@@ -186,10 +186,30 @@ Numa VPS com IP público não precisa de playit, e dá para ter HTTPS de graça.
    `WorkingDirectory=/opt/concord`, `ExecStart=/opt/concord/concord-server` e
    `Restart=always`. Depois `systemctl enable --now concord-server`.
 6. **Do seu PC:** `scripts/deploy-vps.sh root@IP` envia o backend, as
-   migrations, o compose e as atualizações do app, e reinicia. Reiniciar não
+   migrations, o compose, a página de download (`site/`) e as atualizações
+   do app, e reinicia. Reiniciar não
    derruba quem está em chamada.
 7. **Publicar versão do app:** `scripts/release-win.sh` e depois
    `scripts/deploy-vps.sh root@IP`.
+
+**Página de download:** `site/` é uma página estática que lê
+`/updates/latest.yml` e aponta o botão para o instalador mais recente. No
+Caddyfile, um domínio próprio serve a página e repassa `/updates/` ao backend:
+```
+concord.exemplo.com {
+	encode zstd gzip
+	handle /updates/* {
+		reverse_proxy 127.0.0.1:8090
+	}
+	handle {
+		root * /opt/concord/site
+		file_server
+	}
+}
+```
+O domínio precisa de um registro DNS `A` apontando para o IP da VPS (no
+Cloudflare, com o proxy desligado — nuvem cinza — por causa do tamanho do
+instalador).
 
 **Migrar sem perder nada e sem mandar `.exe` novo:**
 1. Pare o backend antigo.
@@ -208,7 +228,8 @@ roda a cada push/merge na `main`:
 1. Roda os testes do backend, do app e do helper. Se algum falhar, para aqui.
 2. Gera o instalador assinado com a próxima versão (uma acima da que já está
    publicada na VPS).
-3. Publica o backend e a atualização com `scripts/deploy-vps.sh`.
+3. Publica o backend, a página de download e a atualização com
+   `scripts/deploy-vps.sh`.
 4. Confere que tudo subiu.
 
 Para ligar, em **Settings → Secrets and variables → Actions**:
@@ -219,7 +240,8 @@ Para ligar, em **Settings → Secrets and variables → Actions**:
 - **Variables:**
   - `DEPLOY_ENABLED=true`;
   - `VPS_HOST=root@<ip>`;
-  - `PUBLIC_URL=https://<endereço>`.
+  - `PUBLIC_URL=https://<endereço>`;
+  - `SITE_URL=https://<página de download>` (opcional; padrão `https://concord.bhrx.com.br`).
 
 Sem `DEPLOY_ENABLED`, o workflow só roda os testes.
 
