@@ -3,6 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { displayAudioMode } from './displayMedia'
+import { PendingDisplayRequest } from './displayPicker'
 import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './background'
 import { setupUpdater } from './updater'
 import {
@@ -19,13 +20,14 @@ let mainWindow: BrowserWindow | null = null
 // Picker de tela (Fase 3): o getDisplayMedia do renderer dispara este handler,
 // que pede ao renderer para abrir o modal de seleção e resolve com a fonte
 // escolhida via IPC (estilo Discord).
-let pendingDisplayCallback:
-  ((streams: { video?: Electron.DesktopCapturerSource; audio?: 'loopback' }) => void) | null = null
+const pendingDisplay = new PendingDisplayRequest((err) =>
+  logAudio(`recusar o compartilhamento falhou: ${String(err)}`)
+)
 let pendingAudioRequested = false
 
 function registerScreenShareHandlers(): void {
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
-    pendingDisplayCallback = callback
+    pendingDisplay.hold(callback)
     pendingAudioRequested = request.audioRequested
     mainWindow?.webContents.send('screen-picker:show')
   })
@@ -46,8 +48,7 @@ function registerScreenShareHandlers(): void {
   })
 
   ipcMain.on('screen-picker:select', async (_event, sourceId: string) => {
-    const callback = pendingDisplayCallback
-    pendingDisplayCallback = null
+    const callback = pendingDisplay.take()
     if (!callback) return
     try {
       const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] })
@@ -56,7 +57,7 @@ function registerScreenShareHandlers(): void {
       stopWindowAudio()
       if (!source) {
         logAudio(`fonte ${sourceId} não encontrada`)
-        callback({})
+        callback(null)
         return
       }
       const hwnd = hwndFromSourceId(source.id)
@@ -75,16 +76,15 @@ function registerScreenShareHandlers(): void {
         mainWindow?.webContents.send('screen-audio:fallback', audioLogPath())
       }
       callback(mode === 'system' ? { video: source, audio: 'loopback' } : { video: source })
-    } catch {
-      callback({})
+    } catch (err) {
+      logAudio(`falha ao compartilhar ${sourceId}: ${String(err)}`)
+      callback(null)
     }
   })
 
   ipcMain.on('screen-picker:cancel', () => {
     stopWindowAudio()
-    const callback = pendingDisplayCallback
-    pendingDisplayCallback = null
-    if (callback) callback({})
+    pendingDisplay.deny()
   })
 }
 
@@ -113,6 +113,7 @@ function createWindow(): void {
   attachCloseToTray(mainWindow)
 
   mainWindow.on('closed', () => {
+    pendingDisplay.deny()
     mainWindow = null
   })
 

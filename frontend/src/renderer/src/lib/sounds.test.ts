@@ -19,6 +19,13 @@ describe('SOUNDS', () => {
     expect(last('undeafen')).toBeGreaterThan(first('undeafen'))
   })
 
+  it('mensagem e menção sobem e soam diferentes', () => {
+    expect(last('message')).toBeGreaterThan(first('message'))
+    expect(last('mention')).toBeGreaterThan(first('mention'))
+    expect(SOUNDS.message).not.toEqual(SOUNDS.mention)
+    expect(SOUNDS.message).toHaveLength(2)
+  })
+
   it('todos os sons são curtos (menos de meio segundo)', () => {
     for (const notes of Object.values(SOUNDS)) {
       const end = Math.max(...notes.map((n) => n.at + n.duration))
