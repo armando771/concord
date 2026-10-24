@@ -1,0 +1,112 @@
+# Deploy automático: a cada push/merge na main, testa tudo e, se passar,
+# publica o backend na VPS e uma versão nova do app desktop (os apps abertos
+# mostram "Nova atualização disponível").
+#
+# Configuração do repositório (Settings → Secrets and variables → Actions):
+#   Secrets:
+#     VPS_SSH_KEY      chave SSH privada de deploy (acesso à VPS)
+#     VPS_KNOWN_HOSTS  linha(s) de known_hosts da VPS (ssh-keyscan)
+#     RELEASE_KEY      chave Ed25519 que assina as atualizações (backend/.release-key)
+#   Variables:
+#     DEPLOY_ENABLED   "true" para ligar o deploy (sem isso, só roda os testes)
+#     VPS_HOST         ex.: root@1.2.3.4
+#     PUBLIC_URL       ex.: https://1-2-3-4.sslip.io
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Um deploy por vez, na ordem dos commits.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Backend
+        working-directory: backend
+        run: go test ./...
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: App desktop
+        working-directory: frontend
+        run: |
+          npm i -g yarn@1.22.22
+          yarn install --frozen-lockfile --ignore-scripts
+          yarn typecheck
+          yarn test
+      - name: Scripts
+        run: node --test scripts/next-version.test.mjs
+
+      - name: Helper de áudio (Rust)
+        working-directory: native/concord-audio
+        run: cargo test
+
+  deploy:
+    needs: test
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    env:
+      PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+      VPS_HOST: ${{ vars.VPS_HOST }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Acesso à VPS e chave de assinatura
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          RELEASE_KEY: ${{ secrets.RELEASE_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          umask 077
+          printf '%s\n' "$RELEASE_KEY" > backend/.release-key
+
+      - name: Versão
+        id: version
+        run: |
+          published=$(curl -fsS "$PUBLIC_URL/updates/latest.yml" | awk '/^version:/ {print $2}' || true)
+          local=$(node -p "require('./frontend/package.json').version")
+          version=$(node scripts/next-version.mjs "${published:--}" "$local")
+          echo "publicada: ${published:-nenhuma} → nova: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: App desktop (instalador assinado)
+        run: scripts/release-win.sh "${{ steps.version.outputs.version }}"
+
+      - name: Publicar na VPS (backend + atualização do app)
+        run: scripts/deploy-vps.sh "$VPS_HOST"
+
+      - name: Conferir
+        run: |
+          curl -fsS "$PUBLIC_URL/updates/latest.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$PUBLIC_URL/rtc/validate")" = 401
+          echo "Concord ${{ steps.version.outputs.version }} no ar em $PUBLIC_URL"
+
+      - name: Limpar chaves
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519 backend/.release-key

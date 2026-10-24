@@ -21,15 +21,21 @@ KEY="$ROOT/backend/.release-key"
 
 env_value() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true; }
 
-SERVER_URL="$(env_value PUBLIC_URL)"
+# PUBLIC_URL e UPDATES_DIR podem vir do ambiente (CI) ou do backend/.env.
+SERVER_URL="${PUBLIC_URL:-$(env_value PUBLIC_URL)}"
 if [[ -z "$SERVER_URL" ]]; then
   echo "defina PUBLIC_URL em backend/.env (endereço público do backend)" >&2
   exit 1
 fi
-UPDATES_DIR="$(env_value UPDATES_DIR)"
+UPDATES_DIR="${UPDATES_DIR:-$(env_value UPDATES_DIR)}"
 UPDATES_DIR="$ROOT/backend/${UPDATES_DIR:-updates}"
 
 if [[ ! -f "$KEY" ]]; then
+  # No CI a chave vem de um secret: gerar outra quebraria os apps instalados.
+  if [[ -n "${CI:-}" ]]; then
+    echo "chave de assinatura ausente em $KEY (secret RELEASE_KEY)" >&2
+    exit 1
+  fi
   echo "Gerando chave de assinatura em $KEY (guarde um backup!)"
   openssl genpkey -algorithm ed25519 -out "$KEY"
   chmod 600 "$KEY"
