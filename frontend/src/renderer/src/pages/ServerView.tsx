@@ -206,6 +206,12 @@ export function ServerView(): React.JSX.Element {
           <ChatPane
             room={`channel:${channelId}`}
             placeholder={`Mensagem para #${activeChannel?.name ?? 'canal'}`}
+            mentionable={currentMembers
+              .filter((m) => m.username)
+              .map((m) => ({
+                username: m.username as string,
+                display_name: m.display_name || (m.username as string)
+              }))}
           />
         ) : (
           <div className="flex flex-1 flex-col justify-between overflow-y-auto p-6">

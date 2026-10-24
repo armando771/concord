@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { callNotification, messageNotification } from './notifications'
+import { callNotification, mentionNotification, messageNotification } from './notifications'
 import type { Message } from '../api/messages'
 
 const dm = (over: Partial<Message> = {}): Message => ({
@@ -44,5 +44,28 @@ describe('callNotification', () => {
       route: '/dm/ana',
       urgent: true
     })
+  })
+})
+
+describe('mentionNotification', () => {
+  const me = { id: 'eu', username: 'fulano' }
+  const inChannel = (over: Partial<Message> = {}): Message =>
+    dm({ conversation_id: null, channel_id: 'ch1', content: 'bora @fulano?', ...over })
+
+  it('menção em canal vira notificação que abre o canal', () => {
+    expect(mentionNotification(inChannel(), me, 'srv1')).toEqual({
+      title: 'Ana mencionou você',
+      body: 'bora @fulano?',
+      route: '/servers/srv1/channels/ch1'
+    })
+  })
+
+  it('sem menção, ou mensagem minha, não notifica', () => {
+    expect(mentionNotification(inChannel({ content: 'bora jogar?' }), me, 'srv1')).toBeNull()
+    expect(mentionNotification(inChannel({ author_id: 'eu' }), me, 'srv1')).toBeNull()
+  })
+
+  it('DM já tem a própria notificação', () => {
+    expect(mentionNotification(dm({ content: '@fulano oi' }), me, null)).toBeNull()
   })
 })

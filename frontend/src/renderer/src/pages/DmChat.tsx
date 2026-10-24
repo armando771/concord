@@ -69,6 +69,7 @@ function DmChat(): React.JSX.Element {
     'Usuário'
   const otherHandle = other?.username ?? (userId === me?.id ? me?.username : '')
   const initial = otherName.charAt(0).toUpperCase()
+  const dmMentionable = otherHandle ? [{ username: otherHandle, display_name: otherName }] : []
   const online = Boolean(userId && presence[userId])
 
   return (
@@ -142,12 +143,14 @@ function DmChat(): React.JSX.Element {
             <ChatPane
               room={`conversation:${conversationId}`}
               placeholder={`Mensagem para @${otherHandle || otherName}`}
+              mentionable={dmMentionable}
             />
           </DmCallView>
         ) : (
           <ChatPane
             room={`conversation:${conversationId}`}
             placeholder={`Mensagem para @${otherHandle || otherName}`}
+            mentionable={dmMentionable}
           />
         )
       ) : (

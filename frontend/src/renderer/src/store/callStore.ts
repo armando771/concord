@@ -13,6 +13,7 @@ import { CallMedia, type RemoteMedia } from '../lib/livekit'
 import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
 import { callNotification, notifyDesktop } from '../lib/notifications'
+import { playSound, setSoundOutput } from '../lib/sounds'
 import {
   abortWindowAudio,
   resetWindowAudio,
@@ -441,6 +442,7 @@ export const useCallStore = create<CallState>()((set, get) => {
           deafened: false,
           startedAt: Date.now()
         })
+        playSound('join')
         useChatStore.getState().subscribeRoom(`call:${call.id}`)
         // O backend já registrou a entrada (startCall é idempotente): a mídia
         // pode conectar em paralelo à leitura do estado da chamada.
@@ -504,6 +506,7 @@ export const useCallStore = create<CallState>()((set, get) => {
 
       // Otimista: o broadcast de call:accept pode chegar antes da assinatura da room.
       set({ status: 'active', startedAt: Date.now() })
+      playSound('join')
       useChatStore.getState().sendEvent('call:accept', { call_id: callId })
       useChatStore.getState().subscribeRoom(`call:${callId}`)
       transitioning = false
@@ -523,6 +526,7 @@ export const useCallStore = create<CallState>()((set, get) => {
         cleanup()
         return
       }
+      if (status === 'active') playSound('leave')
       if (status === 'ringing') {
         useChatStore.getState().sendEvent('call:decline', { call_id: callId })
       } else {
@@ -542,6 +546,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       set(next ? { muted: true } : { muted: false, deafened: false })
       applyMute(next)
       sendVoiceState()
+      playSound(next ? 'mute' : 'unmute')
     },
 
     toggleDeafen: () => {
@@ -555,6 +560,7 @@ export const useCallStore = create<CallState>()((set, get) => {
         applyMute(mutedBeforeDeafen)
       }
       sendVoiceState()
+      playSound(next ? 'deafen' : 'undeafen')
     },
 
     setInputDevice: async (deviceId) => {
@@ -589,6 +595,7 @@ export const useCallStore = create<CallState>()((set, get) => {
 
     setOutputDevice: (deviceId) => {
       set({ outputDeviceId: deviceId })
+      setSoundOutput(deviceId)
       saveAudioPrefs({ inputId: get().inputDeviceId, outputId: deviceId })
     },
 
@@ -790,6 +797,7 @@ export const useCallStore = create<CallState>()((set, get) => {
           const participants = upsertParticipant(current.participants, p.user)
           if (current.status !== 'active') {
             set({ status: 'active', startedAt: Date.now(), participants })
+            playSound('join')
           } else {
             set({ participants })
           }
@@ -855,10 +863,14 @@ export const useCallStore = create<CallState>()((set, get) => {
           if (current.type === 'channel') {
             if (current.status !== 'active' || !meId || p.user.id === meId) return
             set({ participants: upsertParticipant(current.participants, p.user) })
+            playSound('userJoin')
             bumpList()
             return
           }
-          if (current.status === 'outgoing') set({ status: 'active', startedAt: Date.now() })
+          if (current.status === 'outgoing') {
+            set({ status: 'active', startedAt: Date.now() })
+            playSound('join')
+          }
           return
         }
 
@@ -868,6 +880,7 @@ export const useCallStore = create<CallState>()((set, get) => {
           if (p.user.id === meId) return
           showToast.info(`${p.user.display_name} saiu da chamada.`)
           if (get().type === 'channel') {
+            playSound('userLeave')
             // A mídia do participante some sozinha quando ele sai da sala do LiveKit.
             set((s) => ({
               participants: s.participants.filter((q) => q.id !== p.user.id),
@@ -909,6 +922,9 @@ export const useCallStore = create<CallState>()((set, get) => {
     }
   }
 })
+
+// Os efeitos sonoros saem no mesmo dispositivo escolhido para as vozes.
+setSoundOutput(useCallStore.getState().outputDeviceId)
 
 // Dispositivo escolhido desconectado (ex.: tirou o headset): volta para o
 // padrão do sistema em vez de ficar sem microfone/som.

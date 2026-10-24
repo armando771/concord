@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, desktopCapturer, ipcMain, session } from 'electron'
+import { app, shell, BrowserWindow, desktopCapturer, ipcMain, Menu, session } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -133,6 +133,8 @@ if (!ensureSingleInstance(() => mainWindow)) app.exit(0)
 app.whenReady().then(() => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.concord.app')
+  // Sem a barra "File Edit View Window" padrão do Electron (aparecia no Alt).
+  if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
 
   registerScreenShareHandlers()
   registerScreenAudio()

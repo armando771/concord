@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"time"
@@ -130,6 +131,8 @@ func main() {
 	callRepository := call.CallRepository(db)
 	callService := call.CallService(callRepository, hub, conversationService, serverService, channelService, userService, hub.IsOnline)
 	callHandler := call.CallHandler(callService, liveKitTokens)
+	// Reinício do servidor não derruba quem está em chamada.
+	callService.RestoreActive(context.Background())
 
 	// WebSocket handler
 	wsHandler := websocket.WsHandler(hub, authService, channelService, serverService, conversationService, callService)

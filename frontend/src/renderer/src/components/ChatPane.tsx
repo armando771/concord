@@ -3,11 +3,21 @@ import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import type { Message } from '../api/messages'
 import { showToast } from '../store/toastStore'
+import { applyMention, mentionQuery, mentionsUser, splitMentions } from '../lib/mentions'
+
+export interface Mentionable {
+  username: string
+  display_name: string
+}
 
 interface ChatPaneProps {
   room: string
   placeholder?: string
+  /** Quem pode ser marcado com @ (membros do servidor, ou a pessoa da DM). */
+  mentionable?: Mentionable[]
 }
+
+const MAX_SUGGESTIONS = 6
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -27,10 +37,15 @@ function MessageItem({
     author?.display_name ?? author?.username ?? (isMine ? me?.display_name : 'Desconhecido')
   const initial = (name ?? '?').charAt(0).toUpperCase()
   const [hover, setHover] = useState(false)
+  const mentionsMe = !isMine && mentionsUser(message.content, me?.username ?? '')
 
   return (
     <div
-      className="group flex gap-3 rounded-md px-4 py-1.5 transition-colors hover:bg-white/[0.03]"
+      className={`group flex gap-3 rounded-md px-4 py-1.5 transition-colors ${
+        mentionsMe
+          ? 'border-l-2 border-[#f0b232] bg-[#f0b232]/10 hover:bg-[#f0b232]/15'
+          : 'hover:bg-white/[0.03]'
+      }`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
@@ -43,7 +58,15 @@ function MessageItem({
           <span className="text-[10px] text-gray-500">{formatTime(message.created_at)}</span>
         </div>
         <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">
-          {message.content}
+          {splitMentions(message.content).map((part, i) =>
+            part.mention ? (
+              <span key={i} className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]">
+                {part.text}
+              </span>
+            ) : (
+              part.text
+            )
+          )}
         </p>
       </div>
       {isMine && hover && (
@@ -59,7 +82,11 @@ function MessageItem({
   )
 }
 
-function ChatPane({ room, placeholder = 'Digite sua mensagem' }: ChatPaneProps): React.JSX.Element {
+function ChatPane({
+  room,
+  placeholder = 'Digite sua mensagem',
+  mentionable = []
+}: ChatPaneProps): React.JSX.Element {
   const messagesByRoom = useChatStore((s) => s.messagesByRoom)
   const hasMoreByRoom = useChatStore((s) => s.hasMoreByRoom)
   const loadingByRoom = useChatStore((s) => s.loadingByRoom)
@@ -73,6 +100,46 @@ function ChatPane({ room, placeholder = 'Digite sua mensagem' }: ChatPaneProps):
 
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
+  const [highlight, setHighlight] = useState(0)
+  const meUsername = useAuthStore((s) => s.user?.username)
+  const suggestions = mention
+    ? mentionable
+        .filter((m) => m.username !== meUsername)
+        .filter((m) =>
+          [m.username, m.display_name].some((v) =>
+            v.toLowerCase().startsWith(mention.query.toLowerCase())
+          )
+        )
+        .slice(0, MAX_SUGGESTIONS)
+    : []
+
+  const pickMention = (username: string): void => {
+    const el = inputRef.current
+    if (!mention || !el) return
+    const next = applyMention(draft, mention.start, el.selectionStart ?? draft.length, username)
+    setDraft(next.text)
+    setMention(null)
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(next.caret, next.caret)
+    })
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (suggestions.length === 0) return
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      const step = e.key === 'ArrowDown' ? 1 : -1
+      setHighlight((h) => (h + step + suggestions.length) % suggestions.length)
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault()
+      pickMention(suggestions[highlight].username)
+    } else if (e.key === 'Escape') {
+      setMention(null)
+    }
+  }
   const [loadingOlder, setLoadingOlder] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
@@ -165,14 +232,47 @@ function ChatPane({ room, placeholder = 'Digite sua mensagem' }: ChatPaneProps):
         )}
       </div>
 
-      <div className="shrink-0 px-4 pb-4">
+      <div className="relative shrink-0 px-4 pb-4">
+        {suggestions.length > 0 && (
+          <ul
+            role="listbox"
+            aria-label="Marcar alguém"
+            className="absolute bottom-full left-4 right-4 mb-2 overflow-hidden rounded-lg border border-white/10 bg-[#111214] py-1 shadow-2xl"
+          >
+            {suggestions.map((m, i) => (
+              <li
+                key={m.username}
+                role="option"
+                aria-selected={i === highlight}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  pickMention(m.username)
+                }}
+                onMouseEnter={() => setHighlight(i)}
+                className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm ${
+                  i === highlight ? 'bg-[#5865f2]/30 text-white' : 'text-gray-300'
+                }`}
+              >
+                <span className="font-semibold">{m.display_name}</span>
+                <span className="text-xs text-gray-400">@{m.username}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         <form
           onSubmit={handleSubmit}
           className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
         >
           <input
+            ref={inputRef}
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              setMention(mentionQuery(e.target.value, e.target.selectionStart ?? 0))
+              setHighlight(0)
+            }}
+            onKeyDown={handleKeyDown}
+            onBlur={() => setMention(null)}
             placeholder={placeholder}
             maxLength={2000}
             className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 outline-none"

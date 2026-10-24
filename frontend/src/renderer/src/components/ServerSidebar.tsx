@@ -86,16 +86,8 @@ export function ServerSidebar(): React.JSX.Element {
     currentMembers.some((m) => m.user_id === user?.id && m.role === 'admin')
   const isOwner = currentServer?.owner_id === user?.id
 
-  useEffect(() => {
-    if (currentServer?.id) {
-      useChatStore.getState().openServer(currentServer.id)
-    }
-    return () => {
-      if (currentServer?.id) {
-        useChatStore.getState().closeServer(currentServer.id)
-      }
-    }
-  }, [currentServer?.id])
+  // A sala do servidor (eventos, menções, não lidas) é assinada pela
+  // ServerRail para todos os servidores — sair desta tela não a cancela.
 
   // Chamadas ativas do servidor (conectados nos canais de voz) — estado
   // compartilhado no callStore para a view principal também consumir.

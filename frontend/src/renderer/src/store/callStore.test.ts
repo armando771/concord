@@ -103,6 +103,8 @@ vi.mock('./authStore', () => ({
   useAuthStore: { getState: () => ({ user: { id: 'eu' } }) }
 }))
 vi.mock('./toastStore', () => ({ showToast: { error: vi.fn(), info: vi.fn() } }))
+const sounds = vi.hoisted(() => ({ playSound: vi.fn(), setSoundOutput: vi.fn() }))
+vi.mock('../lib/sounds', () => sounds)
 
 import { useCallStore } from './callStore'
 
@@ -423,5 +425,52 @@ describe('callStore — mídia via LiveKit', () => {
       muted: true,
       deafened: true
     })
+  })
+
+  it('toca som ao entrar na chamada e ao sair', async () => {
+    await joinChannel()
+    expect(sounds.playSound).toHaveBeenCalledWith('join')
+
+    useCallStore.getState().endCall()
+    expect(sounds.playSound).toHaveBeenLastCalledWith('leave')
+  })
+
+  it('toca som quando alguém entra e sai da minha chamada', async () => {
+    await joinChannel()
+    const ana = { id: 'ana', username: 'ana', display_name: 'Ana' }
+
+    useCallStore
+      .getState()
+      .handleWsEvent({ type: 'call:joined', payload: { call_id: 'call-1', user: ana } })
+    expect(sounds.playSound).toHaveBeenLastCalledWith('userJoin')
+
+    useCallStore
+      .getState()
+      .handleWsEvent({ type: 'call:left', payload: { call_id: 'call-1', user: ana } })
+    expect(sounds.playSound).toHaveBeenLastCalledWith('userLeave')
+  })
+
+  it('toca som ao mutar/desmutar e ensurdecer/desensurdecer', async () => {
+    await joinChannel()
+    const play = sounds.playSound
+
+    useCallStore.getState().toggleMute()
+    expect(play).toHaveBeenLastCalledWith('mute')
+    useCallStore.getState().toggleMute()
+    expect(play).toHaveBeenLastCalledWith('unmute')
+    useCallStore.getState().toggleDeafen()
+    expect(play).toHaveBeenLastCalledWith('deafen')
+    useCallStore.getState().toggleDeafen()
+    expect(play).toHaveBeenLastCalledWith('undeafen')
+  })
+
+  it('não toca "alguém entrou" quando sou eu entrando', async () => {
+    await joinChannel()
+    sounds.playSound.mockClear()
+    useCallStore.getState().handleWsEvent({
+      type: 'call:joined',
+      payload: { call_id: 'call-1', user: { id: 'eu', username: 'eu', display_name: 'Eu' } }
+    })
+    expect(sounds.playSound).not.toHaveBeenCalled()
   })
 })

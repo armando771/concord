@@ -41,10 +41,27 @@ const server = (await api('/servers', { token: ana.token, method: 'POST', body: 
 const serverId = server.id ?? server.server?.id
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME })
-async function login(user) {
+// Simula o processo main do Electron: registra notificações e sons tocados.
+function fakeDesktop() {
+  window.__notifications = []
+  window.__sounds = 0
+  const noop = () => () => {}
+  window.api = {
+    background: {
+      notify: (n) => window.__notifications.push(n),
+      setCallState: () => {}, quit: () => {}, getAutostart: async () => null, setAutostart: async () => null,
+      onToggleMute: noop, onQuitRequested: noop, onNavigate: noop
+    }
+  }
+  const create = AudioContext.prototype.createOscillator
+  AudioContext.prototype.createOscillator = function () { window.__sounds++; return create.call(this) }
+}
+
+async function login(user, initScript) {
   const context = await browser.newContext({ viewport: { width: 1600, height: 900 } })
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   const page = await context.newPage()
+  if (initScript) await page.addInitScript(initScript)
   await page.goto(APP + '#/login')
   await page.fill('input[type=email]', user.email)
   await page.fill('input[type=password]', user.password)
@@ -55,7 +72,7 @@ async function login(user) {
 
 try {
   // Ana: Convidar → código → Copiar
-  const pageA = await login(ana)
+  const pageA = await login(ana, fakeDesktop)
   await pageA.goto(APP + `#/servers/${serverId}`)
   await pageA.getByRole('button', { name: 'Convidar', exact: true }).first().click()
   const codeEl = pageA.getByLabel('Código de convite')
@@ -139,6 +156,35 @@ try {
   const anaId = (await api('/users/me', { token: ana.token })).body.id
   const blocked = await api(`/conversations/with/${anaId}`, { token: stranger.token })
   check('quem não divide servidor nem é amigo não abre DM', blocked.status === 403, blocked.status)
+
+  // @menção: a Bia marca a Ana no #geral; a Ana está em outra tela.
+  await pageA.goto(APP + '#/friends')
+  await pageB.goto(APP + `#/servers/${serverId}`)
+  const input = pageB.getByPlaceholder(/Mensagem para #geral/)
+  await input.click()
+  await input.pressSequentially('olha @an')
+  await pageB.getByRole('listbox', { name: 'Marcar alguém' }).waitFor({ timeout: 5000 })
+  check('digitar @ sugere a Ana', (await pageB.getByRole('option').first().textContent()).includes(`@ana${run}`))
+  await input.press('Tab')
+  check('Tab completa o @nick', (await input.inputValue()) === `olha @ana${run} `)
+  const soundsBefore = await pageA.evaluate(() => window.__sounds)
+  await input.pressSequentially('isso!')
+  await input.press('Enter')
+  let notif = []
+  for (let i = 0; i < 20 && !notif.length; i++) {
+    notif = await pageA.evaluate(() => window.__notifications.filter((n) => n.title.includes('mencionou')))
+    if (!notif.length) await new Promise((r) => setTimeout(r, 300))
+  }
+  check('a Ana recebe notificação do Windows da menção', notif.length === 1, notif)
+  check('a notificação abre o canal certo', notif[0]?.route?.startsWith(`/servers/${serverId}/channels/`))
+  check('e toca o som de menção', (await pageA.evaluate(() => window.__sounds)) > soundsBefore)
+  await pageA.goto(APP + `#/servers/${serverId}`)
+  await pageA.getByText('isso!').first().waitFor({ timeout: 10000 })
+  const highlighted = await pageA.evaluate(() => {
+    const row = [...document.querySelectorAll('p')].find((p) => p.textContent.includes('isso!'))?.closest('.group')
+    return row?.className.includes('f0b232') ?? false
+  })
+  check('a mensagem que menciona a Ana fica destacada para ela', highlighted)
 
   // Entrar de novo não dá erro nem duplica
   const twice = await api('/invites/join', { token: bia.token, method: 'POST', body: { code } })

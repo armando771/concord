@@ -11,7 +11,8 @@ import { verifyInstaller } from './updateSignature'
 // (`<servidor>/updates/`). O instalador só é aceito com a assinatura Ed25519
 // do dono (chave pública embutida no build).
 
-const CHECK_INTERVAL_MS = 30 * 60_000
+// latest.yml tem poucas centenas de bytes: checar seguido não pesa.
+const CHECK_INTERVAL_MS = 5 * 60_000
 
 interface UpdaterConfig {
   /** ex.: http://abc.ply.gg:1234/updates/ */

@@ -162,3 +162,33 @@ func (r *Repository) ListParticipants(ctx context.Context, callID string) ([]Cal
 
 	return participants, nil
 }
+
+// ListUnended devolve as chamadas ainda não encerradas (para restaurar o
+// estado em memória quando o servidor reinicia).
+func (r *Repository) ListUnended(ctx context.Context) ([]*Call, error) {
+	rows, err := r.db.Query(
+		ctx,
+		`
+		SELECT id, type, conversation_id, channel_id, server_id, initiator_id, status, started_at, ended_at
+		FROM calls
+		WHERE status <> 'ended'
+		`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var calls []*Call
+	for rows.Next() {
+		c := &Call{}
+		if err := rows.Scan(
+			&c.ID, &c.Type, &c.ConversationID, &c.ChannelID, &c.ServerID,
+			&c.InitiatorID, &c.Status, &c.StartedAt, &c.EndedAt,
+		); err != nil {
+			return nil, err
+		}
+		calls = append(calls, c)
+	}
+	return calls, rows.Err()
+}

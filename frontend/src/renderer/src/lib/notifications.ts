@@ -1,4 +1,5 @@
 import type { Message } from '../api/messages'
+import { mentionsUser } from './mentions'
 
 export interface AppNotification {
   title: string
@@ -22,6 +23,22 @@ export function messageNotification(message: Message, meId: string): AppNotifica
     title: message.author?.display_name || message.author?.username || 'Nova mensagem',
     body: truncate(message.content),
     route: `/dm/${message.author_id}`
+  }
+}
+
+/** Notificação para uma mensagem de canal que menciona você (@nick). */
+export function mentionNotification(
+  message: Message,
+  me: { id: string; username: string },
+  serverId: string | null
+): AppNotification | null {
+  if (!message.channel_id || !serverId || message.author_id === me.id) return null
+  if (!mentionsUser(message.content, me.username)) return null
+  const author = message.author?.display_name || message.author?.username || 'Alguém'
+  return {
+    title: `${author} mencionou você`,
+    body: truncate(message.content),
+    route: `/servers/${serverId}/channels/${message.channel_id}`
   }
 }
 

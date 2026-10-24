@@ -125,7 +125,7 @@ computador". Basta clicar em **Mais informações → Executar assim mesmo**.
 **Depois disso, não precisa mandar mais nada.** Para cada versão nova, rode
 `scripts/release-win.sh` de novo:
 
-- O app checa atualizações ao abrir e a cada 30 minutos.
+- O app checa atualizações ao abrir e a cada 5 minutos.
 - Ele baixa a versão nova em segundo plano, mas só fora de chamada, porque o
   upload do servidor é o mesmo das chamadas.
 - Instaladores sem assinatura válida são recusados.
