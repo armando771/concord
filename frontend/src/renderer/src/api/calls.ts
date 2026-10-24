@@ -20,6 +20,8 @@ export interface CallParticipant {
   user_id: string
   role: 'member' | 'presenter'
   joined_at: string
+  muted?: boolean
+  deafened?: boolean
   id?: string
   username?: string
   display_name?: string

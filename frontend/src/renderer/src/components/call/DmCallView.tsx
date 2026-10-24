@@ -6,6 +6,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   HeadsetIcon,
+  HeadsetOffIcon,
   MicIcon,
   MicOffIcon,
   PhoneOffIcon
@@ -19,7 +20,6 @@ function DmCallView({ children }: { children?: React.ReactNode }): React.JSX.Ele
   const status = useCallStore((s) => s.status)
   const type = useCallStore((s) => s.type)
   const participants = useCallStore((s) => s.participants)
-  const streams = useCallStore((s) => s.streams)
   const muted = useCallStore((s) => s.muted)
   const deafened = useCallStore((s) => s.deafened)
   const startedAt = useCallStore((s) => s.startedAt)
@@ -33,7 +33,7 @@ function DmCallView({ children }: { children?: React.ReactNode }): React.JSX.Ele
 
   const dmActive = type === 'dm' && status === 'active'
   const elapsed = useElapsed(dmActive ? startedAt : null)
-  const speaking = useSpeaking(dmActive && !deafened ? streams : {})
+  const speaking = useSpeaking()
 
   const peer = participants[0]
   if (type !== 'dm' || !peer) return null
@@ -101,7 +101,11 @@ function DmCallView({ children }: { children?: React.ReactNode }): React.JSX.Ele
                   : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'
               }`}
             >
-              <HeadsetIcon className="h-4 w-4" />
+              {deafened ? (
+                <HeadsetOffIcon className="h-4 w-4" />
+              ) : (
+                <HeadsetIcon className="h-4 w-4" />
+              )}
             </button>
             <button
               onClick={endCall}

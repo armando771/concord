@@ -28,6 +28,8 @@ export interface CallMediaHandlers {
   onConnectionLost: () => void
   onReconnecting: () => void
   onReconnected: () => void
+  /** Quem está falando agora (identity = userId), incluindo o próprio usuário. */
+  onActiveSpeakers: (userIds: string[]) => void
 }
 
 const SCREEN_MAX_BITRATE = 4_000_000
@@ -67,6 +69,9 @@ export class CallMedia {
       .on(RoomEvent.ParticipantDisconnected, refresh)
       .on(RoomEvent.Reconnecting, () => this.handlers.onReconnecting())
       .on(RoomEvent.Reconnected, () => this.handlers.onReconnected())
+      .on(RoomEvent.ActiveSpeakersChanged, (speakers) =>
+        this.handlers.onActiveSpeakers(speakers.map((p) => p.identity))
+      )
       .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
         if (this.closing || reason === DisconnectReason.CLIENT_INITIATED) return
         this.handlers.onConnectionLost()
@@ -89,6 +94,14 @@ export class CallMedia {
     if (!publication) return
     if (muted) await publication.mute()
     else await publication.unmute()
+  }
+
+  /** Troca o microfone publicado (outro dispositivo) sem sair da sala. */
+  async replaceMic(track: MediaStreamTrack): Promise<void> {
+    const publication = this.room.localParticipant.getTrackPublication(Track.Source.Microphone)
+    if (!publication?.track) return
+    // userProvidedTrack: o SDK não para nem recria a track — o store é o dono.
+    await publication.track.replaceTrack(track, true)
   }
 
   async publishScreen(stream: MediaStream): Promise<void> {

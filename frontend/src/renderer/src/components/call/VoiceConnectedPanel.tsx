@@ -1,6 +1,6 @@
 import { useCallStore } from '../../store/callStore'
 import { useServerStore } from '../../store/serverStore'
-import { HeadsetIcon, MicIcon, MicOffIcon, PhoneOffIcon } from '../icons'
+import { HeadsetIcon, HeadsetOffIcon, MicIcon, MicOffIcon, PhoneOffIcon } from '../icons'
 
 /**
  * Painel "Voz conectada" (estilo Discord) exibido acima do card do usuário
@@ -59,7 +59,11 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
                 : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'
             }`}
           >
-            <HeadsetIcon className="h-4 w-4" />
+            {deafened ? (
+              <HeadsetOffIcon className="h-4 w-4" />
+            ) : (
+              <HeadsetIcon className="h-4 w-4" />
+            )}
           </button>
           <button
             onClick={endCall}

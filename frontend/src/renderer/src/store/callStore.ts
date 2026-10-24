@@ -12,6 +12,14 @@ import { getAudioStream, getCameraStream, getDisplayStream } from '../lib/rtc'
 import { CallMedia, type RemoteMedia } from '../lib/livekit'
 import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
+import { callNotification, notifyDesktop } from '../lib/notifications'
+import {
+  abortWindowAudio,
+  resetWindowAudio,
+  takeWindowAudio,
+  type WindowAudio
+} from '../lib/windowAudio'
+import { loadAudioPrefs, resolveDeviceId, saveAudioPrefs } from '../lib/audioDevices'
 import { useChatStore } from './chatStore'
 import { useAuthStore } from './authStore'
 import { showToast } from './toastStore'
@@ -54,6 +62,18 @@ interface ScreenSharePayload {
   active: boolean
 }
 
+interface VoicePayload {
+  call_id: string
+  user_id: string
+  muted: boolean
+  deafened: boolean
+}
+
+export interface VoiceState {
+  muted: boolean
+  deafened: boolean
+}
+
 interface EndedPayload {
   call_id: string
 }
@@ -85,6 +105,13 @@ interface CallState {
   localCameraStream: MediaStream | null
   /** quem está compartilhando tela segundo o backend (registry) */
   screenSharers: string[]
+  /** microfone e saída escolhidos ('' = padrão do sistema) */
+  inputDeviceId: string
+  outputDeviceId: string
+  /** userId -> mudo/ensurdecido dos outros participantes (evento call:voice) */
+  voiceStates: Record<string, VoiceState>
+  /** userIds falando agora (detecção do LiveKit; inclui o próprio usuário) */
+  speakingIds: string[]
   /** tela em foco no layout expandido (estilo Go Live) */
   focusedScreenUserId: string | null
   muted: boolean
@@ -102,6 +129,8 @@ interface CallState {
   endCall: () => void
   toggleMute: () => void
   toggleDeafen: () => void
+  setInputDevice: (deviceId: string) => Promise<void>
+  setOutputDevice: (deviceId: string) => void
   startScreenShare: () => Promise<void>
   stopScreenShare: () => void
   toggleCamera: () => Promise<void>
@@ -118,8 +147,13 @@ let media: CallMedia | null = null
 
 // Compartilhamento de tela (não-reativo; o estado reativo é localScreenStream)
 let localScreenStream: MediaStream | null = null
+// Som só da janela compartilhada (Windows), quando o helper nativo captura
+let windowAudio: WindowAudio | null = null
 // Câmera local (não-reativa; o estado reativo é localCameraStream)
 let localCameraStream: MediaStream | null = null
+
+/** Mute de antes de ensurdecer — volta a ele ao desensurdecer (como no Discord). */
+let mutedBeforeDeafen = false
 
 const TOKEN_ATTEMPTS = 10
 const TOKEN_RETRY_DELAY_MS = 400
@@ -197,6 +231,9 @@ export const useCallStore = create<CallState>()((set, get) => {
       },
       onReconnected: () => {
         if (media === connection) showToast.info('Chamada reconectada.')
+      },
+      onActiveSpeakers: (userIds) => {
+        if (media === connection) set({ speakingIds: userIds })
       }
     })
     media = connection
@@ -217,8 +254,13 @@ export const useCallStore = create<CallState>()((set, get) => {
     }
     if (media !== connection) return
 
+    // O microfone pode ter sido trocado enquanto a sala conectava.
+    const currentMic = localStream?.getAudioTracks()[0]
+    if (currentMic && currentMic !== mic) await connection.replaceMic(currentMic).catch(() => {})
+
     // O mute pode ter mudado durante a conexão (antes disso não há o que mutar).
     void connection.setMicMuted(get().muted).catch(() => {})
+    sendVoiceState()
 
     // Tela/câmera ligadas antes da sala conectar (ex.: logo após aceitar). Uma
     // falha aqui desliga só aquela mídia, não a chamada.
@@ -250,6 +292,8 @@ export const useCallStore = create<CallState>()((set, get) => {
     stopLocalStream()
     localScreenStream?.getTracks().forEach((t) => t.stop())
     localScreenStream = null
+    windowAudio?.stop()
+    windowAudio = null
     localCameraStream?.getTracks().forEach((t) => t.stop())
     localCameraStream = null
     set({
@@ -265,11 +309,50 @@ export const useCallStore = create<CallState>()((set, get) => {
       isScreenSharing: false,
       localCameraStream: null,
       screenSharers: [],
+      speakingIds: [],
+      voiceStates: {},
       focusedScreenUserId: null,
       muted: false,
       deafened: false,
       startedAt: null
     })
+  }
+
+  /**
+   * Abre o microfone escolhido; se ele sumiu desde a última vez (headset
+   * desconectado), usa o padrão do sistema em vez de impedir a chamada.
+   */
+  const openMic = async (): Promise<MediaStream> => {
+    const id = get().inputDeviceId
+    try {
+      return await getAudioStream(id)
+    } catch (err) {
+      const name = (err as DOMException)?.name
+      if (!id || (name !== 'OverconstrainedError' && name !== 'NotFoundError')) throw err
+      showToast.info('Microfone escolhido não encontrado — usando o padrão do sistema.')
+      set({ inputDeviceId: '' })
+      saveAudioPrefs({ inputId: '', outputId: get().outputDeviceId })
+      return getAudioStream('')
+    }
+  }
+
+  /** Aplica o mute no microfone local e na sala. */
+  const applyMute = (muted: boolean): void => {
+    localStream?.getAudioTracks().forEach((track) => {
+      track.enabled = !muted
+    })
+    void media?.setMicMuted(muted).catch(() => {})
+  }
+
+  /**
+   * Avisa o servidor (e por ele os demais) do mute/ensurdecer atual. Só com a
+   * chamada ativa: tocando, ainda não sou participante (o servidor recusaria).
+   * Reenviado ao conectar a mídia, então nada se perde.
+   */
+  const sendVoiceState = (): void => {
+    const { callId, muted, deafened, status } = get()
+    if (!callId || status !== 'active') return
+    useChatStore.getState().sendEvent('call:voice', { call_id: callId, muted, deafened })
   }
 
   return {
@@ -285,6 +368,10 @@ export const useCallStore = create<CallState>()((set, get) => {
     isScreenSharing: false,
     localCameraStream: null,
     screenSharers: [],
+    speakingIds: [],
+    voiceStates: {},
+    inputDeviceId: loadAudioPrefs().inputId,
+    outputDeviceId: loadAudioPrefs().outputId,
     focusedScreenUserId: null,
     muted: false,
     deafened: false,
@@ -296,7 +383,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       if (get().status !== 'idle' || transitioning) return
       transitioning = true
       try {
-        localStream = await getAudioStream()
+        localStream = await openMic()
       } catch {
         showToast.error('Não foi possível acessar o microfone.')
         transitioning = false
@@ -331,7 +418,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       if (get().status !== 'idle' || transitioning) return
       transitioning = true
       try {
-        localStream = await getAudioStream()
+        localStream = await openMic()
       } catch {
         showToast.error('Não foi possível acessar o microfone.')
         transitioning = false
@@ -367,6 +454,15 @@ export const useCallStore = create<CallState>()((set, get) => {
             const sharing = state.screen_sharing ?? []
             set((s) => ({
               screenSharers: sharing,
+              voiceStates: {
+                ...Object.fromEntries(
+                  others.map((p) => [
+                    p.user_id,
+                    { muted: p.muted ?? false, deafened: p.deafened ?? false }
+                  ])
+                ),
+                ...s.voiceStates
+              },
               focusedScreenUserId: s.focusedScreenUserId ?? sharing[0] ?? null,
               participants: [
                 ...s.participants,
@@ -399,7 +495,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       if (status !== 'ringing' || !callId || !peer || transitioning) return
       transitioning = true
       try {
-        localStream = await getAudioStream()
+        localStream = await openMic()
       } catch {
         showToast.error('Não foi possível acessar o microfone.')
         transitioning = false
@@ -442,34 +538,91 @@ export const useCallStore = create<CallState>()((set, get) => {
 
     toggleMute: () => {
       const next = !get().muted
-      localStream?.getAudioTracks().forEach((track) => {
-        track.enabled = !next
-      })
-      set({ muted: next })
-      void media?.setMicMuted(next)
+      // Desmutar enquanto ensurdecido também tira o ensurdecer.
+      set(next ? { muted: true } : { muted: false, deafened: false })
+      applyMute(next)
+      sendVoiceState()
     },
 
     toggleDeafen: () => {
-      set({ deafened: !get().deafened })
+      const next = !get().deafened
+      if (next) {
+        mutedBeforeDeafen = get().muted
+        set({ deafened: true, muted: true })
+        applyMute(true)
+      } else {
+        set({ deafened: false, muted: mutedBeforeDeafen })
+        applyMute(mutedBeforeDeafen)
+      }
+      sendVoiceState()
+    },
+
+    setInputDevice: async (deviceId) => {
+      set({ inputDeviceId: deviceId })
+      saveAudioPrefs({ inputId: deviceId, outputId: get().outputDeviceId })
+      if (!localStream) return
+      let next: MediaStream
+      try {
+        next = await getAudioStream(deviceId)
+      } catch {
+        showToast.error('Não foi possível usar esse microfone.')
+        return
+      }
+      const previous = localStream
+      // A chamada pode ter acabado enquanto o dispositivo abria.
+      if (!previous) {
+        next.getTracks().forEach((t) => t.stop())
+        return
+      }
+      const track = next.getAudioTracks()[0]
+      track.enabled = !get().muted
+      localStream = next
+      try {
+        await media?.replaceMic(track)
+        // O SDK muta sozinho quando a track antiga morre (ex.: headset tirado).
+        await media?.setMicMuted(get().muted)
+      } catch {
+        showToast.error('Não foi possível trocar o microfone.')
+      }
+      previous.getTracks().forEach((t) => t.stop())
+    },
+
+    setOutputDevice: (deviceId) => {
+      set({ outputDeviceId: deviceId })
+      saveAudioPrefs({ inputId: get().inputDeviceId, outputId: deviceId })
     },
 
     startScreenShare: async () => {
       const s = get()
       if (s.status !== 'active' || s.isScreenSharing || transitioning) return
       let stream: MediaStream
+      resetWindowAudio()
       try {
         stream = await getDisplayStream()
       } catch (err) {
+        abortWindowAudio()
         // NotAllowedError: usuário cancelou o picker — sem toast.
         if ((err as DOMException)?.name !== 'NotAllowedError') {
           showToast.error('Não foi possível compartilhar a tela.')
         }
         return
       }
+      // Janela no Windows: o som vem do helper (só o app da janela).
+      const captured = await takeWindowAudio()
       // A chamada pode ter acabado (ou mudado) com o seletor aberto.
       if (get().callId !== s.callId || get().status !== 'active') {
+        captured?.stop()
         stream.getTracks().forEach((t) => t.stop())
         return
+      }
+      if (captured) {
+        // O som da janela substitui qualquer som de sistema da captura.
+        stream.getAudioTracks().forEach((t) => {
+          stream.removeTrack(t)
+          t.stop()
+        })
+        windowAudio = captured
+        stream.addTrack(captured.track)
       }
 
       localScreenStream = stream
@@ -508,6 +661,8 @@ export const useCallStore = create<CallState>()((set, get) => {
       const callId = s.callId
       const stream = localScreenStream
       localScreenStream = null
+      windowAudio?.stop()
+      windowAudio = null
 
       if (stream) releaseStream(stream)
 
@@ -604,6 +759,7 @@ export const useCallStore = create<CallState>()((set, get) => {
         case 'call:invite': {
           const p = payload as unknown as InvitePayload
           if (p.type !== 'dm' || get().status !== 'idle') return
+          notifyDesktop(callNotification(p.initiator))
           set({
             status: 'ringing',
             callId: p.call_id,
@@ -648,6 +804,30 @@ export const useCallStore = create<CallState>()((set, get) => {
           if (get().callId !== p.call_id) return
           showToast.info(`${p.user.display_name} recusou a chamada.`)
           cleanup()
+          return
+        }
+
+        case 'call:voice': {
+          const p = payload as unknown as VoicePayload
+          const state = { muted: p.muted, deafened: p.deafened }
+          set((s) => {
+            // Lista dos canais de voz do servidor (inclusive de chamadas em que não estou).
+            const serverCalls = { ...s.serverCalls }
+            for (const [channelId, entry] of Object.entries(serverCalls)) {
+              if (entry.call?.id !== p.call_id) continue
+              serverCalls[channelId] = {
+                ...entry,
+                participants: entry.participants.map((q) =>
+                  q.user_id === p.user_id ? { ...q, ...state } : q
+                )
+              }
+            }
+            return {
+              serverCalls,
+              voiceStates:
+                s.callId === p.call_id ? { ...s.voiceStates, [p.user_id]: state } : s.voiceStates
+            }
+          })
           return
         }
 
@@ -729,3 +909,22 @@ export const useCallStore = create<CallState>()((set, get) => {
     }
   }
 })
+
+// Dispositivo escolhido desconectado (ex.: tirou o headset): volta para o
+// padrão do sistema em vez de ficar sem microfone/som.
+if (typeof navigator !== 'undefined' && navigator.mediaDevices?.addEventListener) {
+  navigator.mediaDevices.addEventListener('devicechange', () => {
+    void navigator.mediaDevices.enumerateDevices().then((devices) => {
+      const { inputDeviceId, outputDeviceId, setInputDevice, setOutputDevice } =
+        useCallStore.getState()
+      if (resolveDeviceId(devices, 'audioinput', inputDeviceId) !== inputDeviceId) {
+        showToast.info('Microfone desconectado — usando o padrão do sistema.')
+        void setInputDevice('')
+      }
+      if (resolveDeviceId(devices, 'audiooutput', outputDeviceId) !== outputDeviceId) {
+        showToast.info('Saída de áudio desconectada — usando o padrão do sistema.')
+        setOutputDevice('')
+      }
+    })
+  })
+}

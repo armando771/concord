@@ -3,6 +3,7 @@ import {
   CameraIcon,
   CameraOffIcon,
   HeadsetIcon,
+  HeadsetOffIcon,
   MicIcon,
   MicOffIcon,
   MonitorIcon,
@@ -50,7 +51,7 @@ function VoiceControls(): React.JSX.Element {
           deafened ? 'bg-white text-[#07080b]' : 'bg-white/5 text-gray-200 hover:bg-white/10'
         }`}
       >
-        <HeadsetIcon className="h-5 w-5" />
+        {deafened ? <HeadsetOffIcon className="h-5 w-5" /> : <HeadsetIcon className="h-5 w-5" />}
       </button>
       <button
         onClick={() => void toggleCamera()}

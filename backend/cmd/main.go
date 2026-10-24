@@ -14,6 +14,7 @@ import (
 	"gin-quickstart/backend/internal/livekit"
 	"gin-quickstart/backend/internal/message"
 	"gin-quickstart/backend/internal/server"
+	"gin-quickstart/backend/internal/updates"
 	"gin-quickstart/backend/internal/user"
 	"gin-quickstart/backend/internal/websocket"
 
@@ -163,6 +164,13 @@ func main() {
 
 	// WebSocket endpoint (public, auth via ?token=)
 	router.GET("/ws", wsHandler.ServeWS)
+
+	// Atualizações do app (scripts/release-win.sh publica nesta pasta)
+	updatesDir := os.Getenv("UPDATES_DIR")
+	if updatesDir == "" {
+		updatesDir = "updates"
+	}
+	updates.Routes(router, updatesDir)
 
 	// Sinalização do LiveKit (auth pelo token do LiveKit em ?access_token=)
 	router.Any("/rtc", rtcProxy)

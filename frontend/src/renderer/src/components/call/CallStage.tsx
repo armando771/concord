@@ -25,6 +25,8 @@ function CallStage({
   const me = useAuthStore((s) => s.user)
   const participants = useCallStore((s) => s.participants)
   const muted = useCallStore((s) => s.muted)
+  const deafened = useCallStore((s) => s.deafened)
+  const voiceStates = useCallStore((s) => s.voiceStates)
   const localScreenStream = useCallStore((s) => s.localScreenStream)
   const screenStreams = useCallStore((s) => s.screenStreams)
   const focusedId = useCallStore((s) => s.focusedScreenUserId)
@@ -33,6 +35,7 @@ function CallStage({
   const videoStreams = useCallStore((s) => s.videoStreams)
 
   const meId = me?.id ?? 'me'
+  const meSpeaking = !muted && (speaking?.has(meId) ?? false)
   const meInfo: CallUserInfo = {
     id: meId,
     username: me?.username ?? '',
@@ -58,11 +61,20 @@ function CallStage({
   if (!hasScreens) {
     return (
       <div className={`flex flex-wrap items-center justify-center ${gap}`}>
-        <ParticipantTile user={meInfo} selfMuted={muted} videoStream={localCameraStream} mirror />
+        <ParticipantTile
+          user={meInfo}
+          selfMuted={muted}
+          deafened={deafened}
+          speaking={meSpeaking}
+          videoStream={localCameraStream}
+          mirror
+        />
         {participants.map((p) => (
           <ParticipantTile
             key={p.id}
             user={p}
+            selfMuted={voiceStates[p.id]?.muted}
+            deafened={voiceStates[p.id]?.deafened}
             speaking={speaking?.has(p.id) ?? false}
             videoStream={videoStreams[p.id] ?? null}
           />
@@ -86,11 +98,22 @@ function CallStage({
             onClick={() => setFocused(entry.userId)}
           />
         ))}
-        <ParticipantTile user={meInfo} selfMuted={muted} />
+        <ParticipantTile
+          user={meInfo}
+          selfMuted={muted}
+          deafened={deafened}
+          speaking={meSpeaking}
+        />
         {participants
           .filter((p) => !screenStreams[p.id])
           .map((p) => (
-            <ParticipantTile key={p.id} user={p} speaking={speaking?.has(p.id) ?? false} />
+            <ParticipantTile
+              key={p.id}
+              user={p}
+              selfMuted={voiceStates[p.id]?.muted}
+              deafened={voiceStates[p.id]?.deafened}
+              speaking={speaking?.has(p.id) ?? false}
+            />
           ))}
       </div>
     )
@@ -98,8 +121,8 @@ function CallStage({
 
   // Foco grande (estilo Go Live) + strip com os demais.
   return (
-    <div className="flex h-full w-full max-w-6xl flex-col gap-4">
-      <div className="relative min-h-0 flex-1">
+    <div className="flex h-full w-full flex-col gap-4">
+      <div className="relative flex min-h-0 flex-1 items-center justify-center [container-type:size]">
         <div className="absolute inset-x-0 top-0 z-10 flex items-start justify-between px-1">
           <button
             onClick={() => setFocused(null)}
@@ -133,6 +156,8 @@ function CallStage({
         <ParticipantTile
           user={meInfo}
           selfMuted={muted}
+          deafened={deafened}
+          speaking={meSpeaking}
           size="md"
           videoStream={localCameraStream}
           mirror
@@ -143,6 +168,8 @@ function CallStage({
             <ParticipantTile
               key={p.id}
               user={p}
+              selfMuted={voiceStates[p.id]?.muted}
+              deafened={voiceStates[p.id]?.deafened}
               size="md"
               speaking={speaking?.has(p.id) ?? false}
               videoStream={videoStreams[p.id] ?? null}

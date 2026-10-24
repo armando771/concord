@@ -1,6 +1,6 @@
 {
   "name": "concord",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Concord — desktop chat app (Electron + React + TypeScript)",
   "main": "./out/main/index.js",
   "author": "concord",
@@ -25,6 +25,7 @@
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@tailwindcss/vite": "^4.3.3",
+    "electron-updater": "^6.8.11",
     "livekit-client": "^2.23.0",
     "react-router-dom": "^7.18.2",
     "tailwindcss": "^4.3.3",

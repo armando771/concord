@@ -3,6 +3,14 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { displayMediaStreams } from './displayMedia'
+import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './background'
+import { setupUpdater } from './updater'
+import {
+  hwndFromSourceId,
+  registerScreenAudio,
+  startWindowAudio,
+  stopWindowAudio
+} from './screenAudio'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -42,6 +50,17 @@ function registerScreenShareHandlers(): void {
     try {
       const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] })
       const source = sources.find((s) => s.id === sourceId)
+      // Cada escolha começa do zero: nada do compartilhamento anterior.
+      stopWindowAudio()
+      // Janela no Windows: som só do app dela (helper nativo). Se o helper não
+      // subir (Windows antigo), cai no som do sistema sem o Concord.
+      const hwnd = source ? hwndFromSourceId(source.id) : null
+      if (source && hwnd && pendingAudioRequested && mainWindow) {
+        if (await startWindowAudio(hwnd, mainWindow.webContents)) {
+          callback({ video: source })
+          return
+        }
+      }
       if (source) {
         callback(displayMediaStreams(source, pendingAudioRequested, process.platform))
       } else {
@@ -53,6 +72,7 @@ function registerScreenShareHandlers(): void {
   })
 
   ipcMain.on('screen-picker:cancel', () => {
+    stopWindowAudio()
     const callback = pendingDisplayCallback
     pendingDisplayCallback = null
     if (callback) callback({})
@@ -78,8 +98,10 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow?.show()
+    // Aberto pelo "Iniciar com o Windows": fica só na bandeja.
+    if (!startHidden()) mainWindow?.show()
   })
+  attachCloseToTray(mainWindow)
 
   mainWindow.on('closed', () => {
     mainWindow = null
@@ -102,11 +124,21 @@ function createWindow(): void {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
+// Só uma instância: abrir de novo traz a janela existente.
+// app.exit (não quit): sai na hora, sem criar janela/bandeja duplicadas.
+if (!ensureSingleInstance(() => mainWindow)) app.exit(0)
+
 app.whenReady().then(() => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.concord.app')
 
   registerScreenShareHandlers()
+  registerScreenAudio()
+  setupBackground(() => mainWindow, icon)
+  setupUpdater(() => mainWindow, {
+    feedUrl: __CONCORD_UPDATE_URL__,
+    publicKeyPem: __CONCORD_UPDATE_PUBKEY__
+  })
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

@@ -6,6 +6,27 @@
 import { createRequire } from 'module'
 const require = createRequire(new URL('../frontend/package.json', import.meta.url))
 const { chromium } = require('playwright')
+const { writeFileSync } = require('fs')
+const { tmpdir } = require('os')
+const { join } = require('path')
+
+// Tom contínuo como "microfone": o bipe padrão do Chromium é curto demais
+// para a detecção de fala do LiveKit.
+function writeToneWav(path, seconds = 10, rate = 48000) {
+  const samples = seconds * rate
+  const buf = Buffer.alloc(44 + samples * 2)
+  buf.write('RIFF', 0); buf.writeUInt32LE(36 + samples * 2, 4); buf.write('WAVE', 8)
+  buf.write('fmt ', 12); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22)
+  buf.writeUInt32LE(rate, 24); buf.writeUInt32LE(rate * 2, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34)
+  buf.write('data', 36); buf.writeUInt32LE(samples * 2, 40)
+  for (let i = 0; i < samples; i++) {
+    const env = 0.6 + 0.4 * Math.sin((2 * Math.PI * 3 * i) / rate)
+    buf.writeInt16LE(Math.round(12000 * env * Math.sin((2 * Math.PI * 440 * i) / rate)), 44 + i * 2)
+  }
+  writeFileSync(path, buf)
+}
+const TONE = join(tmpdir(), 'concord-e2e-tone.wav')
+writeToneWav(TONE)
 
 const API = process.env.API ?? 'http://localhost:8080/api'
 const APP = process.env.APP ?? 'http://localhost:5174/'
@@ -54,14 +75,65 @@ const browser = await chromium.launch({
   args: [
     '--use-fake-device-for-media-stream',
     '--use-fake-ui-for-media-stream',
+    `--use-file-for-fake-audio-capture=${TONE}`,
     '--auto-select-desktop-capture-source=Entire screen',
     '--autoplay-policy=no-user-gesture-required'
   ]
 })
 
-async function openClient(user) {
-  const context = await browser.newContext({ permissions: ['microphone', 'camera'] })
+// Simula o Electron no Windows para o fluxo do som da janela: o seletor do
+// app (api.screenPicker) e o processo main entregando o MessagePort com PCM do
+// helper — de propósito DEPOIS do vídeo (canais sem ordem garantida).
+function fakeElectronWindowAudio() {
+  window.electron = { process: { platform: 'win32' } }
+  const showListeners = []
+  let pick = null
+  const thumb = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='
+  window.api = {
+    screenPicker: {
+      onShow: (cb) => { showListeners.push(cb); return () => {} },
+      listSources: async () => [
+        { id: 'screen:0:0', name: 'Tela inteira', thumbnail: thumb, appIcon: null, displayId: '0' },
+        { id: 'window:4242:0', name: 'Jogo', thumbnail: thumb, appIcon: null, displayId: '' }
+      ],
+      select: (id) => pick?.(id),
+      cancel: () => pick?.(null)
+    },
+    screenAudio: { stop: () => { window.__screenAudioStops = (window.__screenAudioStops ?? 0) + 1 } }
+  }
+  const original = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices)
+  navigator.mediaDevices.getDisplayMedia = (constraints) => new Promise((resolve, reject) => {
+    pick = async (id) => {
+      if (!id) return reject(new DOMException('cancelado', 'NotAllowedError'))
+      resolve(await original(constraints))
+      if (!id.startsWith('window:')) return
+      setTimeout(() => {
+        const channel = new MessageChannel()
+        let t = 0
+        setInterval(() => {
+          const frames = 960 // 20 ms a 48 kHz, tom de 1 kHz
+          const pcm = new Float32Array(frames * 2)
+          for (let i = 0; i < frames; i++, t++) {
+            const v = 0.4 * Math.sin((2 * Math.PI * 1000 * t) / 48000)
+            pcm[i * 2] = v
+            pcm[i * 2 + 1] = v
+          }
+          channel.port1.postMessage(pcm.buffer, [pcm.buffer])
+        }, 20)
+        window.postMessage('concord:screen-audio-port', '*', [channel.port2])
+      }, 300)
+    }
+    showListeners.forEach((cb) => cb())
+  })
+}
+
+async function openClient(user, initScript) {
+  const context = await browser.newContext({
+    permissions: ['microphone', 'camera'],
+    viewport: { width: 2560, height: 1440 }
+  })
   const page = await context.newPage()
+  if (initScript) await page.addInitScript(initScript)
   page.on('response', (r) => { if (r.status() === 404) console.log(`[${user.username}] 404:`, r.url()) })
   page.on('console', (m) => { if (m.type() === 'error') console.log(`[${user.username}] console:`, m.text()) })
   await page.goto(APP + '#/login')
@@ -97,14 +169,90 @@ async function waitFor(desc, fn, ok, timeout = 20000) {
 
 let failed = false
 try {
-  const pageA = await openClient(ana)
+  const pageA = await openClient(ana, fakeElectronWindowAudio)
   const pageB = await openClient(bia)
 
   await waitFor('ana ouve a bia', () => audioTracks(pageA), (t) => t.includes('live'))
   await waitFor('bia ouve a ana', () => audioTracks(pageB), (t) => t.includes('live'))
+  // O microfone fake emite um bipe: o próprio usuário fica verde na lista do canal.
+  await waitFor('ana se vê falando (verde na lista do canal)', () => pageA.evaluate(() =>
+    [...document.querySelectorAll('span')].some((el) =>
+      el.textContent?.includes('(você)') &&
+      el.previousElementSibling?.className.includes('ring-[#23a55a]'))), (ok) => ok === true)
 
+  // Mudo/ensurdecido aparece ao lado do nome para os outros (como no Discord).
+  const voiceIcons = (page, name) => page.evaluate((n) => {
+    const row = [...document.querySelectorAll('span')].find((el) => el.textContent === n)?.parentElement
+    const icons = row?.querySelector('[title]')
+    return icons ? icons.getAttribute('title') : 'nenhum'
+  }, name)
+  await pageA.getByRole('button', { name: 'Silenciar microfone' }).first().click()
+  await waitFor('bia vê a ana mutada', () => voiceIcons(pageB, 'ana'), (t) => t === 'Microfone desativado')
+  await pageA.getByRole('button', { name: 'Ficar surdo' }).first().click()
+  await waitFor('bia vê a ana ensurdecida', () => voiceIcons(pageB, 'ana'), (t) => t === 'Áudio e microfone desativados')
+  // Como no Discord: sair do ensurdecer volta ao mute de antes (ela estava mutada).
+  await pageA.getByRole('button', { name: 'Desativar surdez' }).first().click()
+  await waitFor('bia vê a ana de volta só mutada', () => voiceIcons(pageB, 'ana'), (t) => t === 'Microfone desativado')
+  await pageA.getByRole('button', { name: 'Ativar microfone' }).first().click()
+  await waitFor('bia vê a ana com som de novo', () => voiceIcons(pageB, 'ana'), (t) => t === 'nenhum')
+
+  // Troca de microfone no meio da chamada (Configurações → Voz).
+  await pageA.getByRole('button', { name: 'Configurações do usuário' }).first().click()
+  const micSelect = pageA.locator('label', { hasText: 'Microfone' }).locator('select')
+  await micSelect.waitFor()
+  const options = await waitFor('lista de microfones carregada', () =>
+    micSelect.locator('option').allTextContents(), (o) => o.length > 1)
+  const other = options.find((o) => o !== 'Padrão do sistema')
+  if (!other) throw new Error(`sem microfone alternativo: ${JSON.stringify(options)}`)
+  await micSelect.selectOption({ label: other })
+  await pageA.screenshot({ path: join(tmpdir(), 'concord-e2e-settings.png') })
+  await pageA.getByRole('button', { name: 'Fechar' }).click()
+  await pageA.waitForTimeout(1500)
+  await waitFor(`ana continua falando após trocar para "${other}"`, () => pageA.evaluate(() =>
+    [...document.querySelectorAll('span')].some((el) =>
+      el.textContent?.includes('(você)') &&
+      el.previousElementSibling?.className.includes('ring-[#23a55a]'))), (ok) => ok === true)
+  await waitFor('bia continua ouvindo a ana', () => audioTracks(pageB), (t) => t.includes('live'))
+
+  // Seletor do app: aba Aplicativos → a janela "Jogo".
   await pageA.getByRole('button', { name: 'Compartilhar tela' }).click()
+  await pageA.getByRole('button', { name: 'Aplicativos' }).click()
+  await pageA.getByRole('button', { name: 'Compartilhar', exact: true }).click()
+  await waitFor('bia recebe o som da janela como track separada', () => audioTracks(pageB), (t) => t.filter((s) => s === 'live').length >= 2)
+  await waitFor('o som da janela chega com volume', () => pageB.evaluate(async () => {
+    const ctx = new AudioContext()
+    const levels = []
+    for (const el of document.querySelectorAll('audio')) {
+      if (!el.srcObject) continue
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 2048
+      ctx.createMediaStreamSource(el.srcObject).connect(analyser)
+      await new Promise((r) => setTimeout(r, 300))
+      const bins = new Float32Array(analyser.frequencyBinCount)
+      analyser.getFloatFrequencyData(bins)
+      const hz = (i) => Math.round((i * ctx.sampleRate) / analyser.fftSize)
+      let peak = 0
+      bins.forEach((v, i) => { if (v > bins[peak]) peak = i })
+      levels.push(hz(peak))
+    }
+    await ctx.close()
+    return levels
+  }), (peaks) => peaks.some((hz) => Math.abs(hz - 1000) < 60))
   await waitFor('bia vê a tela da ana', () => videoTracks(pageB), (t) => t.some((v) => v.startsWith('live:') && !v.endsWith(':0x0')))
+  // A tela em foco ocupa o palco (encosta na largura ou na altura disponível).
+  // Mede a imagem visível (descontando as faixas pretas do object-contain)
+  // contra a área inteira da view de voz.
+  await waitFor('tela em foco ocupa a área do palco', () => pageB.evaluate(() => {
+    const videos = [...document.querySelectorAll('video')].filter((v) => v.videoWidth > 0)
+    const video = videos.sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0]
+    const area = video?.closest('.overflow-y-auto')
+    if (!video || !area) return null
+    const ar = video.videoWidth / video.videoHeight
+    const box = video.getBoundingClientRect()
+    const w = Math.min(box.width, box.height * ar)
+    const a = area.getBoundingClientRect()
+    return { w: +(w / a.width).toFixed(2), h: +((w / ar) / a.height).toFixed(2) }
+  }), (r) => r !== null && (r.w >= 0.85 || r.h >= 0.7))
 
   await pageB.getByRole('button', { name: 'Compartilhar tela' }).click()
   await waitFor('ana vê a tela da bia (duas telas ao mesmo tempo)', () => videoTracks(pageA), (t) => t.filter((v) => v.startsWith('live:') && !v.endsWith(':0x0')).length >= 2)
@@ -115,6 +263,8 @@ try {
 
   // DM: ana liga para a bia, bia aceita, ambos se ouvem e a bia liga a câmera.
   await pageA.getByRole('button', { name: 'Desconectar', exact: true }).click()
+  await waitFor('captura do som da janela encerrada ao sair', () =>
+    pageA.evaluate(() => window.__screenAudioStops ?? 0), (n) => n >= 1)
   await pageA.goto(APP + `#/dm/${bia.id}`)
   await pageA.getByRole('button', { name: 'Iniciar chamada de voz' }).click()
   await pageB.getByRole('button', { name: 'Aceitar chamada' }).click({ timeout: 15000 })

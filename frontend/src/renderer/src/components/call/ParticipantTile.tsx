@@ -1,15 +1,18 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CallUserInfo } from '../../store/callStore'
-import { MicOffIcon } from '../icons'
+import VoiceStateIcons from './VoiceStateIcons'
 
 function VideoFill({
   stream,
   fit,
-  mirror
+  mirror,
+  onAspect
 }: {
   stream: MediaStream
   fit: 'cover' | 'contain'
   mirror?: boolean
+  /** Proporção (largura/altura) do vídeo assim que ela é conhecida/muda. */
+  onAspect?: (aspect: number) => void
 }): React.JSX.Element {
   const ref = useRef<HTMLVideoElement | null>(null)
 
@@ -19,6 +22,21 @@ function VideoFill({
     el.srcObject = stream
     void el.play().catch(() => {})
   }, [stream])
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || !onAspect) return
+    const report = (): void => {
+      if (el.videoWidth > 0 && el.videoHeight > 0) onAspect(el.videoWidth / el.videoHeight)
+    }
+    el.addEventListener('loadedmetadata', report)
+    el.addEventListener('resize', report)
+    report()
+    return () => {
+      el.removeEventListener('loadedmetadata', report)
+      el.removeEventListener('resize', report)
+    }
+  }, [onAspect])
 
   return (
     <video
@@ -37,6 +55,7 @@ function ParticipantTile({
   user,
   speaking = false,
   selfMuted = false,
+  deafened = false,
   videoStream = null,
   size = 'lg',
   isScreen = false,
@@ -46,6 +65,7 @@ function ParticipantTile({
   user: CallUserInfo
   speaking?: boolean
   selfMuted?: boolean
+  deafened?: boolean
   /** Stream de vídeo (tela/câmera) exibido dentro do tile. */
   videoStream?: MediaStream | null
   size?: 'md' | 'lg' | 'fill'
@@ -56,8 +76,14 @@ function ParticipantTile({
   onClick?: () => void
 }): React.JSX.Element {
   const initial = user.display_name.charAt(0).toUpperCase()
-  const dims =
-    size === 'fill' ? 'h-full w-full min-h-[240px]' : size === 'lg' ? 'h-48 w-80' : 'h-28 w-44'
+  // 'fill': o maior retângulo com a proporção do vídeo que cabe no container
+  // (o pai precisa ter container-type: size).
+  const [aspect, setAspect] = useState(16 / 9)
+  const dims = size === 'fill' ? 'max-h-full max-w-full' : size === 'lg' ? 'h-48 w-80' : 'h-28 w-44'
+  const fillStyle =
+    size === 'fill'
+      ? { aspectRatio: String(aspect), width: `min(100cqw, calc(100cqh * ${aspect}))` }
+      : undefined
   const avatarDims = size === 'lg' ? 'h-24 w-24 text-3xl' : 'h-14 w-14 text-lg'
 
   return (
@@ -65,6 +91,7 @@ function ParticipantTile({
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       title={onClick && isScreen ? 'Expandir tela' : undefined}
+      style={fillStyle}
       className={`relative flex items-center justify-center overflow-hidden rounded-2xl bg-white/[0.04] transition-all ${dims} ${
         isScreen
           ? 'ring-2 ring-[#23a55a] shadow-[0_0_24px_rgba(35,165,90,0.25)]'
@@ -74,7 +101,12 @@ function ParticipantTile({
       } ${onClick ? 'cursor-pointer hover:brightness-110' : ''}`}
     >
       {videoStream && (
-        <VideoFill stream={videoStream} fit={isScreen ? 'contain' : 'cover'} mirror={mirror} />
+        <VideoFill
+          stream={videoStream}
+          fit={isScreen ? 'contain' : 'cover'}
+          mirror={mirror}
+          onAspect={size === 'fill' ? setAspect : undefined}
+        />
       )}
       {!videoStream && (
         <div
@@ -92,7 +124,7 @@ function ParticipantTile({
         </div>
       )}
       <div className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm">
-        {selfMuted && <MicOffIcon className="h-3 w-3 shrink-0 text-red-400" />}
+        <VoiceStateIcons muted={selfMuted} deafened={deafened} className="h-3 w-3" />
         <span className="truncate text-xs font-semibold text-white">{user.display_name}</span>
       </div>
     </div>

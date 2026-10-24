@@ -29,6 +29,7 @@ var (
 type EventPublisher interface {
 	SendToUser(userID string, event []byte)
 	BroadcastToCall(callID string, event []byte)
+	BroadcastToRoom(room string, event []byte)
 }
 
 type ParticipantInfo struct {
@@ -37,6 +38,8 @@ type ParticipantInfo struct {
 	UserID   string    `json:"user_id"`
 	Role     string    `json:"role"`
 	JoinedAt time.Time `json:"joined_at"`
+	Muted    bool      `json:"muted"`
+	Deafened bool      `json:"deafened"`
 }
 
 type StateResponse struct {
@@ -49,6 +52,8 @@ type participantState struct {
 	userID   string
 	role     string
 	joinedAt time.Time
+	muted    bool
+	deafened bool
 }
 
 type activeCall struct {
@@ -493,6 +498,67 @@ func (s *Service) SetScreenShare(ctx context.Context, callID string, userID stri
 	return nil
 }
 
+// SetVoiceState registra se o participante está mudo/ensurdecido e avisa a
+// chamada e o servidor (para a lista do canal de voz).
+func (s *Service) SetVoiceState(callID string, userID string, muted bool, deafened bool) error {
+	s.mu.Lock()
+	ac, ok := s.calls[callID]
+	if !ok || ac.info.Status == StatusEnded {
+		s.mu.Unlock()
+		return ErrNotFound
+	}
+	p, ok := ac.participants[userID]
+	if !ok {
+		s.mu.Unlock()
+		return ErrNotAllowed
+	}
+	p.muted = muted
+	p.deafened = deafened
+	var serverID string
+	if ac.info.ServerID != nil {
+		serverID = *ac.info.ServerID
+	}
+	event := marshalEvent("call:voice", VoiceEvent{
+		CallID:    callID,
+		ChannelID: ac.info.ChannelID,
+		UserID:    userID,
+		Muted:     muted,
+		Deafened:  deafened,
+	})
+	s.mu.Unlock()
+
+	s.publisher.BroadcastToCall(callID, event)
+	if serverID != "" {
+		s.publisher.BroadcastToRoom("server:"+serverID, event)
+	}
+	return nil
+}
+
+func (s *Service) participantInfos(callID string) []ParticipantInfo {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	ac, ok := s.calls[callID]
+	if !ok {
+		return nil
+	}
+	return participantInfosLocked(callID, ac)
+}
+
+func participantInfosLocked(callID string, ac *activeCall) []ParticipantInfo {
+	participants := make([]ParticipantInfo, 0, len(ac.participants))
+	for _, p := range ac.participants {
+		participants = append(participants, ParticipantInfo{
+			CallID:   callID,
+			UserID:   p.userID,
+			Role:     p.role,
+			JoinedAt: p.joinedAt,
+			Muted:    p.muted,
+			Deafened: p.deafened,
+		})
+	}
+	return participants
+}
+
 func (s *Service) IsBusy(userID string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -553,15 +619,7 @@ func (s *Service) GetState(ctx context.Context, callID string) (*StateResponse, 
 		return nil, ErrNotFound
 	}
 
-	participants := make([]ParticipantInfo, 0, len(ac.participants))
-	for _, p := range ac.participants {
-		participants = append(participants, ParticipantInfo{
-			CallID:   callID,
-			UserID:   p.userID,
-			Role:     p.role,
-			JoinedAt: p.joinedAt,
-		})
-	}
+	participants := participantInfosLocked(callID, ac)
 	callCopy := *ac.info
 	screenSharing := make([]string, 0)
 	if sharers, ok := s.screenSharers[callID]; ok {
@@ -664,6 +722,15 @@ func (s *Service) HandleCallMessage(userID string, evType string, payload json.R
 			return
 		}
 		if err := s.Leave(ctx, p.CallID, userID); err != nil {
+			s.sendError(userID, p.CallID, err.Error())
+		}
+	case "call:voice":
+		var p VoicePayload
+		if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" {
+			s.sendError(userID, "", "invalid call:voice payload")
+			return
+		}
+		if err := s.SetVoiceState(p.CallID, userID, p.Muted, p.Deafened); err != nil {
 			s.sendError(userID, p.CallID, err.Error())
 		}
 	case "call:screen":

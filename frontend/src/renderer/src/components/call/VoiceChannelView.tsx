@@ -12,8 +12,6 @@ function VoiceChannelView({ channelId }: { channelId: string }): React.JSX.Eleme
   const status = useCallStore((s) => s.status)
   const type = useCallStore((s) => s.type)
   const activeChannelId = useCallStore((s) => s.channelId)
-  const streams = useCallStore((s) => s.streams)
-  const deafened = useCallStore((s) => s.deafened)
   const startedAt = useCallStore((s) => s.startedAt)
   const serverCalls = useCallStore((s) => s.serverCalls)
   const joinVoiceChannel = useCallStore((s) => s.joinVoiceChannel)
@@ -21,7 +19,7 @@ function VoiceChannelView({ channelId }: { channelId: string }): React.JSX.Eleme
   const connectedHere = status !== 'idle' && type === 'channel' && activeChannelId === channelId
 
   const elapsed = useElapsed(connectedHere ? startedAt : null)
-  const speaking = useSpeaking(connectedHere && !deafened ? streams : {})
+  const speaking = useSpeaking()
 
   const handleJoin = (): void => {
     joinVoiceChannel(channelId).catch((err) => {

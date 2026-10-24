@@ -102,7 +102,8 @@ concord/
 │   ├── internal/     # auth, user, friendship, server, channel, message,
 │   │                 # conversation, call, websocket, database
 │   └── migrations/   # SQL versionado
-├── scripts/          # server-up, build-win, install-services, playit-*, e2e-voice
+├── native/           # concord-audio: helper Rust do som da janela (Windows)
+├── scripts/          # server-up, build-win, release-win, install-services, playit-*, e2e-voice
 └── frontend/         # cliente Electron + React
     └── src/
         ├── main/     # processo principal do Electron
@@ -184,8 +185,18 @@ Eventos principais: `presence:update`, `message:create`, `message:delete`,
   ao mesmo tempo e funciona mesmo atrás de CGNAT.
 - O backend emite o token da sala (`POST /api/calls/:id/token`, só para
   participantes) e faz proxy de `/rtc` para o LiveKit local.
-- **Som da tela** (Windows): loopback do sistema sem o áudio do próprio Concord,
-  para não devolver as vozes da chamada como eco.
+- **Som da tela** (Windows): compartilhando uma janela, vai só o som do app
+  dela (helper nativo `native/concord-audio`, WASAPI process loopback);
+  compartilhando a tela inteira, o som do sistema sem o do próprio Concord.
+- **Fala, mudo e ensurdecido** visíveis para todos (lista do canal e tiles).
+- **Dispositivos:** escolha de microfone e saída (Configurações → Voz).
+
+## 🖥️ App desktop
+
+- **Segundo plano** (Windows): fechar esconde na bandeja; instância única;
+  iniciar com o Windows; notificações de chamada e DM.
+- **Atualização automática** servida pelo próprio servidor (`/updates/`),
+  com instaladores assinados (Ed25519) — `scripts/release-win.sh`.
 
 ## 🛠️ Scripts
 

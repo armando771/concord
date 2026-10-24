@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { notePickedSource } from '../../lib/windowAudio'
 import type { ScreenSourceInfo } from '../../../../preload/index.d'
 import Button from '../Button'
 import { MonitorIcon } from '../icons'
@@ -56,6 +57,7 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
 
   const confirm = useCallback((): void => {
     if (!selected) return
+    notePickedSource(selected)
     screenPicker?.select(selected)
     close()
   }, [screenPicker, selected, close])

@@ -1,9 +1,11 @@
 // Captura de mídia local. O transporte (envio/recebimento) fica no LiveKit —
 // ver lib/livekit.ts.
 
-export async function getAudioStream(): Promise<MediaStream> {
+/** Microfone local. `deviceId` vazio = padrão do sistema. */
+export async function getAudioStream(deviceId = ''): Promise<MediaStream> {
   return navigator.mediaDevices.getUserMedia({
     audio: {
+      ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
       echoCancellation: true,
       noiseSuppression: true,
       autoGainControl: true

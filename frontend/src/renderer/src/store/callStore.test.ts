@@ -73,6 +73,7 @@ vi.mock('../lib/livekit', () => ({
       media.events.push(`mic(${muted})`)
     })
     unpublish = vi.fn(async () => {})
+    replaceMic = vi.fn(async () => {})
     disconnect = vi.fn()
     constructor(handlers: unknown) {
       this.handlers = handlers
@@ -241,5 +242,186 @@ describe('callStore — mídia via LiveKit', () => {
     const afterConnect = events.slice(events.indexOf('connected') + 1)
     expect(afterConnect.at(-1)).toBe('mic(false)')
     expect(useCallStore.getState().muted).toBe(false)
+  })
+
+  it('marca quem está falando, incluindo o próprio usuário', async () => {
+    await joinChannel()
+    const handlers = media.instances[0].handlers as { onActiveSpeakers: (ids: string[]) => void }
+
+    handlers.onActiveSpeakers(['eu', 'ana'])
+    expect(useCallStore.getState().speakingIds).toEqual(['eu', 'ana'])
+
+    handlers.onActiveSpeakers([])
+    expect(useCallStore.getState().speakingIds).toEqual([])
+  })
+
+  it('limpa quem está falando ao sair da chamada', async () => {
+    await joinChannel()
+    const handlers = media.instances[0].handlers as { onActiveSpeakers: (ids: string[]) => void }
+    handlers.onActiveSpeakers(['eu'])
+
+    useCallStore.getState().endCall()
+
+    expect(useCallStore.getState().speakingIds).toEqual([])
+  })
+
+  it('ensurdecer também muta, e voltar restaura o mute anterior (como no Discord)', async () => {
+    await joinChannel()
+
+    useCallStore.getState().toggleDeafen()
+    expect(useCallStore.getState()).toMatchObject({ deafened: true, muted: true })
+
+    useCallStore.getState().toggleDeafen()
+    expect(useCallStore.getState()).toMatchObject({ deafened: false, muted: false })
+  })
+
+  it('desmutar enquanto ensurdecido também tira o ensurdecer', async () => {
+    await joinChannel()
+    useCallStore.getState().toggleDeafen()
+
+    useCallStore.getState().toggleMute()
+
+    expect(useCallStore.getState()).toMatchObject({ deafened: false, muted: false })
+  })
+
+  it('avisa o servidor ao mutar e ensurdecer', async () => {
+    await joinChannel()
+    chat.sendEvent.mockClear()
+
+    useCallStore.getState().toggleMute()
+    expect(chat.sendEvent).toHaveBeenLastCalledWith('call:voice', {
+      call_id: 'call-1',
+      muted: true,
+      deafened: false
+    })
+
+    useCallStore.getState().toggleDeafen()
+    expect(chat.sendEvent).toHaveBeenLastCalledWith('call:voice', {
+      call_id: 'call-1',
+      muted: true,
+      deafened: true
+    })
+  })
+
+  it('mostra quem está mudo/ensurdecido a partir do evento call:voice', async () => {
+    await joinChannel()
+    useCallStore.getState().setServerCalls({
+      'canal-1': {
+        call: { id: 'call-1' } as never,
+        participants: [{ call_id: 'call-1', user_id: 'ana', role: 'member', joined_at: '' }]
+      }
+    })
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:voice',
+      payload: { call_id: 'call-1', user_id: 'ana', muted: true, deafened: true }
+    })
+
+    expect(useCallStore.getState().voiceStates.ana).toEqual({ muted: true, deafened: true })
+    expect(useCallStore.getState().serverCalls['canal-1'].participants[0]).toMatchObject({
+      muted: true,
+      deafened: true
+    })
+  })
+
+  it('troca o microfone no meio da chamada sem sair da sala', async () => {
+    const first = fakeStream('audio')
+    const second = fakeStream('audio')
+    rtc.getAudioStream.mockResolvedValueOnce(first).mockResolvedValueOnce(second)
+    await joinChannel()
+
+    await useCallStore.getState().setInputDevice('mic-usb')
+
+    expect(rtc.getAudioStream).toHaveBeenLastCalledWith('mic-usb')
+    expect(media.instances[0].replaceMic).toHaveBeenCalledWith(second.getAudioTracks()[0])
+    expect(allStopped(first)).toBe(true)
+    expect(useCallStore.getState().inputDeviceId).toBe('mic-usb')
+    expect(useCallStore.getState().status).toBe('active')
+  })
+
+  it('o microfone novo respeita o mute atual', async () => {
+    const second = fakeStream('audio')
+    rtc.getAudioStream.mockResolvedValueOnce(fakeStream('audio')).mockResolvedValueOnce(second)
+    await joinChannel()
+    useCallStore.getState().toggleMute()
+
+    await useCallStore.getState().setInputDevice('mic-usb')
+
+    expect((second.getAudioTracks()[0] as unknown as FakeTrack).enabled).toBe(false)
+  })
+
+  it('entra na chamada já com o microfone escolhido', async () => {
+    await useCallStore.getState().setInputDevice('mic-usb')
+    await joinChannel()
+
+    expect(rtc.getAudioStream).toHaveBeenLastCalledWith('mic-usb')
+  })
+
+  it('guarda a saída de áudio escolhida', () => {
+    useCallStore.getState().setOutputDevice('fone')
+    expect(useCallStore.getState().outputDeviceId).toBe('fone')
+  })
+
+  it('depois de trocar o microfone, reaplica o mute na sala (o SDK pode ter mutado sozinho)', async () => {
+    rtc.getAudioStream
+      .mockResolvedValueOnce(fakeStream('audio'))
+      .mockResolvedValueOnce(fakeStream('audio'))
+    await joinChannel()
+    const connection = media.instances[0]
+    connection.setMicMuted.mockClear()
+
+    await useCallStore.getState().setInputDevice('')
+
+    expect(connection.replaceMic).toHaveBeenCalled()
+    expect(connection.setMicMuted).toHaveBeenLastCalledWith(false)
+  })
+
+  it('microfone salvo que sumiu: entra com o padrão do sistema em vez de falhar', async () => {
+    await useCallStore.getState().setInputDevice('headset-desconectado')
+    rtc.getAudioStream.mockImplementation(async (id?: string) => {
+      if (id) throw Object.assign(new Error('x'), { name: 'OverconstrainedError' })
+      return fakeStream('audio')
+    })
+
+    await joinChannel()
+
+    expect(useCallStore.getState().status).toBe('active')
+    expect(useCallStore.getState().inputDeviceId).toBe('')
+    expect(rtc.getAudioStream).toHaveBeenLastCalledWith('')
+  })
+
+  it('não avisa mudo/ensurdecido antes de a chamada estar ativa (DM tocando)', async () => {
+    useCallStore.getState().handleWsEvent({
+      type: 'call:invite',
+      payload: {
+        call_id: 'dm-1',
+        type: 'dm',
+        initiator: { id: 'ana', username: 'ana', display_name: 'Ana' }
+      }
+    })
+    chat.sendEvent.mockClear()
+
+    useCallStore.getState().toggleMute()
+
+    expect(chat.sendEvent).not.toHaveBeenCalledWith('call:voice', expect.anything())
+    expect(useCallStore.getState().status).toBe('ringing')
+  })
+
+  it('ao conectar a mídia, avisa o estado atual de mudo/ensurdecido', async () => {
+    const connected = deferred<void>()
+    media.connect.mockReturnValue(connected.promise)
+    await useCallStore.getState().startChannelCall('canal-1')
+    useCallStore.getState().toggleDeafen()
+    chat.sendEvent.mockClear()
+
+    connected.resolve()
+    await flush()
+    await flush()
+
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:voice', {
+      call_id: 'call-1',
+      muted: true,
+      deafened: true
+    })
   })
 })

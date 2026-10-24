@@ -100,22 +100,52 @@ atualizar o código: `cd backend && go build -o concord-server ./cmd &&
 systemctl --user restart concord-server`. O Postgres e o LiveKit sobem
 sozinhos pelo Docker (`restart: unless-stopped`).
 
-## 5. Gerar o `.exe` dos amigos
+## 5. Publicar o app para os amigos (com atualização automática)
 
-Use o endereço público do túnel **Concord API**:
+Defina `PUBLIC_URL` no `backend/.env` com o endereço público do túnel
+**Concord API** (ex.: `http://abc-api.gl.at.ply.gg:12345`) e rode:
 
 ```bash
-scripts/build-win.sh http://abc-api.gl.at.ply.gg:12345
+scripts/release-win.sh          # ou: scripts/release-win.sh 0.3.0
 ```
 
-Isso gera em `frontend/dist/`:
+O script faz quatro coisas:
 
-- `Concord-<versão>-portable.exe`: é só abrir. **Mande este.**
-- `Concord-<versão>-setup.exe`: instalador com atalho, para quem preferir.
+1. Na primeira vez, gera a **chave de assinatura** em `backend/.release-key`.
+   Faça backup dela e não compartilhe: sem ela, os apps já instalados recusam
+   as atualizações.
+2. Sobe a versão em `frontend/package.json`.
+3. Gera e assina o instalador com o endereço e a chave pública embutidos.
+4. Publica tudo em `backend/updates/`, que o backend serve em `/updates/`.
 
-O endereço do playit grátis é fixo, então só precisa gerar de novo se ele
-mudar. Como o app não é assinado, o Windows mostra "O Windows protegeu o
-computador". Os amigos clicam em **Mais informações → Executar assim mesmo**.
+**Primeira vez de cada amigo:** mande `frontend/dist/Concord-<versão>-setup.exe`.
+Como o app não é assinado, o Windows mostra "O Windows protegeu o
+computador". Basta clicar em **Mais informações → Executar assim mesmo**.
+
+**Depois disso, não precisa mandar mais nada.** Para cada versão nova, rode
+`scripts/release-win.sh` de novo:
+
+- O app checa atualizações ao abrir e a cada 30 minutos.
+- Ele baixa a versão nova em segundo plano, mas só fora de chamada, porque o
+  upload do servidor é o mesmo das chamadas.
+- Instaladores sem assinatura válida são recusados.
+- Se já estava baixada, a atualização instala ao abrir o app. Com o app aberto,
+  aparece **"Nova atualização disponível"** no canto inferior direito, com o
+  botão **Atualizar**.
+
+> `scripts/build-win.sh <endereço>` ainda gera um `.exe` avulso (portable +
+> instalador), mas sem atualização automática.
+
+### No app (Windows)
+
+- **Fechar a janela** deixa o app na bandeja, como o Discord. Para fechar de
+  vez, use **Sair** no ícone da bandeja.
+- **Iniciar com o Windows** vem ligado e pode ser desligado nas configurações.
+- **Configurações → Voz:** escolha do microfone e da saída de som.
+- **Som da tela compartilhada:**
+  - Ao compartilhar uma **janela**, vai só o som do app dela (Windows 10 2004
+    ou mais novo).
+  - Ao compartilhar a **tela inteira**, vai o som do PC todo, menos o Concord.
 
 ## 6. Testar
 

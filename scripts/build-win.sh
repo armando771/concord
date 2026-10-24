@@ -21,6 +21,25 @@ fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mkdir -p "$ROOT/frontend/dist"
 
+# Alvos (portable + instalador por padrão; release-win.sh usa só nsis) e a
+# chave pública que valida atualizações (vazia = app sem auto-update).
+BUILD_TARGETS="${BUILD_TARGETS:-portable nsis}"
+UPDATE_URL="${SERVER_URL%/}/updates/"
+
+# Helper nativo do som da janela (Rust → concord-audio.exe), embutido no app.
+docker build -q -t concord-rust-win "$ROOT/native/concord-audio" >/dev/null
+docker run --rm \
+  -v "$ROOT/native/concord-audio:/src" \
+  -v concord-cargo-cache:/usr/local/cargo/registry \
+  -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+  -w /src concord-rust-win \
+  bash -euo pipefail -c '
+    cargo build --release --target x86_64-pc-windows-gnu
+    chown -R "$HOST_UID:$HOST_GID" target
+  '
+mkdir -p "$ROOT/frontend/resources/win"
+cp "$ROOT/native/concord-audio/target/x86_64-pc-windows-gnu/release/concord-audio.exe" "$ROOT/frontend/resources/win/"
+
 # O projeto é copiado para dentro do container (sem node_modules do host) e só
 # o resultado volta para frontend/dist — nada criado como root no repositório.
 docker run --rm \
@@ -28,6 +47,9 @@ docker run --rm \
   -v "$ROOT/frontend/dist:/out" \
   -v concord-builder-cache:/root/.cache \
   -e VITE_SERVER_URL="$SERVER_URL" \
+  -e CONCORD_UPDATE_URL="$UPDATE_URL" \
+  -e CONCORD_UPDATE_PUBKEY="${CONCORD_UPDATE_PUBKEY:-}" \
+  -e BUILD_TARGETS="$BUILD_TARGETS" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   electronuserland/builder:wine \
   bash -euo pipefail -c '
@@ -36,9 +58,10 @@ docker run --rm \
     cd /work
     yarn install --frozen-lockfile --ignore-scripts
     yarn electron-vite build
-    yarn electron-builder --win portable nsis --x64 --publish never
+    yarn electron-builder --win $BUILD_TARGETS --x64 --publish never
     cp dist/*.exe /out/
-    chown "$HOST_UID:$HOST_GID" /out/*.exe
+    cp dist/*.blockmap dist/latest.yml /out/ 2>/dev/null || true
+    chown "$HOST_UID:$HOST_GID" /out/*
   '
 
 echo

@@ -9,10 +9,16 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!resources/win/**'
+  - '!**/*.test.ts'
 asarUnpack:
   - resources/**
 win:
   executableName: Concord
+  # Helper do som da janela compartilhada (gerado por scripts/build-win.sh)
+  extraResources:
+    - from: resources/win/concord-audio.exe
+      to: concord-audio.exe
   target:
     - portable
     - nsis
@@ -43,3 +49,8 @@ linux:
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
+# Atualização automática: latest.yml + instalador servidos pelo próprio
+# servidor do Concord (<servidor>/updates/). A URL vem do build-win.sh.
+publish:
+  provider: generic
+  url: ${env.CONCORD_UPDATE_URL}

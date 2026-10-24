@@ -99,6 +99,22 @@ type InvitePayload struct {
 	ChannelID      string `json:"channel_id,omitempty"`
 }
 
+// VoiceEvent: participante mutou/desmutou ou ensurdeceu. Vai para a chamada e
+// para o servidor (lista do canal de voz de quem não está na chamada).
+type VoiceEvent struct {
+	CallID    string  `json:"call_id"`
+	ChannelID *string `json:"channel_id,omitempty"`
+	UserID    string  `json:"user_id"`
+	Muted     bool    `json:"muted"`
+	Deafened  bool    `json:"deafened"`
+}
+
+type VoicePayload struct {
+	CallID   string `json:"call_id"`
+	Muted    bool   `json:"muted"`
+	Deafened bool   `json:"deafened"`
+}
+
 type ScreenPayload struct {
 	CallID string `json:"call_id"`
 	Active bool   `json:"active"`
