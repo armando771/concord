@@ -1,7 +1,13 @@
 import { create } from 'zustand'
 import type { ServerMember } from '../api/servers'
-import { mentionNotification, messageNotification, notifyDesktop } from '../lib/notifications'
+import {
+  mentionNotification,
+  messageNotification,
+  notificationSound,
+  notifyDesktop
+} from '../lib/notifications'
 import { playSound } from '../lib/sounds'
+import { notificationPrefs } from './notificationPrefsStore'
 import { useAuthStore } from './authStore'
 import { WsClient, type WsEvent } from '../api/ws'
 import type { Message } from '../api/messages'
@@ -322,7 +328,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           }
         })
 
-        // DM recebida ou menção a você num canal: notificação do Windows e som.
+        // DM recebida ou menção a você num canal: notificação do Windows, aviso
+        // na barra de tarefas e som — conforme Configurações → Notificações.
         // A mesma mensagem chega pela sala do canal e do servidor: avisa uma vez.
         const me = useAuthStore.getState().user
         if (me && !notifiedMessages.has(msg.id)) {
@@ -331,9 +338,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             messageNotification(msg, me.id) ??
             mentionNotification(msg, { id: me.id, username: me.username }, serverId)
           if (notification) {
-            notifyDesktop(notification)
+            const prefs = notificationPrefs()
+            notifyDesktop(notification, prefs)
             const looking = room === get().activeRoom && document.hasFocus()
-            if (!looking) playSound('mention')
+            const sound = notificationSound(notification.kind, prefs)
+            if (!looking && sound) playSound(sound)
           }
         }
 
