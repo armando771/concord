@@ -80,27 +80,16 @@ jobs:
           RELEASE_KEY: ${{ secrets.RELEASE_KEY }}
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
-          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
-          umask 077
-          # Aceita o PEM colado (com CRLF ou numa linha só), ele em base64 ou só
-          # a linha do meio (sem BEGIN/END).
-          key=$(printf '%s' "$RELEASE_KEY" | tr -d '\r')
-          if [[ "$key" != *BEGIN* ]]; then
-            decoded=$(printf '%s' "$key" | base64 -d 2>/dev/null | tr -d '\0\r' || true)
-            if [[ "$decoded" == *BEGIN* ]]; then
-              key=$decoded
-            else
-              key="-----BEGIN PRIVATE KEY----- $key -----END PRIVATE KEY-----"
-            fi
+          printf '%s' "$VPS_SSH_KEY" | scripts/write-key.sh ~/.ssh/id_ed25519 "OPENSSH PRIVATE KEY"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          if ! pub=$(ssh-keygen -y -f ~/.ssh/id_ed25519 2>/dev/null); then
+            echo "::error::secret VPS_SSH_KEY inválido — cole o arquivo inteiro da chave privada (com as linhas BEGIN/END)"
+            exit 1
           fi
-          if [[ "$key" == *BEGIN* && "$key" != *$'\n'* ]]; then
-            body=${key#*-----BEGIN PRIVATE KEY-----}
-            body=${body%-----END PRIVATE KEY-----*}
-            key=$(printf -- '-----BEGIN PRIVATE KEY-----\n%s\n-----END PRIVATE KEY-----' "$(echo $body | tr ' ' '\n')")
-          fi
-          printf '%s\n' "$key" > backend/.release-key
+          echo "chave SSH de deploy (precisa estar no authorized_keys da VPS): $pub"
+
+          printf '%s' "$RELEASE_KEY" | scripts/write-key.sh backend/.release-key "PRIVATE KEY"
           if ! openssl pkey -in backend/.release-key -noout 2>/dev/null; then
             echo "::error::secret RELEASE_KEY inválido — cole o conteúdo inteiro de backend/.release-key (com as linhas BEGIN/END)"
             exit 1
