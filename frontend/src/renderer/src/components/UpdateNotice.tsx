@@ -12,18 +12,29 @@ function UpdateNotice(): React.JSX.Element | null {
   const inCall = useCallStore((s) => s.status !== 'idle')
   const [version, setVersion] = useState<string | null>(null)
   const [dismissed, setDismissed] = useState<string | null>(null)
+  const [readyVersion, setReadyVersion] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
-  const [progress, setProgress] = useState<number | null>(null)
+  // O download também roda sozinho em segundo plano: o progresso só aparece
+  // depois que a pessoa clica em Atualizar.
+  const [requested, setRequested] = useState(false)
+  const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!updates) return
-    void updates.status().then((s) => s && setVersion(s.version))
+    void updates.status().then((s) => {
+      if (!s) return
+      setVersion(s.version)
+      if (s.ready) setReadyVersion(s.version)
+    })
     const offAvailable = updates.onAvailable(setVersion)
-    const offReady = updates.onReady(setVersion)
+    const offReady = updates.onReady((v) => {
+      setVersion(v)
+      setReadyVersion(v)
+    })
     const offProgress = updates.onProgress(setProgress)
     const offError = updates.onError((message) => {
-      setProgress(null)
+      setRequested(false)
       setError(message)
     })
     return () => {
@@ -37,12 +48,13 @@ function UpdateNotice(): React.JSX.Element | null {
   // "Depois" esconde só esta versão — uma mais nova aparece de novo.
   if (!updates || !version || dismissed === version) return null
 
-  const installing = progress !== null
+  const installing = requested
+  const ready = readyVersion === version
 
   const install = (): void => {
     setError(null)
     setConfirming(false)
-    setProgress(0)
+    setRequested(true)
     // Sai da chamada antes (avisa os outros) — o app reinicia para instalar.
     const wasInCall = useCallStore.getState().status !== 'idle'
     useCallStore.getState().endCall()
@@ -59,14 +71,16 @@ function UpdateNotice(): React.JSX.Element | null {
         {error
           ? error
           : installing
-            ? `Baixando a versão ${version}… ${progress}%`
+            ? ready || progress >= 100
+              ? `Reiniciando para instalar a versão ${version}…`
+              : `Baixando a versão ${version}… ${progress}%`
             : confirming
               ? 'Atualizar agora vai te tirar da chamada. O Concord reinicia em seguida.'
               : `Versão ${version}.`}
       </p>
       {installing && (
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
-          <div className="h-full bg-[#23a55a]" style={{ width: `${progress}%` }} />
+          <div className="h-full bg-[#23a55a]" style={{ width: `${ready ? 100 : progress}%` }} />
         </div>
       )}
       {!installing && (
