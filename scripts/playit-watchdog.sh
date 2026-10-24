@@ -6,7 +6,9 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PUBLIC_URL="$(grep -E '^PUBLIC_URL=' "$ROOT/backend/.env" | cut -d= -f2-)"
+# PLAYIT_URL: endereço do túnel (se o PUBLIC_URL já for outro, ex.: VPS).
+PUBLIC_URL="$(grep -E '^PLAYIT_URL=' "$ROOT/backend/.env" | cut -d= -f2-)"
+[[ -z "$PUBLIC_URL" ]] && PUBLIC_URL="$(grep -E '^PUBLIC_URL=' "$ROOT/backend/.env" | cut -d= -f2-)"
 STATE="${XDG_RUNTIME_DIR:-/tmp}/concord-playit-failures"
 
 if [[ -z "$PUBLIC_URL" ]]; then

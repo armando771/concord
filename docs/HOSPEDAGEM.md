@@ -158,21 +158,57 @@ computador". Basta clicar em **Mais informações → Executar assim mesmo**.
 - Quem está na **mesma rede** que o servidor (o seu desktop) conecta a mídia
   direto pela rede local, sem passar pelo playit.
 
-## 7. Se o playit não ficar bom: VPS no Brasil
+## 7. Rodar numa VPS (recomendado)
 
-O código não muda, só a configuração:
+Numa VPS com IP público não precisa de playit, e dá para ter HTTPS de graça.
 
-1. VPS em São Paulo com IP fixo. Atenção à cota de tráfego: ~2–3 TB/mês numa
-   rotina de 10 pessoas com telas.
-2. Túnel WireGuard VPS ↔ este PC, e a VPS repassando (DNAT) a porta do backend
-   (TCP) e as portas de mídia (UDP e TCP) para o PC.
-3. `.env`: `LIVEKIT_NODE_IP` = IP da VPS; portas iguais às repassadas.
-4. Opcional, recomendado: Caddy na VPS com domínio para ter HTTPS. Aí o
-   build usa `https://seu-dominio` e o app passa a usar `wss://` sozinho.
-5. Gere o `.exe` de novo com o novo endereço e mande para os amigos.
+1. **VPS:** Debian 13 ou Ubuntu 24.04, 2 vCPU, 2–4 GB de RAM, tráfego alto
+   (~2–3 TB/mês com telas) e portas UDP liberadas. Datacenter perto do grupo.
+2. **Instale** Docker (repositório oficial), `caddy` e `rsync`.
+3. **`/opt/concord/.env`** (a partir do `backend/.env.example`):
+   - `HOST=127.0.0.1`, para o backend escutar só local, atrás do Caddy;
+   - `LIVEKIT_NODE_IP` com o IP público da VPS;
+   - `LIVEKIT_UDP_PORT=7882` e `LIVEKIT_TCP_PORT=7881` (sem túnel, as portas
+     são as mesmas);
+   - `PUBLIC_URL=https://<seu-endereço>`;
+   - os segredos (`JWT_SECRET` e as chaves do LiveKit). Usando os mesmos de
+     antes, ninguém perde o login.
+4. **Endereço com HTTPS sem comprar domínio:** use `<ip-com-hífens>.sslip.io`
+   (ex.: `1-2-3-4.sslip.io` aponta para `1.2.3.4`). `/etc/caddy/Caddyfile`:
+   ```
+   1-2-3-4.sslip.io {
+   	reverse_proxy 127.0.0.1:8090
+   }
+   ```
+   O Caddy tira o certificado sozinho. O arquivo precisa ser legível pelo
+   usuário `caddy` (`chmod 644`).
+5. **Serviço do backend:** `/etc/systemd/system/concord-server.service`, com
+   `WorkingDirectory=/opt/concord`, `ExecStart=/opt/concord/concord-server` e
+   `Restart=always`. Depois `systemctl enable --now concord-server`.
+6. **Do seu PC:** `scripts/deploy-vps.sh root@IP` envia o backend, as
+   migrations, o compose e as atualizações do app, e reinicia. Reiniciar não
+   derruba quem está em chamada.
+7. **Publicar versão do app:** `scripts/release-win.sh` e depois
+   `scripts/deploy-vps.sh root@IP`.
+
+**Migrar sem perder nada e sem mandar `.exe` novo:**
+1. Pare o backend antigo.
+2. Copie o banco: `pg_dump` no antigo → `psql` na VPS, e confira as contagens.
+3. No PC antigo, repasse a porta do backend para a VPS:
+   `docker run -d --restart unless-stopped --name concord-relay --network host alpine/socat TCP-LISTEN:<PORT>,fork,reuseaddr TCP:<IP-da-VPS>:8080`.
+   Na VPS, um bloco `:8080 { reverse_proxy 127.0.0.1:8090 }` no Caddy recebe
+   esse tráfego. Assim o endereço antigo (playit) continua funcionando.
+4. Publique uma versão nova com o `PUBLIC_URL` da VPS. Os apps antigos se
+   atualizam pelo endereço antigo e passam a falar direto com a VPS.
+5. Quando todos estiverem na versão nova, desligue o repasse, o playit e o
+   bloco `:8080`.
+
+**Backup:** um timer do systemd roda `pg_dump` todo dia e guarda 14 dias em
+`/opt/concord/backups`.
 
 ## Segurança
 
-Com o playit, login e mensagens trafegam **sem criptografia** (HTTP). A
-mídia das chamadas é sempre criptografada (WebRTC). Use senhas que não sejam
-as mesmas de outros serviços até migrar para uma VPS com HTTPS.
+Com o playit, login e mensagens trafegam **sem criptografia** (HTTP). Na VPS
+com Caddy, tudo vai por HTTPS/WSS. A mídia das chamadas é sempre
+criptografada (WebRTC). Numa VPS sem firewall, o `docker-compose.yml` já deixa
+o Postgres e a API do LiveKit só em `127.0.0.1`.

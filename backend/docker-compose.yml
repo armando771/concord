@@ -10,7 +10,8 @@ services:
       POSTGRES_DB: concord
 
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Só local: numa VPS sem firewall o banco não pode ficar exposto.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
 
     volumes:
       - concord_postgres_data:/var/lib/postgresql/data
@@ -31,6 +32,9 @@ services:
       # às portas públicas do túnel, porque o LiveKit anuncia a própria porta.
       LIVEKIT_CONFIG: |
         port: ${LIVEKIT_PORT:-7880}
+        # API/sinalização só local (o backend faz proxy de /rtc); a mídia
+        # (rtc.tcp_port/udp_port) continua aberta.
+        bind_addresses: ["127.0.0.1"]
         log_level: info
         rtc:
           tcp_port: ${LIVEKIT_TCP_PORT:-7881}

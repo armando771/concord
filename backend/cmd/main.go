@@ -184,7 +184,8 @@ func main() {
 		port = "8080"
 	}
 
-	if err := router.Run(":" + port); err != nil {
+	// HOST=127.0.0.1 quando há um proxy na frente (Caddy na VPS).
+	if err := router.Run(os.Getenv("HOST") + ":" + port); err != nil {
 		log.Fatal(err)
 	}
 }
