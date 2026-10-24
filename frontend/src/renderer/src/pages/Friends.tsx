@@ -387,7 +387,7 @@ function Friends(): React.JSX.Element {
             <div className="mx-auto max-w-xl py-6">
               <h2 className="text-xl font-bold text-white">Adicionar Amigo</h2>
               <p className="mt-1 text-xs text-gray-400">
-                Você pode adicionar um amigo usando o nome de usuário do Concord.
+                Você pode adicionar um amigo usando o nome de usuário da Salinha.
               </p>
 
               <form

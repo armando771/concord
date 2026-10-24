@@ -4,7 +4,7 @@ export type DisplayAudioMode = 'window' | 'system' | 'none'
 /**
  * - janela: só o som do app dela (helper nativo). Se não deu para isolar,
  *   vai SEM som — nunca o do sistema, que vazaria outros apps (YouTube…).
- * - tela inteira: som do sistema sem o Concord (loopback + restrictOwnAudio).
+ * - tela inteira: som do sistema sem a Salinha (loopback + restrictOwnAudio).
  * - loopback só existe no Windows.
  */
 export function displayAudioMode(input: {

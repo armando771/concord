@@ -1,8 +1,8 @@
-# Concord
+# Salinha
 
 > Chat desktop em tempo real com canais de voz, vídeo e compartilhamento de tela.
 
-Concord é um aplicativo de comunicação estilo Discord, construído do zero como
+Salinha é um aplicativo de comunicação estilo Discord, construído do zero como
 projeto de estudo de arquitetura. Traz servidores, canais de texto e voz, DMs,
 amizades e chamadas WebRTC (voz, vídeo e compartilhamento de tela) em um cliente
 desktop com tema escuro.
@@ -15,7 +15,7 @@ desktop com tema escuro.
 
 ## 📖 Sobre o projeto
 
-O Concord nasceu com a ideia de entender, na prática, como funciona uma
+A Salinha nasceu com a ideia de entender, na prática, como funciona uma
 aplicação de chat em tempo real de ponta a ponta: autenticação, permissões,
 mensageria via WebSocket, presença online e chamadas P2P com WebRTC.
 
@@ -190,7 +190,7 @@ Eventos principais: `presence:update`, `message:create`, `message:delete`,
   participantes) e faz proxy de `/rtc` para o LiveKit local.
 - **Som da tela** (Windows): compartilhando uma janela, vai só o som do app
   dela (helper nativo `native/concord-audio`, WASAPI process loopback);
-  compartilhando a tela inteira, o som do sistema sem o do próprio Concord.
+  compartilhando a tela inteira, o som do sistema sem o da própria Salinha.
 - **Fala, mudo e ensurdecido** visíveis para todos (lista do canal e tiles).
 - **Dispositivos:** escolha de microfone e saída (Configurações → Voz).
 

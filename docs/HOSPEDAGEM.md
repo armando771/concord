@@ -1,4 +1,4 @@
-# Hospedar o Concord para os amigos
+# Hospedar a Salinha para os amigos
 
 Este PC é o servidor (backend + Postgres + LiveKit). O **playit.gg** leva o
 tráfego da internet até ele sem abrir porta no roteador. Os amigos só baixam e
@@ -45,9 +45,9 @@ Edite `backend/.env`:
 
    | Túnel | Tipo | Porta local |
    |---|---|---|
-   | Concord API | TCP | o `PORT` do `.env` (padrão 8080) |
-   | Concord mídia | **UDP** | **igual à porta pública** que o playit der |
-   | Concord mídia TCP | TCP | **igual à porta pública** que o playit der |
+   | Salinha API | TCP | o `PORT` do `.env` (padrão 8080) |
+   | Salinha mídia | **UDP** | **igual à porta pública** que o playit der |
+   | Salinha mídia TCP | TCP | **igual à porta pública** que o playit der |
 
    Os dois túneis de mídia precisam ter **porta local = porta pública**, porque
    o LiveKit informa a própria porta aos clientes. Exemplo: se o túnel UDP
@@ -103,7 +103,7 @@ sozinhos pelo Docker (`restart: unless-stopped`).
 ## 5. Publicar o app para os amigos (com atualização automática)
 
 Defina `PUBLIC_URL` no `backend/.env` com o endereço público do túnel
-**Concord API** (ex.: `http://abc-api.gl.at.ply.gg:12345`) e rode:
+**Salinha API** (ex.: `http://abc-api.gl.at.ply.gg:12345`) e rode:
 
 ```bash
 scripts/release-win.sh          # ou: scripts/release-win.sh 0.3.0
@@ -118,7 +118,7 @@ O script faz quatro coisas:
 3. Gera e assina o instalador com o endereço e a chave pública embutidos.
 4. Publica tudo em `backend/updates/`, que o backend serve em `/updates/`.
 
-**Primeira vez de cada amigo:** mande `frontend/dist/Concord-<versão>-setup.exe`.
+**Primeira vez de cada amigo:** mande `frontend/dist/Salinha-<versão>-setup.exe`.
 Como o app não é assinado, o Windows mostra "O Windows protegeu o
 computador". Basta clicar em **Mais informações → Executar assim mesmo**.
 
@@ -145,7 +145,7 @@ computador". Basta clicar em **Mais informações → Executar assim mesmo**.
 - **Som da tela compartilhada:**
   - Ao compartilhar uma **janela**, vai só o som do app dela (Windows 10 2004
     ou mais novo).
-  - Ao compartilhar a **tela inteira**, vai o som do PC todo, menos o Concord.
+  - Ao compartilhar a **tela inteira**, vai o som do PC todo, menos o da Salinha.
 
 ## 6. Testar
 
@@ -196,7 +196,7 @@ Numa VPS com IP público não precisa de playit, e dá para ter HTTPS de graça.
 `/updates/latest.yml` e aponta o botão para o instalador mais recente. No
 Caddyfile, um domínio próprio serve a página e repassa `/updates/` ao backend:
 ```
-concord.exemplo.com {
+salinha.exemplo.com {
 	encode zstd gzip
 	handle /updates/* {
 		reverse_proxy 127.0.0.1:8090
@@ -207,7 +207,9 @@ concord.exemplo.com {
 	}
 }
 ```
-O domínio precisa de um registro DNS `A` apontando para o IP da VPS (no
+Para um endereço antigo continuar funcionando, um bloco
+`antigo.exemplo.com { redir https://salinha.exemplo.com{uri} permanent }`
+basta. O domínio precisa de um registro DNS `A` apontando para o IP da VPS (no
 Cloudflare, com o proxy desligado — nuvem cinza — por causa do tamanho do
 instalador).
 
@@ -241,7 +243,7 @@ Para ligar, em **Settings → Secrets and variables → Actions**:
   - `DEPLOY_ENABLED=true`;
   - `VPS_HOST=root@<ip>`;
   - `PUBLIC_URL=https://<endereço>`;
-  - `SITE_URL=https://<página de download>` (opcional; padrão `https://concord.bhrx.com.br`).
+  - `SITE_URL=https://<página de download>` (opcional; padrão `https://salinha.bhrx.com.br`).
 
 Sem `DEPLOY_ENABLED`, o workflow só roda os testes.
 

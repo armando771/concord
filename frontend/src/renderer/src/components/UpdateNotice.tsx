@@ -75,7 +75,7 @@ function UpdateNotice(): React.JSX.Element | null {
               ? `Reiniciando para instalar a versão ${version}…`
               : `Baixando a versão ${version}… ${progress}%`
             : confirming
-              ? 'Atualizar agora vai te tirar da chamada. O Concord reinicia em seguida.'
+              ? 'Atualizar agora vai te tirar da chamada. A Salinha reinicia em seguida.'
               : `Versão ${version}.`}
       </p>
       {installing && (

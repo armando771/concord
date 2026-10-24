@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Publica uma nova versão do Concord para Windows com atualização automática.
+# Publica uma nova versão da Salinha para Windows com atualização automática.
 #
 #   scripts/release-win.sh [versão]          # ex.: 0.2.0 (padrão: próximo patch)
 #
@@ -59,7 +59,7 @@ echo "Versão $VERSION"
 rm -f dist/latest.yml dist/*.blockmap
 CONCORD_UPDATE_PUBKEY="$PUBKEY" BUILD_TARGETS="nsis" "$ROOT/scripts/build-win.sh" "$SERVER_URL"
 
-INSTALLER="dist/Concord-$VERSION-setup.exe"
+INSTALLER="dist/Salinha-$VERSION-setup.exe"
 if [[ ! -f "$INSTALLER" || ! -f dist/latest.yml ]]; then
   echo "build não gerou $INSTALLER e latest.yml" >&2
   exit 1
@@ -72,6 +72,6 @@ cp "$INSTALLER" "$INSTALLER.blockmap" "$INSTALLER.sig" "$UPDATES_DIR/"
 cp dist/latest.yml "$UPDATES_DIR/latest.yml"
 
 echo
-echo "Publicado: Concord $VERSION em $SERVER_URL/updates/"
+echo "Publicado: Salinha $VERSION em $SERVER_URL/updates/"
 echo "Instalador para quem ainda não tem auto-update: frontend/$INSTALLER"
 echo "Lembre de commitar a nova versão em frontend/package.json."

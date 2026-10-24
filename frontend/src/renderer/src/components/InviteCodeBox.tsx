@@ -40,7 +40,7 @@ function InviteCodeBox({ serverId }: { serverId: string }): React.JSX.Element {
         </Button>
       </div>
       <p className="text-xs text-gray-400">
-        Mande para seus amigos. No Concord, eles clicam em <strong>+</strong> →{' '}
+        Mande para seus amigos. Na Salinha, eles clicam em <strong>+</strong> →{' '}
         <strong>Entrar com código</strong> — não precisa ser amigo nem aceitar convite.
       </p>
     </div>
