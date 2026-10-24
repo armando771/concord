@@ -21,8 +21,11 @@ export interface ScreenAudioApi {
 }
 
 export interface UpdatesApi {
-  status(): Promise<string | null>
+  status(): Promise<{ version: string; ready: boolean } | null>
+  onAvailable(cb: (version: string) => void): () => void
   onReady(cb: (version: string) => void): () => void
+  onProgress(cb: (percent: number) => void): () => void
+  onError(cb: (message: string) => void): () => void
   install(): void
 }
 

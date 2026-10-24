@@ -41,15 +41,32 @@ const api = {
     }
   },
   updates: {
-    /** Versão pronta para instalar (já baixada e com assinatura válida). */
-    status(): Promise<string | null> {
+    /** Versão nova conhecida (e se já está pronta para instalar), ou null. */
+    status(): Promise<{ version: string; ready: boolean } | null> {
       return ipcRenderer.invoke('update:status')
+    },
+    /** Existe versão nova (pode ainda estar baixando). */
+    onAvailable(cb: (version: string) => void): () => void {
+      const listener = (_e: unknown, version: string): void => cb(version)
+      ipcRenderer.on('update:available', listener)
+      return () => ipcRenderer.removeListener('update:available', listener)
     },
     onReady(cb: (version: string) => void): () => void {
       const listener = (_e: unknown, version: string): void => cb(version)
       ipcRenderer.on('update:ready', listener)
       return () => ipcRenderer.removeListener('update:ready', listener)
     },
+    onProgress(cb: (percent: number) => void): () => void {
+      const listener = (_e: unknown, percent: number): void => cb(percent)
+      ipcRenderer.on('update:progress', listener)
+      return () => ipcRenderer.removeListener('update:progress', listener)
+    },
+    onError(cb: (message: string) => void): () => void {
+      const listener = (_e: unknown, message: string): void => cb(message)
+      ipcRenderer.on('update:error', listener)
+      return () => ipcRenderer.removeListener('update:error', listener)
+    },
+    /** Instala (baixando antes, se precisar) e reinicia o app. */
     install(): void {
       ipcRenderer.send('update:install')
     }

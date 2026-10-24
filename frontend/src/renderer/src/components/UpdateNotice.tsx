@@ -3,33 +3,50 @@ import { useCallStore } from '../store/callStore'
 import Button from './Button'
 
 /**
- * "Nova atualização disponível" no canto inferior direito, quando uma versão
- * nova terminou de baixar (e passou na verificação da assinatura).
+ * "Nova atualização disponível" no canto inferior direito, assim que existe
+ * versão nova (mesmo antes de baixar). Atualizar baixa (se ainda não baixou),
+ * verifica a assinatura e reinicia o app.
  */
 function UpdateNotice(): React.JSX.Element | null {
   const updates = window.api?.updates
   const inCall = useCallStore((s) => s.status !== 'idle')
   const [version, setVersion] = useState<string | null>(null)
+  const [dismissed, setDismissed] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
+  const [progress, setProgress] = useState<number | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!updates) return
-    void updates.status().then((v) => v && setVersion(v))
-    return updates.onReady((v) => {
-      setVersion(v)
-      setDismissed(false)
+    void updates.status().then((s) => s && setVersion(s.version))
+    const offAvailable = updates.onAvailable(setVersion)
+    const offReady = updates.onReady(setVersion)
+    const offProgress = updates.onProgress(setProgress)
+    const offError = updates.onError((message) => {
+      setProgress(null)
+      setError(message)
     })
+    return () => {
+      offAvailable()
+      offReady()
+      offProgress()
+      offError()
+    }
   }, [updates])
 
-  if (!updates || !version || dismissed) return null
+  // "Depois" esconde só esta versão — uma mais nova aparece de novo.
+  if (!updates || !version || dismissed === version) return null
+
+  const installing = progress !== null
 
   const install = (): void => {
+    setError(null)
+    setConfirming(false)
+    setProgress(0)
     // Sai da chamada antes (avisa os outros) — o app reinicia para instalar.
-    const inCall = useCallStore.getState().status !== 'idle'
+    const wasInCall = useCallStore.getState().status !== 'idle'
     useCallStore.getState().endCall()
-    // pausa curta para o "saí da chamada" sair pelo WebSocket
-    setTimeout(() => updates.install(), inCall ? 250 : 0)
+    setTimeout(() => updates.install(), wasInCall ? 250 : 0)
   }
 
   return (
@@ -39,24 +56,35 @@ function UpdateNotice(): React.JSX.Element | null {
     >
       <p className="text-sm font-semibold text-white">Nova atualização disponível</p>
       <p className="mt-0.5 text-xs text-gray-400">
-        {confirming
-          ? 'Atualizar agora vai te tirar da chamada. O Concord reinicia em seguida.'
-          : `Versão ${version} pronta para instalar.`}
+        {error
+          ? error
+          : installing
+            ? `Baixando a versão ${version}… ${progress}%`
+            : confirming
+              ? 'Atualizar agora vai te tirar da chamada. O Concord reinicia em seguida.'
+              : `Versão ${version}.`}
       </p>
-      <div className="mt-3 flex justify-end gap-2">
-        <Button
-          variant="ghost"
-          onClick={() => (confirming ? setConfirming(false) : setDismissed(true))}
-        >
-          Depois
-        </Button>
-        <Button
-          variant="success"
-          onClick={() => (inCall && !confirming ? setConfirming(true) : install())}
-        >
-          {confirming ? 'Atualizar mesmo assim' : 'Atualizar'}
-        </Button>
-      </div>
+      {installing && (
+        <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
+          <div className="h-full bg-[#23a55a]" style={{ width: `${progress}%` }} />
+        </div>
+      )}
+      {!installing && (
+        <div className="mt-3 flex justify-end gap-2">
+          <Button
+            variant="ghost"
+            onClick={() => (confirming ? setConfirming(false) : setDismissed(version))}
+          >
+            Depois
+          </Button>
+          <Button
+            variant="success"
+            onClick={() => (inCall && !confirming ? setConfirming(true) : install())}
+          >
+            {confirming ? 'Atualizar mesmo assim' : 'Atualizar'}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

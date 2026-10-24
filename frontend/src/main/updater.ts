@@ -39,9 +39,15 @@ function readVerifiedVersion(): string | null {
 function saveVerifiedVersion(version: string): void {
   void writeFile(verifiedPath(), JSON.stringify({ version })).catch(() => {})
 }
-let pendingDownload = false
-let downloading = false
+/** Versão nova encontrada (ainda baixando ou já pronta). */
+let availableVersion: string | null = null
+/** Versão baixada e com assinatura válida — pronta para instalar. */
 let readyVersion: string | null = null
+let downloading = false
+/** Ficou esperando o fim da chamada para baixar em segundo plano. */
+let pendingDownload = false
+/** A pessoa clicou em Atualizar: instala assim que terminar de baixar. */
+let installRequested = false
 
 function install(): void {
   markQuitting()
@@ -55,9 +61,10 @@ async function fetchSignature(feedUrl: string, file: string): Promise<string> {
   return response.text()
 }
 
-function startDownload(): void {
-  if (downloading || readyVersion) return
-  if (!canDownloadUpdate(isInCall())) {
+/** Baixa a versão disponível. Em chamada, só se a pessoa pediu (force). */
+function startDownload(force = false): void {
+  if (downloading || readyVersion || !availableVersion) return
+  if (!force && !canDownloadUpdate(isInCall())) {
     pendingDownload = true
     return
   }
@@ -70,9 +77,23 @@ function startDownload(): void {
 }
 
 export function setupUpdater(getWindow: () => BrowserWindow | null, config: UpdaterConfig): void {
-  ipcMain.handle('update:status', () => readyVersion)
+  const send = (channel: string, value: unknown): void =>
+    getWindow()?.webContents.send(channel, value)
+
+  ipcMain.handle('update:status', () =>
+    availableVersion
+      ? { version: availableVersion, ready: readyVersion === availableVersion }
+      : null
+  )
+  // Botão Atualizar: instala na hora se já baixou; senão baixa agora (mesmo
+  // em chamada — a pessoa pediu) e instala quando terminar.
   ipcMain.on('update:install', () => {
-    if (readyVersion) install()
+    if (readyVersion) {
+      install()
+      return
+    }
+    installRequested = true
+    startDownload(true)
   })
 
   // Sem endereço ou sem chave (build de desenvolvimento): não atualiza.
@@ -83,10 +104,23 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
   // A instalação passa pela verificação da assinatura — nunca automática.
   autoUpdater.autoInstallOnAppQuit = false
 
-  autoUpdater.on('update-available', startDownload)
+  // Aviso assim que existe versão nova (antes de baixar); versão mais nova
+  // substitui a que já estava pronta.
+  autoUpdater.on('update-available', (info: { version: string }) => {
+    if (info.version !== availableVersion) {
+      availableVersion = info.version
+      readyVersion = null
+    }
+    send('update:available', info.version)
+    startDownload(installRequested)
+  })
+  autoUpdater.on('download-progress', (progress: { percent: number }) => {
+    send('update:progress', Math.round(progress.percent))
+  })
   autoUpdater.on('error', (err) => {
     downloading = false
     console.error('[update] erro:', err)
+    if (installRequested) send('update:error', String(err))
   })
   autoUpdater.on('update-downloaded', async (event: UpdateDownloadedEvent) => {
     downloading = false
@@ -101,24 +135,25 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
     } catch (err) {
       console.error('[update] instalador recusado:', err)
       await rm(event.downloadedFile, { force: true }).catch(() => {})
+      installRequested = false
+      send('update:error', 'A atualização baixada não passou na verificação de segurança.')
       return
     }
 
     readyVersion = event.version
     const verifiedBefore = readVerifiedVersion()
     saveVerifiedVersion(event.version)
-    if (
-      installOnStartup({
-        version: event.version,
-        verifiedBefore,
-        msSinceStart: Date.now() - startedAt,
-        inCall: isInCall()
-      })
-    ) {
+    const startup = installOnStartup({
+      version: event.version,
+      verifiedBefore,
+      msSinceStart: Date.now() - startedAt,
+      inCall: isInCall()
+    })
+    if (installRequested || startup) {
       install()
       return
     }
-    getWindow()?.webContents.send('update:ready', event.version)
+    send('update:ready', event.version)
   })
 
   // Chamada acabou: baixa o que ficou esperando.
