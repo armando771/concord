@@ -2,6 +2,7 @@
 // ver lib/livekit.ts.
 
 import { openMicrophone, type MicHandle } from './noiseSuppression'
+import { pickerError, resetPickerCancel } from './screenPickerCancel'
 
 /** Microfone local (com RNNoise). `deviceId` vazio = padrão do sistema. */
 export function getAudioStream(deviceId = ''): Promise<MicHandle> {
@@ -14,16 +15,21 @@ export function getAudioStream(deviceId = ''): Promise<MicHandle> {
 // áudio do próprio Concord (vozes da chamada) do loopback, evitando eco para
 // quem assiste. Rejeita com NotAllowedError quando o usuário cancela.
 export async function getDisplayStream(): Promise<MediaStream> {
-  const stream = await navigator.mediaDevices.getDisplayMedia({
-    video: { frameRate: 30 },
-    audio: {
-      restrictOwnAudio: true,
-      suppressLocalAudioPlayback: false,
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false
-    } as MediaTrackConstraints
-  })
+  resetPickerCancel()
+  const stream = await navigator.mediaDevices
+    .getDisplayMedia({
+      video: { frameRate: 30 },
+      audio: {
+        restrictOwnAudio: true,
+        suppressLocalAudioPlayback: false,
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      } as MediaTrackConstraints
+    })
+    .catch((err: unknown) => {
+      throw pickerError(err)
+    })
   stream.getVideoTracks().forEach((track) => {
     track.contentHint = 'detail'
   })

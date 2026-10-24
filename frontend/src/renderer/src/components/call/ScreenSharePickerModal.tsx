@@ -3,6 +3,7 @@ import { notePickedSource } from '../../lib/windowAudio'
 import type { ScreenSourceInfo } from '../../../../preload/index.d'
 import Button from '../Button'
 import { MonitorIcon } from '../icons'
+import { notePickerCancelled } from '../../lib/screenPickerCancel'
 
 /**
  * Picker de fonte para compartilhamento de tela (estilo Discord).
@@ -51,6 +52,7 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
   }, [])
 
   const cancel = useCallback((): void => {
+    notePickerCancelled()
     screenPicker?.cancel()
     close()
   }, [screenPicker, close])
