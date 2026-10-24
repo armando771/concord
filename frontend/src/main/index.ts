@@ -97,7 +97,7 @@ function createWindow(): void {
     minHeight: 640,
     show: false,
     autoHideMenuBar: true,
-    title: 'Concord',
+    title: 'Salinha',
     backgroundColor: '#0f1120',
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
@@ -136,10 +136,14 @@ function createWindow(): void {
 // Some APIs can only be used after this event occurs.
 // Só uma instância: abrir de novo traz a janela existente.
 // app.exit (não quit): sai na hora, sem criar janela/bandeja duplicadas.
+// O app se chamava Concord: a pasta de dados continua a mesma para ninguém
+// perder o login nem as configurações (antes do lock, que mora nela).
+app.setPath('userData', join(app.getPath('appData'), 'Concord'))
 if (!ensureSingleInstance(() => mainWindow)) app.exit(0)
 
 app.whenReady().then(() => {
-  // Set app user model id for windows
+  // Set app user model id for windows. Mantém o id do Concord (nome antigo):
+  // é o que liga notificações, atalho de login e instalação ao mesmo app.
   electronApp.setAppUserModelId('com.concord.app')
   // Sem a barra "File Edit View Window" padrão do Electron (aparecia no Alt).
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)

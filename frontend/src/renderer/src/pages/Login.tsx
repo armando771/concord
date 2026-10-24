@@ -47,7 +47,7 @@ function Login(): React.JSX.Element {
   return (
     <div className="flex h-full items-center justify-center p-8">
       <GlassCard className="w-full max-w-md p-8">
-        <h1 className="mb-6 text-2xl font-semibold text-gray-50">Entrar no Concord</h1>
+        <h1 className="mb-6 text-2xl font-semibold text-gray-50">Entrar na Salinha</h1>
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           <Input
             label="Email"

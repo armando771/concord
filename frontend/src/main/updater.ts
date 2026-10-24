@@ -7,7 +7,7 @@ import { isInCall, markQuitting, onCallStateChange } from './background'
 import { canDownloadUpdate, installOnStartup } from './updatePolicy'
 import { verifyInstaller } from './updateSignature'
 
-// Atualização automática servida pelo próprio servidor do Concord
+// Atualização automática servida pelo próprio servidor da Salinha
 // (`<servidor>/updates/`). O instalador só é aceito com a assinatura Ed25519
 // do dono (chave pública embutida no build).
 

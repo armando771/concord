@@ -1,5 +1,7 @@
+# appId continua o do Concord (nome antigo): é ele que faz a versão nova
+# substituir a instalação antiga em vez de instalar um segundo app.
 appId: com.concord.app
-productName: Concord
+productName: Salinha
 directories:
   buildResources: build
 files:
@@ -14,7 +16,7 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: Concord
+  executableName: Salinha
   # Helper do som da janela compartilhada (gerado por scripts/build-win.sh)
   extraResources:
     - from: resources/win/concord-audio.exe
@@ -23,9 +25,9 @@ win:
     - portable
     - nsis
 portable:
-  artifactName: Concord-${version}-portable.${ext}
+  artifactName: Salinha-${version}-portable.${ext}
 nsis:
-  artifactName: Concord-${version}-setup.${ext}
+  artifactName: Salinha-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
@@ -50,7 +52,7 @@ appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
 # Atualização automática: latest.yml + instalador servidos pelo próprio
-# servidor do Concord (<servidor>/updates/). A URL vem do build-win.sh.
+# servidor da Salinha (<servidor>/updates/). A URL vem do build-win.sh.
 publish:
   provider: generic
   url: ${env.CONCORD_UPDATE_URL}

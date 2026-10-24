@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { PlusIcon, InboxIcon } from './icons'
+import { PlusIcon, InboxIcon, SalinhaMarkIcon } from './icons'
 import { useServerStore } from '../store/serverStore'
 import { useInviteStore } from '../store/inviteStore'
 import { useChatStore } from '../store/chatStore'
@@ -107,7 +107,7 @@ function ServerRail(): React.JSX.Element {
   return (
     <>
       <aside className="group/rail flex h-full w-18 shrink-0 flex-col items-center gap-2 border-r border-white/6 bg-[#06070a]/85 py-3 backdrop-blur-2xl">
-        {/* Home / Concord logo 'C' squircle button */}
+        {/* Início: botão com a marca da Salinha */}
         <div className="relative flex items-center justify-center">
           <span
             className={`absolute -left-3.5 w-2 rounded-r-full bg-white transition-all duration-200 ${
@@ -125,7 +125,7 @@ function ServerRail(): React.JSX.Element {
                 : 'rounded-3xl bg-[#12141d]/80 border border-white/10 hover:rounded-2xl hover:bg-linear-to-br hover:from-violet-600 hover:to-indigo-600 hover:shadow-violet-500/30'
             }`}
           >
-            C
+            <SalinhaMarkIcon className="h-8 w-8" />
           </Link>
           {dmUnread > 0 && (
             <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-md">

@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, Tray } fr
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { badgeBitmap, badgeDescription, badgeLabel, taskbarAction } from './taskbarBadge'
-import { launchedHidden, shouldHideOnClose, shouldNotify } from './windowPolicy'
+import { launchedHidden, shouldHideOnClose, shouldNotify, staleLoginItem } from './windowPolicy'
 
 // Modo segundo plano estilo Discord: bandeja, instância única, iniciar com o
 // Windows e notificações nativas. Bandeja/fechar-esconde só no Windows.
@@ -73,9 +73,19 @@ function setAutostart(enabled: boolean): void {
   app.setLoginItemSettings({ openAtLogin: enabled, args: ['--hidden'] })
 }
 
+/** Atalho de login ainda no Concord.exe (nome antigo): regrava no .exe atual. */
+function repairAutostart(): void {
+  const { openAtLogin, launchItems = [] } = app.getLoginItemSettings({ args: ['--hidden'] })
+  if (openAtLogin) return
+  const stale = staleLoginItem(launchItems, process.execPath)
+  if (stale)
+    app.setLoginItemSettings({ openAtLogin: true, args: ['--hidden'], enabled: stale.enabled })
+}
+
 /** "Iniciar com o Windows" vem ligado na primeira execução. */
 function initAutostart(): void {
   if (!autostartSupported() || !app.isPackaged) return
+  repairAutostart()
   const prefs = readPrefs()
   if (prefs.autostartInitialized) return
   setAutostart(true)
@@ -108,10 +118,10 @@ function showWindow(win: BrowserWindow | null): void {
 
 function rebuildTrayMenu(getWindow: () => BrowserWindow | null): void {
   if (!tray) return
-  tray.setToolTip(callState.inCall ? 'Concord — em chamada' : 'Concord')
+  tray.setToolTip(callState.inCall ? 'Salinha — em chamada' : 'Salinha')
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Abrir Concord', click: () => showWindow(getWindow()) },
+      { label: 'Abrir a Salinha', click: () => showWindow(getWindow()) },
       ...(callState.inCall
         ? [
             {
@@ -121,7 +131,7 @@ function rebuildTrayMenu(getWindow: () => BrowserWindow | null): void {
           ]
         : []),
       { type: 'separator' as const },
-      { label: 'Sair do Concord', click: () => requestQuit(getWindow()) }
+      { label: 'Sair da Salinha', click: () => requestQuit(getWindow()) }
     ])
   )
 }

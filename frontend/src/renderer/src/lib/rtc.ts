@@ -12,7 +12,7 @@ export function getAudioStream(deviceId = ''): Promise<MicHandle> {
 // Captura de tela com o som do que está sendo compartilhado. O picker visual é
 // o modal do app — o Electron resolve a fonte escolhida via
 // setDisplayMediaRequestHandler no processo main. `restrictOwnAudio` tira o
-// áudio do próprio Concord (vozes da chamada) do loopback, evitando eco para
+// áudio da própria Salinha (vozes da chamada) do loopback, evitando eco para
 // quem assiste. Rejeita com NotAllowedError quando o usuário cancela.
 export async function getDisplayStream(): Promise<MediaStream> {
   resetPickerCancel()

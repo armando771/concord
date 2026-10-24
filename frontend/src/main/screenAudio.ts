@@ -81,7 +81,7 @@ export function startWindowAudio(hwnd: string, contents: WebContents): Promise<b
   logAudio(`iniciando captura da janela ${hwnd}`)
 
   return new Promise((resolve) => {
-    // stdin aberto: quando o Concord morre, o pipe fecha e o helper sai junto.
+    // stdin aberto: quando a Salinha morre, o pipe fecha e o helper sai junto.
     const child = spawn(path, ['window', hwnd], {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true

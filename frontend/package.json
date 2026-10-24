@@ -1,9 +1,9 @@
 {
-  "name": "concord",
+  "name": "salinha",
   "version": "0.6.0",
-  "description": "Concord — desktop chat app (Electron + React + TypeScript)",
+  "description": "Salinha — desktop chat app (Electron + React + TypeScript)",
   "main": "./out/main/index.js",
-  "author": "concord",
+  "author": "salinha",
   "homepage": "https://electron-vite.org",
   "scripts": {
     "format": "prettier --write .",

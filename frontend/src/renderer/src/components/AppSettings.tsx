@@ -34,7 +34,7 @@ const NOTIFICATION_OPTIONS: { key: keyof NotificationPrefs; title: string; descr
     {
       key: 'taskbar',
       title: 'Mostrar na barra de tarefas',
-      description: 'Pisca o Concord e mostra quantas mensagens chegaram enquanto você não olhava.'
+      description: 'Pisca a Salinha e mostra quantas mensagens chegaram enquanto você não olhava.'
     },
     {
       key: 'desktop',

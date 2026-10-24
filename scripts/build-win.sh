@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Gera o Concord para Windows com o endereço do servidor embutido.
+# Gera a Salinha para Windows com o endereço do servidor embutido.
 #
 #   scripts/build-win.sh http://SEU-ENDERECO.ply.gg:PORTA
 #
-# Saída em frontend/dist/: Concord-<versão>-portable.exe (é só abrir) e
-# Concord-<versão>-setup.exe (instalador). Roda dentro do Docker
+# Saída em frontend/dist/: Salinha-<versão>-portable.exe (é só abrir) e
+# Salinha-<versão>-setup.exe (instalador). Roda dentro do Docker
 # (electronuserland/builder:wine) para não precisar de wine na máquina.
 set -euo pipefail
 
