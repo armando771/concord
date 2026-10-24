@@ -1,6 +1,6 @@
 # Deploy automático: a cada push/merge na main, testa tudo e, se passar,
-# publica o backend na VPS e uma versão nova do app desktop (os apps abertos
-# mostram "Nova atualização disponível").
+# publica na VPS o backend, a página de download (site/) e uma versão nova do
+# app desktop (os apps abertos mostram "Nova atualização disponível").
 #
 # Configuração do repositório (Settings → Secrets and variables → Actions):
 #   Secrets:
@@ -11,6 +11,7 @@
 #     DEPLOY_ENABLED   "true" para ligar o deploy (sem isso, só roda os testes)
 #     VPS_HOST         ex.: root@1.2.3.4
 #     PUBLIC_URL       ex.: https://1-2-3-4.sslip.io
+#     SITE_URL         (opcional) página de download a conferir (padrão: https://concord.bhrx.com.br)
 name: Deploy
 
 on:
@@ -61,6 +62,7 @@ jobs:
     env:
       PUBLIC_URL: ${{ vars.PUBLIC_URL }}
       VPS_HOST: ${{ vars.VPS_HOST }}
+      SITE_URL: ${{ vars.SITE_URL || 'https://concord.bhrx.com.br' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -109,13 +111,18 @@ jobs:
       - name: App desktop (instalador assinado)
         run: scripts/release-win.sh "${{ steps.version.outputs.version }}"
 
-      - name: Publicar na VPS (backend + atualização do app)
+      - name: Publicar na VPS (backend + página de download + atualização do app)
         run: scripts/deploy-vps.sh "$VPS_HOST"
 
       - name: Conferir
         run: |
           curl -fsS "${PUBLIC_URL%/}/updates/latest.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
           test "$(curl -s -o /dev/null -w '%{http_code}' "${PUBLIC_URL%/}/rtc/validate")" = 401
+          if [[ -n "$SITE_URL" ]]; then
+            curl -fsS "${SITE_URL%/}/" | grep -q 'data-download'
+            curl -fsS "${SITE_URL%/}/updates/latest.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
+            echo "Página de download no ar em ${SITE_URL%/}"
+          fi
           echo "Concord ${{ steps.version.outputs.version }} no ar em ${PUBLIC_URL%/}"
 
       - name: Limpar chaves
