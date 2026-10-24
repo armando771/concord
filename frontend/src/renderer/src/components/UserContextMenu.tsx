@@ -6,7 +6,7 @@ import { useCallStore } from '../store/callStore'
 import { useFriendStore } from '../store/friendStore'
 import { useServerStore } from '../store/serverStore'
 import { showToast } from '../store/toastStore'
-import { useUserAudioStore } from '../store/userAudioStore'
+import { streamAudioKey, useUserAudioStore } from '../store/userAudioStore'
 import { useUserMenuStore } from '../store/userMenuStore'
 
 const MENU_WIDTH = 232
@@ -29,7 +29,9 @@ function UserContextMenu(): React.JSX.Element | null {
   const callUsername = useCallStore(
     (s) => s.participants.find((p) => p.id === target?.userId)?.username
   )
-  const audio = useUserAudioStore((s) => (target ? s.get(target.userId) : null))
+  // Menu da live usa o volume da live; menu da pessoa, o da voz dela.
+  const audioKey = target ? (target.stream ? streamAudioKey(target.userId) : target.userId) : ''
+  const audio = useUserAudioStore((s) => (target ? s.get(audioKey) : null))
   const setVolume = useUserAudioStore((s) => s.setVolume)
   const toggleMuted = useUserAudioStore((s) => s.toggleMuted)
   const isFriend = useFriendStore((s) => s.friends.some((f) => f.id === target?.userId))
@@ -56,6 +58,55 @@ function UserContextMenu(): React.JSX.Element | null {
   }, [target, close])
 
   if (!target || !audio) return null
+
+  const left = Math.min(target.x, window.innerWidth - MENU_WIDTH - 8)
+  const top = Math.min(target.y, window.innerHeight - 280)
+
+  const volumeControls = (label: string, muteLabel: string): React.JSX.Element => (
+    <>
+      <label className="flex flex-col gap-1.5 rounded px-2 py-1.5">
+        <span className="text-xs font-semibold text-gray-300">
+          {label} · {Math.round(audio.volume * 100)}%
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={Math.round(audio.volume * 100)}
+          onChange={(e) => setVolume(audioKey, Number(e.target.value) / 100)}
+          aria-label={label}
+          className="accent-[#5865f2]"
+        />
+      </label>
+      <label className="flex cursor-pointer items-center justify-between rounded px-2 py-1.5 hover:bg-white/5">
+        <span>{muteLabel}</span>
+        <input
+          type="checkbox"
+          checked={audio.muted}
+          onChange={() => toggleMuted(audioKey)}
+          className="h-4 w-4 accent-[#f23f43]"
+        />
+      </label>
+    </>
+  )
+
+  // Botão direito na live de alguém: só o som da live.
+  if (target.stream) {
+    return (
+      <div
+        ref={ref}
+        role="menu"
+        aria-label={`Transmissão de ${target.name}`}
+        style={{ left, top, width: MENU_WIDTH }}
+        className="fixed z-[60] flex flex-col gap-1 rounded-lg border border-white/10 bg-[#111214] p-2 text-sm text-gray-200 shadow-2xl"
+      >
+        <p className="truncate px-2 pb-1 pt-0.5 text-xs font-bold text-gray-400">
+          Transmissão de {target.name}
+        </p>
+        {volumeControls('Volume da transmissão', 'Silenciar transmissão')}
+      </div>
+    )
+  }
 
   const canSetRole = Boolean(
     server && member && server.owner_id === meId && member.user_id !== meId
@@ -95,9 +146,6 @@ function UserContextMenu(): React.JSX.Element | null {
     }
   }
 
-  const left = Math.min(target.x, window.innerWidth - MENU_WIDTH - 8)
-  const top = Math.min(target.y, window.innerHeight - 280)
-
   return (
     <div
       ref={ref}
@@ -120,29 +168,7 @@ function UserContextMenu(): React.JSX.Element | null {
       {inCallWith && (
         <>
           <div className="my-1 h-px bg-white/10" />
-          <label className="flex flex-col gap-1.5 rounded px-2 py-1.5">
-            <span className="text-xs font-semibold text-gray-300">
-              Volume do usuário · {Math.round(audio.volume * 100)}%
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={Math.round(audio.volume * 100)}
-              onChange={(e) => setVolume(target.userId, Number(e.target.value) / 100)}
-              aria-label="Volume do usuário"
-              className="accent-[#5865f2]"
-            />
-          </label>
-          <label className="flex cursor-pointer items-center justify-between rounded px-2 py-1.5 hover:bg-white/5">
-            <span>Silenciar</span>
-            <input
-              type="checkbox"
-              checked={audio.muted}
-              onChange={() => toggleMuted(target.userId)}
-              className="h-4 w-4 accent-[#f23f43]"
-            />
-          </label>
+          {volumeControls('Volume do usuário', 'Silenciar')}
         </>
       )}
 

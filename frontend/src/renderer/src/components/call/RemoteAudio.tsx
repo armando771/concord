@@ -34,7 +34,7 @@ function RemoteAudio({
     void el?.setSinkId?.(outputDeviceId).catch(() => {})
   }, [outputDeviceId])
 
-  return <audio ref={ref} autoPlay muted={muted} className="hidden" />
+  return <audio ref={ref} autoPlay muted={muted} data-audio={userId} className="hidden" />
 }
 
 export default RemoteAudio

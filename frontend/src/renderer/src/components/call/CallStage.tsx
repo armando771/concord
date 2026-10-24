@@ -1,6 +1,6 @@
 import { useAuthStore } from '../../store/authStore'
-import { useUserAudioStore } from '../../store/userAudioStore'
-import { userMenuHandler } from '../../store/userMenuStore'
+import { streamAudioKey, useUserAudioStore } from '../../store/userAudioStore'
+import { streamMenuHandler, userMenuHandler } from '../../store/userMenuStore'
 import { useCallStore } from '../../store/callStore'
 import type { CallUserInfo } from '../../store/callStore'
 import { ChevronDownIcon } from '../icons'
@@ -101,6 +101,8 @@ function CallStage({
             videoStream={entry.stream}
             isScreen
             onClick={() => setFocused(entry.userId)}
+            onContextMenu={streamMenuHandler(entry.userId, nameOf(entry.userId).display_name, meId)}
+            locallyMuted={localAudio[streamAudioKey(entry.userId)]?.muted ?? false}
           />
         ))}
         <ParticipantTile
@@ -145,6 +147,12 @@ function CallStage({
           videoStream={focused.stream}
           isScreen
           size="fill"
+          onContextMenu={streamMenuHandler(
+            focused.userId,
+            nameOf(focused.userId).display_name,
+            meId
+          )}
+          locallyMuted={localAudio[streamAudioKey(focused.userId)]?.muted ?? false}
         />
       </div>
       <div className="flex shrink-0 flex-wrap items-center justify-center gap-3">
@@ -158,6 +166,12 @@ function CallStage({
               isScreen
               size="md"
               onClick={() => setFocused(entry.userId)}
+              onContextMenu={streamMenuHandler(
+                entry.userId,
+                nameOf(entry.userId).display_name,
+                meId
+              )}
+              locallyMuted={localAudio[streamAudioKey(entry.userId)]?.muted ?? false}
             />
           ))}
         <ParticipantTile

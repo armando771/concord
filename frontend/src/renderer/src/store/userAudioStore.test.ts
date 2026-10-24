@@ -53,4 +53,17 @@ describe('userAudioStore', () => {
     expect(second.useUserAudioStore.getState().get('ana')).toEqual({ volume: 0.3, muted: false })
     expect(second.useUserAudioStore.getState().get('bia').muted).toBe(true)
   })
+
+  it('volume da live é separado da voz da mesma pessoa e de outras lives', async () => {
+    const { useUserAudioStore, outputVolume, streamAudioKey } = await import('./userAudioStore')
+    const store = useUserAudioStore.getState()
+    store.setVolume(streamAudioKey('ana'), 0.2)
+    store.toggleMuted(streamAudioKey('bia'))
+
+    const state = useUserAudioStore.getState()
+    expect(outputVolume(state.get(streamAudioKey('ana')))).toBe(0.2)
+    expect(outputVolume(state.get('ana'))).toBe(1) // a voz da Ana não muda
+    expect(outputVolume(state.get(streamAudioKey('bia')))).toBe(0)
+    expect(outputVolume(state.get('bia'))).toBe(1)
+  })
 })

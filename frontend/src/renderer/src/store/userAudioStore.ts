@@ -28,6 +28,11 @@ function save(settings: Record<string, UserAudio>): void {
   }
 }
 
+/** Chave do som da live (tela compartilhada) de alguém — separada da voz. */
+export function streamAudioKey(userId: string): string {
+  return `screen:${userId}`
+}
+
 /** Volume que de fato sai no alto-falante para essa pessoa. */
 export function outputVolume(audio: UserAudio): number {
   return audio.muted ? 0 : audio.volume

@@ -1,5 +1,6 @@
 import { useCallStore } from '../../store/callStore'
 import RemoteAudio from './RemoteAudio'
+import { streamAudioKey } from '../../store/userAudioStore'
 
 /**
  * Host global dos <audio> remotos. A UI das chamadas vive nas views
@@ -21,7 +22,12 @@ function CallOverlay(): React.JSX.Element | null {
       ))}
       {/* Som das telas compartilhadas (jogo, vídeo…) — também segue o ensurdecer. */}
       {Object.entries(screenAudioStreams).map(([userId, stream]) => (
-        <RemoteAudio key={`screen:${userId}`} stream={stream} muted={deafened} />
+        <RemoteAudio
+          key={`screen:${userId}`}
+          stream={stream}
+          muted={deafened}
+          userId={streamAudioKey(userId)}
+        />
       ))}
     </>
   )

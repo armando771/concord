@@ -259,6 +259,21 @@ try {
     await ctx.close()
     return levels
   }), (peaks) => peaks.some((hz) => Math.abs(hz - 1000) < 60))
+  // Botão direito na live da Ana: volume e silenciar só da transmissão.
+  const volumesOnB = () => pageB.evaluate(() => Object.fromEntries(
+    [...document.querySelectorAll('audio[data-audio]')].map((el) => [el.dataset.audio.startsWith('screen:') ? 'live' : 'voz', el.volume])))
+  await pageB.locator('video').first().waitFor({ timeout: 20000 })
+  await pageB.locator('video').first().click({ button: 'right' })
+  await pageB.getByRole('menu', { name: 'Transmissão de ana' }).waitFor()
+  await pageB.getByLabel('Volume da transmissão').fill('20')
+  await waitFor('bia baixa a live da ana para 20% (a voz dela continua 100%)', volumesOnB, (v) => Math.abs(v.live - 0.2) < 0.01 && v.voz === 1)
+  await pageB.getByRole('menu', { name: 'Transmissão de ana' }).getByText('Silenciar transmissão').click()
+  await waitFor('bia silencia a live da ana', volumesOnB, (v) => v.live === 0 && v.voz === 1)
+  await waitFor('ícone de silenciado aparece na live', () => pageB.locator('[title="Silenciado por você"]').count(), (n) => n > 0)
+  await pageB.getByRole('menu', { name: 'Transmissão de ana' }).getByText('Silenciar transmissão').click()
+  await pageB.keyboard.press('Escape')
+  await waitFor('bia volta a ouvir a live (20%)', volumesOnB, (v) => Math.abs(v.live - 0.2) < 0.01)
+
   await waitFor('bia vê a tela da ana', () => videoTracks(pageB), (t) => t.some((v) => v.startsWith('live:') && !v.endsWith(':0x0')))
   // A tela em foco ocupa o palco (encosta na largura ou na altura disponível).
   // Mede a imagem visível (descontando as faixas pretas do object-contain)
