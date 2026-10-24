@@ -11,7 +11,7 @@
 #     DEPLOY_ENABLED   "true" para ligar o deploy (sem isso, só roda os testes)
 #     VPS_HOST         ex.: root@1.2.3.4
 #     PUBLIC_URL       ex.: https://1-2-3-4.sslip.io
-#     SITE_URL         (opcional) página de download a conferir (padrão: https://concord.bhrx.com.br)
+#     SITE_URL         (opcional) página de download a conferir (padrão: https://salinha.bhrx.com.br)
 name: Deploy
 
 on:
@@ -62,7 +62,7 @@ jobs:
     env:
       PUBLIC_URL: ${{ vars.PUBLIC_URL }}
       VPS_HOST: ${{ vars.VPS_HOST }}
-      SITE_URL: ${{ vars.SITE_URL || 'https://concord.bhrx.com.br' }}
+      SITE_URL: ${{ vars.SITE_URL || 'https://salinha.bhrx.com.br' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -123,7 +123,7 @@ jobs:
             curl -fsS "${SITE_URL%/}/updates/latest.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
             echo "Página de download no ar em ${SITE_URL%/}"
           fi
-          echo "Concord ${{ steps.version.outputs.version }} no ar em ${PUBLIC_URL%/}"
+          echo "Salinha ${{ steps.version.outputs.version }} no ar em ${PUBLIC_URL%/}"
 
       - name: Limpar chaves
         if: always()
