@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useCallStore } from '../store/callStore'
 import { getAudioStream } from '../lib/rtc'
+import { useNoiseSuppressionStore } from '../store/noiseSuppressionStore'
 
 const METER_FFT_SIZE = 512
 
@@ -119,6 +120,8 @@ function VoiceSettings(): React.JSX.Element {
   const setOutputDevice = useCallStore((s) => s.setOutputDevice)
   const level = useMicLevel(inputDeviceId)
   const canChooseOutput = 'setSinkId' in HTMLMediaElement.prototype
+  const noiseSuppressionEnabled = useNoiseSuppressionStore((s) => s.enabled)
+  const setNoiseSuppressionEnabled = useNoiseSuppressionStore((s) => s.setEnabled)
 
   return (
     <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
@@ -146,6 +149,28 @@ function VoiceSettings(): React.JSX.Element {
           onChange={setOutputDevice}
         />
       )}
+      <div className="space-y-2 pt-1">
+        <p className="text-xs font-bold uppercase tracking-wide text-gray-400">Processamento de áudio</p>
+        <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+          <div>
+            <p className="text-sm text-white">Supressão de ruído (RNNoise)</p>
+            <p className="text-xs text-gray-400">Reduz ruídos constantes como ventilador, teclado e ar-condicionado.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setNoiseSuppressionEnabled(!noiseSuppressionEnabled)}
+            className={`relative h-6 w-11 rounded-full transition-colors ${
+              noiseSuppressionEnabled ? 'bg-[#5865f2]' : 'bg-white/20'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+                noiseSuppressionEnabled ? 'translate-x-5' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </label>
+      </div>
     </div>
   )
 }

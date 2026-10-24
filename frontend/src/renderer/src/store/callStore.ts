@@ -24,6 +24,7 @@ import { loadAudioPrefs, resolveDeviceId, saveAudioPrefs } from '../lib/audioDev
 import { useChatStore } from './chatStore'
 import { useAuthStore } from './authStore'
 import { showToast } from './toastStore'
+import { destroyProcessedAudio } from '../lib/audio'
 
 export type CallStatus = 'idle' | 'ringing' | 'outgoing' | 'active'
 export type CallKind = 'dm' | 'channel'
@@ -291,6 +292,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     media?.disconnect()
     media = null
     stopLocalStream()
+    destroyProcessedAudio()
     localScreenStream?.getTracks().forEach((t) => t.stop())
     localScreenStream = null
     windowAudio?.stop()
