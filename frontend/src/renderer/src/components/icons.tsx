@@ -466,3 +466,26 @@ export function HeadsetOffIcon({ className = '' }: IconProps): React.JSX.Element
     </svg>
   )
 }
+
+/** Ondas de voz (supressão de ruído, como o botão do Krisp no Discord). */
+export function NoiseSuppressionIcon({
+  className = '',
+  off = false
+}: IconProps & { off?: boolean }): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M3 10v4M7 7v10M11 4v16M15 8v8M19 10.5v3" />
+      {off && <path d="M3 3l18 18" />}
+    </svg>
+  )
+}

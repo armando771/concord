@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, Tray } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { badgeBitmap, badgeDescription, badgeLabel, taskbarAction } from './taskbarBadge'
 import { launchedHidden, shouldHideOnClose, shouldNotify } from './windowPolicy'
 
 // Modo segundo plano estilo Discord: bandeja, instância única, iniciar com o
@@ -16,12 +17,18 @@ interface NotifyPayload {
   body: string
   route: string
   urgent?: boolean
+  /** "Notificações na área de trabalho" (padrão: ligada). */
+  toast?: boolean
+  /** "Mostrar na barra de tarefas": piscar + selo de não lidas (padrão: ligada). */
+  taskbar?: boolean
 }
 
 let tray: Tray | null = null
 // Notificações vivas: sem referência o GC do Windows as coleta e o clique some.
 const activeNotifications = new Set<Notification>()
 let quitting = false
+// Mensagens que chegaram com a janela fora de vista (selo na barra de tarefas).
+let unseenCount = 0
 let callState: CallState = { inCall: false, muted: false }
 const callStateListeners = new Set<(state: CallState) => void>()
 
@@ -73,6 +80,23 @@ function initAutostart(): void {
   if (prefs.autostartInitialized) return
   setAutostart(true)
   writePrefs({ ...prefs, autostartInitialized: true })
+}
+
+/** Selo vermelho com o número de não lidas sobre o ícone da barra de tarefas. */
+function updateTaskbarBadge(win: BrowserWindow): void {
+  if (process.platform !== 'win32' || win.isDestroyed()) return
+  const label = badgeLabel(unseenCount)
+  if (!label) {
+    win.setOverlayIcon(null, '')
+    return
+  }
+  const size = 32
+  const image = nativeImage.createFromBitmap(badgeBitmap(label, size), {
+    width: size,
+    height: size,
+    scaleFactor: 2
+  })
+  win.setOverlayIcon(image, badgeDescription(unseenCount))
 }
 
 function showWindow(win: BrowserWindow | null): void {
@@ -164,18 +188,26 @@ export function setupBackground(getWindow: () => BrowserWindow | null, icon: str
 
   ipcMain.on('notify', (_e, payload: NotifyPayload) => {
     const win = getWindow()
-    if (!win || !Notification.isSupported()) return
+    if (!win || win.isDestroyed()) return
     if (!shouldNotify({ visible: win.isVisible(), focused: win.isFocused() })) return
-    const notification = new Notification({ title: payload.title, body: payload.body, icon })
-    activeNotifications.add(notification)
-    notification.on('click', () => {
-      activeNotifications.delete(notification)
-      showWindow(win)
-      win.webContents.send('navigate', payload.route)
-    })
-    notification.on('close', () => activeNotifications.delete(notification))
-    notification.show()
-    if (payload.urgent) win.flashFrame(true)
+    const toast = (payload.urgent || payload.toast !== false) && Notification.isSupported()
+    if (toast) {
+      const notification = new Notification({ title: payload.title, body: payload.body, icon })
+      activeNotifications.add(notification)
+      notification.on('click', () => {
+        activeNotifications.delete(notification)
+        showWindow(win)
+        win.webContents.send('navigate', payload.route)
+      })
+      notification.on('close', () => activeNotifications.delete(notification))
+      notification.show()
+    }
+    const action = taskbarAction(payload)
+    if (action.flash) win.flashFrame(true)
+    if (action.badge) {
+      unseenCount++
+      updateTaskbarBadge(win)
+    }
   })
 }
 
@@ -186,5 +218,11 @@ export function attachCloseToTray(win: BrowserWindow): void {
     event.preventDefault()
     win.hide()
   })
-  win.on('focus', () => win.flashFrame(false))
+  // Voltou a olhar a janela: para de piscar e limpa o selo de não lidas.
+  win.on('focus', () => {
+    win.flashFrame(false)
+    if (unseenCount === 0) return
+    unseenCount = 0
+    updateTaskbarBadge(win)
+  })
 }

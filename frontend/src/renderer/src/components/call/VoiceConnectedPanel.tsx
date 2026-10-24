@@ -1,6 +1,16 @@
+import { useCallback, useState } from 'react'
 import { useCallStore } from '../../store/callStore'
 import { useServerStore } from '../../store/serverStore'
-import { HeadsetIcon, HeadsetOffIcon, MicIcon, MicOffIcon, PhoneOffIcon } from '../icons'
+import { useNoiseSuppressionStore } from '../../store/noiseSuppressionStore'
+import {
+  HeadsetIcon,
+  HeadsetOffIcon,
+  MicIcon,
+  MicOffIcon,
+  NoiseSuppressionIcon,
+  PhoneOffIcon
+} from '../icons'
+import NoiseSuppressionPopover from './NoiseSuppressionPopover'
 
 /**
  * Painel "Voz conectada" (estilo Discord) exibido acima do card do usuário
@@ -18,6 +28,11 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   const endCall = useCallStore((s) => s.endCall)
 
   const channels = useServerStore((s) => s.channels)
+  const noiseSuppression = useNoiseSuppressionStore((s) => s.enabled)
+  /** Botão do popover de supressão de ruído (null = fechado). */
+  const [noiseAnchor, setNoiseAnchor] = useState<HTMLElement | null>(null)
+  const noiseOpen = noiseAnchor !== null
+  const closeNoise = useCallback(() => setNoiseAnchor(null), [])
 
   if (status === 'idle') return null
 
@@ -37,6 +52,24 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <button
+            onClick={(e) => {
+              const button = e.currentTarget
+              setNoiseAnchor((open) => (open ? null : button))
+            }}
+            aria-label="Supressão de ruído"
+            aria-expanded={noiseOpen}
+            title={
+              noiseSuppression
+                ? 'Supressão de ruído fornecida por RNNoise'
+                : 'Supressão de ruído desativada'
+            }
+            className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors ${
+              noiseOpen ? 'bg-white/15 text-white' : 'bg-white/5 hover:bg-white/10 hover:text-white'
+            } ${noiseSuppression ? 'text-gray-300' : 'text-gray-500'}`}
+          >
+            <NoiseSuppressionIcon className="h-4 w-4" off={!noiseSuppression} />
+          </button>
           <button
             onClick={toggleMute}
             aria-label={muted ? 'Ativar microfone' : 'Silenciar microfone'}
@@ -75,6 +108,7 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
           </button>
         </div>
       </div>
+      {noiseAnchor && <NoiseSuppressionPopover anchor={noiseAnchor} onClose={closeNoise} />}
     </div>
   )
 }

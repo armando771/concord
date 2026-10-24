@@ -31,7 +31,16 @@ export interface UpdatesApi {
 
 export interface BackgroundApi {
   setCallState(state: { inCall: boolean; muted: boolean }): void
-  notify(payload: { title: string; body: string; route: string; urgent?: boolean }): void
+  notify(payload: {
+    title: string
+    body: string
+    route: string
+    urgent?: boolean
+    /** Toast nativo (padrão: ligado). */
+    toast?: boolean
+    /** Piscar + selo de não lidas na barra de tarefas (padrão: ligado). */
+    taskbar?: boolean
+  }): void
   quit(): void
   /** null = não suportado nesta plataforma */
   getAutostart(): Promise<boolean | null>
