@@ -36,6 +36,19 @@ function fakeStream(...kinds: Array<'audio' | 'video'>): MediaStream {
   } as unknown as MediaStream
 }
 
+/** Microfone como o rtc.getAudioStream devolve (stream processado + stop). */
+function fakeMic(stream = fakeStream('audio')): {
+  stream: MediaStream
+  setNoiseSuppression: ReturnType<typeof vi.fn>
+  stop: ReturnType<typeof vi.fn>
+} {
+  return {
+    stream,
+    setNoiseSuppression: vi.fn(),
+    stop: vi.fn(() => stream.getTracks().forEach((t) => t.stop()))
+  }
+}
+
 const allStopped = (stream: MediaStream): boolean =>
   (stream.getTracks() as unknown as FakeTrack[]).every((t) => t.stopped)
 
@@ -121,7 +134,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   media.instances.length = 0
   media.events.length = 0
-  rtc.getAudioStream.mockImplementation(async () => fakeStream('audio'))
+  rtc.getAudioStream.mockImplementation(async () => fakeMic())
   api.startCall.mockResolvedValue({ id: 'call-1' })
   media.connect.mockResolvedValue(undefined)
   media.publishScreen.mockResolvedValue(undefined)
@@ -329,7 +342,7 @@ describe('callStore — mídia via LiveKit', () => {
   it('troca o microfone no meio da chamada sem sair da sala', async () => {
     const first = fakeStream('audio')
     const second = fakeStream('audio')
-    rtc.getAudioStream.mockResolvedValueOnce(first).mockResolvedValueOnce(second)
+    rtc.getAudioStream.mockResolvedValueOnce(fakeMic(first)).mockResolvedValueOnce(fakeMic(second))
     await joinChannel()
 
     await useCallStore.getState().setInputDevice('mic-usb')
@@ -341,9 +354,29 @@ describe('callStore — mídia via LiveKit', () => {
     expect(useCallStore.getState().status).toBe('active')
   })
 
+  it('fecha o microfone inteiro (não só a track enviada) ao sair da chamada', async () => {
+    const mic = fakeMic()
+    rtc.getAudioStream.mockResolvedValueOnce(mic)
+    await joinChannel()
+
+    useCallStore.getState().endCall()
+
+    expect(mic.stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('fecha o microfone antigo ao trocar de dispositivo', async () => {
+    const first = fakeMic()
+    rtc.getAudioStream.mockResolvedValueOnce(first).mockResolvedValueOnce(fakeMic())
+    await joinChannel()
+
+    await useCallStore.getState().setInputDevice('mic-usb')
+
+    expect(first.stop).toHaveBeenCalledTimes(1)
+  })
+
   it('o microfone novo respeita o mute atual', async () => {
     const second = fakeStream('audio')
-    rtc.getAudioStream.mockResolvedValueOnce(fakeStream('audio')).mockResolvedValueOnce(second)
+    rtc.getAudioStream.mockResolvedValueOnce(fakeMic()).mockResolvedValueOnce(fakeMic(second))
     await joinChannel()
     useCallStore.getState().toggleMute()
 
@@ -366,8 +399,8 @@ describe('callStore — mídia via LiveKit', () => {
 
   it('depois de trocar o microfone, reaplica o mute na sala (o SDK pode ter mutado sozinho)', async () => {
     rtc.getAudioStream
-      .mockResolvedValueOnce(fakeStream('audio'))
-      .mockResolvedValueOnce(fakeStream('audio'))
+      .mockResolvedValueOnce(fakeMic())
+      .mockResolvedValueOnce(fakeMic())
     await joinChannel()
     const connection = media.instances[0]
     connection.setMicMuted.mockClear()
@@ -382,7 +415,7 @@ describe('callStore — mídia via LiveKit', () => {
     await useCallStore.getState().setInputDevice('headset-desconectado')
     rtc.getAudioStream.mockImplementation(async (id?: string) => {
       if (id) throw Object.assign(new Error('x'), { name: 'OverconstrainedError' })
-      return fakeStream('audio')
+      return fakeMic()
     })
 
     await joinChannel()
