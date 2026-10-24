@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { callNotification, mentionNotification, messageNotification } from './notifications'
+import {
+  type AppNotification,
+  callNotification,
+  DEFAULT_NOTIFICATION_PREFS,
+  desktopPayload,
+  mentionNotification,
+  messageNotification,
+  notificationSound
+} from './notifications'
 import type { Message } from '../api/messages'
 
 const dm = (over: Partial<Message> = {}): Message => ({
@@ -15,6 +23,7 @@ const dm = (over: Partial<Message> = {}): Message => ({
 describe('messageNotification', () => {
   it('DM de outra pessoa vira notificação que abre a conversa', () => {
     expect(messageNotification(dm(), 'eu')).toEqual({
+      kind: 'message',
       title: 'Ana',
       body: 'bora jogar?',
       route: '/dm/ana'
@@ -39,6 +48,7 @@ describe('messageNotification', () => {
 describe('callNotification', () => {
   it('chamada recebida abre a DM de quem ligou', () => {
     expect(callNotification({ id: 'ana', display_name: 'Ana', username: 'ana' })).toEqual({
+      kind: 'call',
       title: 'Ana está te ligando',
       body: 'Chamada de voz — clique para atender',
       route: '/dm/ana',
@@ -54,6 +64,7 @@ describe('mentionNotification', () => {
 
   it('menção em canal vira notificação que abre o canal', () => {
     expect(mentionNotification(inChannel(), me, 'srv1')).toEqual({
+      kind: 'mention',
       title: 'Ana mencionou você',
       body: 'bora @fulano?',
       route: '/servers/srv1/channels/ch1'
@@ -67,5 +78,46 @@ describe('mentionNotification', () => {
 
   it('DM já tem a própria notificação', () => {
     expect(mentionNotification(dm({ content: '@fulano oi' }), me, null)).toBeNull()
+  })
+})
+
+describe('notificationSound', () => {
+  it('DM toca "message", menção toca "mention"', () => {
+    expect(notificationSound('message', { sound: true })).toBe('message')
+    expect(notificationSound('mention', { sound: true })).toBe('mention')
+  })
+
+  it('com o som desligado, fica em silêncio', () => {
+    expect(notificationSound('message', { sound: false })).toBeNull()
+    expect(notificationSound('mention', { sound: false })).toBeNull()
+  })
+
+  it('chamada tem toque próprio', () => {
+    expect(notificationSound('call', { sound: true })).toBeNull()
+  })
+})
+
+describe('desktopPayload', () => {
+  const message = messageNotification(dm(), 'eu') as AppNotification
+  const call = callNotification({ id: 'ana', display_name: 'Ana', username: 'ana' })
+
+  it('leva as preferências para o processo main (padrão: tudo ligado)', () => {
+    expect(desktopPayload(message, DEFAULT_NOTIFICATION_PREFS)).toEqual({
+      title: 'Ana',
+      body: 'bora jogar?',
+      route: '/dm/ana',
+      toast: true,
+      taskbar: true
+    })
+  })
+
+  it('respeita "barra de tarefas" e "área de trabalho" desligadas', () => {
+    const prefs = { desktop: false, taskbar: false, sound: true }
+    expect(desktopPayload(message, prefs)).toMatchObject({ toast: false, taskbar: false })
+  })
+
+  it('chamada recebida sempre avisa, mesmo com tudo desligado', () => {
+    const prefs = { desktop: false, taskbar: false, sound: false }
+    expect(desktopPayload(call, prefs)).toMatchObject({ urgent: true, toast: true, taskbar: true })
   })
 })

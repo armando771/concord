@@ -76,8 +76,18 @@ const api = {
     setCallState(state: { inCall: boolean; muted: boolean }): void {
       ipcRenderer.send('call:state', state)
     },
-    /** Notificação nativa (só aparece se a janela não estiver à vista). */
-    notify(payload: { title: string; body: string; route: string; urgent?: boolean }): void {
+    /**
+     * Notificação nativa e aviso na barra de tarefas (só se a janela não
+     * estiver à vista). `toast`/`taskbar` = preferências do usuário.
+     */
+    notify(payload: {
+      title: string
+      body: string
+      route: string
+      urgent?: boolean
+      toast?: boolean
+      taskbar?: boolean
+    }): void {
       ipcRenderer.send('notify', payload)
     },
     quit(): void {
