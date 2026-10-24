@@ -84,12 +84,34 @@ jobs:
           printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
           umask 077
-          printf '%s\n' "$RELEASE_KEY" > backend/.release-key
+          # Aceita o PEM colado (com CRLF ou numa linha só), ele em base64 ou só
+          # a linha do meio (sem BEGIN/END).
+          key=$(printf '%s' "$RELEASE_KEY" | tr -d '\r')
+          if [[ "$key" != *BEGIN* ]]; then
+            decoded=$(printf '%s' "$key" | base64 -d 2>/dev/null | tr -d '\0\r' || true)
+            if [[ "$decoded" == *BEGIN* ]]; then
+              key=$decoded
+            else
+              key="-----BEGIN PRIVATE KEY----- $key -----END PRIVATE KEY-----"
+            fi
+          fi
+          if [[ "$key" == *BEGIN* && "$key" != *$'\n'* ]]; then
+            body=${key#*-----BEGIN PRIVATE KEY-----}
+            body=${body%-----END PRIVATE KEY-----*}
+            key=$(printf -- '-----BEGIN PRIVATE KEY-----\n%s\n-----END PRIVATE KEY-----' "$(echo $body | tr ' ' '\n')")
+          fi
+          printf '%s\n' "$key" > backend/.release-key
+          if ! openssl pkey -in backend/.release-key -noout 2>/dev/null; then
+            echo "::error::secret RELEASE_KEY inválido — cole o conteúdo inteiro de backend/.release-key (com as linhas BEGIN/END)"
+            exit 1
+          fi
+          echo "chave pública de assinatura:"
+          openssl pkey -in backend/.release-key -pubout
 
       - name: Versão
         id: version
         run: |
-          published=$(curl -fsS "$PUBLIC_URL/updates/latest.yml" | awk '/^version:/ {print $2}' || true)
+          published=$(curl -fsS "${PUBLIC_URL%/}/updates/latest.yml" | awk '/^version:/ {print $2}' || true)
           local=$(node -p "require('./frontend/package.json').version")
           version=$(node scripts/next-version.mjs "${published:--}" "$local")
           echo "publicada: ${published:-nenhuma} → nova: $version"
@@ -103,9 +125,9 @@ jobs:
 
       - name: Conferir
         run: |
-          curl -fsS "$PUBLIC_URL/updates/latest.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
-          test "$(curl -s -o /dev/null -w '%{http_code}' "$PUBLIC_URL/rtc/validate")" = 401
-          echo "Concord ${{ steps.version.outputs.version }} no ar em $PUBLIC_URL"
+          curl -fsS "${PUBLIC_URL%/}/updates/latest.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
+          test "$(curl -s -o /dev/null -w '%{http_code}' "${PUBLIC_URL%/}/rtc/validate")" = 401
+          echo "Concord ${{ steps.version.outputs.version }} no ar em ${PUBLIC_URL%/}"
 
       - name: Limpar chaves
         if: always()
