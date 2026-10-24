@@ -9,6 +9,7 @@ import {
 } from '../api/calls'
 import { ApiError } from '../api/client'
 import { getAudioStream, getCameraStream, getDisplayStream } from '../lib/rtc'
+import type { MicHandle } from '../lib/noiseSuppression'
 import { CallMedia, type RemoteMedia } from '../lib/livekit'
 import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
@@ -24,7 +25,6 @@ import { loadAudioPrefs, resolveDeviceId, saveAudioPrefs } from '../lib/audioDev
 import { useChatStore } from './chatStore'
 import { useAuthStore } from './authStore'
 import { showToast } from './toastStore'
-import { destroyProcessedAudio } from '../lib/audio'
 
 export type CallStatus = 'idle' | 'ringing' | 'outgoing' | 'active'
 export type CallKind = 'dm' | 'channel'
@@ -142,7 +142,8 @@ interface CallState {
   handleWsEvent: (event: WsEvent) => void
 }
 
-let localStream: MediaStream | null = null
+/** Microfone da chamada (o stream processado + o que precisa ser fechado). */
+let localMic: MicHandle | null = null
 let transitioning = false
 /** Conexão com o servidor de mídia (LiveKit) da chamada atual. */
 let media: CallMedia | null = null
@@ -174,8 +175,8 @@ function releaseStream(stream: MediaStream): void {
 }
 
 function stopLocalStream(): void {
-  localStream?.getTracks().forEach((t) => t.stop())
-  localStream = null
+  localMic?.stop()
+  localMic = null
 }
 
 const EMPTY_MEDIA: RemoteMedia = {
@@ -215,8 +216,8 @@ export const useCallStore = create<CallState>()((set, get) => {
    * do backend processar o call:accept (403) — por isso o retry curto.
    */
   const connectMedia = async (callId: string): Promise<void> => {
-    if (media || !localStream) return
-    const mic = localStream.getAudioTracks()[0]
+    if (media || !localMic) return
+    const mic = localMic.stream.getAudioTracks()[0]
     if (!mic) return
 
     const connection = new CallMedia({
@@ -257,7 +258,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     if (media !== connection) return
 
     // O microfone pode ter sido trocado enquanto a sala conectava.
-    const currentMic = localStream?.getAudioTracks()[0]
+    const currentMic = localMic?.stream.getAudioTracks()[0]
     if (currentMic && currentMic !== mic) await connection.replaceMic(currentMic).catch(() => {})
 
     // O mute pode ter mudado durante a conexão (antes disso não há o que mutar).
@@ -292,7 +293,6 @@ export const useCallStore = create<CallState>()((set, get) => {
     media?.disconnect()
     media = null
     stopLocalStream()
-    destroyProcessedAudio()
     localScreenStream?.getTracks().forEach((t) => t.stop())
     localScreenStream = null
     windowAudio?.stop()
@@ -325,7 +325,7 @@ export const useCallStore = create<CallState>()((set, get) => {
    * Abre o microfone escolhido; se ele sumiu desde a última vez (headset
    * desconectado), usa o padrão do sistema em vez de impedir a chamada.
    */
-  const openMic = async (): Promise<MediaStream> => {
+  const openMic = async (): Promise<MicHandle> => {
     const id = get().inputDeviceId
     try {
       return await getAudioStream(id)
@@ -341,7 +341,7 @@ export const useCallStore = create<CallState>()((set, get) => {
 
   /** Aplica o mute no microfone local e na sala. */
   const applyMute = (muted: boolean): void => {
-    localStream?.getAudioTracks().forEach((track) => {
+    localMic?.stream.getAudioTracks().forEach((track) => {
       track.enabled = !muted
     })
     void media?.setMicMuted(muted).catch(() => {})
@@ -386,7 +386,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       if (get().status !== 'idle' || transitioning) return
       transitioning = true
       try {
-        localStream = await openMic()
+        localMic = await openMic()
       } catch {
         showToast.error('Não foi possível acessar o microfone.')
         transitioning = false
@@ -421,7 +421,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       if (get().status !== 'idle' || transitioning) return
       transitioning = true
       try {
-        localStream = await openMic()
+        localMic = await openMic()
       } catch {
         showToast.error('Não foi possível acessar o microfone.')
         transitioning = false
@@ -499,7 +499,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       if (status !== 'ringing' || !callId || !peer || transitioning) return
       transitioning = true
       try {
-        localStream = await openMic()
+        localMic = await openMic()
       } catch {
         showToast.error('Não foi possível acessar o microfone.')
         transitioning = false
@@ -568,23 +568,23 @@ export const useCallStore = create<CallState>()((set, get) => {
     setInputDevice: async (deviceId) => {
       set({ inputDeviceId: deviceId })
       saveAudioPrefs({ inputId: deviceId, outputId: get().outputDeviceId })
-      if (!localStream) return
-      let next: MediaStream
+      if (!localMic) return
+      let next: MicHandle
       try {
         next = await getAudioStream(deviceId)
       } catch {
         showToast.error('Não foi possível usar esse microfone.')
         return
       }
-      const previous = localStream
+      const previous = localMic
       // A chamada pode ter acabado enquanto o dispositivo abria.
       if (!previous) {
-        next.getTracks().forEach((t) => t.stop())
+        next.stop()
         return
       }
-      const track = next.getAudioTracks()[0]
+      const track = next.stream.getAudioTracks()[0]
       track.enabled = !get().muted
-      localStream = next
+      localMic = next
       try {
         await media?.replaceMic(track)
         // O SDK muta sozinho quando a track antiga morre (ex.: headset tirado).
@@ -592,7 +592,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       } catch {
         showToast.error('Não foi possível trocar o microfone.')
       }
-      previous.getTracks().forEach((t) => t.stop())
+      previous.stop()
     },
 
     setOutputDevice: (deviceId) => {

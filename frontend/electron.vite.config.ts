@@ -29,6 +29,8 @@ export default defineConfig({
         '@renderer': resolve('src/renderer/src')
       }
     },
-    plugins: [react(), tailwindcss(), connectSrcPlugin]
+    plugins: [react(), tailwindcss(), connectSrcPlugin],
+    // O WASM do RNNoise entra inline (lib/noiseSuppression.ts).
+    assetsInclude: ['**/*.wasm']
   }
 })

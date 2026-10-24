@@ -1,38 +1,11 @@
 // Captura de mídia local. O transporte (envio/recebimento) fica no LiveKit —
 // ver lib/livekit.ts.
 
-import { createProcessedAudioStream } from './audio'
+import { openMicrophone, type MicHandle } from './noiseSuppression'
 
-/** Microfone local. `deviceId` vazio = padrão do sistema. */
-export async function getAudioStream(deviceId = ''): Promise<MediaStream> {
-  const rawStream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
-      echoCancellation: true,
-      noiseSuppression: false, // desativado para usar RNNoise próprio
-      autoGainControl: true
-    },
-    video: false
-  })
-
-  try {
-    return await createProcessedAudioStream(rawStream)
-  } catch {
-    return rawStream
-  }
-}
-
-/** Stream de áudio bruto (sem processamento RNNoise) */
-export async function getRawAudioStream(deviceId = ''): Promise<MediaStream> {
-  return navigator.mediaDevices.getUserMedia({
-    audio: {
-      ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true
-    },
-    video: false
-  })
+/** Microfone local (com RNNoise). `deviceId` vazio = padrão do sistema. */
+export function getAudioStream(deviceId = ''): Promise<MicHandle> {
+  return openMicrophone(deviceId)
 }
 
 // Captura de tela com o som do que está sendo compartilhado. O picker visual é
