@@ -203,6 +203,26 @@ Numa VPS com IP público não precisa de playit, e dá para ter HTTPS de graça.
 5. Quando todos estiverem na versão nova, desligue o repasse, o playit e o
    bloco `:8080`.
 
+**Deploy automático (GitHub Actions):** o workflow `.github/workflows/deploy.yml`
+roda a cada push/merge na `main`:
+1. Roda os testes do backend, do app e do helper. Se algum falhar, para aqui.
+2. Gera o instalador assinado com a próxima versão (uma acima da que já está
+   publicada na VPS).
+3. Publica o backend e a atualização com `scripts/deploy-vps.sh`.
+4. Confere que tudo subiu.
+
+Para ligar, em **Settings → Secrets and variables → Actions**:
+- **Secrets:**
+  - `VPS_SSH_KEY`: uma chave SSH só para o deploy, autorizada na VPS;
+  - `VPS_KNOWN_HOSTS`: saída de `ssh-keyscan <ip>`;
+  - `RELEASE_KEY`: conteúdo do `backend/.release-key`.
+- **Variables:**
+  - `DEPLOY_ENABLED=true`;
+  - `VPS_HOST=root@<ip>`;
+  - `PUBLIC_URL=https://<endereço>`.
+
+Sem `DEPLOY_ENABLED`, o workflow só roda os testes.
+
 **Backup:** um timer do systemd roda `pg_dump` todo dia e guarda 14 dias em
 `/opt/concord/backups`.
 
