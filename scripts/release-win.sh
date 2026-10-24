@@ -23,6 +23,7 @@ env_value() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true; }
 
 # PUBLIC_URL e UPDATES_DIR podem vir do ambiente (CI) ou do backend/.env.
 SERVER_URL="${PUBLIC_URL:-$(env_value PUBLIC_URL)}"
+SERVER_URL="${SERVER_URL%/}"
 if [[ -z "$SERVER_URL" ]]; then
   echo "defina PUBLIC_URL em backend/.env (endereço público do backend)" >&2
   exit 1
