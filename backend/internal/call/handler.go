@@ -4,16 +4,20 @@ import (
 	"errors"
 	"net/http"
 
+	"gin-quickstart/backend/internal/livekit"
+
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
 	service *Service
+	tokens  *livekit.TokenIssuer
 }
 
-func CallHandler(service *Service) *Handler {
+func CallHandler(service *Service, tokens *livekit.TokenIssuer) *Handler {
 	return &Handler{
 		service: service,
+		tokens:  tokens,
 	}
 }
 
@@ -187,6 +191,31 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "call ended"})
+}
+
+// Token emite o JWT do LiveKit para a sala da chamada. Só participantes
+// (quem já aceitou/entrou pelo fluxo call:*) recebem token.
+func (h *Handler) Token(c *gin.Context) {
+	callID := c.Param("id")
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if !h.service.IsParticipant(callID, userID.(string)) {
+		c.JSON(http.StatusForbidden, gin.H{"error": ErrNotAllowed.Error()})
+		return
+	}
+
+	token, err := h.tokens.Issue(callID, userID.(string), "")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to issue media token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"token": token})
 }
 
 func mapStartError(err error) int {

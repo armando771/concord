@@ -71,7 +71,14 @@ type Service struct {
 	busy  map[string]string
 	// screenSharers: callID -> set de userIDs compartilhando tela (transitório)
 	screenSharers map[string]map[string]struct{}
+
+	// Queda do WS de chat só tira o usuário da chamada se ele não voltar dentro
+	// desse prazo — a mídia (LiveKit) aguenta quedas curtas sozinha.
+	disconnectGrace      time.Duration
+	leaveAfterDisconnect func(ctx context.Context, callID string, userID string) error
 }
+
+const defaultDisconnectGrace = 15 * time.Second
 
 func CallService(
 	repository *Repository,
@@ -82,7 +89,7 @@ func CallService(
 	userService *user.Service,
 	isOnline func(userID string) bool,
 ) *Service {
-	return &Service{
+	s := &Service{
 		repository:          repository,
 		publisher:           publisher,
 		conversationService: conversationService,
@@ -93,7 +100,10 @@ func CallService(
 		calls:               make(map[string]*activeCall),
 		busy:                make(map[string]string),
 		screenSharers:       make(map[string]map[string]struct{}),
+		disconnectGrace:     defaultDisconnectGrace,
 	}
+	s.leaveAfterDisconnect = s.Leave
+	return s
 }
 
 func (s *Service) StartDM(ctx context.Context, initiatorID string, conversationID string) (*Call, error) {
@@ -435,51 +445,6 @@ func (s *Service) EndByUser(ctx context.Context, callID string, userID string) e
 	return s.End(ctx, callID)
 }
 
-func (s *Service) Signal(_ context.Context, fromUserID string, payload SignalPayload) error {
-	s.mu.RLock()
-	ac, ok := s.calls[payload.CallID]
-	if !ok || ac.info.Status == StatusEnded {
-		s.mu.RUnlock()
-		return ErrNotFound
-	}
-	if _, ok := ac.participants[fromUserID]; !ok {
-		s.mu.RUnlock()
-		return ErrNotAllowed
-	}
-
-	relay := SignalRelayEvent{
-		CallID:     payload.CallID,
-		FromUserID: fromUserID,
-		SDP:        payload.SDP,
-		Candidate:  payload.Candidate,
-		Media:      payload.Media,
-	}
-
-	if payload.ToUserID != "" {
-		if _, ok := ac.participants[payload.ToUserID]; !ok {
-			s.mu.RUnlock()
-			return ErrNotAllowed
-		}
-		s.mu.RUnlock()
-		s.publisher.SendToUser(payload.ToUserID, marshalEvent("call:signal", relay))
-		return nil
-	}
-
-	targets := make([]string, 0, len(ac.participants))
-	for pid := range ac.participants {
-		if pid != fromUserID {
-			targets = append(targets, pid)
-		}
-	}
-	s.mu.RUnlock()
-
-	for _, pid := range targets {
-		s.publisher.SendToUser(pid, marshalEvent("call:signal", relay))
-	}
-
-	return nil
-}
-
 // SetScreenShare marca/desmarca um participante como compartilhando tela e
 // publica call:screen para os demais participantes da chamada.
 func (s *Service) SetScreenShare(ctx context.Context, callID string, userID string, active bool) error {
@@ -621,7 +586,19 @@ func (s *Service) GetState(ctx context.Context, callID string) (*StateResponse, 
 	}, nil
 }
 
+// HandleDisconnect é chamado quando a última conexão WS do usuário fecha.
+// Espera disconnectGrace e só então tira o usuário das chamadas, se ele não
+// tiver reconectado nesse meio-tempo.
 func (s *Service) HandleDisconnect(userID string) {
+	time.AfterFunc(s.disconnectGrace, func() {
+		if s.isOnline != nil && s.isOnline(userID) {
+			return
+		}
+		s.leaveAllCalls(userID)
+	})
+}
+
+func (s *Service) leaveAllCalls(userID string) {
 	ctx := context.Background()
 
 	s.mu.RLock()
@@ -634,7 +611,7 @@ func (s *Service) HandleDisconnect(userID string) {
 	s.mu.RUnlock()
 
 	for _, callID := range callIDs {
-		if err := s.Leave(ctx, callID, userID); err != nil {
+		if err := s.leaveAfterDisconnect(ctx, callID, userID); err != nil {
 			log.Printf("[call] disconnect leave %s failed: %v", userID, err)
 		}
 	}
@@ -678,15 +655,6 @@ func (s *Service) HandleCallMessage(userID string, evType string, payload json.R
 			return
 		}
 		if err := s.Decline(ctx, p.CallID, userID); err != nil {
-			s.sendError(userID, p.CallID, err.Error())
-		}
-	case "call:signal":
-		var p SignalPayload
-		if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" {
-			s.sendError(userID, "", "invalid call:signal payload")
-			return
-		}
-		if err := s.Signal(ctx, userID, p); err != nil {
 			s.sendError(userID, p.CallID, err.Error())
 		}
 	case "call:leave":

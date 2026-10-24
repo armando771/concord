@@ -11,6 +11,7 @@ import (
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/database"
 	"gin-quickstart/backend/internal/friendship"
+	"gin-quickstart/backend/internal/livekit"
 	"gin-quickstart/backend/internal/message"
 	"gin-quickstart/backend/internal/server"
 	"gin-quickstart/backend/internal/user"
@@ -62,7 +63,9 @@ func main() {
 	router := gin.Default()
 
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"},
+		// O app empacotado carrega via file:// e a auth é por Bearer (sem
+		// cookies), então qualquer origem pode chamar a API.
+		AllowOriginFunc:  func(string) bool { return true },
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -107,10 +110,25 @@ func main() {
 	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository)
 	messageHandler := message.MessageHandler(messageService, channelService, conversationService, friendshipService, serverService)
 
-	// Call (WebRTC signaling foundation)
+	// LiveKit (mídia das chamadas)
+	liveKitKey, liveKitSecret := os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET")
+	if liveKitKey == "" || liveKitSecret == "" {
+		log.Fatal("LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be set")
+	}
+	liveKitTokens := livekit.NewTokenIssuer(liveKitKey, liveKitSecret)
+	liveKitPort := os.Getenv("LIVEKIT_PORT")
+	if liveKitPort == "" {
+		liveKitPort = "7880"
+	}
+	rtcProxy, err := livekit.NewRTCProxy("http://127.0.0.1:" + liveKitPort)
+	if err != nil {
+		log.Fatalf("invalid LiveKit address: %v", err)
+	}
+
+	// Call (ciclo de vida da chamada; mídia via LiveKit)
 	callRepository := call.CallRepository(db)
 	callService := call.CallService(callRepository, hub, conversationService, serverService, channelService, userService, hub.IsOnline)
-	callHandler := call.CallHandler(callService)
+	callHandler := call.CallHandler(callService, liveKitTokens)
 
 	// WebSocket handler
 	wsHandler := websocket.WsHandler(hub, authService, channelService, serverService, conversationService, callService)
@@ -146,7 +164,16 @@ func main() {
 	// WebSocket endpoint (public, auth via ?token=)
 	router.GET("/ws", wsHandler.ServeWS)
 
-	if err := router.Run(":8080"); err != nil {
+	// Sinalização do LiveKit (auth pelo token do LiveKit em ?access_token=)
+	router.Any("/rtc", rtcProxy)
+	router.Any("/rtc/*path", rtcProxy)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	if err := router.Run(":" + port); err != nil {
 		log.Fatal(err)
 	}
 }

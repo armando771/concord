@@ -60,3 +60,8 @@ export function listActiveServerCalls(serverId: string): Promise<CallStateRespon
     `/calls/active?scope=server&id=${encodeURIComponent(serverId)}`
   )
 }
+
+/** Token do LiveKit para entrar na sala de mídia da chamada (só participantes). */
+export function getCallToken(callId: string): Promise<{ token: string }> {
+  return request<{ token: string }>(`/calls/${callId}/token`, { method: 'POST' })
+}

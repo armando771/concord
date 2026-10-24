@@ -24,3 +24,6 @@ Thumbs.db
 MVP.md
 FRONTEND_PLAN.md
 PLANO_CALLS_WEBRTC.md
+
+# ─── Binário do servidor (scripts/server-up.sh) ─────────────────
+backend/concord-server

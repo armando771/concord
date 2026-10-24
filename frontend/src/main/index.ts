@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow, desktopCapturer, ipcMain, session } from 'el
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { displayMediaStreams } from './displayMedia'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -10,10 +11,12 @@ let mainWindow: BrowserWindow | null = null
 // escolhida via IPC (estilo Discord).
 let pendingDisplayCallback:
   ((streams: { video?: Electron.DesktopCapturerSource; audio?: 'loopback' }) => void) | null = null
+let pendingAudioRequested = false
 
 function registerScreenShareHandlers(): void {
-  session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
+  session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     pendingDisplayCallback = callback
+    pendingAudioRequested = request.audioRequested
     mainWindow?.webContents.send('screen-picker:show')
   })
 
@@ -40,7 +43,7 @@ function registerScreenShareHandlers(): void {
       const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] })
       const source = sources.find((s) => s.id === sourceId)
       if (source) {
-        callback({ video: source })
+        callback(displayMediaStreams(source, pendingAudioRequested, process.platform))
       } else {
         callback({})
       }

@@ -1,5 +1,5 @@
-appId: com.electron.app
-productName: frontend
+appId: com.concord.app
+productName: Concord
 directories:
   buildResources: build
 files:
@@ -12,9 +12,14 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: frontend
+  executableName: Concord
+  target:
+    - portable
+    - nsis
+portable:
+  artifactName: Concord-${version}-portable.${ext}
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
+  artifactName: Concord-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
@@ -38,6 +43,3 @@ linux:
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
-publish:
-  provider: generic
-  url: https://example.com/auto-updates

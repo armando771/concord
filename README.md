@@ -48,7 +48,8 @@ modular e fácil de evoluir.
 | coder/websocket | WebSocket (tempo real) |
 | JWT + bcrypt | Auth (access/refresh + hash de senha) |
 | PostgreSQL 17 | Banco de dados |
-| Docker Compose | Banco local |
+| Docker Compose | Postgres + LiveKit locais |
+| LiveKit (SFU) | Servidor de mídia das chamadas |
 | golang-migrate | Migrations versionadas (aplicadas no boot) |
 
 ### Frontend
@@ -60,7 +61,8 @@ modular e fácil de evoluir.
 | Zustand | Estado global |
 | Tailwind CSS v4 | Estilização (tokens via `@theme`) |
 | react-router-dom 7 | Rotas (HashRouter) |
-| WebRTC nativo | Voz, vídeo e compartilhamento de tela |
+| livekit-client | Voz, vídeo e compartilhamento de tela (com som) via SFU |
+| Vitest | Testes unitários |
 
 ## 🏗️ Arquitetura
 
@@ -73,9 +75,11 @@ Client (Electron/React)
   │
   ├── HTTP ────────┐
   │                ▼
-  └── WebSocket ─► Go (Gin) ──► PostgreSQL
-                     │
-                     └── WebRTC (P2P / mesh) para mídia
+  ├── WebSocket ─► Go (Gin) ──► PostgreSQL
+  │                  │
+  │                  └── /rtc (proxy) ─► LiveKit (sinalização)
+  │
+  └── mídia WebRTC (UDP/TCP) ─────────► LiveKit (SFU)
 ```
 
 Cada módulo em `internal/` segue:
@@ -93,11 +97,12 @@ Regra de dependência: `Handler → Service → Repository → Database`.
 
 ```text
 concord/
-├── backend/          # API em Go + WebSocket + sinalização WebRTC
+├── backend/          # API em Go + WebSocket + token/proxy do LiveKit
 │   ├── cmd/          # main.go
 │   ├── internal/     # auth, user, friendship, server, channel, message,
 │   │                 # conversation, call, websocket, database
 │   └── migrations/   # SQL versionado
+├── scripts/          # server-up, build-win, install-services, playit-*, e2e-voice
 └── frontend/         # cliente Electron + React
     └── src/
         ├── main/     # processo principal do Electron
@@ -107,41 +112,35 @@ concord/
 
 ## 🚀 Como rodar
 
+> **Hospedar para os amigos** (este PC como servidor, amigos só baixam o `.exe`):
+> veja **[docs/HOSPEDAGEM.md](docs/HOSPEDAGEM.md)**.
+
 ### Pré-requisitos
 - Go 1.26+
 - Node.js 20+ e Yarn
-- Docker (para o PostgreSQL)
+- Docker (Postgres + LiveKit)
 
-### 1. Clonar
+### 1. Servidor (Postgres + LiveKit + backend)
 ```bash
-git clone https://github.com/hugoemannuel/concord.git
-cd concord
+cp backend/.env.example backend/.env   # ajuste segredos e portas
+scripts/server-up.sh
+# API em http://localhost:$PORT (padrão 8080)
 ```
 
-### 2. Banco de dados
-```bash
-cd backend
-docker compose up -d
-```
-
-### 3. Backend
-Crie `backend/.env`:
-```env
-DATABASE_URL=postgres://concord-user:concord-password@localhost:5432/concord?sslmode=disable
-JWT_SECRET=troque-por-um-segredo-seguro
-```
-Rode (as migrations são aplicadas automaticamente no boot):
-```bash
-go run ./cmd
-# API em http://localhost:8080  → GET /api/health
-```
-
-### 4. Frontend
+### 2. Frontend
 ```bash
 cd frontend
 yarn
-yarn dev
-# abre a janela do Electron (dev server em http://localhost:5173)
+VITE_SERVER_URL=http://localhost:8080 yarn dev
+# sem VITE_SERVER_URL o app aponta para http://localhost:8080
+```
+
+### 3. Testes
+```bash
+cd backend && go test ./...
+cd frontend && yarn test
+# E2E de chamadas (dois navegadores com mídia fake) — ver cabeçalho do script:
+node scripts/e2e-voice.mjs
 ```
 
 ## 🔌 API (resumo)
@@ -174,14 +173,19 @@ O cliente entra em salas com `{"type":"subscribe","payload":{"room":"..."}}`
 
 Eventos principais: `presence:update`, `message:create`, `message:delete`,
 `channel:create|update|delete`, `server:update|delete`, `server:member:join|leave`,
-`friend:request|accepted|declined|removed` e `call:*` (sinalização WebRTC).
+`friend:request|accepted|declined|removed` e `call:*` (ciclo de vida das chamadas).
 
-## 📞 Chamadas (WebRTC)
+## 📞 Chamadas (LiveKit)
 
-- **Sinalização** por WebSocket (`call:invite`, `call:signal`, `call:leave`...).
-- **Mídia P2P (mesh)** direto entre os participantes — topologia adequada para
-  chamadas 1:1 e grupos pequenos (~4–6). Upgrade para SFU fica como evolução futura.
-- STUN público (Google) para descoberta; TURN fica como trabalho futuro para NATs restritivos.
+- **Ciclo de vida** pelo WebSocket do backend (`call:invite`, `call:accept`,
+  `call:leave`, `call:screen`...).
+- **Mídia via SFU (LiveKit)**: cada pessoa envia uma cópia de cada track para o
+  servidor, que distribui para os demais — aguenta ~10 pessoas com várias telas
+  ao mesmo tempo e funciona mesmo atrás de CGNAT.
+- O backend emite o token da sala (`POST /api/calls/:id/token`, só para
+  participantes) e faz proxy de `/rtc` para o LiveKit local.
+- **Som da tela** (Windows): loopback do sistema sem o áudio do próprio Concord,
+  para não devolver as vozes da chamada como eco.
 
 ## 🛠️ Scripts
 
@@ -198,7 +202,8 @@ yarn dev          # desenvolvimento
 yarn build        # typecheck + build
 yarn lint         # eslint
 yarn typecheck    # tsc
-yarn build:win    # instalador Windows
+yarn test         # vitest
+yarn build:win    # instalador Windows (prefira scripts/build-win.sh)
 yarn build:mac    # instalador macOS
 yarn build:linux  # instalador Linux
 ```
@@ -210,6 +215,6 @@ yarn build:linux  # instalador Linux
 - [x] Chamadas de voz (1:1 e grupo)
 - [x] Compartilhamento de tela multi-tela
 - [x] Vídeo (1:1 e multi-câmera em grupo)
-- [ ] TURN (coturn) para redes restritivas
+- [x] SFU (LiveKit) — mídia passa pelo servidor
 - [ ] Histórico de chamadas na UI
-- [ ] SFU para grupos maiores
+- [ ] TLS (HTTPS/WSS) ao migrar para VPS

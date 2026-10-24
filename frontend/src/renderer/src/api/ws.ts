@@ -1,3 +1,5 @@
+import { WS_URL } from '../lib/config'
+
 export type WsEventType =
   | 'message:create'
   | 'message:delete'
@@ -25,8 +27,6 @@ interface WsClientConfig {
   getUserId: () => string | null
   onEvent: (event: WsEvent) => void
 }
-
-const WS_URL = 'ws://localhost:8080/ws'
 
 const BACKOFF_BASE_MS = 1000
 const BACKOFF_MAX_MS = 30000

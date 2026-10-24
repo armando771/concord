@@ -9,6 +9,7 @@ import RemoteAudio from './RemoteAudio'
 function CallOverlay(): React.JSX.Element | null {
   const status = useCallStore((s) => s.status)
   const streams = useCallStore((s) => s.streams)
+  const screenAudioStreams = useCallStore((s) => s.screenAudioStreams)
   const deafened = useCallStore((s) => s.deafened)
 
   if (status === 'idle' || status === 'ringing') return null
@@ -17,6 +18,10 @@ function CallOverlay(): React.JSX.Element | null {
     <>
       {Object.entries(streams).map(([userId, stream]) => (
         <RemoteAudio key={userId} stream={stream} muted={deafened} />
+      ))}
+      {/* Som das telas compartilhadas (jogo, vídeo…) — também segue o ensurdecer. */}
+      {Object.entries(screenAudioStreams).map(([userId, stream]) => (
+        <RemoteAudio key={`screen:${userId}`} stream={stream} muted={deafened} />
       ))}
     </>
   )

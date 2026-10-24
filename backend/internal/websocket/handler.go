@@ -86,7 +86,9 @@ func (h *Handler) ServeWS(c *gin.Context) {
 	}
 
 	conn, err := websocket.Accept(c.Writer, c.Request, &websocket.AcceptOptions{
-		OriginPatterns: []string{"localhost:5173", "localhost:8080", "null"},
+		// O app empacotado conecta a partir de file:// (sem host de origem) e a
+		// autenticação já é feita pelo ?token=, então a origem não é checada.
+		InsecureSkipVerify: true,
 	})
 	if err != nil {
 		return

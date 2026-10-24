@@ -4,27 +4,20 @@ import {
   startCall as startCallApi,
   endCall as endCallApi,
   getCallState,
+  getCallToken,
   type CallStateResponse
 } from '../api/calls'
-import {
-  createPeerConnection,
-  getAudioStream,
-  getCameraStream,
-  getDisplayStream,
-  createOffer,
-  createAnswer,
-  connectMesh,
-  shouldInitiateOffer,
-  type PeerHandlers
-} from '../lib/rtc'
+import { ApiError } from '../api/client'
+import { getAudioStream, getCameraStream, getDisplayStream } from '../lib/rtc'
+import { CallMedia, type RemoteMedia } from '../lib/livekit'
+import { LIVEKIT_URL } from '../lib/config'
+import { retry } from '../lib/retry'
 import { useChatStore } from './chatStore'
 import { useAuthStore } from './authStore'
 import { showToast } from './toastStore'
 
 export type CallStatus = 'idle' | 'ringing' | 'outgoing' | 'active'
 export type CallKind = 'dm' | 'channel'
-/** Origem do vídeo negociado — vai no metadado `media` da offer. */
-export type VideoKind = 'screen' | 'camera'
 
 export interface CallUserInfo {
   id: string
@@ -48,15 +41,6 @@ interface RingPayload {
 interface ResponsePayload {
   call_id: string
   user: CallUserInfo
-}
-
-interface SignalRelayPayload {
-  call_id: string
-  from_user_id: string
-  sdp?: RTCSessionDescriptionInit
-  candidate?: RTCIceCandidateInit
-  /** metadado da renegociação — indica a origem do vídeo que a offer adiciona */
-  media?: VideoKind
 }
 
 interface StatePayload {
@@ -86,9 +70,12 @@ interface CallState {
   channelId: string | null
   participants: CallUserInfo[]
   isInitiator: boolean
+  /** userId -> microfone remoto */
   streams: Record<string, MediaStream>
   /** userId -> stream de tela remota (Fase 3) */
   screenStreams: Record<string, MediaStream>
+  /** userId -> som da tela remota (jogo, vídeo…) */
+  screenAudioStreams: Record<string, MediaStream>
   /** stream de tela local enquanto isScreenSharing (reativo p/ preview) */
   localScreenStream: MediaStream | null
   isScreenSharing: boolean
@@ -124,196 +111,133 @@ interface CallState {
   handleWsEvent: (event: WsEvent) => void
 }
 
-const peers = new Map<string, RTCPeerConnection>()
-const pendingCandidates = new Map<string, RTCIceCandidateInit[]>()
 let localStream: MediaStream | null = null
 let transitioning = false
+/** Conexão com o servidor de mídia (LiveKit) da chamada atual. */
+let media: CallMedia | null = null
 
 // Compartilhamento de tela (não-reativo; o estado reativo é localScreenStream)
 let localScreenStream: MediaStream | null = null
 // Câmera local (não-reativa; o estado reativo é localCameraStream)
 let localCameraStream: MediaStream | null = null
-/** peerId -> origem do próximo vídeo remoto desse par (metadado da offer recebida) */
-const remoteVideoHint = new Map<string, VideoKind>()
-/** peerId -> renegociação adiada esperando stable (preserva o metadado; true = sem vídeo) */
-const pendingNegotiation = new Map<string, VideoKind | true>()
+
+const TOKEN_ATTEMPTS = 10
+const TOKEN_RETRY_DELAY_MS = 400
+
+/** Tira o stream da sala (se houver) e só então para as tracks. */
+function releaseStream(stream: MediaStream): void {
+  const stop = (): void => stream.getTracks().forEach((t) => t.stop())
+  if (!media) {
+    stop()
+    return
+  }
+  void media
+    .unpublish(stream)
+    .catch(() => {})
+    .finally(stop)
+}
 
 function stopLocalStream(): void {
   localStream?.getTracks().forEach((t) => t.stop())
   localStream = null
 }
 
+const EMPTY_MEDIA: RemoteMedia = {
+  streams: {},
+  screenStreams: {},
+  screenAudioStreams: {},
+  videoStreams: {}
+}
+
 export const useCallStore = create<CallState>()((set, get) => {
-  const signal = (toUserId: string, body: Record<string, unknown>): void => {
-    const callId = get().callId
-    if (!callId) return
-    useChatStore
-      .getState()
-      .sendEvent('call:signal', { call_id: callId, to_user_id: toUserId, ...body })
+  const bumpList = (): void => {
+    set((s) => ({ listVersion: s.listVersion + 1 }))
   }
 
-  const makePeerHandlers = (peerId: string): PeerHandlers => ({
-    onLocalCandidate: (candidate: RTCIceCandidate): void => {
-      signal(peerId, { candidate: candidate.toJSON() })
-    },
-    onRemoteStream: (stream: MediaStream): void => {
-      if (stream.getVideoTracks().length === 0) {
-        set((s) => ({ streams: { ...s.streams, [peerId]: stream } }))
-        return
-      }
-      // Classificação em camadas: (1) metadado `media` da offer recebida;
-      // (2) contentHint da track remota ('motion' câmera / 'detail' tela);
-      // (3) complementar — se o par já tem um tipo classificado, o novo é o
-      // outro; (4) fallback pelo tipo de chamada (DM = câmera, canal = tela).
-      let kind = remoteVideoHint.get(peerId)
-      remoteVideoHint.delete(peerId)
-      if (!kind) {
-        const hint = stream.getVideoTracks()[0]?.contentHint
-        if (hint === 'motion') kind = 'camera'
-        else if (hint === 'detail') kind = 'screen'
-      }
-      const s = get()
-      if (!kind) {
-        const hasCamera = Boolean(s.videoStreams[peerId])
-        const hasScreen = Boolean(s.screenStreams[peerId])
-        if (hasCamera && !hasScreen) kind = 'screen'
-        else if (hasScreen && !hasCamera) kind = 'camera'
-      }
-      kind ??= s.type === 'dm' ? 'camera' : 'screen'
-      if (kind === 'screen') {
-        set((s) => ({
-          screenStreams: { ...s.screenStreams, [peerId]: stream },
-          focusedScreenUserId: s.focusedScreenUserId ?? peerId,
-          participants: upsertParticipant(s.participants, {
-            id: peerId,
-            username: '',
-            display_name: s.participants.find((p) => p.id === peerId)?.display_name ?? 'Usuário'
-          })
-        }))
-        return
-      }
-      // Câmera remota: o par remove a track ao desligar — o evento 'mute'
-      // sincroniza a UI (remove o tile); 'unmute' restaura; 'ended' é definitivo.
-      const removeCamera = (): void => {
-        set((s) => {
-          const videoStreams = { ...s.videoStreams }
-          delete videoStreams[peerId]
-          return { videoStreams }
-        })
-      }
-      stream.getVideoTracks().forEach((track) => {
-        track.addEventListener('mute', removeCamera)
-        track.addEventListener('unmute', () => {
-          set((s) => ({
-            videoStreams: { ...s.videoStreams, [peerId]: stream },
-            participants: upsertParticipant(s.participants, {
-              id: peerId,
-              username: '',
-              display_name: s.participants.find((p) => p.id === peerId)?.display_name ?? 'Usuário'
-            })
-          }))
-        })
-        track.addEventListener('ended', () => {
-          track.removeEventListener('mute', removeCamera)
-          removeCamera()
-        })
-      })
-      set((s) => ({
-        videoStreams: { ...s.videoStreams, [peerId]: stream },
-        participants: upsertParticipant(s.participants, {
-          id: peerId,
-          username: '',
-          display_name: s.participants.find((p) => p.id === peerId)?.display_name ?? 'Usuário'
-        })
-      }))
-    },
-    onConnectionStateChange: (state: RTCPeerConnectionState): void => {
-      if (state !== 'failed') return
-      if (get().type === 'channel') {
-        showToast.error('Conexão com um participante falhou.')
-        detachPeer(peerId)
-      } else {
-        showToast.error('Falha na conexão da chamada.')
-        get().endCall()
-      }
-    },
-    onSignalingStateChange: (state: RTCSignalingState): void => {
-      if (state !== 'stable') return
-      const pc = peers.get(peerId)
-      const kind = pendingNegotiation.get(peerId)
-      if (!pc || kind === undefined) return
-      pendingNegotiation.delete(peerId)
-      void negotiatePeer(peerId, kind === true ? undefined : kind)
-    }
-  })
-
-  /** Anexa as tracks da tela local a um PC (sem duplicar senders). */
-  const attachScreenTracks = (pc: RTCPeerConnection): void => {
-    if (!localScreenStream) return
-    localScreenStream.getTracks().forEach((track) => {
-      const already = pc.getSenders().some((sender) => sender.track === track)
-      if (!already) pc.addTrack(track, localScreenStream as MediaStream)
-    })
-  }
-
-  /** Anexa as tracks da câmera local a um PC (sem duplicar senders). */
-  const attachCameraTracks = (pc: RTCPeerConnection): void => {
-    if (!localCameraStream) return
-    localCameraStream.getTracks().forEach((track) => {
-      const already = pc.getSenders().some((sender) => sender.track === track)
-      if (!already) pc.addTrack(track, localCameraStream as MediaStream)
-    })
-  }
-
-  const ensurePeerConnection = (peerId: string): RTCPeerConnection => {
-    const existing = peers.get(peerId)
-    if (existing) {
-      attachScreenTracks(existing)
-      attachCameraTracks(existing)
-      return existing
-    }
-
-    const pc = createPeerConnection(makePeerHandlers(peerId))
-    localStream?.getTracks().forEach((track) => pc.addTrack(track, localStream as MediaStream))
-    attachScreenTracks(pc)
-    attachCameraTracks(pc)
-    peers.set(peerId, pc)
-    pendingCandidates.set(peerId, [])
-    return pc
-  }
-
-  const detachPeer = (peerId: string): void => {
-    peers.get(peerId)?.close()
-    peers.delete(peerId)
-    pendingCandidates.delete(peerId)
-    remoteVideoHint.delete(peerId)
+  const applyRemoteMedia = (remote: RemoteMedia): void => {
     set((s) => {
-      const streams = { ...s.streams }
-      delete streams[peerId]
-      const screenStreams = { ...s.screenStreams }
-      delete screenStreams[peerId]
-      const videoStreams = { ...s.videoStreams }
-      delete videoStreams[peerId]
-      return {
-        streams,
-        screenStreams,
-        videoStreams,
-        focusedScreenUserId: s.focusedScreenUserId === peerId ? null : s.focusedScreenUserId,
-        participants: s.participants.filter((p) => p.id !== peerId)
+      const meId = useAuthStore.getState().user?.id ?? null
+      const isSharing = (id: string): boolean =>
+        Boolean(remote.screenStreams[id]) || (id === meId && s.isScreenSharing)
+      let focusedScreenUserId = s.focusedScreenUserId
+      if (focusedScreenUserId !== null && !isSharing(focusedScreenUserId)) {
+        // A tela em foco acabou: passa para a próxima (ou nenhuma).
+        focusedScreenUserId =
+          Object.keys(remote.screenStreams)[0] ?? (s.isScreenSharing ? meId : null)
+      } else if (focusedScreenUserId === null) {
+        // Sem foco: só uma tela que acabou de chegar ganha foco — quem saiu do
+        // modo foco não é puxado de volta a cada evento de mídia.
+        focusedScreenUserId =
+          Object.keys(remote.screenStreams).find((id) => !s.screenStreams[id]) ?? null
       }
+      return { ...remote, focusedScreenUserId }
     })
   }
 
-  const flushCandidates = async (peerId: string): Promise<void> => {
-    const pc = peers.get(peerId)
-    const queued = pendingCandidates.get(peerId) ?? []
-    pendingCandidates.set(peerId, [])
-    if (!pc || !pc.remoteDescription) return
-    for (const candidate of queued) {
+  /**
+   * Entra na sala de mídia da chamada. O callee de DM pode pedir o token antes
+   * do backend processar o call:accept (403) — por isso o retry curto.
+   */
+  const connectMedia = async (callId: string): Promise<void> => {
+    if (media || !localStream) return
+    const mic = localStream.getAudioTracks()[0]
+    if (!mic) return
+
+    const connection = new CallMedia({
+      onRemoteMedia: (remote) => {
+        if (media === connection) applyRemoteMedia(remote)
+      },
+      onConnectionLost: () => {
+        if (media !== connection) return
+        showToast.error('Conexão com o servidor de voz perdida.')
+        get().endCall()
+      },
+      onReconnecting: () => {
+        if (media === connection) showToast.info('Reconectando a chamada…')
+      },
+      onReconnected: () => {
+        if (media === connection) showToast.info('Chamada reconectada.')
+      }
+    })
+    media = connection
+
+    try {
+      const { token } = await retry(() => getCallToken(callId), {
+        attempts: TOKEN_ATTEMPTS,
+        delayMs: TOKEN_RETRY_DELAY_MS,
+        shouldRetry: (err) => err instanceof ApiError && err.status === 403
+      })
+      if (media !== connection || get().callId !== callId) return
+      await connection.connect(LIVEKIT_URL, token, mic, get().muted)
+    } catch {
+      if (media !== connection) return
+      showToast.error('Não foi possível conectar ao servidor de voz.')
+      get().endCall()
+      return
+    }
+    if (media !== connection) return
+
+    // O mute pode ter mudado durante a conexão (antes disso não há o que mutar).
+    void connection.setMicMuted(get().muted).catch(() => {})
+
+    // Tela/câmera ligadas antes da sala conectar (ex.: logo após aceitar). Uma
+    // falha aqui desliga só aquela mídia, não a chamada.
+    const screen = localScreenStream
+    if (screen) {
       try {
-        await pc.addIceCandidate(candidate)
+        await connection.publishScreen(screen)
       } catch {
-        // stale candidate, ignore
+        showToast.error('Não foi possível transmitir a tela.')
+        if (localScreenStream === screen) get().stopScreenShare()
+      }
+    }
+    const camera = localCameraStream
+    if (camera) {
+      try {
+        await connection.publishCamera(camera)
+      } catch {
+        showToast.error('Não foi possível transmitir a câmera.')
+        if (localCameraStream === camera) void get().toggleCamera()
       }
     }
   }
@@ -321,11 +245,8 @@ export const useCallStore = create<CallState>()((set, get) => {
   const cleanup = (): void => {
     const callId = get().callId
     if (callId) useChatStore.getState().unsubscribeRoom(`call:${callId}`)
-    peers.forEach((pc) => pc.close())
-    peers.clear()
-    pendingCandidates.clear()
-    remoteVideoHint.clear()
-    pendingNegotiation.clear()
+    media?.disconnect()
+    media = null
     stopLocalStream()
     localScreenStream?.getTracks().forEach((t) => t.stop())
     localScreenStream = null
@@ -339,11 +260,9 @@ export const useCallStore = create<CallState>()((set, get) => {
       channelId: null,
       participants: [],
       isInitiator: false,
-      streams: {},
-      screenStreams: {},
+      ...EMPTY_MEDIA,
       localScreenStream: null,
       isScreenSharing: false,
-      videoStreams: {},
       localCameraStream: null,
       screenSharers: [],
       focusedScreenUserId: null,
@@ -351,115 +270,6 @@ export const useCallStore = create<CallState>()((set, get) => {
       deafened: false,
       startedAt: null
     })
-  }
-
-  const bumpList = (): void => {
-    set((s) => ({ listVersion: s.listVersion + 1 }))
-  }
-
-  /**
-   * Metadado da origem de vídeo para a próxima offer, derivado do estado local.
-   * Com câmera E tela ativas ao mesmo tempo não há tag única — a offer vai sem
-   * metadado e o receptor classifica por heurística (contentHint/complementar).
-   */
-  const currentVideoMeta = (): VideoKind | undefined => {
-    if (get().isScreenSharing && localCameraStream) return undefined
-    if (localCameraStream) return 'camera'
-    if (get().isScreenSharing) return 'screen'
-    return undefined
-  }
-
-  /**
-   * Cria e envia uma offer para o par. Usada tanto no estabelecimento inicial
-   * do mesh quanto na renegociação (compartilhamento de tela/câmera). Se o PC
-   * não está estável, adia para quando voltar a stable (via onSignalingStateChange).
-   */
-  const negotiatePeer = async (peerId: string, media?: VideoKind): Promise<void> => {
-    const pc = peers.get(peerId)
-    if (!pc) return
-    if (pc.signalingState !== 'stable') {
-      pendingNegotiation.set(peerId, media ?? true)
-      return
-    }
-    try {
-      const offer = await createOffer(pc)
-      signal(peerId, media ? { sdp: offer, media } : { sdp: offer })
-    } catch {
-      // PC fechado durante a negociação
-    }
-  }
-
-  // Compat com os fluxos existentes (estabelecimento inicial do mesh).
-  const beginNegotiationAsCaller = async (peerId: string): Promise<void> => {
-    ensurePeerConnection(peerId)
-    // A oferta inicial já carrega as tracks locais ativas (áudio + vídeo);
-    // a tag ajuda o par a classificar o stream corretamente.
-    await negotiatePeer(peerId, currentVideoMeta())
-  }
-
-  const handleSignal = async (payload: SignalRelayPayload): Promise<void> => {
-    const state = get()
-    const myId = useAuthStore.getState().user?.id ?? ''
-    if (state.callId !== payload.call_id || payload.from_user_id === myId) {
-      return
-    }
-    const peerId = payload.from_user_id
-
-    if (payload.sdp) {
-      const desc = payload.sdp
-      if (desc.type === 'offer') {
-        const pc = ensurePeerConnection(peerId)
-
-        // Glare (os dois lados criaram offer ao mesmo tempo — ex.: dois
-        // começaram a compartilhar juntos): o lado "polite" (id maior) cede
-        // com rollback; o "impolite" ignora a offer conflitante.
-        let rolledBack = false
-        if (pc.signalingState === 'have-local-offer') {
-          if (myId <= peerId) return
-          try {
-            await pc.setLocalDescription({ type: 'rollback' } as RTCLocalSessionDescriptionInit)
-            rolledBack = true
-          } catch {
-            return
-          }
-        }
-
-        if (payload.media) remoteVideoHint.set(peerId, payload.media)
-        try {
-          const answer = await createAnswer(pc, desc)
-          signal(peerId, { sdp: answer })
-          await flushCandidates(peerId)
-        } catch {
-          return
-        }
-        // Perdi minha offer no rollback: renegocio meu vídeo agora que está stable.
-        if (rolledBack) {
-          void negotiatePeer(peerId, currentVideoMeta())
-        }
-      } else if (desc.type === 'answer') {
-        const pc = ensurePeerConnection(peerId)
-        if (pc.signalingState === 'have-local-offer') {
-          await pc.setRemoteDescription(desc)
-          await flushCandidates(peerId)
-        }
-      }
-      return
-    }
-
-    if (payload.candidate) {
-      const pc = peers.get(peerId)
-      if (pc?.remoteDescription) {
-        try {
-          await pc.addIceCandidate(payload.candidate)
-        } catch {
-          // stale candidate, ignore
-        }
-      } else {
-        const queue = pendingCandidates.get(peerId) ?? []
-        queue.push(payload.candidate)
-        pendingCandidates.set(peerId, queue)
-      }
-    }
   }
 
   return {
@@ -470,11 +280,9 @@ export const useCallStore = create<CallState>()((set, get) => {
     channelId: null,
     participants: [],
     isInitiator: false,
-    streams: {},
-    screenStreams: {},
+    ...EMPTY_MEDIA,
     localScreenStream: null,
     isScreenSharing: false,
-    videoStreams: {},
     localCameraStream: null,
     screenSharers: [],
     focusedScreenUserId: null,
@@ -547,6 +355,9 @@ export const useCallStore = create<CallState>()((set, get) => {
           startedAt: Date.now()
         })
         useChatStore.getState().subscribeRoom(`call:${call.id}`)
+        // O backend já registrou a entrada (startCall é idempotente): a mídia
+        // pode conectar em paralelo à leitura do estado da chamada.
+        void connectMedia(call.id)
 
         const meId = useAuthStore.getState().user?.id
         if (meId) {
@@ -569,17 +380,8 @@ export const useCallStore = create<CallState>()((set, get) => {
                   }))
               ]
             }))
-            const connections = connectMesh(
-              others.map((p) => ({ id: p.user_id })),
-              { myId: meId, stream: localStream, createHandlers: makePeerHandlers }
-            )
-            connections.forEach((pc, peerId) => {
-              peers.set(peerId, pc)
-              pendingCandidates.set(peerId, [])
-              if (shouldInitiateOffer(meId, peerId)) void beginNegotiationAsCaller(peerId)
-            })
           } catch {
-            // estado indisponível: o mesh se forma pelos eventos call:joined
+            // estado indisponível: a lista se forma pelos eventos call:joined
           }
         }
         bumpList()
@@ -604,12 +406,12 @@ export const useCallStore = create<CallState>()((set, get) => {
         return
       }
 
-      ensurePeerConnection(peer.id)
       // Otimista: o broadcast de call:accept pode chegar antes da assinatura da room.
       set({ status: 'active', startedAt: Date.now() })
       useChatStore.getState().sendEvent('call:accept', { call_id: callId })
       useChatStore.getState().subscribeRoom(`call:${callId}`)
       transitioning = false
+      void connectMedia(callId)
     },
 
     declineCall: () => {
@@ -644,6 +446,7 @@ export const useCallStore = create<CallState>()((set, get) => {
         track.enabled = !next
       })
       set({ muted: next })
+      void media?.setMicMuted(next)
     },
 
     toggleDeafen: () => {
@@ -661,6 +464,11 @@ export const useCallStore = create<CallState>()((set, get) => {
         if ((err as DOMException)?.name !== 'NotAllowedError') {
           showToast.error('Não foi possível compartilhar a tela.')
         }
+        return
+      }
+      // A chamada pode ter acabado (ou mudado) com o seletor aberto.
+      if (get().callId !== s.callId || get().status !== 'active') {
+        stream.getTracks().forEach((t) => t.stop())
         return
       }
 
@@ -685,11 +493,12 @@ export const useCallStore = create<CallState>()((set, get) => {
 
       useChatStore.getState().sendEvent('call:screen', { call_id: callId, active: true })
 
-      // Renegociação com cada par — quem adiciona a track inicia a nova offer.
-      peers.forEach((_pc, peerId) => {
-        attachScreenTracks(peers.get(peerId) as RTCPeerConnection)
-        void negotiatePeer(peerId, 'screen')
-      })
+      try {
+        await media?.publishScreen(stream)
+      } catch {
+        showToast.error('Não foi possível transmitir a tela.')
+        get().stopScreenShare()
+      }
     },
 
     stopScreenShare: () => {
@@ -700,20 +509,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       const stream = localScreenStream
       localScreenStream = null
 
-      const removedVideo = new Set(stream?.getVideoTracks() ?? [])
-      peers.forEach((pc, peerId) => {
-        pc.getSenders()
-          .filter((sender) => sender.track && removedVideo.has(sender.track))
-          .forEach((sender) => {
-            try {
-              pc.removeTrack(sender)
-            } catch {
-              // PC já fechado
-            }
-          })
-        void negotiatePeer(peerId)
-      })
-      stream?.getTracks().forEach((t) => t.stop())
+      if (stream) releaseStream(stream)
 
       set((prev) => ({
         isScreenSharing: false,
@@ -740,21 +536,8 @@ export const useCallStore = create<CallState>()((set, get) => {
         // o fim pelo evento 'mute' da track remota).
         const stream = localCameraStream
         localCameraStream = null
-        const removedVideo = new Set(stream.getVideoTracks())
-        peers.forEach((pc, peerId) => {
-          pc.getSenders()
-            .filter((sender) => sender.track && removedVideo.has(sender.track))
-            .forEach((sender) => {
-              try {
-                pc.removeTrack(sender)
-              } catch {
-                // PC já fechado
-              }
-            })
-          void negotiatePeer(peerId)
-        })
-        stream.getTracks().forEach((t) => t.stop())
         set({ localCameraStream: null })
+        releaseStream(stream)
         return
       }
 
@@ -765,6 +548,11 @@ export const useCallStore = create<CallState>()((set, get) => {
         if ((err as DOMException)?.name !== 'NotAllowedError') {
           showToast.error('Não foi possível acessar a câmera.')
         }
+        return
+      }
+      // A chamada pode ter acabado enquanto a câmera abria.
+      if (get().callId !== s.callId || get().status !== 'active' || localCameraStream) {
+        stream.getTracks().forEach((t) => t.stop())
         return
       }
 
@@ -780,11 +568,12 @@ export const useCallStore = create<CallState>()((set, get) => {
         })
       })
 
-      // Renegociação com o par — quem adiciona a track inicia a nova offer.
-      peers.forEach((pc, peerId) => {
-        attachCameraTracks(pc)
-        void negotiatePeer(peerId, 'camera')
-      })
+      try {
+        await media?.publishCamera(stream)
+      } catch {
+        showToast.error('Não foi possível transmitir a câmera.')
+        if (localCameraStream === stream) void get().toggleCamera()
+      }
     },
 
     setServerCalls: (map) => {
@@ -848,8 +637,8 @@ export const useCallStore = create<CallState>()((set, get) => {
           } else {
             set({ participants })
           }
-          if (current.isInitiator && current.type === 'dm' && p.user.id) {
-            void beginNegotiationAsCaller(p.user.id)
+          if (current.isInitiator && current.type === 'dm' && current.callId) {
+            void connectMedia(current.callId)
           }
           return
         }
@@ -859,11 +648,6 @@ export const useCallStore = create<CallState>()((set, get) => {
           if (get().callId !== p.call_id) return
           showToast.info(`${p.user.display_name} recusou a chamada.`)
           cleanup()
-          return
-        }
-
-        case 'call:signal': {
-          void handleSignal(payload as unknown as SignalRelayPayload)
           return
         }
 
@@ -892,17 +676,6 @@ export const useCallStore = create<CallState>()((set, get) => {
             if (current.status !== 'active' || !meId || p.user.id === meId) return
             set({ participants: upsertParticipant(current.participants, p.user) })
             bumpList()
-            ensurePeerConnection(p.user.id)
-            if (shouldInitiateOffer(meId, p.user.id)) {
-              void beginNegotiationAsCaller(p.user.id)
-            } else if (currentVideoMeta()) {
-              // Perdi o coin flip da oferta inicial: minhas tracks de vídeo ficam
-              // fora da answer — agendo a renegociação para quando voltar a
-              // stable (ou agora, se a oferta inicial do par já concluiu).
-              const meta = currentVideoMeta() as VideoKind
-              pendingNegotiation.set(p.user.id, meta)
-              void negotiatePeer(p.user.id, meta)
-            }
             return
           }
           if (current.status === 'outgoing') set({ status: 'active', startedAt: Date.now() })
@@ -915,7 +688,11 @@ export const useCallStore = create<CallState>()((set, get) => {
           if (p.user.id === meId) return
           showToast.info(`${p.user.display_name} saiu da chamada.`)
           if (get().type === 'channel') {
-            detachPeer(p.user.id)
+            // A mídia do participante some sozinha quando ele sai da sala do LiveKit.
+            set((s) => ({
+              participants: s.participants.filter((q) => q.id !== p.user.id),
+              screenSharers: s.screenSharers.filter((id) => id !== p.user.id)
+            }))
             bumpList()
             return
           }

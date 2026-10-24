@@ -65,14 +65,6 @@ type ResponseEvent struct {
 	User   UserInfo `json:"user"`
 }
 
-type SignalRelayEvent struct {
-	CallID     string          `json:"call_id"`
-	FromUserID string          `json:"from_user_id"`
-	SDP        json.RawMessage `json:"sdp,omitempty"`
-	Candidate  json.RawMessage `json:"candidate,omitempty"`
-	Media      string          `json:"media,omitempty"`
-}
-
 type StateEvent struct {
 	CallID string   `json:"call_id"`
 	User   UserInfo `json:"user"`
@@ -105,14 +97,6 @@ type InvitePayload struct {
 	Type           string `json:"type"`
 	ConversationID string `json:"conversation_id,omitempty"`
 	ChannelID      string `json:"channel_id,omitempty"`
-}
-
-type SignalPayload struct {
-	CallID    string          `json:"call_id"`
-	ToUserID  string          `json:"to_user_id,omitempty"`
-	SDP       json.RawMessage `json:"sdp,omitempty"`
-	Candidate json.RawMessage `json:"candidate,omitempty"`
-	Media     string          `json:"media,omitempty"`
 }
 
 type ScreenPayload struct {

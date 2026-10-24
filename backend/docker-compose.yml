@@ -10,10 +10,40 @@ services:
       POSTGRES_DB: concord
 
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
 
     volumes:
       - concord_postgres_data:/var/lib/postgresql/data
+
+  # Servidor de mídia (SFU). Toda a voz/vídeo/tela passa por aqui.
+  # Rede do host: o LiveKit precisa enxergar as interfaces reais (IP da LAN)
+  # e escutar UDP/TCP direto, sem o NAT do Docker no meio.
+  livekit:
+    image: livekit/livekit-server:v1.13.10
+    container_name: concord-livekit
+    restart: unless-stopped
+    network_mode: host
+
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+      # node_ip = IP público por onde os amigos chegam (playit/VPS). Vazio no
+      # dev: o LiveKit usa o IP da máquina. As portas rtc precisam ser IGUAIS
+      # às portas públicas do túnel, porque o LiveKit anuncia a própria porta.
+      LIVEKIT_CONFIG: |
+        port: ${LIVEKIT_PORT:-7880}
+        log_level: info
+        rtc:
+          tcp_port: ${LIVEKIT_TCP_PORT:-7881}
+          udp_port: ${LIVEKIT_UDP_PORT:-7882}
+          use_external_ip: false
+          node_ip: "${LIVEKIT_NODE_IP:-}"
+          advertise_internal_ip: true
+          # O agente do playit (ou o WireGuard da VPS) entrega a mídia em
+          # 127.0.0.1 — sem isso o LiveKit não abre socket UDP no loopback.
+          enable_loopback_candidate: true
+        room:
+          empty_timeout: 300
+          max_participants: 25
 
 volumes:
   concord_postgres_data:
