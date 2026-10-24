@@ -17,7 +17,7 @@ function CallOverlay(): React.JSX.Element | null {
   return (
     <>
       {Object.entries(streams).map(([userId, stream]) => (
-        <RemoteAudio key={userId} stream={stream} muted={deafened} />
+        <RemoteAudio key={userId} stream={stream} muted={deafened} userId={userId} />
       ))}
       {/* Som das telas compartilhadas (jogo, vídeo…) — também segue o ensurdecer. */}
       {Object.entries(screenAudioStreams).map(([userId, stream]) => (

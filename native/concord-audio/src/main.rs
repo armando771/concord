@@ -42,7 +42,7 @@ fn run(mode: &args::Mode) -> ExitCode {
     match capture::run(mode) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            eprintln!("erro: {err}");
+            eprintln!("erro em {err}");
             ExitCode::FAILURE
         }
     }

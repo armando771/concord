@@ -12,7 +12,7 @@ use windows::Win32::Media::Audio::{
     IActivateAudioInterfaceCompletionHandler, IActivateAudioInterfaceCompletionHandler_Impl,
     IAudioCaptureClient, IAudioClient, AUDCLNT_BUFFERFLAGS_SILENT, AUDCLNT_SHAREMODE_SHARED,
     AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
-    AUDCLNT_STREAMFLAGS_LOOPBACK, AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,
+    AUDCLNT_STREAMFLAGS_LOOPBACK,
     AUDIOCLIENT_ACTIVATION_PARAMS, AUDIOCLIENT_ACTIVATION_PARAMS_0,
     AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK, AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS,
     PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE,
@@ -116,12 +116,18 @@ unsafe fn activate(pid: u32, include: bool) -> Result<IAudioClient> {
         .cast()
 }
 
+/// Erro com a etapa que falhou, para o log do Concord dizer exatamente onde.
+fn step<T>(name: &str, result: Result<T>) -> std::result::Result<T, String> {
+    result.map_err(|err| format!("{name}: {err} (0x{:08X})", err.code().0 as u32))
+}
+
 /// Captura até stdout fechar (o Concord parou o compartilhamento).
-pub fn run(mode: &Mode) -> Result<()> {
+pub fn run(mode: &Mode) -> std::result::Result<(), String> {
     unsafe {
-        CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
-        let (pid, include) = target(mode)?;
-        let client = activate(pid, include)?;
+        step("CoInitializeEx", CoInitializeEx(None, COINIT_MULTITHREADED).ok())?;
+        let (pid, include) = step("janela → processo", target(mode))?;
+        eprintln!("pid {pid} ({})", if include { "incluir" } else { "excluir" });
+        let client = step("ActivateAudioInterfaceAsync", activate(pid, include))?;
 
         let block_align = CHANNELS * 4;
         let format = WAVEFORMATEX {
@@ -133,21 +139,21 @@ pub fn run(mode: &Mode) -> Result<()> {
             wBitsPerSample: 32,
             cbSize: 0,
         };
-        client.Initialize(
+        step("IAudioClient::Initialize", client.Initialize(
             AUDCLNT_SHAREMODE_SHARED,
+            // Mesmas flags do exemplo ApplicationLoopback da Microsoft.
             AUDCLNT_STREAMFLAGS_LOOPBACK
                 | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
-                | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
-                | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,
+                | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
             BUFFER_DURATION,
             0,
             &format,
             None,
-        )?;
-        let ready = CreateEventW(None, false, false, PCWSTR::null())?;
-        client.SetEventHandle(ready)?;
-        let capture: IAudioCaptureClient = client.GetService()?;
-        client.Start()?;
+        ))?;
+        let ready = step("CreateEventW", CreateEventW(None, false, false, PCWSTR::null()))?;
+        step("SetEventHandle", client.SetEventHandle(ready))?;
+        let capture: IAudioCaptureClient = step("GetService", client.GetService())?;
+        step("Start", client.Start())?;
 
         // O processo pai lê esta linha para saber que a captura começou.
         eprintln!("ready");
@@ -160,14 +166,14 @@ pub fn run(mode: &Mode) -> Result<()> {
                 continue;
             }
             loop {
-                let frames_available = capture.GetNextPacketSize()?;
+                let frames_available = step("GetNextPacketSize", capture.GetNextPacketSize())?;
                 if frames_available == 0 {
                     break;
                 }
                 let mut data = std::ptr::null_mut();
                 let mut frames = 0u32;
                 let mut flags = 0u32;
-                capture.GetBuffer(&mut data, &mut frames, &mut flags, None, None)?;
+                step("GetBuffer", capture.GetBuffer(&mut data, &mut frames, &mut flags, None, None))?;
                 let bytes = frames as usize * block_align as usize;
                 let chunk: &[u8] = if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 {
                     silence.resize(bytes, 0);
@@ -176,7 +182,7 @@ pub fn run(mode: &Mode) -> Result<()> {
                     std::slice::from_raw_parts(data, bytes)
                 };
                 let written = out.write_all(chunk);
-                capture.ReleaseBuffer(frames)?;
+                step("ReleaseBuffer", capture.ReleaseBuffer(frames))?;
                 if written.is_err() {
                     // stdout fechado: o Concord parou o compartilhamento.
                     let _ = client.Stop();

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { userMenuHandler } from '../store/userMenuStore'
 import InviteCodeBox from '../components/InviteCodeBox'
 import { Navigate, useParams } from 'react-router-dom'
 import { useServerStore } from '../store/serverStore'
@@ -32,8 +33,13 @@ function MemberRow({
   online
 }: MemberRowProps): React.JSX.Element {
   const initial = displayName.charAt(0).toUpperCase()
+  const meId = useAuthStore((s) => s.user?.id)
   return (
-    <div key={userId} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-white/5">
+    <div
+      key={userId}
+      onContextMenu={userMenuHandler(userId, displayName, meId, handle)}
+      className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-white/5"
+    >
       <div className="relative shrink-0">
         <div
           className={`flex h-8 w-8 items-center justify-center rounded-full font-bold text-xs text-white ${colorClass}`}
@@ -68,10 +74,6 @@ export function ServerView(): React.JSX.Element {
   const fetchChannels = useServerStore((s) => s.fetchChannels)
   const inviteUser = useServerStore((s) => s.inviteUser)
   const fetchServerInvites = useServerStore((s) => s.fetchServerInvites)
-
-  const isAdmin =
-    currentServer?.owner_id === me?.id ||
-    currentMembers.some((m) => m.user_id === me?.id && m.role === 'admin')
 
   const presence = useChatStore((s) => s.presence)
   const fetchPresenceFor = useChatStore((s) => s.fetchPresenceFor)
@@ -186,16 +188,15 @@ export function ServerView(): React.JSX.Element {
           </div>
 
           <div className="flex items-center gap-2">
-            {isAdmin && (
-              <Button
-                variant="secondary"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
-                onClick={openInviteModal}
-              >
-                <UserPlusIcon className="h-4 w-4" />
-                <span>Convidar</span>
-              </Button>
-            )}
+            {/* Qualquer membro pode convidar */}
+            <Button
+              variant="secondary"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
+              onClick={openInviteModal}
+            >
+              <UserPlusIcon className="h-4 w-4" />
+              <span>Convidar</span>
+            </Button>
           </div>
         </header>
 
@@ -254,7 +255,7 @@ export function ServerView(): React.JSX.Element {
         {adminMembers.length > 0 && (
           <div>
             <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
-              Administradores — {adminMembers.length}
+              Moderadores — {adminMembers.length}
             </p>
             <div className="flex flex-col gap-1">
               {adminMembers.map((m) => {

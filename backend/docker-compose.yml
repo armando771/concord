@@ -41,6 +41,13 @@ services:
           # O agente do playit (ou o WireGuard da VPS) entrega a mídia em
           # 127.0.0.1 — sem isso o LiveKit não abre socket UDP no loopback.
           enable_loopback_candidate: true
+        # Detecção de fala mais rápida (padrão: 400 ms × média de 2 = ~1 s de
+        # atraso para ficar verde).
+        audio:
+          active_level: 35
+          min_percentile: 40
+          update_interval: 150
+          smooth_intervals: 1
         room:
           empty_timeout: 300
           max_participants: 25

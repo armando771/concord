@@ -72,3 +72,15 @@ export async function getInviteCode(serverId: string): Promise<{ code: string }>
 export async function joinServerByCode(code: string): Promise<Server> {
   return request<Server>('/invites/join', { method: 'POST', body: JSON.stringify({ code }) })
 }
+
+/** O dono torna alguém moderador ("admin") ou membro comum. */
+export async function setMemberRole(
+  serverId: string,
+  userId: string,
+  role: 'admin' | 'member'
+): Promise<ServerMember> {
+  return request<ServerMember>(`/servers/${serverId}/members/${userId}/role`, {
+    method: 'PUT',
+    body: JSON.stringify({ role })
+  })
+}

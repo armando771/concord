@@ -156,6 +156,11 @@ const videoTracks = (page) => page.evaluate(() =>
   [...document.querySelectorAll('video')].flatMap((el) =>
     el.srcObject ? el.srcObject.getVideoTracks().map((t) => `${t.readyState}:${el.videoWidth}x${el.videoHeight}`) : []))
 
+function check(desc, ok, detail) {
+  if (!ok) throw new Error(`FAIL ${desc}: ${JSON.stringify(detail)}`)
+  console.log(`PASS ${desc}`)
+}
+
 async function waitFor(desc, fn, ok, timeout = 20000) {
   const start = Date.now()
   let last
@@ -195,6 +200,22 @@ try {
   await waitFor('bia vê a ana de volta só mutada', () => voiceIcons(pageB, 'ana'), (t) => t === 'Microfone desativado')
   await pageA.getByRole('button', { name: 'Ativar microfone' }).first().click()
   await waitFor('bia vê a ana com som de novo', () => voiceIcons(pageB, 'ana'), (t) => t === 'nenhum')
+
+  // Botão direito na Bia: volume e silenciar só para a Ana.
+  const biaVolumeOnA = () => pageA.evaluate(() =>
+    [...document.querySelectorAll('audio')].filter((el) => el.srcObject?.getAudioTracks().length).map((el) => el.volume))
+  await pageA.getByText('bia', { exact: true }).first().click({ button: 'right' })
+  await pageA.getByRole('menu', { name: 'Opções de bia' }).waitFor()
+  await pageA.getByLabel('Volume do usuário').fill('30')
+  await waitFor('ana baixa a bia para 30%', biaVolumeOnA, (v) => v.length > 0 && v.every((x) => Math.abs(x - 0.3) < 0.01))
+  await pageA.getByRole('menu', { name: 'Opções de bia' }).getByText('Silenciar').click()
+  await waitFor('ana silencia a bia (só para ela)', biaVolumeOnA, (v) => v.every((x) => x === 0))
+  await waitFor('ícone "silenciado por você" aparece para a ana', () =>
+    pageA.locator('[title="Silenciado por você"]').count(), (n) => n > 0)
+  check('a bia não vê nada (é só para a ana)', (await pageB.locator('[title="Silenciado por você"]').count()) === 0)
+  await pageA.getByRole('menu', { name: 'Opções de bia' }).getByText('Silenciar').click()
+  await pageA.keyboard.press('Escape')
+  await waitFor('ana volta a ouvir a bia (30%)', biaVolumeOnA, (v) => v.every((x) => Math.abs(x - 0.3) < 0.01))
 
   // Troca de microfone no meio da chamada (Configurações → Voz).
   await pageA.getByRole('button', { name: 'Configurações do usuário' }).first().click()

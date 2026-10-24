@@ -1,4 +1,6 @@
 import { useAuthStore } from '../../store/authStore'
+import { useUserAudioStore } from '../../store/userAudioStore'
+import { userMenuHandler } from '../../store/userMenuStore'
 import { useCallStore } from '../../store/callStore'
 import type { CallUserInfo } from '../../store/callStore'
 import { ChevronDownIcon } from '../icons'
@@ -27,6 +29,7 @@ function CallStage({
   const muted = useCallStore((s) => s.muted)
   const deafened = useCallStore((s) => s.deafened)
   const voiceStates = useCallStore((s) => s.voiceStates)
+  const localAudio = useUserAudioStore((s) => s.settings)
   const localScreenStream = useCallStore((s) => s.localScreenStream)
   const screenStreams = useCallStore((s) => s.screenStreams)
   const focusedId = useCallStore((s) => s.focusedScreenUserId)
@@ -74,6 +77,8 @@ function CallStage({
             key={p.id}
             user={p}
             selfMuted={voiceStates[p.id]?.muted}
+            onContextMenu={userMenuHandler(p.id, p.display_name, meId, p.username)}
+            locallyMuted={localAudio[p.id]?.muted ?? false}
             deafened={voiceStates[p.id]?.deafened}
             speaking={speaking?.has(p.id) ?? false}
             videoStream={videoStreams[p.id] ?? null}
@@ -111,6 +116,8 @@ function CallStage({
               key={p.id}
               user={p}
               selfMuted={voiceStates[p.id]?.muted}
+              onContextMenu={userMenuHandler(p.id, p.display_name, meId, p.username)}
+              locallyMuted={localAudio[p.id]?.muted ?? false}
               deafened={voiceStates[p.id]?.deafened}
               speaking={speaking?.has(p.id) ?? false}
             />
@@ -169,6 +176,8 @@ function CallStage({
               key={p.id}
               user={p}
               selfMuted={voiceStates[p.id]?.muted}
+              onContextMenu={userMenuHandler(p.id, p.display_name, meId, p.username)}
+              locallyMuted={localAudio[p.id]?.muted ?? false}
               deafened={voiceStates[p.id]?.deafened}
               size="md"
               speaking={speaking?.has(p.id) ?? false}

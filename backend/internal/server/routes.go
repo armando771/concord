@@ -16,6 +16,7 @@ func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin.
 		servers.POST("/:id/invite", handler.InviteMember)
 		servers.GET("/:id/invites", handler.ListServerInvites)
 		servers.GET("/:id/invite-code", handler.InviteCode)
+		servers.PUT("/:id/members/:userId/role", handler.SetMemberRole)
 	}
 
 	invites := router.Group("/invites")

@@ -21,6 +21,7 @@ type EventPublisher interface {
 	PublishServerDelete(event DeleteEvent)
 	PublishMemberJoin(event MemberJoinEvent)
 	PublishMemberLeave(event MemberLeaveEvent)
+	PublishMemberUpdate(event MemberJoinEvent)
 }
 
 type Service struct {
@@ -246,6 +247,34 @@ func (s *Service) JoinByCode(ctx context.Context, rawCode string, userID string)
 	}
 
 	return s.repository.FindByID(ctx, serverID)
+}
+
+// SetMemberRole: o dono torna alguém moderador ou membro comum.
+func (s *Service) SetMemberRole(ctx context.Context, serverID, actorID, targetID, role string) (*ServerMember, error) {
+	server, err := s.repository.FindByID(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRoleChange(actorID, server.OwnerID, targetID, role); err != nil {
+		return nil, err
+	}
+	if err := s.repository.UpdateMemberRole(ctx, serverID, targetID, role); err != nil {
+		return nil, err
+	}
+	member, err := s.repository.FindMemberByUserID(ctx, serverID, targetID)
+	if err != nil {
+		return nil, err
+	}
+	if s.publisher != nil {
+		s.publisher.PublishMemberUpdate(MemberJoinEvent{ServerID: serverID, Member: *member})
+	}
+	return member, nil
+}
+
+// CanDirectMessage: DM é liberada entre amigos ou entre quem divide um
+// servidor (como no Discord). Aqui só a parte do servidor.
+func (s *Service) SharesServer(ctx context.Context, userA string, userB string) (bool, error) {
+	return s.repository.SharesServer(ctx, userA, userB)
 }
 
 func (s *Service) DeclineInvite(ctx context.Context, inviteID string, userID string) error {

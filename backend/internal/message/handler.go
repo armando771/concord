@@ -164,10 +164,14 @@ func (h *Handler) CreateConversationMessage(c *gin.Context) {
 		otherUserID = conv.UserBID
 	}
 
-	areFriends, err := h.friendService.AreFriends(c.Request.Context(), userID, otherUserID)
-	if err != nil || !areFriends {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you can only message friends"})
-		return
+	// DM liberada entre amigos ou entre quem divide um servidor.
+	areFriends, _ := h.friendService.AreFriends(c.Request.Context(), userID, otherUserID)
+	if !areFriends {
+		shares, err := h.serverService.SharesServer(c.Request.Context(), userID, otherUserID)
+		if err != nil || !shares {
+			c.JSON(http.StatusForbidden, gin.H{"error": "you can only message friends or people from your servers"})
+			return
+		}
 	}
 
 	msg, err := h.service.CreateConversationMessage(c.Request.Context(), conversationID, userID, input.Content)

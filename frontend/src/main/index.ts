@@ -6,6 +6,7 @@ import { displayMediaStreams } from './displayMedia'
 import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './background'
 import { setupUpdater } from './updater'
 import {
+  audioLogPath,
   hwndFromSourceId,
   registerScreenAudio,
   startWindowAudio,
@@ -60,6 +61,7 @@ function registerScreenShareHandlers(): void {
           callback({ video: source })
           return
         }
+        mainWindow.webContents.send('screen-audio:fallback', audioLogPath())
       }
       if (source) {
         callback(displayMediaStreams(source, pendingAudioRequested, process.platform))

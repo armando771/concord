@@ -87,12 +87,65 @@ try {
   await pageA.getByText('bia', { exact: true }).first().waitFor({ timeout: 10000 })
   check('ana vê a bia na lista de membros na hora', true)
 
+  // Qualquer membro pode convidar: a Bia (membro comum) vê o botão e o código
+  await pageB.getByRole('button', { name: 'Convidar', exact: true }).first().click()
+  await pageB.waitForFunction(() => /^[A-Z2-9]{8}$/.test(document.querySelector('[aria-label="Código de convite"]')?.textContent ?? ''))
+  check('membro comum também vê o código para convidar', (await pageB.getByLabel('Código de convite').first().textContent()).trim() === code)
+  await pageB.getByRole('button', { name: 'Fechar' }).click()
+
+  // Moderador: a Ana (dona) clica com o botão direito na Bia e promove
+  const createChannel = () => api(`/servers/${serverId}/channels`, { token: bia.token, method: 'POST', body: { name: `sala-${Date.now()}`, type: 'text' } })
+  check('membro comum não cria canal', (await createChannel()).status === 403)
+  await pageA.getByText('bia', { exact: true }).first().click({ button: 'right' })
+  await pageA.getByRole('menuitem', { name: 'Tornar moderador' }).click()
+  await pageA.getByText('Moderadores — 1').waitFor({ timeout: 10000 })
+  check('ana vê a bia em Moderadores', true)
+  await pageB.getByText('Moderadores — 1').waitFor({ timeout: 10000 })
+  check('a bia também vê na hora (sem recarregar)', true)
+  check('moderadora cria canal', (await createChannel()).status === 201)
+  const biaId = (await api('/users/me', { token: bia.token })).body.id
+  check('moderadora não muda cargos (só a dona)', (await api(`/servers/${serverId}/members/${biaId}/role`, { token: bia.token, method: 'PUT', body: { role: 'member' } })).status === 403)
+  await pageA.getByText('bia', { exact: true }).first().click({ button: 'right' })
+  await pageA.getByRole('menuitem', { name: 'Remover moderador' }).click()
+  await pageA.getByText('Membros — 1').waitFor({ timeout: 10000 })
+  check('ana remove o moderador', (await createChannel()).status === 403)
+
+  // Botão direito na Ana (lista de membros): mensagem privada e amizade, sem
+  // serem amigas — basta estarem no mesmo servidor.
+  await pageB.getByText('ana', { exact: true }).first().click({ button: 'right' })
+  await pageB.getByRole('menuitem', { name: 'Enviar mensagem' }).click()
+  await pageB.waitForURL((u) => u.hash.includes('/dm/'), { timeout: 10000 })
+  const box = pageB.getByPlaceholder(/Mensagem para @ana/)
+  await box.fill('oi ana, entrei pelo código!')
+  await box.press('Enter')
+  const anaConvs = async () => (await api('/conversations', { token: ana.token })).body ?? []
+  let got = false
+  for (let i = 0; i < 20 && !got; i++) {
+    const convs = await anaConvs()
+    got = convs.some((c) => c.last_message?.content === 'oi ana, entrei pelo código!')
+    if (!got) await new Promise((r) => setTimeout(r, 500))
+  }
+  check('bia manda mensagem privada para a ana sem serem amigas', got)
+  await pageB.goto(APP + `#/servers/${serverId}`)
+  await pageB.getByText('ana', { exact: true }).first().click({ button: 'right' })
+  await pageB.getByRole('menuitem', { name: 'Adicionar amigo' }).click()
+  let pending = ''
+  for (let i = 0; i < 20 && !pending.includes(`bia${run}`); i++) {
+    pending = JSON.stringify((await api('/friends/pending', { token: ana.token })).body)
+    await new Promise((r) => setTimeout(r, 300))
+  }
+  check('pedido de amizade chega para a ana', pending.includes(`bia${run}`))
+  const stranger = await makeUser('estranho')
+  const anaId = (await api('/users/me', { token: ana.token })).body.id
+  const blocked = await api(`/conversations/with/${anaId}`, { token: stranger.token })
+  check('quem não divide servidor nem é amigo não abre DM', blocked.status === 403, blocked.status)
+
   // Entrar de novo não dá erro nem duplica
   const twice = await api('/invites/join', { token: bia.token, method: 'POST', body: { code } })
   const members = (await api(`/servers/${serverId}`, { token: ana.token })).body.members
   check('entrar de novo não duplica', twice.status === 200 && members.length === 2, members.length)
 } catch (err) {
-  console.log('FAIL', err.message.split('\n')[0])
+  console.log('FAIL', err.message.split('\n').slice(0, 4).join(' / '))
   process.exitCode = 1
 } finally {
   await browser.close()

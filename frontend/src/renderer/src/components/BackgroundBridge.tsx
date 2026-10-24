@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import router from '../router'
 import { useCallStore } from '../store/callStore'
+import { showToast } from '../store/toastStore'
 
 /**
  * Liga o app ao modo segundo plano do processo main: menu da bandeja
@@ -33,7 +34,13 @@ function BackgroundBridge(): null {
     const offNavigate = background.onNavigate((route) => {
       void router.navigate(route)
     })
+    const offFallback = window.api?.screenAudio?.onFallback((logPath) => {
+      showToast.info(
+        `Som só da janela indisponível — indo o som do PC (sem o Concord). Detalhes: ${logPath}`
+      )
+    })
     return () => {
+      offFallback?.()
       offMute()
       offQuit()
       offNavigate()

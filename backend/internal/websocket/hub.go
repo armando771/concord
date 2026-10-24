@@ -201,6 +201,10 @@ func (h *Hub) PublishServerDelete(event server.DeleteEvent) {
 	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:delete", event))
 }
 
+func (h *Hub) PublishMemberUpdate(event server.MemberJoinEvent) {
+	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:update", event))
+}
+
 func (h *Hub) PublishMemberJoin(event server.MemberJoinEvent) {
 	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:join", event))
 }

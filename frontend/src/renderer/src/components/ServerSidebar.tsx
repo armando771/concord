@@ -8,6 +8,8 @@ import { useUIStore } from '../store/uiStore'
 import { useChatStore } from '../store/chatStore'
 import { useCallStore } from '../store/callStore'
 import VoiceStateIcons from './call/VoiceStateIcons'
+import { useUserAudioStore } from '../store/userAudioStore'
+import { userMenuHandler } from '../store/userMenuStore'
 import { logout } from '../api/auth'
 import type { Channel, ChannelType } from '../api/channels'
 import { listActiveServerCalls, type CallStateResponse } from '../api/calls'
@@ -16,7 +18,15 @@ import Modal from './Modal'
 import Button from './Button'
 import Input from './Input'
 import VoiceConnectedPanel from './call/VoiceConnectedPanel'
-import { GearIcon, UserPlusIcon, PlusIcon, PencilIcon, TrashIcon, VolumeIcon } from './icons'
+import {
+  GearIcon,
+  UserPlusIcon,
+  PlusIcon,
+  PencilIcon,
+  TrashIcon,
+  VolumeIcon,
+  VolumeOffIcon
+} from './icons'
 import VoiceSettings from './VoiceSettings'
 import AppSettings from './AppSettings'
 
@@ -47,6 +57,7 @@ export function ServerSidebar(): React.JSX.Element {
   const speakingIds = useCallStore((s) => s.speakingIds)
   const selfMuted = useCallStore((s) => s.muted)
   const selfDeafened = useCallStore((s) => s.deafened)
+  const locallyMuted = useUserAudioStore((s) => s.settings)
   const serverCalls = useCallStore((s) => s.serverCalls)
   const joinVoiceChannel = useCallStore((s) => s.joinVoiceChannel)
 
@@ -282,18 +293,17 @@ export function ServerSidebar(): React.JSX.Element {
           {/* Dropdown Menu */}
           {dropdownOpen && (
             <div className="absolute top-14 left-3 right-3 z-30 flex flex-col rounded-xl border border-white/10 bg-[#0d0e15]/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2">
-              {isAdmin && (
-                <button
-                  onClick={() => {
-                    setDropdownOpen(false)
-                    openInviteModal()
-                  }}
-                  className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-violet-300 hover:bg-violet-600/20 hover:text-violet-200 cursor-pointer"
-                >
-                  <span>Convidar pessoas</span>
-                  <UserPlusIcon className="h-4 w-4" />
-                </button>
-              )}
+              {/* Qualquer membro pode convidar */}
+              <button
+                onClick={() => {
+                  setDropdownOpen(false)
+                  openInviteModal()
+                }}
+                className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-violet-300 hover:bg-violet-600/20 hover:text-violet-200 cursor-pointer"
+              >
+                <span>Convidar pessoas</span>
+                <UserPlusIcon className="h-4 w-4" />
+              </button>
               {isAdmin && (
                 <button
                   onClick={() => {
@@ -441,6 +451,7 @@ export function ServerSidebar(): React.JSX.Element {
                           return (
                             <div
                               key={p.user_id}
+                              onContextMenu={userMenuHandler(p.user_id, name, user?.id, p.username)}
                               className={`flex items-center gap-2 rounded-md px-2 py-1 ${
                                 isMe ? 'bg-white/5' : ''
                               }`}
@@ -456,7 +467,12 @@ export function ServerSidebar(): React.JSX.Element {
                                 {name}
                                 {isMe ? ' (você)' : ''}
                               </span>
-                              <span className="ml-auto pr-1">
+                              <span className="ml-auto flex items-center gap-0.5 pr-1">
+                                {!isMe && locallyMuted[p.user_id]?.muted && (
+                                  <span title="Silenciado por você" className="text-gray-400">
+                                    <VolumeOffIcon className="h-3.5 w-3.5" />
+                                  </span>
+                                )}
                                 <VoiceStateIcons
                                   muted={isMe && connectedHere ? selfMuted : p.muted}
                                   deafened={isMe && connectedHere ? selfDeafened : p.deafened}

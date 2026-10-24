@@ -35,7 +35,11 @@ function DmChat(): React.JSX.Element {
     const open = async (): Promise<void> => {
       try {
         const conv = await getOrCreateConversationWith(userId)
-        if (!cancelled) setConversationId(conv.id)
+        if (cancelled) return
+        setConversationId(conv.id)
+        // Conversa nova (ex.: alguém do servidor que não é amigo): atualiza a
+        // lista para o nome dela aparecer no topo e na barra lateral.
+        void fetchConversations()
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Falha ao abrir conversa.')
@@ -47,7 +51,7 @@ function DmChat(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [userId])
+  }, [userId, fetchConversations])
 
   useEffect(() => {
     loadFriends()

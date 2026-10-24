@@ -29,6 +29,12 @@ const api = {
     }
   },
   screenAudio: {
+    /** Não deu para capturar só a janela: o som vai ser o do sistema. */
+    onFallback(cb: (logPath: string) => void): () => void {
+      const listener = (_e: unknown, logPath: string): void => cb(logPath)
+      ipcRenderer.on('screen-audio:fallback', listener)
+      return () => ipcRenderer.removeListener('screen-audio:fallback', listener)
+    },
     /** Para a captura do som da janela (fim do compartilhamento). */
     stop(): void {
       ipcRenderer.send('screen-audio:stop')

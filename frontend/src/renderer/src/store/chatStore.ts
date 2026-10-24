@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { ServerMember } from '../api/servers'
 import { messageNotification, notifyDesktop } from '../lib/notifications'
 import { useAuthStore } from './authStore'
 import { WsClient, type WsEvent } from '../api/ws'
@@ -468,6 +469,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         get().handleServerDeleted(serverId)
         useServerStore.getState().removeLocalServer(serverId)
       }
+      return
+    }
+
+    if (event.type === 'server:member:update') {
+      const serverId = payload.server_id as string
+      const member = payload.member as ServerMember
+      if (serverId && member) useServerStore.getState().updateMember(serverId, member)
       return
     }
 

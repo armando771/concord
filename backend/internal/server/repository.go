@@ -527,3 +527,36 @@ func (r *Repository) FindIDByInviteCode(ctx context.Context, code string) (strin
 	err := r.db.QueryRow(ctx, `SELECT id FROM servers WHERE invite_code = $1`, code).Scan(&id)
 	return id, err
 }
+
+func (r *Repository) UpdateMemberRole(ctx context.Context, serverID string, userID string, role string) error {
+	tag, err := r.db.Exec(
+		ctx,
+		`UPDATE server_members SET role = $3, updated_at = NOW() WHERE server_id = $1 AND user_id = $2`,
+		serverID,
+		userID,
+		role,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotServerMember
+	}
+	return nil
+}
+
+// SharesServer: os dois estão em pelo menos um servidor em comum.
+func (r *Repository) SharesServer(ctx context.Context, userA string, userB string) (bool, error) {
+	var shares bool
+	err := r.db.QueryRow(
+		ctx,
+		`SELECT EXISTS (
+			SELECT 1 FROM server_members a
+			JOIN server_members b ON a.server_id = b.server_id
+			WHERE a.user_id = $1 AND b.user_id = $2
+		)`,
+		userA,
+		userB,
+	).Scan(&shares)
+	return shares, err
+}

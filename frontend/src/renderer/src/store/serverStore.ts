@@ -41,6 +41,8 @@ interface ServerState {
   removeLocalServer: (serverId: string) => void
   addMember: (serverId: string, member: ServerMember) => void
   removeMember: (serverId: string, userId: string) => void
+  /** Cargo mudou (ex.: virou moderador). */
+  updateMember: (serverId: string, member: ServerMember) => void
   clearCurrentServer: () => void
   reset: () => void
 }
@@ -163,6 +165,15 @@ export const useServerStore = create<ServerState>()((set, get) => ({
       if (!exists) {
         set({ currentMembers: [...get().currentMembers, member] })
       }
+    }
+  },
+  updateMember: (serverId, member) => {
+    if (get().currentServer?.id === serverId) {
+      set({
+        currentMembers: get().currentMembers.map((m) =>
+          m.user_id === member.user_id ? { ...m, ...member } : m
+        )
+      })
     }
   },
   removeMember: (serverId, userId) => {

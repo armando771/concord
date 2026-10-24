@@ -16,6 +16,7 @@ export interface ScreenPickerApi {
 }
 
 export interface ScreenAudioApi {
+  onFallback(cb: (logPath: string) => void): () => void
   stop(): void
 }
 

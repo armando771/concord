@@ -104,7 +104,7 @@ func main() {
 	// Conversation (DM)
 	conversationRepository := conversation.ConversationRepository(db)
 	conversationService := conversation.ConversationService(conversationRepository)
-	conversationHandler := conversation.ConversationHandler(conversationService, friendshipService, userService)
+	conversationHandler := conversation.ConversationHandler(conversationService, friendshipService, serverService, userService)
 
 	// Message
 	messageRepository := message.MessageRepository(db)

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CallUserInfo } from '../../store/callStore'
 import VoiceStateIcons from './VoiceStateIcons'
+import { VolumeOffIcon } from '../icons'
 
 function VideoFill({
   stream,
@@ -60,7 +61,9 @@ function ParticipantTile({
   size = 'lg',
   isScreen = false,
   mirror = false,
-  onClick
+  onClick,
+  onContextMenu,
+  locallyMuted = false
 }: {
   user: CallUserInfo
   speaking?: boolean
@@ -74,6 +77,10 @@ function ParticipantTile({
   /** Espelha o vídeo (câmera local). */
   mirror?: boolean
   onClick?: () => void
+  /** Botão direito: menu do usuário (volume, silenciar…). */
+  onContextMenu?: (e: React.MouseEvent) => void
+  /** Silenciado por você (só você não ouve). */
+  locallyMuted?: boolean
 }): React.JSX.Element {
   const initial = user.display_name.charAt(0).toUpperCase()
   // 'fill': o maior retângulo com a proporção do vídeo que cabe no container
@@ -89,6 +96,7 @@ function ParticipantTile({
   return (
     <div
       onClick={onClick}
+      onContextMenu={onContextMenu}
       role={onClick ? 'button' : undefined}
       title={onClick && isScreen ? 'Expandir tela' : undefined}
       style={fillStyle}
@@ -124,6 +132,11 @@ function ParticipantTile({
         </div>
       )}
       <div className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm">
+        {locallyMuted && (
+          <span title="Silenciado por você" className="text-gray-300">
+            <VolumeOffIcon className="h-3 w-3" />
+          </span>
+        )}
         <VoiceStateIcons muted={selfMuted} deafened={deafened} className="h-3 w-3" />
         <span className="truncate text-xs font-semibold text-white">{user.display_name}</span>
       </div>

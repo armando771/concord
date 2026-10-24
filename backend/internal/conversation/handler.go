@@ -4,21 +4,24 @@ import (
 	"net/http"
 
 	"gin-quickstart/backend/internal/friendship"
+	"gin-quickstart/backend/internal/server"
 	"gin-quickstart/backend/internal/user"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
-	service        *Service
-	friendService  *friendship.Service
-	userService    *user.Service
+	service       *Service
+	friendService *friendship.Service
+	serverService *server.Service
+	userService   *user.Service
 }
 
-func ConversationHandler(service *Service, friendService *friendship.Service, userService *user.Service) *Handler {
+func ConversationHandler(service *Service, friendService *friendship.Service, serverService *server.Service, userService *user.Service) *Handler {
 	return &Handler{
 		service:       service,
 		friendService: friendService,
+		serverService: serverService,
 		userService:   userService,
 	}
 }
@@ -59,10 +62,14 @@ func (h *Handler) GetOrCreateWith(c *gin.Context) {
 		return
 	}
 
-	areFriends, err := h.friendService.AreFriends(c.Request.Context(), userID.(string), otherUser.ID)
-	if err != nil || !areFriends {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you can only message friends"})
-		return
+	// DM liberada entre amigos ou entre quem divide um servidor.
+	areFriends, _ := h.friendService.AreFriends(c.Request.Context(), userID.(string), otherUser.ID)
+	if !areFriends {
+		shares, err := h.serverService.SharesServer(c.Request.Context(), userID.(string), otherUser.ID)
+		if err != nil || !shares {
+			c.JSON(http.StatusForbidden, gin.H{"error": "you can only message friends or people from your servers"})
+			return
+		}
 	}
 
 	conv, err := h.service.GetOrCreateWith(c.Request.Context(), userID.(string), otherUser.ID)

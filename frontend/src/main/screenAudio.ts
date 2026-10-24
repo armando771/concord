@@ -1,6 +1,6 @@
 import { app, ipcMain, MessageChannelMain, type MessagePortMain, type WebContents } from 'electron'
 import { spawn, type ChildProcess } from 'child_process'
-import { existsSync } from 'fs'
+import { appendFile, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 
 // Som só da janela compartilhada (Windows 10 2004+): o helper nativo
@@ -35,6 +35,20 @@ export class PcmChunker {
   }
 }
 
+/** Log do som da janela: %APPDATA%\\Concord\\logs\\audio.log no Windows. */
+export function audioLogPath(): string {
+  return join(app.getPath('logs'), 'audio.log')
+}
+
+function log(message: string): void {
+  try {
+    mkdirSync(app.getPath('logs'), { recursive: true })
+  } catch {
+    // sem pasta de log: segue sem registrar
+  }
+  appendFile(audioLogPath(), `${new Date().toISOString()} ${message}\n`, () => {})
+}
+
 let helper: ChildProcess | null = null
 let port: MessagePortMain | null = null
 
@@ -59,7 +73,12 @@ export function stopWindowAudio(): void {
 export function startWindowAudio(hwnd: string, contents: WebContents): Promise<boolean> {
   stopWindowAudio()
   const path = helperPath()
-  if (process.platform !== 'win32' || !existsSync(path)) return Promise.resolve(false)
+  if (process.platform !== 'win32') return Promise.resolve(false)
+  if (!existsSync(path)) {
+    log(`helper não encontrado em ${path}`)
+    return Promise.resolve(false)
+  }
+  log(`iniciando captura da janela ${hwnd}`)
 
   return new Promise((resolve) => {
     // stdin aberto: quando o Concord morre, o pipe fecha e o helper sai junto.
@@ -76,20 +95,25 @@ export function startWindowAudio(hwnd: string, contents: WebContents): Promise<b
       if (!ok && helper === child) stopWindowAudio()
       resolve(ok)
     }
-    const timer = setTimeout(() => finish(false), READY_TIMEOUT_MS)
+    const timer = setTimeout(() => {
+      if (!settled) log(`sem "ready" em ${READY_TIMEOUT_MS} ms`)
+      finish(false)
+    }, READY_TIMEOUT_MS)
 
-    child.on('error', () => finish(false))
-    child.on('exit', () => {
+    child.on('error', (err) => {
+      log(`falha ao iniciar o helper: ${err.message}`)
+      finish(false)
+    })
+    child.on('exit', (code) => {
+      log(`helper saiu (código ${code})`)
       finish(false)
       if (helper === child) stopWindowAudio()
     })
     child.stderr?.setEncoding('utf8')
     child.stderr?.on('data', (text: string) => {
       const ready = isReadyLine(text)
-      if (!ready || settled) {
-        if (!ready) console.error('[concord-audio]', text.trim())
-        return
-      }
+      log(`helper: ${text.trim()}`)
+      if (!ready || settled) return
       const channel = new MessageChannelMain()
       port = channel.port1
       contents.postMessage('screen-audio:port', null, [channel.port2])

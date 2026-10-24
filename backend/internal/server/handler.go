@@ -231,29 +231,11 @@ func (h *Handler) InviteMember(c *gin.Context) {
 		return
 	}
 
+	// Qualquer membro pode convidar.
 	if server.OwnerID != userID.(string) {
 		isMember, err := h.service.IsMember(c.Request.Context(), serverID, userID.(string))
 		if err != nil || !isMember {
 			c.JSON(http.StatusForbidden, gin.H{"error": "you are not a member of this server"})
-			return
-		}
-
-		members, err := h.service.ListMembers(c.Request.Context(), serverID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check role"})
-			return
-		}
-
-		isAdmin := false
-		for _, m := range members {
-			if m.UserID == userID.(string) && m.Role == "admin" {
-				isAdmin = true
-				break
-			}
-		}
-
-		if !isAdmin {
-			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can invite members"})
 			return
 		}
 	}
@@ -409,4 +391,36 @@ func (h *Handler) JoinByCode(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, server)
+}
+
+func (h *Handler) SetMemberRole(c *gin.Context) {
+	var input struct {
+		Role string `json:"role"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	member, err := h.service.SetMemberRole(
+		c.Request.Context(), c.Param("id"), userID.(string), c.Param("userId"), input.Role,
+	)
+	switch {
+	case errors.Is(err, ErrOnlyOwner), errors.Is(err, ErrOwnerRole):
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+	case errors.Is(err, ErrInvalidRole):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, ErrNotServerMember):
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	case err != nil:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to change role"})
+	default:
+		c.JSON(http.StatusOK, member)
+	}
 }
