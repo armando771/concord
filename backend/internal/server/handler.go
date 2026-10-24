@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"context"
 	"net/http"
 
@@ -360,4 +361,52 @@ func (h *Handler) DeclineInvite(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "invite declined"})
+}
+
+func (h *Handler) InviteCode(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	code, err := h.service.InviteCode(c.Request.Context(), c.Param("id"), userID.(string))
+	if errors.Is(err, ErrNotServerMember) {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get invite code"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": code})
+}
+
+func (h *Handler) JoinByCode(c *gin.Context) {
+	var input struct {
+		Code string `json:"code"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	server, err := h.service.JoinByCode(c.Request.Context(), input.Code, userID.(string))
+	if errors.Is(err, ErrInvalidCode) {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to join server"})
+		return
+	}
+
+	c.JSON(http.StatusOK, server)
 }

@@ -499,3 +499,31 @@ func (r *Repository) UpdateInviteStatus(ctx context.Context, id string, status s
 	)
 	return err
 }
+
+// InviteCode devolve o código de convite do servidor ("" se ainda não tem).
+func (r *Repository) InviteCode(ctx context.Context, serverID string) (string, error) {
+	var code *string
+	err := r.db.QueryRow(ctx, `SELECT invite_code FROM servers WHERE id = $1`, serverID).Scan(&code)
+	if err != nil || code == nil {
+		return "", err
+	}
+	return *code, nil
+}
+
+// SetInviteCodeIfMissing grava o código só se o servidor ainda não tem um
+// (duas pessoas abrindo "Convidar" ao mesmo tempo recebem o mesmo código).
+func (r *Repository) SetInviteCodeIfMissing(ctx context.Context, serverID string, code string) error {
+	_, err := r.db.Exec(
+		ctx,
+		`UPDATE servers SET invite_code = $2 WHERE id = $1 AND invite_code IS NULL`,
+		serverID,
+		code,
+	)
+	return err
+}
+
+func (r *Repository) FindIDByInviteCode(ctx context.Context, code string) (string, error) {
+	var id string
+	err := r.db.QueryRow(ctx, `SELECT id FROM servers WHERE invite_code = $1`, code).Scan(&id)
+	return id, err
+}

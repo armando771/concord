@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import InviteCodeBox from '../components/InviteCodeBox'
 import { Navigate, useParams } from 'react-router-dom'
 import { useServerStore } from '../store/serverStore'
 import { useFriendStore } from '../store/friendStore'
@@ -337,8 +338,9 @@ export function ServerView(): React.JSX.Element {
         onClose={closeInviteModal}
       >
         <div className="space-y-4">
+          <InviteCodeBox serverId={currentServer.id} />
           <p className="text-xs text-gray-400">
-            Selecione um amigo para enviar um convite. Ele poderá aceitar ou recusar.
+            Ou selecione um amigo para enviar um convite. Ele poderá aceitar ou recusar.
           </p>
 
           <div className="relative">

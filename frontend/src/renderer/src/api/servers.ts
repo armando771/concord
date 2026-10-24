@@ -62,3 +62,13 @@ export async function deleteServer(serverId: string): Promise<void> {
     method: 'DELETE'
   })
 }
+
+/** Código de convite do servidor (qualquer membro pode ver e compartilhar). */
+export async function getInviteCode(serverId: string): Promise<{ code: string }> {
+  return request<{ code: string }>(`/servers/${serverId}/invite-code`)
+}
+
+/** Entra no servidor do código. Já sendo membro, só devolve o servidor. */
+export async function joinServerByCode(code: string): Promise<Server> {
+  return request<Server>('/invites/join', { method: 'POST', body: JSON.stringify({ code }) })
+}

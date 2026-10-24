@@ -12,6 +12,8 @@ var (
 	ErrNotInvitee       = errors.New("you are not the invitee")
 	ErrInviteNotPending = errors.New("invite is not pending")
 	ErrAlreadyMember    = errors.New("you are already a member of this server")
+	ErrInvalidCode      = errors.New("código de convite inválido")
+	ErrNotServerMember  = errors.New("you are not a member of this server")
 )
 
 type EventPublisher interface {
@@ -193,6 +195,57 @@ func (s *Service) AcceptInvite(ctx context.Context, inviteID string, userID stri
 	}
 
 	return nil
+}
+
+// InviteCode devolve o código de convite do servidor, criando na primeira vez.
+// Qualquer membro pode ver e compartilhar.
+func (s *Service) InviteCode(ctx context.Context, serverID string, userID string) (string, error) {
+	isMember, err := s.repository.IsMember(ctx, serverID, userID)
+	if err != nil {
+		return "", err
+	}
+	if !isMember {
+		return "", ErrNotServerMember
+	}
+
+	code, err := s.repository.InviteCode(ctx, serverID)
+	if err != nil || code != "" {
+		return code, err
+	}
+	if err := s.repository.SetInviteCodeIfMissing(ctx, serverID, newInviteCode()); err != nil {
+		return "", err
+	}
+	return s.repository.InviteCode(ctx, serverID)
+}
+
+// JoinByCode coloca o usuário no servidor do código. Já sendo membro, só
+// devolve o servidor (entrar de novo não é erro).
+func (s *Service) JoinByCode(ctx context.Context, rawCode string, userID string) (*Server, error) {
+	code := normalizeInviteCode(rawCode)
+	if code == "" {
+		return nil, ErrInvalidCode
+	}
+	serverID, err := s.repository.FindIDByInviteCode(ctx, code)
+	if err != nil {
+		return nil, ErrInvalidCode
+	}
+
+	isMember, err := s.repository.IsMember(ctx, serverID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !isMember {
+		member := &ServerMember{}
+		if err := s.repository.AddingUserServer(ctx, &Server{ID: serverID}, member, userID, "member"); err != nil {
+			return nil, err
+		}
+		fullMember, err := s.repository.FindMemberByUserID(ctx, serverID, userID)
+		if err == nil && s.publisher != nil {
+			s.publisher.PublishMemberJoin(MemberJoinEvent{ServerID: serverID, Member: *fullMember})
+		}
+	}
+
+	return s.repository.FindByID(ctx, serverID)
 }
 
 func (s *Service) DeclineInvite(ctx context.Context, inviteID string, userID string) error {

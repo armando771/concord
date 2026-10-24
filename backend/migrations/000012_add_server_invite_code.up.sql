@@ -1,0 +1,1 @@
+ALTER TABLE servers ADD COLUMN invite_code VARCHAR(16) UNIQUE;

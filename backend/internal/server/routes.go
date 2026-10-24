@@ -15,6 +15,7 @@ func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin.
 		servers.DELETE("/:id", handler.Delete)
 		servers.POST("/:id/invite", handler.InviteMember)
 		servers.GET("/:id/invites", handler.ListServerInvites)
+		servers.GET("/:id/invite-code", handler.InviteCode)
 	}
 
 	invites := router.Group("/invites")
@@ -22,6 +23,7 @@ func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin.
 	{
 		invites.GET("", handler.ListInvites)
 		invites.GET("/", handler.ListInvites)
+		invites.POST("/join", handler.JoinByCode)
 		invites.POST("/:id/accept", handler.AcceptInvite)
 		invites.POST("/:id/decline", handler.DeclineInvite)
 	}

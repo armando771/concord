@@ -8,6 +8,7 @@ import { showToast } from '../store/toastStore'
 import Modal from './Modal'
 import Button from './Button'
 import Input from './Input'
+import { joinServerByCode } from '../api/servers'
 
 function ServerRail(): React.JSX.Element {
   const location = useLocation()
@@ -30,6 +31,8 @@ function ServerRail(): React.JSX.Element {
   const [serverName, setServerName] = useState('')
   const [iconUrl, setIconUrl] = useState('')
   const [creating, setCreating] = useState(false)
+  const [joinCode, setJoinCode] = useState('')
+  const [joining, setJoining] = useState(false)
 
   useEffect(() => {
     fetchServers()
@@ -79,6 +82,25 @@ function ServerRail(): React.JSX.Element {
       showToast.error(err instanceof Error ? err.message : 'Falha ao criar servidor.')
     } finally {
       setCreating(false)
+    }
+  }
+
+  const handleJoinByCode = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault()
+    if (!joinCode.trim()) return
+
+    setJoining(true)
+    try {
+      const server = await joinServerByCode(joinCode)
+      await fetchServers()
+      showToast.success(`Você entrou em "${server.name}"!`)
+      setJoinCode('')
+      setCreateModalOpen(false)
+      navigate(`/servers/${server.id}`)
+    } catch (err) {
+      showToast.error(err instanceof Error ? err.message : 'Código de convite inválido.')
+    } finally {
+      setJoining(false)
     }
   }
 
@@ -199,7 +221,7 @@ function ServerRail(): React.JSX.Element {
       {/* Modal Criar Servidor */}
       <Modal
         open={createModalOpen}
-        title="Personalize seu servidor"
+        title="Criar ou entrar em um servidor"
         onClose={() => setCreateModalOpen(false)}
       >
         <form onSubmit={handleCreateServer} className="flex flex-col gap-4">
@@ -229,6 +251,26 @@ function ServerRail(): React.JSX.Element {
             </Button>
             <Button type="submit" variant="primary" disabled={creating || !serverName.trim()}>
               {creating ? 'Criando...' : 'Criar servidor'}
+            </Button>
+          </div>
+        </form>
+
+        {/* Entrar em um servidor existente com o código de convite */}
+        <form
+          onSubmit={handleJoinByCode}
+          className="mt-5 flex flex-col gap-3 border-t border-white/10 pt-5"
+        >
+          <p className="text-sm font-semibold text-white">Entrar com código</p>
+          <div className="flex gap-2">
+            <Input
+              placeholder="Ex: K7P2QX9M"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value)}
+              aria-label="Código de convite"
+              className="font-mono uppercase tracking-widest"
+            />
+            <Button type="submit" variant="success" disabled={joining || !joinCode.trim()}>
+              {joining ? 'Entrando...' : 'Entrar'}
             </Button>
           </div>
         </form>
