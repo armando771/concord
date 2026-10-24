@@ -1,19 +1,43 @@
 import { describe, expect, it } from 'vitest'
-import { displayMediaStreams } from './displayMedia'
+import { displayAudioMode } from './displayMedia'
 
-const source = { id: 'screen:0:0', name: 'Tela inteira' }
+describe('displayAudioMode', () => {
+  const win = { audioRequested: true, platform: 'win32' as const }
 
-describe('displayMediaStreams', () => {
-  it('inclui o som do sistema (loopback) no Windows quando a página pede áudio', () => {
-    expect(displayMediaStreams(source, true, 'win32')).toEqual({ video: source, audio: 'loopback' })
+  it('janela: só o som do app dela quando o helper conseguiu capturar', () => {
+    expect(displayAudioMode({ ...win, sourceId: 'window:132456:0', windowAudioOk: true })).toBe(
+      'window'
+    )
   })
 
-  it('não pede áudio quando a página não pediu', () => {
-    expect(displayMediaStreams(source, false, 'win32')).toEqual({ video: source })
+  it('janela: se não deu para isolar o som do app, vai SEM som (nunca o do sistema)', () => {
+    expect(displayAudioMode({ ...win, sourceId: 'window:132456:0', windowAudioOk: false })).toBe(
+      'none'
+    )
   })
 
-  it('só vídeo fora do Windows (loopback não é suportado)', () => {
-    expect(displayMediaStreams(source, true, 'linux')).toEqual({ video: source })
-    expect(displayMediaStreams(source, true, 'darwin')).toEqual({ video: source })
+  it('tela inteira: som do sistema (sem o Concord)', () => {
+    expect(displayAudioMode({ ...win, sourceId: 'screen:0:0', windowAudioOk: false })).toBe(
+      'system'
+    )
+  })
+
+  it('sem pedir áudio, ou fora do Windows, só vídeo', () => {
+    expect(
+      displayAudioMode({
+        ...win,
+        audioRequested: false,
+        sourceId: 'screen:0:0',
+        windowAudioOk: false
+      })
+    ).toBe('none')
+    expect(
+      displayAudioMode({
+        audioRequested: true,
+        platform: 'linux',
+        sourceId: 'screen:0:0',
+        windowAudioOk: false
+      })
+    ).toBe('none')
   })
 })

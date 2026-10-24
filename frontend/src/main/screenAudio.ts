@@ -12,7 +12,7 @@ const READY_TIMEOUT_MS = 1500
 
 /** "window:<hwnd>:0" → hwnd; telas inteiras não têm janela. */
 export function hwndFromSourceId(sourceId: string): string | null {
-  const match = /^window:(\d+):/.exec(sourceId)
+  const match = /^window:(\d+)(?::|$)/.exec(sourceId)
   return match ? match[1] : null
 }
 
@@ -40,7 +40,7 @@ export function audioLogPath(): string {
   return join(app.getPath('logs'), 'audio.log')
 }
 
-function log(message: string): void {
+export function logAudio(message: string): void {
   try {
     mkdirSync(app.getPath('logs'), { recursive: true })
   } catch {
@@ -75,10 +75,10 @@ export function startWindowAudio(hwnd: string, contents: WebContents): Promise<b
   const path = helperPath()
   if (process.platform !== 'win32') return Promise.resolve(false)
   if (!existsSync(path)) {
-    log(`helper não encontrado em ${path}`)
+    logAudio(`helper não encontrado em ${path}`)
     return Promise.resolve(false)
   }
-  log(`iniciando captura da janela ${hwnd}`)
+  logAudio(`iniciando captura da janela ${hwnd}`)
 
   return new Promise((resolve) => {
     // stdin aberto: quando o Concord morre, o pipe fecha e o helper sai junto.
@@ -96,23 +96,23 @@ export function startWindowAudio(hwnd: string, contents: WebContents): Promise<b
       resolve(ok)
     }
     const timer = setTimeout(() => {
-      if (!settled) log(`sem "ready" em ${READY_TIMEOUT_MS} ms`)
+      if (!settled) logAudio(`sem "ready" em ${READY_TIMEOUT_MS} ms`)
       finish(false)
     }, READY_TIMEOUT_MS)
 
     child.on('error', (err) => {
-      log(`falha ao iniciar o helper: ${err.message}`)
+      logAudio(`falha ao iniciar o helper: ${err.message}`)
       finish(false)
     })
     child.on('exit', (code) => {
-      log(`helper saiu (código ${code})`)
+      logAudio(`helper saiu (código ${code})`)
       finish(false)
       if (helper === child) stopWindowAudio()
     })
     child.stderr?.setEncoding('utf8')
     child.stderr?.on('data', (text: string) => {
       const ready = isReadyLine(text)
-      log(`helper: ${text.trim()}`)
+      logAudio(`helper: ${text.trim()}`)
       if (!ready || settled) return
       const channel = new MessageChannelMain()
       port = channel.port1

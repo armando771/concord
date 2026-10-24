@@ -36,7 +36,7 @@ function BackgroundBridge(): null {
     })
     const offFallback = window.api?.screenAudio?.onFallback((logPath) => {
       showToast.info(
-        `Som só da janela indisponível — indo o som do PC (sem o Concord). Detalhes: ${logPath}`
+        `Não deu para capturar só o som deste app — compartilhando sem som. Detalhes: ${logPath}`
       )
     })
     return () => {

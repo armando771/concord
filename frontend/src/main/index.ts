@@ -2,12 +2,13 @@ import { app, shell, BrowserWindow, desktopCapturer, ipcMain, Menu, session } fr
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { displayMediaStreams } from './displayMedia'
+import { displayAudioMode } from './displayMedia'
 import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './background'
 import { setupUpdater } from './updater'
 import {
   audioLogPath,
   hwndFromSourceId,
+  logAudio,
   registerScreenAudio,
   startWindowAudio,
   stopWindowAudio
@@ -53,21 +54,27 @@ function registerScreenShareHandlers(): void {
       const source = sources.find((s) => s.id === sourceId)
       // Cada escolha começa do zero: nada do compartilhamento anterior.
       stopWindowAudio()
-      // Janela no Windows: som só do app dela (helper nativo). Se o helper não
-      // subir (Windows antigo), cai no som do sistema sem o Concord.
-      const hwnd = source ? hwndFromSourceId(source.id) : null
-      if (source && hwnd && pendingAudioRequested && mainWindow) {
-        if (await startWindowAudio(hwnd, mainWindow.webContents)) {
-          callback({ video: source })
-          return
-        }
-        mainWindow.webContents.send('screen-audio:fallback', audioLogPath())
-      }
-      if (source) {
-        callback(displayMediaStreams(source, pendingAudioRequested, process.platform))
-      } else {
+      if (!source) {
+        logAudio(`fonte ${sourceId} não encontrada`)
         callback({})
+        return
       }
+      const hwnd = hwndFromSourceId(source.id)
+      let windowAudioOk = false
+      if (hwnd && pendingAudioRequested && process.platform === 'win32' && mainWindow) {
+        windowAudioOk = await startWindowAudio(hwnd, mainWindow.webContents)
+      }
+      const mode = displayAudioMode({
+        sourceId: source.id,
+        audioRequested: pendingAudioRequested,
+        platform: process.platform,
+        windowAudioOk
+      })
+      logAudio(`compartilhando "${source.name}" (${source.id}): som = ${mode}`)
+      if (mode === 'none' && source.id.startsWith('window:') && pendingAudioRequested) {
+        mainWindow?.webContents.send('screen-audio:fallback', audioLogPath())
+      }
+      callback(mode === 'system' ? { video: source, audio: 'loopback' } : { video: source })
     } catch {
       callback({})
     }

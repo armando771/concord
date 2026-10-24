@@ -1,24 +1,19 @@
-export interface DisplaySource {
-  id: string
-  name: string
-}
-
-export interface DisplayMediaStreams<S extends DisplaySource> {
-  video: S
-  audio?: 'loopback'
-}
+/** Que som vai junto da tela compartilhada. */
+export type DisplayAudioMode = 'window' | 'system' | 'none'
 
 /**
- * Resposta do setDisplayMediaRequestHandler para a fonte escolhida. O som da
- * tela é o loopback do sistema (só existe no Windows); como o renderer pede
- * `restrictOwnAudio`, o Electron (≥ 43.4) troca por loopbackWithoutChrome e o
- * áudio do próprio Concord — as vozes da chamada — fica de fora.
+ * - janela: só o som do app dela (helper nativo). Se não deu para isolar,
+ *   vai SEM som — nunca o do sistema, que vazaria outros apps (YouTube…).
+ * - tela inteira: som do sistema sem o Concord (loopback + restrictOwnAudio).
+ * - loopback só existe no Windows.
  */
-export function displayMediaStreams<S extends DisplaySource>(
-  source: S,
-  audioRequested: boolean,
+export function displayAudioMode(input: {
+  sourceId: string
+  audioRequested: boolean
   platform: NodeJS.Platform
-): DisplayMediaStreams<S> {
-  if (audioRequested && platform === 'win32') return { video: source, audio: 'loopback' }
-  return { video: source }
+  windowAudioOk: boolean
+}): DisplayAudioMode {
+  if (!input.audioRequested || input.platform !== 'win32') return 'none'
+  if (input.sourceId.startsWith('window:')) return input.windowAudioOk ? 'window' : 'none'
+  return 'system'
 }
