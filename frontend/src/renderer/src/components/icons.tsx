@@ -661,7 +661,8 @@ export function SoundboardIcon({ className = '' }: IconProps): React.JSX.Element
   )
 }
 
-export function StarIcon({
+/** Estrela de favorito (contorno; preenchida com `filled`). */
+export function FavoriteStarIcon({
   className = '',
   filled = false
 }: IconProps & { filled?: boolean }): React.JSX.Element {

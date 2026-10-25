@@ -41,6 +41,8 @@ function SoundboardUploadModal({
 
   useEffect(() => {
     if (!open) {
+      // Fechou o modal: zera o formulário para a próxima abertura.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFile(null)
       setDurationMs(null)
       setName('')
