@@ -150,15 +150,16 @@ export function ServerView(): React.JSX.Element {
     )
   })
 
-  // Separar membros por Papel (Dono, Admin, Membro)
-  const ownerMembers = currentMembers.filter((m) => m.user_id === currentServer.owner_id)
-  const adminMembers = currentMembers.filter(
+  // Offline fica só no grupo Offline; os grupos de papel (Dono, Admin, Membro) mostram só quem está online
+  const onlineMembers = currentMembers.filter((m) => presence[m.user_id])
+  const offlineMembers = currentMembers.filter((m) => !presence[m.user_id])
+  const ownerMembers = onlineMembers.filter((m) => m.user_id === currentServer.owner_id)
+  const adminMembers = onlineMembers.filter(
     (m) => m.user_id !== currentServer.owner_id && m.role === 'admin'
   )
-  const regularMembers = currentMembers.filter(
+  const regularMembers = onlineMembers.filter(
     (m) => m.user_id !== currentServer.owner_id && m.role !== 'admin'
   )
-  const offlineMembers = currentMembers.filter((m) => !presence[m.user_id])
 
   const activeChannel = channels.find((c) => c.id === channelId)
 
@@ -233,29 +234,33 @@ export function ServerView(): React.JSX.Element {
       {/* Right Column: Server Members List */}
       <aside className="hidden lg:flex w-64 shrink-0 flex-col overflow-y-auto border-l border-white/6 bg-[#07080b]/60 p-4 space-y-6">
         {/* Owner Group */}
-        <div>
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
-            Dono do Servidor — {ownerMembers.length}
-          </p>
-          <div className="flex flex-col gap-1">
-            {ownerMembers.map((m) => {
-              const displayName =
-                m.display_name ?? m.username ?? (m.user_id === me?.id ? me?.display_name : 'Dono')
-              const handle = m.username ?? (m.user_id === me?.id ? me?.username : 'dono')
-              return (
-                <MemberRow
-                  key={m.user_id}
-                  userId={m.user_id}
-                  displayName={displayName}
-                  handle={handle}
-                  colorClass="bg-amber-600"
-                  nameClass="text-amber-300"
-                  online={Boolean(presence[m.user_id])}
-                />
-              )
-            })}
+        {ownerMembers.length > 0 && (
+          <div>
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+              Dono do Servidor — {ownerMembers.length}
+            </p>
+            <div className="flex flex-col gap-1">
+              {ownerMembers.map((m) => {
+                const displayName =
+                  m.display_name ??
+                  m.username ??
+                  (m.user_id === me?.id ? me?.display_name : 'Dono')
+                const handle = m.username ?? (m.user_id === me?.id ? me?.username : 'dono')
+                return (
+                  <MemberRow
+                    key={m.user_id}
+                    userId={m.user_id}
+                    displayName={displayName}
+                    handle={handle}
+                    colorClass="bg-amber-600"
+                    nameClass="text-amber-300"
+                    online
+                  />
+                )
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Admin Group */}
         {adminMembers.length > 0 && (
@@ -275,7 +280,7 @@ export function ServerView(): React.JSX.Element {
                     handle={handle}
                     colorClass="bg-violet-600"
                     nameClass="text-violet-300"
-                    online={Boolean(presence[m.user_id])}
+                    online
                   />
                 )
               })}
@@ -284,29 +289,33 @@ export function ServerView(): React.JSX.Element {
         )}
 
         {/* Regular Members Group */}
-        <div>
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
-            Membros — {regularMembers.length}
-          </p>
-          <div className="flex flex-col gap-1">
-            {regularMembers.map((m) => {
-              const displayName =
-                m.display_name ?? m.username ?? (m.user_id === me?.id ? me?.display_name : 'Membro')
-              const handle = m.username ?? (m.user_id === me?.id ? me?.username : 'membro')
-              return (
-                <MemberRow
-                  key={m.user_id}
-                  userId={m.user_id}
-                  displayName={displayName}
-                  handle={handle}
-                  colorClass="bg-indigo-600"
-                  nameClass="text-gray-200"
-                  online={Boolean(presence[m.user_id])}
-                />
-              )
-            })}
+        {regularMembers.length > 0 && (
+          <div>
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+              Membros — {regularMembers.length}
+            </p>
+            <div className="flex flex-col gap-1">
+              {regularMembers.map((m) => {
+                const displayName =
+                  m.display_name ??
+                  m.username ??
+                  (m.user_id === me?.id ? me?.display_name : 'Membro')
+                const handle = m.username ?? (m.user_id === me?.id ? me?.username : 'membro')
+                return (
+                  <MemberRow
+                    key={m.user_id}
+                    userId={m.user_id}
+                    displayName={displayName}
+                    handle={handle}
+                    colorClass="bg-indigo-600"
+                    nameClass="text-gray-200"
+                    online
+                  />
+                )
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Offline Group */}
         {offlineMembers.length > 0 && (
