@@ -8,22 +8,35 @@ import (
 )
 
 var (
-	ErrNameRequired    = errors.New("name is required")
-	ErrChannelNotFound = errors.New("channel not found")
+	ErrNameRequired        = errors.New("name is required")
+	ErrChannelNotFound     = errors.New("channel not found")
+	ErrInvalidChannelOrder = errors.New("invalid channel order")
 )
 
 type EventPublisher interface {
 	PublishChannelCreate(event CreateEvent)
 	PublishChannelUpdate(event CreateEvent)
 	PublishChannelDelete(event DeleteEvent)
+	PublishChannelReorder(event ReorderEvent)
+}
+
+type Store interface {
+	Create(ctx context.Context, ch *Channel) error
+	FindByID(ctx context.Context, id string) (*Channel, error)
+	Update(ctx context.Context, id string, name string) error
+	Reorder(ctx context.Context, serverID string, channelIDs []string) error
+	Delete(ctx context.Context, id string) error
+	ListByServerID(ctx context.Context, serverID string) ([]Channel, error)
+	IsMember(ctx context.Context, serverID string, userID string) (bool, error)
+	IsAdminOrOwner(ctx context.Context, serverID string, userID string) (bool, error)
 }
 
 type Service struct {
-	repository *Repository
+	repository Store
 	publisher  EventPublisher
 }
 
-func ChannelService(repository *Repository, publisher EventPublisher) *Service {
+func ChannelService(repository Store, publisher EventPublisher) *Service {
 	return &Service{
 		repository: repository,
 		publisher:  publisher,
@@ -86,6 +99,40 @@ func (s *Service) Update(ctx context.Context, id string, name string) (*Channel,
 	}
 
 	return updated, nil
+}
+
+func (s *Service) Reorder(ctx context.Context, serverID string, channelIDs []string) ([]Channel, error) {
+	if len(channelIDs) == 0 {
+		return nil, ErrInvalidChannelOrder
+	}
+	seen := make(map[string]struct{}, len(channelIDs))
+	for _, id := range channelIDs {
+		if id == "" {
+			return nil, ErrInvalidChannelOrder
+		}
+		if _, dup := seen[id]; dup {
+			return nil, ErrInvalidChannelOrder
+		}
+		seen[id] = struct{}{}
+	}
+
+	if err := s.repository.Reorder(ctx, serverID, channelIDs); err != nil {
+		return nil, err
+	}
+
+	channels, err := s.repository.ListByServerID(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.publisher != nil {
+		s.publisher.PublishChannelReorder(ReorderEvent{
+			ServerID: serverID,
+			Channels: channels,
+		})
+	}
+
+	return channels, nil
 }
 
 func (s *Service) Delete(ctx context.Context, id string) error {

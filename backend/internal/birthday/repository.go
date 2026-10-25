@@ -38,7 +38,7 @@ func (r *Repository) Targets(ctx context.Context, month int, days []int) ([]targ
 			s.owner_id,
 			COALESCE(
 				s.primary_channel_id,
-				(SELECT c.id FROM channels c WHERE c.server_id = s.id AND c.type = 'text' ORDER BY c.created_at, c.id LIMIT 1)
+				(SELECT c.id FROM channels c WHERE c.server_id = s.id AND c.type = 'text' ORDER BY c.position, c.created_at, c.id LIMIT 1)
 			),
 			array_agg(u.username ORDER BY u.username)
 		FROM users u

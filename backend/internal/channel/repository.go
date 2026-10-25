@@ -20,13 +20,21 @@ func (r *Repository) Create(ctx context.Context, ch *Channel) error {
 	return r.db.QueryRow(
 		ctx,
 		`
-		INSERT INTO channels (id, server_id, name, type, created_by)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO channels (id, server_id, name, type, position, created_by)
+		VALUES (
+			$1,
+			$2,
+			$3,
+			$4,
+			COALESCE((SELECT MAX(position) + 1 FROM channels WHERE server_id = $2 AND type = $4), 0),
+			$5
+		)
 		RETURNING
 			id,
 			server_id,
 			name,
 			type,
+			position,
 			created_by,
 			created_at,
 			updated_at
@@ -41,6 +49,7 @@ func (r *Repository) Create(ctx context.Context, ch *Channel) error {
 		&ch.ServerID,
 		&ch.Name,
 		&ch.Type,
+		&ch.Position,
 		&ch.CreatedBy,
 		&ch.CreatedAt,
 		&ch.UpdatedAt,
@@ -57,6 +66,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Channel, error) 
 			server_id,
 			name,
 			type,
+			position,
 			created_by,
 			created_at,
 			updated_at
@@ -69,6 +79,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Channel, error) 
 		&ch.ServerID,
 		&ch.Name,
 		&ch.Type,
+		&ch.Position,
 		&ch.CreatedBy,
 		&ch.CreatedAt,
 		&ch.UpdatedAt,
@@ -104,6 +115,32 @@ func (r *Repository) Update(ctx context.Context, id string, name string) error {
 	return nil
 }
 
+func (r *Repository) Reorder(ctx context.Context, serverID string, channelIDs []string) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	for i, channelID := range channelIDs {
+		tag, err := tx.Exec(
+			ctx,
+			`UPDATE channels SET position = $1, updated_at = NOW() WHERE id = $2 AND server_id = $3`,
+			i,
+			channelID,
+			serverID,
+		)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrChannelNotFound
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (r *Repository) Delete(ctx context.Context, id string) error {
 	tag, err := r.db.Exec(ctx, `DELETE FROM channels WHERE id = $1`, id)
 	if err != nil {
@@ -124,12 +161,13 @@ func (r *Repository) ListByServerID(ctx context.Context, serverID string) ([]Cha
 			server_id,
 			name,
 			type,
+			position,
 			created_by,
 			created_at,
 			updated_at
 		FROM channels
 		WHERE server_id = $1
-		ORDER BY created_at, name
+		ORDER BY position, created_at, name
 		`,
 		serverID,
 	)
@@ -146,6 +184,7 @@ func (r *Repository) ListByServerID(ctx context.Context, serverID string) ([]Cha
 			&ch.ServerID,
 			&ch.Name,
 			&ch.Type,
+			&ch.Position,
 			&ch.CreatedBy,
 			&ch.CreatedAt,
 			&ch.UpdatedAt,
