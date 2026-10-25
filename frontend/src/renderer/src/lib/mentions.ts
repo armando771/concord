@@ -7,14 +7,31 @@ import type { ChosenStatus } from './presenceStatus'
 
 const NICK = '[A-Za-z0-9_.]+'
 
+/**
+ * O que pode vir logo antes do "@": começo, espaço ou pontuação de abertura.
+ * Assim "x.com/@ana" ou "medium.com/@here" (links) não viram menção. Mesma
+ * regra do backend (internal/message/mention.go).
+ */
+const OPENER = `(^|[\\s([{"'<*~“‘«])`
+
+/** Nomes que nunca são menção pessoal: @all/@here só valem pelo mention_everyone. */
+const RESERVED = ['all', 'here', 'everyone']
+
+function isReserved(nick: string): boolean {
+  return RESERVED.includes(nick.toLowerCase())
+}
+
 function escape(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-/** A mensagem menciona este @nick (sem diferenciar maiúsculas)? */
+/**
+ * A mensagem menciona este @nick (sem diferenciar maiúsculas)? Quem se chama
+ * all/here/everyone nunca é pingado pelo texto.
+ */
 export function mentionsUser(content: string, username: string): boolean {
-  if (!username) return false
-  return new RegExp(`(^|[^A-Za-z0-9_.@])@${escape(username)}(?![A-Za-z0-9_])`, 'i').test(content)
+  if (!username || isReserved(username)) return false
+  return new RegExp(`${OPENER}@${escape(username)}(?![A-Za-z0-9_])`, 'i').test(content)
 }
 
 export interface MessagePart {
@@ -44,7 +61,7 @@ export function splitMentions(
     if (prev && !prev.mention) prev.text += text
     else parts.push({ text })
   }
-  const re = new RegExp(`(^|[^A-Za-z0-9_.@])@(${NICK})`, 'g')
+  const re = new RegExp(`${OPENER}@(${NICK})`, 'g')
   let last = 0
   for (let match = re.exec(content); match; match = re.exec(content)) {
     const start = match.index + match[1].length
@@ -52,9 +69,10 @@ export function splitMentions(
     const nick = match[2].replace(/\.+$/, '')
     const lower = nick.toLowerCase()
     if (start > last) pushText(content.slice(last, start))
-    if (isEveryone(lower)) {
-      if (lower === everyone) parts.push({ text: `@${nick}`, mention: lower })
-      else pushText(`@${nick}`)
+    if (isEveryone(lower) && lower === everyone) {
+      parts.push({ text: `@${nick}`, mention: lower })
+    } else if (isReserved(lower)) {
+      pushText(`@${nick}`)
     } else {
       parts.push({ text: `@${nick}`, mention: nick })
     }
@@ -136,4 +154,42 @@ export function applyMention(
 ): { text: string; caret: number } {
   const insert = `@${username} `
   return { text: draft.slice(0, start) + insert + draft.slice(caret), caret: start + insert.length }
+}
+
+export interface UserSuggestionInput {
+  username: string
+  display_name: string
+}
+
+/** Item do autocompletar: alguém do canal ou @all/@here. */
+export type MentionSuggestion =
+  | { kind: 'user'; username: string; display_name: string }
+  | { kind: 'everyone'; username: MentionEveryone; description: string }
+
+/**
+ * Monta o autocompletar do "@". @all/@here (só para quem pode) aparecem no
+ * topo quando o que foi digitado bate com eles ("@a", "@h"), ou com só "@"
+ * se ninguém mais bate. O item padrão (Tab/Enter) é sempre uma pessoa quando
+ * há alguma, para nunca marcar @all sem querer; com só "@" e nenhuma pessoa,
+ * não há padrão (-1).
+ */
+export function mentionSuggestions(
+  query: string,
+  users: UserSuggestionInput[],
+  canMentionEveryone: boolean,
+  { exclude, max = 6 }: { exclude?: string; max?: number } = {}
+): { items: MentionSuggestion[]; defaultIndex: number } {
+  const q = query.toLowerCase()
+  const people: MentionSuggestion[] = users
+    .filter((u) => u.username !== exclude && !isReserved(u.username))
+    .filter((u) => [u.username, u.display_name].some((v) => v.toLowerCase().startsWith(q)))
+    .slice(0, max)
+    .map((u) => ({ kind: 'user', username: u.username, display_name: u.display_name }))
+  const everyone: MentionSuggestion[] =
+    q || people.length === 0
+      ? everyoneSuggestions(q, canMentionEveryone).map((e) => ({ kind: 'everyone', ...e }))
+      : []
+  const items = [...everyone, ...people]
+  const defaultIndex = people.length > 0 ? everyone.length : q && items.length > 0 ? 0 : -1
+  return { items, defaultIndex }
 }

@@ -4,6 +4,7 @@ import {
   everyonePingsMe,
   everyoneSuggestions,
   mentionQuery,
+  mentionSuggestions,
   messageMentionsMe,
   mentionsUser,
   splitMentions
@@ -20,6 +21,18 @@ describe('mentionsUser', () => {
     expect(mentionsUser('@fulano2 oi', 'fulano')).toBe(false)
     expect(mentionsUser('fulano@fulano.com', 'fulano')).toBe(false)
     expect(mentionsUser('fulano sem arroba', 'fulano')).toBe(false)
+  })
+
+  it('não conta @nick dentro de link', () => {
+    expect(mentionsUser('x.com/@fulano', 'fulano')).toBe(false)
+    expect(mentionsUser('https://medium.com/@fulano', 'fulano')).toBe(false)
+    expect(mentionsUser('(@fulano)', 'fulano')).toBe(true)
+  })
+
+  it('quem se chama all, here ou everyone só é pingado pelo mention_everyone', () => {
+    expect(mentionsUser('@all bora', 'all')).toBe(false)
+    expect(mentionsUser('@HERE alguém?', 'here')).toBe(false)
+    expect(mentionsUser('@everyone', 'Everyone')).toBe(false)
   })
 })
 
@@ -56,6 +69,28 @@ describe('splitMentions', () => {
       { text: '@here', mention: 'here' },
       { text: ' e @all' }
     ])
+  })
+
+  it('@ no meio de link não vira menção, nem com mention_everyone', () => {
+    expect(splitMentions('x.com/@all', 'all')).toEqual([{ text: 'x.com/@all' }])
+    expect(splitMentions('https://medium.com/@here', 'here')).toEqual([
+      { text: 'https://medium.com/@here' }
+    ])
+    expect(splitMentions('veja x.com/@ana')).toEqual([{ text: 'veja x.com/@ana' }])
+    expect(splitMentions('<@all>', 'all')).toEqual([
+      { text: '<' },
+      { text: '@all', mention: 'all' },
+      { text: '>' }
+    ])
+    expect(splitMentions('["@ana"]')).toEqual([
+      { text: '["' },
+      { text: '@ana', mention: 'ana' },
+      { text: '"]' }
+    ])
+  })
+
+  it('@everyone não é menção de ninguém', () => {
+    expect(splitMentions('oi @everyone')).toEqual([{ text: 'oi @everyone' }])
   })
 })
 
@@ -145,5 +180,67 @@ describe('messageMentionsMe', () => {
       messageMentionsMe(msg({ author_id: 'eu', content: '@all', mention_everyone: 'all' }), me)
     ).toBe(false)
     expect(messageMentionsMe(msg({ content: '@fulano' }), null)).toBe(false)
+  })
+})
+
+describe('mentionSuggestions', () => {
+  const users = [
+    { username: 'ana', display_name: 'Ana' },
+    { username: 'alice', display_name: 'Alice' },
+    { username: 'hugo', display_name: 'Hugo' }
+  ]
+  const names = (r: ReturnType<typeof mentionSuggestions>): string[] =>
+    r.items.map((i) => `${i.kind}:${i.username}`)
+
+  it('só "@": nada de @all/@here, o padrão é a primeira pessoa', () => {
+    const r = mentionSuggestions('', users, true)
+    expect(names(r)).toEqual(['user:ana', 'user:alice', 'user:hugo'])
+    expect(r.defaultIndex).toBe(0)
+  })
+
+  it('"@a"/"@h": @all/@here no topo, mas o padrão continua sendo uma pessoa', () => {
+    const a = mentionSuggestions('a', users, true)
+    expect(names(a)).toEqual(['everyone:all', 'user:ana', 'user:alice'])
+    expect(a.defaultIndex).toBe(1)
+    const h = mentionSuggestions('H', users, true)
+    expect(names(h)).toEqual(['everyone:here', 'user:hugo'])
+    expect(h.defaultIndex).toBe(1)
+  })
+
+  it('só @all/@here batem: aparecem e o padrão é o que foi digitado', () => {
+    const r = mentionSuggestions('al', [{ username: 'bia', display_name: 'Bia' }], true)
+    expect(names(r)).toEqual(['everyone:all'])
+    expect(r.defaultIndex).toBe(0)
+  })
+
+  it('só "@" e ninguém mais bate: @all/@here aparecem, mas sem padrão', () => {
+    const r = mentionSuggestions('', [], true)
+    expect(names(r)).toEqual(['everyone:all', 'everyone:here'])
+    expect(r.defaultIndex).toBe(-1)
+  })
+
+  it('sem permissão, só pessoas', () => {
+    expect(names(mentionSuggestions('a', users, false))).toEqual(['user:ana', 'user:alice'])
+    expect(mentionSuggestions('', [], false)).toEqual({ items: [], defaultIndex: -1 })
+  })
+
+  it('esconde eu mesmo e quem se chama all/here/everyone', () => {
+    const r = mentionSuggestions(
+      '',
+      [
+        ...users,
+        { username: 'All', display_name: 'All' },
+        { username: 'everyone', display_name: 'E' }
+      ],
+      false,
+      { exclude: 'ana' }
+    )
+    expect(names(r)).toEqual(['user:alice', 'user:hugo'])
+  })
+
+  it('casa pelo nick ou pelo nome e respeita o limite', () => {
+    const r = mentionSuggestions('hu', [{ username: 'x1', display_name: 'Hugo' }], false)
+    expect(names(r)).toEqual(['user:x1'])
+    expect(mentionSuggestions('', users, false, { max: 2 }).items).toHaveLength(2)
   })
 })

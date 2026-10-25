@@ -9,8 +9,8 @@ import { useUserLook } from '../store/profileStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import {
   applyMention,
-  everyoneSuggestions,
   mentionQuery,
+  mentionSuggestions,
   messageMentionsMe,
   splitMentions
 } from '../lib/mentions'
@@ -46,11 +46,6 @@ interface ChatPaneProps {
   /** Sugere @all/@here (canal de servidor, só dono e moderadores). */
   canMentionEveryone?: boolean
 }
-
-/** Item do autocompletar: alguém do canal ou @all/@here. */
-type Suggestion =
-  | { kind: 'user'; username: string; display_name: string }
-  | { kind: 'everyone'; username: string; description: string }
 
 const MAX_SUGGESTIONS = 6
 
@@ -374,25 +369,17 @@ function ChatPane({
     roomRef.current = room
   }, [room])
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
-  const [highlight, setHighlight] = useState(0)
+  const [highlightChoice, setHighlight] = useState<number | null>(null)
   const meUsername = useAuthStore((s) => s.user?.username)
-  const suggestions: Suggestion[] = mention
-    ? [
-        ...everyoneSuggestions(mention.query, canMentionEveryone).map((e): Suggestion => ({
-          kind: 'everyone',
-          ...e
-        })),
-        ...mentionable
-          .filter((m) => m.username !== meUsername)
-          .filter((m) =>
-            [m.username, m.display_name].some((v) =>
-              v.toLowerCase().startsWith(mention.query.toLowerCase())
-            )
-          )
-          .slice(0, MAX_SUGGESTIONS)
-          .map((m): Suggestion => ({ kind: 'user', ...m }))
-      ]
-    : []
+  // Tab/Enter pegam o item padrão (sempre uma pessoa, se houver) até a
+  // pessoa navegar com as setas.
+  const { items: suggestions, defaultIndex } = mention
+    ? mentionSuggestions(mention.query, mentionable, canMentionEveryone, {
+        exclude: meUsername,
+        max: MAX_SUGGESTIONS
+      })
+    : { items: [], defaultIndex: -1 }
+  const highlight = highlightChoice ?? defaultIndex
 
   const pickMention = (username: string): void => {
     const el = inputRef.current
@@ -411,14 +398,21 @@ function ChatPane({
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault()
         const step = e.key === 'ArrowDown' ? 1 : -1
-        setHighlight((h) => (h + step + suggestions.length) % suggestions.length)
-      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        const from = highlight < 0 ? (step > 0 ? -1 : 0) : highlight
+        setHighlight((from + step + suggestions.length) % suggestions.length)
+        return
+      }
+      if ((e.key === 'Enter' || e.key === 'Tab') && highlight >= 0) {
         e.preventDefault()
         pickMention(suggestions[highlight].username)
-      } else if (e.key === 'Escape') {
-        setMention(null)
+        return
       }
-      return
+      if (e.key === 'Escape') {
+        setMention(null)
+        return
+      }
+      // Sem item escolhido, Enter/Tab seguem normais (nada de @all sem querer).
+      if (e.key === 'Enter' || e.key === 'Tab') return
     }
     if (e.key === 'Escape' && replyingTo) {
       setReplyState(null)
@@ -719,7 +713,7 @@ function ChatPane({
             onChange={(e) => {
               setDraft(e.target.value)
               setMention(mentionQuery(e.target.value, e.target.selectionStart ?? 0))
-              setHighlight(0)
+              setHighlight(null)
             }}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}

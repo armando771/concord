@@ -34,6 +34,25 @@ func TestDetectEveryoneMention(t *testing.T) {
 		{"meu_@all", ""},
 		{"@", ""},
 		{"", ""},
+		// Só no começo, depois de espaço ou de pontuação de abertura.
+		{"[@all]", MentionAll},
+		{"\"@here\" pessoal", MentionHere},
+		{"'@all'", MentionAll},
+		{"{@all}", MentionAll},
+		{"<@all>", MentionAll},
+		{"*@all*", MentionAll},
+		{"~@here~", MentionHere},
+		{"oi\t@all", MentionAll},
+		{"“@all”", MentionAll},
+		// Links de perfil não pingam ninguém.
+		{"x.com/@all", ""},
+		{"olha https://medium.com/@here", ""},
+		{"https://www.youtube.com/@all/videos", ""},
+		{"#@all", ""},
+		{"-@all", ""},
+		{"é@all", ""},
+		{":@here", ""},
+		{"x.com/@all mas @here vale", MentionHere},
 	}
 	for _, tc := range cases {
 		if got := DetectEveryoneMention(tc.content); got != tc.want {

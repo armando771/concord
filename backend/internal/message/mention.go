@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Menções em massa num canal de servidor: @all avisa todo mundo do canal,
@@ -30,8 +32,9 @@ func isNickByte(b byte) bool {
 }
 
 // DetectEveryoneMention acha @all/@here como palavra inteira (sem diferenciar
-// maiúsculas): não vale dentro de palavra, e-mail ("x@all.com") nem nick
-// maior ("@allan", "@all.bot"). Se as duas aparecem, @all ganha. Mesma regra
+// maiúsculas): o "@" precisa abrir o token (começo, espaço ou pontuação de
+// abertura), então não vale dentro de palavra, e-mail ("x@all.com") nem link
+// ("x.com/@all"); também não vale nick maior ("@allan", "@all.bot"). Se as duas aparecem, @all ganha. Mesma regra
 // de token do @nick do app (lib/mentions.ts). O app não renderiza código
 // inline, então crase não muda nada.
 func DetectEveryoneMention(content string) string {
@@ -41,11 +44,8 @@ func DetectEveryoneMention(content string) string {
 		if lower[i] != '@' {
 			continue
 		}
-		if i > 0 {
-			prev := lower[i-1]
-			if isNickByte(prev) || prev == '.' || prev == '@' {
-				continue
-			}
+		if !opensToken(lower[:i]) {
+			continue
 		}
 		for _, word := range []string{MentionAll, MentionHere} {
 			end := i + 1 + len(word)
@@ -60,6 +60,20 @@ func DetectEveryoneMention(content string) string {
 	}
 	return found
 }
+
+// opensToken: o que vem antes do "@" deixa começar uma menção? Só o começo
+// da mensagem, espaço ou pontuação de abertura — assim "x.com/@all",
+// "#@all" ou "é@all" (links, palavras) não pingam ninguém.
+func opensToken(before string) bool {
+	if before == "" {
+		return true
+	}
+	prev, _ := utf8.DecodeLastRuneInString(before)
+	return unicode.IsSpace(prev) || strings.ContainsRune(mentionOpeners, prev)
+}
+
+// Pontuação que pode vir logo antes de uma menção (igual em lib/mentions.ts).
+const mentionOpeners = "([{\"'<*~“‘«"
 
 // tokenEndsAt: o nick acaba em end? Ponto final conta como pontuação ("@all."),
 // mas ponto seguido de letra continua o nick ("@all.bot").
