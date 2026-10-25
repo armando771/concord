@@ -51,6 +51,21 @@ func (s *Service) FindByEmail(ctx context.Context, email string) (*User, error) 
 	return s.repository.FindByEmail(ctx, email)
 }
 
+// FindByEmailFold acha a conta pelo e-mail, sem diferenciar caixa.
+func (s *Service) FindByEmailFold(ctx context.Context, email string) (*User, error) {
+	return s.repository.FindByEmailFold(ctx, email)
+}
+
+// MarkEmailVerified confirma o e-mail da conta.
+func (s *Service) MarkEmailVerified(ctx context.Context, id string) error {
+	return s.repository.MarkEmailVerified(ctx, id)
+}
+
+// SetPassword grava um hash de senha já calculado.
+func (s *Service) SetPassword(ctx context.Context, id, hash string) error {
+	return s.repository.SetPassword(ctx, id, hash)
+}
+
 func (s *Service) Create(
 	ctx context.Context,
 	user *User,

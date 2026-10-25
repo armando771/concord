@@ -17,7 +17,13 @@ var (
 	ErrAlreadyMember    = errors.New("you are already a member of this server")
 	ErrInvalidCode      = errors.New("código de convite inválido")
 	ErrNotServerMember  = errors.New("you are not a member of this server")
+	ErrBanned           = errors.New("você foi banido deste servidor")
 )
+
+// RoleDefaults cria os cargos padrão (@everyone e Moderador) de um servidor novo.
+type RoleDefaults interface {
+	CreateDefaults(ctx context.Context, serverID string) error
+}
 
 type EventPublisher interface {
 	PublishServerUpdate(event UpdateEvent)
@@ -30,12 +36,17 @@ type EventPublisher interface {
 type Service struct {
 	repository *Repository
 	publisher  EventPublisher
+	roles      RoleDefaults
+	presence   PresenceLookup
+	previews   *previewCache
 }
 
-func ServerService(repository *Repository, publisher EventPublisher) *Service {
+func ServerService(repository *Repository, publisher EventPublisher, roles RoleDefaults) *Service {
 	return &Service{
 		repository: repository,
 		publisher:  publisher,
+		roles:      roles,
+		previews:   newPreviewCache(invitePreviewTTL, invitePreviewMaxKeys),
 	}
 }
 
@@ -57,8 +68,14 @@ func (s *Service) Create(
 		return err
 	}
 
+	if s.roles != nil {
+		if err := s.roles.CreateDefaults(ctx, server.ID); err != nil {
+			return err
+		}
+	}
+
 	member := &ServerMember{}
-	if err := s.repository.AddingUserServer(ctx, server, member, server.OwnerID, "admin"); err != nil {
+	if err := s.repository.AddingUserServer(ctx, server, member, server.OwnerID, "member"); err != nil {
 		return err
 	}
 
@@ -71,7 +88,7 @@ func (s *Service) Create(
 	}
 
 	// Todo servidor nasce com o Maestro (o dono pode remover depois).
-	if err := s.repository.AddMemberIfMissing(ctx, server.ID, bot.UserID, RoleMember); err != nil {
+	if err := s.repository.AddMemberIfMissing(ctx, server.ID, bot.UserID, "member"); err != nil {
 		return err
 	}
 	if botMember, err := s.repository.FindMemberByUserID(ctx, server.ID, bot.UserID); err == nil && s.publisher != nil {
@@ -99,7 +116,7 @@ func (s *Service) SetMusicBot(ctx context.Context, serverID, actorID string, ena
 		}
 		return nil
 	}
-	if err := s.repository.AddMemberIfMissing(ctx, serverID, bot.UserID, RoleMember); err != nil {
+	if err := s.repository.AddMemberIfMissing(ctx, serverID, bot.UserID, "member"); err != nil {
 		return err
 	}
 	if m, err := s.repository.FindMemberByUserID(ctx, serverID, bot.UserID); err == nil && s.publisher != nil {
@@ -133,7 +150,7 @@ func (s *Service) SetPrimaryChannel(ctx context.Context, serverID string, channe
 	return updated, nil
 }
 
-func (s *Service) Update(ctx context.Context, id string, name string, iconURL string) (*Server, error) {
+func (s *Service) Update(ctx context.Context, id string, name string, iconURL *string) (*Server, error) {
 	if name == "" {
 		return nil, errors.New("name is required")
 	}
@@ -143,7 +160,11 @@ func (s *Service) Update(ctx context.Context, id string, name string, iconURL st
 		return nil, errors.New("server not found")
 	}
 
-	if err := s.repository.Update(ctx, id, name, iconURL); err != nil {
+	icon := srv.IconURL
+	if iconURL != nil {
+		icon = *iconURL
+	}
+	if err := s.repository.Update(ctx, id, name, icon); err != nil {
 		return nil, err
 	}
 
@@ -160,6 +181,23 @@ func (s *Service) Update(ctx context.Context, id string, name string, iconURL st
 	}
 
 	return updated, nil
+}
+
+// SetIcon troca o ícone (nil tira), avisa os membros com server:update e
+// devolve o ícone antigo para quem chama apagar o arquivo.
+func (s *Service) SetIcon(ctx context.Context, id string, url *string) (*Server, *string, error) {
+	old, err := s.repository.SetIcon(ctx, id, url)
+	if err != nil {
+		return nil, nil, errors.New("server not found")
+	}
+	updated, err := s.repository.FindByID(ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	if s.publisher != nil {
+		s.publisher.PublishServerUpdate(UpdateEvent{ServerID: updated.ID, Server: *updated})
+	}
+	return updated, old, nil
 }
 
 func (s *Service) Delete(ctx context.Context, id string) error {
@@ -194,6 +232,11 @@ func (s *Service) IsMember(ctx context.Context, serverID string, userID string) 
 }
 
 func (s *Service) InviteUser(ctx context.Context, serverID string, inviterID string, inviteeID string) error {
+	if banned, err := s.repository.IsBanned(ctx, serverID, inviteeID); err != nil {
+		return err
+	} else if banned {
+		return ErrBanned
+	}
 	invite := &ServerInvite{
 		ID:        uuid.New().String(),
 		ServerID:  serverID,
@@ -235,6 +278,11 @@ func (s *Service) AcceptInvite(ctx context.Context, inviteID string, userID stri
 	}
 	if isMember {
 		return ErrAlreadyMember
+	}
+	if banned, err := s.repository.IsBanned(ctx, invite.ServerID, userID); err != nil {
+		return err
+	} else if banned {
+		return ErrBanned
 	}
 
 	member := &ServerMember{}
@@ -295,10 +343,17 @@ func (s *Service) JoinByCode(ctx context.Context, rawCode string, userID string)
 		return nil, err
 	}
 	if !isMember {
+		if banned, err := s.repository.IsBanned(ctx, serverID, userID); err != nil {
+			return nil, err
+		} else if banned {
+			return nil, ErrBanned
+		}
 		member := &ServerMember{}
 		if err := s.repository.AddingUserServer(ctx, &Server{ID: serverID}, member, userID, "member"); err != nil {
 			return nil, err
 		}
+		// A prévia do convite mostra o número de membros: entrou, conta já.
+		s.previews.forgetServer(serverID)
 		fullMember, err := s.repository.FindMemberByUserID(ctx, serverID, userID)
 		if err == nil && s.publisher != nil {
 			s.publisher.PublishMemberJoin(MemberJoinEvent{ServerID: serverID, Member: *fullMember})
@@ -306,28 +361,6 @@ func (s *Service) JoinByCode(ctx context.Context, rawCode string, userID string)
 	}
 
 	return s.repository.FindByID(ctx, serverID)
-}
-
-// SetMemberRole: o dono torna alguém moderador ou membro comum.
-func (s *Service) SetMemberRole(ctx context.Context, serverID, actorID, targetID, role string) (*ServerMember, error) {
-	server, err := s.repository.FindByID(ctx, serverID)
-	if err != nil {
-		return nil, err
-	}
-	if err := validateRoleChange(actorID, server.OwnerID, targetID, role); err != nil {
-		return nil, err
-	}
-	if err := s.repository.UpdateMemberRole(ctx, serverID, targetID, role); err != nil {
-		return nil, err
-	}
-	member, err := s.repository.FindMemberByUserID(ctx, serverID, targetID)
-	if err != nil {
-		return nil, err
-	}
-	if s.publisher != nil {
-		s.publisher.PublishMemberUpdate(MemberJoinEvent{ServerID: serverID, Member: *member})
-	}
-	return member, nil
 }
 
 // CanDirectMessage: DM é liberada entre amigos ou entre quem divide um

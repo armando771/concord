@@ -3,6 +3,7 @@ package message
 import (
 	"context"
 	"errors"
+	"gin-quickstart/backend/internal/permission"
 	"testing"
 	"time"
 )
@@ -122,23 +123,31 @@ func TestMentionLimiterAllowsOnePerAuthorPerChannelEvery30s(t *testing.T) {
 	}
 }
 
+// fakeModerators devolve MENTION_EVERYONE (mais VIEW) a quem está em allowed.
 type fakeModerators struct {
-	allowed map[string]bool // "serverID|userID"
+	allowed map[string]bool // "channelID|userID"
 	err     error
 }
 
-func (f fakeModerators) IsAdminOrOwner(_ context.Context, serverID string, userID string) (bool, error) {
-	return f.allowed[serverID+"|"+userID], f.err
+func (f fakeModerators) ChannelPerms(_ context.Context, channelID string, userID string) (int64, error) {
+	if f.err != nil {
+		return 0, f.err
+	}
+	perms := permission.ViewChannel
+	if f.allowed[channelID+"|"+userID] {
+		perms |= permission.MentionEveryone
+	}
+	return perms, nil
 }
 
 func TestResolveMentionEveryone(t *testing.T) {
 	clock := &fakeClock{now: time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)}
-	newService := func(mods ModeratorChecker) *Service {
+	newService := func(mods PermissionChecker) *Service {
 		s := MessageService(nil, nil, nil, nil, nil, mods)
 		s.mentionLimiter = newMentionLimiter(30*time.Second, clock.Now)
 		return s
 	}
-	mods := fakeModerators{allowed: map[string]bool{"srv|mod": true, "srv|dono": true}}
+	mods := fakeModerators{allowed: map[string]bool{"ch1|mod": true, "ch1|dono": true, "ch2|dono": true}}
 	ctx := context.Background()
 
 	t.Run("moderador ou dono marcam @all/@here", func(t *testing.T) {

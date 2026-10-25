@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 import type { ServerMember } from '../api/servers'
 import {
+  deliverDesktop,
   friendRequestNotification,
   mentionNotification,
+  messageAlert,
   messageNotification,
   notificationSound,
   notifyDesktop
@@ -22,6 +24,7 @@ import {
   listConversationMessages,
   sendConversationMessage,
   deleteConversationMessage,
+  editMessage,
   addConversationReaction,
   removeConversationReaction,
   createPoll,
@@ -30,20 +33,31 @@ import {
 } from '../api/messages'
 import { applyReactionAdd, applyReactionRemove } from '../lib/emotes'
 import { applyPollUpdate, messagePreview, type PollUpdate } from '../lib/polls'
+import { mergeMissedMessages, newestMessage } from '../lib/missedMessages'
+import { mergeMessages } from '../lib/messageOrder'
+import { applyMessageUpdate } from '../lib/messageEdit'
 import { APP_UPDATE_EVENT, requestUpdateCheck } from '../lib/appUpdate'
 import type { ConversationSummary } from '../api/conversations'
 import { listConversations, markConversationRead } from '../api/conversations'
-import { conversationTitle } from '../lib/conversations'
+import { conversationTitle, sanitizeConversations } from '../lib/conversations'
 import type { PresenceMap } from '../api/presence'
-import { fetchPresence } from '../api/presence'
+import { fetchActivities, fetchPresence } from '../api/presence'
 import { listChannels } from '../api/channels'
+import { useChannelNameStore } from './channelNameStore'
 import { useServerStore } from './serverStore'
+import { handleServerRoleEvent, removedMessage } from './serverEvents'
 import { useFriendStore } from './friendStore'
 import { useCallStore } from './callStore'
 import { useLevelStore } from './levelStore'
+import { useBadgeStore } from './badgeStore'
 import { useSoundboardStore } from './soundboardStore'
 import { useMusicStore } from './musicStore'
-import { showToast } from './toastStore'
+import { useActivityStore } from './activityStore'
+import { useTypingStore } from './typingStore'
+import { usePresenceActivityStore } from './presenceActivityStore'
+import { sanitizeActivity } from '../lib/presenceActivity'
+import { showToast, useToastStore } from './toastStore'
+import { createReconnectNotice } from '../lib/wsReconnect'
 import { router } from '../router'
 import { MESSAGE_LIMIT } from '../api/messages'
 import type { PublicProfile } from '../api/users'
@@ -80,6 +94,8 @@ interface ChatState {
     replyToId?: string | null
   ) => Promise<void>
   deleteFromRoom: (room: RoomKey, messageId: string) => Promise<void>
+  /** Edita o texto de uma mensagem sua; a lista já sai com a versão do servidor. */
+  editInRoom: (room: RoomKey, messageId: string, content: string) => Promise<void>
   toggleReaction: (room: RoomKey, messageId: string, emoji: string) => Promise<void>
   createPollInRoom: (room: RoomKey, input: CreatePollInput) => Promise<void>
   votePollInRoom: (room: RoomKey, messageId: string, answerIds: number[]) => Promise<void>
@@ -91,6 +107,8 @@ interface ChatState {
   subscribeRoom: (room: RoomKey) => void
   unsubscribeRoom: (room: RoomKey) => void
   handleWsEvent: (event: WsEvent) => void
+  /** WS voltou (ex.: deploy): busca o que se perdeu na queda, sem som nem notificação. */
+  resyncAfterReconnect: () => Promise<void>
   handleServerDeleted: (serverId: string) => void
   reset: () => void
 }
@@ -104,22 +122,54 @@ const getRoomFetch = (room: RoomKey): ((before?: string) => Promise<Message[]>) 
   return (before?: string) => listConversationMessages(id, before)
 }
 
-const appendUnique = (messages: Message[], incoming: Message[]): Message[] => {
-  const seen = new Set(messages.map((m) => m.id))
-  const merged = [...messages]
-  for (const msg of incoming) {
-    if (!seen.has(msg.id)) {
-      merged.push(msg)
-      seen.add(msg.id)
-    }
-  }
-  return merged
-}
+/**
+ * Salas com um ChatPane aberto. Só elas guardam lista de mensagens: o
+ * message:create de uma sala fechada (DM pela sala user:<eu>, canal pela sala
+ * do servidor) não pode criar uma lista solta que depois seria juntada à
+ * página carregada ao abrir. São também as que a reconexão relê
+ * (resyncAfterReconnect); `loaded` diz se o histórico já veio, para uma sala
+ * cuja primeira carga falhou ser carregada ali em vez de contar a página
+ * inteira como não lida.
+ */
+const openRooms = new Map<RoomKey, { loaded: boolean }>()
 
 const clearDeletedReplyTarget = (messages: Message[], deletedId: string): Message[] =>
   messages
     .filter((m) => m.id !== deletedId)
     .map((m) => (m.reply_to_id === deletedId ? { ...m, reply_to: null } : m))
+
+/**
+ * Aplica uma mensagem editada à sala (se carregada) e à prévia da DM, quando
+ * ela é a última da conversa. Não mexe em não lidas nem notifica: editar não
+ * é mensagem nova.
+ */
+const withUpdatedMessage = (
+  state: Pick<ChatState, 'messagesByRoom' | 'conversations'>,
+  room: RoomKey,
+  msg: Message
+): Partial<ChatState> => {
+  const current = state.messagesByRoom[room]
+  const next: Partial<ChatState> = {}
+  if (current) {
+    const updated = applyMessageUpdate(current, msg)
+    if (updated !== current) next.messagesByRoom = { ...state.messagesByRoom, [room]: updated }
+  }
+  if (msg.conversation_id) {
+    const idx = state.conversations.findIndex(
+      (c) => c.id === msg.conversation_id && c.last_message?.id === msg.id
+    )
+    if (idx !== -1) {
+      const conversations = [...state.conversations]
+      const conv = conversations[idx]
+      conversations[idx] = {
+        ...conv,
+        last_message: { ...conv.last_message!, content: messagePreview(msg) }
+      }
+      next.conversations = conversations
+    }
+  }
+  return next
+}
 
 /** Troca a enquete de uma mensagem carregada na sala (sem efeito se não estiver). */
 const replacePoll = (
@@ -135,6 +185,27 @@ const replacePoll = (
     [room]: messages.map((m) => (m.id === messageId ? { ...m, poll: next(m.poll) } : m))
   }
 }
+
+/** Releitura de presença e listas depois de reconectar (ver resyncAfterReconnect). */
+const LISTS_RESYNC_DELAY_MS = 3000
+let listsResyncTimer: ReturnType<typeof setTimeout> | null = null
+
+/** Aviso "Reconectando…" só se o servidor demorar (um deploy leva menos de 3 s). */
+let reconnectToastId: string | null = null
+const dismissReconnectToast = (): void => {
+  if (reconnectToastId) useToastStore.getState().removeToast(reconnectToastId)
+  reconnectToastId = null
+}
+const reconnectNotice = createReconnectNotice({
+  onSlow: () => {
+    reconnectToastId = showToast.info('Reconectando ao servidor…', 0)
+  },
+  onBack: () => {
+    dismissReconnectToast()
+    showToast.success('Conectado ao servidor de novo.')
+  },
+  onDismiss: dismissReconnectToast
+})
 
 // Marca a DM como lida no servidor, juntando rajadas de mensagens.
 const readTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -152,6 +223,9 @@ function markReadSoon(conversationId: string, messageId?: string): void {
   )
 }
 
+/** A janela (ou a aba, no web) está à vista e com foco. */
+const windowFocused = (): boolean => document.visibilityState !== 'hidden' && document.hasFocus()
+
 const isBlocked = (userId: string): boolean =>
   useFriendStore.getState().blocked.some((u) => u.id === userId)
 
@@ -159,12 +233,19 @@ const client = new WsClient({
   getToken: () => useAuthStore.getState().accessToken,
   getUserId: () => useAuthStore.getState().user?.id ?? null,
   onEvent: (event) => useChatStore.getState().handleWsEvent(event),
-  onOpen: () => {
+  onOpen: (reconnected) => {
+    reconnectNotice.restored()
+    // Avisos de digitando de antes da queda podem nunca receber o stop.
+    useTypingStore.getState().reset()
     useCallStore.getState().handleWsReconnect()
+    // O servidor perdeu o jogo em andamento na queda: manda de novo.
+    usePresenceActivityStore.getState().publishMine()
     // Reconexão costuma ser deploy: checa atualização (o aviso app:update é o
     // caminho principal; isto cobre o manifesto publicado antes do reinício).
     requestUpdateCheck()
-  }
+    if (reconnected) void useChatStore.getState().resyncAfterReconnect()
+  },
+  onLost: () => reconnectNotice.lost()
 })
 
 /** Mensagens que já geraram notificação (chegam por mais de uma sala). */
@@ -190,12 +271,18 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
   disconnect: () => {
     client.disconnect()
+    reconnectNotice.cancel()
+    if (listsResyncTimer) clearTimeout(listsResyncTimer)
+    listsResyncTimer = null
     get().reset()
     useLevelStore.getState().reset()
+    useBadgeStore.getState().reset()
   },
   isWsConnected: () => client.isConnected(),
 
   openRoom: async (room) => {
+    // Reabrir a sala carrega o histórico de novo (closeRoom apaga a lista).
+    openRooms.set(room, { loaded: false })
     client.subscribe(room)
     const fetch = getRoomFetch(room)
     const token = useAuthStore.getState().accessToken
@@ -221,10 +308,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     try {
       const fetched = await fetch()
       if (useAuthStore.getState().accessToken !== token) return
+      if (!openRooms.has(room)) return
+      openRooms.set(room, { loaded: true })
       set((state) => ({
         messagesByRoom: {
           ...state.messagesByRoom,
-          [room]: appendUnique(state.messagesByRoom[room] ?? [], [...fetched].reverse())
+          // Pode já ter mensagem ao vivo que chegou durante o carregamento.
+          [room]: mergeMessages(state.messagesByRoom[room] ?? [], fetched)
         },
         hasMoreByRoom: { ...state.hasMoreByRoom, [room]: fetched.length >= MESSAGE_LIMIT }
       }))
@@ -238,6 +328,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   closeRoom: (room) => {
+    openRooms.delete(room)
     client.unsubscribe(room)
     set((state) => {
       const next = { ...state.messagesByRoom }
@@ -261,16 +352,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const fetch = getRoomFetch(room)
     const current = get().messagesByRoom[room] ?? []
     if (current.length === 0) return
+    // A lista está em ordem (created_at, id): a primeira é a mais antiga.
     const before = current[0].id
     const token = useAuthStore.getState().accessToken
     try {
       const fetched = await fetch(before)
       if (useAuthStore.getState().accessToken !== token) return
-      if (fetched.length === 0) return
+      if (fetched.length === 0 || !openRooms.has(room)) return
       set((state) => ({
         messagesByRoom: {
           ...state.messagesByRoom,
-          [room]: [...[...fetched].reverse(), ...(state.messagesByRoom[room] ?? [])]
+          [room]: mergeMessages(state.messagesByRoom[room] ?? [], fetched)
         },
         hasMoreByRoom: { ...state.hasMoreByRoom, [room]: fetched.length >= MESSAGE_LIMIT }
       }))
@@ -313,6 +405,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         [room]: clearDeletedReplyTarget(state.messagesByRoom[room] ?? [], messageId)
       }
     }))
+  },
+
+  editInRoom: async (room, messageId, content) => {
+    const updated = await editMessage(room, messageId, content)
+    set((state) => withUpdatedMessage(state, room, updated))
   },
 
   toggleReaction: async (room, messageId, emoji) => {
@@ -404,7 +501,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     try {
       const conversations = await listConversations()
       if (useAuthStore.getState().accessToken !== token) return
-      const list = Array.isArray(conversations) ? conversations : []
+      // Linha fora do formato (null, sem id, sem membros) não derruba a lista.
+      const list = sanitizeConversations(conversations)
       // Não lidas vêm do servidor (sobrevivem ao reload); a aberta fica zerada.
       set((state) => {
         const unreadByRoom = { ...state.unreadByRoom }
@@ -444,6 +542,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         presence: { ...state.presence, ...presence },
         statuses: { ...state.statuses, ...statuses }
       }))
+      // Atividade vem à parte: backend antigo não tem a rota (erro = ignora).
+      fetchActivities(unique)
+        .then((activities) => {
+          if (useAuthStore.getState().accessToken !== token) return
+          usePresenceActivityStore.getState().applyFetched(unique, activities)
+        })
+        .catch(() => {})
     } catch (err) {
       console.error('[chatStore] fetchPresenceFor error:', err)
     }
@@ -466,6 +571,89 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
+  resyncAfterReconnect: async () => {
+    const token = useAuthStore.getState().accessToken
+    if (!token) return
+    // As salas abertas (inclusive uma cuja primeira carga falhou), a ativa primeiro.
+    const { activeRoom } = get()
+    const rooms = [...openRooms.keys()].sort(
+      (a, b) => Number(b === activeRoom) - Number(a === activeRoom)
+    )
+    const resyncRoom = async (room: RoomKey): Promise<void> => {
+      const loaded = openRooms.get(room)?.loaded ?? false
+      // O que já se conhecia antes da busca: o que chegar pelo WS enquanto ela
+      // roda não entra na conta das não lidas.
+      const knownBefore = newestMessage(get().messagesByRoom[room] ?? [])
+      try {
+        const latest = await getRoomFetch(room)()
+        if (useAuthStore.getState().accessToken !== token) return
+        const entry = openRooms.get(room)
+        if (!entry) return // sala fechada enquanto buscava
+        if (!loaded) {
+          // A primeira carga tinha falhado: é ela que acontece agora. A página é
+          // histórico, não mensagem nova; nada vira não lido.
+          entry.loaded = true
+          for (const m of latest) notifiedMessages.add(m.id)
+          set((state) => ({
+            messagesByRoom: {
+              ...state.messagesByRoom,
+              [room]: mergeMessages(state.messagesByRoom[room] ?? [], latest)
+            },
+            hasMoreByRoom: { ...state.hasMoreByRoom, [room]: latest.length >= MESSAGE_LIMIT }
+          }))
+          return
+        }
+        set((state) => {
+          const { messages, added, unseen, reset } = mergeMissedMessages(
+            state.messagesByRoom[room] ?? [],
+            latest,
+            knownBefore
+          )
+          // Já estão na tela: um evento atrasado da mesma mensagem não notifica.
+          for (const m of added) notifiedMessages.add(m.id)
+          // Só o que chegou depois da última mensagem conhecida é não lido.
+          const unread =
+            room !== state.activeRoom && unseen.length > 0
+              ? { ...state.unreadByRoom, [room]: (state.unreadByRoom[room] ?? 0) + unseen.length }
+              : state.unreadByRoom
+          return {
+            messagesByRoom: { ...state.messagesByRoom, [room]: messages },
+            unreadByRoom: unread,
+            hasMoreByRoom: reset
+              ? { ...state.hasMoreByRoom, [room]: latest.length >= MESSAGE_LIMIT }
+              : state.hasMoreByRoom
+          }
+        })
+      } catch (err) {
+        console.error(`[chatStore] resync ${room} failed:`, err)
+      }
+    }
+
+    const refreshLists = async (): Promise<void> => {
+      if (useAuthStore.getState().accessToken !== token) return
+      const servers = useServerStore.getState()
+      const currentServerId = servers.currentServer?.id
+      await Promise.all([
+        get().fetchConversations(),
+        get().fetchPresenceFor(Object.keys(get().presence)),
+        get().fetchChannelsForServers(Object.keys(get().channelsByServer)),
+        servers.fetchServers(),
+        currentServerId ? servers.fetchChannels(currentServerId) : Promise.resolve(),
+        useFriendStore.getState().loadAll(),
+        useLevelStore.getState().loadMe()
+      ])
+    }
+    // Presença e listas esperam os outros apps reconectarem também (no deploy
+    // todos caem juntos): lida cedo demais, a presença mostraria todo mundo
+    // offline por um instante.
+    if (listsResyncTimer) clearTimeout(listsResyncTimer)
+    listsResyncTimer = setTimeout(() => {
+      listsResyncTimer = null
+      void refreshLists()
+    }, LISTS_RESYNC_DELAY_MS)
+    await Promise.all(rooms.map(resyncRoom))
+  },
+
   sendEvent: (type, payload) => {
     client.sendEvent(type, payload)
   },
@@ -479,6 +667,23 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   handleWsEvent: (event) => {
+    // Relê o que a pessoa vê do servidor (cargos/canais mudaram) e, se o canal
+    // aberto sumiu para ela, sai dele.
+    const reconcileAfterPermissionChange = async (serverId: string): Promise<void> => {
+      const before = get().channelsByServer[serverId] ?? []
+      const servers = useServerStore.getState()
+      if (servers.currentServer?.id === serverId) await servers.refreshServer(serverId)
+      await get().fetchChannelsForServers([serverId])
+      const room = get().activeRoom
+      if (!room || !room.startsWith('channel:')) return
+      const open = room.slice('channel:'.length)
+      const after = get().channelsByServer[serverId] ?? []
+      if (before.includes(open) && !after.includes(open)) {
+        get().closeRoom(room)
+        void router.navigate(`/servers/${serverId}`)
+      }
+    }
+
     const payload = event.payload as Record<string, unknown>
 
     if (event.type === APP_UPDATE_EVENT) {
@@ -496,13 +701,28 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return
     }
 
+    if (event.type.startsWith('call:activity')) {
+      useActivityStore.getState().handleWsEvent(event)
+      return
+    }
+
     if (event.type.startsWith('call:')) {
       useCallStore.getState().handleWsEvent(event)
       return
     }
 
+    if (event.type === 'typing' || event.type === 'typing:stop') {
+      useTypingStore.getState().handleWsEvent(event)
+      return
+    }
+
     if (event.type.startsWith('level:')) {
       useLevelStore.getState().handleWsEvent(event)
+      return
+    }
+
+    if (event.type.startsWith('badge:')) {
+      useBadgeStore.getState().handleWsEvent(event)
       return
     }
 
@@ -513,11 +733,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         : `conversation:${msg.conversation_id}`
       const serverId = (payload.server_id as string) || null
       if (!room.endsWith(':')) {
+        useTypingStore.getState().messageArrived(room, msg.author_id)
         set((state) => {
-          const nextMessages = {
-            ...state.messagesByRoom,
-            [room]: appendUnique(state.messagesByRoom[room] ?? [], [msg])
-          }
+          const nextMessages = openRooms.has(room)
+            ? {
+                ...state.messagesByRoom,
+                [room]: mergeMessages(state.messagesByRoom[room] ?? [], [msg])
+              }
+            : state.messagesByRoom
           const isActive = room === state.activeRoom
           const mine = msg.author_id === useAuthStore.getState().user?.id
           const nextUnread =
@@ -541,9 +764,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         // DM recebida ou menção a você num canal (inclusive @all/@here liberados
         // pelo backend no mention_everyone): notificação do Windows, aviso
         // na barra de tarefas e som — conforme Configurações → Notificações.
+        // Chega mesmo com a conversa fechada (canal pela sala do servidor, DM
+        // pela sala user:<eu>) e avisa sempre, menos para quem está lendo
+        // essa conversa com a janela em foco (messageAlert).
         // A mesma mensagem chega pela sala do canal e do servidor: avisa uma vez.
         const me = useAuthStore.getState().user
-        if (msg.conversation_id && room === get().activeRoom && document.hasFocus()) {
+        if (msg.conversation_id && room === get().activeRoom && windowFocused()) {
           markReadSoon(msg.conversation_id, msg.id)
         }
         if (me && !notifiedMessages.has(msg.id) && !isBlocked(msg.author_id)) {
@@ -558,15 +784,21 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             mentionNotification(
               msg,
               { id: me.id, username: me.username, status: me.status },
-              serverId
+              serverId,
+              serverId ? useServerStore.getState().nicknames?.[serverId] : undefined
             )
           if (notification) {
             // "Não perturbe" silencia o aviso, a barra de tarefas e o som.
             const prefs = prefsForStatus(notificationPrefs(), me.status)
-            notifyDesktop(notification, prefs)
-            const looking = room === get().activeRoom && document.hasFocus()
-            const sound = notificationSound(notification.kind, prefs)
-            if (!looking && sound) playSound(sound)
+            const alert = messageAlert(
+              notification,
+              { focused: windowFocused(), viewingRoom: room === get().activeRoom },
+              prefs
+            )
+            if (alert) {
+              deliverDesktop(alert.payload)
+              if (alert.sound) playSound(alert.sound)
+            }
           }
         }
 
@@ -594,6 +826,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             void get().fetchConversations()
           }
         }
+      }
+      return
+    }
+
+    if (event.type === 'message:update') {
+      const msg = payload.message as Message | undefined
+      if (msg?.id) {
+        const room = msg.channel_id
+          ? `channel:${msg.channel_id}`
+          : `conversation:${msg.conversation_id}`
+        if (!room.endsWith(':')) set((state) => withUpdatedMessage(state, room, msg))
       }
       return
     }
@@ -676,6 +919,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (event.type === 'channel:create') {
       const serverId = payload.server_id as string
       if (serverId) {
+        useChannelNameStore.getState().invalidate(serverId)
         useServerStore.getState().fetchChannels(serverId)
         get().fetchChannelsForServers([serverId])
       }
@@ -685,6 +929,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (event.type === 'channel:update') {
       const serverId = payload.server_id as string
       if (serverId) {
+        useChannelNameStore.getState().invalidate(serverId)
         useServerStore.getState().fetchChannels(serverId)
         get().fetchChannelsForServers([serverId])
       }
@@ -718,6 +963,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (event.type === 'channel:delete') {
       const serverId = payload.server_id as string
       const channelId = payload.channel_id as string
+      if (serverId) useChannelNameStore.getState().invalidate(serverId)
       if (serverId && channelId) {
         const room = `channel:${channelId}`
         set((state) => {
@@ -734,6 +980,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             activeRoom: state.activeRoom === room ? null : state.activeRoom
           }
         })
+        openRooms.delete(room)
         client.unsubscribe(room)
         useServerStore.getState().fetchChannels(serverId)
         get().fetchChannelsForServers([serverId])
@@ -744,14 +991,35 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return
     }
 
+    // Cargos, permissões e saída do servidor (sair, expulsão, banimento).
+    if (
+      handleServerRoleEvent(event, {
+        onServerRemoved: (serverId, reason) => {
+          const name = useServerStore.getState().servers.find((s) => s.id === serverId)?.name
+          get().handleServerDeleted(serverId)
+          useServerStore.getState().removeLocalServer(serverId)
+          const message = removedMessage(reason, name)
+          if (message) showToast.error(message)
+        },
+        onPermissionsChanged: (serverId) => {
+          void reconcileAfterPermissionChange(serverId)
+        }
+      })
+    ) {
+      return
+    }
+
     if (event.type === 'server:update') {
       const serverId = payload.server_id as string
       const srv = payload.server as Server | undefined
+      // O evento já traz o servidor inteiro: aplica por cima, sem recarregar.
       if (srv) {
         useServerStore.getState().updateLocalServer(srv)
-      }
-      if (serverId && useServerStore.getState().currentServer?.id === serverId) {
-        void useServerStore.getState().selectServer(serverId)
+      } else if (serverId && useServerStore.getState().currentServer?.id === serverId) {
+        useServerStore
+          .getState()
+          .selectServer(serverId)
+          .catch(() => {})
       }
       return
     }
@@ -796,6 +1064,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       if (serverId && userId) {
         useServerStore.getState().removeMember(serverId, userId)
       }
+      return
+    }
+
+    // Jogo em andamento de alguém (null = parou).
+    if (event.type === 'presence:activity') {
+      usePresenceActivityStore
+        .getState()
+        .setActivity(payload.user_id as string, sanitizeActivity(payload.activity))
       return
     }
 
@@ -913,13 +1189,19 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         activeRoom: state.activeRoom && roomSet.has(state.activeRoom) ? null : state.activeRoom
       }
     })
-    rooms.forEach((room) => client.unsubscribe(room))
+    rooms.forEach((room) => {
+      openRooms.delete(room)
+      client.unsubscribe(room)
+    })
     if (useServerStore.getState().currentServer?.id === serverId) {
       router.navigate('/friends')
     }
   },
 
-  reset: () =>
+  reset: () => {
+    useTypingStore.getState().reset()
+    usePresenceActivityStore.getState().reset()
+    openRooms.clear()
     set({
       messagesByRoom: {},
       hasMoreByRoom: {},
@@ -933,6 +1215,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       conversations: [],
       conversationsLoading: false
     })
+  }
 }))
 
 /**

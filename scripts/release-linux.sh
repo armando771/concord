@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
-# Publica AppImage x64 assinado. Passe a mesma versão do release Windows.
-# Uso: scripts/release-linux.sh [versão] (padrão: versão do package.json)
+# Publica a Salinha para Linux x64, assinada. Passe a mesma versão do release
+# Windows. Uso: scripts/release-linux.sh [versão] (padrão: versão do package.json)
+#
+#   Salinha-<v>-x64.AppImage (+ .sig) + latest-linux.yml
+#       AppImage montado: atualiza pelo electron-updater.
+#   Salinha-<v>-x64.tar.gz (+ .sig) + latest-linux-tar.yml
+#       Instalação por usuário sem FUSE (site/install.sh) e AppImage extraído:
+#       atualiza pelo updater próprio (frontend/src/main/linuxUpdater.ts).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -35,14 +41,29 @@ node -e '
   fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n")
 ' "$VERSION"
 
-rm -f dist/latest-linux.yml "dist/Salinha-$VERSION-x64.AppImage"
+rm -f dist/latest-linux.yml dist/latest-linux-tar.yml "dist/Salinha-$VERSION-x64.AppImage" \
+  "dist/Salinha-$VERSION-x64.tar.gz"
 CONCORD_UPDATE_PUBKEY="$PUBKEY" "$ROOT/scripts/build-linux.sh" "$SERVER_URL"
 IMAGE="dist/Salinha-$VERSION-x64.AppImage"
+TARBALL="dist/Salinha-$VERSION-x64.tar.gz"
 test -f "$IMAGE"
+test -f "$TARBALL"
 test -f dist/latest-linux.yml
-openssl pkeyutl -sign -inkey "$KEY" -rawin -in "$IMAGE" | base64 -w0 > "$IMAGE.sig"
+for artifact in "$IMAGE" "$TARBALL"; do
+  openssl pkeyutl -sign -inkey "$KEY" -rawin -in "$artifact" | base64 -w0 > "$artifact.sig"
+done
+# Manifesto do .tar.gz: formato fixo `chave: valor` (parseLinuxManifest no app,
+# awk no site/install.sh). sha512 em hex; a assinatura fica no .sig.
+{
+  echo "version: $VERSION"
+  echo "path: $(basename "$TARBALL")"
+  echo "sha512: $(sha512sum "$TARBALL" | cut -d' ' -f1)"
+  echo "size: $(stat -c %s "$TARBALL")"
+  echo "releaseDate: '$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'"
+} > dist/latest-linux-tar.yml
 mkdir -p "$UPDATES_DIR"
-cp "$IMAGE" "$IMAGE.sig" "$UPDATES_DIR/"
-# O manifesto só fica visível quando o artefato e a assinatura estão prontos.
+cp "$IMAGE" "$IMAGE.sig" "$TARBALL" "$TARBALL.sig" "$UPDATES_DIR/"
+# Os manifestos só ficam visíveis quando os artefatos e as assinaturas estão prontos.
+cp dist/latest-linux-tar.yml "$UPDATES_DIR/latest-linux-tar.yml"
 cp dist/latest-linux.yml "$UPDATES_DIR/latest-linux.yml"
-echo "Publicado: Salinha $VERSION (Linux x64) em $SERVER_URL/updates/"
+echo "Publicado: Salinha $VERSION (Linux x64: AppImage e .tar.gz) em $SERVER_URL/updates/"

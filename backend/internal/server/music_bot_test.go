@@ -33,7 +33,7 @@ func TestMusicBotProvisioningDB(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	svc := ServerService(ServerRepository(db), nil)
+	svc := ServerService(ServerRepository(db), nil, nil)
 	s := &Server{Name: "Galera", OwnerID: owner}
 	if err := svc.Create(ctx, s); err != nil {
 		t.Fatal(err)

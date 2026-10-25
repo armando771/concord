@@ -29,8 +29,8 @@ export function Toggle({
   return (
     <div className="flex items-center justify-between gap-4">
       <span className="min-w-0">
-        <span className="block text-sm font-semibold text-white">{title}</span>
-        <span className="block text-xs leading-snug text-gray-400">{description}</span>
+        <span className="block text-ds-md font-medium text-white">{title}</span>
+        <span className="block text-ds-sm text-gray-400">{description}</span>
       </span>
       <Switch checked={checked} onChange={onChange} label={title} />
     </div>
@@ -99,7 +99,7 @@ function BrowserPermission(): React.JSX.Element {
         <button
           type="button"
           onClick={() => void requestBrowserPermission().then(setPermission)}
-          className="shrink-0 cursor-pointer rounded-md bg-[#23a55a] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#1f9450]"
+          className="shrink-0 cursor-pointer rounded-md bg-[#23a55a] px-3 py-1.5 text-ds-sm font-medium text-white transition-colors hover:bg-[#1f9450]"
         >
           Permitir notificações
         </button>
@@ -139,16 +139,14 @@ export function BirthdaySettings(): React.JSX.Element {
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-      <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-400">
-        Aniversário
-      </h3>
+      <h3 className="mb-3 text-ds-sm font-medium text-gray-400">Aniversário</h3>
       <div className="flex flex-col gap-3">
         <BirthdayFields
           value={birthday}
           onChange={(value) => void save({ ...birthday, ...value })}
         />
         {error && <p className="text-xs text-amber-300">{error}</p>}
-        <p className="text-[11px] text-gray-500">
+        <p className="text-ds-xs text-gray-500">
           Sua idade aparece só para você, no recado de feliz aniversário.
         </p>
         <Toggle
@@ -157,7 +155,7 @@ export function BirthdaySettings(): React.JSX.Element {
           checked={birthday.announce}
           onChange={() => void save({ ...birthday, announce: !birthday.announce })}
         />
-        {saving && <p className="text-[11px] text-gray-500">Salvando…</p>}
+        {saving && <p className="text-ds-xs text-gray-500">Salvando…</p>}
       </div>
     </div>
   )
@@ -229,7 +227,7 @@ export function DesktopSettings(): React.JSX.Element {
       {/* Overlay de jogo: só Windows (preload: process.platform, sandbox desligado). */}
       {hasOverlay && (
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-          <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-400">Overlay</h3>
+          <h3 className="mb-3 text-ds-sm font-medium text-gray-400">Overlay</h3>
           <Toggle
             title="Overlay nos jogos"
             description="Mostra quem está na chamada e quem está falando por cima de jogos em tela cheia (modo janela)."
@@ -239,8 +237,8 @@ export function DesktopSettings(): React.JSX.Element {
           <OverlayShortcutField disabled={!overlayEnabled} />
           <div className="mt-4 flex items-center justify-between gap-3">
             <span>
-              <span className="block text-sm font-semibold text-white">Posição e tamanho</span>
-              <span className="block text-xs text-gray-400">
+              <span className="block text-ds-md font-medium text-white">Posição e tamanho</span>
+              <span className="block text-ds-sm text-gray-400">
                 Volta para a esquerda, no meio da tela, no tamanho normal.
               </span>
             </span>
@@ -248,13 +246,13 @@ export function DesktopSettings(): React.JSX.Element {
               type="button"
               onClick={resetOverlayLayout}
               disabled={!overlayMoved}
-              className="shrink-0 cursor-pointer rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/15 disabled:cursor-default disabled:opacity-50"
+              className="shrink-0 cursor-pointer rounded-lg bg-white/10 px-3 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-white/15 disabled:cursor-default disabled:opacity-50"
             >
               Restaurar posição
             </button>
           </div>
           <label className="mt-4 flex flex-col gap-2">
-            <span className="flex items-center justify-between text-sm font-semibold text-white">
+            <span className="flex items-center justify-between text-ds-md font-medium text-white">
               Opacidade do overlay (quem fala fica mais visível)
               <span className="text-xs font-medium text-gray-400">{overlayOpacity}%</span>
             </span>
@@ -277,9 +275,7 @@ export function DesktopSettings(): React.JSX.Element {
         </div>
       )}
       {!hasAutostart && !hasOverlay && (
-        <p className="text-sm text-gray-400">
-          Nada para configurar aqui nesta plataforma.
-        </p>
+        <p className="text-ds-md text-gray-400">Nada para configurar aqui nesta plataforma.</p>
       )}
       {/* Prévia da animação de nível: só no build de dev (some do build final). */}
       {import.meta.env.DEV && <LevelUpPreview />}

@@ -1,4 +1,5 @@
 import { MAX_LINKS, linkError, normalizeLink } from './profileLinks'
+import { NAME_CHARS_MESSAGE, nameCharsError } from './nameChars'
 
 // Rascunho do editor de perfil (Configurações → Perfis). Os limites são os do
 // backend (internal/user/profile.go) e do Discord.
@@ -66,6 +67,7 @@ export function profileErrors(draft: ProfileFields): ProfileErrors {
   if (charCount(name) < 1) errors.display_name = 'Escolha um nome de exibição.'
   else if (charCount(name) > MAX_DISPLAY_NAME)
     errors.display_name = `Até ${MAX_DISPLAY_NAME} caracteres.`
+  else if (nameCharsError(name)) errors.display_name = NAME_CHARS_MESSAGE
   if (charCount(draft.pronouns.trim()) > MAX_PRONOUNS)
     errors.pronouns = `Até ${MAX_PRONOUNS} caracteres.`
   if (charCount(draft.bio.trim()) > MAX_BIO) errors.bio = `Até ${MAX_BIO} caracteres.`

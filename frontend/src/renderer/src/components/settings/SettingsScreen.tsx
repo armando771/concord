@@ -15,6 +15,7 @@ import { PencilIcon, SearchIcon, XIcon } from '../icons'
 import MyAccountSection from './sections/MyAccountSection'
 import ProfilesSection from './sections/ProfilesSection'
 import { PrivacySection } from './sections/PrivacySection'
+import { KeybindsSection } from './sections/KeybindsSection'
 import { AppSection, NotificationsSection, VoiceSection } from './sections/SimpleSections'
 
 const NAV_BG = '#0b0c10'
@@ -30,6 +31,7 @@ const SECTION_VIEW: Record<SettingsSectionId, () => React.JSX.Element | null> = 
   profiles: ProfilesSection,
   privacy: PrivacySection,
   voice: VoiceSection,
+  keybinds: KeybindsSection,
   notifications: NotificationsSection,
   app: AppSection
 }
@@ -100,7 +102,7 @@ function SettingsContent(): React.JSX.Element {
             animate="always"
           />
           <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-white">{name}</span>
+            <span className="block truncate text-ds-md font-medium text-white">{name}</span>
             <span className="flex items-center gap-1 text-xs text-gray-400">
               Editar perfis <PencilIcon className="h-3 w-3" />
             </span>
@@ -114,7 +116,7 @@ function SettingsContent(): React.JSX.Element {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar"
             aria-label="Buscar nas configurações"
-            className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 focus:outline-none"
+            className="min-w-0 flex-1 bg-transparent text-ds-md text-white placeholder:text-gray-500 focus:outline-none"
           />
         </label>
 
@@ -124,16 +126,14 @@ function SettingsContent(): React.JSX.Element {
             if (items.length === 0) return null
             return (
               <div key={group.id} className="mb-4">
-                <p className="mb-1 px-2 text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                  {group.label}
-                </p>
+                <p className="mb-1 px-2 text-ds-sm font-medium text-gray-500">{group.label}</p>
                 {items.map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => goTo(item.id)}
                     aria-current={item.id === current.id ? 'page' : undefined}
-                    className={`mb-0.5 block w-full cursor-pointer rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors ${
+                    className={`mb-0.5 block w-full cursor-pointer rounded-md px-2 py-1.5 text-left text-ds-md font-medium transition-colors ${
                       item.id === current.id
                         ? 'bg-white/10 text-white'
                         : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
@@ -146,7 +146,7 @@ function SettingsContent(): React.JSX.Element {
             )
           })}
           {visible.length === 0 && (
-            <p className="px-2 text-sm text-gray-500">Nada encontrado para “{query}”.</p>
+            <p className="px-2 text-ds-md text-gray-500">Nada encontrado para “{query}”.</p>
           )}
 
           <div className="mt-2 border-t border-white/10 pt-2">
@@ -154,7 +154,7 @@ function SettingsContent(): React.JSX.Element {
               type="button"
               onClick={() => void logout()}
               disabled={loggingOut}
-              className="block w-full cursor-pointer rounded-md px-2 py-1.5 text-left text-sm font-medium text-[#f23f43] transition-colors hover:bg-[#f23f43]/10 disabled:opacity-50"
+              className="block w-full cursor-pointer rounded-md px-2 py-1.5 text-left text-ds-md font-medium text-[#f23f43] transition-colors hover:bg-[#f23f43]/10 disabled:opacity-50"
             >
               {loggingOut ? 'Saindo...' : 'Sair'}
             </button>
@@ -165,7 +165,7 @@ function SettingsContent(): React.JSX.Element {
       {/* Conteúdo */}
       <main className="relative min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[740px] px-10 pb-28 pt-14">
-          <h1 className="mb-6 text-xl font-bold text-white">{current.label}</h1>
+          <h1 className="mb-6 text-ds-lg font-semibold text-white">{current.label}</h1>
           <View />
         </div>
         <div

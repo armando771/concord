@@ -40,3 +40,18 @@ func AuthMiddleware(service *Service) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// OptionalAuthMiddleware: para rotas públicas que mostram um pouco mais a quem
+// está logado (prévia do convite). Token de acesso válido põe o userID no
+// contexto; sem token, ou com token inválido, segue anônimo (nunca recusa).
+func OptionalAuthMiddleware(service *Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		parts := strings.SplitN(c.GetHeader("Authorization"), " ", 2)
+		if len(parts) == 2 && parts[0] == "Bearer" {
+			if claims, err := service.ValidateToken(parts[1]); err == nil && claims.Type == "access" {
+				c.Set("userID", claims.UserID)
+			}
+		}
+		c.Next()
+	}
+}

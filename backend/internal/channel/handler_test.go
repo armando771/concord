@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"gin-quickstart/backend/internal/permission"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -35,7 +37,7 @@ func newFakeStore() *fakeStore {
 	}
 }
 
-func (f *fakeStore) Create(context.Context, *Channel) error { return nil }
+func (f *fakeStore) Create(context.Context, *Channel, []permission.Overwrite) error { return nil }
 func (f *fakeStore) FindByID(context.Context, string) (*Channel, error) {
 	return nil, ErrChannelNotFound
 }
@@ -45,12 +47,21 @@ func (f *fakeStore) ListByServerID(context.Context, string) ([]Channel, error) {
 	return []Channel{}, nil
 }
 
-func (f *fakeStore) IsMember(_ context.Context, serverID, userID string) (bool, error) {
-	return serverID == f.serverID && f.members[userID], nil
-}
+func (f *fakeStore) SetOverwrite(context.Context, string, permission.Overwrite) error { return nil }
+func (f *fakeStore) DeleteOverwrite(context.Context, string, string, string) error    { return nil }
 
-func (f *fakeStore) IsAdminOrOwner(_ context.Context, serverID, userID string) (bool, error) {
-	return serverID == f.serverID && (userID == f.ownerID || f.admins[userID]), nil
+// perms: dono, "mod" com o cargo Moderador e "ana" só com @everyone.
+func (f *fakeStore) perms() *permission.Service {
+	snap := permission.NewSnapshot(f.serverID, f.ownerID, permission.DefaultEveryone).
+		WithRole("moderador", 1, permission.DefaultModerator)
+	for id := range f.members {
+		if f.admins[id] {
+			snap.WithMember(id, "moderador")
+		} else {
+			snap.WithMember(id)
+		}
+	}
+	return permission.NewService(&permission.StaticStore{Snapshots: map[string]*permission.Snapshot{f.serverID: snap}})
 }
 
 func (f *fakeStore) Reorder(_ context.Context, serverID, chType string, ids []string) error {
@@ -74,6 +85,7 @@ func (p *fakePublisher) PublishChannelCreate(CreateEvent)     {}
 func (p *fakePublisher) PublishChannelUpdate(CreateEvent)     {}
 func (p *fakePublisher) PublishChannelDelete(DeleteEvent)     {}
 func (p *fakePublisher) PublishChannelReorder(e ReorderEvent) { p.reorders = append(p.reorders, e) }
+func (p *fakePublisher) PublishPermissionsChanged(string)     {}
 
 func reorderRequest(t *testing.T, store *fakeStore, pub *fakePublisher, userID, serverID, body string) *httptest.ResponseRecorder {
 	t.Helper()
@@ -85,7 +97,7 @@ func reorderRequest(t *testing.T, store *fakeStore, pub *fakePublisher, userID, 
 		}
 		c.Next()
 	}
-	ChannelRoutes(router.Group("/api"), ChannelHandler(newService(store, pub)), auth)
+	ChannelRoutes(router.Group("/api"), ChannelHandler(newService(store, pub), store.perms()), auth)
 
 	req := httptest.NewRequest(http.MethodPut, "/api/servers/"+serverID+"/channels/order", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

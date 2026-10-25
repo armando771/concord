@@ -15,11 +15,15 @@ var (
 	ErrInvalidUsername     = errors.New("username must be 3-32 letters, numbers or _")
 	ErrDisplayNameRequired = errors.New("display name is required")
 	ErrDisplayNameTooLong  = errors.New("display name is too long")
+	ErrDisplayNameInvalid  = errors.New("o nome de exibição não pode ter caracteres invisíveis ou de controle")
 	ErrInvalidEmail        = errors.New("invalid email")
 	ErrPasswordTooShort    = errors.New("password must have at least 8 characters")
 	// O bcrypt só aceita até 72 bytes (acima disso dava 500).
 	ErrPasswordTooLong = errors.New("Senha muito longa (máx. 72 bytes)")
 )
+
+// maxRegistrationDisplayName: o tamanho da coluna (o perfil depois limita a 32).
+const maxRegistrationDisplayName = 64
 
 // maxPasswordBytes é o limite do bcrypt.
 const maxPasswordBytes = 72
@@ -62,19 +66,26 @@ func ValidateRegistration(r Registration) error {
 	if !usernamePattern.MatchString(r.Username) {
 		return ErrInvalidUsername
 	}
-	if r.DisplayName == "" {
+	switch _, err := NormalizeName(r.DisplayName, maxRegistrationDisplayName); {
+	case errors.Is(err, ErrNameEmpty):
 		return ErrDisplayNameRequired
-	}
-	if utf8.RuneCountInString(r.DisplayName) > 64 {
+	case errors.Is(err, ErrNameTooLong):
 		return ErrDisplayNameTooLong
+	case err != nil:
+		return ErrDisplayNameInvalid
 	}
 	if utf8.RuneCountInString(r.Email) > 255 || !emailPattern.MatchString(r.Email) {
 		return ErrInvalidEmail
 	}
-	if utf8.RuneCountInString(r.Password) < 8 {
+	return ValidatePassword(r.Password)
+}
+
+// ValidatePassword aplica as regras de senha do cadastro (também na redefinição).
+func ValidatePassword(password string) error {
+	if utf8.RuneCountInString(password) < 8 {
 		return ErrPasswordTooShort
 	}
-	if PasswordTooLong(r.Password) {
+	if PasswordTooLong(password) {
 		return ErrPasswordTooLong
 	}
 	return nil

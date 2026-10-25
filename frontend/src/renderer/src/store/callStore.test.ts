@@ -89,6 +89,7 @@ vi.mock('../lib/livekit', () => ({
     })
     unpublish = vi.fn(async () => {})
     replaceMic = vi.fn(async () => {})
+    ensureMic = vi.fn(async () => {})
     disconnect = vi.fn()
     constructor(handlers: unknown) {
       this.handlers = handlers
@@ -117,7 +118,7 @@ vi.mock('./chatStore', () => ({ useChatStore: { getState: () => chat } }))
 vi.mock('./authStore', () => ({
   useAuthStore: { getState: () => ({ user: { id: 'eu' } }) }
 }))
-vi.mock('./toastStore', () => ({ showToast: { error: vi.fn(), info: vi.fn() } }))
+vi.mock('./toastStore', () => ({ showToast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
 const sounds = vi.hoisted(() => ({ playSound: vi.fn(), setSoundOutput: vi.fn() }))
 vi.mock('../lib/sounds', () => sounds)
 
@@ -137,6 +138,8 @@ vi.mock('../lib/localSpeaking', () => ({
 }))
 
 import { useCallStore } from './callStore'
+import { ApiError } from '../api/client'
+import { showToast } from './toastStore'
 
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0))
 
@@ -380,10 +383,47 @@ describe('callStore — mídia via LiveKit', () => {
       payload: { call_id: 'call-1', user_id: 'ana', muted: true, deafened: true }
     })
 
-    expect(useCallStore.getState().voiceStates.ana).toEqual({ muted: true, deafened: true })
+    expect(useCallStore.getState().voiceStates.ana).toEqual({
+      muted: true,
+      deafened: true,
+      serverMuted: false,
+      serverDeafened: false
+    })
     expect(useCallStore.getState().serverCalls['canal-1'].participants[0]).toMatchObject({
       muted: true,
       deafened: true
+    })
+  })
+
+  it('mostra o que um moderador impôs (silenciar/ensurdecer no servidor)', async () => {
+    await joinChannel()
+    useCallStore.getState().setServerCalls({
+      'canal-1': {
+        call: { id: 'call-1' } as never,
+        participants: [{ call_id: 'call-1', user_id: 'ana', role: 'member', joined_at: '' }]
+      }
+    })
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:voice',
+      payload: {
+        call_id: 'call-1',
+        user_id: 'ana',
+        muted: false,
+        deafened: false,
+        server_muted: true,
+        server_deafened: false
+      }
+    })
+
+    expect(useCallStore.getState().voiceStates.ana).toMatchObject({
+      muted: false,
+      serverMuted: true,
+      serverDeafened: false
+    })
+    expect(useCallStore.getState().serverCalls['canal-1'].participants[0]).toMatchObject({
+      server_muted: true,
+      server_deafened: false
     })
   })
 
@@ -564,10 +604,12 @@ describe('callStore — reentrada após queda do WS', () => {
   it('volta a entrar e recarrega a lista quando o backend me tira da chamada', async () => {
     await joinChannel()
     api.startCall.mockClear()
-    api.getCallState.mockResolvedValueOnce({
+    const state = {
       call: null,
       participants: [participant('eu'), participant('ana'), participant('bia')]
-    } as never)
+    }
+    // Primeiro confere que a chamada existe, depois lê a lista.
+    api.getCallState.mockResolvedValueOnce(state as never).mockResolvedValueOnce(state as never)
 
     useCallStore.getState().handleWsEvent({
       type: 'call:left',
@@ -596,6 +638,101 @@ describe('callStore — reentrada após queda do WS', () => {
     expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'call-1', active: true })
   })
 
+  it('reconectar o WS (deploy) não toca som nem reconecta a mídia', async () => {
+    await joinChannel()
+    sounds.playSound.mockClear()
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(sounds.playSound).not.toHaveBeenCalled()
+    expect(media.instances).toHaveLength(1)
+    expect(media.instances[0].disconnect).not.toHaveBeenCalled()
+    expect(useCallStore.getState().status).toBe('active')
+  })
+
+  it('ao reconectar, reenvia o mudo e que não estou transmitindo (o servidor pode ter ficado velho)', async () => {
+    await joinChannel()
+    useCallStore.getState().toggleMute()
+    chat.sendEvent.mockClear()
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:voice', {
+      call_id: 'call-1',
+      muted: true,
+      deafened: false
+    })
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'call-1', active: false })
+  })
+
+  it('ao reconectar, o mudo dos outros vem do servidor', async () => {
+    await joinChannel()
+    useCallStore.getState().handleWsEvent({
+      type: 'call:voice',
+      payload: { call_id: 'call-1', user_id: 'ana', muted: false, deafened: false }
+    })
+    // Na queda, a ana mutou e o evento se perdeu.
+    const state = {
+      call: null,
+      participants: [participant('eu'), { ...participant('ana'), muted: true }]
+    }
+    api.getCallState.mockResolvedValueOnce(state as never).mockResolvedValueOnce(state as never)
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(useCallStore.getState().voiceStates.ana).toMatchObject({ muted: true, deafened: false })
+  })
+
+  it('canal: 404 ao reconectar não cria chamada nova enquanto há gente na sala de mídia', async () => {
+    await joinChannel()
+    onRemoteMedia({ ...empty, mediaPeers: { ana: 'Ana' } })
+    api.startCall.mockClear()
+    vi.useFakeTimers()
+    try {
+      api.getCallState.mockRejectedValue(
+        Object.assign(new ApiError(404, 'call not found'), { status: 404 }) as never
+      )
+
+      useCallStore.getState().handleWsReconnect()
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(api.startCall).not.toHaveBeenCalled()
+      expect(media.instances[0].disconnect).not.toHaveBeenCalled()
+      expect(useCallStore.getState().callId).toBe('call-1')
+    } finally {
+      api.getCallState.mockReset()
+      api.getCallState.mockImplementation(async () => ({ call: null, participants: [] }))
+      vi.useRealTimers()
+    }
+  })
+
+  it('canal: um 404 passageiro não troca de sala', async () => {
+    await joinChannel()
+    api.startCall.mockClear()
+    vi.useFakeTimers()
+    try {
+      api.getCallState.mockRejectedValueOnce(
+        Object.assign(new ApiError(404, 'call not found'), { status: 404 }) as never
+      )
+
+      useCallStore.getState().handleWsReconnect()
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      // Passado o 404, segue como sempre: reentra na mesma chamada, mídia intacta.
+      expect(api.startCall).toHaveBeenCalledTimes(1)
+      expect(media.instances[0].disconnect).not.toHaveBeenCalled()
+      expect(useCallStore.getState().callId).toBe('call-1')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('não faz nada ao reconectar o WS fora de chamada', async () => {
     useCallStore.getState().handleWsReconnect()
     await flush()
@@ -614,6 +751,118 @@ describe('callStore — reentrada após queda do WS', () => {
       mediaPeers: { caio: 'Caio' }
     })
     expect(useCallStore.getState().mediaPeers).toEqual({ caio: 'Caio' })
+  })
+})
+
+describe('callStore — DM após queda do WS', () => {
+  const ana = { id: 'ana', username: 'ana', display_name: 'Ana' }
+
+  async function inDmWithAna(): Promise<void> {
+    api.startCall.mockResolvedValue({ id: 'dm-1' })
+    await useCallStore.getState().startDMCall('conversa-1', ana)
+    useCallStore.getState().handleWsEvent({
+      type: 'call:accept',
+      payload: { call_id: 'dm-1', user: ana }
+    })
+    await flush()
+    await flush()
+  }
+
+  it('reenvia mudo e tela e lê o estado, sem reconectar a mídia nem tirar a outra pessoa', async () => {
+    await inDmWithAna()
+    expect(useCallStore.getState().status).toBe('active')
+    useCallStore.getState().toggleMute()
+    chat.sendEvent.mockClear()
+    api.getCallState.mockClear()
+    api.getCallState.mockResolvedValueOnce({
+      call: null,
+      participants: [{ user_id: 'eu' }, { user_id: 'ana', username: 'ana', deafened: true }]
+    } as never)
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(api.getCallState).toHaveBeenCalledWith('dm-1')
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:voice', {
+      call_id: 'dm-1',
+      muted: true,
+      deafened: false
+    })
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'dm-1', active: false })
+    expect(useCallStore.getState().voiceStates.ana).toMatchObject({ muted: false, deafened: true })
+    expect(useCallStore.getState().participants.map((p) => p.id)).toEqual(['ana'])
+    expect(media.instances).toHaveLength(1)
+    expect(api.startCall).toHaveBeenCalledTimes(1)
+  })
+
+  const notFound = (): Error => Object.assign(new ApiError(404, 'call not found'), { status: 404 })
+
+  it('DM que acabou durante a queda fecha a chamada (404 confirmado e a outra pessoa fora da mídia)', async () => {
+    await inDmWithAna()
+    vi.useFakeTimers()
+    try {
+      api.getCallState.mockRejectedValue(notFound() as never)
+
+      useCallStore.getState().handleWsReconnect()
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(useCallStore.getState().status).toBe('idle')
+      expect(useCallStore.getState().callId).toBeNull()
+    } finally {
+      api.getCallState.mockReset()
+      api.getCallState.mockImplementation(async () => ({ call: null, participants: [] }))
+      vi.useRealTimers()
+    }
+  })
+
+  it('um 404 passageiro (servidor acabando de subir) não derruba a DM', async () => {
+    await inDmWithAna()
+    vi.useFakeTimers()
+    try {
+      api.getCallState.mockRejectedValueOnce(notFound() as never)
+      chat.sendEvent.mockClear()
+
+      useCallStore.getState().handleWsReconnect()
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(useCallStore.getState().status).toBe('active')
+      expect(media.instances[0].disconnect).not.toHaveBeenCalled()
+      // E reenvia o próprio estado como numa reconexão normal.
+      expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'dm-1', active: false })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('404 repetido mas a outra pessoa ainda na sala de mídia: a DM continua', async () => {
+    await inDmWithAna()
+    onRemoteMedia({ ...empty, mediaPeers: { ana: 'Ana' } })
+    vi.useFakeTimers()
+    try {
+      api.getCallState.mockRejectedValue(notFound() as never)
+
+      useCallStore.getState().handleWsReconnect()
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(useCallStore.getState().status).toBe('active')
+      expect(media.instances[0].disconnect).not.toHaveBeenCalled()
+    } finally {
+      api.getCallState.mockReset()
+      api.getCallState.mockImplementation(async () => ({ call: null, participants: [] }))
+      vi.useRealTimers()
+    }
+  })
+
+  it('erro passageiro ao ler o estado mantém a DM', async () => {
+    await inDmWithAna()
+    api.getCallState.mockRejectedValueOnce(new Error('rede') as never)
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(useCallStore.getState().status).toBe('active')
   })
 })
 
@@ -1104,5 +1353,196 @@ describe('callStore — detecção local da própria fala', () => {
     await flush()
     expect(useCallStore.getState().muted).toBe(true)
     expect(useCallStore.getState().speakingIds).toEqual([])
+  })
+})
+
+// ─── Permissões de voz (cargos) ─────────────────────────────────────────────
+
+const mediaHandlers = (): {
+  onPublishPermissions: (allowed: { microphone: boolean; stream: boolean }) => void
+} => media.instances[0].handlers as never
+
+describe('callStore — permissões de voz', () => {
+  it('começa podendo falar e transmitir', async () => {
+    await joinChannel()
+    expect(useCallStore.getState()).toMatchObject({ canSpeak: true, canStream: true })
+  })
+
+  it('perder a permissão de falar muda para mudo e avisa a chamada', async () => {
+    await joinChannel()
+    chat.sendEvent.mockClear()
+
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+
+    expect(useCallStore.getState()).toMatchObject({ canSpeak: false, muted: true, canStream: true })
+    expect(chat.sendEvent).toHaveBeenLastCalledWith('call:voice', {
+      call_id: 'call-1',
+      muted: true,
+      deafened: false
+    })
+  })
+
+  it('sem permissão de falar não dá para desmutar', async () => {
+    await joinChannel()
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+    vi.mocked(showToast.error).mockClear()
+
+    useCallStore.getState().toggleMute()
+
+    expect(useCallStore.getState().muted).toBe(true)
+    expect(showToast.error).toHaveBeenCalledWith(expect.stringMatching(/permissão para falar/))
+  })
+
+  it('silenciado por moderador explica o motivo certo', async () => {
+    await joinChannel()
+    useCallStore.getState().handleWsEvent({
+      type: 'call:voice',
+      payload: {
+        call_id: 'call-1',
+        user_id: 'eu',
+        muted: true,
+        deafened: false,
+        server_muted: true,
+        server_deafened: false
+      }
+    })
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+    vi.mocked(showToast.error).mockClear()
+
+    useCallStore.getState().toggleMute()
+
+    expect(showToast.error).toHaveBeenCalledWith(expect.stringMatching(/moderador/))
+  })
+
+  it('ganhar a permissão publica o microfone, mas não desmuta sozinho', async () => {
+    await joinChannel()
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+
+    mediaHandlers().onPublishPermissions({ microphone: true, stream: true })
+
+    expect(useCallStore.getState()).toMatchObject({ canSpeak: true, muted: true })
+    expect(media.instances[0].ensureMic).toHaveBeenCalledWith(true)
+    useCallStore.getState().toggleMute()
+    expect(useCallStore.getState().muted).toBe(false)
+  })
+
+  it('sem permissão de transmitir, tela e câmera nem abrem', async () => {
+    await joinChannel()
+    mediaHandlers().onPublishPermissions({ microphone: true, stream: false })
+    vi.mocked(showToast.error).mockClear()
+
+    await useCallStore.getState().startScreenShare()
+    await useCallStore.getState().toggleCamera()
+
+    expect(rtc.getDisplayStream).not.toHaveBeenCalled()
+    expect(rtc.getCameraStream).not.toHaveBeenCalled()
+    expect(showToast.error).toHaveBeenCalledTimes(2)
+    expect(showToast.error).toHaveBeenCalledWith(expect.stringMatching(/transmitir/))
+  })
+
+  it('desconectado por um moderador: avisa e encerra a chamada', async () => {
+    await joinChannel()
+    const handlers = media.instances[0].handlers as { onRemovedByModerator: () => void }
+
+    handlers.onRemovedByModerator()
+
+    expect(showToast.info).toHaveBeenCalledWith(expect.stringMatching(/moderador desconectou/))
+    expect(useCallStore.getState().status).toBe('idle')
+  })
+
+  it('sair da chamada devolve as permissões ao padrão', async () => {
+    await joinChannel()
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: false })
+
+    useCallStore.getState().endCall()
+
+    expect(useCallStore.getState()).toMatchObject({ canSpeak: true, canStream: true })
+  })
+})
+
+describe('callStore — salas trancadas e pedidos de entrada', () => {
+  it('toggleLock envia evento call:lock com inversão do estado atual', async () => {
+    await joinChannel()
+    expect(useCallStore.getState().locked).toBe(false)
+
+    useCallStore.getState().toggleLock()
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:lock', {
+      call_id: 'call-1',
+      locked: true
+    })
+  })
+
+  it('evento call:lock atualiza o estado local e serverCalls', () => {
+    useCallStore.getState().setServerCalls({
+      'canal-1': {
+        call: { id: 'call-1', type: 'channel', channel_id: 'canal-1', initiator_id: 'ana', status: 'active', started_at: '', locked: false },
+        participants: []
+      }
+    })
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:lock',
+      payload: {
+        call_id: 'call-1',
+        channel_id: 'canal-1',
+        locked: true,
+        by: { id: 'ana', username: 'ana', display_name: 'Ana' }
+      }
+    })
+
+    expect(useCallStore.getState().serverCalls['canal-1']?.call?.locked).toBe(true)
+  })
+
+  it('receber call:knock adiciona participante aos joinRequests', async () => {
+    await joinChannel()
+    const joao = { id: 'joao', username: 'joao', display_name: 'João' }
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:knock',
+      payload: {
+        call_id: 'call-1',
+        user: joao
+      }
+    })
+
+    expect(useCallStore.getState().joinRequests).toEqual([joao])
+
+    // call:knock_resolved remove o usuário de joinRequests
+    useCallStore.getState().handleWsEvent({
+      type: 'call:knock_resolved',
+      payload: {
+        call_id: 'call-1',
+        user_id: 'joao',
+        accepted: true,
+        reason: 'accepted'
+      }
+    })
+
+    expect(useCallStore.getState().joinRequests).toEqual([])
+  })
+
+  it('call:knock_accepted conecta automaticamente ao canal', async () => {
+    useCallStore.setState({
+      knock: { channelId: 'canal-trancado', callId: 'call-x', status: 'pending' }
+    })
+    api.startCall.mockResolvedValue({ id: 'call-x', server_id: 'srv-1', locked: true })
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:knock_accepted',
+      payload: {
+        call_id: 'call-x',
+        channel_id: 'canal-trancado',
+        server_id: 'srv-1',
+        reason: 'accepted',
+        by: { id: 'mod', username: 'mod', display_name: 'Mod' }
+      }
+    })
+
+    await flush()
+    await flush()
+
+    expect(useCallStore.getState().knock).toBeNull()
+    expect(useCallStore.getState().callId).toBe('call-x')
+    expect(useCallStore.getState().admittedChannelId).toBe('canal-trancado')
   })
 })

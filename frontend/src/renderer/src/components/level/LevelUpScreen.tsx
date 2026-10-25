@@ -1,37 +1,11 @@
 import { useMemo } from 'react'
 import { useAuthStore } from '../../store/authStore'
 import { useLevelStore } from '../../store/levelStore'
-import { levelUpEffects } from '../../lib/levels'
+import { levelUpEffects, RAINBOW } from '../../lib/levels'
+import Crown from './Crown'
 
 /** Duração da celebração lendária em tela cheia. */
 const LEGENDARY_MS = 4000
-
-const RAINBOW = ['#f472b6', '#facc15', '#34d399', '#60a5fa', '#c084fc']
-
-function Crown(): React.JSX.Element {
-  return (
-    <svg width="96" height="72" viewBox="0 0 96 72" aria-hidden="true">
-      <defs>
-        <linearGradient id="level-crown-fill" x1="0" y1="0" x2="1" y2="0">
-          {RAINBOW.map((color, i) => (
-            <stop key={color} offset={i / (RAINBOW.length - 1)} stopColor={color} />
-          ))}
-        </linearGradient>
-      </defs>
-      <path
-        d="M6 62 L12 18 L32 40 L48 6 L64 40 L84 18 L90 62 Z"
-        fill="url(#level-crown-fill)"
-        stroke="#fff"
-        strokeWidth="3"
-        strokeLinejoin="round"
-      />
-      <rect x="6" y="60" width="84" height="9" rx="3" fill="#fff" />
-      {[12, 48, 84].map((x, i) => (
-        <circle key={x} cx={x} cy={i === 1 ? 6 : 18} r="5" fill="#fff" />
-      ))}
-    </svg>
-  )
-}
 
 /**
  * Efeitos na janela inteira quando VOCÊ sobe de nível alto: do 80 em diante
@@ -77,7 +51,7 @@ function LevelUpScreen(): React.JSX.Element | null {
           style={
             {
               '--level-fade-ms': '1800ms',
-              background: `radial-gradient(ellipse at center, transparent 50%, ${tier.color}40 78%, ${tier.color}aa 100%)`,
+              background: `radial-gradient(ellipse at center, transparent ${Math.round(62 - 14 * fx.glow)}%, ${tier.color}40 78%, ${tier.color}aa 100%)`,
               animation: 'level-vignette 1.8s ease-in-out both'
             } as React.CSSProperties
           }

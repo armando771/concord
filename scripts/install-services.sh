@@ -44,6 +44,8 @@ cat > "$UNITS/concord-server.service" <<UNIT
 [Unit]
 Description=Concord backend (API + proxy LiveKit)
 After=network-online.target
+# Sem limite de reinícios (com RestartSec=1 o systemd desistiria após 5 falhas em 10 s).
+StartLimitIntervalSec=0
 
 [Service]
 WorkingDirectory=$ROOT/backend
@@ -52,7 +54,11 @@ Environment=MUSIC_YTDLP=$YTDLP_BIN
 Environment=MUSIC_FFMPEG=$FFMPEG_BIN
 ExecStart=$ROOT/backend/concord-server
 Restart=always
-RestartSec=3
+RestartSec=1
+# SIGTERM desliga com calma (fecha o chat com 1012 e termina as requisições em
+# até 3 s); só depois disso o systemd mata à força.
+KillSignal=SIGTERM
+TimeoutStopSec=10
 
 [Install]
 WantedBy=default.target

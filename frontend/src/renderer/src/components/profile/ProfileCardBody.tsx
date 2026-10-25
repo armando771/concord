@@ -4,7 +4,9 @@ import { profileMediaSrc } from '../../lib/profileMedia'
 import { detectProvider, linkLabel, splitLinks } from '../../lib/profileLinks'
 import type { PresenceStatus } from '../../lib/presenceStatus'
 import Avatar from '../Avatar'
-import { PencilIcon, PlusIcon } from '../icons'
+import { GamepadIcon, PencilIcon, PlusIcon } from '../icons'
+import { Elapsed } from '../ActivityCard'
+import { useActivity } from '../../store/presenceActivityStore'
 import LinkIcon from './LinkIcon'
 
 /** Fundo do cartão: recorta o avatar e a bolinha de status. */
@@ -13,6 +15,8 @@ export const CARD_BG = '#111214'
 export interface CardProfile {
   id?: string
   display_name: string
+  /** Apelido no servidor aberto: aparece em destaque, com o nome de verdade embaixo. */
+  nickname?: string | null
   username?: string
   avatar_url?: string | null
   banner_url?: string | null
@@ -32,6 +36,8 @@ interface ProfileCardBodyProps {
   avatarFallbackClassName?: string
   /** Canto direito, na altura do avatar (selo de nível). */
   badge?: ReactNode
+  /** Fileira de badges ao lado do username. */
+  badges?: ReactNode
   /** Só no próprio perfil: avatar e nota vazia levam ao editor. */
   onEditProfile?: () => void
   /** Prévia do editor: o avatar não usa o profileStore (mostra o rascunho). */
@@ -50,6 +56,7 @@ function ProfileCardBody({
   fallbackBanner,
   avatarFallbackClassName,
   badge,
+  badges,
   onEditProfile,
   preview = false,
   children
@@ -57,6 +64,7 @@ function ProfileCardBody({
   const bannerSrc = profileMediaSrc(profile.banner_url, API_BASE_URL)
   const note = profile.status_text?.trim()
   const bio = profile.bio?.trim()
+  const game = useActivity(preview ? undefined : profile.id)
   const links = profile.links ?? []
 
   return (
@@ -83,7 +91,7 @@ function ProfileCardBody({
             <div className="relative shrink-0 rounded-full p-1.5" style={{ background: CARD_BG }}>
               <Avatar
                 userId={preview ? undefined : profile.id}
-                name={profile.display_name}
+                name={profile.nickname || profile.display_name}
                 avatarUrl={profile.avatar_url}
                 size={80}
                 animate="always"
@@ -137,20 +145,43 @@ function ProfileCardBody({
 
         <div className="mt-2">
           <p className="truncate text-xl font-bold text-white">
-            {profile.display_name || ' '}
+            {profile.nickname || profile.display_name || ' '}
             {isMe && !preview && (
               <span className="ml-1.5 text-xs font-medium text-gray-400">(você)</span>
             )}
           </p>
-          {(profile.username || profile.pronouns) && (
-            <p className="truncate text-sm text-gray-300">
-              {profile.username && <span>{profile.username}</span>}
-              {profile.username && profile.pronouns && <span className="text-gray-500"> • </span>}
-              {profile.pronouns && <span className="text-gray-400">{profile.pronouns}</span>}
+          {profile.nickname && (
+            <p
+              className="truncate text-ds-sm font-semibold text-gray-200"
+              title="Nome de exibição (fora deste servidor)"
+            >
+              {profile.display_name}
             </p>
+          )}
+          {(profile.username || profile.pronouns || badges) && (
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="min-w-0 truncate text-sm text-gray-300">
+                {profile.username && <span>{profile.username}</span>}
+                {profile.username && profile.pronouns && <span className="text-gray-500"> • </span>}
+                {profile.pronouns && <span className="text-gray-400">{profile.pronouns}</span>}
+              </p>
+              {badges}
+            </div>
           )}
         </div>
 
+        {game && (
+          <div className="mt-3 rounded-lg bg-white/5 p-2.5">
+            <p className="text-ds-xs font-bold uppercase text-gray-400">Jogando agora</p>
+            <p className="mt-1 flex items-center gap-1.5 text-ds-md font-semibold text-white">
+              <GamepadIcon className="h-4 w-4 shrink-0 text-gray-400" />
+              <span className="truncate">{game.name}</span>
+              <span className="shrink-0 text-ds-xs font-normal text-gray-400">
+                <Elapsed startedAt={game.started_at} />
+              </span>
+            </p>
+          </div>
+        )}
         {bio && (
           <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-snug text-gray-200">
             {splitLinks(bio).map((part, i) =>

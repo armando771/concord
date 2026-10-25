@@ -5,7 +5,7 @@
  */
 
 /** Status do ApiError; null quando nem chegou ao servidor (fetch rejeitou). */
-function statusOf(err: unknown): number | null | undefined {
+export function statusOf(err: unknown): number | null | undefined {
   if (
     typeof err === 'object' &&
     err !== null &&
@@ -17,7 +17,7 @@ function statusOf(err: unknown): number | null | undefined {
   return err instanceof TypeError ? null : undefined
 }
 
-function commonMessage(status: number | null | undefined): string | null {
+export function commonMessage(status: number | null | undefined): string | null {
   if (status === null || status === 0) return 'Sem conexão com o servidor.'
   if (status === undefined) return null
   if (status === 429) return 'Muitas tentativas. Espere um pouco e tente de novo.'
@@ -30,6 +30,14 @@ export function loginErrorMessage(err: unknown): string {
   if (status === 401) return 'E-mail/usuário ou senha incorretos.'
   if (status === 400) return 'Não foi possível entrar. Confira os dados e tente de novo.'
   return commonMessage(status) ?? 'Falha ao entrar.'
+}
+
+/** Falhas de "esqueci a senha", redefinição e confirmação de e-mail. */
+export function emailActionErrorMessage(err: unknown): string {
+  const status = statusOf(err)
+  // O backend não diz se o link expirou, já foi usado ou nunca existiu.
+  if (status === 400) return 'Este link é inválido ou expirou. Peça um novo.'
+  return commonMessage(status) ?? 'Algo deu errado. Tente de novo.'
 }
 
 export function registerErrorMessage(err: unknown): string {

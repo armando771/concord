@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCallStore } from '../../store/callStore'
+import { useCallNicknames } from '../../store/useServerNames'
+import { serverDisplayName } from '../../lib/serverNames'
 import {
   clampMiniPlayer,
   loadMiniPlayerOffset,
@@ -37,6 +39,7 @@ function sizeOf(el: HTMLElement | null): { width: number; height: number } {
  */
 function ScreenMiniPlayer(): React.JSX.Element | null {
   const navigate = useNavigate()
+  const nicknames = useCallNicknames()
   const ref = useRef<HTMLDivElement>(null)
   const [gesture] = useState(() => new MiniPlayerGesture())
   const [offset, setOffset] = useState(loadMiniPlayerOffset)
@@ -90,7 +93,10 @@ function ScreenMiniPlayer(): React.JSX.Element | null {
 
   const shown = clampMiniPlayer(offset, MINI_PLAYER_SIZE, viewport)
 
-  const name = participants.find((p) => p.id === id)?.display_name || mediaPeers[id] || 'Usuário'
+  const name = serverDisplayName(
+    { nickname: nicknames?.[id] },
+    { display_name: participants.find((p) => p.id === id)?.display_name || mediaPeers[id] }
+  )
 
   const handleOpen = (): void => {
     focusWatchedScreen(id)

@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"gin-quickstart/backend/internal/channel"
+	"gin-quickstart/backend/internal/permission"
 )
 
 var (
@@ -88,8 +89,30 @@ func checkMove(actorIsModerator bool, actorID, ownerID, targetID string, from vo
 	return nil
 }
 
+// authorizeMove junta as regras de mover: MOVE_MEMBERS no canal em que a
+// pessoa está, ver o destino, estar acima dela na hierarquia e o destino
+// deixar a pessoa entrar.
+func authorizeMove(snap *permission.Snapshot, actorID, targetID string, from voiceLocation, inVoice bool, dest *channel.Channel) error {
+	if !snap.CanView(dest.ID, actorID) {
+		return ErrNotFound
+	}
+	canMove := inVoice && permission.Has(snap.Channel(from.channelID, actorID), permission.MoveMembers)
+	if err := checkMove(canMove, actorID, snap.OwnerID, targetID, from, inVoice, dest); err != nil {
+		return err
+	}
+	if targetID != actorID && !snap.CanActOn(actorID, targetID) {
+		return ErrCannotActOnMember
+	}
+	if !permission.Has(snap.Channel(dest.ID, targetID), permission.ViewChannel|permission.Connect) {
+		return ErrTargetCannotJoin
+	}
+	return nil
+}
+
 // MoveToChannel tira targetID do canal de voz em que está e o coloca em
-// channelID. Só o dono e os moderadores do servidor podem fazer isso.
+// channelID. Exige MOVE_MEMBERS no canal em que a pessoa está, ver o canal de
+// destino e estar acima da pessoa na hierarquia; o destino precisa deixar a
+// pessoa entrar (CONNECT).
 func (s *Service) MoveToChannel(ctx context.Context, actorID, targetID, channelID string) (*Call, error) {
 	dest, err := s.channelService.FindByID(ctx, channelID)
 	if err != nil {
@@ -98,23 +121,22 @@ func (s *Service) MoveToChannel(ctx context.Context, actorID, targetID, channelI
 
 	from, inVoice := s.voiceLocationOf(targetID)
 
-	isModerator, err := s.channelService.IsAdminOrOwner(ctx, dest.ServerID, actorID)
-	if err != nil {
-		return nil, err
+	if s.perms == nil {
+		return nil, ErrNotModerator
 	}
-	srv, err := s.serverService.FindByID(ctx, dest.ServerID)
-	if err != nil {
+	snap, err := s.perms.Snapshot(ctx, dest.ServerID)
+	if err != nil || !snap.IsMember(actorID) {
 		return nil, ErrNotFound
 	}
-
-	if err := checkMove(isModerator, actorID, srv.OwnerID, targetID, from, inVoice, dest); err != nil {
+	if err := authorizeMove(snap, actorID, targetID, from, inVoice, dest); err != nil {
 		return nil, err
 	}
 
 	if err := s.Leave(ctx, from.callID, targetID); err != nil {
 		return nil, err
 	}
-	call, err := s.StartChannel(ctx, targetID, dest.ID)
+	// Mover é ação de moderador: passa mesmo por sala trancada.
+	call, err := s.startChannel(ctx, targetID, dest.ID, true)
 	if err != nil {
 		log.Printf("[call] move %s to %s failed after leaving: %v", targetID, dest.ID, err)
 		return nil, err
@@ -136,7 +158,7 @@ func (s *Service) MoveToChannel(ctx context.Context, actorID, targetID, channelI
 		MovedBy:       actorInfo,
 	})
 	s.publisher.SendToUser(targetID, event)
-	s.publisher.BroadcastToRoom("server:"+dest.ServerID, event)
+	s.broadcastServer(dest.ServerID, &dest.ID, event)
 
 	return call, nil
 }

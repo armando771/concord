@@ -2,6 +2,9 @@ import { useEffect } from 'react'
 import router from '../router'
 import { useCallStore } from '../store/callStore'
 import { showToast } from '../store/toastStore'
+import { useAuthStore } from '../store/authStore'
+import { useInviteLinkStore } from '../store/inviteLinkStore'
+import { authPathWithInvite, normalizeInviteCode } from '../lib/inviteLink'
 
 /**
  * Liga o app ao modo segundo plano do processo main: menu da bandeja
@@ -39,13 +42,36 @@ function BackgroundBridge(): null {
         `Não deu para capturar só o som deste app — compartilhando sem som. Detalhes: ${logPath}`
       )
     })
+    const offHidden = window.api?.screenShare?.onWindowHidden(() => {
+      showToast.info(
+        'A janela compartilhada foi minimizada e a live congelou para quem assiste. Restaure a janela ou compartilhe a tela inteira.'
+      )
+    })
     return () => {
+      offHidden?.()
       offFallback?.()
       offMute()
       offQuit()
       offNavigate()
     }
   }, [background])
+
+  // Link salinha://convite/<código> (o main guarda até aqui buscar): abre a
+  // confirmação por cima de onde a pessoa está; deslogado, passa pelo login.
+  useEffect(() => {
+    const links = window.api?.inviteLinks
+    if (!links) return
+    const take = (): void => {
+      void links.takePending().then((raw) => {
+        const code = raw ? normalizeInviteCode(raw) : null
+        if (!code) return
+        if (useAuthStore.getState().accessToken) useInviteLinkStore.getState().open(code)
+        else void router.navigate(authPathWithInvite('/login', code))
+      })
+    }
+    take()
+    return links.onPending(take)
+  }, [])
 
   return null
 }
