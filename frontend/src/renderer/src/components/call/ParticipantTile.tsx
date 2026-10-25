@@ -9,6 +9,8 @@ import { useLevelStore } from '../../store/levelStore'
 import { levelUpEffects } from '../../lib/levels'
 import LevelUpBurst from '../level/LevelUpBurst'
 import Avatar from '../Avatar'
+import MaestroAvatar from '../music/MaestroAvatar'
+import { isMaestroIdentity, T18 } from '../../lib/music'
 
 export function VideoFill({
   stream,
@@ -152,16 +154,20 @@ function ParticipantTile({
       {!videoStream && (
         <div className="flex flex-col items-center gap-3">
           <div className="relative">
-            <Avatar
-              userId={user.id}
-              name={user.display_name}
-              avatarUrl={user.avatar_url}
-              size={avatarSize}
-              animate="always"
-              className={`rounded-full transition-shadow ${
-                speaking || isPlayingSound ? 'ring-4 ring-[#23a55a]' : ''
-              }`}
-            />
+            {isMaestroIdentity(user.id) ? (
+              <MaestroAvatar size={avatarSize} />
+            ) : (
+              <Avatar
+                userId={user.id}
+                name={user.display_name}
+                avatarUrl={user.avatar_url}
+                size={avatarSize}
+                animate="always"
+                className={`rounded-full transition-shadow ${
+                  speaking || isPlayingSound ? 'ring-4 ring-[#23a55a]' : ''
+                }`}
+              />
+            )}
             {!isScreen && user.id !== meId && (
               <LevelUpBurst userId={user.id} size={size === 'lg' ? 96 : 56} />
             )}
@@ -211,6 +217,11 @@ function ParticipantTile({
         )}
         <VoiceStateIcons muted={selfMuted} deafened={deafened} className="h-3 w-3" />
         <span className="truncate text-xs font-semibold text-white">{user.display_name}</span>
+        {isMaestroIdentity(user.id) && (
+          <span className="rounded bg-violet-400/30 px-1 text-[9px] font-bold uppercase text-violet-100">
+            {T18.tag}
+          </span>
+        )}
       </div>
     </div>
   )

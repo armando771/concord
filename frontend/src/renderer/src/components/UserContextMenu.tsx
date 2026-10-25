@@ -15,6 +15,8 @@ import { showToast } from '../store/toastStore'
 import { streamAudioKey, useUserAudioStore } from '../store/userAudioStore'
 import { useUserMenuStore } from '../store/userMenuStore'
 import { friendRequestError } from '../lib/relationship'
+import { disableMaestro } from '../api/music'
+import { MAESTRO_USER_ID, T18 } from '../lib/music'
 
 const MENU_WIDTH = 232
 
@@ -123,6 +125,46 @@ function UserContextMenu(): React.JSX.Element | null {
           Transmissão de {target.name}
         </p>
         {volumeControls('Volume da transmissão', 'Silenciar transmissão')}
+      </div>
+    )
+  }
+
+  // Maestro: só perfil e, para o dono do servidor, remover.
+  if (target.userId === MAESTRO_USER_ID) {
+    const removeMaestro = (): void => {
+      close()
+      if (!server || !window.confirm(T18.confirm)) return
+      disableMaestro(server.id).catch((err) =>
+        showToast.error(err instanceof Error ? err.message : 'Falha na operação.')
+      )
+    }
+    const openMaestroProfile = (): void => {
+      close()
+      useProfileCardStore.getState().open({
+        userId: target.userId,
+        name: target.name,
+        username: target.username,
+        side: 'right',
+        anchor: { top: target.y, left: target.x, right: target.x, bottom: target.y }
+      })
+    }
+    return (
+      <div
+        ref={ref}
+        role="menu"
+        aria-label={`Opções de ${target.name}`}
+        style={{ left, top, width: MENU_WIDTH }}
+        className="fixed z-[60] flex flex-col gap-1 rounded-lg border border-white/10 bg-[#111214] p-2 text-sm text-gray-200 shadow-2xl"
+      >
+        <p className="truncate px-2 pb-1 pt-0.5 text-xs font-bold text-gray-400">{target.name}</p>
+        <button role="menuitem" onClick={openMaestroProfile} className={itemClass}>
+          Perfil
+        </button>
+        {server?.owner_id === meId && (
+          <button role="menuitem" onClick={removeMaestro} className={`${itemClass} text-[#f23f43]`}>
+            {T18.remove}
+          </button>
+        )}
       </div>
     )
   }

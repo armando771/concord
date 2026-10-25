@@ -4,6 +4,9 @@ import { profileCardHandler } from '../store/profileCardStore'
 import InviteCodeBox from '../components/InviteCodeBox'
 import { Navigate, useParams } from 'react-router-dom'
 import { useServerStore } from '../store/serverStore'
+import { useMusicStore } from '../store/musicStore'
+import MaestroAvatar from '../components/music/MaestroAvatar'
+import { T18 } from '../lib/music'
 import { useFriendStore } from '../store/friendStore'
 import { useAuthStore } from '../store/authStore'
 import { useUIStore } from '../store/uiStore'
@@ -31,6 +34,7 @@ interface MemberRowProps {
   colorClass: string
   nameClass: string
   online: boolean
+  isBot?: boolean
 }
 
 function MemberRow({
@@ -40,7 +44,8 @@ function MemberRow({
   avatarUrl,
   colorClass,
   nameClass,
-  online
+  online,
+  isBot = false
 }: MemberRowProps): React.JSX.Element {
   const meId = useAuthStore((s) => s.user?.id)
   const status = usePresenceStatus(userId)
@@ -57,22 +62,32 @@ function MemberRow({
       <LevelRowShimmer userId={userId} />
       <div className="relative shrink-0">
         <LevelUpBurst userId={userId} />
-        <Avatar
-          userId={userId}
-          name={displayName}
-          avatarUrl={avatarUrl}
-          size={32}
-          status={status}
-          cutoutColor="#07080b"
-          fallbackClassName={colorClass}
-        />
+        {isBot ? (
+          <MaestroAvatar size={32} />
+        ) : (
+          <Avatar
+            userId={userId}
+            name={displayName}
+            avatarUrl={avatarUrl}
+            size={32}
+            status={status}
+            cutoutColor="#07080b"
+            fallbackClassName={colorClass}
+          />
+        )}
       </div>
       <div className="relative min-w-0 leading-tight">
         <div className="flex min-w-0 items-center gap-1.5">
           <p title={look.name} className={`truncate text-sm font-semibold ${nameClass}`}>
             {look.name}
           </p>
-          <LevelBadge userId={userId} />
+          {isBot ? (
+            <span className="rounded bg-violet-400/30 px-1 text-[9px] font-bold uppercase text-violet-100">
+              {T18.tag}
+            </span>
+          ) : (
+            <LevelBadge userId={userId} />
+          )}
         </div>
         <p title={`@${handle}`} className="truncate text-[11px] text-gray-400">
           @{handle}
@@ -133,6 +148,10 @@ export function ServerView(): React.JSX.Element {
         showToast.error(err instanceof Error ? err.message : 'Falha ao carregar servidor.')
       })
       fetchChannels(id)
+      useMusicStore
+        .getState()
+        .loadPresence(id)
+        .catch(() => {})
     }
   }, [id, selectServer, fetchChannels])
 
@@ -190,8 +209,11 @@ export function ServerView(): React.JSX.Element {
   })
 
   // Offline fica só no grupo Offline; os grupos de papel (Dono, Admin, Membro) mostram só quem está online
-  const onlineMembers = currentMembers.filter((m) => presence[m.user_id])
-  const offlineMembers = currentMembers.filter((m) => !presence[m.user_id])
+  // O Maestro não tem websocket: está sempre online.
+  const isOnline = (m: (typeof currentMembers)[number]): boolean =>
+    !!m.is_bot || !!presence[m.user_id]
+  const onlineMembers = currentMembers.filter(isOnline)
+  const offlineMembers = currentMembers.filter((m) => !isOnline(m))
   const ownerMembers = onlineMembers.filter((m) => m.user_id === currentServer.owner_id)
   const adminMembers = onlineMembers.filter(
     (m) => m.user_id !== currentServer.owner_id && m.role === 'admin'
@@ -354,6 +376,7 @@ export function ServerView(): React.JSX.Element {
                     colorClass="bg-indigo-600"
                     nameClass="text-gray-200"
                     online
+                    isBot={!!m.is_bot}
                   />
                 )
               })}

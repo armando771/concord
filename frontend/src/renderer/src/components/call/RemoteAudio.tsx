@@ -5,12 +5,15 @@ import { outputVolume, useUserAudioStore } from '../../store/userAudioStore'
 function RemoteAudio({
   stream,
   muted,
-  userId
+  userId,
+  gain = 1
 }: {
   stream: MediaStream
   muted: boolean
   /** Voz de alguém: aplica o volume/silenciar escolhido para essa pessoa. */
   userId?: string
+  /** Multiplicador do volume (ex.: música que abaixa quando alguém fala). */
+  gain?: number
 }): React.JSX.Element {
   const ref = useRef<HTMLAudioElement | null>(null)
   const outputDeviceId = useCallStore((s) => s.outputDeviceId)
@@ -24,8 +27,8 @@ function RemoteAudio({
   }, [stream])
 
   useEffect(() => {
-    if (ref.current) ref.current.volume = volume
-  }, [volume])
+    if (ref.current) ref.current.volume = Math.max(0, Math.min(1, volume * gain))
+  }, [volume, gain])
 
   // Saída escolhida nas configurações ('' = padrão do sistema).
   useEffect(() => {

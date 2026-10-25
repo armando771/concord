@@ -43,6 +43,8 @@ import {
   VolumeOffIcon
 } from './icons'
 import { setPrimaryChannel } from '../api/servers'
+import { enableMaestro } from '../api/music'
+import { T18 } from '../lib/music'
 import { primaryChannelId } from '../lib/primaryChannel'
 import ResizeHandle from './ResizeHandle'
 import { useResizableWidth } from './useResizableWidth'
@@ -950,6 +952,19 @@ export function ServerSidebar(): React.JSX.Element {
               maxLength={500}
             />
           </div>
+          {isOwner && currentServer && !currentMembers.some((m) => m.is_bot) && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() =>
+                enableMaestro(currentServer.id).catch((err) =>
+                  showToast.error(err instanceof Error ? err.message : 'Falha na operação.')
+                )
+              }
+            >
+              {T18.add}
+            </Button>
+          )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setEditServerOpen(false)}>
               Cancelar
