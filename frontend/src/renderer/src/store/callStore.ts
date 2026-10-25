@@ -9,10 +9,17 @@ import {
 } from '../api/calls'
 import { ApiError } from '../api/client'
 import { getAudioStream, getCameraStream, getDisplayStream } from '../lib/rtc'
+import {
+  rememberStreamQuality,
+  saveScreenQuality,
+  streamQuality,
+  type ScreenShareQuality
+} from '../lib/screenShareQuality'
 import type { MicHandle } from '../lib/noiseSuppression'
 import { CallMedia, type RemoteMedia } from '../lib/livekit'
 import { watchLocalSpeaking } from '../lib/localSpeaking'
 import { mergeLocalSpeaking, sameIds } from '../lib/voiceActivity'
+import { voiceServerId } from '../lib/voiceServer'
 import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
 import { micBlockReason, streamBlockReason } from '../lib/voicePermissions'
@@ -42,6 +49,7 @@ import { showToast } from './toastStore'
 import type { CallResume } from '../../../shared/callResume'
 
 import { useSoundboardStore } from './soundboardStore'
+import { useBoostStore } from './boostStore'
 import { useActivityStore } from './activityStore'
 import { stopAllSoundboardAudio } from '../lib/soundboardPlayer'
 
@@ -188,6 +196,9 @@ interface CallState {
   /** stream de tela local enquanto isScreenSharing (reativo p/ preview) */
   localScreenStream: MediaStream | null
   isScreenSharing: boolean
+  screenShareQuality: ScreenShareQuality | null
+  /** Última troca pedida e ainda não concluída (null = nada pendente). */
+  pendingScreenQuality: ScreenShareQuality | null
   /** userId -> stream de câmera remota (Fase 4, DM) */
   videoStreams: Record<string, MediaStream>
   /** userId -> nome de quem está na sala de mídia (LiveKit), mesmo fora da lista do backend */
@@ -257,6 +268,7 @@ interface CallState {
   setOutputDevice: (deviceId: string) => void
   startScreenShare: () => Promise<void>
   stopScreenShare: () => void
+  updateScreenQuality: (quality: ScreenShareQuality) => void
   toggleCamera: () => Promise<void>
   setFocusedScreenUser: (userId: string | null) => void
   /** Começa a baixar e assistir a transmissão de alguém (e foca nela). */
@@ -277,11 +289,19 @@ interface CallState {
 /** Microfone da chamada (o stream processado + o que precisa ser fechado). */
 let localMic: MicHandle | null = null
 let transitioning = false
+let screenSharePending = false
 let callGeneration = 0
 /** Reentrada na chamada de canal em andamento (ver resyncChannelCall). */
 let resyncing = false
 /** Conexão com o servidor de mídia (LiveKit) da chamada atual. */
 let media: CallMedia | null = null
+
+/** Leitura sob demanda; o histórico pertence somente ao popover. */
+export async function readCallLatency(): Promise<number | null> {
+  const connection = media
+  const ms = await connection?.getLatency()
+  return connection === media ? (ms ?? null) : null
+}
 
 /** Quem está falando segundo o servidor (ActiveSpeakersChanged). */
 let serverSpeakers: string[] = []
@@ -292,6 +312,58 @@ let speakingWatch: { track: MediaStreamTrack; stop: () => void } | null = null
 
 // Compartilhamento de tela (não-reativo; o estado reativo é localScreenStream)
 let localScreenStream: MediaStream | null = null
+/** Troca de qualidade esperando a vez: só a mais recente fica na fila. */
+let screenQualityQueue: ScreenQualityRequest | null = null
+let screenQualityRunning = false
+
+interface ScreenQualityRequest {
+  stream: MediaStream
+  connection: CallMedia
+  callId: string | null
+  quality: ScreenShareQuality
+}
+
+const sameScreenQuality = (a: ScreenShareQuality | null, b: ScreenShareQuality): boolean =>
+  a?.resolution === b.resolution && a?.frameRate === b.frameRate
+
+/** A troca ainda vale: mesma transmissão, mesma conexão e mesma chamada. */
+function isCurrentScreen(request: ScreenQualityRequest): boolean {
+  return (
+    localScreenStream === request.stream &&
+    media === request.connection &&
+    useCallStore.getState().callId === request.callId
+  )
+}
+
+/**
+ * Aplica as trocas uma de cada vez. Enquanto uma está em andamento, cliques
+ * novos substituem a fila: só a escolha final chega ao servidor.
+ */
+async function runScreenQualityQueue(): Promise<void> {
+  screenQualityRunning = true
+  try {
+    while (screenQualityQueue) {
+      const request = screenQualityQueue
+      screenQualityQueue = null
+      if (!isCurrentScreen(request)) continue
+      try {
+        await request.connection.updateScreenQuality(request.stream, request.quality)
+        if (!isCurrentScreen(request)) continue
+        rememberStreamQuality(request.stream, request.quality)
+        saveScreenQuality(request.quality)
+        useCallStore.setState({ screenShareQuality: { ...request.quality } })
+      } catch {
+        if (isCurrentScreen(request)) {
+          showToast.error('Não foi possível alterar a qualidade da transmissão.')
+        }
+      }
+    }
+  } finally {
+    screenQualityRunning = false
+    useCallStore.setState({ pendingScreenQuality: null })
+  }
+}
+
 // Som só da janela compartilhada (Windows), quando o helper nativo captura
 let windowAudio: WindowAudio | null = null
 // Câmera local (não-reativa; o estado reativo é localCameraStream)
@@ -544,7 +616,12 @@ export const useCallStore = create<CallState>()((set, get) => {
       }))
       set((s) => ({
         locked: state.call?.locked ?? s.locked,
-        joinRequests: replace ? joinReqs : [...s.joinRequests, ...joinReqs.filter((r) => !s.joinRequests.some((q) => q.id === r.id))],
+        joinRequests: replace
+          ? joinReqs
+          : [
+              ...s.joinRequests,
+              ...joinReqs.filter((r) => !s.joinRequests.some((q) => q.id === r.id))
+            ],
         screenSharers: sharing,
         voiceStates: {
           ...Object.fromEntries(
@@ -641,6 +718,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       if (call.id !== callId) {
         // A chamada antiga acabou enquanto eu estava fora: segue na nova.
         useChatStore.getState().unsubscribeRoom(`call:${callId}`)
+        useBoostStore.getState().clearCall(callId)
         useChatStore.getState().subscribeRoom(`call:${call.id}`)
         media?.disconnect()
         media = null
@@ -696,7 +774,10 @@ export const useCallStore = create<CallState>()((set, get) => {
   const cleanup = (): void => {
     callGeneration++
     const callId = get().callId
-    if (callId) useChatStore.getState().unsubscribeRoom(`call:${callId}`)
+    if (callId) {
+      useChatStore.getState().unsubscribeRoom(`call:${callId}`)
+      useBoostStore.getState().clearCall(callId)
+    }
     media?.disconnect()
     media = null
     stopLocalSpeaking()
@@ -704,6 +785,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     stopLocalStream()
     localScreenStream?.getTracks().forEach((t) => t.stop())
     localScreenStream = null
+    screenQualityQueue = null
     windowAudio?.stop()
     windowAudio = null
     localCameraStream?.getTracks().forEach((t) => t.stop())
@@ -721,6 +803,8 @@ export const useCallStore = create<CallState>()((set, get) => {
       ...EMPTY_MEDIA,
       localScreenStream: null,
       isScreenSharing: false,
+      screenShareQuality: null,
+      pendingScreenQuality: null,
       localCameraStream: null,
       screenSharers: [],
       speakingIds: [],
@@ -788,6 +872,8 @@ export const useCallStore = create<CallState>()((set, get) => {
     ...EMPTY_MEDIA,
     localScreenStream: null,
     isScreenSharing: false,
+    screenShareQuality: null,
+    pendingScreenQuality: null,
     localCameraStream: null,
     screenSharers: [],
     speakingIds: [],
@@ -1082,69 +1168,94 @@ export const useCallStore = create<CallState>()((set, get) => {
 
     startScreenShare: async () => {
       const s = get()
-      if (s.status !== 'active' || s.isScreenSharing || transitioning) return
+      if (s.status !== 'active' || s.isScreenSharing || transitioning || screenSharePending) return
       const blocked = streamBlockReason(s.canStream)
       if (blocked) {
         showToast.error(blocked)
         return
       }
-      let stream: MediaStream
-      resetWindowAudio()
+      screenSharePending = true
       try {
-        stream = await getDisplayStream()
-      } catch (err) {
-        abortWindowAudio()
-        // NotAllowedError: usuário cancelou o picker — sem toast.
-        if ((err as DOMException)?.name !== 'NotAllowedError') {
-          showToast.error('Não foi possível compartilhar a tela.')
+        let stream: MediaStream
+        resetWindowAudio()
+        try {
+          stream = await getDisplayStream()
+        } catch (err) {
+          abortWindowAudio()
+          // NotAllowedError: usuário cancelou o picker — sem toast.
+          if ((err as DOMException)?.name !== 'NotAllowedError') {
+            showToast.error('Não foi possível compartilhar a tela.')
+          }
+          return
         }
-        return
-      }
-      // Janela no Windows: o som vem do helper (só o app da janela).
-      const captured = await takeWindowAudio()
-      // A chamada pode ter acabado (ou mudado) com o seletor aberto.
-      if (get().callId !== s.callId || get().status !== 'active') {
-        captured?.stop()
-        stream.getTracks().forEach((t) => t.stop())
-        return
-      }
-      if (captured) {
-        // O som da janela substitui qualquer som de sistema da captura.
-        stream.getAudioTracks().forEach((t) => {
-          stream.removeTrack(t)
-          t.stop()
+        // Janela no Windows: o som vem do helper (só o app da janela).
+        const captured = await takeWindowAudio()
+        // A chamada pode ter acabado (ou mudado) com o seletor aberto.
+        if (get().callId !== s.callId || get().status !== 'active') {
+          captured?.stop()
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
+        if (captured) {
+          // O som da janela substitui qualquer som de sistema da captura.
+          stream.getAudioTracks().forEach((t) => {
+            stream.removeTrack(t)
+            t.stop()
+          })
+          windowAudio = captured
+          stream.addTrack(captured.track)
+        }
+
+        localScreenStream = stream
+        const meId = useAuthStore.getState().user?.id
+        const callId = get().callId
+        set((prev) => ({
+          isScreenSharing: true,
+          screenShareQuality: streamQuality(stream),
+          localScreenStream: stream,
+          screenSharers: meId
+            ? Array.from(new Set([...prev.screenSharers, meId]))
+            : prev.screenSharers,
+          focusedScreenUserId: prev.focusedScreenUserId ?? meId ?? null
+        }))
+
+        // Parar pela barra nativa do Electron / fim da fonte encerra o share.
+        stream.getVideoTracks().forEach((track) => {
+          track.addEventListener('ended', () => {
+            if (get().isScreenSharing) get().stopScreenShare()
+          })
         })
-        windowAudio = captured
-        stream.addTrack(captured.track)
+
+        useChatStore.getState().sendEvent('call:screen', { call_id: callId, active: true })
+
+        try {
+          await media?.publishScreen(stream)
+        } catch {
+          showToast.error('Não foi possível transmitir a tela.')
+          get().stopScreenShare()
+        }
+      } finally {
+        screenSharePending = false
       }
+    },
 
-      localScreenStream = stream
-      const meId = useAuthStore.getState().user?.id
-      const callId = get().callId
-      set((prev) => ({
-        isScreenSharing: true,
-        localScreenStream: stream,
-        screenSharers: meId
-          ? Array.from(new Set([...prev.screenSharers, meId]))
-          : prev.screenSharers,
-        focusedScreenUserId: prev.focusedScreenUserId ?? meId ?? null
-      }))
-
-      // Parar pela barra nativa do Electron / fim da fonte encerra o share.
-      stream.getVideoTracks().forEach((track) => {
-        track.addEventListener('ended', () => {
-          if (get().isScreenSharing) get().stopScreenShare()
-        })
-      })
-
-      useChatStore.getState().sendEvent('call:screen', { call_id: callId, active: true })
-
-      try {
-        await media?.publishScreen(stream)
-      } catch {
-        showToast.error('Não foi possível transmitir a tela.')
-        get().stopScreenShare()
-      }
+    updateScreenQuality: (quality) => {
+      const s = get()
+      const stream = localScreenStream
+      const connection = media
+      if (
+        s.status !== 'active' ||
+        !s.isScreenSharing ||
+        !stream ||
+        !connection ||
+        screenSharePending ||
+        transitioning
+      )
+        return
+      if (sameScreenQuality(s.pendingScreenQuality ?? s.screenShareQuality, quality)) return
+      screenQualityQueue = { stream, connection, callId: s.callId, quality: { ...quality } }
+      set({ pendingScreenQuality: { ...quality } })
+      if (!screenQualityRunning) void runScreenQualityQueue()
     },
 
     stopScreenShare: () => {
@@ -1154,6 +1265,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       const callId = s.callId
       const stream = localScreenStream
       localScreenStream = null
+      screenQualityQueue = null
       windowAudio?.stop()
       windowAudio = null
 
@@ -1161,6 +1273,8 @@ export const useCallStore = create<CallState>()((set, get) => {
 
       set((prev) => ({
         isScreenSharing: false,
+        screenShareQuality: null,
+        pendingScreenQuality: null,
         localScreenStream: null,
         screenSharers: prev.screenSharers.filter((id) => id !== meId),
         focusedScreenUserId: prev.focusedScreenUserId === meId ? null : prev.focusedScreenUserId
@@ -1607,7 +1721,11 @@ export const useCallStore = create<CallState>()((set, get) => {
           const chId = p.channel_id ?? knock.channelId
           set({ knock: null, admittedChannelId: chId })
           const byName = p.by?.display_name || p.by?.username
-          showToast.success(byName ? `${byName} permitiu sua entrada na sala!` : 'Sua entrada na sala foi permitida!')
+          showToast.success(
+            byName
+              ? `${byName} permitiu sua entrada na sala!`
+              : 'Sua entrada na sala foi permitida!'
+          )
           void get().joinVoiceChannel(chId)
           return
         }
@@ -1620,7 +1738,11 @@ export const useCallStore = create<CallState>()((set, get) => {
             // A sala acabou ou destrancou: pode entrar livremente
             if (knockDeclinedTimer) clearTimeout(knockDeclinedTimer)
             set({ knock: null })
-            showToast.info(p.reason === 'ended' ? 'A chamada terminou. A sala agora está livre.' : 'A sala foi destrancada!')
+            showToast.info(
+              p.reason === 'ended'
+                ? 'A chamada terminou. A sala agora está livre.'
+                : 'A sala foi destrancada!'
+            )
             return
           }
           set({ knock: { ...knock, status: 'declined' } })
@@ -1650,7 +1772,7 @@ useCallStore.subscribe((s) => {
     .getState()
     .setCall(
       s.status === 'idle' ? null : s.callId,
-      s.status !== 'idle' && s.type === 'channel' ? s.serverId : null
+      voiceServerId(s)
     )
 })
 

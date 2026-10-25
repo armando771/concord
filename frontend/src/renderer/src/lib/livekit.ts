@@ -18,6 +18,14 @@ import {
 } from './callMedia'
 import { pruneWatched } from './screenWatch'
 import { canPublishSource, type PublishSource } from './mediaPermissions'
+import { reportLatency } from './connectionStats'
+import {
+  screenEncoding,
+  screenSource,
+  screenVideoConstraints,
+  streamQuality,
+  type ScreenShareQuality
+} from './screenShareQuality'
 
 // Mídia das chamadas via SFU (LiveKit): cada pessoa envia uma cópia de cada
 // track para o servidor, que distribui para os demais. Substitui o mesh P2P.
@@ -59,9 +67,6 @@ export interface CallMediaHandlers {
   onRemovedByModerator?: () => void
 }
 
-const SCREEN_MAX_BITRATE = 4_000_000
-const SCREEN_MAX_FRAMERATE = 30
-
 export class CallMedia {
   private room: Room
   private cache = new StreamCache<MediaStream>((tracks) => new MediaStream(tracks))
@@ -84,11 +89,8 @@ export class CallMedia {
         dtx: true,
         red: true,
         simulcast: true,
-        videoCodec: 'vp8',
-        screenShareEncoding: {
-          maxBitrate: SCREEN_MAX_BITRATE,
-          maxFramerate: SCREEN_MAX_FRAMERATE
-        }
+        // A qualidade de tela é definida por publicação, não pela sala.
+        videoCodec: 'vp8'
       }
     })
 
@@ -158,6 +160,29 @@ export class CallMedia {
     this.emitPublishPermissions()
   }
 
+  /** RTT até o SFU pelas estatísticas públicas das tracks, inclusive em modo ouvinte. */
+  async getLatency(): Promise<number | null> {
+    if (this.closing || this.room.state !== ConnectionState.Connected) return null
+    const publications = [
+      ...this.room.localParticipant.trackPublications.values(),
+      ...Array.from(this.room.remoteParticipants.values()).flatMap((participant) =>
+        Array.from(participant.trackPublications.values())
+      )
+    ]
+    for (const publication of publications) {
+      if (!publication.track) continue
+      try {
+        const report = await publication.track.getRTCStatsReport()
+        if (this.closing || this.room.state !== ConnectionState.Connected) return null
+        const ms = report ? reportLatency(report) : null
+        if (ms !== null) return ms
+      } catch {
+        // Track removida durante a consulta: tenta outra, sem interferir na chamada.
+      }
+    }
+    return null
+  }
+
   /** Pode publicar essa fonte, segundo as permissões que o servidor deu. */
   canPublish(source: PublishSource): boolean {
     return canPublishSource(this.room.localParticipant.permissions, source)
@@ -209,7 +234,8 @@ export class CallMedia {
       await this.room.localParticipant.publishTrack(video, {
         source: Track.Source.ScreenShare,
         name: 'screen',
-        simulcast: false
+        simulcast: false,
+        screenShareEncoding: screenEncoding(streamQuality(stream), video.getSettings())
       })
     }
     const [audio] = stream.getAudioTracks()
@@ -234,6 +260,51 @@ export class CallMedia {
       source: Track.Source.Camera,
       name: 'camera'
     })
+  }
+
+  /** Não despublica: preserva SID, tracks e assinaturas de quem já está assistindo. */
+  async updateScreenQuality(stream: MediaStream, quality: ScreenShareQuality): Promise<void> {
+    const publication = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare)
+    const track = publication?.videoTrack
+    const video = stream.getVideoTracks()[0]
+    const sender = track?.sender
+    const current = (): boolean =>
+      this.connected &&
+      this.room.state === ConnectionState.Connected &&
+      video?.readyState === 'live' &&
+      this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare) === publication &&
+      track?.sender === sender
+    if (!track || !video || !sender || track.mediaStreamTrack !== video || !current()) {
+      throw new Error('screen_not_available')
+    }
+    const previous = video.getConstraints()
+    const oldParameters = sender.getParameters()
+    if (oldParameters.encodings.length !== 1) throw new Error('unsupported_screen_encodings')
+    const oldEncoding = { ...oldParameters.encodings[0] }
+    const encoding = screenEncoding(quality, screenSource(video))
+    let encodingApplied = false
+    try {
+      // applyConstraints substitui as restrições anteriores; Fonte remove width/height.
+      await video.applyConstraints(screenVideoConstraints(quality, screenSource(video)))
+      if (!current()) throw new Error('screen_changed')
+      const parameters = sender.getParameters()
+      Object.assign(parameters.encodings[0], encoding)
+      await sender.setParameters(parameters)
+      encodingApplied = true
+      if (!current()) throw new Error('screen_changed')
+      // Reconexões internas do SDK também precisam conhecer o novo orçamento.
+      track.publishOptions = { ...track.publishOptions, screenShareEncoding: encoding }
+      publication.options = { ...publication.options, screenShareEncoding: encoding }
+    } catch (error) {
+      // Nunca encerra a transmissão caso o browser recuse a alteração.
+      if (video.readyState === 'live') await video.applyConstraints(previous).catch(() => {})
+      if (encodingApplied && current()) {
+        const parameters = sender.getParameters()
+        parameters.encodings[0] = { ...oldEncoding }
+        await sender.setParameters(parameters).catch(() => {})
+      }
+      throw error
+    }
   }
 
   /** Despublica as tracks do stream (quem chama é dono de parar as tracks). */

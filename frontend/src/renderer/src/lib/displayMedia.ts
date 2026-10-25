@@ -18,10 +18,10 @@ const SCREEN_AUDIO = {
  */
 export function displayMediaOptions(
   web: boolean,
-  { audio = true }: { audio?: boolean } = {}
+  { audio = true, frameRate = 30 }: { audio?: boolean; frameRate?: 30 | 60 } = {}
 ): DisplayMediaStreamOptions {
   const base: DisplayMediaStreamOptions = {
-    video: { frameRate: 30 },
+    video: { frameRate },
     audio: audio ? SCREEN_AUDIO : false
   }
   if (!web || !audio) return base

@@ -691,8 +691,8 @@ do `LIVEKIT_CONFIG` (comentários inclusive) vira variável do container e conta
 **Página de download:** `site/` é uma página estática que lê
 `/updates/latest.yml` (Windows) e `/updates/latest-linux.yml` (Linux) e aponta
 cada botão para o artefato correspondente. A falha de um manifesto não bloqueia
-o download da outra plataforma. O deploy mantém os três instaladores Windows
-e três AppImages e `.tar.gz` mais recentes. No Caddyfile, `salinha.bhrx.com.br` serve a
+o download da outra plataforma. O deploy guarda só a versão atual: o instalador, o
+`.blockmap` e o `.sig` que os manifests citam; o resto é apagado. No Caddyfile, `salinha.bhrx.com.br` serve a
 página e o `/updates/` direto do disco; `concord.bhrx.com.br` redireciona para
 ele. Os dois estão atrás do proxy do Cloudflare (nuvem laranja).
 

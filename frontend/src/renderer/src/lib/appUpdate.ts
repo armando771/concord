@@ -16,7 +16,7 @@ export type UpdateFromErrorResult = 'installing' | 'checking' | 'unavailable'
 /**
  * Botão "Verificar atualização" da tela de erro: se já existe versão nova,
  * instala (baixa se precisar e reinicia); senão pede uma checagem — achando,
- * o aviso "Nova atualização disponível" aparece no canto. Na web: indisponível.
+ * a barra de atualização aparece na própria tela de erro (e acima do painel de voz). Na web: indisponível.
  */
 export async function updateFromErrorScreen(): Promise<UpdateFromErrorResult> {
   const updates = typeof window === 'undefined' ? undefined : window.api?.updates

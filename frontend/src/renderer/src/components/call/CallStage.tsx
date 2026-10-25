@@ -110,7 +110,8 @@ function CallStage({
   const meInfo: CallUserInfo = {
     id: meId,
     username: me?.username ?? '',
-    display_name: serverDisplayName({ nickname: nicknames?.[meId] }, me, 'Você')
+    display_name: serverDisplayName({ nickname: nicknames?.[meId] }, me, 'Você'),
+    avatar_url: me?.avatar_url ?? null
   }
 
   const nameOf = (userId: string): CallUserInfo =>

@@ -17,6 +17,7 @@ import {
 } from '../icons'
 import SoundboardPopover from './SoundboardPopover'
 import ActivityPickerPopover from './ActivityPickerPopover'
+import ScreenQualityPopover from './ScreenQualityPopover'
 
 function VoiceControls(): React.JSX.Element {
   const muted = useCallStore((s) => s.muted)
@@ -101,27 +102,29 @@ function VoiceControls(): React.JSX.Element {
       >
         {cameraOn ? <CameraIcon className="h-5 w-5" /> : <CameraOffIcon className="h-5 w-5" />}
       </button>
-      <button
-        onClick={handleToggleScreen}
-        disabled={!connected || (!canStream && !sharing)}
-        aria-label={sharing ? 'Parar de compartilhar tela' : 'Compartilhar tela'}
-        title={
-          !canStream && !sharing
-            ? 'Você não pode transmitir neste canal'
-            : sharing
-              ? 'Parar de compartilhar'
-              : 'Compartilhar tela'
-        }
-        className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-          !connected || (!canStream && !sharing)
-            ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
-            : sharing
-              ? 'cursor-pointer bg-[#23a55a] text-white hover:bg-[#1e8c4a]'
-              : 'cursor-pointer bg-white/5 text-gray-200 hover:bg-white/10'
-        }`}
-      >
-        <MonitorIcon className="h-5 w-5" />
-      </button>
+      <ScreenQualityPopover disabled={!connected}>
+        <button
+          onClick={handleToggleScreen}
+          disabled={!connected || (!canStream && !sharing)}
+          aria-label={sharing ? 'Parar de compartilhar tela' : 'Compartilhar tela'}
+          title={
+            !canStream && !sharing
+              ? 'Você não pode transmitir neste canal'
+              : sharing
+                ? undefined
+                : 'Compartilhar tela'
+          }
+          className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+            !connected || (!canStream && !sharing)
+              ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
+              : sharing
+                ? 'cursor-pointer bg-[#23a55a] text-white hover:bg-[#1e8c4a]'
+                : 'cursor-pointer bg-white/5 text-gray-200 hover:bg-white/10'
+          }`}
+        >
+          <MonitorIcon className="h-5 w-5" />
+        </button>
+      </ScreenQualityPopover>
       {callType === 'channel' && (
         <button
           onClick={toggleLock}

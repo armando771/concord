@@ -4,7 +4,7 @@ package bot
 
 import "strings"
 
-// UserID é o usuário de sistema do Maestro, criado pela migration 000029.
+// UserID é o usuário de sistema do Maestro, criado pela migration 000045.
 const UserID = "4d414553-5452-4f00-8000-000000000001"
 
 // DisplayName é o nome do bot na lista de membros e na sala de mídia.

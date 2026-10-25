@@ -23,7 +23,7 @@ function MediaLightbox({
     <div
       role="dialog"
       aria-label={alt}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80"
       onClick={onClose}
     >
       <img

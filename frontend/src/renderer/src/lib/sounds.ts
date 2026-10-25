@@ -193,6 +193,8 @@ export const SOUNDS = {
   // DM recebida: dois toques curtos subindo, mais graves que a menção.
   message: [tone(784, 0, 0.08), tone(1047, 0.09, 0.12)],
   mention: [tone(988, 0, 0.12), tone(1319, 0.13, 0.22)],
+  // Versão nova do app: três notas subindo, mais lentas que a menção.
+  update: [tone(784, 0, 0.09), tone(988, 0.1, 0.09), tone(1319, 0.2, 0.2)],
   // Subir de nível (40+): arpejo curto subindo (dó-mi-sol).
   levelChime: [soft(1047, 0, 0.1, 0.38), soft(1319, 0.07, 0.1, 0.38), soft(1568, 0.14, 0.25, 0.38)],
   // 80+: arpejo mais longo terminando num acorde que soa um pouco.

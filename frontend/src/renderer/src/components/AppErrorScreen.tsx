@@ -2,6 +2,7 @@ import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from '
 import { useRouteError } from 'react-router-dom'
 import { updateFromErrorScreen } from '../lib/appUpdate'
 import Button from './Button'
+import UpdateBar from './UpdateBar'
 
 /**
  * "Algo deu errado": no lugar da tela crua de erro do react-router (ou da tela
@@ -20,7 +21,7 @@ export function AppErrorScreen({ error }: { error?: unknown }): React.JSX.Elemen
       result === 'installing'
         ? 'Baixando a versão nova. O app reinicia sozinho.'
         : result === 'checking'
-          ? 'Se houver versão nova, o aviso aparece no canto da tela.'
+          ? 'Se houver versão nova, o aviso aparece aqui.'
           : 'Atualização indisponível aqui.'
     )
   }
@@ -45,6 +46,9 @@ export function AppErrorScreen({ error }: { error?: unknown }): React.JSX.Elemen
           )}
         </div>
         {updateMessage && <p className="mt-3 text-xs text-gray-400">{updateMessage}</p>}
+        <div className="mt-4 w-full">
+          <UpdateBar />
+        </div>
         {detail && (
           <details className="mt-5 text-left text-xs text-gray-500">
             <summary className="cursor-pointer">Detalhes</summary>

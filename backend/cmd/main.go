@@ -26,11 +26,13 @@ import (
 	"gin-quickstart/backend/internal/health"
 	"gin-quickstart/backend/internal/httplog"
 	"gin-quickstart/backend/internal/level"
+	"gin-quickstart/backend/internal/proposal"
 	"gin-quickstart/backend/internal/lifecycle"
 	"gin-quickstart/backend/internal/livekit"
 	"gin-quickstart/backend/internal/media"
 	"gin-quickstart/backend/internal/message"
 	"gin-quickstart/backend/internal/music"
+	"gin-quickstart/backend/internal/notifysettings"
 	"gin-quickstart/backend/internal/permission"
 	"gin-quickstart/backend/internal/role"
 	"gin-quickstart/backend/internal/server"
@@ -56,6 +58,58 @@ func loadEnv() {
 		}
 	}
 	log.Println("No .env file found")
+}
+
+// newIssueCreator escolhe como as propostas aprovadas viram issue: como um
+// GitHub App (GITHUB_APP_*, as issues saem como "<app>[bot]") ou com um token
+// fixo (GITHUB_TOKEN). Sem repositório ou sem credencial, devolve nil e as
+// propostas aprovadas ficam sem issue.
+func newIssueCreator() proposal.IssueCreator {
+	creator := buildIssueCreator()
+	// GITHUB_API_URL: GitHub Enterprise ou servidor de teste (padrão api.github.com).
+	if apiURL := os.Getenv("GITHUB_API_URL"); apiURL != "" {
+		if client, ok := creator.(*proposal.GitHubClient); ok {
+			log.Printf("[proposal] API do GitHub em %s", apiURL)
+			creator = client.WithBaseURL(apiURL)
+		}
+	}
+	// API_PUBLIC_URL: endereço público do backend; com ele as imagens das
+	// propostas entram na issue (o GitHub precisa conseguir buscá-las).
+	if publicURL := os.Getenv("API_PUBLIC_URL"); publicURL != "" {
+		if client, ok := creator.(*proposal.GitHubClient); ok {
+			client.WithPublicURL(publicURL)
+		}
+	}
+	return creator
+}
+
+func buildIssueCreator() proposal.IssueCreator {
+	repo := os.Getenv("GITHUB_REPO")
+	if repo == "" {
+		log.Println("[proposal] GITHUB_REPO vazio: propostas aprovadas ficam sem issue")
+		return nil
+	}
+	appID, installationID := os.Getenv("GITHUB_APP_ID"), os.Getenv("GITHUB_APP_INSTALLATION_ID")
+	if keyPath := os.Getenv("GITHUB_APP_PRIVATE_KEY_PATH"); appID != "" && installationID != "" && keyPath != "" {
+		pemKey, err := os.ReadFile(keyPath)
+		if err != nil {
+			log.Printf("[proposal] GitHub App: não consegui ler a chave %s: %v (propostas aprovadas ficam sem issue)", keyPath, err)
+			return nil
+		}
+		client, err := proposal.NewGitHubAppClient(appID, installationID, pemKey, repo)
+		if err != nil {
+			log.Printf("[proposal] %v (propostas aprovadas ficam sem issue)", err)
+			return nil
+		}
+		log.Printf("[proposal] issues em %s como GitHub App %s", repo, appID)
+		return client
+	}
+	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+		log.Printf("[proposal] issues em %s com GITHUB_TOKEN", repo)
+		return proposal.NewGitHubClient(token, repo)
+	}
+	log.Println("[proposal] sem GITHUB_APP_* nem GITHUB_TOKEN: propostas aprovadas ficam sem issue")
+	return nil
 }
 
 func findMigrationsDir() string {
@@ -384,12 +438,32 @@ func main() {
 	levelHandler := level.LevelHandler(levelService)
 	go levelService.Run(ctx)
 
+	// Propostas (kanban com votação de 7 dias; aprovadas viram issue no GitHub)
+	issueCreator := newIssueCreator()
+	var techIDs []string
+	for id := range strings.SplitSeq(os.Getenv("TECH_TEAM_USER_IDS"), ",") {
+		if id = strings.TrimSpace(id); id != "" {
+			techIDs = append(techIDs, id)
+		}
+	}
+	// Imagens das propostas numa subpasta que a limpeza dos anexos não varre.
+	proposalImages, err := media.NewStore(filepath.Join(uploadsDir, proposal.ImagesDir))
+	if err != nil {
+		log.Fatalf("failed to open proposal images dir: %v", err)
+	}
+	proposalService := proposal.ProposalService(proposal.ProposalRepository(db), hub, issueCreator, proposalImages, techIDs)
+	proposalHandler := proposal.ProposalHandler(proposalService, proposalImages, uploadSpace)
+	go proposalService.Run(ctx)
+
 	// Badges do perfil (tempo transmitindo, madrugada, maior call... somados
 	// olhando as chamadas; o resto vem dos contadores do banco)
 	// Horas de Coruja/Madrugador em Brasília (nil), não no relógio da VPS. No
 	// desligamento grava o que estava na memória antes de fechar o banco.
 	badgeService := badge.BadgeService(badge.BadgeRepository(db), hub, callService, hub, nil)
 	badgeHandler := badge.BadgeHandler(badgeService)
+	notifySettingsHandler := notifysettings.NotifySettingsHandler(
+		notifysettings.NotifySettingsService(notifysettings.NotifySettingsRepository(db), permissionService, hub),
+	)
 	badgeDone := make(chan struct{})
 	go func() {
 		defer close(badgeDone)
@@ -438,6 +512,8 @@ func main() {
 	soundboard.Routes(api, soundboardHandler, authMiddleware)
 	level.LevelRoutes(api, levelHandler, authMiddleware)
 	badge.BadgeRoutes(api, badgeHandler, authMiddleware)
+	notifysettings.Routes(api, notifySettingsHandler, authMiddleware)
+	proposal.ProposalRoutes(api, proposalHandler, authMiddleware, requireVerified)
 	birthday.BirthdayRoutes(api, birthdayHandler, authMiddleware)
 	music.Routes(api, music.NewHandler(musicManager, authService), authMiddleware)
 

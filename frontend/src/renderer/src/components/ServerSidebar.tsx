@@ -12,6 +12,9 @@ import { Perm } from '../lib/permissions'
 import { canOpenServerSettings } from '../lib/serverSettingsNav'
 import { actionErrorMessage } from '../lib/permissionErrors'
 import { useChatStore } from '../store/chatStore'
+import { useNotifySettingsStore } from '../store/notifySettingsStore'
+import { resolveScope } from '../lib/notificationMute'
+import { useNow } from './useNow'
 import { useCallStore } from '../store/callStore'
 import VoiceStateIcons from './call/VoiceStateIcons'
 import VoiceChannelTimer from './call/VoiceChannelTimer'
@@ -80,6 +83,11 @@ export function ServerSidebar(): React.JSX.Element {
   const deleteChannel = useServerStore((s) => s.deleteChannel)
   const deleteServer = useServerStore((s) => s.deleteServer)
   const unreadByRoom = useChatStore((s) => s.unreadByRoom)
+  const mentionsByRoom = useChatStore((s) => s.mentionsByRoom)
+  const notifyServers = useNotifySettingsStore((s) => s.servers)
+  const notifyChannels = useNotifySettingsStore((s) => s.channels)
+  const openNotifyModal = useNotifySettingsStore((s) => s.openModal)
+  const now = useNow()
   const openInviteModal = useUIStore((s) => s.openServerInviteModal)
   const createChannelModalOpen = useUIStore((s) => s.createChannelModalOpen)
   const openCreateChannelModal = useUIStore((s) => s.openCreateChannelModal)
@@ -130,9 +138,15 @@ export function ServerSidebar(): React.JSX.Element {
   const access = useServerAccess()
   const canManageChannels = access.can(Perm.MANAGE_CHANNELS)
   const isOwner = access.isOwner
-  /** Abre o menu do canal: gerencia canais ou as permissões deste canal. */
+  /**
+   * Canal de texto: todo membro abre o menu (notificações). Canal de voz: só
+   * quem gerencia canais ou as permissões dele. Cada item de moderação se
+   * esconde sozinho sem a permissão.
+   */
   const canOpenChannelMenu = (ch: Channel): boolean =>
-    canManageChannels || access.canInChannel(ch.id, Perm.MANAGE_ROLES)
+    (ch.type ?? 'text') === 'text' ||
+    canManageChannels ||
+    access.canInChannel(ch.id, Perm.MANAGE_ROLES)
   /** Canal de voz sobre o qual alguém está sendo arrastado (moderadores). */
   const [voiceDropTarget, setVoiceDropTarget] = useState<string | null>(null)
   const canMove = (targetId: string, fromChannelId: string): boolean =>
@@ -436,6 +450,17 @@ export function ServerSidebar(): React.JSX.Element {
       <>
         <div className="fixed inset-0 z-20" onClick={() => setChannelMenuFor(null)} />
         <div className="absolute right-1.5 top-full z-30 mt-1 flex w-48 flex-col rounded-xl border border-white/10 bg-[#0d0e15]/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in">
+          {currentServer && (ch.type ?? 'text') === 'text' && (
+            <button
+              onClick={() => {
+                setChannelMenuFor(null)
+                openNotifyModal({ serverId: currentServer.id, channelId: ch.id, name: ch.name })
+              }}
+              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-white/10 cursor-pointer"
+            >
+              <span>Notificações do canal</span>
+            </button>
+          )}
           {/* Alternativa ao arrastar (teclado/leitor de tela). */}
           {canManageChannels && index > 0 && (
             <button
@@ -570,6 +595,17 @@ export function ServerSidebar(): React.JSX.Element {
                   <PencilIcon className="h-3.5 w-3.5" />
                 </button>
               )}
+              {currentServer && (
+                <button
+                  onClick={() => {
+                    setDropdownOpen(false)
+                    openNotifyModal({ serverId: currentServer.id, name: currentServer.name })
+                  }}
+                  className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-white/10 cursor-pointer"
+                >
+                  <span>Notificações do servidor</span>
+                </button>
+              )}
               {canOpenServerSettings(access.perms) && (
                 <button
                   onClick={() => {
@@ -640,7 +676,13 @@ export function ServerSidebar(): React.JSX.Element {
               )}
               {textChannels.map((ch, index) => {
                 const active = ch.id === channelId
-                const unread = unreadByRoom[`channel:${ch.id}`] ?? 0
+                const muted = resolveScope(
+                  currentServer ? notifyServers[currentServer.id] : undefined,
+                  notifyChannels[ch.id],
+                  now
+                ).muted
+                const mentions = mentionsByRoom[`channel:${ch.id}`] ?? 0
+                const unread = muted ? 0 : (unreadByRoom[`channel:${ch.id}`] ?? 0)
                 return (
                   <div
                     key={ch.id}
@@ -661,7 +703,7 @@ export function ServerSidebar(): React.JSX.Element {
                         active
                           ? 'bg-white/10 text-white shadow-sm'
                           : 'text-gray-400 hover:bg-white/6 hover:text-gray-200'
-                      }`}
+                      } ${muted && !active && mentions === 0 ? 'opacity-50' : ''}`}
                     >
                       <span className="flex h-6 shrink-0 items-center text-xl leading-none text-gray-500">
                         #
@@ -688,10 +730,16 @@ export function ServerSidebar(): React.JSX.Element {
                           </span>
                         )}
                       </span>
-                      {unread > 0 && (
+                      {(mentions > 0 || unread > 0) && (
                         <span className="flex h-6 shrink-0 items-center">
-                          <span className="rounded-full bg-red-500 px-1.5 py-0.2 text-[10px] font-bold text-white">
-                            {unread > 99 ? '99+' : unread}
+                          <span
+                            title={mentions > 0 ? 'Menções' : undefined}
+                            className="rounded-full bg-red-500 px-1.5 py-0.2 text-[10px] font-bold text-white"
+                          >
+                            {(() => {
+                              const n = mentions > 0 ? mentions : unread
+                              return n > 99 ? '99+' : n
+                            })()}
                           </span>
                         </span>
                       )}

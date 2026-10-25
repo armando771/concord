@@ -74,6 +74,7 @@ const media = vi.hoisted(() => ({
   events: [] as string[],
   connect: vi.fn(),
   publishScreen: vi.fn(),
+  updateScreenQuality: vi.fn(),
   publishCamera: vi.fn(),
   setWatchedScreens: vi.fn()
 }))
@@ -82,6 +83,7 @@ vi.mock('../lib/livekit', () => ({
     handlers: unknown
     connect = media.connect
     publishScreen = media.publishScreen
+    updateScreenQuality = media.updateScreenQuality
     publishCamera = media.publishCamera
     setWatchedScreens = media.setWatchedScreens
     setMicMuted = vi.fn(async (muted: boolean) => {
@@ -173,10 +175,115 @@ beforeEach(() => {
   api.startCall.mockResolvedValue({ id: 'call-1' })
   media.connect.mockResolvedValue(undefined)
   media.publishScreen.mockResolvedValue(undefined)
+  media.updateScreenQuality.mockResolvedValue(undefined)
   media.publishCamera.mockResolvedValue(undefined)
 })
 
 describe('callStore — mídia via LiveKit', () => {
+  it('troca qualidade sem encerrar a transmissão nem anunciar saída aos espectadores', async () => {
+    await joinChannel()
+    const stream = fakeStream('video', 'audio')
+    rtc.getDisplayStream.mockResolvedValueOnce(stream)
+    await useCallStore.getState().startScreenShare()
+    chat.sendEvent.mockClear()
+    const watched = useCallStore.getState().watchedScreenIds
+    const sharers = useCallStore.getState().screenSharers
+    useCallStore.getState().updateScreenQuality({ resolution: '720p', frameRate: 60 })
+    await flush()
+    expect(media.updateScreenQuality).toHaveBeenCalledWith(stream, {
+      resolution: '720p',
+      frameRate: 60
+    })
+    expect(useCallStore.getState()).toMatchObject({
+      isScreenSharing: true,
+      localScreenStream: stream,
+      pendingScreenQuality: null,
+      screenShareQuality: { resolution: '720p', frameRate: 60 },
+      screenSharers: sharers,
+      watchedScreenIds: watched
+    })
+    expect(chat.sendEvent).not.toHaveBeenCalled()
+    expect(media.publishScreen).toHaveBeenCalledTimes(1)
+    expect(allStopped(stream)).toBe(false)
+  })
+
+  it('ignora escolha igual à qualidade atual', async () => {
+    await joinChannel()
+    rtc.getDisplayStream.mockResolvedValueOnce(fakeStream('video'))
+    await useCallStore.getState().startScreenShare()
+    useCallStore.getState().updateScreenQuality({ resolution: '1080p', frameRate: 30 })
+    await flush()
+    expect(media.updateScreenQuality).not.toHaveBeenCalled()
+    expect(useCallStore.getState().pendingScreenQuality).toBeNull()
+  })
+
+  it('aplica a última escolha sem perder trocas feitas durante uma atualização', async () => {
+    await joinChannel()
+    const stream = fakeStream('video')
+    rtc.getDisplayStream.mockResolvedValueOnce(stream)
+    await useCallStore.getState().startScreenShare()
+    const waiting = deferred<void>()
+    media.updateScreenQuality.mockReturnValueOnce(waiting.promise)
+    const store = useCallStore.getState()
+    store.updateScreenQuality({ resolution: '720p', frameRate: 60 })
+    store.updateScreenQuality({ resolution: '1080p', frameRate: 60 })
+    store.updateScreenQuality({ resolution: 'source', frameRate: 30 })
+    expect(useCallStore.getState().pendingScreenQuality).toEqual({
+      resolution: 'source',
+      frameRate: 30
+    })
+    expect(media.updateScreenQuality).toHaveBeenCalledTimes(1)
+    waiting.resolve()
+    await flush()
+    expect(media.updateScreenQuality).toHaveBeenCalledTimes(2)
+    expect(media.updateScreenQuality).toHaveBeenLastCalledWith(stream, {
+      resolution: 'source',
+      frameRate: 30
+    })
+    expect(useCallStore.getState()).toMatchObject({
+      pendingScreenQuality: null,
+      screenShareQuality: { resolution: 'source', frameRate: 30 }
+    })
+  })
+
+  it('descarta a conclusão de uma troca depois de parar a transmissão', async () => {
+    await joinChannel()
+    rtc.getDisplayStream.mockResolvedValueOnce(fakeStream('video'))
+    await useCallStore.getState().startScreenShare()
+    const waiting = deferred<void>()
+    media.updateScreenQuality.mockReturnValueOnce(waiting.promise)
+    useCallStore.getState().updateScreenQuality({ resolution: '720p', frameRate: 60 })
+    expect(useCallStore.getState().pendingScreenQuality).toEqual({
+      resolution: '720p',
+      frameRate: 60
+    })
+    useCallStore.getState().stopScreenShare()
+    waiting.resolve()
+    await flush()
+    expect(useCallStore.getState()).toMatchObject({
+      isScreenSharing: false,
+      screenShareQuality: null,
+      pendingScreenQuality: null
+    })
+    expect(showToast.error).not.toHaveBeenCalled()
+  })
+
+  it('mantém a qualidade ativa e a transmissão quando a atualização falha', async () => {
+    await joinChannel()
+    rtc.getDisplayStream.mockResolvedValueOnce(fakeStream('video'))
+    await useCallStore.getState().startScreenShare()
+    const previous = useCallStore.getState().screenShareQuality
+    media.updateScreenQuality.mockRejectedValueOnce(new Error('encoder'))
+    useCallStore.getState().updateScreenQuality({ resolution: '720p', frameRate: 60 })
+    await flush()
+    expect(useCallStore.getState()).toMatchObject({
+      isScreenSharing: true,
+      screenShareQuality: previous,
+      pendingScreenQuality: null
+    })
+    expect(showToast.error).toHaveBeenCalled()
+  })
+
   it('retoma ensurdecido sem publicar áudio e restaura o mute anterior ao desensurdecer', async () => {
     const mic = fakeMic()
     rtc.getAudioStream.mockResolvedValue(mic)
@@ -231,6 +338,8 @@ describe('callStore — mídia via LiveKit', () => {
     rtc.getDisplayStream.mockReturnValue(picked.promise)
 
     const sharing = useCallStore.getState().startScreenShare()
+    await useCallStore.getState().startScreenShare()
+    expect(rtc.getDisplayStream).toHaveBeenCalledTimes(1)
     useCallStore.getState().endCall()
     const stream = fakeStream('video', 'audio')
     picked.resolve(stream)
@@ -1475,7 +1584,15 @@ describe('callStore — salas trancadas e pedidos de entrada', () => {
   it('evento call:lock atualiza o estado local e serverCalls', () => {
     useCallStore.getState().setServerCalls({
       'canal-1': {
-        call: { id: 'call-1', type: 'channel', channel_id: 'canal-1', initiator_id: 'ana', status: 'active', started_at: '', locked: false },
+        call: {
+          id: 'call-1',
+          type: 'channel',
+          channel_id: 'canal-1',
+          initiator_id: 'ana',
+          status: 'active',
+          started_at: '',
+          locked: false
+        },
         participants: []
       }
     })

@@ -1,3 +1,4 @@
+import NotifySettingsModal from './NotifySettingsModal'
 import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import ServerRail from './ServerRail'
@@ -10,8 +11,10 @@ import EmailVerifyBanner from './EmailVerifyBanner'
 import ScreenMiniPlayer from './call/ScreenMiniPlayer'
 import ActivityPanel from './call/ActivityPanel'
 import ScreenSharePickerModal from './call/ScreenSharePickerModal'
+import ScreenQualityModal from './call/ScreenQualityModal'
 import JoinRequestsStack from './call/JoinRequestsStack'
 import LevelUpBanner from './level/LevelUpBanner'
+import BoostBanner from './level/BoostBanner'
 import LevelUpScreen from './level/LevelUpScreen'
 import InviteConfirmModal from './invite/InviteConfirmModal'
 import LevelUpMilestone from './level/LevelUpMilestone'
@@ -60,13 +63,16 @@ function AppShell(): React.JSX.Element {
       <ActivityPanel />
       {/* No navegador o seletor de tela é o do próprio navegador. */}
       {!IS_WEB && <ScreenSharePickerModal />}
+      {IS_WEB && <ScreenQualityModal />}
       <LevelUpScreen />
       <InviteConfirmModal />
       <LevelUpMilestone />
 
       <LevelUpBanner />
+      <BoostBanner />
       <BadgeUnlockToast />
       <BadgesModal />
+      <NotifySettingsModal />
       {quickSwitcherOpen && <QuickSwitcherModal open onClose={() => setQuickSwitcherOpen(false)} />}
       <ShortcutsModal />
     </div>
