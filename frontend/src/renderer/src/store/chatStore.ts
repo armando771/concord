@@ -790,11 +790,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (event.type === 'server:update') {
       const serverId = payload.server_id as string
       const srv = payload.server as Server | undefined
+      // O evento já traz o servidor inteiro: aplica por cima, sem recarregar.
       if (srv) {
         useServerStore.getState().updateLocalServer(srv)
-      }
-      if (serverId && useServerStore.getState().currentServer?.id === serverId) {
-        void useServerStore.getState().selectServer(serverId)
+      } else if (serverId && useServerStore.getState().currentServer?.id === serverId) {
+        useServerStore
+          .getState()
+          .selectServer(serverId)
+          .catch(() => {})
       }
       return
     }
