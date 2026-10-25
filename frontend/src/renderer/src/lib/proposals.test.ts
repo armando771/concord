@@ -1,19 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import type { PendingProposalMention, Proposal } from '../api/proposals'
+import type { PendingProposalMention, Proposal, ProposalComment } from '../api/proposals'
 import {
   badgeCount,
   canDeleteComment,
   canDeleteProposal,
+  canDropOn,
   canEditComment,
   canEditProposal,
   canVote,
+  closeLabel,
+  commentPreview,
+  hasReacted,
   MAX_IMAGE_BYTES,
   MAX_IMAGES,
   MAX_MENTIONS,
   mentionIdsIn,
   mergeProposal,
+  moveProposal,
   moveTargets,
+  needsCloseConfirm,
   pickImageFiles,
+  restoreProposal,
+  sortColumn,
   timeLeftLabel,
   unseenCount,
   yesPercent
@@ -181,5 +189,158 @@ describe('mergeProposal', () => {
   it('card novo entra no começo', () => {
     const out = mergeProposal([base], { ...base, id: 'p9' })
     expect(out.map((p) => p.id)).toEqual(['p9', 'p1'])
+  })
+})
+
+const ALL = ['voting', 'proposed', 'in_progress', 'done', 'rejected'] as const
+
+describe('canDropOn', () => {
+  it('aceita qualquer coluna diferente, menos Em votação', () => {
+    expect(canDropOn('voting', 'proposed')).toBe(true)
+    expect(canDropOn('proposed', 'done')).toBe(true)
+    expect(canDropOn('done', 'in_progress')).toBe(true)
+    expect(canDropOn('in_progress', 'rejected')).toBe(true)
+    expect(canDropOn('rejected', 'proposed')).toBe(true)
+  })
+  it('recusa a mesma coluna e a volta para votação', () => {
+    expect(canDropOn('proposed', 'proposed')).toBe(false)
+    expect(canDropOn('voting', 'voting')).toBe(false)
+    expect(canDropOn('done', 'voting')).toBe(false)
+    expect(canDropOn('rejected', 'voting')).toBe(false)
+  })
+  it('permite exatamente o que o menu Mover para oferece', () => {
+    for (const from of ALL) {
+      expect(ALL.filter((to) => canDropOn(from, to))).toEqual(moveTargets(from))
+    }
+  })
+})
+
+describe('needsCloseConfirm', () => {
+  it('só pergunta ao tirar o card de Em votação', () => {
+    expect(needsCloseConfirm({ status: 'voting' })).toBe(true)
+    expect(needsCloseConfirm({ status: 'proposed' })).toBe(false)
+    expect(needsCloseConfirm({ status: 'rejected' })).toBe(false)
+  })
+})
+
+describe('sortColumn', () => {
+  it('em votação: o prazo que acaba primeiro vem antes', () => {
+    const a = { ...base, id: 'a', voting_ends_at: at(3 * H) }
+    const b = { ...base, id: 'b', voting_ends_at: at(1 * H) }
+    expect(sortColumn([a, b], 'voting').map((p) => p.id)).toEqual(['b', 'a'])
+  })
+  it('nas outras colunas: quem entrou por último fica no topo', () => {
+    const old = { ...base, id: 'old', status: 'proposed' as const, moved_at: at(-5 * H) }
+    const fresh = { ...base, id: 'fresh', status: 'proposed' as const, moved_at: at(-1 * H) }
+    expect(sortColumn([old, fresh], 'proposed').map((p) => p.id)).toEqual(['fresh', 'old'])
+  })
+  it('sem moved_at cai no closed_at e depois no created_at', () => {
+    const a = { ...base, id: 'a', status: 'done' as const, closed_at: at(-2 * H) }
+    const b = { ...base, id: 'b', status: 'done' as const, created_at: at(-9 * H) }
+    expect(sortColumn([b, a], 'done').map((p) => p.id)).toEqual(['a', 'b'])
+  })
+  it('não altera a lista original', () => {
+    const list = [
+      { ...base, id: 'a', voting_ends_at: at(3 * H) },
+      { ...base, id: 'b', voting_ends_at: at(1 * H) }
+    ]
+    sortColumn(list, 'voting')
+    expect(list.map((p) => p.id)).toEqual(['a', 'b'])
+  })
+})
+
+describe('moveProposal / restoreProposal', () => {
+  it('move só o card pedido, grava moved_at e o fechamento', () => {
+    const other = { ...base, id: 'p2' }
+    const out = moveProposal([base, other], 'p1', 'in_progress', NOW)
+    expect(out[0].status).toBe('in_progress')
+    expect(out[0].moved_at).toBe(new Date(NOW).toISOString())
+    expect(out[0].closed_at).toBe(new Date(NOW).toISOString())
+    expect(out[0].close_reason).toBe('manual')
+    expect(out[1]).toBe(other)
+  })
+  it('mover de uma coluna já fechada mantém o closed_at e o motivo', () => {
+    const closed = {
+      ...base,
+      status: 'proposed' as const,
+      closed_at: at(-3 * H),
+      close_reason: 'deadline' as const
+    }
+    const out = moveProposal([closed], 'p1', 'done', NOW)[0]
+    expect(out.closed_at).toBe(at(-3 * H))
+    expect(out.close_reason).toBe('deadline')
+    expect(out.moved_at).toBe(new Date(NOW).toISOString())
+  })
+  it('o desfazer devolve o card exatamente como estava', () => {
+    const moved = moveProposal([base], 'p1', 'done', NOW)
+    expect(restoreProposal(moved, base)).toEqual([base])
+  })
+  it('id que não existe não muda nada', () => {
+    expect(moveProposal([base], 'x', 'done', NOW)).toEqual([base])
+  })
+})
+
+describe('closeLabel', () => {
+  it('não mostra nada em votação', () => {
+    expect(closeLabel(base)).toBeNull()
+  })
+  it('diz quem encerrou, ou que foi o prazo', () => {
+    const closed = { ...base, status: 'proposed' as const, closed_at: '2026-10-25T12:00:00Z' }
+    expect(closeLabel({ ...closed, close_reason: 'manual', closed_by_name: 'Hugo' })).toContain(
+      'encerrada por Hugo (time tech)'
+    )
+    expect(closeLabel({ ...closed, close_reason: 'manual' })).toContain('pelo time tech')
+    expect(closeLabel({ ...closed, close_reason: 'deadline' })).toContain('pelo prazo')
+  })
+})
+
+const comment = (over: Partial<ProposalComment> = {}): ProposalComment => ({
+  id: 'c1',
+  proposal_id: 'p1',
+  author_id: 'u1',
+  author_name: 'Ana',
+  body: 'oi',
+  created_at: at(0),
+  mentions: [],
+  reactions: [],
+  attachments: [],
+  ...over
+})
+
+describe('hasReacted', () => {
+  const reactions = [
+    { emoji: '👍', count: 2, user_ids: ['u1', 'u2'] },
+    { emoji: '🔥', count: 1, user_ids: ['u3'] }
+  ]
+  it('diz se a pessoa está entre quem usou o emoji', () => {
+    expect(hasReacted({ reactions }, 'u1', '👍')).toBe(true)
+    expect(hasReacted({ reactions }, 'u3', '👍')).toBe(false)
+    expect(hasReacted({ reactions }, 'u1', '🔥')).toBe(false)
+  })
+  it('sem usuário logado ou sem reações é falso', () => {
+    expect(hasReacted({ reactions }, null, '👍')).toBe(false)
+    expect(hasReacted({ reactions: [] }, 'u1', '👍')).toBe(false)
+  })
+})
+
+describe('commentPreview', () => {
+  it('usa o texto, sem quebras de linha', () => {
+    expect(commentPreview(comment({ body: 'olha\n  isso' }))).toBe('olha isso')
+  })
+  it('só anexo: mostra o rótulo do arquivo', () => {
+    const att = {
+      id: 'a',
+      kind: 'image' as const,
+      content_type: 'image/png',
+      filename: 'a.png',
+      size_bytes: 1,
+      url: '/x'
+    }
+    expect(commentPreview(comment({ body: '', attachments: [att] }))).toBe('🖼️ Imagem')
+    expect(commentPreview(comment({ body: '', attachments: [att, att] }))).toBe('📎 2 anexos')
+  })
+  it('sem nada devolve vazio e corta o texto longo', () => {
+    expect(commentPreview(comment({ body: '' }))).toBe('')
+    expect(commentPreview(comment({ body: 'a'.repeat(300) }), 10)).toBe('aaaaaaaaaa…')
   })
 })

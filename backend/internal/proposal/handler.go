@@ -41,6 +41,14 @@ func (h *Handler) fail(c *gin.Context, err error) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid image"})
 	case errors.Is(err, ErrInvalidComment):
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid comment"})
+	case errors.Is(err, ErrInvalidReply):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid reply"})
+	case errors.Is(err, ErrInvalidAttachment):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid attachment"})
+	case errors.Is(err, ErrInvalidEmoji):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid emoji"})
+	case errors.Is(err, ErrTooManyReactions):
+		c.JSON(http.StatusConflict, gin.H{"error": "too many different reactions", "code": "too_many_reactions"})
 	case errors.Is(err, ErrInvalidStatus):
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status"})
 	case errors.Is(err, ErrTooManyOpen):
@@ -213,14 +221,22 @@ func (h *Handler) AddComment(c *gin.Context) {
 		return
 	}
 	var body struct {
-		Body     string   `json:"body"`
-		Mentions []string `json:"mentions"`
+		Body          string   `json:"body"`
+		Mentions      []string `json:"mentions"`
+		ReplyToID     *string  `json:"reply_to_id"`
+		AttachmentIDs []string `json:"attachment_ids"`
 	}
-	if err := c.ShouldBindJSON(&body); err != nil || !validImageIDs(body.Mentions) {
+	if err := c.ShouldBindJSON(&body); err != nil || !validImageIDs(body.Mentions) || !validImageIDs(body.AttachmentIDs) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
 		return
 	}
-	comment, err := h.service.AddComment(c.Request.Context(), id, c.GetString("userID"), body.Body, body.Mentions)
+	if body.ReplyToID != nil {
+		if _, err := uuid.Parse(*body.ReplyToID); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+			return
+		}
+	}
+	comment, err := h.service.AddComment(c.Request.Context(), id, c.GetString("userID"), body.Body, body.Mentions, body.ReplyToID, body.AttachmentIDs)
 	if err != nil {
 		h.fail(c, err)
 		return
