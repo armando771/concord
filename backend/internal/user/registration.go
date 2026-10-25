@@ -71,10 +71,15 @@ func ValidateRegistration(r Registration) error {
 	if utf8.RuneCountInString(r.Email) > 255 || !emailPattern.MatchString(r.Email) {
 		return ErrInvalidEmail
 	}
-	if utf8.RuneCountInString(r.Password) < 8 {
+	return ValidatePassword(r.Password)
+}
+
+// ValidatePassword aplica as regras de senha do cadastro (também na redefinição).
+func ValidatePassword(password string) error {
+	if utf8.RuneCountInString(password) < 8 {
 		return ErrPasswordTooShort
 	}
-	if PasswordTooLong(r.Password) {
+	if PasswordTooLong(password) {
 		return ErrPasswordTooLong
 	}
 	return nil

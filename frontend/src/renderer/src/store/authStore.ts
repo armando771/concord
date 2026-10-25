@@ -32,6 +32,8 @@ export interface PublicUser {
 /** A própria conta (/users/me e /users/me/*): com o e-mail. */
 export interface User extends PublicUser {
   email: string
+  /** false até a pessoa abrir o link do e-mail de confirmação. */
+  email_verified?: boolean
 }
 
 interface AuthState {

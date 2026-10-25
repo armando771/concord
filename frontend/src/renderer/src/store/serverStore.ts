@@ -146,6 +146,9 @@ const OWN_REQUEST_TTL_MS = 60_000
 const newRequestId = (): string =>
   globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
 
+/** Conta as chamadas de selectServer: só a mais recente grava o resultado. */
+let selectSeq = 0
+
 const isSameSession = (tokenAtStart: string | null): boolean =>
   useAuthStore.getState().accessToken === tokenAtStart
 
@@ -179,10 +182,14 @@ export const useServerStore = create<ServerState>()((set, get) => ({
   },
   selectServer: async (id: string) => {
     const token = useAuthStore.getState().accessToken
-    set({ loading: true })
+    const seq = ++selectSeq
+    // Já é o servidor na tela: busca por baixo e troca quando chegar. O
+    // "carregando" (que tira a tela toda, modal junto) é só para abrir outro.
+    const refreshing = get().currentServer?.id === id
+    if (!refreshing) set({ loading: true })
     try {
       const res = await getServer(id)
-      if (!isSameSession(token)) return
+      if (!isSameSession(token) || seq !== selectSeq) return
       set({
         currentServer: res.server,
         currentMembers: res.members,
@@ -190,10 +197,11 @@ export const useServerStore = create<ServerState>()((set, get) => ({
         nicknames: { ...get().nicknames, [id]: nicknameMap(res.members) }
       })
     } catch (err) {
-      if (isSameSession(token)) set({ currentServer: null, currentMembers: [], roles: [] })
+      if (!isSameSession(token) || seq !== selectSeq) return
+      if (!refreshing) set({ currentServer: null, currentMembers: [], roles: [] })
       throw err
     } finally {
-      set({ loading: false })
+      if (seq === selectSeq) set({ loading: false })
     }
   },
   refreshServer: async (serverId: string) => {
@@ -428,10 +436,9 @@ export const useServerStore = create<ServerState>()((set, get) => ({
   },
   inviteUser: async (serverId: string, userId: string) => {
     await apiInviteMember(serverId, userId)
+    // Convite não muda membros (o amigo só entra ao aceitar, e aí chega o
+    // server:member_join): basta a lista de convites pendentes.
     await get().fetchServerInvites(serverId)
-    if (get().currentServer?.id === serverId) {
-      await get().selectServer(serverId)
-    }
   },
   clearCurrentServer: () =>
     set({ currentServer: null, currentMembers: [], roles: [], channels: [] }),

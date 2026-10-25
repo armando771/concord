@@ -1,0 +1,19 @@
+# /etc/systemd/system/concord-server.socket — a porta do backend fica com o
+# systemd. No reinício (deploy) ela nunca fecha: quem chega enquanto o processo
+# troca espera na fila do kernel e é atendido pelo processo novo, em vez de
+# receber "conexão recusada" (o Caddy não precisa repetir nada, nem POST).
+#
+# ListenStream tem que ser o endereço para onde o Caddy manda (127.0.0.1:8090);
+# com o socket, o backend ignora HOST/PORT do .env. Veja docs/HOSPEDAGEM.md
+# ("Porta do backend com o systemd") para ativar sem derrubar ninguém.
+[Unit]
+Description=Porta do backend da Salinha (aberta durante o reinício)
+
+[Socket]
+ListenStream=127.0.0.1:8090
+# Fila para as conexões que chegam durante a troca de processo.
+Backlog=4096
+NoDelay=true
+
+[Install]
+WantedBy=sockets.target

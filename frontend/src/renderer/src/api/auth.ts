@@ -38,6 +38,32 @@ export function login(input: LoginInput): Promise<AuthResponse> {
   })
 }
 
+export function verifyEmail(token: string): Promise<void> {
+  return rawRequest<void>('/auth/verify-email', {
+    method: 'POST',
+    body: JSON.stringify({ token })
+  })
+}
+
+/** Reenvia o e-mail de confirmação; sent=false quando já estava confirmado. */
+export function resendVerification(): Promise<{ sent: boolean }> {
+  return request<{ sent: boolean }>('/auth/resend-verification', { method: 'POST' })
+}
+
+export function forgotPassword(email: string): Promise<void> {
+  return rawRequest<void>('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email })
+  })
+}
+
+export function resetPassword(token: string, password: string): Promise<void> {
+  return rawRequest<void>('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, password })
+  })
+}
+
 export function logout(): Promise<void> {
   return request<void>('/auth/logout', { method: 'POST' })
 }

@@ -1,3 +1,4 @@
+import { ACTIVITIES } from '../../../shared/activities'
 // Funções puras sobre o endereço do servidor. Usadas pelo renderer (config.ts)
 // e pelo build (electron.vite.config.ts, para gerar a CSP) — sem import.meta.
 
@@ -6,7 +7,10 @@ export const DEFAULT_SERVER_URL = 'http://localhost:8080'
 export interface ServerUrls {
   apiBaseUrl: string
   wsUrl: string
-  /** O livekit-client acrescenta /rtc sozinho; o backend repassa para o LiveKit. */
+  /**
+   * O livekit-client acrescenta /rtc sozinho. Na VPS o Caddy manda /rtc direto
+   * para o LiveKit; sem Caddy (PC de casa), o backend repassa.
+   */
   liveKitUrl: string
 }
 
@@ -81,8 +85,12 @@ export function buildWebMediaSrc(): string {
   return "'self' blob:"
 }
 
-/** Diretivas que só o build web acrescenta à CSP (o desktop fica como está). */
-export const WEB_EXTRA_CSP = "base-uri 'self'"
+/**
+ * Diretivas que só o build web acrescenta à CSP (o desktop fica como está).
+ * frame-src: só o iframe das atividades (Krunker.io); o desktop abre o jogo
+ * numa janela própria.
+ */
+export const WEB_EXTRA_CSP = `base-uri 'self'; frame-src ${ACTIVITIES.flatMap((a) => a.origins).join(' ')}`
 
 /** Preenche os marcadores da CSP do index.html; `extra` vem depois do connect-src. */
 export function fillCsp(

@@ -31,6 +31,7 @@ export async function getDisplayStream(): Promise<MediaStream> {
     })
   stream.getVideoTracks().forEach((track) => {
     track.contentHint = 'detail'
+    track.addEventListener('ended', () => window.api?.screenShare?.ended())
   })
   stream.getAudioTracks().forEach((track) => {
     track.contentHint = 'music'
