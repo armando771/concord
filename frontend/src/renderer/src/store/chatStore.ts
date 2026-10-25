@@ -47,6 +47,7 @@ import { handleServerRoleEvent, removedMessage } from './serverEvents'
 import { useFriendStore } from './friendStore'
 import { useCallStore } from './callStore'
 import { useLevelStore } from './levelStore'
+import { useBadgeStore } from './badgeStore'
 import { useSoundboardStore } from './soundboardStore'
 import { useActivityStore } from './activityStore'
 import { useTypingStore } from './typingStore'
@@ -265,6 +266,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     listsResyncTimer = null
     get().reset()
     useLevelStore.getState().reset()
+    useBadgeStore.getState().reset()
   },
   isWsConnected: () => client.isConnected(),
 
@@ -694,6 +696,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     if (event.type.startsWith('level:')) {
       useLevelStore.getState().handleWsEvent(event)
+      return
+    }
+
+    if (event.type.startsWith('badge:')) {
+      useBadgeStore.getState().handleWsEvent(event)
       return
     }
 

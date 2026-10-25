@@ -939,3 +939,30 @@
     animation-name: typing-dot-fade;
   }
 }
+
+/* Aviso de badge novo (BadgeUnlockToast): desce, fica e some. */
+@keyframes badge-toast {
+  0% {
+    transform: translateY(-16px);
+    opacity: 0;
+  }
+  8%,
+  88% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-6px);
+    opacity: 0;
+  }
+}
+
+.badge-toast {
+  animation: badge-toast var(--badge-toast-ms, 5000ms) ease-in-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .badge-toast {
+    animation-name: level-fade;
+  }
+}
