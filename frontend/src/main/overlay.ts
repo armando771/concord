@@ -17,6 +17,9 @@ import {
 let snapshot: OverlaySnapshot | null = null
 let foreground: Foreground = null
 let win: BrowserWindow | null = null
+// Saindo do app: um estado atrasado do renderer não pode subir o helper nem
+// recriar a janela, senão o Electron fica esperando e não fecha.
+let quitting = false
 
 function createOverlayWindow(): BrowserWindow {
   const overlay = new BrowserWindow({
@@ -43,6 +46,8 @@ function createOverlayWindow(): BrowserWindow {
   // Cliques passam para o jogo; nível acima de janelas em tela cheia.
   overlay.setIgnoreMouseEvents(true)
   overlay.setAlwaysOnTop(true, 'screen-saver')
+  // Fora do compartilhamento de tela (quem assiste não vê o overlay).
+  overlay.setContentProtection(true)
   overlay.on('closed', () => {
     if (win === overlay) win = null
   })
@@ -55,6 +60,7 @@ function createOverlayWindow(): BrowserWindow {
 }
 
 function sync(): void {
+  if (quitting) return
   if (shouldWatchForeground(process.platform, snapshot)) {
     startForegroundWatch((next) => {
       foreground = next
@@ -100,5 +106,12 @@ export function setupOverlay(getMainWindow: () => BrowserWindow | null): void {
       sync()
     }
   })
-  app.on('before-quit', stopForegroundWatch)
+  app.on('before-quit', () => {
+    quitting = true
+    snapshot = null
+    foreground = null
+    stopForegroundWatch()
+    win?.destroy()
+    win = null
+  })
 }
