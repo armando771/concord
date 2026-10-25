@@ -36,8 +36,7 @@ import { showToast } from '../store/toastStore'
 import Modal from './Modal'
 import Button from './Button'
 import Input from './Input'
-import VoiceConnectedPanel from './call/VoiceConnectedPanel'
-import UserBar from './UserBar'
+import SidebarFooter from './SidebarFooter'
 import ChannelPermissionsModal from './ChannelPermissionsModal'
 import ConfirmModal from './friends/ConfirmModal'
 import Switch from './Switch'
@@ -911,10 +910,8 @@ export function ServerSidebar(): React.JSX.Element {
           </div>
         </div>
 
-        {/* Painel de voz conectada (estilo Discord) */}
-        <VoiceConnectedPanel />
-
-        <UserBar />
+        {/* "Voz conectada" na chamada + a barra do usuário (igual em todas as telas) */}
+        <SidebarFooter />
       </aside>
 
       {/* Create / Edit Channel Modal */}

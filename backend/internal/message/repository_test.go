@@ -2,6 +2,7 @@ package message
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -150,5 +151,80 @@ func checkPages(t *testing.T, want []string, list func(before string) ([]Message
 		if got[i] != want[i] {
 			t.Fatalf("posição %d: got %s, want %s", i, got[i], want[i])
 		}
+	}
+}
+
+// Edição num Postgres de verdade: só o autor grava, edited_at volta nas
+// leituras e a ordem (created_at) não muda.
+func TestUpdateContentDB(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL não definido")
+	}
+	ctx := context.Background()
+	db, err := database.Connect(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := database.Migrate(db, "../../migrations"); err != nil {
+		t.Fatal(err)
+	}
+
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := db.Exec(ctx, sql, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	author, other := uuid.NewString(), uuid.NewString()
+	serverID, channelID := uuid.NewString(), uuid.NewString()
+	for _, u := range []string{author, other} {
+		name := "u" + strings.ReplaceAll(u, "-", "")[:12]
+		exec(`INSERT INTO users (id, username, display_name, email, password_hash) VALUES ($1, $2::text, $2::text, $2::text || '@ex.com', 'x')`, u, name)
+	}
+	t.Cleanup(func() {
+		db.Exec(ctx, `DELETE FROM servers WHERE id = $1`, serverID)
+		db.Exec(ctx, `DELETE FROM users WHERE id = ANY($1)`, []string{author, other})
+	})
+	exec(`INSERT INTO servers (id, name, icon_url, owner_id) VALUES ($1, 's', '', $2)`, serverID, author)
+	exec(`INSERT INTO channels (id, server_id, name, type, created_by, position) VALUES ($1, $2, 'geral', 'text', $3, 0)`, channelID, serverID, author)
+
+	repo := MessageRepository(db)
+	first := &Message{ID: uuid.NewString(), AuthorID: author, ChannelID: &channelID, Content: "@all primeira", MentionEveryone: strPtr(MentionAll)}
+	second := &Message{ID: uuid.NewString(), AuthorID: author, ChannelID: &channelID, Content: "segunda"}
+	for _, m := range []*Message{first, second} {
+		if err := repo.Create(ctx, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := repo.UpdateContent(ctx, first.ID, other, "x", nil); !errors.Is(err, ErrMessageNotFound) {
+		t.Fatalf("outra pessoa: err = %v, want ErrMessageNotFound", err)
+	}
+	if err := repo.UpdateContent(ctx, first.ID, author, "primeira, editada", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := repo.FindByID(ctx, first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Content != "primeira, editada" || got.EditedAt == nil || got.MentionEveryone != nil {
+		t.Fatalf("depois da edição: %+v", got)
+	}
+	if !got.CreatedAt.Equal(first.CreatedAt) {
+		t.Fatalf("created_at mudou: %v → %v", first.CreatedAt, got.CreatedAt)
+	}
+	if has, err := repo.HasPoll(ctx, first.ID); err != nil || has {
+		t.Fatalf("HasPoll = %v, %v", has, err)
+	}
+
+	list, err := repo.ListByChannel(ctx, channelID, 10, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 2 || list[0].ID != second.ID || list[1].ID != first.ID || list[1].EditedAt == nil || list[0].EditedAt != nil {
+		t.Fatalf("lista depois da edição fora de ordem ou sem edited_at: %+v", list)
 	}
 }

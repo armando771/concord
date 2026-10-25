@@ -22,6 +22,7 @@ import {
   listConversationMessages,
   sendConversationMessage,
   deleteConversationMessage,
+  editMessage,
   addConversationReaction,
   removeConversationReaction,
   createPoll,
@@ -32,6 +33,7 @@ import { applyReactionAdd, applyReactionRemove } from '../lib/emotes'
 import { applyPollUpdate, messagePreview, type PollUpdate } from '../lib/polls'
 import { mergeMissedMessages, newestMessage } from '../lib/missedMessages'
 import { mergeMessages } from '../lib/messageOrder'
+import { applyMessageUpdate } from '../lib/messageEdit'
 import { APP_UPDATE_EVENT, requestUpdateCheck } from '../lib/appUpdate'
 import type { ConversationSummary } from '../api/conversations'
 import { listConversations, markConversationRead } from '../api/conversations'
@@ -39,6 +41,7 @@ import { conversationTitle, sanitizeConversations } from '../lib/conversations'
 import type { PresenceMap } from '../api/presence'
 import { fetchPresence } from '../api/presence'
 import { listChannels } from '../api/channels'
+import { useChannelNameStore } from './channelNameStore'
 import { useServerStore } from './serverStore'
 import { handleServerRoleEvent, removedMessage } from './serverEvents'
 import { useFriendStore } from './friendStore'
@@ -85,6 +88,8 @@ interface ChatState {
     replyToId?: string | null
   ) => Promise<void>
   deleteFromRoom: (room: RoomKey, messageId: string) => Promise<void>
+  /** Edita o texto de uma mensagem sua; a lista já sai com a versão do servidor. */
+  editInRoom: (room: RoomKey, messageId: string, content: string) => Promise<void>
   toggleReaction: (room: RoomKey, messageId: string, emoji: string) => Promise<void>
   createPollInRoom: (room: RoomKey, input: CreatePollInput) => Promise<void>
   votePollInRoom: (room: RoomKey, messageId: string, answerIds: number[]) => Promise<void>
@@ -126,6 +131,39 @@ const clearDeletedReplyTarget = (messages: Message[], deletedId: string): Messag
   messages
     .filter((m) => m.id !== deletedId)
     .map((m) => (m.reply_to_id === deletedId ? { ...m, reply_to: null } : m))
+
+/**
+ * Aplica uma mensagem editada à sala (se carregada) e à prévia da DM, quando
+ * ela é a última da conversa. Não mexe em não lidas nem notifica: editar não
+ * é mensagem nova.
+ */
+const withUpdatedMessage = (
+  state: Pick<ChatState, 'messagesByRoom' | 'conversations'>,
+  room: RoomKey,
+  msg: Message
+): Partial<ChatState> => {
+  const current = state.messagesByRoom[room]
+  const next: Partial<ChatState> = {}
+  if (current) {
+    const updated = applyMessageUpdate(current, msg)
+    if (updated !== current) next.messagesByRoom = { ...state.messagesByRoom, [room]: updated }
+  }
+  if (msg.conversation_id) {
+    const idx = state.conversations.findIndex(
+      (c) => c.id === msg.conversation_id && c.last_message?.id === msg.id
+    )
+    if (idx !== -1) {
+      const conversations = [...state.conversations]
+      const conv = conversations[idx]
+      conversations[idx] = {
+        ...conv,
+        last_message: { ...conv.last_message!, content: messagePreview(msg) }
+      }
+      next.conversations = conversations
+    }
+  }
+  return next
+}
 
 /** Troca a enquete de uma mensagem carregada na sala (sem efeito se não estiver). */
 const replacePoll = (
@@ -355,6 +393,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         [room]: clearDeletedReplyTarget(state.messagesByRoom[room] ?? [], messageId)
       }
     }))
+  },
+
+  editInRoom: async (room, messageId, content) => {
+    const updated = await editMessage(room, messageId, content)
+    set((state) => withUpdatedMessage(state, room, updated))
   },
 
   toggleReaction: async (room, messageId, emoji) => {
@@ -750,6 +793,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return
     }
 
+    if (event.type === 'message:update') {
+      const msg = payload.message as Message | undefined
+      if (msg?.id) {
+        const room = msg.channel_id
+          ? `channel:${msg.channel_id}`
+          : `conversation:${msg.conversation_id}`
+        if (!room.endsWith(':')) set((state) => withUpdatedMessage(state, room, msg))
+      }
+      return
+    }
+
     if (event.type === 'message:delete') {
       const messageId = payload.message_id as string
       const channelId = payload.channel_id as string | undefined
@@ -828,6 +882,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (event.type === 'channel:create') {
       const serverId = payload.server_id as string
       if (serverId) {
+        useChannelNameStore.getState().invalidate(serverId)
         useServerStore.getState().fetchChannels(serverId)
         get().fetchChannelsForServers([serverId])
       }
@@ -837,6 +892,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (event.type === 'channel:update') {
       const serverId = payload.server_id as string
       if (serverId) {
+        useChannelNameStore.getState().invalidate(serverId)
         useServerStore.getState().fetchChannels(serverId)
         get().fetchChannelsForServers([serverId])
       }
@@ -870,6 +926,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (event.type === 'channel:delete') {
       const serverId = payload.server_id as string
       const channelId = payload.channel_id as string
+      if (serverId) useChannelNameStore.getState().invalidate(serverId)
       if (serverId && channelId) {
         const room = `channel:${channelId}`
         set((state) => {
