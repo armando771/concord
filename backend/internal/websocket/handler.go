@@ -6,31 +6,38 @@ import (
 	"strings"
 
 	"gin-quickstart/backend/internal/auth"
-	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/conversation"
+	"gin-quickstart/backend/internal/permission"
 	"gin-quickstart/backend/internal/server"
 
 	"github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 )
 
+// ChannelPermissions: as permissões do membro num canal (permission.Service).
+type ChannelPermissions interface {
+	ChannelPerms(ctx context.Context, channelID, userID string) (int64, error)
+}
+
 type Handler struct {
 	hub                 *Hub
 	authService         *auth.Service
-	channelService      *channel.Service
+	perms               ChannelPermissions
 	serverService       *server.Service
 	conversationService *conversation.Service
 	callRouter          CallRouter
+	typing              TypingRouter
 }
 
-func WsHandler(hub *Hub, authService *auth.Service, channelService *channel.Service, serverService *server.Service, conversationService *conversation.Service, callRouter CallRouter) *Handler {
+func WsHandler(hub *Hub, authService *auth.Service, perms ChannelPermissions, serverService *server.Service, conversationService *conversation.Service, callRouter CallRouter, typing TypingRouter) *Handler {
 	return &Handler{
 		hub:                 hub,
 		authService:         authService,
-		channelService:      channelService,
+		perms:               perms,
 		serverService:       serverService,
 		conversationService: conversationService,
 		callRouter:          callRouter,
+		typing:              typing,
 	}
 }
 
@@ -48,15 +55,9 @@ func (h *Handler) validator(ctx context.Context, userID string, channelID string
 	}
 
 	if channelID != "" {
-		ch, err := h.channelService.FindByID(ctx, channelID)
-		if err != nil {
-			return false
-		}
-		isMember, err := h.serverService.IsMember(ctx, ch.ServerID, userID)
-		if err != nil || !isMember {
-			return false
-		}
-		return true
+		// Canal privado: só quem tem VIEW_CHANNEL entra na sala.
+		perms, err := h.perms.ChannelPerms(ctx, channelID, userID)
+		return err == nil && permission.Has(perms, permission.ViewChannel)
 	}
 
 	if conversationID != "" {
@@ -102,6 +103,7 @@ func (h *Handler) ServeWS(c *gin.Context) {
 		rooms:      make(map[string]struct{}),
 		validator:  h.validator,
 		callRouter: h.callRouter,
+		typing:     h.typing,
 	}
 
 	h.hub.Register(client)

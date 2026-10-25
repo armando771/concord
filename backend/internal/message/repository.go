@@ -141,6 +141,15 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Message, error) 
 	return msg, nil
 }
 
+// listBeforeCondition é o cursor "before" (id da mensagem mais antiga já
+// carregada): tudo que vem antes dela na ordem da lista, (created_at, id).
+// Não dá para comparar só o id: é UUID v4, aleatório, e "id menor" trazia
+// mensagens novas na página "anterior" (apareciam no topo da conversa) e
+// pulava antigas. O id desempata mensagens no mesmo microssegundo.
+const listBeforeCondition = `AND (m.created_at, m.id) < (
+				SELECT b.created_at, b.id FROM messages b WHERE b.id = $2::uuid
+			)`
+
 func (r *Repository) ListByChannel(ctx context.Context, channelID string, limit int, before string) ([]Message, error) {
 	var rows pgx.Rows
 	var err error
@@ -165,7 +174,7 @@ func (r *Repository) ListByChannel(ctx context.Context, channelID string, limit 
 			SELECT `+messageColumns+`
 			`+messageFrom+`
 			WHERE m.channel_id = $1
-			AND m.id < $2::uuid
+			`+listBeforeCondition+`
 			ORDER BY m.created_at DESC, m.id DESC
 			LIMIT $3
 			`,
@@ -213,7 +222,7 @@ func (r *Repository) ListByConversation(ctx context.Context, conversationID stri
 			SELECT `+messageColumns+`
 			`+messageFrom+`
 			WHERE m.conversation_id = $1
-			AND m.id < $2::uuid
+			`+listBeforeCondition+`
 			ORDER BY m.created_at DESC, m.id DESC
 			LIMIT $3
 			`,

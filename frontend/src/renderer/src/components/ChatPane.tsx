@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import type { Message } from '../api/messages'
@@ -34,6 +34,29 @@ import { ApiError } from '../api/client'
 import VoiceRecordButton from './chat/VoiceRecordButton'
 import ComposerAttachments from './chat/ComposerAttachments'
 import { useAttachmentDraft } from './chat/useAttachmentDraft'
+import { useTypingSender } from './chat/useTypingSender'
+import TypingIndicator from './chat/TypingIndicator'
+import {
+  afterSendFailure,
+  canRestoreHere,
+  replyAfterRestore,
+  restoreFailedText
+} from '../lib/composerDraft'
+import {
+  ATTACH_DENIED,
+  DIRECT_CHAT_PERMISSIONS,
+  sendDeniedReason,
+  type ChatPermissions
+} from '../lib/chatPermissions'
+import { actionErrorMessage } from '../lib/permissionErrors'
+import { permissionError } from '../lib/permissions'
+import {
+  anchoredScrollTop,
+  measureOffset,
+  olderPagePrepended,
+  pickAnchor,
+  type AnchorCandidate
+} from '../lib/scrollAnchor'
 
 export interface Mentionable {
   username: string
@@ -49,9 +72,13 @@ interface ChatPaneProps {
   canMentionEveryone?: boolean
   /** Troca o campo de mensagem por este aviso (ex.: DM com alguém bloqueado). */
   disabledReason?: string
+  /** O que a pessoa pode neste canal (cargos). Sem isso (DM), vale o padrão do chat. */
+  permissions?: ChatPermissions
 }
 
 const MAX_SUGGESTIONS = 6
+/** Reservas da âncora do loadOlder (a primeira e as seguintes). */
+const ANCHOR_CANDIDATES = 20
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -138,7 +165,9 @@ function MessageItem({
   onJumpToMessage,
   onDelete,
   onVote,
-  onEndPoll
+  onEndPoll,
+  canReact,
+  canModerate
 }: {
   message: Message
   isHighlighted: boolean
@@ -148,6 +177,10 @@ function MessageItem({
   onDelete: () => void
   onVote: (answerIds: number[]) => Promise<void>
   onEndPoll: () => Promise<void>
+  /** ADD_REACTIONS no canal. */
+  canReact: boolean
+  /** MANAGE_MESSAGES no canal: apaga mensagem de outros e encerra enquete. */
+  canModerate: boolean
 }): React.JSX.Element {
   const me = useAuthStore((s) => s.user)
   const isMine = message.author_id === me?.id
@@ -268,7 +301,12 @@ function MessageItem({
             <MessageAttachments attachments={message.attachments} />
           ) : null}
           {message.poll && (
-            <PollCard poll={message.poll} isAuthor={isMine} onVote={onVote} onEnd={onEndPoll} />
+            <PollCard
+              poll={message.poll}
+              isAuthor={isMine || canModerate}
+              onVote={onVote}
+              onEnd={onEndPoll}
+            />
           )}
 
           {reactions.length > 0 && (
@@ -280,7 +318,9 @@ function MessageItem({
                     key={reaction.emoji}
                     type="button"
                     onClick={() => onReact(reaction.emoji)}
-                    className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors ${
+                    // Sem ADD_REACTIONS ainda dá para tirar a própria reação.
+                    disabled={!canReact && !meReacted}
+                    className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                       meReacted
                         ? 'border-[#5865f2] bg-[#5865f2]/25 text-white'
                         : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'
@@ -291,39 +331,44 @@ function MessageItem({
                   </button>
                 )
               })}
-              <button
-                type="button"
-                onClick={() => setPickerOpen((v) => !v)}
-                title="Adicionar reação"
-                className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
-              >
-                +
-              </button>
+              {canReact && (
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen((v) => !v)}
+                  title="Adicionar reação"
+                  className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+                >
+                  +
+                </button>
+              )}
             </div>
           )}
         </div>
 
         {(hover || pickerOpen) && (
           <div className="absolute -top-3 right-4 z-20 flex items-center gap-0.5 rounded-lg border border-white/10 bg-[#18191c] px-1 py-0.5 shadow-lg">
-            {QUICK_EMOTES.map((emoji) => (
+            {canReact &&
+              QUICK_EMOTES.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => onReact(emoji)}
+                  title={`Reagir com ${emoji}`}
+                  className="flex h-6 w-6 cursor-pointer items-center justify-center rounded text-sm transition-transform hover:scale-110 hover:bg-white/10"
+                >
+                  {emoji}
+                </button>
+              ))}
+            {canReact && (
               <button
-                key={emoji}
                 type="button"
-                onClick={() => onReact(emoji)}
-                title={`Reagir com ${emoji}`}
-                className="flex h-6 w-6 cursor-pointer items-center justify-center rounded text-sm transition-transform hover:scale-110 hover:bg-white/10"
+                onClick={() => setPickerOpen((v) => !v)}
+                title="Mais reações"
+                className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
               >
-                {emoji}
+                😀+
               </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setPickerOpen((v) => !v)}
-              title="Mais reações"
-              className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              😀+
-            </button>
+            )}
             <button
               type="button"
               onClick={onReply}
@@ -332,11 +377,11 @@ function MessageItem({
             >
               Responder
             </button>
-            {isMine && (
+            {(isMine || canModerate) && (
               <button
                 type="button"
                 onClick={onDelete}
-                title="Excluir mensagem"
+                title={isMine ? 'Excluir mensagem' : 'Excluir mensagem (moderação)'}
                 className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs font-semibold text-gray-400 transition-colors hover:bg-red-500/15 hover:text-red-400"
               >
                 Excluir
@@ -346,7 +391,7 @@ function MessageItem({
         )}
       </div>
 
-      {pickerOpen && (
+      {pickerOpen && canReact && (
         <EmotePickerPopover
           onSelect={(emoji) => onReact(emoji)}
           onClose={() => setPickerOpen(false)}
@@ -361,8 +406,11 @@ function ChatPane({
   placeholder = 'Digite sua mensagem',
   mentionable = [],
   canMentionEveryone = false,
-  disabledReason
+  disabledReason: disabledReasonProp,
+  permissions = DIRECT_CHAT_PERMISSIONS
 }: ChatPaneProps): React.JSX.Element {
+  // Sem SEND_MESSAGES o campo de mensagem dá lugar ao aviso.
+  const disabledReason = disabledReasonProp ?? sendDeniedReason(permissions)
   const messagesByRoom = useChatStore((s) => s.messagesByRoom)
   const hasMoreByRoom = useChatStore((s) => s.hasMoreByRoom)
   const loadingByRoom = useChatStore((s) => s.loadingByRoom)
@@ -386,7 +434,17 @@ function ChatPane({
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { drafts, addFiles, remove: removeAttachment } = useAttachmentDraft(room)
+  const { drafts, addFiles: addDraftFiles, remove: removeAttachment } = useAttachmentDraft(room)
+  /** Sem ATTACH_FILES, arrastar, colar ou escolher arquivos só avisa. */
+  const addFiles = (files: File[]): void => {
+    if (files.length === 0) return
+    if (!permissions.canAttach) {
+      showToast.error(ATTACH_DENIED)
+      return
+    }
+    addDraftFiles(files)
+  }
+  const typing = useTypingSender(room)
   const attachmentState = draftStatus(drafts)
   const submittable = canSubmit(draft, drafts)
   // dragenter/dragleave disparam a cada filho; o contador evita piscar.
@@ -399,6 +457,14 @@ function ChatPane({
   useEffect(() => {
     roomRef.current = room
   }, [room])
+  // Envio que falha depois de sair do chat não mexe no campo (só oferece copiar).
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
   const [highlightChoice, setHighlight] = useState<number | null>(null)
   const meUsername = useAuthStore((s) => s.user?.username)
@@ -417,6 +483,7 @@ function ChatPane({
     if (!mention || !el) return
     const next = applyMention(draft, mention.start, el.selectionStart ?? draft.length, username)
     setDraft(next.text)
+    typing.onDraftChange(next.text)
     setMention(null)
     requestAnimationFrame(() => {
       el.focus()
@@ -449,13 +516,22 @@ function ChatPane({
       setReplyState(null)
     }
   }
-  const [loadingOlder, setLoadingOlder] = useState(false)
+  // Por sala: o ServerView reaproveita o ChatPane entre canais, e o
+  // carregamento de um canal não pode travar (nem destravar) o botão do outro.
+  const [loadingOlderRooms, setLoadingOlderRooms] = useState<ReadonlySet<string>>(new Set())
+  const loadingOlder = loadingOlderRooms.has(room)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
   const firstRender = useRef(true)
+  // loadOlder: a antiga primeira mensagem (e sua posição no conteúdo) fica
+  // no mesmo lugar da tela quando a página antiga entra em cima dela. As
+  // seguintes vão junto, de reserva, caso ela seja apagada durante a espera.
+  const olderAnchor = useRef<{ room: string; candidates: AnchorCandidate[] } | null>(null)
 
   useEffect(() => {
     stickToBottom.current = true
+    olderAnchor.current = null
     void openRoom(room)
     return () => {
       useChatStore.getState().closeRoom(room)
@@ -473,6 +549,25 @@ function ChatPane({
     }
   }, [messages.length])
 
+  const firstId = messages[0]?.id
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    const anchor = olderAnchor.current
+    // Só quando a página antiga entrou em cima; mensagem ao vivo embaixo (ou a
+    // de cima apagada) não gasta a âncora.
+    if (!el || !anchor || !olderPagePrepended(firstId, anchor.candidates)) return
+    olderAnchor.current = null
+    if (anchor.room !== room) return
+    const elementOf = (id: string): HTMLElement | null => {
+      const node = document.getElementById(`msg-${id}`)
+      return node && el.contains(node) ? node : null
+    }
+    const kept = pickAnchor(anchor.candidates, (id) => elementOf(id) !== null)
+    const node = kept && elementOf(kept.id)
+    if (!kept || !node) return
+    el.scrollTop = anchoredScrollTop(el.scrollTop, kept.offset, measureOffset(el, node))
+  }, [firstId, room])
+
   const handleScroll = (e: React.UIEvent<HTMLDivElement>): void => {
     const el = e.currentTarget
     stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60
@@ -480,9 +575,33 @@ function ChatPane({
 
   const handleLoadOlder = async (): Promise<void> => {
     if (loadingOlder) return
-    setLoadingOlder(true)
-    await loadOlder(room)
-    setLoadingOlder(false)
+    const startedRoom = room
+    setLoadingOlderRooms((current) => new Set(current).add(startedRoom))
+    const el = scrollRef.current
+    let anchor: typeof olderAnchor.current = null
+    if (el) {
+      const candidates: AnchorCandidate[] = []
+      for (const m of messages.slice(0, ANCHOR_CANDIDATES)) {
+        const node = document.getElementById(`msg-${m.id}`)
+        if (node) candidates.push({ id: m.id, offset: measureOffset(el, node) })
+      }
+      if (candidates.length > 0) {
+        anchor = { room: startedRoom, candidates }
+        olderAnchor.current = anchor
+        stickToBottom.current = false
+      }
+    }
+    await loadOlder(startedRoom)
+    setLoadingOlderRooms((current) => {
+      const next = new Set(current)
+      next.delete(startedRoom)
+      return next
+    })
+    // Nada novo (ou já aplicado no layout effect): esta âncora não vale para
+    // a próxima mudança. Só a desta chamada — outra sala pode ter a sua.
+    requestAnimationFrame(() => {
+      if (anchor && olderAnchor.current === anchor) olderAnchor.current = null
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
@@ -490,24 +609,82 @@ function ChatPane({
     if (!submittable || sending) return
     setSending(true)
     const sentRoom = room
+    const sentText = draft
+    const sentReply = replyingTo
     // Só sai do rascunho o que foi enviado: arquivo adicionado durante o envio fica.
     const sentDrafts = drafts.filter((d) => d.status === 'done').map((d) => d.localId)
+    // O texto sai do campo na hora: dá para começar a próxima mensagem sem
+    // esperar o servidor. Os anexos só saem quando o envio dá certo.
+    typing.onSent()
+    setDraft('')
+    setReplyState(null)
+    setMention(null)
+    setHighlight(null)
     try {
-      await sendToRoom(room, draft.trim(), attachmentState.readyIds, replyingTo?.id ?? null)
+      await sendToRoom(room, sentText.trim(), attachmentState.readyIds, sentReply?.id ?? null)
       if (roomRef.current === sentRoom) {
-        setDraft('')
-        setReplyState(null)
         sentDrafts.forEach(removeAttachment)
       }
     } catch (err) {
-      showToast.error(
+      const message =
         err instanceof ApiError
-          ? sendErrorMessage(err.status, err.message)
+          ? permissionError(err.code, '') || sendErrorMessage(err.status, err.message)
           : 'Falha ao enviar mensagem.'
-      )
+      handleSendFailure(message, sentRoom, sentText, sentReply)
     } finally {
       setSending(false)
     }
+  }
+
+  // O texto que falhou nunca se perde: volta sozinho se o campo continua
+  // vazio; senão o aviso oferece "Restaurar" (vem antes do texto novo, com a
+  // resposta). Em outra sala o campo é de lá: o aviso oferece copiar.
+  const handleSendFailure = (
+    message: string,
+    sentRoom: string,
+    sentText: string,
+    sentReply: Message | null
+  ): void => {
+    const sentReplyState = sentReply ? { room: sentRoom, message: sentReply } : null
+    const here = (): boolean => canRestoreHere(mountedRef.current, roomRef.current, sentRoom)
+    const copyAction = {
+      label: 'Copiar',
+      run: () => void navigator.clipboard?.writeText(sentText)
+    }
+    if (!here()) {
+      showToast.error(message, 10000, sentText.trim() ? copyAction : undefined)
+      return
+    }
+    const current = inputRef.current?.value ?? ''
+    const action = afterSendFailure(sentText, sentReply !== null, current)
+    if (action === 'restore') {
+      setDraft(sentText)
+      setReplyState((now) => replyAfterRestore(now, sentReplyState))
+      showToast.error(message)
+      return
+    }
+    if (action === 'nothing') {
+      showToast.error(message)
+      return
+    }
+    showToast.error(message, 10000, {
+      label: 'Restaurar',
+      run: () => {
+        if (!here()) {
+          if (sentText.trim()) {
+            showToast.error(
+              'Você saiu da conversa: copie a mensagem que falhou.',
+              10000,
+              copyAction
+            )
+          }
+          return
+        }
+        setDraft((now) => restoreFailedText(sentText, now))
+        setReplyState((now) => replyAfterRestore(now, sentReplyState))
+        requestAnimationFrame(() => inputRef.current?.focus())
+      }
+    })
   }
 
   // Áudio gravado vai sozinho; o texto digitado continua no campo.
@@ -533,7 +710,7 @@ function ChatPane({
         setReplyState(null)
       }
     } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Falha ao excluir mensagem.')
+      showToast.error(actionErrorMessage(err, 'Falha ao excluir mensagem.'))
     }
   }
 
@@ -571,7 +748,7 @@ function ChatPane({
     try {
       await toggleReaction(room, messageId, emoji)
     } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Falha ao reagir à mensagem.')
+      showToast.error(actionErrorMessage(err, 'Falha ao reagir à mensagem.'))
     }
   }
 
@@ -611,7 +788,12 @@ function ChatPane({
           Solte os arquivos para enviar
         </div>
       )}
-      <div className="flex-1 overflow-y-auto" onScroll={handleScroll}>
+      {/* Sem o scroll anchoring do navegador: a âncora do loadOlder é a única. */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto [overflow-anchor:none]"
+        onScroll={handleScroll}
+      >
         {loading ? (
           <div className="flex h-full items-center justify-center text-sm text-gray-400">
             Carregando mensagens...
@@ -645,6 +827,8 @@ function ChatPane({
                 onDelete={() => handleDelete(m.id)}
                 onVote={(answerIds) => votePollInRoom(room, m.id, answerIds)}
                 onEndPoll={() => endPollInRoom(room, m.id)}
+                canReact={permissions.canReact}
+                canModerate={permissions.canModerate}
               />
             ))}
             <div ref={bottomRef} />
@@ -652,7 +836,7 @@ function ChatPane({
         )}
       </div>
 
-      <div className="relative shrink-0 px-4 pb-4">
+      <div className="relative shrink-0 px-4">
         {suggestions.length > 0 && (
           <ul
             role="listbox"
@@ -714,15 +898,17 @@ function ChatPane({
             onSubmit={handleSubmit}
             className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
           >
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              title="Anexar arquivo"
-              aria-label="Anexar arquivo"
-              className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              <PaperclipIcon className="h-5 w-5" />
-            </button>
+            {permissions.canAttach && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                title="Anexar arquivo"
+                aria-label="Anexar arquivo"
+                className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <PaperclipIcon className="h-5 w-5" />
+              </button>
+            )}
             <input
               ref={fileInputRef}
               type="file"
@@ -748,6 +934,7 @@ function ChatPane({
               value={draft}
               onChange={(e) => {
                 setDraft(e.target.value)
+                typing.onDraftChange(e.target.value)
                 setMention(mentionQuery(e.target.value, e.target.selectionStart ?? 0))
                 setHighlight(null)
               }}
@@ -758,7 +945,9 @@ function ChatPane({
               maxLength={2000}
               className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 outline-none"
             />
-            <VoiceRecordButton key={room} disabled={sendingVoice} onRecorded={handleRecorded} />
+            {permissions.canAttach && (
+              <VoiceRecordButton key={room} disabled={sendingVoice} onRecorded={handleRecorded} />
+            )}
             <button
               type="submit"
               disabled={sending || !submittable}
@@ -772,6 +961,7 @@ function ChatPane({
             </button>
           </form>
         )}
+        <TypingIndicator room={room} />
       </div>
       <CreatePollModal
         open={pollOpen}

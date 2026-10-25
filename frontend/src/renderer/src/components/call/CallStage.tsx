@@ -172,6 +172,8 @@ function CallStage({
             onContextMenu={userMenuHandler(p.id, p.display_name, meId, p.username)}
             locallyMuted={localAudio[p.id]?.muted ?? false}
             deafened={voiceStates[p.id]?.deafened}
+            serverMuted={voiceStates[p.id]?.serverMuted}
+            serverDeafened={voiceStates[p.id]?.serverDeafened}
             speaking={speaking?.has(p.id) ?? false}
           />
         ))}
@@ -224,6 +226,8 @@ function CallStage({
           onContextMenu={userMenuHandler(userId, p.display_name, meId, p.username)}
           locallyMuted={localAudio[userId]?.muted ?? false}
           deafened={voiceStates[userId]?.deafened}
+          serverMuted={voiceStates[userId]?.serverMuted}
+          serverDeafened={voiceStates[userId]?.serverDeafened}
           speaking={speaking?.has(userId) ?? false}
           videoStream={stream}
           size="fill"
@@ -264,6 +268,8 @@ function CallStage({
                   onContextMenu={userMenuHandler(p.id, p.display_name, meId, p.username)}
                   locallyMuted={localAudio[p.id]?.muted ?? false}
                   deafened={voiceStates[p.id]?.deafened}
+                  serverMuted={voiceStates[p.id]?.serverMuted}
+                  serverDeafened={voiceStates[p.id]?.serverDeafened}
                   size="md"
                   speaking={speaking?.has(p.id) ?? false}
                 />
@@ -335,6 +341,8 @@ function CallStage({
               onContextMenu={userMenuHandler(p.id, p.display_name, meId, p.username)}
               locallyMuted={localAudio[p.id]?.muted ?? false}
               deafened={voiceStates[p.id]?.deafened}
+              serverMuted={voiceStates[p.id]?.serverMuted}
+              serverDeafened={voiceStates[p.id]?.serverDeafened}
               size="md"
               speaking={speaking?.has(p.id) ?? false}
               videoStream={videoStreams[p.id] ?? null}

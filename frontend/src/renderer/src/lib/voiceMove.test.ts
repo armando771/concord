@@ -2,25 +2,29 @@ import { describe, expect, it } from 'vitest'
 import { canMoveVoiceUser, voiceChannelOf } from './voiceMove'
 
 describe('canMoveVoiceUser', () => {
-  it('só moderadores e o dono movem', () => {
+  const base = { meId: 'mod', targetId: 'ana', canMoveMembers: true, canActOnTarget: true }
+
+  it('precisa de MOVE_MEMBERS e de estar acima da pessoa', () => {
+    expect(canMoveVoiceUser(base)).toBe(true)
+    expect(canMoveVoiceUser({ ...base, canMoveMembers: false })).toBe(false)
+    expect(canMoveVoiceUser({ ...base, canActOnTarget: false })).toBe(false)
+  })
+
+  it('sem login ninguém move', () => {
+    expect(canMoveVoiceUser({ ...base, meId: undefined })).toBe(false)
+  })
+
+  it('quem move a si mesmo só precisa da permissão', () => {
     expect(
-      canMoveVoiceUser({ meId: 'mod', ownerId: 'dono', isModerator: true, targetId: 'ana' })
+      canMoveVoiceUser({ ...base, targetId: 'mod', canActOnTarget: false, canMoveMembers: true })
     ).toBe(true)
     expect(
-      canMoveVoiceUser({ meId: 'bia', ownerId: 'dono', isModerator: false, targetId: 'ana' })
-    ).toBe(false)
-    expect(
-      canMoveVoiceUser({ meId: undefined, ownerId: 'dono', isModerator: true, targetId: 'ana' })
+      canMoveVoiceUser({ ...base, targetId: 'mod', canActOnTarget: false, canMoveMembers: false })
     ).toBe(false)
   })
 
-  it('moderador não move o dono; o dono pode', () => {
-    expect(
-      canMoveVoiceUser({ meId: 'mod', ownerId: 'dono', isModerator: true, targetId: 'dono' })
-    ).toBe(false)
-    expect(
-      canMoveVoiceUser({ meId: 'dono', ownerId: 'dono', isModerator: true, targetId: 'dono' })
-    ).toBe(true)
+  it('moderador não move o dono (a hierarquia nunca deixa)', () => {
+    expect(canMoveVoiceUser({ ...base, targetId: 'dono', canActOnTarget: false })).toBe(false)
   })
 })
 

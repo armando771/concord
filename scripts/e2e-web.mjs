@@ -104,7 +104,7 @@ async function openClient(user, initScript) {
   page.on('console', (m) => { if (m.type() === 'error') errors.push(`[${user.username}] ${m.text()}`) })
   page.on('pageerror', (e) => errors.push(`[${user.username}] pageerror ${e.message}`))
   await page.goto(APP + 'login')
-  await page.fill('input[type=email]', user.email)
+  await page.fill('input[autocomplete=username]', user.email)
   await page.fill('input[type=password]', user.password)
   await page.click('button[type=submit]')
   await page.getByText('Adicionar amigo').first().waitFor({ timeout: 30000 })
@@ -129,6 +129,7 @@ try {
   // Permissão de notificação: pedida por botão nas configurações, não ao abrir.
   check('nada pede permissão ao abrir a página', (await pageB.evaluate(() => window.__permission)) === 'default')
   await pageB.getByRole('button', { name: 'Configurações do usuário' }).click()
+  await pageB.getByRole('button', { name: 'Notificações', exact: true }).click()
   await pageB.getByRole('button', { name: 'Permitir notificações' }).click()
   await pageB.getByText('Permitidas neste navegador.').waitFor({ timeout: 5000 })
   check('botão "Permitir notificações" pede e mostra permitido', (await pageB.evaluate(() => window.__permission)) === 'granted')
@@ -245,7 +246,7 @@ try {
 
   // Logout limpa a sessão, vale para a outra aba e sobrevive ao reload.
   await pageB.getByRole('button', { name: 'Configurações do usuário' }).click()
-  await pageB.getByRole('button', { name: 'Sair da conta' }).click()
+  await pageB.getByRole('button', { name: 'Sair', exact: true }).click()
   await pageB2.waitForURL((u) => u.pathname === '/login', { timeout: 15000 })
   check('sair numa aba leva a outra ao login', new URL(pageB2.url()).pathname === '/login')
   await pageB.waitForURL((u) => u.pathname === '/login', { timeout: 15000 })

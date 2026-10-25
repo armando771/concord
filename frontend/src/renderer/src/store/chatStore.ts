@@ -30,6 +30,7 @@ import {
 } from '../api/messages'
 import { applyReactionAdd, applyReactionRemove } from '../lib/emotes'
 import { applyPollUpdate, messagePreview, type PollUpdate } from '../lib/polls'
+import { mergeMessages } from '../lib/messageOrder'
 import { APP_UPDATE_EVENT, requestUpdateCheck } from '../lib/appUpdate'
 import type { ConversationSummary } from '../api/conversations'
 import { listConversations, markConversationRead } from '../api/conversations'
@@ -38,10 +39,12 @@ import type { PresenceMap } from '../api/presence'
 import { fetchPresence } from '../api/presence'
 import { listChannels } from '../api/channels'
 import { useServerStore } from './serverStore'
+import { handleServerRoleEvent, removedMessage } from './serverEvents'
 import { useFriendStore } from './friendStore'
 import { useCallStore } from './callStore'
 import { useLevelStore } from './levelStore'
 import { useSoundboardStore } from './soundboardStore'
+import { useTypingStore } from './typingStore'
 import { showToast } from './toastStore'
 import { router } from '../router'
 import { MESSAGE_LIMIT } from '../api/messages'
@@ -103,17 +106,13 @@ const getRoomFetch = (room: RoomKey): ((before?: string) => Promise<Message[]>) 
   return (before?: string) => listConversationMessages(id, before)
 }
 
-const appendUnique = (messages: Message[], incoming: Message[]): Message[] => {
-  const seen = new Set(messages.map((m) => m.id))
-  const merged = [...messages]
-  for (const msg of incoming) {
-    if (!seen.has(msg.id)) {
-      merged.push(msg)
-      seen.add(msg.id)
-    }
-  }
-  return merged
-}
+/**
+ * Salas com um ChatPane aberto. Só elas guardam lista de mensagens: o
+ * message:create de uma sala fechada (DM pela sala user:<eu>, canal pela sala
+ * do servidor) não pode criar uma lista solta que depois seria juntada à
+ * página carregada ao abrir.
+ */
+const openRooms = new Set<RoomKey>()
 
 const clearDeletedReplyTarget = (messages: Message[], deletedId: string): Message[] =>
   messages
@@ -159,6 +158,8 @@ const client = new WsClient({
   getUserId: () => useAuthStore.getState().user?.id ?? null,
   onEvent: (event) => useChatStore.getState().handleWsEvent(event),
   onOpen: () => {
+    // Avisos de digitando de antes da queda podem nunca receber o stop.
+    useTypingStore.getState().reset()
     useCallStore.getState().handleWsReconnect()
     // Reconexão costuma ser deploy: checa atualização (o aviso app:update é o
     // caminho principal; isto cobre o manifesto publicado antes do reinício).
@@ -195,6 +196,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   isWsConnected: () => client.isConnected(),
 
   openRoom: async (room) => {
+    openRooms.add(room)
     client.subscribe(room)
     const fetch = getRoomFetch(room)
     const token = useAuthStore.getState().accessToken
@@ -220,10 +222,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     try {
       const fetched = await fetch()
       if (useAuthStore.getState().accessToken !== token) return
+      if (!openRooms.has(room)) return
       set((state) => ({
         messagesByRoom: {
           ...state.messagesByRoom,
-          [room]: appendUnique(state.messagesByRoom[room] ?? [], [...fetched].reverse())
+          // Pode já ter mensagem ao vivo que chegou durante o carregamento.
+          [room]: mergeMessages(state.messagesByRoom[room] ?? [], fetched)
         },
         hasMoreByRoom: { ...state.hasMoreByRoom, [room]: fetched.length >= MESSAGE_LIMIT }
       }))
@@ -237,6 +241,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   closeRoom: (room) => {
+    openRooms.delete(room)
     client.unsubscribe(room)
     set((state) => {
       const next = { ...state.messagesByRoom }
@@ -260,16 +265,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const fetch = getRoomFetch(room)
     const current = get().messagesByRoom[room] ?? []
     if (current.length === 0) return
+    // A lista está em ordem (created_at, id): a primeira é a mais antiga.
     const before = current[0].id
     const token = useAuthStore.getState().accessToken
     try {
       const fetched = await fetch(before)
       if (useAuthStore.getState().accessToken !== token) return
-      if (fetched.length === 0) return
+      if (fetched.length === 0 || !openRooms.has(room)) return
       set((state) => ({
         messagesByRoom: {
           ...state.messagesByRoom,
-          [room]: [...[...fetched].reverse(), ...(state.messagesByRoom[room] ?? [])]
+          [room]: mergeMessages(state.messagesByRoom[room] ?? [], fetched)
         },
         hasMoreByRoom: { ...state.hasMoreByRoom, [room]: fetched.length >= MESSAGE_LIMIT }
       }))
@@ -478,6 +484,23 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   handleWsEvent: (event) => {
+    // Relê o que a pessoa vê do servidor (cargos/canais mudaram) e, se o canal
+    // aberto sumiu para ela, sai dele.
+    const reconcileAfterPermissionChange = async (serverId: string): Promise<void> => {
+      const before = get().channelsByServer[serverId] ?? []
+      const servers = useServerStore.getState()
+      if (servers.currentServer?.id === serverId) await servers.refreshServer(serverId)
+      await get().fetchChannelsForServers([serverId])
+      const room = get().activeRoom
+      if (!room || !room.startsWith('channel:')) return
+      const open = room.slice('channel:'.length)
+      const after = get().channelsByServer[serverId] ?? []
+      if (before.includes(open) && !after.includes(open)) {
+        get().closeRoom(room)
+        void router.navigate(`/servers/${serverId}`)
+      }
+    }
+
     const payload = event.payload as Record<string, unknown>
 
     if (event.type === APP_UPDATE_EVENT) {
@@ -495,6 +518,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return
     }
 
+    if (event.type === 'typing' || event.type === 'typing:stop') {
+      useTypingStore.getState().handleWsEvent(event)
+      return
+    }
+
     if (event.type.startsWith('level:')) {
       useLevelStore.getState().handleWsEvent(event)
       return
@@ -507,11 +535,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         : `conversation:${msg.conversation_id}`
       const serverId = (payload.server_id as string) || null
       if (!room.endsWith(':')) {
+        useTypingStore.getState().messageArrived(room, msg.author_id)
         set((state) => {
-          const nextMessages = {
-            ...state.messagesByRoom,
-            [room]: appendUnique(state.messagesByRoom[room] ?? [], [msg])
-          }
+          const nextMessages = openRooms.has(room)
+            ? {
+                ...state.messagesByRoom,
+                [room]: mergeMessages(state.messagesByRoom[room] ?? [], [msg])
+              }
+            : state.messagesByRoom
           const isActive = room === state.activeRoom
           const mine = msg.author_id === useAuthStore.getState().user?.id
           const nextUnread =
@@ -738,6 +769,24 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return
     }
 
+    // Cargos, permissões e saída do servidor (sair, expulsão, banimento).
+    if (
+      handleServerRoleEvent(event, {
+        onServerRemoved: (serverId, reason) => {
+          const name = useServerStore.getState().servers.find((s) => s.id === serverId)?.name
+          get().handleServerDeleted(serverId)
+          useServerStore.getState().removeLocalServer(serverId)
+          const message = removedMessage(reason, name)
+          if (message) showToast.error(message)
+        },
+        onPermissionsChanged: (serverId) => {
+          void reconcileAfterPermissionChange(serverId)
+        }
+      })
+    ) {
+      return
+    }
+
     if (event.type === 'server:update') {
       const serverId = payload.server_id as string
       const srv = payload.server as Server | undefined
@@ -913,7 +962,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
-  reset: () =>
+  reset: () => {
+    useTypingStore.getState().reset()
+    openRooms.clear()
     set({
       messagesByRoom: {},
       hasMoreByRoom: {},
@@ -927,6 +978,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       conversations: [],
       conversationsLoading: false
     })
+  }
 }))
 
 /**

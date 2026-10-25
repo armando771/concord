@@ -16,12 +16,21 @@ export type WsEventType =
   | 'server:member:join'
   | 'server:member:update'
   | 'server:member:leave'
+  | 'server:member:roles'
+  | 'server:removed'
+  | 'server:permissions:invalidate'
+  | 'role:create'
+  | 'role:update'
+  | 'role:delete'
+  | 'role:reorder'
   | 'user:update'
   | 'friend:request'
   | 'friend:request:accepted'
   | 'friend:request:declined'
   | 'friend:request:cancelled'
   | 'friend:removed'
+  | 'typing'
+  | 'typing:stop'
 
 export interface WsEvent<T = unknown> {
   type: WsEventType | string

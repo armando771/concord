@@ -12,6 +12,7 @@ vi.mock('../api/channels', () => ({
 }))
 vi.mock('../api/servers', () => ({}))
 vi.mock('../api/invites', () => ({}))
+vi.mock('../api/roles', () => ({}))
 vi.mock('./authStore', () => ({
   useAuthStore: { getState: () => ({ accessToken: 't' }) }
 }))

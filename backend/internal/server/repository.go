@@ -2,6 +2,9 @@ package server
 
 import (
 	"context"
+	"fmt"
+
+	"gin-quickstart/backend/internal/permission"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -119,6 +122,25 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Server, error) {
 	return s, nil
 }
 
+// memberRoleIDsColumn: ids dos cargos do membro (alias "sm" de server_members).
+const memberRoleIDsColumn = `COALESCE(
+			(SELECT array_agg(mr.role_id::text) FROM member_roles mr WHERE mr.server_id = sm.server_id AND mr.user_id = sm.user_id),
+			'{}'
+		)`
+
+// legacyRoleColumn: o campo "role" que os apps antigos leem — "admin" para o
+// dono e para quem tem MANAGE_CHANNELS ou ADMINISTRATOR (por um cargo ou pelo
+// @everyone).
+var legacyRoleColumn = fmt.Sprintf(`CASE WHEN EXISTS (
+				SELECT 1 FROM servers so WHERE so.id = sm.server_id AND so.owner_id = sm.user_id
+			) OR EXISTS (
+				SELECT 1 FROM roles r
+				WHERE r.server_id = sm.server_id AND (r.permissions & %d) <> 0
+				AND (r.is_default OR r.id IN (
+					SELECT mr.role_id FROM member_roles mr WHERE mr.server_id = sm.server_id AND mr.user_id = sm.user_id
+				))
+			) THEN 'admin' ELSE 'member' END`, permission.ManageChannels|permission.Administrator)
+
 // primaryChannelColumn: o canal principal escolhido ou, sem escolha (ou se ele
 // foi apagado), o canal de texto mais antigo do servidor. De propósito não
 // segue a ordem da barra lateral (channels.position): reordenar canais não muda
@@ -227,13 +249,14 @@ func (r *Repository) ListMembers(ctx context.Context, serverID string) ([]Server
 			u.username,
 			u.display_name,
 			u.avatar_url,
-			sm.role,
+			`+legacyRoleColumn+`,
+			`+memberRoleIDsColumn+`,
 			sm.joined_at,
 			sm.updated_at
 		FROM server_members sm
 		JOIN users u ON u.id = sm.user_id
 		WHERE sm.server_id = $1
-		ORDER BY sm.role, sm.joined_at
+		ORDER BY sm.joined_at
 		`,
 		serverID,
 	)
@@ -252,6 +275,7 @@ func (r *Repository) ListMembers(ctx context.Context, serverID string) ([]Server
 			&m.DisplayName,
 			&m.AvatarURL,
 			&m.Role,
+			&m.RoleIDs,
 			&m.JoinedAt,
 			&m.UpdatedAt,
 		); err != nil {
@@ -289,7 +313,8 @@ func (r *Repository) FindMemberByUserID(ctx context.Context, serverID string, us
 			u.username,
 			u.display_name,
 			u.avatar_url,
-			sm.role,
+			`+legacyRoleColumn+`,
+			`+memberRoleIDsColumn+`,
 			sm.joined_at,
 			sm.updated_at
 		FROM server_members sm
@@ -305,6 +330,7 @@ func (r *Repository) FindMemberByUserID(ctx context.Context, serverID string, us
 		&m.DisplayName,
 		&m.AvatarURL,
 		&m.Role,
+		&m.RoleIDs,
 		&m.JoinedAt,
 		&m.UpdatedAt,
 	)
@@ -564,23 +590,6 @@ func (r *Repository) FindIDByInviteCode(ctx context.Context, code string) (strin
 	var id string
 	err := r.db.QueryRow(ctx, `SELECT id FROM servers WHERE invite_code = $1`, code).Scan(&id)
 	return id, err
-}
-
-func (r *Repository) UpdateMemberRole(ctx context.Context, serverID string, userID string, role string) error {
-	tag, err := r.db.Exec(
-		ctx,
-		`UPDATE server_members SET role = $3, updated_at = NOW() WHERE server_id = $1 AND user_id = $2`,
-		serverID,
-		userID,
-		role,
-	)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotServerMember
-	}
-	return nil
 }
 
 // SharesServer: os dois estão em pelo menos um servidor em comum.

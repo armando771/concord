@@ -8,7 +8,7 @@ import (
 	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/friendship"
-	"gin-quickstart/backend/internal/server"
+	"gin-quickstart/backend/internal/permission"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,19 +18,34 @@ type Handler struct {
 	channelService      *channel.Service
 	conversationService *conversation.Service
 	friendService       *friendship.Service
-	serverService       *server.Service
+	perms               PermissionChecker
 	access              RoomAccess
 }
 
-func MessageHandler(service *Service, channelService *channel.Service, conversationService *conversation.Service, friendService *friendship.Service, serverService *server.Service) *Handler {
+func MessageHandler(service *Service, channelService *channel.Service, conversationService *conversation.Service, friendService *friendship.Service, perms PermissionChecker) *Handler {
 	return &Handler{
 		service:             service,
 		channelService:      channelService,
 		conversationService: conversationService,
 		friendService:       friendService,
-		serverService:       serverService,
-		access:              NewServiceRoomAccess(channelService, serverService, conversationService, friendService),
+		perms:               perms,
+		access:              NewServiceRoomAccess(channelService, perms, conversationService, friendService),
 	}
+}
+
+// requireChannel confere se userID tem want no canal; se não tiver, já
+// responde o erro (canal que a pessoa não vê é 404).
+func (h *Handler) requireChannel(c *gin.Context, channelID string, userID string, want int64) bool {
+	err := channelAccess(c.Request.Context(), h.perms, channelID, userID, permission.ViewChannel|want)
+	switch {
+	case err == nil:
+		return true
+	case errors.Is(err, ErrRoomNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": "channel not found", "code": "channel_not_found"})
+	default:
+		c.JSON(http.StatusForbidden, gin.H{"error": permission.ErrMissingPermission.Error(), "code": "missing_permission"})
+	}
+	return false
 }
 
 func (h *Handler) getUserID(c *gin.Context) (string, bool) {
@@ -72,15 +87,11 @@ func (h *Handler) CreateChannelMessage(c *gin.Context) {
 		return
 	}
 
-	ch, err := h.channelService.FindByID(c.Request.Context(), channelID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "channel not found"})
-		return
+	want := permission.SendMessages
+	if len(input.AttachmentIDs) > 0 {
+		want |= permission.AttachFiles
 	}
-
-	isMember, err := h.serverService.IsMember(c.Request.Context(), ch.ServerID, userID)
-	if err != nil || !isMember {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you are not a member of this server"})
+	if !h.requireChannel(c, channelID, userID, want) {
 		return
 	}
 
@@ -101,15 +112,12 @@ func (h *Handler) ListChannelMessages(c *gin.Context) {
 		return
 	}
 
-	ch, err := h.channelService.FindByID(c.Request.Context(), channelID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "channel not found"})
+	if !h.requireChannel(c, channelID, userID, 0) {
 		return
 	}
-
-	isMember, err := h.serverService.IsMember(c.Request.Context(), ch.ServerID, userID)
-	if err != nil || !isMember {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you are not a member of this server"})
+	// Sem READ_MESSAGE_HISTORY o canal abre vazio: só vê o que chegar ao vivo.
+	if perms, err := h.perms.ChannelPerms(c.Request.Context(), channelID, userID); err != nil || !permission.Has(perms, permission.ReadHistory) {
+		c.JSON(http.StatusOK, []Message{})
 		return
 	}
 
@@ -134,7 +142,14 @@ func (h *Handler) DeleteChannelMessage(c *gin.Context) {
 	}
 
 	if err := h.service.DeleteChannelMessage(c.Request.Context(), channelID, messageID, userID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		switch {
+		case errors.Is(err, ErrNotAuthor):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "missing_permission"})
+		case errors.Is(err, ErrMessageNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
@@ -245,7 +260,7 @@ func (h *Handler) AddChannelReaction(c *gin.Context) {
 		return
 	}
 
-	if !h.isChannelMember(c, channelID, userID) {
+	if !h.requireChannel(c, channelID, userID, permission.AddReactions) {
 		return
 	}
 
@@ -282,7 +297,7 @@ func (h *Handler) RemoveChannelReaction(c *gin.Context) {
 		return
 	}
 
-	if !h.isChannelMember(c, channelID, userID) {
+	if !h.requireChannel(c, channelID, userID, 0) {
 		return
 	}
 

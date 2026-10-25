@@ -1,0 +1,229 @@
+{
+  "_comment": "Casos compartilhados entre o backend (permission/vectors_test.go) e o app (lib/permissions.test.ts): os dois lados têm que calcular igual. Permissões por nome; ALL = todas.",
+  "bits": {
+    "VIEW_CHANNEL": 1,
+    "MANAGE_CHANNELS": 2,
+    "MANAGE_ROLES": 4,
+    "MANAGE_SERVER": 8,
+    "CREATE_INVITE": 16,
+    "KICK_MEMBERS": 32,
+    "BAN_MEMBERS": 64,
+    "ADMINISTRATOR": 128,
+    "SEND_MESSAGES": 256,
+    "ATTACH_FILES": 512,
+    "ADD_REACTIONS": 1024,
+    "MENTION_EVERYONE": 2048,
+    "MANAGE_MESSAGES": 4096,
+    "READ_MESSAGE_HISTORY": 8192,
+    "CONNECT": 65536,
+    "SPEAK": 131072,
+    "STREAM": 262144,
+    "MUTE_MEMBERS": 524288,
+    "DEAFEN_MEMBERS": 1048576,
+    "MOVE_MEMBERS": 2097152,
+    "USE_SOUNDBOARD": 4194304,
+    "MANAGE_EXPRESSIONS": 8388608
+  },
+  "defaults": {
+    "everyone": ["VIEW_CHANNEL", "SEND_MESSAGES", "ATTACH_FILES", "ADD_REACTIONS", "READ_MESSAGE_HISTORY", "CREATE_INVITE", "CONNECT", "SPEAK", "STREAM", "USE_SOUNDBOARD"],
+    "moderator": ["VIEW_CHANNEL", "SEND_MESSAGES", "ATTACH_FILES", "ADD_REACTIONS", "READ_MESSAGE_HISTORY", "CREATE_INVITE", "CONNECT", "SPEAK", "STREAM", "USE_SOUNDBOARD", "MANAGE_CHANNELS", "MANAGE_SERVER", "MENTION_EVERYONE", "MANAGE_MESSAGES", "MOVE_MEMBERS", "MUTE_MEMBERS", "DEAFEN_MEMBERS", "KICK_MEMBERS", "MANAGE_EXPRESSIONS"]
+  },
+  "compute": [
+    {
+      "name": "dono tem tudo, mesmo negado no canal",
+      "owner_id": "dono", "user_id": "dono",
+      "everyone": ["VIEW_CHANNEL"], "roles": [], "member_roles": [],
+      "channel": {"type": "text", "overwrites": [{"target_type": "role", "target_id": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]}]},
+      "expect_base": ["ALL"], "expect_channel": ["ALL"]
+    },
+    {
+      "name": "membro comum num canal sem sobrescrita",
+      "owner_id": "dono", "user_id": "ana",
+      "everyone": ["VIEW_CHANNEL", "SEND_MESSAGES", "READ_MESSAGE_HISTORY"], "roles": [], "member_roles": [],
+      "channel": {"type": "text", "overwrites": []},
+      "expect_base": ["VIEW_CHANNEL", "SEND_MESSAGES", "READ_MESSAGE_HISTORY"],
+      "expect_channel": ["VIEW_CHANNEL", "SEND_MESSAGES", "READ_MESSAGE_HISTORY"]
+    },
+    {
+      "name": "cargos somam com o @everyone",
+      "owner_id": "dono", "user_id": "ana",
+      "everyone": ["VIEW_CHANNEL", "SEND_MESSAGES"],
+      "roles": [{"id": "mod", "position": 1, "permissions": ["MANAGE_CHANNELS", "KICK_MEMBERS"]}],
+      "member_roles": ["mod"],
+      "channel": {"type": "text", "overwrites": []},
+      "expect_base": ["VIEW_CHANNEL", "SEND_MESSAGES", "MANAGE_CHANNELS", "KICK_MEMBERS"],
+      "expect_channel": ["VIEW_CHANNEL", "SEND_MESSAGES", "MANAGE_CHANNELS", "KICK_MEMBERS"]
+    },
+    {
+      "name": "cargo que o membro não tem não conta",
+      "owner_id": "dono", "user_id": "ana",
+      "everyone": ["VIEW_CHANNEL"],
+      "roles": [{"id": "mod", "position": 1, "permissions": ["MANAGE_CHANNELS"]}],
+      "member_roles": [],
+      "channel": {"type": "text", "overwrites": [{"target_type": "role", "target_id": "mod", "allow": ["SEND_MESSAGES"], "deny": []}]},
+      "expect_base": ["VIEW_CHANNEL"],
+      "expect_channel": ["VIEW_CHANNEL"]
+    },
+    {
+      "name": "ADMINISTRATOR vira tudo e ignora canal privado",
+      "owner_id": "dono", "user_id": "ana",
+      "everyone": ["VIEW_CHANNEL"],
+      "roles": [{"id": "admin", "position": 2, "permissions": ["ADMINISTRATOR"]}],
+      "member_roles": ["admin"],
+      "channel": {"type": "voice", "overwrites": [{"target_type": "role", "target_id": "everyone", "allow": [], "deny": ["VIEW_CHANNEL", "CONNECT"]}]},
+      "expect_base": ["ALL"], "expect_channel": ["ALL"]
+    },
+    {
+      "name": "canal privado: sem cargo liberado não vê nada",
+      "owner_id": "dono", "user_id": "ana",
+      "everyone": ["VIEW_CHANNEL", "SEND_MESSAGES", "READ_MESSAGE_HISTORY"],
+      "roles": [{"id": "vip", "position": 1, "permissions": []}],
+      "member_roles": [],
+      "channel": {"type": "text", "overwrites": [
+        {"target_type": "role", "target_id": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
+        {"target_type": "role", "target_id": "vip", "allow": ["VIEW_CHANNEL"], "deny": []}
+      ]},
+      "expect_base": ["VIEW_CHANNEL", "SEND_MESSAGES", "READ_MESSAGE_HISTORY"],
+      "expect_channel": []
+    },
+    {
+      "name": "canal privado: cargo liberado vê",
+      "owner_id": "dono", "user_id": "ana",
+      "everyone": ["VIEW_CHANNEL", "SEND_MESSAGES", "READ_MESSAGE_HISTORY"],
+      "roles": [{"id": "vip", "position": 1, "permissions": []}],
+      "member_roles": ["vip"],
+      "channel": {"type": "text", "overwrites": [
+        {"target_type": "role", "target_id": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
+        {"target_type": "role", "target_id": "vip", "allow": ["VIEW_CHANNEL"], "deny": []}
+      ]},
+      "expect_base": ["VIEW_CHANNEL", "SEND_MESSAGES", "READ_MESSAGE_HISTORY"],
+      "expect_channel": ["VIEW_CHANNEL", "SEND_MESSAGES", "READ_MESSAGE_HISTORY"]
+    },
+    {
+      "name": "deny de cargo vence allow do @everyone",
+      "owner_id": "dono", "user_id": "ana",
+      "everyone": ["VIEW_CHANNEL"],
+      "roles": [{"id": "castigo", "position": 1, "permissions": []}],
+      "member_roles": ["castigo"],
+      "channel": {"type": "text", "overwrites": [
+        {"target_type": "role", "target_id": "everyone", "allow": ["SEND_MESSAGES"], "deny": []},
+        {"target_type": "role", "target_id": "castigo", "allow": [], "deny": ["SEND_MESSAGES"]}
+      ]},
+      "expect_base": ["VIEW_CHANNEL"],
+      "expect_channel": ["VIEW_CHANNEL"]
+    },
+    {
+      "name": "entre cargos, allow vence deny",
+      "owner_id": "dono", "user_id": "ana",
+      "everyone": ["VIEW_CHANNEL"],
+      "roles": [
+        {"id": "a", "position": 1, "permissions": []},
+        {"id": "b", "position": 2, "permissions": []}
+      ],
+      "member_roles": ["a", "b"],
+      "channel": {"type": "text", "overwrites": [
+        {"target_type": "role", "target_id": "a", "allow": [], "deny": ["SEND_MESSAGES"]},
+        {"target_type": "role", "target_id": "b", "allow": ["SEND_MESSAGES"], "deny": []}
+      ]},
+      "expect_base": ["VIEW_CHANNEL"],
+      "expect_channel": ["VIEW_CHANNEL", "SEND_MESSAGES"]
+    },
+    {
+      "name": "sobrescrita do membro vence a do cargo (deny)",
+      "owner_id": "dono", "user_id": "ana",
+      "everyone": ["VIEW_CHANNEL"],
+      "roles": [{"id": "vip", "position": 1, "permissions": []}],
+      "member_roles": ["vip"],
+      "channel": {"type": "text", "overwrites": [
+        {"target_type": "role", "target_id": "vip", "allow": ["SEND_MESSAGES", "ADD_REACTIONS"], "deny": []},
+        {"target_type": "member", "target_id": "ana", "allow": [], "deny": ["SEND_MESSAGES"]}
+      ]},
+      "expect_base": ["VIEW_CHANNEL"],
+      "expect_channel": ["VIEW_CHANNEL", "ADD_REACTIONS"]
+    },
+    {
+      "name": "sobrescrita do membro vence a do cargo (allow)",
+      "owner_id": "dono", "user_id": "ana",
+      "everyone": ["VIEW_CHANNEL", "SEND_MESSAGES"],
+      "roles": [{"id": "castigo", "position": 1, "permissions": []}],
+      "member_roles": ["castigo"],
+      "channel": {"type": "text", "overwrites": [
+        {"target_type": "role", "target_id": "castigo", "allow": [], "deny": ["SEND_MESSAGES"]},
+        {"target_type": "member", "target_id": "ana", "allow": ["SEND_MESSAGES"], "deny": []}
+      ]},
+      "expect_base": ["VIEW_CHANNEL", "SEND_MESSAGES"],
+      "expect_channel": ["VIEW_CHANNEL", "SEND_MESSAGES"]
+    },
+    {
+      "name": "sobrescrita de outro membro não conta",
+      "owner_id": "dono", "user_id": "ana",
+      "everyone": ["VIEW_CHANNEL", "SEND_MESSAGES"],
+      "roles": [], "member_roles": [],
+      "channel": {"type": "text", "overwrites": [
+        {"target_type": "member", "target_id": "bia", "allow": [], "deny": ["SEND_MESSAGES"]}
+      ]},
+      "expect_base": ["VIEW_CHANNEL", "SEND_MESSAGES"],
+      "expect_channel": ["VIEW_CHANNEL", "SEND_MESSAGES"]
+    },
+    {
+      "name": "texto sem enviar não anexa nem menciona todos",
+      "owner_id": "dono", "user_id": "ana",
+      "everyone": ["VIEW_CHANNEL", "ATTACH_FILES", "MENTION_EVERYONE", "READ_MESSAGE_HISTORY"],
+      "roles": [], "member_roles": [],
+      "channel": {"type": "text", "overwrites": []},
+      "expect_base": ["VIEW_CHANNEL", "ATTACH_FILES", "MENTION_EVERYONE", "READ_MESSAGE_HISTORY"],
+      "expect_channel": ["VIEW_CHANNEL", "READ_MESSAGE_HISTORY"]
+    },
+    {
+      "name": "voz sem conectar não fala, transmite nem modera",
+      "owner_id": "dono", "user_id": "ana",
+      "everyone": ["VIEW_CHANNEL", "SPEAK", "STREAM", "USE_SOUNDBOARD", "MOVE_MEMBERS", "MUTE_MEMBERS"],
+      "roles": [], "member_roles": [],
+      "channel": {"type": "voice", "overwrites": []},
+      "expect_base": ["VIEW_CHANNEL", "SPEAK", "STREAM", "USE_SOUNDBOARD", "MOVE_MEMBERS", "MUTE_MEMBERS"],
+      "expect_channel": ["VIEW_CHANNEL"]
+    },
+    {
+      "name": "voz: @everyone sem falar neste canal",
+      "owner_id": "dono", "user_id": "ana",
+      "everyone": ["VIEW_CHANNEL", "CONNECT", "SPEAK", "STREAM"],
+      "roles": [], "member_roles": [],
+      "channel": {"type": "voice", "overwrites": [
+        {"target_type": "role", "target_id": "everyone", "allow": [], "deny": ["SPEAK"]}
+      ]},
+      "expect_base": ["VIEW_CHANNEL", "CONNECT", "SPEAK", "STREAM"],
+      "expect_channel": ["VIEW_CHANNEL", "CONNECT", "STREAM"]
+    },
+    {
+      "name": "sem ver o canal, nada mais vale",
+      "owner_id": "dono", "user_id": "ana",
+      "everyone": ["SEND_MESSAGES", "READ_MESSAGE_HISTORY", "MANAGE_MESSAGES"],
+      "roles": [], "member_roles": [],
+      "channel": {"type": "text", "overwrites": []},
+      "expect_base": ["SEND_MESSAGES", "READ_MESSAGE_HISTORY", "MANAGE_MESSAGES"],
+      "expect_channel": []
+    }
+  ],
+  "can_act_on": [
+    {"name": "dono age sobre qualquer um", "owner_id": "dono", "actor": "dono", "target": "ana", "actor_highest": 0, "target_highest": 5, "expect": true},
+    {"name": "ninguém age sobre o dono", "owner_id": "dono", "actor": "ana", "target": "dono", "actor_highest": 9, "target_highest": 0, "expect": false},
+    {"name": "ninguém age sobre si mesmo", "owner_id": "dono", "actor": "ana", "target": "ana", "actor_highest": 3, "target_highest": 3, "expect": false},
+    {"name": "cargo mais alto age", "owner_id": "dono", "actor": "mod", "target": "ana", "actor_highest": 2, "target_highest": 1, "expect": true},
+    {"name": "mesma posição não age", "owner_id": "dono", "actor": "mod", "target": "ana", "actor_highest": 2, "target_highest": 2, "expect": false},
+    {"name": "abaixo não age", "owner_id": "dono", "actor": "mod", "target": "ana", "actor_highest": 1, "target_highest": 3, "expect": false}
+  ],
+  "can_manage_role": [
+    {"name": "dono gerencia qualquer cargo", "is_owner": true, "actor_highest": 0, "role_position": 10, "expect": true},
+    {"name": "cargo abaixo do seu", "is_owner": false, "actor_highest": 3, "role_position": 2, "expect": true},
+    {"name": "o próprio cargo mais alto não", "is_owner": false, "actor_highest": 3, "role_position": 3, "expect": false},
+    {"name": "cargo acima não", "is_owner": false, "actor_highest": 3, "role_position": 4, "expect": false},
+    {"name": "@everyone com qualquer cargo", "is_owner": false, "actor_highest": 1, "role_position": 0, "expect": true},
+    {"name": "só @everyone não gerencia nem o @everyone", "is_owner": false, "actor_highest": 0, "role_position": 0, "expect": false}
+  ],
+  "can_grant": [
+    {"name": "dá o que tem", "actor": ["VIEW_CHANNEL", "SEND_MESSAGES", "MANAGE_ROLES"], "changed": ["SEND_MESSAGES"], "expect": true},
+    {"name": "não dá o que não tem", "actor": ["VIEW_CHANNEL", "MANAGE_ROLES"], "changed": ["SEND_MESSAGES", "VIEW_CHANNEL"], "expect": false},
+    {"name": "administrador dá qualquer coisa", "actor": ["ADMINISTRATOR"], "changed": ["BAN_MEMBERS", "KICK_MEMBERS"], "expect": true},
+    {"name": "não mexer em nada sempre pode", "actor": [], "changed": [], "expect": true}
+  ]
+}

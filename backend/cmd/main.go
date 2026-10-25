@@ -20,6 +20,8 @@ import (
 	"gin-quickstart/backend/internal/livekit"
 	"gin-quickstart/backend/internal/media"
 	"gin-quickstart/backend/internal/message"
+	"gin-quickstart/backend/internal/permission"
+	"gin-quickstart/backend/internal/role"
 	"gin-quickstart/backend/internal/server"
 	"gin-quickstart/backend/internal/soundboard"
 	"gin-quickstart/backend/internal/updates"
@@ -83,7 +85,7 @@ func main() {
 		// O app empacotado carrega via file:// e a auth é por Bearer (sem
 		// cookies), então qualquer origem pode chamar a API.
 		AllowOriginFunc:  func(string) bool { return true },
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
@@ -115,9 +117,20 @@ func main() {
 	hub := websocket.NewHub()
 	hub.SetStatusLookup(userRepository.GetStatus)
 
+	// Permissões (cargos, @everyone, sobrescritas por canal)
+	permissionRepository := permission.PermissionRepository(db)
+	permissionService := permission.PermissionService(permissionRepository)
+	hub.SetVisibility(permissionService)
+
+	// Cargos
+	roleRepository := role.RoleRepository(db)
+	roleService := role.RoleService(roleRepository, permissionService, hub)
+	roleHandler := role.RoleHandler(roleService)
+
 	// Server
 	serverRepository := server.ServerRepository(db)
-	serverService := server.ServerService(serverRepository, hub)
+	serverService := server.ServerService(serverRepository, hub, roleRepository)
+	moderationService := server.ModerationService(serverRepository, permissionService, hub)
 
 	// Friendship
 	friendshipRepository := friendship.FriendshipRepository(db)
@@ -127,9 +140,9 @@ func main() {
 	// Channel
 	channelRepository := channel.ChannelRepository(db)
 	channelService := channel.ChannelService(channelRepository, hub)
-	channelHandler := channel.ChannelHandler(channelService)
+	channelHandler := channel.ChannelHandler(channelService, permissionService)
 
-	serverHandler := server.ServerHandler(serverService, friendshipService, userService, channelService)
+	serverHandler := server.ServerHandler(serverService, friendshipService, userService, channelService, permissionService, roleService, moderationService)
 
 	// Conversation (DM)
 	conversationRepository := conversation.ConversationRepository(db)
@@ -151,12 +164,12 @@ func main() {
 
 	// Message
 	messageRepository := message.MessageRepository(db)
-	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository, uploads, channelRepository)
+	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository, uploads, permissionService)
 	// Limpeza horária de arquivos sem dono (cascatas e uploads abandonados).
 	go message.NewJanitor(messageRepository, uploads).Run(context.Background(), time.Hour)
-	messageHandler := message.MessageHandler(messageService, channelService, conversationService, friendshipService, serverService)
+	messageHandler := message.MessageHandler(messageService, channelService, conversationService, friendshipService, permissionService)
 	uploadSpace := media.NewSpace(uploadsDir, media.ReserveFromEnv(os.Getenv("UPLOADS_MIN_FREE_GB")))
-	roomAccess := message.NewServiceRoomAccess(channelService, serverService, conversationService, friendshipService)
+	roomAccess := message.NewServiceRoomAccess(channelService, permissionService, conversationService, friendshipService)
 	attachmentHandler := message.NewAttachmentHandler(messageRepository, uploads, uploadSpace, roomAccess, authService)
 
 	// Mesa de áudio (Soundboard) compartilhada por servidor
@@ -165,7 +178,7 @@ func main() {
 		log.Fatalf("failed to open soundboard uploads dir: %v", err)
 	}
 	soundboardRepository := soundboard.NewRepository(db)
-	soundboardHandler := soundboard.NewHandler(soundboardRepository, soundboardUploads, uploadSpace, serverService, channelService, authService, hub)
+	soundboardHandler := soundboard.NewHandler(soundboardRepository, soundboardUploads, uploadSpace, serverService, permissionService, authService, hub)
 
 	// Perfil (avatar/banner numa subpasta que a limpeza dos anexos não varre)
 	profileMediaDir := filepath.Join(uploadsDir, user.ProfileMediaDir)
@@ -200,6 +213,15 @@ func main() {
 	callRepository := call.CallRepository(db)
 	callService := call.CallService(callRepository, hub, conversationService, serverService, channelService, userService, hub.IsOnline)
 	callService.SetSoundLookup(soundboard.NewCallLookup(soundboardRepository))
+	callService.SetPermissions(permissionService)
+	callService.SetMediaAdmin(livekit.NewAdmin("http://127.0.0.1:"+liveKitPort, liveKitKey, liveKitSecret))
+	// Mudou cargo ou canal: quem está em voz sem acesso sai; quem perdeu falar
+	// ou transmitir tem a mídia atualizada na hora.
+	hub.SetPermissionsChangedHook(func(serverID string) {
+		callService.RevalidateServer(context.Background(), serverID)
+	})
+	// Expulso, banido ou saiu do servidor: sai da chamada de voz dele.
+	moderationService.SetOnRemoved(callService.RemoveFromServerCalls)
 	callService.SetBlockedCheck(friendshipService.IsBlockedEither)
 	callHandler := call.CallHandler(callService, liveKitTokens)
 	// Reinício do servidor não derruba quem está em chamada.
@@ -218,7 +240,9 @@ func main() {
 	go levelService.Run(context.Background())
 
 	// WebSocket handler
-	wsHandler := websocket.WsHandler(hub, authService, channelService, serverService, conversationService, callService)
+	// "Fulano está digitando…": mesma regra de escrita das mensagens.
+	typing := websocket.NewTyping(hub, roomAccess, userService.FindByID)
+	wsHandler := websocket.WsHandler(hub, authService, permissionService, serverService, conversationService, callService, typing)
 	hub.SetDisconnectHandler(callService.HandleDisconnect)
 
 	// Auth middleware
@@ -237,6 +261,7 @@ func main() {
 	friendship.FriendRoutes(api, friendshipHandler, authMiddleware)
 	server.ServerRoutes(api, serverHandler, authMiddleware)
 	channel.ChannelRoutes(api, channelHandler, authMiddleware)
+	role.RoleRoutes(api, roleHandler, authMiddleware)
 	conversation.ConversationRoutes(api, conversationHandler, authMiddleware)
 	message.MessageRoutes(api, messageHandler, authMiddleware)
 	message.AttachmentRoutes(api, attachmentHandler, authMiddleware)

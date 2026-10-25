@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import type { Server, ServerMember } from '../api/servers'
 import type { ServerInvite } from '../api/invites'
-import type { Channel, ChannelType } from '../api/channels'
+import type { Channel, ChannelType, CreateChannelOptions } from '../api/channels'
+import type { Role } from '../lib/permissions'
 import { useAuthStore } from './authStore'
 import {
   listServers,
@@ -9,8 +10,20 @@ import {
   createServer as apiCreateServer,
   inviteMember as apiInviteMember,
   updateServer as apiUpdateServer,
-  deleteServer as apiDeleteServer
+  deleteServer as apiDeleteServer,
+  kickMember as apiKickMember,
+  leaveServer as apiLeaveServer,
+  banMember as apiBanMember
 } from '../api/servers'
+import {
+  createRole as apiCreateRole,
+  updateRole as apiUpdateRole,
+  deleteRole as apiDeleteRole,
+  reorderRoles as apiReorderRoles,
+  addMemberRole as apiAddMemberRole,
+  removeMemberRole as apiRemoveMemberRole,
+  type RoleInput
+} from '../api/roles'
 import { listServerInvites } from '../api/invites'
 import {
   listChannels as apiListChannels,
@@ -20,21 +33,34 @@ import {
   reorderChannels as apiReorderChannels
 } from '../api/channels'
 import { applyChannelOrder } from '../lib/channelOrder'
+import { removeRole, sortRoles, stripRoleFromMembers, upsertRole } from '../lib/roleList'
 
 interface ServerState {
   servers: Server[]
   currentServer: Server | null
   currentMembers: ServerMember[]
+  /** Cargos do servidor aberto, do mais alto para o mais baixo (@everyone por último). */
+  roles: Role[]
   serverInvites: ServerInvite[]
   channels: Channel[]
   loading: boolean
   fetchServers: () => Promise<void>
   selectServer: (id: string) => Promise<void>
+  /**
+   * Relê membros, cargos e canais do servidor aberto sem a tela de carregando
+   * (permissões mudaram: cargo novo, canal virou privado…).
+   */
+  refreshServer: (serverId: string) => Promise<void>
   fetchServerInvites: (serverId: string) => Promise<void>
   fetchChannels: (serverId: string) => Promise<void>
   addServer: (name: string, icon_url?: string) => Promise<Server>
   inviteUser: (serverId: string, userId: string) => Promise<void>
-  createChannel: (serverId: string, name: string, type?: ChannelType) => Promise<void>
+  createChannel: (
+    serverId: string,
+    name: string,
+    type?: ChannelType,
+    options?: CreateChannelOptions
+  ) => Promise<void>
   updateChannel: (serverId: string, channelId: string, name: string) => Promise<void>
   deleteChannel: (serverId: string, channelId: string) => Promise<void>
   /**
@@ -62,6 +88,21 @@ interface ServerState {
   removeMember: (serverId: string, userId: string) => void
   /** Cargo mudou (ex.: virou moderador). */
   updateMember: (serverId: string, member: ServerMember) => void
+  /** Cargos de um membro mudaram (evento server:member:roles). */
+  setMemberRoleIds: (serverId: string, userId: string, roleIds: string[]) => void
+  /** Cargos do servidor (resposta da API ou evento role:reorder). */
+  setRoles: (serverId: string, roles: Role[]) => void
+  upsertLocalRole: (serverId: string, role: Role) => void
+  removeLocalRole: (serverId: string, roleId: string) => void
+  createRole: (serverId: string, input: RoleInput) => Promise<Role>
+  updateRole: (serverId: string, roleId: string, input: RoleInput) => Promise<Role>
+  deleteRole: (serverId: string, roleId: string) => Promise<void>
+  reorderRoles: (serverId: string, roleIds: string[]) => Promise<void>
+  addMemberRole: (serverId: string, userId: string, roleId: string) => Promise<void>
+  removeMemberRole: (serverId: string, userId: string, roleId: string) => Promise<void>
+  kickMember: (serverId: string, userId: string) => Promise<void>
+  banMember: (serverId: string, userId: string, reason?: string) => Promise<void>
+  leaveServer: (serverId: string) => Promise<void>
   clearCurrentServer: () => void
   reset: () => void
 }
@@ -110,6 +151,7 @@ export const useServerStore = create<ServerState>()((set, get) => ({
   servers: [],
   currentServer: null,
   currentMembers: [],
+  roles: [],
   serverInvites: [],
   channels: [],
   loading: false,
@@ -129,12 +171,32 @@ export const useServerStore = create<ServerState>()((set, get) => ({
     try {
       const res = await getServer(id)
       if (!isSameSession(token)) return
-      set({ currentServer: res.server, currentMembers: res.members })
+      set({
+        currentServer: res.server,
+        currentMembers: res.members,
+        roles: sortRoles(res.roles ?? [])
+      })
     } catch (err) {
-      if (isSameSession(token)) set({ currentServer: null, currentMembers: [] })
+      if (isSameSession(token)) set({ currentServer: null, currentMembers: [], roles: [] })
       throw err
     } finally {
       set({ loading: false })
+    }
+  },
+  refreshServer: async (serverId: string) => {
+    const token = useAuthStore.getState().accessToken
+    try {
+      const [res, channels] = await Promise.all([getServer(serverId), apiListChannels(serverId)])
+      if (!isSameSession(token) || get().currentServer?.id !== serverId) return
+      set({
+        currentServer: res.server,
+        currentMembers: res.members,
+        roles: sortRoles(res.roles ?? []),
+        channels: Array.isArray(channels) ? channels : []
+      })
+    } catch {
+      // Sem acesso (foi expulso/banido) ou rede fora: o evento server:removed
+      // cuida do primeiro caso e o próximo evento tenta de novo.
     }
   },
   fetchServerInvites: async (serverId: string) => {
@@ -162,8 +224,8 @@ export const useServerStore = create<ServerState>()((set, get) => ({
     set({ servers: [...get().servers, newServer] })
     return newServer
   },
-  createChannel: async (serverId: string, name: string, type?: ChannelType) => {
-    await apiCreateChannel(serverId, name, type)
+  createChannel: async (serverId, name, type, options) => {
+    await apiCreateChannel(serverId, name, type, options)
     await get().fetchChannels(serverId)
   },
   updateChannel: async (serverId: string, channelId: string, name: string) => {
@@ -230,7 +292,7 @@ export const useServerStore = create<ServerState>()((set, get) => ({
     await apiDeleteServer(serverId)
     set({ servers: get().servers.filter((s) => s.id !== serverId) })
     if (get().currentServer?.id === serverId) {
-      set({ currentServer: null, currentMembers: [], channels: [] })
+      set({ currentServer: null, currentMembers: [], roles: [], channels: [] })
     }
   },
   updateLocalServer: (server) => {
@@ -247,6 +309,7 @@ export const useServerStore = create<ServerState>()((set, get) => ({
       servers: get().servers.filter((s) => s.id !== serverId),
       currentServer: get().currentServer?.id === serverId ? null : get().currentServer,
       currentMembers: get().currentServer?.id === serverId ? [] : get().currentMembers,
+      roles: get().currentServer?.id === serverId ? [] : get().roles,
       channels: get().currentServer?.id === serverId ? [] : get().channels,
       serverInvites: get().currentServer?.id === serverId ? [] : get().serverInvites
     })
@@ -273,6 +336,67 @@ export const useServerStore = create<ServerState>()((set, get) => ({
       set({ currentMembers: get().currentMembers.filter((m) => m.user_id !== userId) })
     }
   },
+  setMemberRoleIds: (serverId, userId, roleIds) => {
+    if (get().currentServer?.id !== serverId) return
+    set({
+      currentMembers: get().currentMembers.map((m) =>
+        m.user_id === userId ? { ...m, role_ids: roleIds } : m
+      )
+    })
+  },
+  setRoles: (serverId, roles) => {
+    if (get().currentServer?.id === serverId) set({ roles: sortRoles(roles) })
+  },
+  upsertLocalRole: (serverId, role) => {
+    if (get().currentServer?.id === serverId) set({ roles: upsertRole(get().roles, role) })
+  },
+  removeLocalRole: (serverId, roleId) => {
+    if (get().currentServer?.id !== serverId) return
+    set({
+      roles: removeRole(get().roles, roleId),
+      currentMembers: stripRoleFromMembers(get().currentMembers, roleId)
+    })
+  },
+  createRole: async (serverId, input) => {
+    const role = await apiCreateRole(serverId, input)
+    // O novo cargo empurra os outros uma posição acima: relê a lista toda.
+    get().upsertLocalRole(serverId, role)
+    void get().refreshServer(serverId)
+    return role
+  },
+  updateRole: async (serverId, roleId, input) => {
+    const role = await apiUpdateRole(serverId, roleId, input)
+    get().upsertLocalRole(serverId, role)
+    return role
+  },
+  deleteRole: async (serverId, roleId) => {
+    await apiDeleteRole(serverId, roleId)
+    get().removeLocalRole(serverId, roleId)
+  },
+  reorderRoles: async (serverId, roleIds) => {
+    const roles = await apiReorderRoles(serverId, roleIds)
+    get().setRoles(serverId, roles)
+  },
+  addMemberRole: async (serverId, userId, roleId) => {
+    const res = await apiAddMemberRole(serverId, userId, roleId)
+    get().setMemberRoleIds(serverId, userId, res.role_ids)
+  },
+  removeMemberRole: async (serverId, userId, roleId) => {
+    const res = await apiRemoveMemberRole(serverId, userId, roleId)
+    get().setMemberRoleIds(serverId, userId, res.role_ids)
+  },
+  kickMember: async (serverId, userId) => {
+    await apiKickMember(serverId, userId)
+    get().removeMember(serverId, userId)
+  },
+  banMember: async (serverId, userId, reason) => {
+    await apiBanMember(serverId, userId, reason)
+    get().removeMember(serverId, userId)
+  },
+  leaveServer: async (serverId) => {
+    await apiLeaveServer(serverId)
+    get().removeLocalServer(serverId)
+  },
   inviteUser: async (serverId: string, userId: string) => {
     await apiInviteMember(serverId, userId)
     await get().fetchServerInvites(serverId)
@@ -280,12 +404,14 @@ export const useServerStore = create<ServerState>()((set, get) => ({
       await get().selectServer(serverId)
     }
   },
-  clearCurrentServer: () => set({ currentServer: null, currentMembers: [], channels: [] }),
+  clearCurrentServer: () =>
+    set({ currentServer: null, currentMembers: [], roles: [], channels: [] }),
   reset: () =>
     set({
       servers: [],
       currentServer: null,
       currentMembers: [],
+      roles: [],
       serverInvites: [],
       channels: [],
       loading: false
