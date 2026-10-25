@@ -140,17 +140,17 @@ function UserBar(): React.JSX.Element {
           cutoutColor={BAR_BG}
           className={`rounded-full transition-shadow ${speaking ? 'ring-2 ring-[#23a55a]' : ''}`}
         />
-        <div className="min-w-0 leading-tight">
-          <p className="truncate text-sm font-semibold text-white">{name}</p>
+        <div className="min-w-0">
+          <p className="truncate text-ds-md leading-[18px] font-medium text-white">{name}</p>
           {/* Como no Discord: "Em call", a nota (ou o status) e, com o mouse, o @. */}
           <p
-            className={`truncate text-[11px] group-hover:hidden ${
+            className={`truncate text-ds-xs leading-[13px] font-medium group-hover:hidden ${
               inCall ? 'text-[#23a55a]' : 'text-gray-400'
             }`}
           >
             {subtitle}
           </p>
-          <p className="hidden truncate text-[11px] text-gray-400 group-hover:block">
+          <p className="hidden truncate text-ds-xs leading-[13px] font-medium text-gray-400 group-hover:block">
             @{user?.username}
           </p>
         </div>

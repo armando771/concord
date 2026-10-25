@@ -282,9 +282,7 @@ function ChannelPermissionsModal({
               <div className="space-y-5">
                 {groups.map((group) => (
                   <section key={group.title}>
-                    <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">
-                      {group.title}
-                    </h3>
+                    <h3 className="mb-2 text-ds-sm font-medium text-gray-400">{group.title}</h3>
                     <ul className="divide-y divide-white/6 rounded-lg border border-white/8 bg-white/3">
                       {group.permissions.map((p) => {
                         const bit = Perm[p.name]

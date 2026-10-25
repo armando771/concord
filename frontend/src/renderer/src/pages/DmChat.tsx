@@ -122,12 +122,12 @@ function DmChat(): React.JSX.Element {
               cutoutColor="#07080b"
             />
           </button>
-          <div className="min-w-0 leading-tight">
-            <p className="truncate text-sm font-bold text-white">{look.name}</p>
-            {otherHandle && <p className="truncate text-[11px] text-gray-400">@{otherHandle}</p>}
+          <div className="min-w-0">
+            <p className="truncate text-ds-md font-semibold text-white">{look.name}</p>
+            {otherHandle && <p className="truncate text-ds-xs text-gray-400">@{otherHandle}</p>}
           </div>
         </div>
-        <span className="text-[11px] font-semibold" style={{ color: STATUS_META[status].color }}>
+        <span className="text-ds-xs font-semibold" style={{ color: STATUS_META[status].color }}>
           {STATUS_META[status].label}
         </span>
         <div className="ml-auto">
@@ -168,7 +168,7 @@ function DmChat(): React.JSX.Element {
       </header>
 
       {error ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-gray-400">
+        <div className="flex flex-1 items-center justify-center text-ds-md text-gray-400">
           <p>{error}</p>
         </div>
       ) : conversationId ? (
@@ -190,7 +190,7 @@ function DmChat(): React.JSX.Element {
           />
         )
       ) : (
-        <div className="flex flex-1 items-center justify-center text-sm text-gray-400">
+        <div className="flex flex-1 items-center justify-center text-ds-md text-gray-400">
           <p>Abrindo conversa...</p>
         </div>
       )}

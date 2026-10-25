@@ -148,7 +148,7 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
       <div className="flex items-center gap-1">
         <div className="min-w-0 flex-1">
           <p
-            className={`flex items-center gap-1.5 text-[13px] font-bold leading-5 ${
+            className={`flex items-center gap-1.5 text-ds-md font-semibold ${
               connected ? 'text-[#23a55a]' : 'text-[#f0b232]'
             }`}
           >
@@ -161,12 +161,12 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
               onClick={() => navigate(route)}
               aria-label={`${goTitle}: ${label}`}
               title={`${goTitle}: ${label}`}
-              className="block w-full cursor-pointer truncate text-left text-xs leading-4 text-gray-400 hover:text-gray-200 hover:underline"
+              className="block w-full cursor-pointer truncate text-left text-ds-xs text-gray-400 hover:text-gray-200 hover:underline"
             >
               {label}
             </button>
           ) : (
-            <p className="truncate text-xs leading-4 text-gray-400" title={label}>
+            <p className="truncate text-ds-xs text-gray-400" title={label}>
               {label}
             </p>
           )}

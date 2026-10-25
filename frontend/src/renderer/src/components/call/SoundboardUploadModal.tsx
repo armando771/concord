@@ -156,7 +156,7 @@ function SoundboardUploadModal({
 
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <label className="mb-1.5 block text-ds-sm font-medium text-gray-400">
               Arquivo de áudio (máx. 15s e 5 MB)
             </label>
             <input
@@ -207,7 +207,7 @@ function SoundboardUploadModal({
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <label className="mb-1.5 block text-ds-sm font-medium text-gray-400">
               Nome do botão
             </label>
             <Input
@@ -220,7 +220,7 @@ function SoundboardUploadModal({
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <label className="mb-1.5 block text-ds-sm font-medium text-gray-400">
               Ícone / Emoji
             </label>
             <div className="flex flex-wrap items-center gap-1.5">

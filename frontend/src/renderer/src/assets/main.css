@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+/* Fonte e escala de texto do Discord (compartilhado com o overlay). */
+@import './typography.css';
 
 @theme {
   --color-discord-violet: #5865f2;
@@ -34,10 +36,7 @@
   }
 
   body {
-    /* Emoji por último: nomes de canal/servidor com emoji (🐺) em qualquer SO. */
-    font-family:
-      'gg sans', 'Noto Sans', 'Helvetica Neue', 'Segoe UI', 'Inter', sans-serif,
-      'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
+    font-family: var(--font-sans);
     color: #f2f3f5;
     background: #050508;
   }
@@ -94,7 +93,9 @@
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 0.625rem;
     color: #f2f3f5;
-    font-size: 0.9375rem;
+    /* Campo de texto do Discord: 16px (44px de altura com o min-height). */
+    font-size: var(--text-ds-md);
+    line-height: var(--text-ds-md--line-height);
     outline: none;
     transition:
       border-color 0.15s ease,

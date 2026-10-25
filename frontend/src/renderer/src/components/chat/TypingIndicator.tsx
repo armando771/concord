@@ -33,7 +33,7 @@ function TypingIndicator({
   return (
     <div
       aria-live="polite"
-      className="flex h-6 min-w-0 items-center gap-1.5 px-1 text-xs text-gray-400"
+      className="flex h-6 min-w-0 items-center gap-1.5 px-1 text-ds-sm text-gray-400"
     >
       {segments.length > 0 && (
         <>

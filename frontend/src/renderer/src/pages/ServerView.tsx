@@ -63,7 +63,7 @@ function MemberRow({
       // Na lista de membros o menu abre até em você (para "Alterar apelido").
       onContextMenu={userMenuHandler(userId, name, meId, handle, { allowSelf: true })}
       onClick={profileCardHandler(userId, name, handle, 'left')}
-      className={`group relative flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-white/5 ${
+      className={`group relative flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1 hover:bg-white/5 ${
         online ? '' : 'opacity-60 hover:opacity-100'
       }`}
     >
@@ -80,18 +80,18 @@ function MemberRow({
           fallbackClassName={colorClass}
         />
       </div>
-      <div className="relative min-w-0 leading-tight">
+      <div className="relative min-w-0">
         <div className="flex min-w-0 items-center gap-1.5">
           <p
             title={name}
             style={nameColor ? { color: nameColor } : undefined}
-            className={`truncate text-sm font-semibold ${nameColor ? '' : nameClass}`}
+            className={`truncate text-ds-md font-medium ${nameColor ? '' : nameClass}`}
           >
             {name}
           </p>
           <LevelBadge userId={userId} />
         </div>
-        <p title={`@${handle}`} className="truncate text-[11px] text-gray-400">
+        <p title={`@${handle}`} className="-mt-0.5 truncate text-ds-xs font-medium text-gray-400">
           @{handle}
         </p>
       </div>
@@ -187,7 +187,7 @@ export function ServerView(): React.JSX.Element {
   if (loading || !currentServer) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-[#07080b]/90 text-gray-400">
-        <p className="text-sm">Carregando servidor...</p>
+        <p className="text-ds-md">Carregando servidor...</p>
       </div>
     )
   }
@@ -230,7 +230,7 @@ export function ServerView(): React.JSX.Element {
         {/* Top Channel Header Bar */}
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/6 px-4">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex items-center gap-2 text-gray-300 font-bold text-lg">
+            <div className="flex min-w-0 items-center gap-2 text-gray-300">
               {activeChannel?.type === 'voice' ? (
                 <VolumeIcon className="h-5 w-5 text-gray-400" />
               ) : (
@@ -238,7 +238,7 @@ export function ServerView(): React.JSX.Element {
               )}
               <span
                 title={activeChannel?.name ?? currentServer.name}
-                className="truncate text-white text-base"
+                className="truncate text-ds-md font-semibold text-white"
               >
                 {activeChannel?.name ?? currentServer.name}
               </span>
@@ -250,7 +250,7 @@ export function ServerView(): React.JSX.Element {
             {access.can(Perm.CREATE_INVITE) && (
               <Button
                 variant="secondary"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-ds-sm font-medium"
                 onClick={openInviteModal}
               >
                 <UserPlusIcon className="h-4 w-4" />
@@ -283,8 +283,10 @@ export function ServerView(): React.JSX.Element {
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-violet-600/30 border border-violet-500/40 text-violet-300 font-bold text-2xl shadow-lg">
                 #
               </div>
-              <h1 className="text-3xl font-bold text-white">Bem-vindo a #{currentServer.name}!</h1>
-              <p className="text-sm text-gray-400 leading-relaxed">
+              <h1 className="text-ds-xxl font-bold text-white">
+                Bem-vindo a #{currentServer.name}!
+              </h1>
+              <p className="text-ds-md text-gray-400">
                 Este é o início do servidor{' '}
                 <strong className="text-white">{currentServer.name}</strong>. Convide seus amigos e
                 comece a conversar!
@@ -300,7 +302,7 @@ export function ServerView(): React.JSX.Element {
           const offline = group.key === 'offline'
           return (
             <div key={group.key}>
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+              <p className="mb-1 text-ds-sm font-medium text-gray-400">
                 {group.title} — {group.members.length}
               </p>
               <div className={`flex flex-col gap-1 ${offline ? 'opacity-70' : ''}`}>
@@ -344,7 +346,7 @@ export function ServerView(): React.JSX.Element {
       >
         <div className="space-y-4">
           <InviteCodeBox serverId={currentServer.id} />
-          <p className="text-xs text-gray-400">
+          <p className="text-ds-sm text-gray-400">
             Ou selecione um amigo para enviar um convite. Ele poderá aceitar ou recusar.
           </p>
 
@@ -353,7 +355,7 @@ export function ServerView(): React.JSX.Element {
               placeholder="Buscar amigo por nome"
               value={inviteFilter}
               onChange={(e) => setInviteFilter(e.target.value)}
-              className="glass-input pl-9 text-sm"
+              className="glass-input pl-9 text-ds-md"
               autoFocus
             />
             <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
@@ -384,8 +386,8 @@ export function ServerView(): React.JSX.Element {
                         size={32}
                       />
                       <div className="leading-tight">
-                        <p className="text-sm font-semibold text-white">{f.display_name}</p>
-                        <p className="text-[11px] text-gray-400">@{f.username}</p>
+                        <p className="text-ds-md font-medium text-white">{f.display_name}</p>
+                        <p className="text-ds-xs text-gray-400">@{f.username}</p>
                       </div>
                     </div>
 

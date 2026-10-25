@@ -434,7 +434,7 @@ function RoleMembers({
       )}
 
       <div>
-        <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">
+        <h3 className="mb-2 text-ds-sm font-medium text-gray-400">
           Com este cargo — {withRole.length}
         </h3>
         {withRole.length === 0 ? (

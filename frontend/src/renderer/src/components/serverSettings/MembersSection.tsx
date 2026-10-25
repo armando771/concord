@@ -60,9 +60,7 @@ function MembersSection(): React.JSX.Element {
         onChange={(e) => setQuery(e.target.value)}
         className="mb-4"
       />
-      <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">
-        Membros — {shown.length}
-      </p>
+      <p className="mb-2 text-ds-sm font-medium text-gray-400">Membros — {shown.length}</p>
       <ul className="divide-y divide-white/6 rounded-lg border border-white/8">
         {shown.map((m) => {
           const own = rolesOfMember(roles, m.role_ids)
