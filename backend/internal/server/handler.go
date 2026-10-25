@@ -31,10 +31,11 @@ type Handler struct {
 	perms          PermissionChecker
 	roles          RoleLister
 	moderation     *Moderation
+	nicknames      *Nicknames
 	previews       InvitePreviewer
 }
 
-func ServerHandler(service *Service, friendService *friendship.Service, userService *user.Service, channelService *channel.Service, perms PermissionChecker, roles RoleLister, moderation *Moderation) *Handler {
+func ServerHandler(service *Service, friendService *friendship.Service, userService *user.Service, channelService *channel.Service, perms PermissionChecker, roles RoleLister, moderation *Moderation, nicknames *Nicknames) *Handler {
 	return &Handler{
 		service:        service,
 		friendService:  friendService,
@@ -43,6 +44,7 @@ func ServerHandler(service *Service, friendService *friendship.Service, userServ
 		perms:          perms,
 		roles:          roles,
 		moderation:     moderation,
+		nicknames:      nicknames,
 		previews:       service,
 	}
 }

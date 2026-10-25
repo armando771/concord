@@ -8,6 +8,8 @@ import Avatar from './Avatar'
 import { useUserLook } from '../store/profileStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import { userMenuHandler } from '../store/userMenuStore'
+import { useServerNickname, useServerNicknames } from '../store/useServerNames'
+import { serverDisplayName } from '../lib/serverNames'
 import { useFriendStore } from '../store/friendStore'
 import { applyMention, mentionQuery, mentionSuggestions, messageMentionsMe } from '../lib/mentions'
 import {
@@ -63,10 +65,17 @@ import {
 export interface Mentionable {
   username: string
   display_name: string
+  /** Apelido no servidor (só em canal de servidor). */
+  nickname?: string | null
 }
 
 interface ChatPaneProps {
   room: string
+  /**
+   * Canal de servidor: os nomes saem com o apelido de cada um naquele
+   * servidor. Sem isso (DM, grupo), vale o nome de exibição.
+   */
+  serverId?: string
   placeholder?: string
   /** Quem pode ser marcado com @ (membros do servidor, ou a pessoa da DM). */
   mentionable?: Mentionable[]
@@ -178,6 +187,7 @@ function EmotePickerPopover({
 
 function MessageItem({
   message,
+  serverId,
   isHighlighted,
   onReply,
   onReact,
@@ -195,6 +205,8 @@ function MessageItem({
   canModerate
 }: {
   message: Message
+  /** Canal de servidor: autor e resposta com o apelido daquele servidor. */
+  serverId?: string
   isHighlighted: boolean
   onReply: () => void
   onReact: (emoji: string) => void
@@ -225,7 +237,9 @@ function MessageItem({
       'Desconhecido',
     avatarUrl: author?.avatar_url
   })
-  const name = look.name
+  const nickname = useServerNickname(serverId, message.author_id)
+  const name = serverDisplayName({ nickname }, { display_name: look.name })
+  const replyNickname = useServerNickname(serverId, message.reply_to?.author_id)
   const openProfile = profileCardHandler(message.author_id, name, author?.username, 'right')
   const [hover, setHover] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -239,8 +253,7 @@ function MessageItem({
   const editable = canEditMessage(message, me?.id)
   const reactions = message.reactions ?? []
   const hasReplyReference = Boolean(message.reply_to_id || message.reply_to)
-  const replyAuthorName =
-    message.reply_to?.author?.display_name ?? message.reply_to?.author?.username ?? 'Usuário'
+  const replyAuthorName = serverDisplayName({ nickname: replyNickname }, message.reply_to?.author)
 
   if (message.system_kind) return <SystemMessage message={message} />
 
@@ -464,6 +477,7 @@ function MessageItem({
 
 function ChatPane({
   room,
+  serverId,
   placeholder = 'Digite sua mensagem',
   mentionable = [],
   canMentionEveryone = false,
@@ -532,6 +546,7 @@ function ChatPane({
       mountedRef.current = false
     }
   }, [])
+  const nicknames = useServerNicknames(serverId)
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
   const [highlightChoice, setHighlight] = useState<number | null>(null)
   const meUsername = useAuthStore((s) => s.user?.username)
@@ -891,8 +906,10 @@ function ChatPane({
     }, 1600)
   }
 
-  const replyTargetAuthor =
-    replyingTo?.author?.display_name ?? replyingTo?.author?.username ?? 'Usuário'
+  const replyTargetAuthor = serverDisplayName(
+    { nickname: replyingTo ? nicknames?.[replyingTo.author_id] : undefined },
+    replyingTo?.author
+  )
 
   return (
     <div
@@ -941,6 +958,7 @@ function ChatPane({
               <MessageItem
                 key={m.id}
                 message={m}
+                serverId={serverId}
                 isHighlighted={highlightedId === m.id}
                 onReply={() => handleStartReply(m)}
                 onReact={(emoji) => void handleReact(m.id, emoji)}
@@ -991,7 +1009,7 @@ function ChatPane({
                   </>
                 ) : (
                   <>
-                    <span className="font-semibold">{m.display_name}</span>
+                    <span className="font-semibold">{serverDisplayName(m, m)}</span>
                     <span className="text-xs text-gray-400">@{m.username}</span>
                   </>
                 )}
@@ -1088,7 +1106,7 @@ function ChatPane({
             </button>
           </form>
         )}
-        <TypingIndicator room={room} />
+        <TypingIndicator room={room} serverId={serverId} />
       </div>
       <CreatePollModal
         open={pollOpen}

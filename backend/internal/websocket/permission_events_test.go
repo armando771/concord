@@ -268,3 +268,29 @@ func TestValidatorRequiresViewForChannelRooms(t *testing.T) {
 		}
 	}
 }
+
+// Apelido novo chega a todo o servidor, com o payload que o app lê.
+func TestMemberNicknameReachesWholeServer(t *testing.T) {
+	h, clients := hubWithServerMembers(visibilitySnapshot(), "dono", "vip", "ana")
+	for _, c := range clients {
+		events(c)
+	}
+	nick := "Aninha"
+	h.PublishMemberNickname(server.NicknameEvent{ServerID: "s1", UserID: "ana", Nickname: &nick})
+
+	for user, c := range clients {
+		if len(c.send) != 1 {
+			t.Fatalf("%s recebeu %d eventos", user, len(c.send))
+		}
+		var ev struct {
+			Type    string               `json:"type"`
+			Payload server.NicknameEvent `json:"payload"`
+		}
+		if err := json.Unmarshal(<-c.send, &ev); err != nil {
+			t.Fatal(err)
+		}
+		if ev.Type != "server:member:nickname" || ev.Payload.UserID != "ana" || ev.Payload.Nickname == nil || *ev.Payload.Nickname != nick {
+			t.Errorf("%s: evento = %+v", user, ev)
+		}
+	}
+}

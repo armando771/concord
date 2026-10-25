@@ -16,6 +16,9 @@ import { useSettingsStore } from '../store/settingsStore'
 import { changeMyStatus } from '../store/meActions'
 import { showToast } from '../store/toastStore'
 import { formatMemberSince, placeProfileCard } from '../lib/profileCard'
+import { serverIdFromPath } from '../lib/serverNames'
+import { useServerAccess } from '../store/useServerAccess'
+import { useModerationStore } from '../store/moderationStore'
 import { levelTier } from '../lib/levels'
 import { voiceChannelOf } from '../lib/voiceMove'
 import { memberColor } from '../lib/memberGroups'
@@ -152,6 +155,8 @@ function UserProfileCard(): React.JSX.Element | null {
   const profile = useProfileStore((s) => (target ? s.profiles[target.userId] : undefined))
   const fetchProfile = useProfileStore((s) => s.fetchProfile)
   const openSettings = useSettingsStore((s) => s.openSettings)
+  const access = useServerAccess()
+  const askNickname = useModerationStore((s) => s.askNickname)
   // Os badges chegam depois e podem mudar a altura do cartão.
   const badgesLoaded = useBadgeStore((s) => (target ? Boolean(s.byUser[target.userId]) : false))
   const ref = useRef<HTMLDivElement | null>(null)
@@ -224,6 +229,11 @@ function UserProfileCard(): React.JSX.Element | null {
   if (!target) return null
 
   const inServer = Boolean(server && member)
+  // O apelido só vale com o servidor aberto na tela (em DM não existe).
+  const nicknameContext =
+    inServer && serverIdFromPath(router.state.location.pathname) === server?.id
+  const nickname = nicknameContext ? (member?.nickname ?? null) : null
+  const canNickname = nicknameContext && access.canChangeNickname(target.userId)
   const isServerOwner = server?.owner_id === target.userId
   const memberRoles = inServer ? rolesOfMember(serverRoles, member?.role_ids) : []
   // O banner e o avatar sem foto usam a cor do cargo mais alto que tem cor.
@@ -239,6 +249,7 @@ function UserProfileCard(): React.JSX.Element | null {
   const card: CardProfile = {
     id: target.userId,
     display_name: source?.display_name || member?.display_name || target.name,
+    nickname,
     username: source?.username || member?.username || target.username,
     avatar_url: source ? source.avatar_url : member?.avatar_url,
     banner_url: source?.banner_url,
@@ -262,6 +273,26 @@ function UserProfileCard(): React.JSX.Element | null {
     close()
     openSettings('profiles')
   }
+
+  const editNickname = (): void => {
+    if (!server) return
+    close()
+    askNickname({
+      serverId: server.id,
+      userId: target.userId,
+      name: nickname || card.display_name,
+      nickname,
+      displayName: card.display_name,
+      self: isMe
+    })
+  }
+  const nicknameButton = canNickname && (
+    <MenuButton
+      icon={<span className="text-ds-sm font-black leading-none">@</span>}
+      label="Alterar apelido"
+      onClick={editNickname}
+    />
+  )
 
   const copyId = async (): Promise<void> => {
     try {
@@ -313,7 +344,7 @@ function UserProfileCard(): React.JSX.Element | null {
     const r = e.currentTarget.getBoundingClientRect()
     useUserMenuStore.getState().open({
       userId: target.userId,
-      name: card.display_name,
+      name: nickname || card.display_name,
       username: card.username,
       x: r.left,
       y: r.bottom + 4
@@ -324,7 +355,7 @@ function UserProfileCard(): React.JSX.Element | null {
     <div
       ref={ref}
       role="dialog"
-      aria-label={`Perfil de ${card.display_name}`}
+      aria-label={`Perfil de ${nickname || card.display_name}`}
       style={{
         width: CARD_WIDTH,
         left: pos?.left ?? -9999,
@@ -468,6 +499,7 @@ function UserProfileCard(): React.JSX.Element | null {
                 label="Editar perfil"
                 onClick={editProfile}
               />
+              {nicknameButton}
               <div className="mx-2 my-1 h-px bg-white/10" />
               <StatusMenu status={status} />
             </div>
@@ -520,6 +552,9 @@ function UserProfileCard(): React.JSX.Element | null {
               <DotsIcon className="h-4 w-4" />
             </button>
           </div>
+        )}
+        {!isMe && nicknameButton && (
+          <div className="mt-2 rounded-lg bg-black/30 p-1.5">{nicknameButton}</div>
         )}
       </ProfileCardBody>
     </div>

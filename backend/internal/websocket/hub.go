@@ -556,6 +556,12 @@ func (h *Hub) PublishMemberUpdate(event server.MemberJoinEvent) {
 	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:update", event))
 }
 
+// PublishMemberNickname: o apelido de alguém mudou; todo o servidor atualiza
+// o nome na hora (lista de membros, chat, voz).
+func (h *Hub) PublishMemberNickname(event server.NicknameEvent) {
+	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:nickname", event))
+}
+
 func (h *Hub) PublishMemberJoin(event server.MemberJoinEvent) {
 	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:join", event))
 }

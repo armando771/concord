@@ -26,10 +26,13 @@ import { useServerAccess } from '../store/useServerAccess'
 import { groupMembers, memberColor } from '../lib/memberGroups'
 import { chatPermissionsFor } from '../lib/chatPermissions'
 import { Perm, roleColorCss } from '../lib/permissions'
+import { serverDisplayName } from '../lib/serverNames'
 
 interface MemberRowProps {
   userId: string
   displayName: string
+  /** Apelido neste servidor (ganha do nome de exibição). */
+  nickname?: string | null
   handle: string
   avatarUrl?: string | null
   colorClass: string
@@ -42,6 +45,7 @@ interface MemberRowProps {
 function MemberRow({
   userId,
   displayName,
+  nickname,
   handle,
   avatarUrl,
   colorClass,
@@ -52,11 +56,13 @@ function MemberRow({
   const meId = useAuthStore((s) => s.user?.id)
   const status = usePresenceStatus(userId)
   const look = useUserLook(userId, { name: displayName, avatarUrl })
+  const name = serverDisplayName({ nickname }, { display_name: look.name })
   return (
     <div
       key={userId}
-      onContextMenu={userMenuHandler(userId, displayName, meId, handle)}
-      onClick={profileCardHandler(userId, displayName, handle, 'left')}
+      // Na lista de membros o menu abre até em você (para "Alterar apelido").
+      onContextMenu={userMenuHandler(userId, name, meId, handle, { allowSelf: true })}
+      onClick={profileCardHandler(userId, name, handle, 'left')}
       className={`group relative flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1 hover:bg-white/5 ${
         online ? '' : 'opacity-60 hover:opacity-100'
       }`}
@@ -66,7 +72,7 @@ function MemberRow({
         <LevelUpBurst userId={userId} />
         <Avatar
           userId={userId}
-          name={displayName}
+          name={name}
           avatarUrl={avatarUrl}
           size={32}
           status={status}
@@ -77,11 +83,11 @@ function MemberRow({
       <div className="relative min-w-0">
         <div className="flex min-w-0 items-center gap-1.5">
           <p
-            title={look.name}
+            title={name}
             style={nameColor ? { color: nameColor } : undefined}
             className={`truncate text-ds-md font-medium ${nameColor ? '' : nameClass}`}
           >
-            {look.name}
+            {name}
           </p>
           <LevelBadge userId={userId} />
         </div>
@@ -259,6 +265,7 @@ export function ServerView(): React.JSX.Element {
         ) : channelId ? (
           <ChatPane
             room={`channel:${channelId}`}
+            serverId={currentServer.id}
             placeholder={`Mensagem para #${activeChannel?.name ?? 'canal'}`}
             canMentionEveryone={canMentionEveryone}
             permissions={chatPermissions}
@@ -266,7 +273,8 @@ export function ServerView(): React.JSX.Element {
               .filter((m) => m.username)
               .map((m) => ({
                 username: m.username as string,
-                display_name: m.display_name || (m.username as string)
+                display_name: m.display_name || (m.username as string),
+                nickname: m.nickname
               }))}
           />
         ) : (
@@ -310,6 +318,7 @@ export function ServerView(): React.JSX.Element {
                       key={m.user_id}
                       userId={m.user_id}
                       displayName={displayName ?? 'Membro'}
+                      nickname={m.nickname}
                       avatarUrl={m.avatar_url}
                       handle={handle ?? 'membro'}
                       colorClass={

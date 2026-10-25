@@ -3,6 +3,7 @@ import { findActivity } from '../../../../shared/activities'
 import { activityBanner } from '../../lib/activityState'
 import { useActivityStore } from '../../store/activityStore'
 import { useAuthStore } from '../../store/authStore'
+import { useCallNicknames } from '../../store/useServerNames'
 import { showToast } from '../../store/toastStore'
 import { ActivityGlyph } from './ActivityPickerPopover'
 
@@ -23,7 +24,8 @@ function ActivityBar(): React.JSX.Element | null {
   const [link, setLink] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const banner = activityBanner({ callId, shared, local, pending: null }, meId)
+  const nicknames = useCallNicknames()
+  const banner = activityBanner({ callId, shared, local, pending: null }, meId, nicknames)
   const activity = shared ? findActivity(shared.activityId) : undefined
   if (!banner || !activity || !shared) return null
 

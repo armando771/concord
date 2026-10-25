@@ -229,6 +229,7 @@ func main() {
 	// Online na prévia do link de convite (invisível conta como offline).
 	serverService.SetPresence(hub.PresenceMap)
 	moderationService := server.ModerationService(serverRepository, permissionService, hub)
+	nicknameService := server.NicknameService(serverRepository, permissionService, hub)
 
 	// Friendship
 	friendshipRepository := friendship.FriendshipRepository(db)
@@ -240,7 +241,7 @@ func main() {
 	channelService := channel.ChannelService(channelRepository, hub)
 	channelHandler := channel.ChannelHandler(channelService, permissionService)
 
-	serverHandler := server.ServerHandler(serverService, friendshipService, userService, channelService, permissionService, roleService, moderationService)
+	serverHandler := server.ServerHandler(serverService, friendshipService, userService, channelService, permissionService, roleService, moderationService, nicknameService)
 
 	// Conversation (DM)
 	conversationRepository := conversation.ConversationRepository(db)
