@@ -7,6 +7,7 @@ export type WsEventType =
   | 'message:poll:update'
   | 'level:update'
   | 'level:up'
+  | 'badge:unlock'
   | 'presence:update'
   | 'channel:create'
   | 'channel:update'

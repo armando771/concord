@@ -1,0 +1,57 @@
+import { request } from './client'
+
+export type BadgeRarity = 'comum' | 'raro' | 'epico' | 'lendario'
+
+export type BadgeUnit =
+  'seconds' | 'months' | 'messages' | 'reactions' | 'level' | 'people' | 'servers' | 'founder'
+
+export interface BadgeTier {
+  tier: number
+  name: string
+  threshold: number
+  rarity: BadgeRarity
+  unlocked_at?: string
+}
+
+/** Uma categoria de badge (backend: internal/badge). Tier 0 = nada ainda. */
+export interface Badge {
+  category: string
+  name: string
+  description: string
+  unit: BadgeUnit
+  value: number
+  tier: number
+  tier_name?: string
+  rarity?: BadgeRarity
+  unlocked_at?: string
+  next_threshold?: number
+  next_tier_name?: string
+  /** Só na idade da conta: quando o próximo tier chega. */
+  next_at?: string
+  /** Do tier atual até o próximo, de 0 a 1. */
+  progress: number
+  /** false: não dá mais para conseguir (Fundador depois do corte). */
+  obtainable: boolean
+  tiers: BadgeTier[]
+}
+
+export interface BadgesResponse {
+  user_id: string
+  badges: Badge[]
+}
+
+/** Evento badge:unlock (só para a própria pessoa). */
+export interface BadgeUnlockEvent {
+  user_id: string
+  unlocks: {
+    category: string
+    name: string
+    tier: number
+    tier_name: string
+    rarity: BadgeRarity
+  }[]
+}
+
+export function fetchBadges(userId: string): Promise<BadgesResponse> {
+  return request<BadgesResponse>(`/users/${encodeURIComponent(userId)}/badges`)
+}

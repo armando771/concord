@@ -1,0 +1,193 @@
+import { describe, expect, it } from 'vitest'
+import type { Badge } from '../api/badges'
+import {
+  formatThreshold,
+  formatUnlockDate,
+  profileBadgeRow,
+  progressPercent,
+  RARITY,
+  remainingText,
+  splitBadges,
+  statText
+} from './badges'
+
+const HOUR = 3600
+
+function badge(over: Partial<Badge> = {}): Badge {
+  return {
+    category: 'voz',
+    name: 'Tempo em call',
+    description: '',
+    unit: 'seconds',
+    value: 0,
+    tier: 0,
+    progress: 0,
+    obtainable: true,
+    tiers: [],
+    ...over
+  }
+}
+
+describe('statText', () => {
+  it('fala o número de cada categoria em português', () => {
+    expect(statText(badge({ value: 798 * HOUR }))).toBe('798 horas em call')
+    expect(statText(badge({ value: HOUR }))).toBe('1 hora em call')
+    expect(statText(badge({ value: 45 * 60 }))).toBe('45 min em call')
+    expect(statText(badge({ category: 'streamer', value: 12 * HOUR }))).toBe(
+      '12 horas transmitindo'
+    )
+    expect(statText(badge({ category: 'coruja', value: 3 * HOUR }))).toBe(
+      '3 horas em call de madrugada'
+    )
+    expect(statText(badge({ category: 'maratona', value: 5 * HOUR }))).toBe(
+      '5 horas seguidas numa call'
+    )
+    expect(statText(badge({ category: 'mensagens', unit: 'messages', value: 12345 }))).toBe(
+      '12.345 mensagens enviadas'
+    )
+    expect(statText(badge({ category: 'mensagens', unit: 'messages', value: 1 }))).toBe(
+      '1 mensagem enviada'
+    )
+    expect(statText(badge({ category: 'nivel', unit: 'level', value: 27 }))).toBe('Nível 27')
+    expect(statText(badge({ category: 'festeiro', unit: 'people', value: 7 }))).toBe(
+      'Call com até 7 pessoas'
+    )
+    expect(statText(badge({ category: 'dono', unit: 'servers', value: 1 }))).toBe(
+      'Dono de 1 servidor'
+    )
+    expect(statText(badge({ category: 'reacoes', unit: 'reactions', value: 2 }))).toBe('2 reações')
+    expect(statText(badge({ category: 'fundador', unit: 'founder', value: 1 }))).toBe(
+      'Chegou nas primeiras semanas'
+    )
+  })
+
+  it('idade da conta em anos e meses', () => {
+    const conta = (value: number): string =>
+      statText(badge({ category: 'conta', unit: 'months', value }))
+    expect(conta(0)).toBe('Menos de 1 mês de conta')
+    expect(conta(1)).toBe('1 mês de conta')
+    expect(conta(7)).toBe('7 meses de conta')
+    expect(conta(12)).toBe('1 ano de conta')
+    expect(conta(26)).toBe('2 anos e 2 meses de conta')
+  })
+})
+
+describe('formatThreshold', () => {
+  it('rótulo curto da escada', () => {
+    expect(formatThreshold('seconds', HOUR)).toBe('1 hora')
+    expect(formatThreshold('seconds', 1000 * HOUR)).toBe('1.000 horas')
+    expect(formatThreshold('months', 1)).toBe('1 mês')
+    expect(formatThreshold('months', 24)).toBe('24 meses')
+    expect(formatThreshold('messages', 2000)).toBe('2.000 mensagens')
+    expect(formatThreshold('level', 10)).toBe('Nível 10')
+    expect(formatThreshold('people', 5)).toBe('5 pessoas')
+    expect(formatThreshold('servers', 1)).toBe('1 servidor')
+    expect(formatThreshold('reactions', 50)).toBe('50 reações')
+    expect(formatThreshold('founder', 1)).toBe('Até 31/10/26')
+  })
+})
+
+describe('remainingText', () => {
+  const now = new Date('2026-10-25T12:00:00Z')
+
+  it('quanto falta para o próximo tier', () => {
+    expect(remainingText(badge({ value: 30 * HOUR, next_threshold: 50 * HOUR }), now)).toBe(
+      'Faltam 20 horas'
+    )
+    expect(remainingText(badge({ value: 50 * 60, next_threshold: HOUR }), now)).toBe(
+      'Faltam 10 min'
+    )
+    expect(
+      remainingText(
+        badge({ category: 'mensagens', unit: 'messages', value: 499, next_threshold: 500 }),
+        now
+      )
+    ).toBe('Falta 1 mensagem')
+    expect(
+      remainingText(badge({ category: 'nivel', unit: 'level', value: 22, next_threshold: 25 }), now)
+    ).toBe('Faltam 3 níveis')
+    expect(
+      remainingText(
+        badge({ category: 'festeiro', unit: 'people', value: 6, next_threshold: 10 }),
+        now
+      )
+    ).toBe('Uma call com 10 pessoas')
+  })
+
+  it('idade da conta conta pelo dia em que chega', () => {
+    const conta = (nextAt: string): string =>
+      remainingText(
+        badge({ category: 'conta', unit: 'months', value: 2, next_threshold: 3, next_at: nextAt }),
+        now
+      )
+    expect(conta('2027-02-25T12:00:00Z')).toBe('Faltam 4 meses')
+    expect(conta('2026-11-06T12:00:00Z')).toBe('Faltam 12 dias')
+    expect(conta('2026-10-26T11:00:00Z')).toBe('Falta 1 dia')
+  })
+
+  it('no último tier não falta nada', () => {
+    expect(remainingText(badge({ tier: 6, value: 2000 * HOUR }), now)).toBe('Tier máximo!')
+  })
+})
+
+describe('profileBadgeRow', () => {
+  const list = [
+    badge({ category: 'voz', tier: 2, rarity: 'comum' }),
+    badge({ category: 'conta', tier: 0 }),
+    badge({ category: 'mensagens', tier: 4, rarity: 'epico' }),
+    badge({ category: 'streamer', tier: 1, rarity: 'comum' }),
+    badge({ category: 'nivel', tier: 1, rarity: 'comum' }),
+    badge({ category: 'coruja', tier: 1, rarity: 'comum' }),
+    badge({ category: 'madrugador', tier: 1, rarity: 'comum' }),
+    badge({ category: 'fundador', tier: 1, rarity: 'lendario' }),
+    badge({ category: 'dono', tier: 1, rarity: 'raro' })
+  ]
+
+  it('mostra os conquistados, do mais raro para o mais comum, e o resto vira +N', () => {
+    const { shown, overflow } = profileBadgeRow(list, 6)
+    expect(shown.map((b) => b.category)).toEqual([
+      'fundador',
+      'mensagens',
+      'dono',
+      'voz',
+      'streamer',
+      'nivel'
+    ])
+    expect(overflow).toBe(2)
+  })
+
+  it('sem badges, nada', () => {
+    expect(profileBadgeRow([badge()], 6)).toEqual({ shown: [], overflow: 0 })
+  })
+})
+
+describe('splitBadges', () => {
+  it('separa conquistados dos que dá para desbloquear', () => {
+    const { earned, available } = splitBadges([
+      badge({ category: 'voz', tier: 1, rarity: 'comum' }),
+      badge({ category: 'conta' }),
+      badge({ category: 'fundador', unit: 'founder', obtainable: false })
+    ])
+    expect(earned.map((b) => b.category)).toEqual(['voz'])
+    expect(available.map((b) => b.category)).toEqual(['conta'])
+  })
+})
+
+describe('misc', () => {
+  it('percentual da barra', () => {
+    expect(progressPercent(badge({ progress: 0.666 }))).toBe(67)
+    expect(progressPercent(badge({ progress: 3 }))).toBe(100)
+    expect(progressPercent(badge({ progress: -1 }))).toBe(0)
+  })
+
+  it('data curta dd/mm/aa', () => {
+    expect(formatUnlockDate('2026-07-29T15:00:00Z')).toBe('29/07/26')
+    expect(formatUnlockDate(undefined)).toBe('')
+  })
+
+  it('toda raridade tem nome e cor', () => {
+    expect(RARITY.lendario.label).toBe('Lendário')
+    expect(RARITY.epico.label).toBe('Épico')
+    expect(RARITY.raro.color).toMatch(/^#/)
+  })
+})
