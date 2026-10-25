@@ -8,6 +8,7 @@ import CallOverlay from './call/CallOverlay'
 import BirthdayModal from './BirthdayModal'
 import EmailVerifyBanner from './EmailVerifyBanner'
 import ScreenMiniPlayer from './call/ScreenMiniPlayer'
+import ActivityPanel from './call/ActivityPanel'
 import ScreenSharePickerModal from './call/ScreenSharePickerModal'
 import LevelUpBanner from './level/LevelUpBanner'
 import LevelUpScreen from './level/LevelUpScreen'
@@ -45,6 +46,7 @@ function AppShell(): React.JSX.Element {
       <CallOverlay />
       <BirthdayModal />
       <ScreenMiniPlayer />
+      <ActivityPanel />
       {/* No navegador o seletor de tela é o do próprio navegador. */}
       {!IS_WEB && <ScreenSharePickerModal />}
       <LevelUpScreen />

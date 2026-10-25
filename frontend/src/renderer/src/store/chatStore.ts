@@ -46,6 +46,7 @@ import { useCallStore } from './callStore'
 import { useLevelStore } from './levelStore'
 import { useBadgeStore } from './badgeStore'
 import { useSoundboardStore } from './soundboardStore'
+import { useActivityStore } from './activityStore'
 import { useTypingStore } from './typingStore'
 import { showToast, useToastStore } from './toastStore'
 import { createReconnectNotice } from '../lib/wsReconnect'
@@ -632,6 +633,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     if (event.type === 'call:soundboard' || event.type.startsWith('soundboard:')) {
       useSoundboardStore.getState().handleWsEvent(event)
+      return
+    }
+
+    if (event.type.startsWith('call:activity')) {
+      useActivityStore.getState().handleWsEvent(event)
       return
     }
 

@@ -698,3 +698,46 @@ export function LockIcon({ className = '' }: IconProps): React.JSX.Element {
     </svg>
   )
 }
+
+/** Atividades da chamada (controle de jogo). */
+export function ActivityIcon({ className = '' }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 11h4M8 9v4M15 12h.01M18 10h.01" />
+      <path d="M17.32 5H6.68a4 4 0 0 0-3.98 3.59l-.69 6.2A3 3 0 0 0 5 18c1 0 1.5-.5 2-1l1.41-1.41A2 2 0 0 1 9.83 15h4.34a2 2 0 0 1 1.42.59L17 17c.5.5 1 1 2 1a3 3 0 0 0 2.99-3.21l-.69-6.2A4 4 0 0 0 17.32 5Z" />
+    </svg>
+  )
+}
+
+/** Mira (atividades de tiro, ex.: Krunker.io). */
+export function CrosshairIcon({ className = '' }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" />
+    </svg>
+  )
+}

@@ -39,7 +39,13 @@ function BackgroundBridge(): null {
         `Não deu para capturar só o som deste app — compartilhando sem som. Detalhes: ${logPath}`
       )
     })
+    const offHidden = window.api?.screenShare?.onWindowHidden(() => {
+      showToast.info(
+        'A janela compartilhada foi minimizada e a live congelou para quem assiste. Restaure a janela ou compartilhe a tela inteira.'
+      )
+    })
     return () => {
+      offHidden?.()
       offFallback?.()
       offMute()
       offQuit()
