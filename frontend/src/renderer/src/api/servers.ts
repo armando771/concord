@@ -5,6 +5,8 @@ export interface Server {
   name: string
   icon_url?: string
   owner_id: string
+  /** Canal de texto dos avisos do servidor (ver lib/primaryChannel). */
+  primary_channel_id?: string | null
   created_at?: string
   updated_at?: string
 }
@@ -82,5 +84,13 @@ export async function setMemberRole(
   return request<ServerMember>(`/servers/${serverId}/members/${userId}/role`, {
     method: 'PUT',
     body: JSON.stringify({ role })
+  })
+}
+
+/** Dono/moderador: escolhe o canal principal (avisos do servidor). */
+export async function setPrimaryChannel(serverId: string, channelId: string): Promise<Server> {
+  return request<Server>(`/servers/${serverId}/primary-channel`, {
+    method: 'PUT',
+    body: JSON.stringify({ channel_id: channelId })
   })
 }

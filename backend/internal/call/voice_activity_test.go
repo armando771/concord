@@ -3,6 +3,7 @@ package call
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestEligibleVoiceUsersNeedsSomeoneListening(t *testing.T) {
@@ -54,5 +55,49 @@ func TestActiveVoiceUsersCarriesCallAndServer(t *testing.T) {
 	got := s.ActiveVoiceUsers()
 	if len(got) != 2 || got[0].CallID != "call-1" || got[0].ServerID == nil || *got[0].ServerID != "server-1" {
 		t.Fatalf("ActiveVoiceUsers = %+v", got)
+	}
+}
+
+func TestSpeakingIsReportedPerParticipant(t *testing.T) {
+	s := serviceWithCall("call-1", "ana", "bia")
+	t0 := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+
+	speaking := func(now time.Time) map[string]bool {
+		got := map[string]bool{}
+		for _, a := range s.activeVoiceUsersAt(now) {
+			got[a.UserID] = a.Speaking
+		}
+		return got
+	}
+
+	if got := speaking(t0); got["ana"] || got["bia"] {
+		t.Fatalf("nobody spoke yet, got %v", got)
+	}
+
+	if err := s.SetSpeaking("call-1", "ana", true, t0); err != nil {
+		t.Fatalf("SetSpeaking: %v", err)
+	}
+	if got := speaking(t0.Add(time.Minute)); !got["ana"] || got["bia"] {
+		t.Fatalf("ana speaking (still), got %v", got)
+	}
+
+	_ = s.SetSpeaking("call-1", "ana", false, t0.Add(time.Minute))
+	if got := speaking(t0.Add(time.Minute + 5*time.Second)); !got["ana"] {
+		t.Fatal("ana stopped 5s ago: still counts (pause)")
+	}
+	if got := speaking(t0.Add(time.Minute + 11*time.Second)); got["ana"] {
+		t.Fatal("ana stopped 11s ago: silent")
+	}
+}
+
+func TestSpeakingWhileMutedIsIgnored(t *testing.T) {
+	s := serviceWithCall("call-1", "ana", "bia")
+	s.calls["call-1"].participants["ana"].muted = true
+	_ = s.SetSpeaking("call-1", "ana", true, time.Now())
+	if s.calls["call-1"].participants["ana"].speaking {
+		t.Fatal("a muted mic cannot be speaking")
+	}
+	if err := s.SetSpeaking("call-1", "caio", true, time.Now()); err == nil {
+		t.Fatal("non-participant must be rejected")
 	}
 }

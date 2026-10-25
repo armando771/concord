@@ -128,6 +128,7 @@ function CallStage({
         videoStream={entry.stream}
         onClick={() => setFocused(entry.userId)}
         onClose={entry.local ? undefined : () => stopWatchingScreen(entry.userId)}
+        streamAudioUserId={entry.local ? undefined : entry.userId}
       />
     )
   }
@@ -287,6 +288,7 @@ function CallStage({
             meId
           )}
           locallyMuted={localAudio[streamAudioKey(focused.userId)]?.muted ?? false}
+          streamAudioUserId={focused.local ? undefined : focused.userId}
         />
       </div>
       <div className="flex shrink-0 flex-wrap items-center justify-center gap-3">

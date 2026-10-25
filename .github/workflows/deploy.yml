@@ -49,7 +49,7 @@ jobs:
           yarn typecheck
           yarn test
       - name: Scripts
-        run: node --test scripts/next-version.test.mjs
+        run: node --test scripts/*.test.mjs
 
       - name: Helper de áudio (Rust)
         working-directory: native/concord-audio
@@ -111,16 +111,27 @@ jobs:
       - name: App desktop (instalador assinado)
         run: scripts/release-win.sh "${{ steps.version.outputs.version }}"
 
+      - name: App desktop Linux (AppImage assinado)
+        run: scripts/release-linux.sh "${{ steps.version.outputs.version }}"
+
       - name: Publicar na VPS (backend + página de download + atualização do app)
         run: scripts/deploy-vps.sh "$VPS_HOST"
 
       - name: Conferir
         run: |
           curl -fsS "${PUBLIC_URL%/}/updates/latest.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
+          curl -fsS "${PUBLIC_URL%/}/updates/latest-linux.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
+          for manifest in latest.yml latest-linux.yml; do
+            path=$(curl -fsS "${PUBLIC_URL%/}/updates/$manifest" | awk '/^path:/ {print $2}' | tr -d "\"'")
+            test -n "$path"
+            curl -fsSI "${PUBLIC_URL%/}/updates/$path"
+            curl -fsS "${PUBLIC_URL%/}/updates/$path.sig" | grep -q .
+          done
           test "$(curl -s -o /dev/null -w '%{http_code}' "${PUBLIC_URL%/}/rtc/validate")" = 401
           if [[ -n "$SITE_URL" ]]; then
             curl -fsS "${SITE_URL%/}/" | grep -q 'data-download'
             curl -fsS "${SITE_URL%/}/updates/latest.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
+            curl -fsS "${SITE_URL%/}/updates/latest-linux.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
             echo "Página de download no ar em ${SITE_URL%/}"
           fi
           echo "Salinha ${{ steps.version.outputs.version }} no ar em ${PUBLIC_URL%/}"
