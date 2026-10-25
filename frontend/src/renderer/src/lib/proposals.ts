@@ -50,6 +50,77 @@ export function moveTargets(status: ProposalStatus): ProposalStatus[] {
   )
 }
 
+/** Arrastar um card: qualquer coluna diferente da atual, menos "Em votação" (não reabre). */
+export function canDropOn(from: ProposalStatus, to: ProposalStatus): boolean {
+  return from !== to && to !== 'voting'
+}
+
+/** Tirar um card de "Em votação" encerra a votação na hora e não tem volta: pede confirmação. */
+export function needsCloseConfirm(p: Pick<Proposal, 'status'>): boolean {
+  return p.status === 'voting'
+}
+
+const timeOf = (iso: string | null | undefined): number => {
+  const ms = iso ? new Date(iso).getTime() : NaN
+  return Number.isFinite(ms) ? ms : 0
+}
+
+/**
+ * Cards de uma coluna na ordem de exibição: em votação, o prazo que acaba
+ * primeiro; nas demais, o que entrou na coluna por último (moved_at) no topo.
+ */
+export function sortColumn(cards: Proposal[], status: ProposalStatus): Proposal[] {
+  const entered = (p: Proposal): number => timeOf(p.moved_at ?? p.closed_at ?? p.created_at)
+  return [...cards].sort((a, b) =>
+    status === 'voting'
+      ? timeOf(a.voting_ends_at) - timeOf(b.voting_ends_at)
+      : entered(b) - entered(a)
+  )
+}
+
+/**
+ * Move o card na hora, antes da resposta do servidor (o arrasto não pode
+ * esperar a rede). Reproduz o que o backend grava; a resposta real o substitui.
+ */
+export function moveProposal(
+  list: Proposal[],
+  id: string,
+  status: ProposalStatus,
+  now = Date.now()
+): Proposal[] {
+  const stamp = new Date(now).toISOString()
+  return list.map((p) =>
+    p.id !== id
+      ? p
+      : {
+          ...p,
+          status,
+          moved_at: stamp,
+          closed_at: p.closed_at ?? stamp,
+          close_reason: p.status === 'voting' ? 'manual' : p.close_reason
+        }
+  )
+}
+
+/** Desfaz moveProposal quando o servidor recusa: devolve o card como estava. */
+export function restoreProposal(list: Proposal[], previous: Proposal): Proposal[] {
+  return list.map((p) => (p.id === previous.id ? previous : p))
+}
+
+/** "Votação encerrada por Ana (time tech) em 25/10/2026"; nulo se ainda está em votação. */
+export function closeLabel(
+  p: Pick<Proposal, 'status' | 'close_reason' | 'closed_by_name' | 'closed_at'>
+): string | null {
+  if (p.status === 'voting' || !p.closed_at) return null
+  const day = new Date(p.closed_at).toLocaleDateString('pt-BR')
+  if (p.close_reason === 'manual') {
+    return p.closed_by_name
+      ? `Votação encerrada por ${p.closed_by_name} (time tech) em ${day}`
+      : `Votação encerrada pelo time tech em ${day}`
+  }
+  return `Votação encerrada pelo prazo em ${day}`
+}
+
 /** Endereço para o <img> de uma imagem da proposta. */
 export function proposalImageSrc(url: string): string {
   return profileMediaSrc(url, API_BASE_URL) ?? url
@@ -90,8 +161,7 @@ export function unseenCount(
 ): number {
   if (lastSeenAt == null) return 0
   return proposals.filter(
-    (p) =>
-      canVote(p, now) && p.author_id !== meId && new Date(p.created_at).getTime() > lastSeenAt
+    (p) => canVote(p, now) && p.author_id !== meId && new Date(p.created_at).getTime() > lastSeenAt
   ).length
 }
 
@@ -126,7 +196,10 @@ export function canDeleteProposal(
 }
 
 /** O autor do comentário edita; ele ou o time tech apagam. */
-export function canEditComment(c: Pick<ProposalComment, 'author_id'>, meId: string | null): boolean {
+export function canEditComment(
+  c: Pick<ProposalComment, 'author_id'>,
+  meId: string | null
+): boolean {
   return meId != null && c.author_id === meId
 }
 

@@ -22,6 +22,12 @@ export interface Proposal {
   created_at: string
   voting_ends_at: string
   closed_at?: string | null
+  /** Quando o card entrou na coluna atual: ordena as colunas (o movido sobe ao topo). */
+  moved_at?: string | null
+  /** Como a votação acabou: `manual` (o time tech moveu o card) ou `deadline` (o prazo venceu). */
+  close_reason?: 'manual' | 'deadline' | null
+  /** Quem encerrou a votação, quando foi `manual`. */
+  closed_by_name?: string | null
   edited_at?: string | null
   github_issue_number?: number | null
   github_issue_url?: string | null

@@ -22,6 +22,8 @@ interface ProposalCardProps {
   onRemoveVote: () => void
   onMove: (status: ProposalStatus) => void
   onDelete: () => void
+  /** Clone que segue o mouse no arrasto: sem botões e sem abrir o modal. */
+  overlay?: boolean
 }
 
 function ProposalCard({
@@ -34,22 +36,24 @@ function ProposalCard({
   onVote,
   onRemoveVote,
   onMove,
-  onDelete
+  onDelete,
+  overlay = false
 }: ProposalCardProps): React.JSX.Element {
-  const open = canVote(p, now)
+  const open = canVote(p, now) && !overlay
   const total = p.yes_votes + p.no_votes
   const percent = yesPercent(p)
-  const canDelete = canDeleteProposal(p, meId, isTech)
+  const canDelete = canDeleteProposal(p, meId, isTech) && !overlay
   const firstImage = p.images[0]
   // Os controles de dentro do card não abrem o modal.
   const stop = (e: React.SyntheticEvent): void => e.stopPropagation()
 
   return (
     <article
-      role="button"
-      tabIndex={0}
-      aria-label={`Abrir proposta: ${p.title}`}
-      onClick={onOpen}
+      role={overlay ? undefined : 'button'}
+      tabIndex={overlay ? undefined : 0}
+      aria-label={overlay ? undefined : `Abrir proposta: ${p.title}`}
+      aria-hidden={overlay || undefined}
+      onClick={overlay ? undefined : onOpen}
       onKeyDown={(e) => {
         if (e.target !== e.currentTarget) return
         if (e.key === 'Enter' || e.key === ' ') {
@@ -57,7 +61,11 @@ function ProposalCard({
           onOpen()
         }
       }}
-      className="flex cursor-pointer flex-col gap-3 rounded-xl border border-white/6 bg-white/3 p-3 transition-colors hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-violet-400"
+      className={`flex flex-col gap-3 rounded-xl border p-3 focus-visible:outline-2 focus-visible:outline-violet-400 ${
+        overlay
+          ? 'rotate-2 cursor-grabbing border-violet-400/60 bg-[#1b1d2b] shadow-2xl shadow-black/60'
+          : 'cursor-pointer border-white/6 bg-white/3 transition-colors hover:bg-white/5'
+      }`}
     >
       {firstImage && (
         <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black/30">
@@ -150,7 +158,7 @@ function ProposalCard({
         </div>
       )}
 
-      {p.github_issue_url && (
+      {p.github_issue_url && !overlay && (
         <a
           href={p.github_issue_url}
           target="_blank"
@@ -162,7 +170,7 @@ function ProposalCard({
         </a>
       )}
 
-      {(isTech || canDelete) && (
+      {!overlay && (isTech || canDelete) && (
         <div
           className="flex flex-wrap items-center gap-2 border-t border-white/6 pt-2"
           onClick={stop}

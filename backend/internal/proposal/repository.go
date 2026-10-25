@@ -23,7 +23,8 @@ func ProposalRepository(db *pgxpool.Pool) *Repository {
 // $1 é quem está olhando (nulo nos eventos de tempo real: sem my_vote).
 const selectProposal = `
 	SELECT p.id, p.author_id, u.display_name, u.avatar_url, p.title, p.description,
-		p.status, p.created_at, p.voting_ends_at, p.closed_at, p.edited_at,
+		p.status, p.created_at, p.voting_ends_at, p.closed_at, p.moved_at, p.close_reason,
+		(SELECT cu.display_name FROM users cu WHERE cu.id = p.closed_by), p.edited_at,
 		p.github_issue_number, p.github_issue_url,
 		(SELECT COUNT(*) FROM proposal_votes v WHERE v.proposal_id = p.id AND v.approve)::int,
 		(SELECT COUNT(*) FROM proposal_votes v WHERE v.proposal_id = p.id AND NOT v.approve)::int,
@@ -41,7 +42,8 @@ func scanProposal(row pgx.Row) (Proposal, error) {
 	var images []byte
 	err := row.Scan(
 		&p.ID, &p.AuthorID, &p.AuthorName, &p.AuthorAvatarURL, &p.Title, &p.Description,
-		&p.Status, &p.CreatedAt, &p.VotingEndsAt, &p.ClosedAt, &p.EditedAt,
+		&p.Status, &p.CreatedAt, &p.VotingEndsAt, &p.ClosedAt, &p.MovedAt, &p.CloseReason,
+		&p.ClosedByName, &p.EditedAt,
 		&p.GithubIssueNumber, &p.GithubIssueURL,
 		&p.YesVotes, &p.NoVotes, &p.CommentCount, &images, &p.MyVote,
 	)
@@ -81,7 +83,7 @@ func (r *Repository) query(ctx context.Context, viewerID *string, where string, 
 func (r *Repository) List(ctx context.Context, viewerID string) ([]Proposal, error) {
 	return r.query(ctx, &viewerID, `
 		WHERE p.status IN ('voting', 'proposed', 'in_progress')
-		   OR p.closed_at > NOW() - INTERVAL '30 days'
+		   OR p.moved_at > NOW() - INTERVAL '30 days'
 		ORDER BY p.created_at DESC
 		LIMIT 500`)
 }
@@ -239,11 +241,19 @@ func (r *Repository) Delete(ctx context.Context, id string) error {
 }
 
 // SetStatus move o card (time tech), inclusive antes do fim da votação: o
-// fechamento é marcado agora se ainda não foi.
-func (r *Repository) SetStatus(ctx context.Context, id, status string) error {
+// fechamento é marcado agora se ainda não foi, com quem encerrou. No UPDATE os
+// valores à direita são os da linha antiga, então status = 'voting' vale como
+// "estava em votação".
+func (r *Repository) SetStatus(ctx context.Context, id, userID, status string) error {
 	tag, err := r.db.Exec(ctx, `
-		UPDATE proposals SET status = $2, closed_at = COALESCE(closed_at, NOW()) WHERE id = $1`,
-		id, status)
+		UPDATE proposals SET
+			closed_by = CASE WHEN status = 'voting' THEN $3::uuid ELSE closed_by END,
+			close_reason = CASE WHEN status = 'voting' THEN 'manual' ELSE close_reason END,
+			closed_at = COALESCE(closed_at, NOW()),
+			moved_at = NOW(),
+			status = $2
+		WHERE id = $1`,
+		id, status, userID)
 	if err != nil {
 		return err
 	}
@@ -263,7 +273,9 @@ func (r *Repository) CloseDue(ctx context.Context, now time.Time) ([]string, err
 				(SELECT COUNT(*) FROM proposal_votes v WHERE v.proposal_id = p.id AND v.approve)
 				> (SELECT COUNT(*) FROM proposal_votes v WHERE v.proposal_id = p.id AND NOT v.approve)
 				THEN 'proposed' ELSE 'rejected' END,
-			closed_at = $1
+			closed_at = $1,
+			moved_at = $1,
+			close_reason = 'deadline'
 		WHERE p.status = 'voting' AND p.voting_ends_at <= $1
 		RETURNING p.id`,
 		now,

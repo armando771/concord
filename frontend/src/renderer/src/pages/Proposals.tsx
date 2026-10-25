@@ -1,13 +1,33 @@
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  pointerWithin,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent
+} from '@dnd-kit/core'
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { ProposalStatus } from '../api/proposals'
 import { ApiError } from '../api/client'
 import Button from '../components/Button'
 import { DiamondIcon } from '../components/icons'
+import BoardColumn from '../components/proposals/BoardColumn'
+import ConfirmCloseModal from '../components/proposals/ConfirmCloseModal'
+import DraggableProposalCard from '../components/proposals/DraggableProposalCard'
+import RejectDropZone from '../components/proposals/RejectDropZone'
 import NewProposalModal from '../components/proposals/NewProposalModal'
 import ProposalDetailModal from '../components/proposals/ProposalDetailModal'
 import ProposalCard from '../components/proposals/ProposalCard'
-import { BOARD_COLUMNS, REJECTED_COLUMN } from '../lib/proposals'
+import {
+  BOARD_COLUMNS,
+  canDropOn,
+  needsCloseConfirm,
+  REJECTED_COLUMN,
+  sortColumn
+} from '../lib/proposals'
 import { useAuthStore } from '../store/authStore'
 import { useProposalStore } from '../store/proposalStore'
 import { showToast } from '../store/toastStore'
@@ -21,6 +41,10 @@ interface ProposalActions {
 
 // Atualiza a contagem regressiva dos cards.
 const CLOCK_MS = 30_000
+
+// O arrasto só começa depois de alguns pixels: um clique parado abre o card e os
+// botões de dentro dele continuam funcionando.
+const DRAG_DISTANCE_PX = 8
 
 function Proposals(): React.JSX.Element {
   const proposals = useProposalStore((s) => s.proposals)
@@ -40,10 +64,22 @@ function Proposals(): React.JSX.Element {
   const [creating, setCreating] = useState(false)
   const [showRejected, setShowRejected] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  // Mover um card em votação espera a confirmação do time tech.
+  const [pendingMove, setPendingMove] = useState<{ id: string; status: ProposalStatus } | null>(
+    null
+  )
   // O card aberto fica na URL (?proposal=<id>): as notificações de menção abrem direto nele.
   const [params, setParams] = useSearchParams()
   const selectedId = params.get('proposal')
   const selected = selectedId ? (proposals.find((p) => p.id === selectedId) ?? null) : null
+  const dragging = draggingId ? (proposals.find((p) => p.id === draggingId) ?? null) : null
+  // Se a votação acabou (ou o card sumiu) com a confirmação aberta, não há mais o que confirmar.
+  const pendingCard = pendingMove ? (proposals.find((p) => p.id === pendingMove.id) ?? null) : null
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: DRAG_DISTANCE_PX } })
+  )
 
   useEffect(() => {
     fetchProposals()
@@ -95,15 +131,55 @@ function Proposals(): React.JSX.Element {
     }
   }
 
+  // O card já voltou sozinho (setStatus desfaz); recarregar mostra o que mudou de verdade
+  // (por exemplo, outra pessoa moveu o mesmo card antes).
   const move = (id: string, status: ProposalStatus): Promise<void> =>
-    run(id, () => setStatus(id, status), 'Não foi possível mover a proposta.')
+    run(
+      id,
+      async () => {
+        try {
+          await setStatus(id, status)
+        } catch (err) {
+          fetchProposals()
+          throw err
+        }
+      },
+      'Não foi possível mover a proposta.'
+    )
+
+  // Arrastando ou pelo menu "Mover para…": a mesma regra e a mesma confirmação.
+  const requestMove = async (id: string, status: ProposalStatus): Promise<void> => {
+    const card = proposals.find((p) => p.id === id)
+    if (!card || !canDropOn(card.status, status)) return
+    if (needsCloseConfirm(card)) {
+      setPendingMove({ id, status })
+      return
+    }
+    await move(id, status)
+  }
 
   const actions = (id: string): ProposalActions => ({
     onVote: (approve) => run(id, () => vote(id, approve), 'Não foi possível votar.'),
     onRemoveVote: () => run(id, () => removeVote(id), 'Não foi possível retirar o voto.'),
-    onMove: (status) => move(id, status),
+    onMove: (status) => requestMove(id, status),
     onDelete: () => run(id, () => remove(id), 'Não foi possível excluir a proposta.')
   })
+
+  const handleDragStart = (event: DragStartEvent): void => setDraggingId(String(event.active.id))
+
+  const endDrag = (): void => setDraggingId(null)
+
+  const handleDragEnd = (event: DragEndEvent): void => {
+    endDrag()
+    const card = proposals.find((p) => p.id === event.active.id)
+    if (!card || !event.over) return
+    const target = event.over.id as ProposalStatus
+    if (target === 'voting' && card.status !== 'voting') {
+      showToast.info('Uma votação encerrada não reabre.')
+      return
+    }
+    if (canDropOn(card.status, target)) void requestMove(card.id, target)
+  }
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-[#07080b]/90 backdrop-blur-2xl text-gray-100">
@@ -122,51 +198,74 @@ function Proposals(): React.JSX.Element {
         {loading ? (
           <div className="py-8 text-center text-sm text-gray-400">Carregando propostas...</div>
         ) : (
-          <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto px-6 py-4">
-            {columns.map((col) => {
-              const cards = proposals
-                .filter((p) => p.status === col.status)
-                .sort((a, b) =>
-                  col.status === 'voting'
-                    ? a.voting_ends_at.localeCompare(b.voting_ends_at)
-                    : (b.closed_at ?? b.created_at).localeCompare(a.closed_at ?? a.created_at)
-                )
-              return (
-                <section
-                  key={col.status}
-                  className="flex min-h-0 min-w-64 flex-1 basis-64 flex-col rounded-2xl border border-white/6 bg-[#12141d]/60"
-                >
-                  <div className="shrink-0 px-3 pb-2 pt-3">
-                    <div className="flex items-center justify-between">
-                      <h2 className="text-sm font-semibold text-white">{col.title}</h2>
-                      <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-gray-300">
-                        {cards.length}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-gray-500">{col.hint}</p>
-                  </div>
-                  <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3">
-                    {cards.length === 0 ? (
-                      <p className="py-6 text-center text-xs text-gray-500">Nada por aqui ainda.</p>
-                    ) : (
-                      cards.map((p) => (
-                        <ProposalCard
-                          key={p.id}
-                          proposal={p}
-                          now={now}
-                          meId={meId}
-                          isTech={isTech}
-                          busy={busyId === p.id}
-                          onOpen={() => setParams({ proposal: p.id })}
-                          {...actions(p.id)}
-                        />
-                      ))
-                    )}
-                  </div>
-                </section>
-              )
-            })}
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={pointerWithin}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDragCancel={endDrag}
+          >
+            <div className="relative flex min-h-0 flex-1">
+              <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto px-6 py-4">
+                {columns.map((col) => {
+                  const cards = sortColumn(
+                    proposals.filter((p) => p.status === col.status),
+                    col.status
+                  )
+                  return (
+                    <BoardColumn
+                      key={col.status}
+                      status={col.status}
+                      title={col.title}
+                      hint={col.hint}
+                      count={cards.length}
+                      dragFrom={dragging?.status ?? null}
+                    >
+                      {cards.length === 0 ? (
+                        <p className="py-6 text-center text-xs text-gray-500">
+                          Nada por aqui ainda.
+                        </p>
+                      ) : (
+                        cards.map((p) => (
+                          <DraggableProposalCard
+                            key={p.id}
+                            draggable={isTech && busyId !== p.id}
+                            proposal={p}
+                            now={now}
+                            meId={meId}
+                            isTech={isTech}
+                            busy={busyId === p.id}
+                            onOpen={() => setParams({ proposal: p.id })}
+                            {...actions(p.id)}
+                          />
+                        ))
+                      )}
+                    </BoardColumn>
+                  )
+                })}
+              </div>
+              {/* Com "Recusada" oculta, uma faixa fixa recebe os cards recusados durante o arrasto. */}
+              {dragging && !showRejected && dragging.status !== 'rejected' && <RejectDropZone />}
+            </div>
+            {/* Sem animação de soltar: o card já está na coluna nova (movido na hora). */}
+            <DragOverlay dropAnimation={null}>
+              {dragging && (
+                <ProposalCard
+                  overlay
+                  proposal={dragging}
+                  now={now}
+                  meId={meId}
+                  isTech={false}
+                  busy={false}
+                  onOpen={() => {}}
+                  onVote={() => {}}
+                  onRemoveVote={() => {}}
+                  onMove={() => {}}
+                  onDelete={() => {}}
+                />
+              )}
+            </DragOverlay>
+          </DndContext>
         )}
       </div>
 
@@ -180,6 +279,18 @@ function Proposals(): React.JSX.Element {
           busy={busyId === selected.id}
           onClose={() => setParams({})}
           {...actions(selected.id)}
+        />
+      )}
+      {pendingMove && pendingCard && needsCloseConfirm(pendingCard) && (
+        <ConfirmCloseModal
+          proposal={pendingCard}
+          target={pendingMove.status}
+          onCancel={() => setPendingMove(null)}
+          onConfirm={() => {
+            const { id, status } = pendingMove
+            setPendingMove(null)
+            void move(id, status)
+          }}
         />
       )}
     </div>
