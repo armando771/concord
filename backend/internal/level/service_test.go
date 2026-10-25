@@ -20,18 +20,25 @@ func (f *fakeStore) AddVoiceXP(_ context.Context, userID string, xp int64, secon
 }
 
 type fakePublisher struct {
-	mu   sync.Mutex
-	sent []string // "<alvo> <tipo>"
+	mu     sync.Mutex
+	sent   []string // "<alvo> <tipo>"
+	boosts []BoostEvent
 }
 
 func (f *fakePublisher) record(target string, raw []byte) {
 	var event struct {
-		Type string `json:"type"`
+		Type    string          `json:"type"`
+		Payload json.RawMessage `json:"payload"`
 	}
 	_ = json.Unmarshal(raw, &event)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sent = append(f.sent, target+" "+event.Type)
+	if event.Type == "voice:boost" {
+		var boost BoostEvent
+		_ = json.Unmarshal(event.Payload, &boost)
+		f.boosts = append(f.boosts, boost)
+	}
 }
 
 func (f *fakePublisher) SendToUser(userID string, event []byte)      { f.record("user:"+userID, event) }
@@ -52,7 +59,7 @@ func newTestService(active ...string) (*Service, *fakeStore, *fakePublisher, *fa
 	for _, id := range active {
 		voice.active = append(voice.active, call.VoiceActivity{UserID: id, CallID: "call-1", ServerID: &serverID})
 	}
-	s := &Service{store: store, publisher: pub, voice: voice, pending: map[string]time.Duration{}, lastTick: t0}
+	s := &Service{store: store, publisher: pub, voice: voice, pending: map[string]time.Duration{}, lastBoost: map[string]int{}, lastTick: t0}
 	return s, store, pub, voice
 }
 
@@ -130,5 +137,87 @@ func TestNoLevelUpEventWithoutNewLevel(t *testing.T) {
 		if sent != "user:ana level:update" {
 			t.Fatalf("unexpected event %q", sent)
 		}
+	}
+}
+
+// usersN devolve n nomes distintos ("ua", "ub"...).
+func usersN(n int) []string {
+	names := make([]string, n)
+	for i := range names {
+		names[i] = "u" + string(rune('a'+i))
+	}
+	return names
+}
+
+func TestBoostMultipliesXP(t *testing.T) {
+	cases := []struct {
+		users int
+		want  int64
+	}{
+		{3, XPPerMinute},              // sem buff
+		{4, XPPerMinute * 125 / 100},  // A
+		{6, XPPerMinute * 150 / 100},  // S
+		{8, XPPerMinute * 175 / 100},  // SS
+		{10, XPPerMinute * 200 / 100}, // SSS
+	}
+	for _, c := range cases {
+		s, store, _, _ := newTestService(usersN(c.users)...)
+		run(s, t0, 6) // 60 s = 1 minuto
+		for _, name := range usersN(c.users) {
+			if store.xp[name] != c.want {
+				t.Errorf("%d pessoas: xp de %s = %d, want %d", c.users, name, store.xp[name], c.want)
+			}
+		}
+	}
+}
+
+func TestBoostEventOnlyWhenBuffed(t *testing.T) {
+	s, _, pub, _ := newTestService(usersN(3)...)
+	run(s, t0, 6)
+
+	if len(pub.boosts) != 0 {
+		t.Fatalf("call sem buff recebeu voice:boost: %+v", pub.boosts)
+	}
+}
+
+func TestBoostEventIsHeartbeatWhileBuffed(t *testing.T) {
+	s, _, pub, _ := newTestService(usersN(4)...)
+	run(s, t0, 3)
+
+	if len(pub.boosts) != 3 {
+		t.Fatalf("boosts = %d, want 1 por tick (3)", len(pub.boosts))
+	}
+	want := BoostEvent{CallID: "call-1", Percent: 125, Eligible: 4}
+	for _, got := range pub.boosts {
+		if got != want {
+			t.Errorf("boost = %+v, want %+v", got, want)
+		}
+	}
+}
+
+func TestBoostEndIsAnnouncedOnce(t *testing.T) {
+	s, _, pub, voice := newTestService(usersN(4)...)
+	now := run(s, t0, 1)
+
+	voice.active = voice.active[:3] // alguém mutou: sobram 3
+	now = run(s, now, 1)
+	run(s, now, 2) // sem buff: nada mais é enviado
+
+	last := pub.boosts[len(pub.boosts)-1]
+	if len(pub.boosts) != 2 || last.Percent != 100 || last.Eligible != 3 {
+		t.Fatalf("boosts = %+v, want buff (125) e depois um único aviso de fim (100, 3 elegíveis)", pub.boosts)
+	}
+}
+
+func TestBoostEndIsAnnouncedWhenCallDisappears(t *testing.T) {
+	s, _, pub, voice := newTestService(usersN(4)...)
+	now := run(s, t0, 1)
+
+	voice.active = nil // todo mundo saiu/mutou
+	run(s, now, 2)
+
+	last := pub.boosts[len(pub.boosts)-1]
+	if len(pub.boosts) != 2 || last != (BoostEvent{CallID: "call-1", Percent: 100}) {
+		t.Fatalf("boosts = %+v, want buff e depois um único aviso de fim", pub.boosts)
 	}
 }
