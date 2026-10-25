@@ -49,6 +49,8 @@ interface MusicStore {
   ephemeral: MusicEphemeral[]
   duckingEnabled: boolean
   videoEnabled: boolean
+  /** Vídeo da música em destaque no palco da call (não persiste). */
+  stageVideo: boolean
   handleWsEvent: (event: WsEvent) => void
   loadState: (serverId: string) => Promise<void>
   loadPresence: (serverId: string) => Promise<void>
@@ -56,6 +58,7 @@ interface MusicStore {
   markExpired: (id: string) => void
   setDucking: (on: boolean) => void
   setVideoEnabled: (on: boolean) => void
+  setStageVideo: (on: boolean) => void
   clearState: () => void
 }
 
@@ -76,6 +79,7 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
   ephemeral: [],
   duckingEnabled: readFlag(DUCKING_KEY),
   videoEnabled: readFlag(VIDEO_KEY),
+  stageVideo: false,
 
   handleWsEvent: (event) => {
     switch (event.type) {
@@ -137,5 +141,6 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
     writeFlag(VIDEO_KEY, on)
     set({ videoEnabled: on })
   },
-  clearState: () => set({ state: null })
+  setStageVideo: (on) => set({ stageVideo: on }),
+  clearState: () => set({ state: null, stageVideo: false })
 }))

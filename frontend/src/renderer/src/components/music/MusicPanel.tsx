@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { removeQueueItem, skipMusic, swapQueueItems, type MusicItem } from '../../api/music'
-import { canSwap, formatDuration, T17 } from '../../lib/music'
+import { canSwap, formatDuration, T17, T20 } from '../../lib/music'
 import { useAuthStore } from '../../store/authStore'
 import { useMusicStore } from '../../store/musicStore'
 import { showToast } from '../../store/toastStore'
@@ -17,6 +17,10 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
   const state = useMusicStore((s) => s.state)
   const ducking = useMusicStore((s) => s.duckingEnabled)
   const setDucking = useMusicStore((s) => s.setDucking)
+  const videoEnabled = useMusicStore((s) => s.videoEnabled)
+  const setVideoEnabled = useMusicStore((s) => s.setVideoEnabled)
+  const stageVideo = useMusicStore((s) => s.stageVideo)
+  const setStageVideo = useMusicStore((s) => s.setStageVideo)
   const serverOffsetMs = useMusicStore((s) => s.serverOffsetMs)
   const meId = useAuthStore((s) => s.user?.id)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -39,12 +43,42 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
     swapQueueItems(serverId, source.id, target.id).catch((err) => showToast.error(errorText(err)))
   }
 
+  const goFullscreen = (): void => {
+    const request = (): void => {
+      void document
+        .querySelector<HTMLElement>('[data-music-video-stage]')
+        ?.requestFullscreen?.()
+        .catch(() => {})
+    }
+    if (stageVideo) return request()
+    setStageVideo(true)
+    requestAnimationFrame(request)
+  }
+
   return (
     <aside className="flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-white/6 bg-black/20 p-4">
       <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400">{T17.title}</h3>
       {now && (
         <div className="flex flex-col gap-2">
           <MusicVideo serverId={serverId} item={now.item} startedAt={now.started_at} />
+          {now.item.has_video && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setStageVideo(true)}
+                className="cursor-pointer rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/15"
+              >
+                {T20.watch}
+              </button>
+              <button
+                type="button"
+                onClick={goFullscreen}
+                className="cursor-pointer rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/15"
+              >
+                {T20.fullscreen}
+              </button>
+            </div>
+          )}
           <div className="min-w-0">
             <p className="truncate font-semibold text-white">{now.item.title}</p>
             <p className="truncate text-xs text-gray-400">
@@ -121,6 +155,10 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
       )}
 
       <div className="mt-auto flex items-center justify-between gap-2 text-xs text-gray-300">
+        <span>{T20.showInPanel}</span>
+        <Switch checked={videoEnabled} onChange={setVideoEnabled} label={T20.showInPanel} />
+      </div>
+      <div className="flex items-center justify-between gap-2 text-xs text-gray-300">
         <span>{T17.ducking}</span>
         <Switch checked={ducking} onChange={setDucking} label={T17.ducking} />
       </div>

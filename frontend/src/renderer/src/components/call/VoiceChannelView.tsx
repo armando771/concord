@@ -57,7 +57,7 @@ function VoiceChannelView({ channelId }: { channelId: string }): React.JSX.Eleme
       <div className="flex flex-1 overflow-hidden">
         <div className="flex flex-1 items-center justify-center overflow-y-auto p-6">
           {connectedHere ? (
-            <CallStage speaking={speaking} />
+            <CallStage speaking={speaking} serverId={serverId} />
           ) : (serverCalls[channelId]?.participants ?? []).length === 0 ? (
             <div className="flex flex-col items-center gap-4 text-center">
               <div className="flex h-20 w-20 items-center justify-center rounded-full border border-[#23a55a]/40 bg-[#23a55a]/10 text-[#23a55a] shadow-lg">
