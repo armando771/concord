@@ -44,6 +44,12 @@ import ResizeHandle from './ResizeHandle'
 import { useResizableWidth } from './useResizableWidth'
 import AppSettings from './AppSettings'
 
+/**
+ * Nomes longos quebram linha em vez de cortar com "…" (o canal "predador-🐺-vs…"
+ * aparecia pela metade). `anywhere` também quebra palavra gigante sem hífen.
+ */
+const WRAP_NAME = 'break-words [overflow-wrap:anywhere]'
+
 export function ServerSidebar(): React.JSX.Element {
   const navigate = useNavigate()
   const { channelId } = useParams<{ channelId: string }>()
@@ -288,7 +294,7 @@ export function ServerSidebar(): React.JSX.Element {
       onClick={() => setChannelMenuFor(channelMenuFor === ch.id ? null : ch.id)}
       aria-label="Opções do canal"
       title="Opções do canal"
-      className={`absolute right-1.5 top-1/2 z-10 -translate-y-1/2 rounded-md p-0.5 text-gray-500 transition-[color,background-color,opacity] hover:bg-white/10 hover:text-white cursor-pointer ${
+      className={`absolute right-1.5 top-1.5 z-10 flex h-5 items-center rounded-md px-0.5 text-gray-500 transition-[color,background-color,opacity] hover:bg-white/10 hover:text-white cursor-pointer ${
         onHover && channelMenuFor !== ch.id
           ? 'opacity-0 group-hover/voicech:opacity-100 focus-visible:opacity-100'
           : ''
@@ -315,7 +321,7 @@ export function ServerSidebar(): React.JSX.Element {
   const channelMenu = (ch: Channel): React.JSX.Element => (
     <>
       <div className="fixed inset-0 z-20" onClick={() => setChannelMenuFor(null)} />
-      <div className="absolute right-1.5 top-9 z-30 flex w-48 flex-col rounded-xl border border-white/10 bg-[#0d0e15]/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in">
+      <div className="absolute right-1.5 top-full z-30 mt-1 flex w-48 flex-col rounded-xl border border-white/10 bg-[#0d0e15]/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in">
         {(ch.type ?? 'text') === 'text' && ch.id !== primaryId && (
           <button
             onClick={() => void makePrimary(ch)}
@@ -363,10 +369,12 @@ export function ServerSidebar(): React.JSX.Element {
         <div className="relative flex h-14 shrink-0 items-center justify-between px-4 border-b border-white/6 shadow-xs">
           <button
             onClick={() => setDropdownOpen((d) => !d)}
-            className="flex w-full items-center justify-between text-left font-bold text-white text-base truncate hover:text-gray-200 cursor-pointer"
+            title={serverName}
+            className="flex w-full min-w-0 items-center justify-between gap-1 text-left font-bold text-white text-base hover:text-gray-200 cursor-pointer"
           >
-            <span className="truncate">{serverName}</span>
-            <span className="text-xs text-gray-400 ml-1">▼</span>
+            {/* Até duas linhas (o cabeçalho tem altura fixa); o resto no title. */}
+            <span className={`line-clamp-2 min-w-0 leading-5 ${WRAP_NAME}`}>{serverName}</span>
+            <span className="shrink-0 text-xs text-gray-400">▼</span>
           </button>
 
           {/* Dropdown Menu */}
@@ -447,26 +455,36 @@ export function ServerSidebar(): React.JSX.Element {
                     <button
                       onClick={() => navigate(`/servers/${currentServer?.id}/channels/${ch.id}`)}
                       onContextMenu={channelContextMenu(ch)}
-                      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all cursor-pointer ${
+                      title={ch.name}
+                      className={`flex w-full items-start gap-2 rounded-lg py-1.5 pl-2.5 text-left text-sm font-medium transition-all cursor-pointer ${
+                        isAdmin ? 'pr-7' : 'pr-2.5'
+                      } ${
                         active
                           ? 'bg-white/10 text-white shadow-sm'
                           : 'text-gray-400 hover:bg-white/6 hover:text-gray-200'
                       }`}
                     >
-                      <span className="text-base leading-none text-gray-500">#</span>
-                      <span className="truncate">{ch.name}</span>
-                      {ch.id === primaryId && (
-                        <span
-                          title="Canal principal: avisos do servidor são enviados aqui"
-                          className="shrink-0 text-amber-400/90"
-                        >
-                          <StarIcon className="h-3 w-3" />
-                          <span className="sr-only">(canal principal)</span>
-                        </span>
-                      )}
+                      <span className="flex h-5 shrink-0 items-center text-base leading-none text-gray-500">
+                        #
+                      </span>
+                      {/* Nome inteiro, quebrando linha; a estrela segue o texto. */}
+                      <span className={`min-w-0 flex-1 leading-5 ${WRAP_NAME}`}>
+                        {ch.name}
+                        {ch.id === primaryId && (
+                          <span
+                            title="Canal principal: avisos do servidor são enviados aqui"
+                            className="ml-1.5 inline-flex align-[-1px] text-amber-400/90"
+                          >
+                            <StarIcon className="h-3 w-3" />
+                            <span className="sr-only">(canal principal)</span>
+                          </span>
+                        )}
+                      </span>
                       {unread > 0 && (
-                        <span className="ml-auto shrink-0 rounded-full bg-red-500 px-1.5 py-0.2 text-[10px] font-bold text-white">
-                          {unread > 99 ? '99+' : unread}
+                        <span className="flex h-5 shrink-0 items-center">
+                          <span className="rounded-full bg-red-500 px-1.5 py-0.2 text-[10px] font-bold text-white">
+                            {unread > 99 ? '99+' : unread}
+                          </span>
                         </span>
                       )}
                     </button>
@@ -541,14 +559,17 @@ export function ServerSidebar(): React.JSX.Element {
                       void moveUser(userId, ch.id)
                     }}
                   >
-                    {/* O "•••" é absoluto e centrado na vertical: precisa ficar preso à
-                        linha do canal, não ao bloco todo (que cresce com a lista). */}
+                    {/* O "•••" é absoluto, alinhado à primeira linha do nome: precisa ficar
+                        preso à linha do canal, não ao bloco todo (que cresce com a lista). */}
                     <div className="group/voicech relative">
                       <button
                         onClick={() => handleVoiceClick(ch)}
                         onContextMenu={channelContextMenu(ch)}
                         title={connectedHere ? 'Desconectar' : 'Conectar ao canal de voz'}
-                        className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all cursor-pointer ${
+                        className={`flex w-full items-start gap-2 rounded-lg py-1.5 pl-2.5 text-left text-sm font-medium transition-all cursor-pointer ${
+                          // Sem gente, o "•••" fica sempre à direita: guarda o espaço dele.
+                          isAdmin && participants.length === 0 ? 'pr-7' : 'pr-2.5'
+                        } ${
                           voiceDropTarget === ch.id
                             ? 'bg-[#5865f2]/25 text-white ring-2 ring-[#5865f2]'
                             : connectedHere
@@ -557,22 +578,32 @@ export function ServerSidebar(): React.JSX.Element {
                         }`}
                       >
                         {/* Verde só nos canais com gente (pode ser em vários ao mesmo tempo). */}
-                        <VolumeIcon
-                          className={`h-4 w-4 shrink-0 transition-colors ${
-                            participants.length > 0 ? 'text-[#23a55a]' : 'text-gray-500'
-                          }`}
-                        />
-                        <span className="truncate">{ch.name}</span>
+                        <span className="flex h-5 shrink-0 items-center">
+                          <VolumeIcon
+                            className={`h-4 w-4 transition-colors ${
+                              participants.length > 0 ? 'text-[#23a55a]' : 'text-gray-500'
+                            }`}
+                          />
+                        </span>
+                        {/* Nome inteiro, quebrando linha; tempo e contagem ficam na
+                            altura da primeira linha. */}
+                        <span title={ch.name} className={`min-w-0 flex-1 leading-5 ${WRAP_NAME}`}>
+                          {ch.name}
+                        </span>
                         {participants.length > 0 && callState?.call?.started_at && (
-                          <VoiceChannelTimer startedAt={callState.call.started_at} />
+                          <span className="flex h-5 shrink-0 items-center">
+                            <VoiceChannelTimer startedAt={callState.call.started_at} />
+                          </span>
                         )}
                         {participants.length > 0 && (
                           <span
-                            className={`ml-auto shrink-0 rounded-full bg-white/10 px-1.5 py-0.2 text-[10px] font-bold text-gray-300 transition-opacity ${
+                            className={`flex h-5 shrink-0 items-center transition-opacity ${
                               isAdmin ? 'group-hover/voicech:opacity-0' : ''
                             }`}
                           >
-                            {participants.length}
+                            <span className="rounded-full bg-white/10 px-1.5 py-0.2 text-[10px] font-bold text-gray-300">
+                              {participants.length}
+                            </span>
                           </span>
                         )}
                       </button>
@@ -613,7 +644,8 @@ export function ServerSidebar(): React.JSX.Element {
                                 {name.charAt(0).toUpperCase()}
                               </div>
                               <span
-                                className={`truncate text-xs transition-colors group-hover/voiceuser:text-white ${
+                                title={name}
+                                className={`min-w-0 truncate text-xs transition-colors group-hover/voiceuser:text-white ${
                                   isMe ? 'font-bold text-white' : 'font-medium text-gray-300'
                                 }`}
                               >

@@ -64,10 +64,14 @@ function MemberRow({
       </div>
       <div className="relative min-w-0 leading-tight">
         <div className="flex min-w-0 items-center gap-1.5">
-          <p className={`truncate text-sm font-semibold ${nameClass}`}>{displayName}</p>
+          <p title={displayName} className={`truncate text-sm font-semibold ${nameClass}`}>
+            {displayName}
+          </p>
           <LevelBadge userId={userId} />
         </div>
-        <p className="truncate text-[11px] text-gray-400">@{handle}</p>
+        <p title={`@${handle}`} className="truncate text-[11px] text-gray-400">
+          @{handle}
+        </p>
       </div>
     </div>
   )
@@ -208,7 +212,10 @@ export function ServerView(): React.JSX.Element {
               ) : (
                 <span className="text-gray-400 text-xl font-bold">#</span>
               )}
-              <span className="truncate text-white text-base">
+              <span
+                title={activeChannel?.name ?? currentServer.name}
+                className="truncate text-white text-base"
+              >
                 {activeChannel?.name ?? currentServer.name}
               </span>
             </div>
