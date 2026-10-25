@@ -97,9 +97,9 @@ func main() {
 	// User
 	userRepository := user.UserRepository(db)
 	userService := user.UserService(userRepository)
-	// A migration 000021 não falha com usernames que só diferem na caixa:
+	// A migration 000025 não falha com usernames que só diferem na caixa:
 	// cai num índice comum. Aqui isso aparece no log (só contagens).
-	// E se a 000021 nem rodou (pulada por ordem de aplicação), ERROR no log.
+	// E se a 000025 nem rodou (pulada por ordem de aplicação), ERROR no log.
 	if hasUsername, hasEmail, err := userService.LoginIndexes(context.Background()); err != nil {
 		log.Printf("[user] check login indexes: %v", err)
 	} else if msg := user.MissingLoginIndexesError(hasUsername, hasEmail); msg != "" {
@@ -148,7 +148,7 @@ func main() {
 
 	// Message
 	messageRepository := message.MessageRepository(db)
-	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository, uploads)
+	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository, uploads, channelRepository)
 	// Limpeza horária de arquivos sem dono (cascatas e uploads abandonados).
 	go message.NewJanitor(messageRepository, uploads).Run(context.Background(), time.Hour)
 	messageHandler := message.MessageHandler(messageService, channelService, conversationService, friendshipService, serverService)

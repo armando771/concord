@@ -1,6 +1,6 @@
 import { request, ApiError, refreshTokens } from './client'
 import { API_BASE_URL } from '../lib/config'
-import { useAuthStore, type ProfileLink, type User } from '../store/authStore'
+import { useAuthStore, type ProfileLink, type PublicUser, type User } from '../store/authStore'
 import type { ChosenStatus, PresenceStatus } from '../lib/presenceStatus'
 import type { ProfileFields } from '../lib/profileValidation'
 
@@ -8,8 +8,8 @@ export function getMe(): Promise<User> {
   return request<User>('/users/me')
 }
 
-export function searchUsers(username: string): Promise<User[]> {
-  return request<User[]>(`/users/search?username=${encodeURIComponent(username)}`)
+export function searchUsers(username: string): Promise<PublicUser[]> {
+  return request<PublicUser[]>(`/users/search?username=${encodeURIComponent(username)}`)
 }
 
 /** O que os outros veem no cartão de perfil (sem e-mail; status efetivo). */

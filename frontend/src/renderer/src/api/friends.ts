@@ -1,5 +1,5 @@
 import { request } from './client'
-import type { User } from '../store/authStore'
+import type { PublicUser } from '../store/authStore'
 
 export interface PendingRequest {
   user_id: string
@@ -17,8 +17,8 @@ export function sendFriendRequest(username: string): Promise<{ message: string }
   })
 }
 
-export function listFriends(): Promise<User[]> {
-  return request<User[]>('/friends')
+export function listFriends(): Promise<PublicUser[]> {
+  return request<PublicUser[]>('/friends')
 }
 
 export function listPending(): Promise<PendingRequest[]> {

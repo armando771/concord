@@ -71,7 +71,7 @@ func (s *Service) Create(
 // CheckAvailable devolve ErrIdentityTaken se o nome for reservado ou se já
 // existir conta com esse username ou e-mail. O UNIQUE do banco só pega a
 // caixa exata (e o índice em lower(username) pode não existir; ver migration
-// 000021), então confere sem diferenciar caixa.
+// 000025), então confere sem diferenciar caixa.
 func (s *Service) CheckAvailable(ctx context.Context, username, email string) error {
 	// Reservado responde como nome já usado (mesmo 409 genérico).
 	if IsReservedUsername(username) {
@@ -87,7 +87,7 @@ func (s *Service) CheckAvailable(ctx context.Context, username, email string) er
 	return nil
 }
 
-// LoginIndexes diz se os índices da migration 000021 existem.
+// LoginIndexes diz se os índices da migration 000025 existem.
 func (s *Service) LoginIndexes(ctx context.Context) (hasUsername, hasEmail bool, err error) {
 	return s.repository.LoginIndexes(ctx)
 }

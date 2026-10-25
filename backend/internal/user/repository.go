@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -99,7 +100,7 @@ func (r *Repository) FindLoginCandidates(ctx context.Context, column loginColumn
 }
 
 // IdentityTaken diz se já existe conta com esse username ou e-mail, sem
-// diferenciar caixa (usa os índices em lower() da migration 000021).
+// diferenciar caixa (usa os índices em lower() da migration 000025).
 func (r *Repository) IdentityTaken(ctx context.Context, username, email string) (bool, error) {
 	var taken bool
 	err := r.db.QueryRow(
@@ -114,7 +115,7 @@ func (r *Repository) IdentityTaken(ctx context.Context, username, email string) 
 	return taken, err
 }
 
-// LoginIndexes diz se os índices da migration 000021 existem: o de
+// LoginIndexes diz se os índices da migration 000025 existem: o de
 // lower(username) (único ou, com conflitos, comum) e o de lower(email).
 func (r *Repository) LoginIndexes(ctx context.Context) (hasUsername, hasEmail bool, err error) {
 	err = r.db.QueryRow(
@@ -152,6 +153,16 @@ func (r *Repository) FindByUsername(ctx context.Context, username string) (*User
 	return scanUser(r.db.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE username = $1`, username))
 }
 
+// escapeLike escapa os curingas do LIKE/ILIKE (% e _) e a própria barra, para
+// a busca tratar o texto digitado como literal (com ESCAPE '\').
+func escapeLike(s string) string {
+	return likeEscaper.Replace(s)
+}
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// SearchByUsername busca por trecho do username. Não traz o e-mail: o
+// resultado é de outras pessoas.
 func (r *Repository) SearchByUsername(ctx context.Context, query string, excludeUserID string) ([]User, error) {
 	rows, err := r.db.Query(
 		ctx,
@@ -160,16 +171,15 @@ func (r *Repository) SearchByUsername(ctx context.Context, query string, exclude
 			id,
 			username,
 			display_name,
-			email,
 			avatar_url,
 			created_at,
 			updated_at
 		FROM users
-		WHERE username ILIKE '%' || $1 || '%'
+		WHERE username ILIKE '%' || $1 || '%' ESCAPE '\'
 		AND id <> $2
 		LIMIT 20
 		`,
-		query,
+		escapeLike(query),
 		excludeUserID,
 	)
 	if err != nil {
@@ -184,7 +194,6 @@ func (r *Repository) SearchByUsername(ctx context.Context, query string, exclude
 			&u.ID,
 			&u.Username,
 			&u.DisplayName,
-			&u.Email,
 			&u.AvatarURL,
 			&u.CreatedAt,
 			&u.UpdatedAt,

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Button from '../components/Button'
 import Input from '../components/Input'
 import { FriendsIcon, SearchIcon, DotsIcon, ChatBubbleIcon, TrashIcon } from '../components/icons'
-import { useAuthStore, type User } from '../store/authStore'
+import { useAuthStore, type PublicUser } from '../store/authStore'
 import { useFriendStore } from '../store/friendStore'
 import { useUIStore, type FriendsTab } from '../store/uiStore'
 import { useChatStore, usePresenceStatus } from '../store/chatStore'
@@ -11,7 +11,8 @@ import UserAvatar from '../components/Avatar'
 import { searchUsers } from '../api/users'
 import { showToast } from '../store/toastStore'
 
-const friendUsernames = (friends: User[]): Set<string> => new Set(friends.map((f) => f.username))
+const friendUsernames = (friends: PublicUser[]): Set<string> =>
+  new Set(friends.map((f) => f.username))
 
 /** Avatar das listas de amigos (pendentes e busca vêm sem presença). */
 function Avatar({
@@ -59,7 +60,7 @@ function Friends(): React.JSX.Element {
 
   const [filterText, setFilterText] = useState('')
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<User[] | null>(null)
+  const [results, setResults] = useState<PublicUser[] | null>(null)
   const [searching, setSearching] = useState(false)
   const [sendingTo, setSendingTo] = useState<string | null>(null)
   const [actionUser, setActionUser] = useState<string | null>(null)

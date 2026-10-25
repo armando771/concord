@@ -433,3 +433,27 @@ func mustJSON(t *testing.T, v any) string {
 	}
 	return string(data)
 }
+
+// As respostas de /me/* são da própria pessoa: o app guarda a resposta como a
+// sessão, então o próprio e-mail continua indo (e só ele).
+func TestOwnProfileResponsesKeepOwnEmail(t *testing.T) {
+	e := newProfileEnv(t)
+	responses := map[string]*httptest.ResponseRecorder{
+		"PUT /me/profile":   e.do(t, http.MethodPut, "/api/users/me/profile", []byte(`{"display_name":"Mugis","links":[]}`), "application/json"),
+		"PUT /me/status":    e.do(t, http.MethodPut, "/api/users/me/status", []byte(`{"status":"idle"}`), "application/json"),
+		"POST /me/avatar":   e.upload(t, "/api/users/me/avatar", map[string][]byte{"file": pngData()}),
+		"DELETE /me/avatar": e.do(t, http.MethodDelete, "/api/users/me/avatar", nil, ""),
+	}
+	for what, rec := range responses {
+		if rec.Code != http.StatusOK {
+			t.Errorf("%s: status = %d %s", what, rec.Code, rec.Body.String())
+			continue
+		}
+		if !strings.Contains(rec.Body.String(), `"email":"m@x.com"`) {
+			t.Errorf("%s perdeu o próprio e-mail: %s", what, rec.Body.String())
+		}
+		if strings.Contains(rec.Body.String(), "b@x.com") {
+			t.Errorf("%s com e-mail de outra pessoa: %s", what, rec.Body.String())
+		}
+	}
+}

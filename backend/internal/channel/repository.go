@@ -3,6 +3,7 @@ package channel
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -20,13 +21,18 @@ func (r *Repository) Create(ctx context.Context, ch *Channel) error {
 	return r.db.QueryRow(
 		ctx,
 		`
-		INSERT INTO channels (id, server_id, name, type, created_by)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO channels (id, server_id, name, type, created_by, position)
+		VALUES (
+			$1, $2, $3, $4::varchar, $5,
+			-- Canal novo vai para o fim da seção dele.
+			(SELECT COALESCE(MAX(position) + 1, 0) FROM channels WHERE server_id = $2 AND type = $4::varchar)
+		)
 		RETURNING
 			id,
 			server_id,
 			name,
 			type,
+			position,
 			created_by,
 			created_at,
 			updated_at
@@ -41,6 +47,7 @@ func (r *Repository) Create(ctx context.Context, ch *Channel) error {
 		&ch.ServerID,
 		&ch.Name,
 		&ch.Type,
+		&ch.Position,
 		&ch.CreatedBy,
 		&ch.CreatedAt,
 		&ch.UpdatedAt,
@@ -57,6 +64,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Channel, error) 
 			server_id,
 			name,
 			type,
+			position,
 			created_by,
 			created_at,
 			updated_at
@@ -69,6 +77,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Channel, error) 
 		&ch.ServerID,
 		&ch.Name,
 		&ch.Type,
+		&ch.Position,
 		&ch.CreatedBy,
 		&ch.CreatedAt,
 		&ch.UpdatedAt,
@@ -124,12 +133,13 @@ func (r *Repository) ListByServerID(ctx context.Context, serverID string) ([]Cha
 			server_id,
 			name,
 			type,
+			position,
 			created_by,
 			created_at,
 			updated_at
 		FROM channels
 		WHERE server_id = $1
-		ORDER BY created_at, name
+		ORDER BY position, created_at, name
 		`,
 		serverID,
 	)
@@ -146,6 +156,7 @@ func (r *Repository) ListByServerID(ctx context.Context, serverID string) ([]Cha
 			&ch.ServerID,
 			&ch.Name,
 			&ch.Type,
+			&ch.Position,
 			&ch.CreatedBy,
 			&ch.CreatedAt,
 			&ch.UpdatedAt,
@@ -188,4 +199,47 @@ func (r *Repository) IsAdminOrOwner(ctx context.Context, serverID string, userID
 		userID,
 	).Scan(&allowed)
 	return allowed, err
+}
+// Reorder grava a nova ordem dos canais de um tipo do servidor numa transação:
+// trava os canais da seção, confere que ids é exatamente eles (ValidateOrder)
+// e grava position = índice em ids.
+func (r *Repository) Reorder(ctx context.Context, serverID string, chType string, ids []string) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	rows, err := tx.Query(
+		ctx,
+		`SELECT id FROM channels WHERE server_id = $1 AND type = $2 FOR UPDATE`,
+		serverID,
+		chType,
+	)
+	if err != nil {
+		return err
+	}
+	current, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return err
+	}
+
+	if err := ValidateOrder(current, ids); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(
+		ctx,
+		`
+		UPDATE channels AS c
+		SET position = o.ord - 1
+		FROM unnest($1::text[]) WITH ORDINALITY AS o(id, ord)
+		WHERE c.id = o.id::uuid
+		`,
+		ids,
+	); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }

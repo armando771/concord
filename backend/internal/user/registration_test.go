@@ -125,7 +125,7 @@ func TestMissingLoginIndexesError(t *testing.T) {
 		{false, false, "lower(username)"},
 	} {
 		got := MissingLoginIndexesError(c.username, c.email)
-		for _, want := range []string{"ERROR", "000021", c.mentions, "000021_add_login_lower_indexes.up.sql", "psql"} {
+		for _, want := range []string{"ERROR", "000025", c.mentions, "000025_add_login_lower_indexes.up.sql", "psql"} {
 			if !strings.Contains(got, want) {
 				t.Errorf("MissingLoginIndexesError(%v, %v) = %q, falta %q", c.username, c.email, got, want)
 			}

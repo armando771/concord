@@ -486,7 +486,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           }
         })
 
-        // DM recebida ou menção a você num canal: notificação do Windows, aviso
+        // DM recebida ou menção a você num canal (inclusive @all/@here liberados
+        // pelo backend no mention_everyone): notificação do Windows, aviso
         // na barra de tarefas e som — conforme Configurações → Notificações.
         // A mesma mensagem chega pela sala do canal e do servidor: avisa uma vez.
         const me = useAuthStore.getState().user
@@ -494,7 +495,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           notifiedMessages.add(msg.id)
           const notification =
             messageNotification(msg, me.id) ??
-            mentionNotification(msg, { id: me.id, username: me.username }, serverId)
+            mentionNotification(
+              msg,
+              { id: me.id, username: me.username, status: me.status },
+              serverId
+            )
           if (notification) {
             // "Não perturbe" silencia o aviso, a barra de tarefas e o som.
             const prefs = prefsForStatus(notificationPrefs(), me.status)
@@ -652,6 +657,30 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return
     }
 
+    if (event.type === 'channel:reorder') {
+      const reorder = payload as {
+        server_id?: string
+        type?: string
+        channel_ids?: string[]
+        request_id?: string
+      }
+      if (
+        reorder.server_id &&
+        (reorder.type === 'text' || reorder.type === 'voice') &&
+        Array.isArray(reorder.channel_ids)
+      ) {
+        useServerStore
+          .getState()
+          .receiveChannelOrder(
+            reorder.server_id,
+            reorder.type,
+            reorder.channel_ids,
+            reorder.request_id
+          )
+      }
+      return
+    }
+
     if (event.type === 'channel:delete') {
       const serverId = payload.server_id as string
       const channelId = payload.channel_id as string
@@ -754,8 +783,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
 
     const friendUser = payload.user as
-      | { id: string; username: string; display_name: string }
-      | undefined
+      { id: string; username: string; display_name: string } | undefined
 
     if (event.type === 'friend:request') {
       useFriendStore.getState().loadAll()

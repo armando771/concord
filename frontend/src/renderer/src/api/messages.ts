@@ -51,6 +51,9 @@ export interface Attachment {
   duration_ms?: number | null
 }
 
+/** Menção em massa num canal: @all (todo mundo) ou @here (quem está online). */
+export type MentionEveryone = 'all' | 'here'
+
 export interface Message {
   id: string
   author_id: string
@@ -63,6 +66,11 @@ export interface Message {
   content: string
   /** Mensagem do próprio servidor (ex.: "birthday"). */
   system_kind?: string | null
+  /**
+   * Quem o backend deixou pingar com @all/@here (só dono/moderador, com
+   * anti-spam). null = ninguém, mesmo com "@all" no texto.
+   */
+  mention_everyone?: MentionEveryone | null
   poll?: Poll | null
   attachments?: Attachment[] | null
   created_at: string

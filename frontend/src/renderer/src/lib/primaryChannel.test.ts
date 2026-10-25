@@ -18,6 +18,17 @@ describe('primaryChannelId', () => {
     expect(primaryChannelId({ primary_channel_id: 'voz' }, channels)).toBe('geral')
   })
 
+  it('sem escolha vale o canal de texto mais antigo, não o primeiro da barra', () => {
+    // "memes" foi arrastado para o topo, mas "geral" é mais antigo.
+    const reordered = [
+      // Formato do Go: fração sem zeros à direita e fuso -03:00.
+      { id: 'memes', type: 'text', created_at: '2026-01-01T10:00:00.5-03:00' },
+      { id: 'geral', type: 'text', created_at: '2026-01-01T10:00:00.123456-03:00' }
+    ]
+    expect(primaryChannelId({}, reordered)).toBe('geral')
+    expect(primaryChannelId({ primary_channel_id: 'apagado' }, reordered)).toBe('geral')
+  })
+
   it('sem canal de texto não há principal', () => {
     expect(primaryChannelId({}, [{ id: 'voz', type: 'voice' }])).toBeNull()
     expect(primaryChannelId(null, [])).toBeNull()
