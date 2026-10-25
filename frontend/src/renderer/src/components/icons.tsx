@@ -661,7 +661,7 @@ export function SoundboardIcon({ className = '' }: IconProps): React.JSX.Element
   )
 }
 
-/** Estrela de favorito (contorno; preenchida com `filled`). */
+/** Estrela de favorito (mesa de áudio): vazada ou cheia. */
 export function FavoriteStarIcon({
   className = '',
   filled = false
