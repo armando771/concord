@@ -92,3 +92,45 @@ func TestSpeakingEventReachesCallService(t *testing.T) {
 		t.Fatal("call:speaking não chegou ao serviço de chamadas")
 	}
 }
+
+// Um app modificado mandando call:speaking sem parar não pode pesar no
+// serviço de chamadas (cada evento trava o estado global).
+func TestSpeakingEventsAreRateLimited(t *testing.T) {
+	router := &recordingRouter{events: make(chan routedEvent, 64)}
+	conn := connectWithRouter(t, router, "ana")
+
+	for i := 0; i < 30; i++ {
+		msg := `{"type":"call:speaking","payload":{"call_id":"call-1","speaking":true}}`
+		if err := conn.Write(context.Background(), websocket.MessageText, []byte(msg)); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	// Outros eventos da chamada não entram no limite.
+	if err := conn.Write(context.Background(), websocket.MessageText,
+		[]byte(`{"type":"call:voice","payload":{"call_id":"call-1","muted":true}}`)); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	speaking, voice := 0, 0
+	deadline := time.After(500 * time.Millisecond)
+loop:
+	for {
+		select {
+		case ev := <-router.events:
+			switch ev.evType {
+			case "call:speaking":
+				speaking++
+			case "call:voice":
+				voice++
+			}
+		case <-deadline:
+			break loop
+		}
+	}
+	if speaking == 0 || speaking > maxSpeakingPerSecond {
+		t.Fatalf("call:speaking repassados = %d, want 1..%d", speaking, maxSpeakingPerSecond)
+	}
+	if voice != 1 {
+		t.Fatalf("call:voice repassados = %d, want 1", voice)
+	}
+}

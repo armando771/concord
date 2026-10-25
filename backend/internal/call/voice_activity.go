@@ -64,8 +64,13 @@ func (s *Service) SetSpeaking(callID string, userID string, speaking bool, now t
 		return ErrNotAllowed
 	}
 	// Mutado o microfone não capta nada; ignora aviso atrasado.
-	p.speaking = speaking && !p.muted && !p.deafened
-	p.lastSpokeAt = now
+	next := speaking && !p.muted && !p.deafened
+	// Só falar (ou parar depois de falar) marca a última fala: um "parei"
+	// repetido de quem já estava calado não estica a janela do XP.
+	if next || p.speaking {
+		p.lastSpokeAt = now
+	}
+	p.speaking = next
 	return nil
 }
 

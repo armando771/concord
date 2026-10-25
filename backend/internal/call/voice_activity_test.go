@@ -118,3 +118,35 @@ func TestSpeakingMessageMarksParticipantAsSpeaking(t *testing.T) {
 		}
 	}
 }
+
+// "Parei de falar" repetido não pode esticar a janela de fala: só a
+// transição falando → calado marca a última fala.
+func TestSilentStopMessagesDoNotExtendSpeaking(t *testing.T) {
+	s := serviceWithCall("call-1", "ana", "bia")
+	t0 := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	speaking := func(now time.Time) bool {
+		for _, a := range s.activeVoiceUsersAt(now) {
+			if a.UserID == "ana" {
+				return a.Speaking
+			}
+		}
+		return false
+	}
+
+	for i := 0; i < 5; i++ {
+		_ = s.SetSpeaking("call-1", "ana", false, t0.Add(time.Duration(i)*9*time.Second))
+	}
+	if speaking(t0.Add(40 * time.Second)) {
+		t.Fatal("ana nunca falou e conta como falando")
+	}
+
+	_ = s.SetSpeaking("call-1", "ana", true, t0.Add(time.Minute))
+	_ = s.SetSpeaking("call-1", "ana", false, t0.Add(time.Minute+time.Second))
+	_ = s.SetSpeaking("call-1", "ana", false, t0.Add(time.Minute+9*time.Second))
+	if speaking(t0.Add(time.Minute + 12*time.Second)) {
+		t.Fatal("o segundo 'parei' esticou a janela de fala")
+	}
+	if !speaking(t0.Add(time.Minute + 5*time.Second)) {
+		t.Fatal("pausa curta depois de falar ainda conta")
+	}
+}

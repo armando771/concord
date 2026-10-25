@@ -13,6 +13,10 @@ import (
 const (
 	writeWait      = 10 * time.Second
 	maxMessageSize = 65536
+	// O app avisa "falando/parei" no máximo umas poucas vezes por segundo
+	// (debounce de 1,5 s); acima disso descarta, para um cliente modificado
+	// não ficar travando o estado global das chamadas.
+	maxSpeakingPerSecond = 5
 )
 
 type subscribeValidator func(ctx context.Context, userID string, channelID string, conversationID string, serverID string, userRoomID string, callID string) bool
@@ -32,6 +36,19 @@ type Client struct {
 	callRouter CallRouter
 	// Cancela a leitura (e com isso fecha a conexão); usado no desligamento.
 	cancel context.CancelFunc
+	// Limite de call:speaking (só o readPump mexe).
+	speakingWindow time.Time
+	speakingCount  int
+}
+
+// allowSpeaking aplica o limite de call:speaking por conexão (janela de 1 s).
+func (c *Client) allowSpeaking(now time.Time) bool {
+	if now.Sub(c.speakingWindow) >= time.Second {
+		c.speakingWindow = now
+		c.speakingCount = 0
+	}
+	c.speakingCount++
+	return c.speakingCount <= maxSpeakingPerSecond
 }
 
 func (c *Client) readPump(ctx context.Context) {
@@ -87,6 +104,9 @@ func (c *Client) readPump(ctx context.Context) {
 		// call:speaking: voz captada (detector do LiveKit no app) — é o que
 		// conta para o XP de voz.
 		case "call:invite", "call:accept", "call:decline", "call:leave", "call:screen", "call:voice", "call:speaking":
+			if ev.Type == "call:speaking" && !c.allowSpeaking(time.Now()) {
+				continue
+			}
 			if c.callRouter != nil {
 				c.callRouter.HandleCallMessage(c.userID, ev.Type, ev.Payload)
 			}
