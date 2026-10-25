@@ -63,9 +63,16 @@ dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
   icon: resources/icon.png
+  executableName: salinha
   target:
     - AppImage
   category: Network
+# Runtime estático do AppImage (AppImage/type2-runtime): só precisa do
+# fusermount3, não da libfuse2 que várias distros (Arch, Ubuntu 22.04+) não
+# trazem. Sem FUSE nenhum, a instalação por usuário (site/install.sh) é o
+# caminho: ela não usa FUSE.
+toolsets:
+  appimage: '1.0.3'
 appImage:
   # Distribuímos apenas x64; o macro arch do AppImage expande para x86_64.
   artifactName: Salinha-${version}-x64.${ext}
