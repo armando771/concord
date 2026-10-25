@@ -35,10 +35,13 @@ import {
   UserPlusIcon,
   PlusIcon,
   PencilIcon,
+  StarIcon,
   TrashIcon,
   VolumeIcon,
   VolumeOffIcon
 } from './icons'
+import { setPrimaryChannel } from '../api/servers'
+import { primaryChannelId } from '../lib/primaryChannel'
 import VoiceSettings from './VoiceSettings'
 import AppSettings from './AppSettings'
 
@@ -94,6 +97,7 @@ export function ServerSidebar(): React.JSX.Element {
   const [deletingServer, setDeletingServer] = useState(false)
 
   const textChannels = channels.filter((ch) => (ch.type ?? 'text') === 'text')
+  const primaryId = primaryChannelId(currentServer, channels)
   const voiceChannels = channels.filter((ch) => ch.type === 'voice')
 
   const isAdmin =
@@ -269,6 +273,15 @@ export function ServerSidebar(): React.JSX.Element {
   const initial = (user?.display_name ?? user?.username ?? '?').charAt(0).toUpperCase()
   const serverName = currentServer?.name ?? 'Servidor'
 
+  /** Botão direito no canal abre o mesmo menu do "•••" (moderadores). */
+  const channelContextMenu = (ch: Channel): ((e: React.MouseEvent) => void) | undefined =>
+    isAdmin
+      ? (e) => {
+          e.preventDefault()
+          setChannelMenuFor(ch.id)
+        }
+      : undefined
+
   /** `onHover`: só aparece com o mouse em cima (fica no lugar da contagem). */
   const channelMenuButton = (ch: Channel, onHover = false): React.JSX.Element => (
     <button
@@ -285,10 +298,31 @@ export function ServerSidebar(): React.JSX.Element {
     </button>
   )
 
+  const makePrimary = async (ch: Channel): Promise<void> => {
+    if (!currentServer) return
+    setChannelMenuFor(null)
+    try {
+      const updated = await setPrimaryChannel(currentServer.id, ch.id)
+      useServerStore.getState().updateLocalServer(updated)
+      showToast.success(`#${ch.name} agora é o canal principal.`)
+    } catch (err) {
+      showToast.error(err instanceof Error ? err.message : 'Não foi possível mudar o canal principal.')
+    }
+  }
+
   const channelMenu = (ch: Channel): React.JSX.Element => (
     <>
       <div className="fixed inset-0 z-20" onClick={() => setChannelMenuFor(null)} />
-      <div className="absolute right-1.5 top-9 z-30 flex w-40 flex-col rounded-xl border border-white/10 bg-[#0d0e15]/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in">
+      <div className="absolute right-1.5 top-9 z-30 flex w-48 flex-col rounded-xl border border-white/10 bg-[#0d0e15]/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in">
+        {(ch.type ?? 'text') === 'text' && ch.id !== primaryId && (
+          <button
+            onClick={() => void makePrimary(ch)}
+            className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+          >
+            <span>Definir como principal</span>
+            <StarIcon className="h-3.5 w-3.5 text-amber-400" />
+          </button>
+        )}
         <button
           onClick={() => {
             setChannelMenuFor(null)
@@ -405,6 +439,7 @@ export function ServerSidebar(): React.JSX.Element {
                   <div key={ch.id} className="relative">
                     <button
                       onClick={() => navigate(`/servers/${currentServer?.id}/channels/${ch.id}`)}
+                      onContextMenu={channelContextMenu(ch)}
                       className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all cursor-pointer ${
                         active
                           ? 'bg-white/10 text-white shadow-sm'
@@ -413,6 +448,15 @@ export function ServerSidebar(): React.JSX.Element {
                     >
                       <span className="text-base leading-none text-gray-500">#</span>
                       <span className="truncate">{ch.name}</span>
+                      {ch.id === primaryId && (
+                        <span
+                          title="Canal principal: avisos do servidor são enviados aqui"
+                          className="shrink-0 text-amber-400/90"
+                        >
+                          <StarIcon className="h-3 w-3" />
+                          <span className="sr-only">(canal principal)</span>
+                        </span>
+                      )}
                       {unread > 0 && (
                         <span className="ml-auto shrink-0 rounded-full bg-red-500 px-1.5 py-0.2 text-[10px] font-bold text-white">
                           {unread > 99 ? '99+' : unread}
@@ -495,6 +539,7 @@ export function ServerSidebar(): React.JSX.Element {
                     <div className="group/voicech relative">
                       <button
                         onClick={() => handleVoiceClick(ch)}
+                        onContextMenu={channelContextMenu(ch)}
                         title={connectedHere ? 'Desconectar' : 'Conectar ao canal de voz'}
                         className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all cursor-pointer ${
                           voiceDropTarget === ch.id
@@ -551,7 +596,7 @@ export function ServerSidebar(): React.JSX.Element {
                               }
                               className={`group/voiceuser relative flex items-center gap-2 overflow-hidden rounded-md px-2 py-1 transition-colors ${
                                 isMe ? 'bg-white/5 hover:bg-white/10' : 'hover:bg-white/[0.06]'
-                              } ${canMove(p.user_id) ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+                              } ${canMove(p.user_id) ? 'cursor-pointer active:cursor-grabbing' : 'cursor-pointer'}`}
                             >
                               <div
                                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[9px] font-bold text-white transition-shadow ${
@@ -560,9 +605,12 @@ export function ServerSidebar(): React.JSX.Element {
                               >
                                 {name.charAt(0).toUpperCase()}
                               </div>
-                              <span className="truncate text-xs font-medium text-gray-300 transition-colors group-hover/voiceuser:text-white">
+                              <span
+                                className={`truncate text-xs transition-colors group-hover/voiceuser:text-white ${
+                                  isMe ? 'font-bold text-white' : 'font-medium text-gray-300'
+                                }`}
+                              >
                                 {name}
-                                {isMe ? ' (você)' : ''}
                               </span>
                               <LevelBadge userId={p.user_id} />
                               <span className="ml-auto flex items-center gap-0.5 pr-1">

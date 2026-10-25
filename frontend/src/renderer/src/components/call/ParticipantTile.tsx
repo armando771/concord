@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CallUserInfo } from '../../store/callStore'
 import VoiceStateIcons from './VoiceStateIcons'
+import StreamAudioControls from './StreamAudioControls'
 import { VolumeOffIcon, XIcon } from '../icons'
 import { useAuthStore } from '../../store/authStore'
 import { useLevelStore } from '../../store/levelStore'
@@ -69,7 +70,8 @@ function ParticipantTile({
   onContextMenu,
   locallyMuted = false,
   action,
-  onClose
+  onClose,
+  streamAudioUserId
 }: {
   user: CallUserInfo
   speaking?: boolean
@@ -91,6 +93,8 @@ function ParticipantTile({
   action?: React.ReactNode
   /** Mostra o X de fechar a transmissão no canto superior direito (o esquerdo é do "Mover" do mosaico). */
   onClose?: () => void
+  /** Live de outra pessoa: barra de mutar/volume (só para você) ao passar o mouse. */
+  streamAudioUserId?: string
 }): React.JSX.Element {
   const initial = user.display_name.charAt(0).toUpperCase()
   // 'fill': o maior retângulo com a proporção do vídeo que cabe no container
@@ -115,7 +119,7 @@ function ParticipantTile({
       role={onClick ? 'button' : undefined}
       title={onClick && isScreen ? 'Expandir tela' : undefined}
       style={fillStyle}
-      className={`relative flex items-center justify-center overflow-hidden rounded-2xl bg-white/[0.04] transition-all ${dims} ${
+      className={`group/tile relative flex items-center justify-center overflow-hidden rounded-2xl bg-white/[0.04] transition-all ${dims} ${
         isScreen
           ? 'ring-2 ring-[#23a55a] shadow-[0_0_24px_rgba(35,165,90,0.25)]'
           : speaking
@@ -182,6 +186,7 @@ function ParticipantTile({
           <span className="text-[10px] font-bold uppercase tracking-wide text-white">Ao vivo</span>
         </div>
       )}
+      {streamAudioUserId && videoStream && <StreamAudioControls userId={streamAudioUserId} />}
       <div className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm">
         {locallyMuted && (
           <span title="Silenciado por você" className="text-gray-300">
