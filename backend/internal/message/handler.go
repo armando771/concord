@@ -1,6 +1,7 @@
 package message
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -54,7 +55,8 @@ func (h *Handler) CreateChannelMessage(c *gin.Context) {
 	channelID := c.Param("channelId")
 
 	var input struct {
-		Content string `json:"content"`
+		Content   string  `json:"content"`
+		ReplyToID *string `json:"reply_to_id"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -79,7 +81,7 @@ func (h *Handler) CreateChannelMessage(c *gin.Context) {
 		return
 	}
 
-	msg, err := h.service.CreateChannelMessage(c.Request.Context(), channelID, userID, input.Content)
+	msg, err := h.service.CreateChannelMessage(c.Request.Context(), channelID, userID, input.Content, input.ReplyToID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -140,7 +142,8 @@ func (h *Handler) CreateConversationMessage(c *gin.Context) {
 	conversationID := c.Param("id")
 
 	var input struct {
-		Content string `json:"content"`
+		Content   string  `json:"content"`
+		ReplyToID *string `json:"reply_to_id"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -157,7 +160,7 @@ func (h *Handler) CreateConversationMessage(c *gin.Context) {
 		return
 	}
 
-	msg, err := h.service.CreateConversationMessage(c.Request.Context(), conversationID, userID, input.Content)
+	msg, err := h.service.CreateConversationMessage(c.Request.Context(), conversationID, userID, input.Content, input.ReplyToID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -238,4 +241,138 @@ func (h *Handler) DeleteConversationMessage(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "message deleted"})
+}
+
+func (h *Handler) AddChannelReaction(c *gin.Context) {
+	channelID := c.Param("channelId")
+	messageID := c.Param("messageId")
+
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	if !h.isChannelMember(c, channelID, userID) {
+		return
+	}
+
+	var input struct {
+		Emoji string `json:"emoji"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if err := h.service.AddChannelReaction(c.Request.Context(), channelID, messageID, userID, input.Emoji); err != nil {
+		if errors.Is(err, ErrInvalidEmoji) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, ErrMessageNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add reaction"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *Handler) RemoveChannelReaction(c *gin.Context) {
+	channelID := c.Param("channelId")
+	messageID := c.Param("messageId")
+
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	if !h.isChannelMember(c, channelID, userID) {
+		return
+	}
+
+	emoji := c.Query("emoji")
+	if err := h.service.RemoveChannelReaction(c.Request.Context(), channelID, messageID, userID, emoji); err != nil {
+		if errors.Is(err, ErrInvalidEmoji) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, ErrMessageNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove reaction"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *Handler) AddConversationReaction(c *gin.Context) {
+	conversationID := c.Param("id")
+	messageID := c.Param("messageId")
+
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	if !h.isConversationParticipant(c, conversationID, userID) {
+		return
+	}
+
+	var input struct {
+		Emoji string `json:"emoji"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if err := h.service.AddConversationReaction(c.Request.Context(), conversationID, messageID, userID, input.Emoji); err != nil {
+		if errors.Is(err, ErrInvalidEmoji) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, ErrMessageNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add reaction"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *Handler) RemoveConversationReaction(c *gin.Context) {
+	conversationID := c.Param("id")
+	messageID := c.Param("messageId")
+
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	if !h.isConversationParticipant(c, conversationID, userID) {
+		return
+	}
+
+	emoji := c.Query("emoji")
+	if err := h.service.RemoveConversationReaction(c.Request.Context(), conversationID, messageID, userID, emoji); err != nil {
+		if errors.Is(err, ErrInvalidEmoji) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, ErrMessageNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove reaction"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
