@@ -557,7 +557,7 @@ export function ServerSidebar(): React.JSX.Element {
                               title={canMove(p.user_id) ? 'Arraste para outro canal de voz' : undefined}
                               className={`group/voiceuser relative flex items-center gap-2 overflow-hidden rounded-md px-2 py-1 transition-colors ${
                                 isMe ? 'bg-white/5 hover:bg-white/10' : 'hover:bg-white/[0.06]'
-                              } ${canMove(p.user_id) ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+                              } ${canMove(p.user_id) ? 'cursor-pointer active:cursor-grabbing' : 'cursor-pointer'}`}
                             >
                               <div
                                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[9px] font-bold text-white transition-shadow ${
