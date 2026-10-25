@@ -2,8 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
+	"net"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"gin-quickstart/backend/internal/auth"
@@ -12,8 +17,10 @@ import (
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/database"
 	"gin-quickstart/backend/internal/friendship"
+	"gin-quickstart/backend/internal/health"
 	"gin-quickstart/backend/internal/httplog"
 	"gin-quickstart/backend/internal/level"
+	"gin-quickstart/backend/internal/lifecycle"
 	"gin-quickstart/backend/internal/livekit"
 	"gin-quickstart/backend/internal/media"
 	"gin-quickstart/backend/internal/message"
@@ -50,8 +57,16 @@ func findMigrationsDir() string {
 	return "migrations"
 }
 
+// Tempo para terminar requisições em andamento (uploads inclusive) ao receber
+// SIGTERM. O TimeoutStopSec do systemd precisa ser maior (docs/HOSPEDAGEM.md).
+const shutdownTimeout = 10 * time.Second
+
 func main() {
 	loadEnv()
+
+	// SIGTERM (systemctl restart/stop) ou Ctrl+C: desliga com calma (ver lifecycle.Run).
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+	defer stop()
 
 	databaseURL := os.Getenv("DATABASE_URL")
 
@@ -67,7 +82,12 @@ func main() {
 
 	// Como o gin.Default(), mas o log não grava tokens que vão na URL.
 	router := gin.New()
-	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{Formatter: httplog.Formatter}), gin.Recovery())
+	// O Caddy consulta /healthz a cada segundo: fora do log.
+	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{Formatter: httplog.Formatter, SkipPaths: []string{"/healthz"}}), gin.Recovery())
+
+	// Pronto só depois de recarregar as chamadas (ver SetReady abaixo).
+	readiness := health.New(db.Ping)
+	router.GET("/healthz", readiness.Handler)
 
 	router.Use(cors.New(cors.Config{
 		// O app empacotado carrega via file:// e a auth é por Bearer (sem
@@ -126,7 +146,7 @@ func main() {
 	messageRepository := message.MessageRepository(db)
 	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository, uploads)
 	// Limpeza horária de arquivos sem dono (cascatas e uploads abandonados).
-	go message.NewJanitor(messageRepository, uploads).Run(context.Background(), time.Hour)
+	go message.NewJanitor(messageRepository, uploads).Run(ctx, time.Hour)
 	messageHandler := message.MessageHandler(messageService, channelService, conversationService, friendshipService, serverService)
 	uploadSpace := media.NewSpace(uploadsDir, media.ReserveFromEnv(os.Getenv("UPLOADS_MIN_FREE_GB")))
 	roomAccess := message.NewServiceRoomAccess(channelService, serverService, conversationService, friendshipService)
@@ -152,13 +172,13 @@ func main() {
 	callService := call.CallService(callRepository, hub, conversationService, serverService, channelService, userService, hub.IsOnline)
 	callHandler := call.CallHandler(callService, liveKitTokens)
 	// Reinício do servidor não derruba quem está em chamada.
-	callService.RestoreActive(context.Background())
+	callService.RestoreActive(ctx)
 
 	// Level (XP por tempo em call, sem mute)
 	levelRepository := level.LevelRepository(db)
 	levelService := level.LevelService(levelRepository, hub, callService)
 	levelHandler := level.LevelHandler(levelService)
-	go levelService.Run(context.Background())
+	go levelService.Run(ctx)
 
 	// WebSocket handler
 	wsHandler := websocket.WsHandler(hub, authService, channelService, serverService, conversationService, callService)
@@ -212,8 +232,28 @@ func main() {
 		port = "8080"
 	}
 
-	// HOST=127.0.0.1 quando há um proxy na frente (Caddy na VPS).
-	if err := router.Run(os.Getenv("HOST") + ":" + port); err != nil {
+	// HOST=127.0.0.1 quando há um proxy na frente (Caddy na VPS). A porta só
+	// abre com tudo pronto: até lá o Caddy segura as requisições.
+	ln, err := net.Listen("tcp", os.Getenv("HOST")+":"+port)
+	if err != nil {
 		log.Fatal(err)
 	}
+	readiness.SetReady()
+	log.Printf("servidor pronto em %s", ln.Addr())
+
+	srv := &http.Server{Handler: router, ReadHeaderTimeout: 10 * time.Second}
+	err = lifecycle.Run(ctx, srv, ln, shutdownTimeout, func(ctx context.Context) {
+		stop() // um segundo SIGTERM/Ctrl+C mata na hora
+		readiness.SetStopping()
+		// Não tira ninguém das chamadas: o processo novo as recarrega do banco
+		// e os clientes reconectam com o código 1012.
+		hub.Shutdown(ctx)
+	})
+	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
+		log.Fatal(err)
+	}
+	if err != nil {
+		log.Printf("desligamento: requisições ainda em andamento após %s", shutdownTimeout)
+	}
+	log.Println("servidor desligado")
 }

@@ -38,7 +38,8 @@ import { useServerStore } from './serverStore'
 import { useFriendStore } from './friendStore'
 import { useCallStore } from './callStore'
 import { useLevelStore } from './levelStore'
-import { showToast } from './toastStore'
+import { showToast, useToastStore } from './toastStore'
+import { createReconnectNotice } from '../lib/wsReconnect'
 import { router } from '../router'
 import { MESSAGE_LIMIT } from '../api/messages'
 
@@ -127,11 +128,32 @@ const replacePoll = (
   }
 }
 
+/** Aviso "Reconectando…" só se o servidor demorar (um deploy leva menos de 3 s). */
+let reconnectToastId: string | null = null
+const dismissReconnectToast = (): void => {
+  if (reconnectToastId) useToastStore.getState().removeToast(reconnectToastId)
+  reconnectToastId = null
+}
+const reconnectNotice = createReconnectNotice({
+  onSlow: () => {
+    reconnectToastId = showToast.info('Reconectando ao servidor…', 0)
+  },
+  onBack: () => {
+    dismissReconnectToast()
+    showToast.success('Conectado ao servidor de novo.')
+  },
+  onDismiss: dismissReconnectToast
+})
+
 const client = new WsClient({
   getToken: () => useAuthStore.getState().accessToken,
   getUserId: () => useAuthStore.getState().user?.id ?? null,
   onEvent: (event) => useChatStore.getState().handleWsEvent(event),
-  onOpen: () => useCallStore.getState().handleWsReconnect()
+  onOpen: () => {
+    reconnectNotice.restored()
+    useCallStore.getState().handleWsReconnect()
+  },
+  onLost: () => reconnectNotice.lost()
 })
 
 /** Mensagens que já geraram notificação (chegam por mais de uma sala). */
@@ -156,6 +178,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
   disconnect: () => {
     client.disconnect()
+    reconnectNotice.cancel()
     get().reset()
     useLevelStore.getState().reset()
   },

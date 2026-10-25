@@ -216,7 +216,12 @@ Numa VPS com IP público não precisa de playit, e dá para ter HTTPS de graça.
    usuário `caddy` (`chmod 644`).
 5. **Serviço do backend:** `/etc/systemd/system/concord-server.service`, com
    `WorkingDirectory=/opt/concord`, `ExecStart=/opt/concord/concord-server` e
-   `Restart=always`. Depois `systemctl enable --now concord-server`.
+   `Restart=always`, mais o complemento
+   [`deploy/concord-server.service.d/zero-downtime.conf`](../deploy/concord-server.service.d/zero-downtime.conf)
+   em `/etc/systemd/system/concord-server.service.d/` (`KillSignal=SIGTERM`,
+   `TimeoutStopSec=20`, `RestartSec=1`; veja
+   [Reinício sem queda](#reinício-do-backend-sem-queda)). Depois
+   `systemctl daemon-reload && systemctl enable --now concord-server`.
 6. **Do seu PC:** `scripts/deploy-vps.sh root@IP` envia o backend, as
    migrations, o compose, a página de download (`site/`) e as atualizações
    do app, e reinicia. Reiniciar não derruba quem está em chamada e, com o
@@ -265,6 +270,36 @@ curl -s -o /dev/null -w '%{http_code}\n' https://<endereço>/rtc/validate   # 40
 ```
 
 Depois disso, reloads do Caddy não derrubam ninguém.
+
+### Reinício do backend sem queda
+
+O deploy reinicia o backend (`systemctl restart concord-server`). Com o
+SIGTERM, o backend:
+
+1. para de aceitar conexões (as novas esperam no Caddy pelo processo novo);
+2. fecha o WebSocket do chat de cada app com o código **1012** ("servidor
+   reiniciando"), sem tirar ninguém da chamada nem marcar ninguém offline;
+3. termina as requisições em andamento (uploads inclusive) em até 10 s e sai.
+
+O processo novo recarrega as chamadas do banco e só então abre a porta. O app,
+ao receber o 1012, reconecta em 100–300 ms (em vez de 1 s, 2 s, 4 s…) e não
+mostra aviso. "Reconectando ao servidor…" só aparece se a conexão ficar fora
+por mais de 3 s.
+
+`GET /healthz` responde `200` só com o servidor pronto (banco respondendo e
+chamadas recarregadas) e `503` enquanto sobe ou desliga. Não aparece no log.
+
+O systemd precisa esperar esse desligamento: `TimeoutStopSec` maior que os
+10 s do backend. Na VPS, instale o complemento uma vez (não reinicia nada):
+
+```bash
+mkdir -p /etc/systemd/system/concord-server.service.d
+cp zero-downtime.conf /etc/systemd/system/concord-server.service.d/   # deploy/concord-server.service.d/
+systemctl daemon-reload
+systemctl show concord-server -p KillSignal -p TimeoutStopUSec -p RestartUSec
+```
+
+No PC de casa, `scripts/install-services.sh` já gera o serviço com isso.
 
 ### Postgres e LiveKit não são recriados no deploy
 

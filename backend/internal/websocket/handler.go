@@ -93,6 +93,11 @@ func (h *Handler) ServeWS(c *gin.Context) {
 	if err != nil {
 		return
 	}
+	// Conexão que chegou enquanto o servidor desligava: manda para o processo novo.
+	if h.hub.ShuttingDown() {
+		_ = conn.Close(CloseServiceRestart, closeRestartReason)
+		return
+	}
 
 	client := &Client{
 		hub:        h.hub,

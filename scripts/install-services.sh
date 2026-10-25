@@ -32,7 +32,11 @@ After=network-online.target
 WorkingDirectory=$ROOT/backend
 ExecStart=$ROOT/backend/concord-server
 Restart=always
-RestartSec=3
+RestartSec=1
+# SIGTERM desliga com calma (fecha o chat com 1012 e termina as requisições em
+# até 10 s); só depois disso o systemd mata à força.
+KillSignal=SIGTERM
+TimeoutStopSec=20
 
 [Install]
 WantedBy=default.target

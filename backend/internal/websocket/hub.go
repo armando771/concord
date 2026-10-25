@@ -1,12 +1,22 @@
 package websocket
 
 import (
+	"context"
 	"sync"
 
 	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/message"
 	"gin-quickstart/backend/internal/server"
 	"gin-quickstart/backend/internal/user"
+
+	"github.com/coder/websocket"
+)
+
+// CloseServiceRestart (1012) avisa o app que o servidor está reiniciando: ele
+// reconecta logo, sem o backoff normal nem aviso de "reconectando".
+const (
+	CloseServiceRestart = websocket.StatusServiceRestart
+	closeRestartReason  = "servidor reiniciando"
 )
 
 type Hub struct {
@@ -15,6 +25,9 @@ type Hub struct {
 	rooms        map[string]map[*Client]struct{}
 	presence     map[string]int
 	onDisconnect func(userID string)
+	// Desligando (deploy): quem cai não "saiu", então nem presença offline
+	// nem saída da chamada — o processo novo recarrega tudo.
+	shuttingDown bool
 }
 
 func NewHub() *Hub {
@@ -60,7 +73,7 @@ func (h *Hub) Unregister(client *Client) {
 	h.presence[client.userID]--
 	if h.presence[client.userID] <= 0 {
 		delete(h.presence, client.userID)
-		wasOnline = true
+		wasOnline = !h.shuttingDown
 	}
 	h.mu.Unlock()
 
@@ -74,6 +87,48 @@ func (h *Hub) Unregister(client *Client) {
 			"online":  false,
 		}))
 	}
+}
+
+// Shutdown fecha todas as conexões com 1012 ("servidor reiniciando") e espera
+// os fechamentos até ctx acabar. Chamado no desligamento, depois de o servidor
+// HTTP parar de aceitar conexões, para os clientes reconectarem no processo novo.
+func (h *Hub) Shutdown(ctx context.Context) {
+	h.mu.Lock()
+	h.shuttingDown = true
+	conns := make([]*websocket.Conn, 0, len(h.clients))
+	for client := range h.clients {
+		conns = append(conns, client.conn)
+	}
+	h.mu.Unlock()
+
+	var wg sync.WaitGroup
+	for _, conn := range conns {
+		wg.Add(1)
+		go func(conn *websocket.Conn) {
+			defer wg.Done()
+			// Close espera o "ok" do cliente (até 5 s); quem não responde cai.
+			_ = conn.Close(CloseServiceRestart, closeRestartReason)
+		}(conn)
+	}
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		for _, conn := range conns {
+			_ = conn.CloseNow()
+		}
+	}
+}
+
+// ShuttingDown diz se o servidor já começou a desligar.
+func (h *Hub) ShuttingDown() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.shuttingDown
 }
 
 func (h *Hub) Subscribe(client *Client, room string) {
