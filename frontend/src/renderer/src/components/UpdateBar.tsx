@@ -33,8 +33,10 @@ function message(p: UpdateBarViewProps): string {
 
 export function UpdateBarView(p: UpdateBarViewProps): React.JSX.Element {
   return (
-    <div role="status" className="border-t border-[#23a55a]/40 bg-[#23a55a]/10 px-3 py-2">
-      <p className="text-xs text-gray-200">{message(p)}</p>
+    <div role="status" className="shrink-0 border-t border-[#23a55a]/40 bg-[#23a55a]/10 px-3 py-2">
+      <p className="line-clamp-3 break-words text-xs text-gray-200" title={message(p)}>
+        {message(p)}
+      </p>
       {p.requested && (
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
           <div
@@ -88,7 +90,7 @@ function UpdateBar(): React.JSX.Element | null {
       requested={requested}
       progress={progress}
       error={error}
-      confirming={confirming}
+      confirming={confirming && inCall}
       inCall={inCall}
       callType={callType}
       onInstall={install}

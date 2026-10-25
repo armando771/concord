@@ -27,6 +27,7 @@ describe('UpdateBarView', () => {
     const html = render()
     expect(html).toContain('Versão 1.2.0 disponível')
     expect(html).toContain('Atualizar')
+    expect(html).toContain('<button')
     expect(html).not.toContain('Depois')
   })
 
@@ -34,6 +35,7 @@ describe('UpdateBarView', () => {
     const html = render({ inCall: true, confirming: true, callType: 'channel' })
     expect(html).toContain('Atualizar mesmo assim')
     expect(html).toContain('Você voltará automaticamente ao canal')
+    expect(html).toContain('Cancelar')
   })
 
   it('pedindo confirmação em DM: avisa que sai da chamada', () => {

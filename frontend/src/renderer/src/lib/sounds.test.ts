@@ -54,6 +54,9 @@ describe('SOUNDS', () => {
     expect(notes).toHaveLength(3)
     expect(notes[1].freq).toBeGreaterThan(notes[0].freq)
     expect(notes[2].freq).toBeGreaterThan(notes[1].freq)
+    for (let i = 1; i < notes.length; i++) {
+      expect(notes[i].at).toBeGreaterThanOrEqual(notes[i - 1].at + notes[i - 1].duration)
+    }
     expect(peakGain('update')).toBe(BASE_VOLUME)
     for (const other of names.filter((n) => n !== 'update')) {
       expect(SOUNDS.update).not.toEqual(SOUNDS[other])

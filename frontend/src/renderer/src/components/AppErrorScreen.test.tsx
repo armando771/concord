@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+vi.mock('../store/callStore', () => ({ useCallStore: () => undefined }))
 import { AppErrorBoundary, AppErrorScreen } from './AppErrorScreen'
 
 afterEach(() => {

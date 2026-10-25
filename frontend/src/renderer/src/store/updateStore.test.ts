@@ -72,6 +72,7 @@ describe('updateStore', () => {
       confirming: false
     })
     expect(call.state.endCall).toHaveBeenCalledTimes(1)
+    expect(install).not.toHaveBeenCalled()
     vi.advanceTimersByTime(0)
     expect(install).toHaveBeenCalledTimes(1)
   })
