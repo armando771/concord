@@ -2,7 +2,13 @@ import { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, Tray } fr
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { badgeBitmap, badgeDescription, badgeLabel, taskbarAction } from './taskbarBadge'
-import { launchedHidden, shouldHideOnClose, shouldNotify, staleLoginItem } from './windowPolicy'
+import {
+  launchedHidden,
+  LOGIN_ITEM_ARGS,
+  shouldHideOnClose,
+  shouldNotify,
+  staleLoginItem
+} from './windowPolicy'
 
 // Modo segundo plano estilo Discord: bandeja, instância única, iniciar com o
 // Windows e notificações nativas. Bandeja/fechar-esconde só no Windows.
@@ -70,16 +76,20 @@ const autostartSupported = (): boolean =>
   process.platform === 'win32' && !process.env.PORTABLE_EXECUTABLE_FILE
 
 function setAutostart(enabled: boolean): void {
-  app.setLoginItemSettings({ openAtLogin: enabled, args: ['--hidden'] })
+  app.setLoginItemSettings({ openAtLogin: enabled, args: LOGIN_ITEM_ARGS })
 }
+
+// Sem os mesmos args da gravação, o Windows sempre responde openAtLogin false.
+const loginItemSettings = (): Electron.LoginItemSettings =>
+  app.getLoginItemSettings({ args: LOGIN_ITEM_ARGS })
 
 /** Atalho de login ainda no Concord.exe (nome antigo): regrava no .exe atual. */
 function repairAutostart(): void {
-  const { openAtLogin, launchItems = [] } = app.getLoginItemSettings({ args: ['--hidden'] })
+  const { openAtLogin, launchItems = [] } = loginItemSettings()
   if (openAtLogin) return
   const stale = staleLoginItem(launchItems, process.execPath)
   if (stale)
-    app.setLoginItemSettings({ openAtLogin: true, args: ['--hidden'], enabled: stale.enabled })
+    app.setLoginItemSettings({ openAtLogin: true, args: LOGIN_ITEM_ARGS, enabled: stale.enabled })
 }
 
 /** "Iniciar com o Windows" vem ligado na primeira execução. */
@@ -188,7 +198,7 @@ export function setupBackground(getWindow: () => BrowserWindow | null, icon: str
   })
 
   ipcMain.handle('settings:autostart', () =>
-    autostartSupported() ? app.getLoginItemSettings().openAtLogin : null
+    autostartSupported() ? loginItemSettings().openAtLogin : null
   )
   ipcMain.handle('settings:set-autostart', (_e, enabled: boolean) => {
     if (!autostartSupported()) return null
