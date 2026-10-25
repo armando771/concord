@@ -32,6 +32,7 @@
     "electron-updater": "^6.8.11",
     "livekit-client": "^2.23.0",
     "react-router-dom": "^7.18.2",
+    "simple-icons": "13.21.0",
     "tailwindcss": "^4.3.3",
     "zustand": "^5.0.15"
   },

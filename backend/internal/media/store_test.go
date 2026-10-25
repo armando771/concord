@@ -162,3 +162,21 @@ func TestPurgeTrashWithoutTrashDir(t *testing.T) {
 		t.Fatalf("PurgeTrash sem lixeira = (%d, %v)", n, err)
 	}
 }
+
+// A mídia do perfil fica numa subpasta (uploads/profile): a limpeza dos
+// anexos lista só a raiz e nunca pode mandar avatar para a lixeira.
+func TestListIgnoresSubdirectories(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := NewStore(dir)
+	profile, _ := NewStore(filepath.Join(dir, "profile"))
+	if _, _, err := profile.Save(uuid.NewString(), strings.NewReader("avatar"), 100); err != nil {
+		t.Fatal(err)
+	}
+	files, err := s.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("List enxergou a subpasta: %+v", files)
+	}
+}

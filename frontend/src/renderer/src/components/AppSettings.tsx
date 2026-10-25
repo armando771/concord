@@ -11,8 +11,10 @@ import { IS_WEB } from '../lib/config'
 import { permissionView, type WebPermission } from '../lib/webNotifications'
 import { browserPermission, requestBrowserPermission } from '../lib/browserNotifications'
 import LevelUpPreview from './level/LevelUpPreview'
+import Switch from './Switch'
 
-function Toggle({
+/** Linha com título, descrição e o interruptor, como nas configurações do Discord. */
+export function Toggle({
   title,
   description,
   checked,
@@ -24,18 +26,13 @@ function Toggle({
   onChange: () => void
 }): React.JSX.Element {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3">
-      <span>
+    <div className="flex items-center justify-between gap-4">
+      <span className="min-w-0">
         <span className="block text-sm font-semibold text-white">{title}</span>
-        <span className="block text-xs text-gray-400">{description}</span>
+        <span className="block text-xs leading-snug text-gray-400">{description}</span>
       </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={onChange}
-        className="h-4 w-4 accent-[#23a55a]"
-      />
-    </label>
+      <Switch checked={checked} onChange={onChange} label={title} />
+    </div>
   )
 }
 
@@ -110,8 +107,8 @@ function BrowserPermission(): React.JSX.Element {
   )
 }
 
-/** Perfil: aniversário (opcional) e se os servidores podem anunciar. */
-function ProfileSettings(): React.JSX.Element {
+/** Aniversário (opcional) e se os servidores podem anunciar. Salva na hora. */
+export function BirthdaySettings(): React.JSX.Element {
   const [birthday, setLocal] = useState<Birthday | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -141,7 +138,9 @@ function ProfileSettings(): React.JSX.Element {
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-      <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-400">Perfil</h3>
+      <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-400">
+        Aniversário
+      </h3>
       <div className="flex flex-col gap-3">
         <BirthdayFields
           value={birthday}
@@ -163,15 +162,35 @@ function ProfileSettings(): React.JSX.Element {
   )
 }
 
+/** Configurações → Notificações. */
+export function NotificationSettings(): React.JSX.Element {
+  const prefs = useNotificationPrefsStore()
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <div className="flex flex-col gap-4">
+        {IS_WEB && <BrowserPermission />}
+        {NOTIFICATION_OPTIONS.map((option) => (
+          <Toggle
+            key={option.key}
+            title={option.title}
+            description={option.description}
+            checked={prefs[option.key]}
+            onChange={() => prefs.setPref(option.key, !prefs[option.key])}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /**
- * Preferências do app: no desktop, onde há suporte (ex.: Windows); no
- * navegador, perfil e notificações (sem iniciar com o sistema nem overlay).
+ * Configurações → Aplicativo: iniciar com o sistema e overlay (só onde há
+ * suporte, ex.: Windows).
  */
-function AppSettings(): React.JSX.Element | null {
+export function DesktopSettings(): React.JSX.Element {
   const background = window.api?.background
   // undefined = ainda carregando; null = não suportado nesta plataforma
   const [autostart, setAutostart] = useState<boolean | null | undefined>(undefined)
-  const prefs = useNotificationPrefsStore()
   const overlayEnabled = useOverlayPrefsStore((s) => s.enabled)
   const setOverlayEnabled = useOverlayPrefsStore((s) => s.setEnabled)
   const overlayOpacity = useOverlayPrefsStore((s) => s.opacity)
@@ -181,38 +200,28 @@ function AppSettings(): React.JSX.Element | null {
     void background?.getAutostart().then(setAutostart)
   }, [background])
 
-  // Prévia da animação de nível: só no build de dev (some do build final).
-  const devPreview = import.meta.env.DEV ? <LevelUpPreview /> : null
-
-  if (!background && !IS_WEB) {
-    return (
-      <div className="flex flex-col gap-4">
-        <ProfileSettings />
-        {devPreview}
-      </div>
-    )
-  }
-
   const toggleAutostart = (): void => {
     void background?.setAutostart(!autostart).then((value) => {
       if (value !== null) setAutostart(value)
     })
   }
 
+  const hasAutostart = Boolean(background) && typeof autostart === 'boolean'
+  const hasOverlay = Boolean(background && window.api?.overlay?.supported)
+
   return (
     <div className="flex flex-col gap-4">
-      <ProfileSettings />
-      {typeof autostart === 'boolean' && (
+      {hasAutostart && (
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <Toggle
             title="Iniciar com o Windows"
             description="Abre escondido na bandeja, pronto para receber chamadas."
-            checked={autostart}
+            checked={Boolean(autostart)}
             onChange={toggleAutostart}
           />
         </div>
       )}
-      {window.api?.overlay?.supported && (
+      {hasOverlay && (
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <Toggle
             title="Overlay nos jogos"
@@ -234,31 +243,18 @@ function AppSettings(): React.JSX.Element | null {
               disabled={!overlayEnabled}
               onChange={(e) => setOverlayOpacity(Number(e.target.value))}
               aria-label="Opacidade do overlay"
-              className="accent-[#23a55a] disabled:opacity-40"
+              className="accent-[#5865f2] disabled:opacity-40"
             />
           </label>
         </div>
       )}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-        <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-400">
-          Notificações
-        </h3>
-        <div className="flex flex-col gap-3">
-          {IS_WEB && <BrowserPermission />}
-          {NOTIFICATION_OPTIONS.map((option) => (
-            <Toggle
-              key={option.key}
-              title={option.title}
-              description={option.description}
-              checked={prefs[option.key]}
-              onChange={() => prefs.setPref(option.key, !prefs[option.key])}
-            />
-          ))}
-        </div>
-      </div>
-      {devPreview}
+      {!hasAutostart && !hasOverlay && (
+        <p className="text-sm text-gray-400">
+          Nada para configurar aqui nesta plataforma.
+        </p>
+      )}
+      {/* Prévia da animação de nível: só no build de dev (some do build final). */}
+      {import.meta.env.DEV && <LevelUpPreview />}
     </div>
   )
 }
-
-export default AppSettings

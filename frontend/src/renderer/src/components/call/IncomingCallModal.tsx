@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useCallStore } from '../../store/callStore'
 import { PhoneIcon, PhoneOffIcon } from '../icons'
 import Button from '../Button'
+import Avatar from '../Avatar'
 
 function useRingtone(ringing: boolean): void {
   const ctxRef = useRef<AudioContext | null>(null)
@@ -64,14 +65,17 @@ function IncomingCallModal(): React.JSX.Element | null {
     })
   }
 
-  const initial = peer.display_name.charAt(0).toUpperCase()
-
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="glass-card w-full max-w-sm p-8 text-center">
-        <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-violet-600 text-2xl font-bold text-white">
-          {initial}
-        </div>
+        <Avatar
+          userId={peer.id}
+          name={peer.display_name}
+          avatarUrl={peer.avatar_url}
+          size={80}
+          animate="always"
+          className="mx-auto mb-4"
+        />
         <p className="text-lg font-bold text-white">{peer.display_name}</p>
         <p className="mb-6 text-xs text-gray-400">@{peer.username}</p>
         <p className="mb-6 animate-pulse text-sm font-semibold text-gray-300">Chamada de voz...</p>

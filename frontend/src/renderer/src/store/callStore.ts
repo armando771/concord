@@ -33,7 +33,12 @@ import { loadAudioPrefs, resolveDeviceId, saveAudioPrefs } from '../lib/audioDev
 import { useChatStore } from './chatStore'
 import { useAuthStore } from './authStore'
 import { showToast } from './toastStore'
+
 import type { CallResume } from '../../../shared/callResume'
+
+import { useSoundboardStore } from './soundboardStore'
+import { stopAllSoundboardAudio } from '../lib/soundboardPlayer'
+
 
 export type CallStatus = 'idle' | 'ringing' | 'outgoing' | 'active'
 export type CallKind = 'dm' | 'channel'
@@ -422,6 +427,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     windowAudio = null
     localCameraStream?.getTracks().forEach((t) => t.stop())
     localCameraStream = null
+    useSoundboardStore.getState().clearActivePlays()
     set({
       status: 'idle',
       callId: null,
@@ -679,6 +685,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       if (next) {
         set({ mutedBeforeDeafen: get().muted, deafened: true, muted: true })
         applyMute(true)
+        stopAllSoundboardAudio()
       } else {
         set({ deafened: false, muted: get().mutedBeforeDeafen })
         applyMute(get().mutedBeforeDeafen)
