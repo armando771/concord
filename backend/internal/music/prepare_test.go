@@ -100,3 +100,68 @@ func TestPrepareWithFFmpeg(t *testing.T) {
 		t.Fatalf("bytes = %d", len(data))
 	}
 }
+
+const realAnalysis = `Input #0, matroska,webm, from 'a.webm':
+  Duration: 00:00:06.00, start: 0.000000, bitrate: 50 kb/s
+[Parsed_silencedetect_0 @ 000001211e636780] silence_start: 0
+[Parsed_silencedetect_0 @ 000001211e636780] silence_end: 0.997833 | silence_duration: 0.997833
+[Parsed_silencedetect_0 @ 000001211e636780] silence_start: 4.080146
+[Parsed_silencedetect_0 @ 000001211e636780] silence_end: 6 | silence_duration: 1.919854
+[Parsed_ebur128_1 @ 0x2] Summary:
+
+  Integrated loudness:
+    I:         -20.0 LUFS
+
+  True peak:
+    Peak:       -3.0 dBFS
+`
+
+// O ffmpeg real emite silence_end no fim do arquivo; o silêncio final ainda deve ser cortado.
+func TestParseAnalysisTrailingSilenceWithEnd(t *testing.T) {
+	a, err := ParseAnalysis(realAnalysis)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(a.StartSec-0.997833) > 1e-6 || math.Abs(a.EndSec-4.080146) > 1e-6 {
+		t.Fatalf("a = %+v", a)
+	}
+}
+
+func TestParseAnalysisLeadingSilenceTolerance(t *testing.T) {
+	in := "[silencedetect @ 0x1] silence_start: 0.0065\n[silencedetect @ 0x1] silence_end: 1.5 | silence_duration: 1.49\nSummary:\n I: -14.0 LUFS\n Peak: -2.0 dBFS\n"
+	a, err := ParseAnalysis(in)
+	if err != nil || a.StartSec != 1.5 {
+		t.Fatalf("a=%+v err=%v", a, err)
+	}
+}
+
+// 1 s de silêncio + 2 s de tom + 2 s de silêncio: o PCM tem que sair bem menor que 5 s.
+func TestPrepareTrimsSilenceWithFFmpeg(t *testing.T) {
+	ff, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg não instalado")
+	}
+	src := t.TempDir() + "/mix.opus"
+	out, err := exec.Command(ff, "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-t", "1", "-i", "anullsrc=r=48000:cl=stereo",
+		"-f", "lavfi", "-t", "2", "-i", "sine=frequency=440:sample_rate=48000",
+		"-f", "lavfi", "-t", "2", "-i", "anullsrc=r=48000:cl=stereo",
+		"-filter_complex", "[1:a]aformat=channel_layouts=stereo[t];[0:a][t][2:a]concat=n=3:v=0:a=1",
+		"-c:a", "libopus", src).CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	r, err := NewPreparer(ff, ExecRunner).Prepare(context.Background(), src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	data, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 3,5 s = 3.5*48000*8 bytes; sem corte seriam ~5 s (1.92 MB).
+	if len(data) == 0 || len(data) >= 1_344_000 {
+		t.Fatalf("bytes = %d", len(data))
+	}
+}

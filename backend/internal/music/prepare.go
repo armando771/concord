@@ -31,6 +31,7 @@ var (
 	rePeak         = regexp.MustCompile(`Peak:\s+(-?[\d.]+|-inf) dBFS`)
 	reSilenceStart = regexp.MustCompile(`silence_start: (-?[\d.]+)`)
 	reSilenceEnd   = regexp.MustCompile(`silence_end: (-?[\d.]+)`)
+	reDuration     = regexp.MustCompile(`Duration: (\d+):(\d+):(\d+(?:\.\d+)?)`)
 )
 
 func parseNum(s string) float64 {
@@ -61,14 +62,28 @@ func ParseAnalysis(stderr string) (Analysis, error) {
 	// Silêncio que começa no 0 marca o início; o último silence_start sem
 	// silence_end depois dele é o silêncio do fim.
 	body := stderr[:i]
+	var duration float64
+	if d := reDuration.FindStringSubmatch(stderr); d != nil {
+		h, _ := strconv.ParseFloat(d[1], 64)
+		m, _ := strconv.ParseFloat(d[2], 64)
+		duration = h*3600 + m*60 + parseNum(d[3])
+	}
 	starts := reSilenceStart.FindAllStringSubmatchIndex(body, -1)
 	ends := reSilenceEnd.FindAllStringSubmatchIndex(body, -1)
-	if len(starts) > 0 && parseNum(body[starts[0][2]:starts[0][3]]) == 0 && len(ends) > 0 {
+	if len(starts) > 0 && parseNum(body[starts[0][2]:starts[0][3]]) <= 0.1 && len(ends) > 0 {
 		a.StartSec = parseNum(body[ends[0][2]:ends[0][3]])
 	}
 	if len(starts) > 0 {
 		last := starts[len(starts)-1]
-		openAtEnd := len(ends) == 0 || ends[len(ends)-1][0] < last[0]
+		// O ffmpeg real fecha o último silêncio com um silence_end no fim do
+		// arquivo, então ele também conta como final se terminar na duração.
+		openAtEnd := true
+		for _, e := range ends {
+			if e[0] > last[0] {
+				openAtEnd = duration > 0 && parseNum(body[e[2]:e[3]]) >= duration-0.1
+				break
+			}
+		}
 		if openAtEnd {
 			if v := parseNum(body[last[2]:last[3]]); v > a.StartSec {
 				a.EndSec = v
