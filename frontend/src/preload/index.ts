@@ -168,6 +168,17 @@ const api = {
     saveLayout(layout: OverlayLayout): void {
       ipcRenderer.send('overlay:layout', layout)
     },
+    /** Configurações: o atalho está livre? null = atalho inválido. */
+    checkShortcut(accelerator: string): Promise<{ accelerator: string; taken: boolean } | null> {
+      return ipcRenderer.invoke('overlay:check-shortcut', accelerator)
+    },
+    /** Configurações: resultado de segurar o atalho no jogo (outro programa pode ter). */
+    onShortcutStatus(cb: (status: { accelerator: string; taken: boolean }) => void): () => void {
+      const listener = (_e: unknown, status: { accelerator: string; taken: boolean }): void =>
+        cb(status)
+      ipcRenderer.on('overlay:shortcut-status', listener)
+      return () => ipcRenderer.removeListener('overlay:shortcut-status', listener)
+    },
     /** Renderer principal: posição/tamanho editados no jogo, para salvar. */
     onLayout(cb: (layout: OverlayLayout) => void): () => void {
       const listener = (_e: unknown, layout: OverlayLayout): void => cb(layout)

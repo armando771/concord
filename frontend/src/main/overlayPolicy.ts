@@ -86,8 +86,7 @@ export function overlayFrame(workArea: Rect, rect: Rect): OverlayFrame {
   }
 }
 
-/** Atalho para mover/redimensionar o overlay. Ver overlayShortcuts. */
-export const OVERLAY_EDIT_SHORTCUT = 'Shift+Tab'
+/** Sai do modo de edição (o de entrar é configurável: lib/overlayShortcut). */
 export const OVERLAY_EXIT_SHORTCUT = 'Escape'
 
 export interface OverlayShortcutState {
@@ -99,8 +98,8 @@ export interface OverlayShortcutState {
 }
 
 /**
- * Atalhos globais que o overlay segura agora. Só com ele à vista: Shift+Tab
- * nunca é roubado de outros apps nem da área de trabalho. Esc só no modo de
+ * Atalhos globais que o overlay segura agora. Só com ele à vista: o atalho de
+ * edição (padrão Shift+Tab) nunca é roubado de outros apps nem da área de trabalho. Esc só no modo de
  * edição.
  */
 export function overlayShortcuts(state: OverlayShortcutState): {

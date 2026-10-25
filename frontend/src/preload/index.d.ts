@@ -55,6 +55,12 @@ export interface BackgroundApi {
   onNavigate(cb: (route: string) => void): () => void
 }
 
+/** Atalho do modo de edição e se outro programa já tem ele. */
+export interface OverlayShortcutStatus {
+  accelerator: string
+  taken: boolean
+}
+
 export interface OverlayApi {
   /** Overlay de jogo existe nesta plataforma (só Windows). */
   supported: boolean
@@ -79,6 +85,10 @@ export interface OverlayApi {
   onEditing(cb: (editing: boolean) => void): () => void
   /** Página do overlay: posição/tamanho novos, ao soltar o mouse. */
   saveLayout(layout: OverlayLayout): void
+  /** Configurações: o atalho está livre? null = atalho inválido. */
+  checkShortcut(accelerator: string): Promise<OverlayShortcutStatus | null>
+  /** Configurações: resultado de segurar o atalho no jogo. Retorna unsubscribe. */
+  onShortcutStatus(cb: (status: OverlayShortcutStatus) => void): () => void
   /** Renderer principal: posição/tamanho editados no jogo, para salvar. Retorna unsubscribe. */
   onLayout(cb: (layout: OverlayLayout) => void): () => void
 }

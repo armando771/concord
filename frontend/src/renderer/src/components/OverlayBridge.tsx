@@ -15,6 +15,7 @@ function OverlayBridge(): null {
   const enabled = useOverlayPrefsStore((s) => s.enabled)
   const opacity = useOverlayPrefsStore((s) => s.opacity)
   const layout = useOverlayPrefsStore((s) => s.layout)
+  const shortcut = useOverlayPrefsStore((s) => s.shortcut)
   const setLayout = useOverlayPrefsStore((s) => s.setLayout)
   const me = useAuthStore((s) => s.user)
   const status = useCallStore((s) => s.status)
@@ -55,7 +56,8 @@ function OverlayBridge(): null {
         muted,
         deafened,
         opacity,
-        layout
+        layout,
+        shortcut
       })
     )
   }, [
@@ -63,6 +65,7 @@ function OverlayBridge(): null {
     enabled,
     opacity,
     layout,
+    shortcut,
     status,
     me,
     participants,

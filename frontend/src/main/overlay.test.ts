@@ -360,12 +360,11 @@ describe('overlay', () => {
       { sender: w.webContents },
       { position: { x: 0.5, y: 2 }, scale: 1.2 }
     )
-    expect(mainWindow.sent).toEqual([
-      ['overlay:layout', { position: { x: 0.5, y: 1 }, scale: 1.2 }]
-    ])
+    const layouts = (): unknown[] => mainWindow.sent.filter(([ch]) => ch === 'overlay:layout')
+    expect(layouts()).toEqual([['overlay:layout', { position: { x: 0.5, y: 1 }, scale: 1.2 }]])
     // De outra página: ignorado.
     h.state.handlers['overlay:layout']({ sender: {} }, { position: null, scale: 1 })
-    expect(mainWindow.sent).toHaveLength(1)
+    expect(layouts()).toHaveLength(1)
   })
 
   it('ao sair do app: fecha tudo e ignora estados atrasados do renderer', async () => {
@@ -448,5 +447,69 @@ describe('overlay', () => {
     ready(w)
     press('Shift+Tab')
     expect(w.ignoreMouse).toBe(false)
+  })
+
+  it('registra o atalho configurado, não o Shift+Tab', async () => {
+    await setup()
+    sendState({ ...inCall, shortcut: 'Ctrl+Shift+O' })
+    showGame()
+    expect(shortcuts()).toEqual(['Ctrl+Shift+O'])
+    press('Ctrl+Shift+O')
+    expect(h.state.windows[0].ignoreMouse).toBe(false)
+    expect(shortcuts()).toEqual(['Ctrl+Shift+O', 'Escape'])
+  })
+
+  it('trocar o atalho com o overlay à vista solta o velho e segura o novo', async () => {
+    await setup()
+    sendState(inCall)
+    showGame()
+    expect(shortcuts()).toEqual(['Shift+Tab'])
+    sendState({ ...inCall, shortcut: 'Alt+F9' })
+    expect(shortcuts()).toEqual(['Alt+F9'])
+  })
+
+  it('atalho inválido vindo do estado vira o padrão', async () => {
+    await setup()
+    sendState({ ...inCall, shortcut: 'O' })
+    showGame()
+    expect(shortcuts()).toEqual(['Shift+Tab'])
+  })
+
+  it('atalho ocupado por outro programa: avisa as configurações', async () => {
+    h.state.shortcutsTaken = ['Shift+Tab']
+    await setup()
+    sendState(inCall)
+    showGame()
+    expect(mainWindow.sent).toContainEqual([
+      'overlay:shortcut-status',
+      { accelerator: 'Shift+Tab', taken: true }
+    ])
+  })
+
+  it('atalho registrado: avisa que está livre', async () => {
+    await setup()
+    sendState(inCall)
+    showGame()
+    expect(mainWindow.sent).toContainEqual([
+      'overlay:shortcut-status',
+      { accelerator: 'Shift+Tab', taken: false }
+    ])
+  })
+
+  it('configurações perguntam se um atalho está livre (sem ficar com ele)', async () => {
+    h.state.shortcutsTaken = ['Ctrl+Alt+P']
+    await setup()
+    const check = (accel: unknown): unknown =>
+      h.state.handlers['overlay:check-shortcut']({ sender: mainWindow.webContents }, accel)
+    expect(check('Ctrl+Shift+O')).toEqual({ accelerator: 'Ctrl+Shift+O', taken: false })
+    expect(shortcuts()).toEqual([])
+    expect(check('ctrl+alt+p')).toEqual({ accelerator: 'Ctrl+Alt+P', taken: true })
+    // Inválido: nem tenta registrar.
+    expect(check('Tab')).toBeNull()
+    // O que o overlay já segura conta como livre.
+    sendState(inCall)
+    showGame()
+    expect(check('Shift+Tab')).toEqual({ accelerator: 'Shift+Tab', taken: false })
+    expect(shortcuts()).toEqual(['Shift+Tab'])
   })
 })

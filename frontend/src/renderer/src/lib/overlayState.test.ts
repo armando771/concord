@@ -3,6 +3,7 @@ import {
   buildOverlaySnapshot,
   clampOverlayOpacity,
   migrateOverlayPrefs,
+  normalizeOverlayPrefs,
   OVERLAY_PREFS_VERSION,
   OVERLAY_OPACITY_DEFAULT,
   overlayRowOpacity,
@@ -25,6 +26,7 @@ function input(over: Partial<OverlayInput> = {}): OverlayInput {
     deafened: false,
     opacity: OVERLAY_OPACITY_DEFAULT,
     layout: OVERLAY_DEFAULT_LAYOUT,
+    shortcut: 'Shift+Tab',
     ...over
   }
 }
@@ -188,24 +190,24 @@ describe('overlayRowOpacity', () => {
 })
 
 describe('migrateOverlayPrefs', () => {
-  it('versão da opacidade em repouso é a 1', () => {
-    expect(OVERLAY_PREFS_VERSION).toBe(1)
+  it('versão 2: atalho configurável (v1: opacidade em repouso)', () => {
+    expect(OVERLAY_PREFS_VERSION).toBe(2)
   })
 
-  it('opacidade salva antes (v0, 20–100% na lista toda) volta para 30%; o resto é mantido', () => {
-    expect(migrateOverlayPrefs({ enabled: true, opacity: 70 }, 0)).toEqual({
+  it('opacidade salva antes da v1 (20–100% na lista toda) volta para 30%; o resto é mantido', () => {
+    expect(migrateOverlayPrefs({ enabled: true, opacity: 70 }, 0)).toMatchObject({
       enabled: true,
       opacity: 30
     })
-    expect(migrateOverlayPrefs({ enabled: false, opacity: 20 }, 0)).toEqual({
+    expect(migrateOverlayPrefs({ enabled: false, opacity: 20 }, 0)).toMatchObject({
       enabled: false,
       opacity: 30
     })
     expect(migrateOverlayPrefs({ opacity: 45 }, 0).opacity).toBe(30)
   })
 
-  it('opacidade salva depois (v1+) é mantida, encaixada em 10–60%', () => {
-    expect(migrateOverlayPrefs({ enabled: true, opacity: 45 }, 1)).toEqual({
+  it('opacidade salva da v1 em diante é mantida, encaixada em 10–60%', () => {
+    expect(migrateOverlayPrefs({ enabled: true, opacity: 45 }, 1)).toMatchObject({
       enabled: true,
       opacity: 45
     })
@@ -214,8 +216,59 @@ describe('migrateOverlayPrefs', () => {
     expect(migrateOverlayPrefs({ opacity: 'x' }, 1).opacity).toBe(OVERLAY_OPACITY_DEFAULT)
   })
 
+  it('antes da v2 não havia atalho: fica o padrão (Shift+Tab)', () => {
+    expect(migrateOverlayPrefs({ opacity: 30 }, 0).shortcut).toBe('Shift+Tab')
+    expect(migrateOverlayPrefs({ opacity: 30, shortcut: 'Ctrl+Shift+O' }, 1).shortcut).toBe(
+      'Shift+Tab'
+    )
+  })
+
+  it('da v2 em diante, o atalho salvo é mantido; inválido volta ao padrão', () => {
+    expect(migrateOverlayPrefs({ shortcut: 'ctrl+shift+o' }, 2).shortcut).toBe('Ctrl+Shift+O')
+    expect(migrateOverlayPrefs({ shortcut: 'Tab' }, 2).shortcut).toBe('Shift+Tab')
+  })
+
   it('nada salvo não quebra', () => {
-    expect(migrateOverlayPrefs(undefined, 0)).toEqual({ opacity: OVERLAY_OPACITY_DEFAULT })
-    expect(migrateOverlayPrefs(null, 1)).toEqual({ opacity: OVERLAY_OPACITY_DEFAULT })
+    expect(migrateOverlayPrefs(undefined, 0)).toMatchObject({
+      opacity: OVERLAY_OPACITY_DEFAULT,
+      shortcut: 'Shift+Tab'
+    })
+    expect(migrateOverlayPrefs(null, 1)).toMatchObject({ opacity: OVERLAY_OPACITY_DEFAULT })
+  })
+})
+
+describe('normalizeOverlayPrefs (a cada carga, mesmo sem mudar de versão)', () => {
+  it('encaixa opacidade, posição/tamanho e atalho; mantém o resto', () => {
+    expect(
+      normalizeOverlayPrefs({
+        enabled: false,
+        opacity: 99,
+        layout: { position: { x: 2, y: 0.5 }, scale: 9 },
+        shortcut: 'O'
+      })
+    ).toEqual({
+      enabled: false,
+      opacity: 60,
+      layout: { position: { x: 1, y: 0.5 }, scale: 1.6 },
+      shortcut: 'Shift+Tab'
+    })
+  })
+
+  it('layout estragado (ex.: null) vira o padrão em vez de quebrar a tela de configurações', () => {
+    expect(normalizeOverlayPrefs({ layout: null }).layout).toEqual(OVERLAY_DEFAULT_LAYOUT)
+    expect(normalizeOverlayPrefs(undefined)).toEqual({
+      opacity: OVERLAY_OPACITY_DEFAULT,
+      layout: OVERLAY_DEFAULT_LAYOUT,
+      shortcut: 'Shift+Tab'
+    })
+  })
+})
+
+describe('atalho no estado do overlay', () => {
+  it('vai junto, normalizado, também fora da call', () => {
+    expect(buildOverlaySnapshot(input({ shortcut: 'alt+f9' })).shortcut).toBe('Alt+F9')
+    expect(buildOverlaySnapshot(input({ status: 'idle', shortcut: 'Tab' })).shortcut).toBe(
+      'Shift+Tab'
+    )
   })
 })

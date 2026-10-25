@@ -7,6 +7,7 @@ import { showToast } from '../store/toastStore'
 import BirthdayFields from './BirthdayFields'
 import { useNotificationPrefsStore } from '../store/notificationPrefsStore'
 import { useOverlayPrefsStore } from '../store/overlayPrefsStore'
+import OverlayShortcutField from './OverlayShortcutField'
 import { IS_WEB } from '../lib/config'
 import { permissionView, type WebPermission } from '../lib/webNotifications'
 import { browserPermission, requestBrowserPermission } from '../lib/browserNotifications'
@@ -226,10 +227,13 @@ function AppSettings(): React.JSX.Element | null {
             checked={overlayEnabled}
             onChange={() => setOverlayEnabled(!overlayEnabled)}
           />
-          <div className="mt-3 flex items-center justify-between gap-3">
-            <span className="text-xs text-gray-400">
-              Atalho: <kbd className="font-semibold text-gray-200">Shift+Tab</kbd> para mover e
-              redimensionar o overlay durante o jogo
+          <OverlayShortcutField disabled={!overlayEnabled} />
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <span>
+              <span className="block text-sm font-semibold text-white">Posição e tamanho</span>
+              <span className="block text-xs text-gray-400">
+                Volta para a esquerda, no meio da tela, no tamanho normal.
+              </span>
             </span>
             <button
               type="button"

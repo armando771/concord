@@ -15,9 +15,11 @@ import {
   type OverlayLayout,
   type OverlaySize
 } from '../lib/overlayLayout'
+import { normalizeOverlayShortcut } from '../lib/overlayShortcut'
 import VoiceStateIcons from '../components/call/VoiceStateIcons'
 
-const EDIT_HINT = 'Arraste para mover · canto para redimensionar · Shift+Tab ou Esc para sair'
+const editHint = (shortcut: string): string =>
+  `Arraste para mover · canto para redimensionar · ${shortcut} ou Esc para sair`
 
 /** Opacidade na pílula (não na janela nem na lista): quem fala se destaca dos outros. */
 function rowStyle(resting: number, speaking: boolean): React.CSSProperties {
@@ -243,7 +245,7 @@ function OverlayApp(): React.JSX.Element | null {
                 hintBelow ? 'top-full mt-3' : 'bottom-full mb-3'
               } ${hintRight ? 'right-0' : 'left-0'}`}
             >
-              {EDIT_HINT}
+              {editHint(normalizeOverlayShortcut(snapshot.shortcut))}
             </div>
           </>
         )}
