@@ -67,7 +67,14 @@ func newIssueCreator() proposal.IssueCreator {
 	if apiURL := os.Getenv("GITHUB_API_URL"); apiURL != "" {
 		if client, ok := creator.(*proposal.GitHubClient); ok {
 			log.Printf("[proposal] API do GitHub em %s", apiURL)
-			return client.WithBaseURL(apiURL)
+			creator = client.WithBaseURL(apiURL)
+		}
+	}
+	// API_PUBLIC_URL: endereço público do backend; com ele as imagens das
+	// propostas entram na issue (o GitHub precisa conseguir buscá-las).
+	if publicURL := os.Getenv("API_PUBLIC_URL"); publicURL != "" {
+		if client, ok := creator.(*proposal.GitHubClient); ok {
+			client.WithPublicURL(publicURL)
 		}
 	}
 	return creator
@@ -398,8 +405,13 @@ func main() {
 			techIDs = append(techIDs, id)
 		}
 	}
-	proposalService := proposal.ProposalService(proposal.ProposalRepository(db), hub, issueCreator, techIDs)
-	proposalHandler := proposal.ProposalHandler(proposalService)
+	// Imagens das propostas numa subpasta que a limpeza dos anexos não varre.
+	proposalImages, err := media.NewStore(filepath.Join(uploadsDir, proposal.ImagesDir))
+	if err != nil {
+		log.Fatalf("failed to open proposal images dir: %v", err)
+	}
+	proposalService := proposal.ProposalService(proposal.ProposalRepository(db), hub, issueCreator, proposalImages, techIDs)
+	proposalHandler := proposal.ProposalHandler(proposalService, proposalImages, uploadSpace)
 	go proposalService.Run(ctx)
 
 	// Badges do perfil (tempo transmitindo, madrugada, maior call... somados

@@ -1,14 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { ProposalStatus } from '../api/proposals'
 import { ApiError } from '../api/client'
 import Button from '../components/Button'
 import { DiamondIcon } from '../components/icons'
 import NewProposalModal from '../components/proposals/NewProposalModal'
+import ProposalDetailModal from '../components/proposals/ProposalDetailModal'
 import ProposalCard from '../components/proposals/ProposalCard'
 import { BOARD_COLUMNS, REJECTED_COLUMN } from '../lib/proposals'
 import { useAuthStore } from '../store/authStore'
 import { useProposalStore } from '../store/proposalStore'
 import { showToast } from '../store/toastStore'
+
+interface ProposalActions {
+  onVote: (approve: boolean) => Promise<void>
+  onRemoveVote: () => Promise<void>
+  onMove: (status: ProposalStatus) => Promise<void>
+  onDelete: () => Promise<void>
+}
 
 // Atualiza a contagem regressiva dos cards.
 const CLOCK_MS = 30_000
@@ -22,16 +31,42 @@ function Proposals(): React.JSX.Element {
   const removeVote = useProposalStore((s) => s.removeVote)
   const setStatus = useProposalStore((s) => s.setStatus)
   const remove = useProposalStore((s) => s.remove)
+  const markSeen = useProposalStore((s) => s.markSeen)
+  const markMentionsSeen = useProposalStore((s) => s.markMentionsSeen)
+  const pendingMentions = useProposalStore((s) => s.pendingMentions)
   const meId = useAuthStore((s) => s.user?.id ?? null)
 
   const [now, setNow] = useState(() => Date.now())
   const [creating, setCreating] = useState(false)
   const [showRejected, setShowRejected] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
+  // O card aberto fica na URL (?proposal=<id>): as notificações de menção abrem direto nele.
+  const [params, setParams] = useSearchParams()
+  const selectedId = params.get('proposal')
+  const selected = selectedId ? (proposals.find((p) => p.id === selectedId) ?? null) : null
 
   useEffect(() => {
     fetchProposals()
   }, [fetchProposals])
+
+  // Abrir o quadro zera o badge; sair marca de novo o que chegou enquanto estava aqui.
+  useEffect(() => {
+    markSeen()
+    return () => markSeen()
+  }, [markSeen])
+
+  // Proposta que não existe mais (apagada, ou link antigo): fecha o modal.
+  useEffect(() => {
+    if (selectedId && !loading && !selected) setParams({}, { replace: true })
+  }, [selectedId, selected, loading, setParams])
+
+  // Quem abre o card vê as menções dele, inclusive as que chegam com o modal aberto.
+  const hasMentionHere = selectedId
+    ? pendingMentions.some((m) => m.proposal_id === selectedId)
+    : false
+  useEffect(() => {
+    if (selectedId && hasMentionHere) void markMentionsSeen(selectedId)
+  }, [selectedId, hasMentionHere, markMentionsSeen])
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), CLOCK_MS)
@@ -62,6 +97,13 @@ function Proposals(): React.JSX.Element {
 
   const move = (id: string, status: ProposalStatus): Promise<void> =>
     run(id, () => setStatus(id, status), 'Não foi possível mover a proposta.')
+
+  const actions = (id: string): ProposalActions => ({
+    onVote: (approve) => run(id, () => vote(id, approve), 'Não foi possível votar.'),
+    onRemoveVote: () => run(id, () => removeVote(id), 'Não foi possível retirar o voto.'),
+    onMove: (status) => move(id, status),
+    onDelete: () => run(id, () => remove(id), 'Não foi possível excluir a proposta.')
+  })
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-[#07080b]/90 backdrop-blur-2xl text-gray-100">
@@ -115,16 +157,8 @@ function Proposals(): React.JSX.Element {
                           meId={meId}
                           isTech={isTech}
                           busy={busyId === p.id}
-                          onVote={(approve) =>
-                            run(p.id, () => vote(p.id, approve), 'Não foi possível votar.')
-                          }
-                          onRemoveVote={() =>
-                            run(p.id, () => removeVote(p.id), 'Não foi possível retirar o voto.')
-                          }
-                          onMove={(status) => move(p.id, status)}
-                          onDelete={() =>
-                            run(p.id, () => remove(p.id), 'Não foi possível excluir a proposta.')
-                          }
+                          onOpen={() => setParams({ proposal: p.id })}
+                          {...actions(p.id)}
                         />
                       ))
                     )}
@@ -137,6 +171,17 @@ function Proposals(): React.JSX.Element {
       </div>
 
       <NewProposalModal open={creating} onClose={() => setCreating(false)} />
+      {selected && (
+        <ProposalDetailModal
+          proposal={selected}
+          now={now}
+          meId={meId}
+          isTech={isTech}
+          busy={busyId === selected.id}
+          onClose={() => setParams({})}
+          {...actions(selected.id)}
+        />
+      )}
     </div>
   )
 }

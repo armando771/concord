@@ -51,3 +51,22 @@ func TestGitHubClientErrorStatus(t *testing.T) {
 		t.Fatalf("esperava erro 401, veio %v", err)
 	}
 }
+
+func TestIssueBodyImages(t *testing.T) {
+	p := Proposal{
+		Description: "Texto", AuthorName: "Ana",
+		Images: []Image{{ID: "1", URL: "/api/proposal-media/1"}, {ID: "2", URL: "/api/proposal-media/2"}},
+	}
+	got := issueBody(p, "https://api.exemplo.com")
+	for _, want := range []string{
+		"![Imagem 1](https://api.exemplo.com/api/proposal-media/1)",
+		"![Imagem 2](https://api.exemplo.com/api/proposal-media/2)",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("corpo sem %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(issueBody(p, ""), "![Imagem") {
+		t.Error("sem API_PUBLIC_URL a issue não pode ter imagens")
+	}
+}

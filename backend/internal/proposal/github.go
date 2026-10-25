@@ -22,6 +22,9 @@ type GitHubClient struct {
 	repo   string // owner/repo
 	http   *http.Client
 	base   string
+	// publicURL é o endereço público do backend (API_PUBLIC_URL): as imagens do
+	// card entram na issue como link absoluto. Vazio: a issue sai sem imagens.
+	publicURL string
 }
 
 // NewGitHubClient usa um token fixo (pessoal ou de uma conta robô). Para criar
@@ -45,6 +48,12 @@ func (g *GitHubClient) WithBaseURL(url string) *GitHubClient {
 	return g
 }
 
+// WithPublicURL informa onde o GitHub consegue buscar as imagens das propostas.
+func (g *GitHubClient) WithPublicURL(url string) *GitHubClient {
+	g.publicURL = strings.TrimRight(url, "/")
+	return g
+}
+
 func (g *GitHubClient) CreateIssue(ctx context.Context, p Proposal) (int, string, error) {
 	token, err := g.tokens.Token(ctx)
 	if err != nil {
@@ -52,7 +61,7 @@ func (g *GitHubClient) CreateIssue(ctx context.Context, p Proposal) (int, string
 	}
 	body, err := json.Marshal(map[string]any{
 		"title":  p.Title,
-		"body":   issueBody(p),
+		"body":   issueBody(p, g.publicURL),
 		"labels": []string{"proposta"},
 	})
 	if err != nil {
@@ -90,13 +99,19 @@ func (g *GitHubClient) CreateIssue(ctx context.Context, p Proposal) (int, string
 	return out.Number, out.HTMLURL, nil
 }
 
-func issueBody(p Proposal) string {
+func issueBody(p Proposal, publicURL string) string {
 	desc := strings.TrimSpace(p.Description)
 	if desc == "" {
 		desc = "_Sem descrição._"
 	}
+	var images strings.Builder
+	if publicURL != "" {
+		for i, img := range p.Images {
+			fmt.Fprintf(&images, "\n\n![Imagem %d](%s%s)", i+1, publicURL, img.URL)
+		}
+	}
 	return fmt.Sprintf(
-		"%s\n\n---\nProposta de **%s**, aprovada na votação da comunidade: %d sim, %d não.",
-		desc, p.AuthorName, p.YesVotes, p.NoVotes,
+		"%s%s\n\n---\nProposta de **%s**, aprovada na votação da comunidade: %d sim, %d não.",
+		desc, images.String(), p.AuthorName, p.YesVotes, p.NoVotes,
 	)
 }
