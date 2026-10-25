@@ -206,42 +206,74 @@ Numa VPS com IP público não precisa de playit, e dá para ter HTTPS de graça.
    - `UPLOADS_MIN_FREE_GB` (opcional; padrão 5): abaixo desse espaço livre no
      disco o servidor recusa uploads novos.
 4. **Endereço com HTTPS sem comprar domínio:** use `<ip-com-hífens>.sslip.io`
-   (ex.: `1-2-3-4.sslip.io` aponta para `1.2.3.4`). `/etc/caddy/Caddyfile`:
-   ```
-   1-2-3-4.sslip.io {
-   	reverse_proxy 127.0.0.1:8090
-   }
-   ```
-   O Caddy tira o certificado sozinho. O arquivo precisa ser legível pelo
+   (ex.: `1-2-3-4.sslip.io` aponta para `1.2.3.4`). O `/etc/caddy/Caddyfile`
+   é o [`deploy/Caddyfile`](../deploy/Caddyfile) do repositório, com o seu
+   endereço no lugar de `1-2-3-4.sslip.io` (veja
+   [Caddyfile](#caddyfile-sinalização-das-chamadas-direto-no-livekit)).
+   O Caddy tira o certificado sozinho. Precisa do Caddy **2.7 ou mais novo**
+   (`caddy version`; se o `apt` da distribuição trouxer um mais velho, instale
+   pelo repositório oficial do Caddy). O arquivo precisa ser legível pelo
    usuário `caddy` (`chmod 644`).
 5. **Serviço do backend:** `/etc/systemd/system/concord-server.service`, com
    `WorkingDirectory=/opt/concord`, `ExecStart=/opt/concord/concord-server` e
    `Restart=always`. Depois `systemctl enable --now concord-server`.
 6. **Do seu PC:** `scripts/deploy-vps.sh root@IP` envia o backend, as
    migrations, o compose, a página de download (`site/`) e as atualizações
-   do app, e reinicia. Reiniciar não
-   derruba quem está em chamada.
+   do app, e reinicia. Reiniciar não derruba quem está em chamada e, com o
+   Caddyfile do repositório, nem trava a voz/tela (a sinalização vai direto
+   para o LiveKit).
 7. **Publicar versão do app:** `scripts/release-win.sh`, `scripts/release-linux.sh` e depois
    `scripts/deploy-vps.sh root@IP`.
+
+### Caddyfile: sinalização das chamadas direto no LiveKit
+
+O [`deploy/Caddyfile`](../deploy/Caddyfile) é a cópia versionada do
+`/etc/caddy/Caddyfile` da VPS. O deploy **não** envia esse arquivo: mudar o
+Caddy é sempre um passo manual.
+
+- **`/rtc*` vai direto para o LiveKit** (`127.0.0.1:7880`, o `LIVEKIT_PORT`),
+  sem passar pelo backend. Antes, a sinalização do LiveKit passava pelo
+  backend: cada deploy cortava essa conexão, o cliente fazia um "ICE restart"
+  e a voz e a tela de todo mundo travavam por 0,3–1 s ao mesmo tempo.
+- O app já pede `/rtc` no mesmo endereço da API (`wss://<endereço>/rtc/v1`),
+  então os apps instalados passam a usar a rota nova **sem atualizar**.
+- **Todo bloco de site que serve o app precisa da rota `/rtc*`**: o endereço
+  da API (`PUBLIC_URL`), a versão web (ex.: `app-salinha.bhrx.com.br`) e
+  qualquer repasse antigo (ex.: o bloco `:8080` da migração). Basta pôr
+  `import salinha_rtc` no começo do bloco, antes dos outros `handle`. Um bloco
+  sem ela continua funcionando pelo proxy `/rtc` do backend, mas volta a travar
+  a voz a cada deploy.
+- `stream_close_delay 12h`: recarregar o Caddy (`systemctl reload caddy`) não
+  corta mais os WebSockets abertos (chat e chamadas).
+- O proxy `/rtc` do backend continua existindo para o PC de casa com playit
+  (um túnel TCP só, sem Caddy) e para blocos sem a rota. Lá, reiniciar o
+  backend ainda trava a voz por um instante.
+
+**Aplicar o Caddyfile (uma vez, com ninguém em chamada):** o
+`stream_close_delay` só protege conexões abertas por uma configuração que já o
+tem. O reload que aplica este arquivo pela primeira vez **fecha todos os
+WebSockets uma vez**: o chat reconecta sozinho, mas quem estiver em chamada
+perde a sinalização e a chamada reconecta (ou cai). Faça quando ninguém estiver
+em chamada:
+
+```bash
+cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak
+# edite /etc/caddy/Caddyfile a partir do deploy/Caddyfile (endereços e portas)
+caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+systemctl reload caddy
+curl -s -o /dev/null -w '%{http_code}\n' https://<endereço>/rtc/validate   # 401 (é o LiveKit)
+```
+
+Depois disso, reloads do Caddy não derrubam ninguém.
 
 **Página de download:** `site/` é uma página estática que lê
 `/updates/latest.yml` (Windows) e `/updates/latest-linux.yml` (Linux) e aponta
 cada botão para o artefato correspondente. A falha de um manifesto não bloqueia
 o download da outra plataforma. O deploy mantém os três instaladores Windows
-e três AppImages mais recentes. No
-Caddyfile, um domínio próprio serve a página e repassa `/updates/` ao backend:
-```
-salinha.exemplo.com {
-	encode zstd gzip
-	handle /updates/* {
-		reverse_proxy 127.0.0.1:8090
-	}
-	handle {
-		root * /opt/concord/site
-		file_server
-	}
-}
-```
+e três AppImages mais recentes. No Caddyfile, um domínio próprio serve a
+página e repassa `/updates/` ao backend (bloco `salinha.exemplo.com` do
+[`deploy/Caddyfile`](../deploy/Caddyfile)). Ele não serve o app, então não
+precisa da rota `/rtc*`.
 Para um endereço antigo continuar funcionando, um bloco
 `antigo.exemplo.com { redir https://salinha.exemplo.com{uri} permanent }`
 basta. O domínio precisa de um registro DNS `A` apontando para o IP da VPS (no

@@ -6,7 +6,9 @@
 # Envia o backend (binário Linux), migrations, docker-compose.yml, a página
 # de download (site/) e as atualizações do app (backend/updates, geradas por
 # release-win.sh/release-linux.sh) para /opt/concord e reinicia o backend. Reiniciar não derruba chamadas: o
-# backend recarrega as chamadas ativas e a mídia segue no LiveKit.
+# backend recarrega as chamadas ativas, e a mídia e a sinalização (/rtc, que o
+# Caddy manda direto para o LiveKit — deploy/Caddyfile) seguem no LiveKit.
+# O Caddyfile da VPS não é enviado (mudá-lo é manual; veja docs/HOSPEDAGEM.md).
 # O .env da VPS (/opt/concord/.env) não é tocado.
 # A mídia do chat (/opt/concord/uploads) nunca é enviada nem apagada pelo deploy.
 set -euo pipefail

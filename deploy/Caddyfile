@@ -1,0 +1,51 @@
+# /etc/caddy/Caddyfile da VPS — cópia versionada. O deploy (scripts/deploy-vps.sh)
+# NÃO envia este arquivo: aplicar uma mudança aqui é um passo manual, e a
+# primeira aplicação derruba a sinalização das chamadas uma vez (veja
+# docs/HOSPEDAGEM.md, seção "Caddyfile"). Requer Caddy 2.7 ou mais novo.
+#
+# Troque 1-2-3-4.sslip.io pelo endereço do PUBLIC_URL e salinha.exemplo.com
+# pelo da página de download. As portas são as do /opt/concord/.env: 8090 é o
+# PORT do backend e 7880 o LIVEKIT_PORT.
+
+# Sinalização do LiveKit (/rtc, /rtc/v1, /rtc/validate…) direto para o
+# LiveKit, sem passar pelo backend: reiniciar o backend não corta a
+# sinalização, e o cliente não faz o "ICE restart" que travava voz e tela por
+# ~1 s. O app já pede /rtc no mesmo endereço da API, então funciona sem
+# atualizar o app. Todo bloco de site que serve o app (endereço da API, versão
+# web…) precisa importar este trecho.
+(salinha_rtc) {
+	handle /rtc* {
+		reverse_proxy 127.0.0.1:7880 {
+			# Recarregar o Caddy não corta as conexões abertas (o padrão é
+			# fechar todo WebSocket a cada reload).
+			stream_close_delay 12h
+		}
+	}
+}
+
+# Backend (API, WebSocket do chat, /updates).
+(salinha_backend) {
+	reverse_proxy 127.0.0.1:8090 {
+		stream_close_delay 12h
+	}
+}
+
+# Endereço do app (PUBLIC_URL).
+1-2-3-4.sslip.io {
+	import salinha_rtc
+	handle {
+		import salinha_backend
+	}
+}
+
+# Página de download (site/), opcional.
+salinha.exemplo.com {
+	encode zstd gzip
+	handle /updates/* {
+		import salinha_backend
+	}
+	handle {
+		root * /opt/concord/site
+		file_server
+	}
+}

@@ -27,6 +27,11 @@ services:
 
     environment:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+      # A sinalização (/rtc) chega pelo Caddy, que a manda direto para cá na
+      # VPS (deploy/Caddyfile); no PC de casa, pelo proxy /rtc do backend.
+      # Não edite o texto do LIVEKIT_CONFIG à toa (nem os comentários dentro
+      # dele): ele vira variável do container, e qualquer mudança exige
+      # recriar o LiveKit, o que derruba todas as chamadas.
       # node_ip = IP público por onde os amigos chegam (playit/VPS). Vazio no
       # dev: o LiveKit usa o IP da máquina. As portas rtc precisam ser IGUAIS
       # às portas públicas do túnel, porque o LiveKit anuncia a própria porta.
