@@ -41,6 +41,7 @@ import { conversationTitle, sanitizeConversations } from '../lib/conversations'
 import type { PresenceMap } from '../api/presence'
 import { fetchPresence } from '../api/presence'
 import { listChannels } from '../api/channels'
+import { useChannelNameStore } from './channelNameStore'
 import { useServerStore } from './serverStore'
 import { handleServerRoleEvent, removedMessage } from './serverEvents'
 import { useFriendStore } from './friendStore'
@@ -880,6 +881,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (event.type === 'channel:create') {
       const serverId = payload.server_id as string
       if (serverId) {
+        useChannelNameStore.getState().invalidate(serverId)
         useServerStore.getState().fetchChannels(serverId)
         get().fetchChannelsForServers([serverId])
       }
@@ -889,6 +891,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (event.type === 'channel:update') {
       const serverId = payload.server_id as string
       if (serverId) {
+        useChannelNameStore.getState().invalidate(serverId)
         useServerStore.getState().fetchChannels(serverId)
         get().fetchChannelsForServers([serverId])
       }
@@ -922,6 +925,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (event.type === 'channel:delete') {
       const serverId = payload.server_id as string
       const channelId = payload.channel_id as string
+      if (serverId) useChannelNameStore.getState().invalidate(serverId)
       if (serverId && channelId) {
         const room = `channel:${channelId}`
         set((state) => {

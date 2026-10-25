@@ -11,8 +11,7 @@ import { useUserLook } from '../store/profileStore'
 import { useUserMenuStore } from '../store/userMenuStore'
 import { showToast } from '../store/toastStore'
 import Avatar from './Avatar'
-import VoiceConnectedPanel from './call/VoiceConnectedPanel'
-import UserBar from './UserBar'
+import SidebarFooter from './SidebarFooter'
 import { FriendsIcon, PlusIcon, XIcon } from './icons'
 import ResizeHandle from './ResizeHandle'
 import { useResizableWidth } from './useResizableWidth'
@@ -287,10 +286,8 @@ export function FriendsSidebar(): React.JSX.Element {
           </div>
         </div>
 
-        {/* Painel de voz conectada (estilo Discord) */}
-        <VoiceConnectedPanel />
-
-        <UserBar />
+        {/* "Voz conectada" na chamada + a barra do usuário (igual em todas as telas) */}
+        <SidebarFooter />
       </aside>
 
       {switcherOpen && <QuickSwitcherModal open onClose={() => setSwitcherOpen(false)} />}

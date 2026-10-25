@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { loadAudioPrefs, resolveDeviceId, saveAudioPrefs } from './audioDevices'
+import { deviceOptions, loadAudioPrefs, resolveDeviceId, saveAudioPrefs } from './audioDevices'
 
 function memoryStorage(): Storage {
   const data = new Map<string, string>()
@@ -49,5 +49,30 @@ describe('audioDevices', () => {
     expect(resolveDeviceId(devices, 'audioinput', 'mic-que-foi-desconectado')).toBe('')
     // id de saída não serve como entrada
     expect(resolveDeviceId(devices, 'audioinput', 'fone')).toBe('')
+  })
+
+  it('opções do seletor: "Padrão do sistema" e os dispositivos daquele tipo', () => {
+    expect(deviceOptions(devices, 'audioinput')).toEqual([
+      { id: '', label: 'Padrão do sistema' },
+      { id: 'mic-usb', label: 'Mic USB' },
+      { id: 'cam-mic', label: 'Webcam' }
+    ])
+    expect(deviceOptions(devices, 'audiooutput')).toEqual([
+      { id: '', label: 'Padrão do sistema' },
+      { id: 'fone', label: 'Fone' }
+    ])
+  })
+
+  it('sem permissão os nomes vêm vazios: numera os dispositivos', () => {
+    const unnamed = [
+      { deviceId: 'a', kind: 'audioinput', label: '' },
+      { deviceId: '', kind: 'audioinput', label: '' },
+      { deviceId: 'b', kind: 'audioinput', label: '' }
+    ] as MediaDeviceInfo[]
+    expect(deviceOptions(unnamed, 'audioinput')).toEqual([
+      { id: '', label: 'Padrão do sistema' },
+      { id: 'a', label: 'Dispositivo 1' },
+      { id: 'b', label: 'Dispositivo 2' }
+    ])
   })
 })
