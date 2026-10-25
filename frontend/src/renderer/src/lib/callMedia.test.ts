@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { groupTracks, StreamCache, type TrackEntry } from './callMedia'
+import {
+  groupTracks,
+  listScreenPublishers,
+  StreamCache,
+  wantsSubscription,
+  type TrackEntry
+} from './callMedia'
 
 function fakeTrack(id: string): MediaStreamTrack {
   return { id } as MediaStreamTrack
@@ -61,5 +67,38 @@ describe('StreamCache', () => {
     cache.get('ana:voice', [mic])
 
     expect(created).toBe(2)
+  })
+})
+
+describe('wantsSubscription', () => {
+  it('microfone e câmera sempre são assinados', () => {
+    expect(wantsSubscription('microphone', 'ana', new Set())).toBe(true)
+    expect(wantsSubscription('camera', 'ana', new Set())).toBe(true)
+  })
+
+  it('tela e som da tela só de quem estou assistindo', () => {
+    expect(wantsSubscription('screen_share', 'ana', new Set())).toBe(false)
+    expect(wantsSubscription('screen_share_audio', 'ana', new Set())).toBe(false)
+    expect(wantsSubscription('screen_share', 'ana', new Set(['ana']))).toBe(true)
+    expect(wantsSubscription('screen_share_audio', 'ana', new Set(['ana']))).toBe(true)
+    expect(wantsSubscription('screen_share', 'bia', new Set(['ana']))).toBe(false)
+  })
+})
+
+describe('listScreenPublishers', () => {
+  it('lista quem publica tela, sem repetir, na ordem de chegada', () => {
+    expect(
+      listScreenPublishers([
+        { userId: 'ana', source: 'microphone' },
+        { userId: 'ana', source: 'screen_share' },
+        { userId: 'ana', source: 'screen_share_audio' },
+        { userId: 'bia', source: 'screen_share' },
+        { userId: 'ana', source: 'screen_share' }
+      ])
+    ).toEqual(['ana', 'bia'])
+  })
+
+  it('sem tela devolve vazio', () => {
+    expect(listScreenPublishers([{ userId: 'ana', source: 'microphone' }])).toEqual([])
   })
 })

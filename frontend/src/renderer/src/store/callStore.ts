@@ -13,6 +13,14 @@ import type { MicHandle } from '../lib/noiseSuppression'
 import { CallMedia, type RemoteMedia } from '../lib/livekit'
 import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
+import { addWatched, miniPlayerOnly, pruneWatched, resolveFocus } from '../lib/screenWatch'
+import {
+  applyLiveEvent,
+  LIVE_GRACE_MS,
+  reapplyRecentLive,
+  type LivePayload,
+  type LiveRecord
+} from '../lib/liveBadge'
 import { callNotification, notifyDesktop } from '../lib/notifications'
 import { playSound, setSoundOutput } from '../lib/sounds'
 import {
@@ -90,6 +98,8 @@ interface CallState {
   type: CallKind | null
   conversationId: string | null
   channelId: string | null
+  /** servidor do canal de voz da chamada (rota de volta da miniatura) */
+  serverId: string | null
   participants: CallUserInfo[]
   isInitiator: boolean
   /** userId -> microfone remoto */
@@ -105,6 +115,14 @@ interface CallState {
   videoStreams: Record<string, MediaStream>
   /** userId -> nome de quem está na sala de mídia (LiveKit), mesmo fora da lista do backend */
   mediaPeers: Record<string, string>
+  /** userIds remotos com tela publicada na sala de mídia (assistida ou não) */
+  availableScreens: string[]
+  /** telas remotas que estou assistindo (só essas são baixadas); zera ao sair da call */
+  watchedScreenIds: string[]
+  /** palco da call (CallStage) montado = tela da call visível; senão a miniatura aparece */
+  stageVisible: boolean
+  /** chamada de DM minimizada (barrinha sobre o chat) */
+  dmMinimized: boolean
   /** stream da câmera local enquanto ligada (reativo p/ preview espelhado) */
   localCameraStream: MediaStream | null
   /** quem está compartilhando tela segundo o backend (registry) */
@@ -139,6 +157,14 @@ interface CallState {
   stopScreenShare: () => void
   toggleCamera: () => Promise<void>
   setFocusedScreenUser: (userId: string | null) => void
+  /** Começa a baixar e assistir a transmissão de alguém (e foca nela). */
+  watchScreen: (userId: string) => void
+  /** Fecha a transmissão: para de baixar e volta ao card "Assistir transmissão". */
+  stopWatchingScreen: (userId: string) => void
+  setStageVisible: (visible: boolean) => void
+  setDmMinimized: (minimized: boolean) => void
+  /** Clique na miniatura: põe em destaque uma transmissão que estou assistindo. */
+  focusWatchedScreen: (userId: string) => void
   setServerCalls: (map: Record<string, CallStateResponse>) => void
   joinVoiceChannel: (channelId: string) => Promise<void>
   /** WS de chat reconectou: volta a se registrar na chamada de canal, se houver. */
@@ -160,6 +186,9 @@ let localScreenStream: MediaStream | null = null
 let windowAudio: WindowAudio | null = null
 // Câmera local (não-reativa; o estado reativo é localCameraStream)
 let localCameraStream: MediaStream | null = null
+
+/** call:live recentes, reaplicados sobre o polling da lista do servidor. */
+let recentLive: LiveRecord[] = []
 
 /** Mute de antes de ensurdecer — volta a ele ao desensurdecer (como no Discord). */
 let mutedBeforeDeafen = false
@@ -190,7 +219,8 @@ const EMPTY_MEDIA: RemoteMedia = {
   screenStreams: {},
   screenAudioStreams: {},
   videoStreams: {},
-  mediaPeers: {}
+  mediaPeers: {},
+  availableScreens: []
 }
 
 export const useCallStore = create<CallState>()((set, get) => {
@@ -198,23 +228,29 @@ export const useCallStore = create<CallState>()((set, get) => {
     set((s) => ({ listVersion: s.listVersion + 1 }))
   }
 
-  const applyRemoteMedia = (remote: RemoteMedia): void => {
+  const applyRemoteMedia = ({ reconnecting, ...remote }: RemoteMedia): void => {
     set((s) => {
       const meId = useAuthStore.getState().user?.id ?? null
-      const isSharing = (id: string): boolean =>
-        Boolean(remote.screenStreams[id]) || (id === meId && s.isScreenSharing)
-      let focusedScreenUserId = s.focusedScreenUserId
-      if (focusedScreenUserId !== null && !isSharing(focusedScreenUserId)) {
-        // A tela em foco acabou: passa para a próxima (ou nenhuma).
-        focusedScreenUserId =
-          Object.keys(remote.screenStreams)[0] ?? (s.isScreenSharing ? meId : null)
-      } else if (focusedScreenUserId === null) {
-        // Sem foco: só uma tela que acabou de chegar ganha foco — quem saiu do
-        // modo foco não é puxado de volta a cada evento de mídia.
-        focusedScreenUserId =
-          Object.keys(remote.screenStreams).find((id) => !s.screenStreams[id]) ?? null
+      const availableScreens = remote.availableScreens ?? []
+      // Parou de transmitir: deixa de ser assistida (se voltar, começa pausada).
+      // Reconectando, as telas somem só por um instante: mantém o que assisto.
+      const watchedScreenIds = reconnecting
+        ? s.watchedScreenIds
+        : pruneWatched(s.watchedScreenIds, availableScreens)
+      // Nada ganha foco sozinho; o foco só muda se a tela em foco acabou. Uma
+      // assistida cujo vídeo ainda não chegou continua em foco.
+      const focusedScreenUserId = resolveFocus(
+        s.focusedScreenUserId,
+        watchedScreenIds,
+        s.isScreenSharing ? meId : null
+      )
+      return {
+        ...remote,
+        mediaPeers: remote.mediaPeers ?? {},
+        availableScreens,
+        watchedScreenIds,
+        focusedScreenUserId
       }
-      return { ...remote, mediaPeers: remote.mediaPeers ?? {}, focusedScreenUserId }
     })
   }
 
@@ -325,7 +361,7 @@ export const useCallStore = create<CallState>()((set, get) => {
           ),
           ...(replace ? {} : s.voiceStates)
         },
-        focusedScreenUserId: s.focusedScreenUserId ?? sharing[0] ?? null,
+        focusedScreenUserId: s.focusedScreenUserId,
         participants: replace
           ? others
           : [...s.participants, ...others.filter((p) => !s.participants.some((q) => q.id === p.id))]
@@ -355,7 +391,7 @@ export const useCallStore = create<CallState>()((set, get) => {
         useChatStore.getState().subscribeRoom(`call:${call.id}`)
         media?.disconnect()
         media = null
-        set({ callId: call.id, participants: [], ...EMPTY_MEDIA })
+        set({ callId: call.id, participants: [], ...EMPTY_MEDIA, watchedScreenIds: [] })
         void connectMedia(call.id)
       }
       await loadCallState(call.id, true)
@@ -390,6 +426,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       type: null,
       conversationId: null,
       channelId: null,
+      serverId: null,
       participants: [],
       isInitiator: false,
       ...EMPTY_MEDIA,
@@ -399,6 +436,8 @@ export const useCallStore = create<CallState>()((set, get) => {
       screenSharers: [],
       speakingIds: [],
       voiceStates: {},
+      watchedScreenIds: [],
+      dmMinimized: false,
       focusedScreenUserId: null,
       muted: false,
       deafened: false,
@@ -449,6 +488,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     type: null,
     conversationId: null,
     channelId: null,
+    serverId: null,
     participants: [],
     isInitiator: false,
     ...EMPTY_MEDIA,
@@ -458,6 +498,9 @@ export const useCallStore = create<CallState>()((set, get) => {
     screenSharers: [],
     speakingIds: [],
     voiceStates: {},
+    watchedScreenIds: [],
+    stageVisible: false,
+    dmMinimized: false,
     inputDeviceId: loadAudioPrefs().inputId,
     outputDeviceId: loadAudioPrefs().outputId,
     focusedScreenUserId: null,
@@ -522,6 +565,7 @@ export const useCallStore = create<CallState>()((set, get) => {
           type: 'channel',
           conversationId: null,
           channelId,
+          serverId: call.server_id ?? null,
           participants: [],
           isInitiator: false,
           streams: {},
@@ -743,6 +787,58 @@ export const useCallStore = create<CallState>()((set, get) => {
       set({ focusedScreenUserId: userId })
     },
 
+    watchScreen: (userId) => {
+      const s = get()
+      if (s.status !== 'active' || !s.availableScreens.includes(userId)) return
+      const next = addWatched(s.watchedScreenIds, userId)
+      set({ watchedScreenIds: next, focusedScreenUserId: userId })
+      media?.setWatchedScreens(next)
+    },
+
+    stopWatchingScreen: (userId) => {
+      const s = get()
+      const next = s.watchedScreenIds.filter((id) => id !== userId)
+      set({
+        watchedScreenIds: next,
+        focusedScreenUserId: s.focusedScreenUserId === userId ? null : s.focusedScreenUserId
+      })
+      media?.setWatchedScreens(next)
+    },
+
+    setStageVisible: (visible) => {
+      const s = get()
+      // Saiu da tela da call: a miniatura mostra uma transmissão só, e as
+      // outras param de baixar (e de tocar som) até a pessoa voltar e assistir.
+      const next = visible
+        ? s.watchedScreenIds
+        : miniPlayerOnly(s.watchedScreenIds, s.focusedScreenUserId, s.screenStreams)
+      if (next === s.watchedScreenIds) {
+        set({ stageVisible: visible })
+        return
+      }
+      const meId = useAuthStore.getState().user?.id ?? null
+      set({
+        stageVisible: visible,
+        watchedScreenIds: next,
+        focusedScreenUserId: resolveFocus(
+          s.focusedScreenUserId,
+          next,
+          s.isScreenSharing ? meId : null
+        )
+      })
+      media?.setWatchedScreens(next)
+    },
+
+    setDmMinimized: (minimized) => {
+      set({ dmMinimized: minimized })
+    },
+
+    focusWatchedScreen: (userId) => {
+      if (!get().watchedScreenIds.includes(userId)) return
+      // DM minimizada: a rota já é a da call, então só expandir mostra o palco.
+      set({ focusedScreenUserId: userId, dmMinimized: false })
+    },
+
     toggleCamera: async () => {
       const s = get()
       if (s.type === null || s.status !== 'active' || transitioning) return
@@ -793,7 +889,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     },
 
     setServerCalls: (map) => {
-      set({ serverCalls: map })
+      set({ serverCalls: reapplyRecentLive(map, recentLive, Date.now()) })
     },
 
     joinVoiceChannel: async (channelId) => {
@@ -904,13 +1000,26 @@ export const useCallStore = create<CallState>()((set, get) => {
             screenSharers: p.active
               ? Array.from(new Set([...s.screenSharers, p.user.id]))
               : s.screenSharers.filter((id) => id !== p.user.id),
-            focusedScreenUserId: p.active
-              ? (s.focusedScreenUserId ?? p.user.id)
-              : s.focusedScreenUserId === p.user.id
-                ? null
-                : s.focusedScreenUserId,
+            // Transmissão nova começa pausada: só a que acabou perde o foco.
+            focusedScreenUserId:
+              !p.active && s.focusedScreenUserId === p.user.id ? null : s.focusedScreenUserId,
             participants: upsertParticipant(s.participants, p.user)
           }))
+          return
+        }
+
+        case 'call:live': {
+          // Selo LIVE na lista do servidor (inclusive de chamadas em que não estou).
+          const p = payload as unknown as LivePayload
+          const now = Date.now()
+          recentLive = [
+            ...recentLive.filter((r) => now - r.at < LIVE_GRACE_MS),
+            { payload: p, at: now }
+          ]
+          const known = Object.values(get().serverCalls).some((e) => e.call?.id === p.call_id)
+          set((s) => ({ serverCalls: applyLiveEvent(s.serverCalls, p) }))
+          // Chamada que começou depois do último polling: busca a lista agora.
+          if (!known) bumpList()
           return
         }
 
@@ -967,6 +1076,35 @@ export const useCallStore = create<CallState>()((set, get) => {
         case 'call:busy': {
           showToast.error('O usuário está ocupado em outra chamada.')
           cleanup()
+          return
+        }
+
+        case 'call:moved': {
+          // Um moderador moveu alguém de canal de voz: as listas mudam.
+          bumpList()
+          const p = payload as unknown as {
+            from_call_id: string
+            channel_id: string
+            channel_name: string
+            user: CallUserInfo
+            moved_by: CallUserInfo
+          }
+          if (p.user.id !== meId || get().callId !== p.from_call_id) return
+          // Fui eu: o servidor já me colocou no canal novo; troca a mídia de
+          // sala mantendo o mute/ensurdecer de antes.
+          const { muted, deafened } = get()
+          cleanup()
+          void get()
+            .startChannelCall(p.channel_id)
+            .then(() => {
+              if (get().channelId !== p.channel_id) return
+              set({ muted: muted || deafened, deafened })
+              applyMute(muted || deafened)
+              sendVoiceState()
+              showToast.info(
+                `${p.moved_by.display_name || 'Um moderador'} moveu você para ${p.channel_name || 'outro canal'}.`
+              )
+            })
           return
         }
 

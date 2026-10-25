@@ -91,6 +91,15 @@ type ErrorEvent struct {
 	Message string `json:"message"`
 }
 
+// LiveEvent: participante começou/parou de transmitir. Vai para a sala do
+// servidor (selo LIVE na lista do canal de voz de quem está fora da chamada).
+type LiveEvent struct {
+	CallID    string  `json:"call_id"`
+	ChannelID *string `json:"channel_id,omitempty"`
+	UserID    string  `json:"user_id"`
+	Active    bool    `json:"active"`
+}
+
 // Client -> Server payloads
 
 type InvitePayload struct {

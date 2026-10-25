@@ -7,7 +7,7 @@ export function ToastContainer(): React.JSX.Element {
   if (toasts.length === 0) return <></>
 
   return (
-    <div className="pointer-events-none fixed top-4 right-4 z-50 flex flex-col gap-2.5 max-w-sm w-full">
+    <div className="pointer-events-none fixed top-[calc(var(--titlebar-height,0px)+1rem)] right-4 z-50 flex flex-col gap-2.5 max-w-sm w-full">
       {toasts.map((toast) => {
         const isSuccess = toast.type === 'success'
         const isError = toast.type === 'error'

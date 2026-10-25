@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { setMemberRole } from '../api/servers'
+import { moveToVoiceChannel } from '../api/calls'
+import { canMoveVoiceUser, voiceChannelOf } from '../lib/voiceMove'
 import router from '../router'
 import { useAuthStore } from '../store/authStore'
 import { useCallStore } from '../store/callStore'
@@ -17,7 +19,8 @@ const itemClass =
 /**
  * Botão direito em um usuário (como no Discord): mensagem e amizade para
  * todos; volume e silenciar para quem está na chamada com você; para o dono
- * do servidor, tornar moderador.
+ * do servidor, tornar moderador; para moderadores, mover para outro canal de
+ * voz.
  */
 function UserContextMenu(): React.JSX.Element | null {
   const target = useUserMenuStore((s) => s.target)
@@ -38,6 +41,13 @@ function UserContextMenu(): React.JSX.Element | null {
   const sendRequest = useFriendStore((s) => s.sendRequest)
   const server = useServerStore((s) => s.currentServer)
   const member = useServerStore((s) => s.currentMembers.find((m) => m.user_id === target?.userId))
+  const amModerator = useServerStore(
+    (s) =>
+      Boolean(s.currentServer && s.currentServer.owner_id === meId) ||
+      s.currentMembers.some((m) => m.user_id === meId && m.role === 'admin')
+  )
+  const channels = useServerStore((s) => s.channels)
+  const serverCalls = useCallStore((s) => s.serverCalls)
   const ref = useRef<HTMLDivElement | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -114,6 +124,31 @@ function UserContextMenu(): React.JSX.Element | null {
   const isModerator = member?.role === 'admin'
   const username = target.username || member?.username || callUsername
 
+  const fromChannel = voiceChannelOf(serverCalls, target.userId)
+  const moveTargets =
+    fromChannel &&
+    canMoveVoiceUser({
+      meId,
+      ownerId: server?.owner_id,
+      isModerator: amModerator,
+      targetId: target.userId
+    })
+      ? channels.filter((ch) => ch.type === 'voice' && ch.id !== fromChannel)
+      : []
+
+  const moveTo = async (channelId: string, channelName: string): Promise<void> => {
+    setSaving(true)
+    try {
+      await moveToVoiceChannel(target.userId, channelId)
+      showToast.success(`${target.name} foi movido para ${channelName}.`)
+      close()
+    } catch (err) {
+      showToast.error(err instanceof Error ? err.message : 'Não foi possível mover.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const sendMessage = (): void => {
     close()
     void router.navigate(`/dm/${target.userId}`)
@@ -169,6 +204,28 @@ function UserContextMenu(): React.JSX.Element | null {
         <>
           <div className="my-1 h-px bg-white/10" />
           {volumeControls('Volume do usuário', 'Silenciar')}
+        </>
+      )}
+
+      {moveTargets.length > 0 && (
+        <>
+          <div className="my-1 h-px bg-white/10" />
+          <p className="px-2 pt-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-500">
+            Mover para
+          </p>
+          <div className="flex max-h-40 flex-col gap-0.5 overflow-y-auto">
+            {moveTargets.map((ch) => (
+              <button
+                key={ch.id}
+                role="menuitem"
+                disabled={saving}
+                onClick={() => void moveTo(ch.id, ch.name)}
+                className={`${itemClass} truncate`}
+              >
+                🔊 {ch.name}
+              </button>
+            ))}
+          </div>
         </>
       )}
 
