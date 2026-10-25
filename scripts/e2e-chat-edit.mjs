@@ -1,10 +1,13 @@
 // E2E do chat no app web: editar mensagem (canal e DM, o outro lado vê
 // "(editada)"), selecionar/copiar texto e clicar em link. Não precisa de LiveKit.
-// Uso: backend rodando e o dist-web servido com o proxy do backend:
+// Uso: backend rodando (sem SMTP, com a saída num arquivo: o e-mail de
+// confirmação sai no log) e o dist-web servido com o proxy do backend:
+//   (backend)  go run ./cmd > /tmp/backend.log 2>&1
 //   (frontend) yarn build:web && WEB_BACKEND_URL=http://localhost:8080 yarn preview:web
-//   APP=http://localhost:4173/ SHOTS=./shots CHROME=<chromium> node scripts/e2e-chat-edit.mjs
+//   APP=http://localhost:4173/ BACKEND_LOG=/tmp/backend.log SHOTS=./shots CHROME=<chromium> \
+//     node scripts/e2e-chat-edit.mjs
 import { createRequire } from 'module'
-import { mkdirSync } from 'fs'
+import { mkdirSync, readFileSync } from 'fs'
 const require = createRequire(new URL('../frontend/package.json', import.meta.url))
 const { chromium } = require('playwright')
 
@@ -25,6 +28,26 @@ async function api(path, { token, method = 'GET', body } = {}) {
   return text ? JSON.parse(text) : null
 }
 
+/**
+ * Confirma o e-mail como o usuário faria: sem SMTP o backend imprime o e-mail
+ * no log (LogMailer), e o link traz o token.
+ */
+async function verifyEmail(email) {
+  if (!process.env.BACKEND_LOG) throw new Error('defina BACKEND_LOG (saída do backend) para confirmar o e-mail')
+  const start = Date.now()
+  while (Date.now() - start < 10000) {
+    const log = readFileSync(process.env.BACKEND_LOG, 'utf8')
+    const at = log.lastIndexOf(`para ${email}`)
+    const token = at >= 0 && /\/verify-email\?token=([^\s&]+)/.exec(log.slice(at))?.[1]
+    if (token) {
+      await api('/auth/verify-email', { method: 'POST', body: { token: decodeURIComponent(token) } })
+      return
+    }
+    await new Promise((r) => setTimeout(r, 100))
+  }
+  throw new Error(`e-mail de confirmação de ${email} não apareceu no log do backend`)
+}
+
 async function makeUser(name) {
   const email = `${name}-${run}@teste.dev`
   const password = 'senha-forte-123'
@@ -32,6 +55,7 @@ async function makeUser(name) {
     method: 'POST',
     body: { username: `${name}${run}`, display_name: name, email, password }
   })
+  await verifyEmail(email)
   const me = await api('/users/me', { token: access_token })
   return { email, password, token: access_token, id: me.id ?? me.user?.id, username: `${name}${run}` }
 }
