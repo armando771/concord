@@ -11,6 +11,8 @@ import { ApiError } from '../api/client'
 import { getAudioStream, getCameraStream, getDisplayStream } from '../lib/rtc'
 import type { MicHandle } from '../lib/noiseSuppression'
 import { CallMedia, type RemoteMedia } from '../lib/livekit'
+import { watchLocalSpeaking } from '../lib/localSpeaking'
+import { mergeLocalSpeaking, sameIds } from '../lib/voiceActivity'
 import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
 import { addWatched, miniPlayerOnly, pruneWatched, resolveFocus } from '../lib/screenWatch'
@@ -138,7 +140,11 @@ interface CallState {
   outputDeviceId: string
   /** userId -> mudo/ensurdecido dos outros participantes (evento call:voice) */
   voiceStates: Record<string, VoiceState>
-  /** userIds falando agora (detecção do LiveKit; inclui o próprio usuário) */
+  /**
+   * userIds falando agora: os outros pela detecção do LiveKit (servidor); o
+   * próprio usuário pela detecção local do microfone publicado (sem o atraso
+   * da ida e volta ao servidor), ou pelo servidor se a local não carregar.
+   */
   speakingIds: string[]
   /** tela em foco no layout expandido (estilo Go Live) */
   focusedScreenUserId: string | null
@@ -189,6 +195,13 @@ let resyncing = false
 /** Conexão com o servidor de mídia (LiveKit) da chamada atual. */
 let media: CallMedia | null = null
 
+/** Quem está falando segundo o servidor (ActiveSpeakersChanged). */
+let serverSpeakers: string[] = []
+/** Fala do próprio usuário detectada aqui; null = sem detecção local. */
+let localSpeaking: boolean | null = null
+/** Detecção local em andamento (identifica callbacks de uma já parada). */
+let speakingWatch: { track: MediaStreamTrack; stop: () => void } | null = null
+
 // Compartilhamento de tela (não-reativo; o estado reativo é localScreenStream)
 let localScreenStream: MediaStream | null = null
 // Som só da janela compartilhada (Windows), quando o helper nativo captura
@@ -232,6 +245,48 @@ const EMPTY_MEDIA: RemoteMedia = {
 export const useCallStore = create<CallState>()((set, get) => {
   const bumpList = (): void => {
     set((s) => ({ listVersion: s.listVersion + 1 }))
+  }
+
+  /**
+   * Junta servidor (os outros) e detecção local (eu). Mudo nunca está
+   * falando — nem quando a detecção local caiu e o servidor ainda me lista
+   * (ele demora a perceber o mute).
+   */
+  const publishSpeaking = (): void => {
+    const meId = useAuthStore.getState().user?.id ?? null
+    const local = get().muted ? false : localSpeaking
+    const next = mergeLocalSpeaking(serverSpeakers, meId, local)
+    if (!sameIds(get().speakingIds, next)) set({ speakingIds: next })
+  }
+
+  const stopLocalSpeaking = (): void => {
+    speakingWatch?.stop()
+    speakingWatch = null
+    localSpeaking = null
+  }
+
+  /** (Re)inicia a detecção local na track do microfone da chamada. */
+  const startLocalSpeaking = (): void => {
+    stopLocalSpeaking()
+    const mic = localMic
+    const track = mic?.stream.getAudioTracks()[0]
+    if (!mic || !track) return
+    const watch = { track, stop: () => {} }
+    speakingWatch = watch
+    localSpeaking = false
+    watch.stop = watchLocalSpeaking(mic, {
+      onChange: (speaking) => {
+        if (speakingWatch !== watch) return
+        localSpeaking = speaking
+        publishSpeaking()
+      },
+      onUnavailable: () => {
+        if (speakingWatch !== watch) return
+        localSpeaking = null
+        publishSpeaking()
+      }
+    })
+    publishSpeaking()
   }
 
   const applyRemoteMedia = ({ reconnecting, ...remote }: RemoteMedia): void => {
@@ -285,10 +340,15 @@ export const useCallStore = create<CallState>()((set, get) => {
         if (media === connection) showToast.info('Chamada reconectada.')
       },
       onActiveSpeakers: (userIds) => {
-        if (media === connection) set({ speakingIds: userIds })
+        if (media !== connection) return
+        serverSpeakers = userIds
+        publishSpeaking()
       }
     })
     media = connection
+    // Mesma track que vai ser publicada; sobrevive à troca de sala (resync).
+    // Só reinicia se a detecção ficou presa a uma track antiga.
+    if (speakingWatch?.track !== mic) startLocalSpeaking()
 
     try {
       const { token } = await retry(() => getCallToken(callId), {
@@ -397,7 +457,9 @@ export const useCallStore = create<CallState>()((set, get) => {
         useChatStore.getState().subscribeRoom(`call:${call.id}`)
         media?.disconnect()
         media = null
+        serverSpeakers = []
         set({ callId: call.id, participants: [], ...EMPTY_MEDIA, watchedScreenIds: [] })
+        publishSpeaking()
         void connectMedia(call.id)
       }
       await loadCallState(call.id, true)
@@ -420,6 +482,8 @@ export const useCallStore = create<CallState>()((set, get) => {
     if (callId) useChatStore.getState().unsubscribeRoom(`call:${callId}`)
     media?.disconnect()
     media = null
+    stopLocalSpeaking()
+    serverSpeakers = []
     stopLocalStream()
     localScreenStream?.getTracks().forEach((t) => t.stop())
     localScreenStream = null
@@ -676,6 +740,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       // Desmutar enquanto ensurdecido também tira o ensurdecer.
       set(next ? { muted: true } : { muted: false, deafened: false })
       applyMute(next)
+      publishSpeaking()
       sendVoiceState()
       playSound(next ? 'mute' : 'unmute')
     },
@@ -690,6 +755,7 @@ export const useCallStore = create<CallState>()((set, get) => {
         set({ deafened: false, muted: get().mutedBeforeDeafen })
         applyMute(get().mutedBeforeDeafen)
       }
+      publishSpeaking()
       sendVoiceState()
       playSound(next ? 'deafen' : 'undeafen')
     },
@@ -714,6 +780,8 @@ export const useCallStore = create<CallState>()((set, get) => {
       const track = next.stream.getAudioTracks()[0]
       track.enabled = !get().muted
       localMic = next
+      // A detecção segue o microfone publicado.
+      if (speakingWatch) startLocalSpeaking()
       try {
         await media?.replaceMic(track)
         // O SDK muta sozinho quando a track antiga morre (ex.: headset tirado).
@@ -1133,6 +1201,7 @@ export const useCallStore = create<CallState>()((set, get) => {
               if (get().channelId !== p.channel_id) return
               set({ muted: muted || deafened, deafened })
               applyMute(muted || deafened)
+              publishSpeaking()
               sendVoiceState()
               showToast.info(
                 `${p.moved_by.display_name || 'Um moderador'} moveu você para ${p.channel_name || 'outro canal'}.`

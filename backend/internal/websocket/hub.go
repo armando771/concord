@@ -205,6 +205,15 @@ func (h *Hub) BroadcastAll(event []byte) {
 	}
 }
 
+// PublishAppUpdate avisa todos os apps conectados que saiu versão nova
+// (manifesto do electron-updater mudou): eles checam na hora.
+func (h *Hub) PublishAppUpdate(file, version string) {
+	h.BroadcastAll(writeEvent("app:update", map[string]string{
+		"file":    file,
+		"version": version,
+	}))
+}
+
 func (h *Hub) IsOnline(userID string) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
