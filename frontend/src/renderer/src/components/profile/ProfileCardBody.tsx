@@ -5,7 +5,7 @@ import { detectProvider, linkLabel, splitLinks } from '../../lib/profileLinks'
 import type { PresenceStatus } from '../../lib/presenceStatus'
 import Avatar from '../Avatar'
 import { GamepadIcon, PencilIcon, PlusIcon } from '../icons'
-import { activityElapsed } from '../../lib/presenceActivity'
+import { Elapsed } from '../ActivityCard'
 import { useActivity } from '../../store/presenceActivityStore'
 import LinkIcon from './LinkIcon'
 
@@ -177,7 +177,7 @@ function ProfileCardBody({
               <GamepadIcon className="h-4 w-4 shrink-0 text-gray-400" />
               <span className="truncate">{game.name}</span>
               <span className="shrink-0 text-ds-xs font-normal text-gray-400">
-                {activityElapsed(game.started_at, Date.now())}
+                <Elapsed startedAt={game.started_at} />
               </span>
             </p>
           </div>

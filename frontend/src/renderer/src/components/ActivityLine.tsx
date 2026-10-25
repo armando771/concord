@@ -1,16 +1,6 @@
 import { activityLine } from '../lib/presenceActivity'
-import { useAuthStore } from '../store/authStore'
-import { useCallStore } from '../store/callStore'
-import { useActivity } from '../store/presenceActivityStore'
+import { useActivity, useInVoice } from '../store/presenceActivityStore'
 import { GamepadIcon, VolumeIcon } from './icons'
-
-/** Está na chamada em andamento comigo (ou sou eu nela). */
-export function useInVoice(userId: string): boolean {
-  const meId = useAuthStore((s) => s.user?.id)
-  const inCall = useCallStore((s) => s.status === 'active')
-  const isParticipant = useCallStore((s) => s.participants.some((p) => p.id === userId))
-  return inCall && (userId === meId || isParticipant)
-}
 
 /** Só o jogo (ícone + nome); nada se a pessoa não está jogando. */
 export function GameLine({

@@ -34,6 +34,7 @@ modular e fácil de evoluir.
 **Social**
 - Amigos: buscar, enviar/aceitar/recusar/cancelar solicitações, bloquear
 - DMs e **conversas em grupo**, com contagem de não lidas e presença online ao vivo
+- **Em atividade**: o jogo em andamento aparece embaixo do nome e na coluna "Atividade" (só Windows). Ver [docs/ATIVIDADE.md](docs/ATIVIDADE.md)
 
 **Servidores**
 - Criar, editar, ordenar e convidar (código/link de convite, com pré-visualização)
@@ -246,6 +247,7 @@ Autenticação via header `Authorization: Bearer <access_token>` (exceto rotas p
 | ... | `/api/calls/*` | criar/estado/encerrar chamadas, token LiveKit, moderação |
 | ... | `/api/soundboard/*` | mesa de áudio |
 | GET | `/api/presence?ids=` | status online |
+| GET | `/api/presence/activities?ids=` | jogo em andamento de quem posso ver |
 
 > A lista completa de endpoints está no código (`internal/*/routes.go`).
 
@@ -255,7 +257,7 @@ Endpoint: `GET /ws?token=<access_token>`.
 O cliente entra em salas com `{"type":"subscribe","payload":{"room":"..."}}`
 (`channel:`, `conversation:`, `server:`, `user:`, `call:`).
 
-Eventos principais: `presence:update`, `message:create|update|delete`,
+Eventos principais: `presence:update`, `presence:activity`, `message:create|update|delete`,
 `message:reaction:*`, `message:poll:update`, `typing:*`, `channel:*`, `server:*`
 (inclui `server:member:*` e `server:permissions:invalidate`), `role:*`,
 `conversation:*`, `friend:request*|removed`, `level:*`, `badge:unlock`,
@@ -332,4 +334,5 @@ yarn build:linux  # instalador Linux
 
 - [docs/HOSPEDAGEM.md](docs/HOSPEDAGEM.md): hospedar para os amigos e rodar numa VPS
 - [docs/CARGOS.md](docs/CARGOS.md): cargos, permissões e hierarquia
+- [docs/ATIVIDADE.md](docs/ATIVIDADE.md): jogo em andamento (rich presence)
 - `FRONTEND_PLAN.md`, `PLANO_CALLS_WEBRTC.md` e `backend/MVP.md`: planos da fase inicial, mantidos como histórico

@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { sanitizeActivity, type PresenceActivity } from '../lib/presenceActivity'
+import { useAuthStore } from './authStore'
+import { useCallStore } from './callStore'
 import { useChatStore } from './chatStore'
 
 interface PresenceActivityState {
@@ -76,4 +78,12 @@ export const usePresenceActivityStore = create<PresenceActivityState>()(
 /** Atividade (jogo) de um usuário, ou null. */
 export function useActivity(userId: string | undefined): PresenceActivity | null {
   return usePresenceActivityStore((s) => (userId ? (s.byUser[userId] ?? null) : null))
+}
+
+/** Está na chamada em andamento comigo (ou sou eu nela). */
+export function useInVoice(userId: string): boolean {
+  const meId = useAuthStore((s) => s.user?.id)
+  const inCall = useCallStore((s) => s.status === 'active')
+  const isParticipant = useCallStore((s) => s.participants.some((p) => p.id === userId))
+  return inCall && (userId === meId || isParticipant)
 }

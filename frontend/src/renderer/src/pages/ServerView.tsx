@@ -27,8 +27,8 @@ import { groupMembers, memberColor } from '../lib/memberGroups'
 import { chatPermissionsFor } from '../lib/chatPermissions'
 import { Perm, roleColorCss } from '../lib/permissions'
 import { serverDisplayName } from '../lib/serverNames'
-import { ActivityLine, useInVoice } from '../components/ActivityLine'
-import { useActivity } from '../store/presenceActivityStore'
+import { ActivityLine } from '../components/ActivityLine'
+import { useActivity, useInVoice } from '../store/presenceActivityStore'
 import {
   lastServerChannel,
   rememberServerChannel,

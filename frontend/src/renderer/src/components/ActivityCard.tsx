@@ -1,7 +1,14 @@
+import { useState } from 'react'
 import { gameAccent } from '../../../shared/gameCatalog'
 import { activityElapsed, type PresenceActivity } from '../lib/presenceActivity'
 import Avatar from './Avatar'
 import { GamepadIcon } from './icons'
+
+/** "há 5 min": o tempo é lido uma vez por montagem (o cartão reabre a cada visita). */
+export function Elapsed({ startedAt }: { startedAt: number }): React.JSX.Element {
+  const [now] = useState(() => Date.now())
+  return <>{activityElapsed(startedAt, now)}</>
+}
 
 /** Card da coluna "Atividade": amigo, jogo em destaque e há quanto tempo. */
 export function ActivityCard({
@@ -32,7 +39,7 @@ export function ActivityCard({
         </p>
         <p className="truncate text-ds-md font-bold text-white">{activity.name}</p>
         <p className="truncate text-ds-xs text-gray-400">
-          {activityElapsed(activity.started_at, Date.now())}
+          <Elapsed startedAt={activity.started_at} />
         </p>
       </div>
       <span
