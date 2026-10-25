@@ -30,3 +30,31 @@ export function measureOffset(scroller: HTMLElement, element: HTMLElement): numb
     scroller.scrollTop
   )
 }
+
+/** Mensagem já carregada no clique e sua posição no conteúdo naquele momento. */
+export interface AnchorCandidate {
+  id: string
+  offset: number
+}
+
+/**
+ * Âncora usada na volta: a antiga primeira mensagem ou, se ela foi apagada
+ * durante o carregamento, a mais próxima dela que ainda está na tela.
+ */
+export function pickAnchor(
+  candidates: AnchorCandidate[],
+  isPresent: (id: string) => boolean
+): AnchorCandidate | null {
+  return candidates.find((c) => isPresent(c.id)) ?? null
+}
+
+/**
+ * Entrou página antiga em cima? A nova primeira não é nenhuma das que já
+ * estavam (se for, só sumiu a de cima — apagada — e a página ainda vem).
+ */
+export function olderPagePrepended(
+  firstId: string | undefined,
+  candidates: AnchorCandidate[]
+): boolean {
+  return firstId !== undefined && !candidates.some((c) => c.id === firstId)
+}

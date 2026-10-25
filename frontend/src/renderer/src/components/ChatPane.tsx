@@ -32,7 +32,13 @@ import { ApiError } from '../api/client'
 import VoiceRecordButton from './chat/VoiceRecordButton'
 import ComposerAttachments from './chat/ComposerAttachments'
 import { useAttachmentDraft } from './chat/useAttachmentDraft'
-import { anchoredScrollTop, measureOffset } from '../lib/scrollAnchor'
+import {
+  anchoredScrollTop,
+  measureOffset,
+  olderPagePrepended,
+  pickAnchor,
+  type AnchorCandidate
+} from '../lib/scrollAnchor'
 
 export interface Mentionable {
   username: string
@@ -49,6 +55,8 @@ interface ChatPaneProps {
 }
 
 const MAX_SUGGESTIONS = 6
+/** Reservas da âncora do loadOlder (a primeira e as seguintes). */
+const ANCHOR_CANDIDATES = 20
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -420,16 +428,17 @@ function ChatPane({
     }
   }
   // Por sala: o ServerView reaproveita o ChatPane entre canais, e o
-  // carregamento de um canal não pode travar o botão do outro.
-  const [loadingOlderRoom, setLoadingOlderRoom] = useState<string | null>(null)
-  const loadingOlder = loadingOlderRoom === room
+  // carregamento de um canal não pode travar (nem destravar) o botão do outro.
+  const [loadingOlderRooms, setLoadingOlderRooms] = useState<ReadonlySet<string>>(new Set())
+  const loadingOlder = loadingOlderRooms.has(room)
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
   const firstRender = useRef(true)
   // loadOlder: a antiga primeira mensagem (e sua posição no conteúdo) fica
-  // no mesmo lugar da tela quando a página antiga entra em cima dela.
-  const olderAnchor = useRef<{ room: string; firstId: string; offset: number } | null>(null)
+  // no mesmo lugar da tela quando a página antiga entra em cima dela. As
+  // seguintes vão junto, de reserva, caso ela seja apagada durante a espera.
+  const olderAnchor = useRef<{ room: string; candidates: AnchorCandidate[] } | null>(null)
 
   useEffect(() => {
     stickToBottom.current = true
@@ -455,13 +464,19 @@ function ChatPane({
   useLayoutEffect(() => {
     const el = scrollRef.current
     const anchor = olderAnchor.current
-    // Só quando algo entrou em cima (a primeira mudou); mensagem ao vivo
-    // embaixo não mexe na âncora.
-    if (!el || !anchor || firstId === anchor.firstId) return
+    // Só quando a página antiga entrou em cima; mensagem ao vivo embaixo (ou a
+    // de cima apagada) não gasta a âncora.
+    if (!el || !anchor || !olderPagePrepended(firstId, anchor.candidates)) return
     olderAnchor.current = null
-    const oldFirst = document.getElementById(`msg-${anchor.firstId}`)
-    if (anchor.room !== room || !oldFirst || !el.contains(oldFirst)) return
-    el.scrollTop = anchoredScrollTop(el.scrollTop, anchor.offset, measureOffset(el, oldFirst))
+    if (anchor.room !== room) return
+    const elementOf = (id: string): HTMLElement | null => {
+      const node = document.getElementById(`msg-${id}`)
+      return node && el.contains(node) ? node : null
+    }
+    const kept = pickAnchor(anchor.candidates, (id) => elementOf(id) !== null)
+    const node = kept && elementOf(kept.id)
+    if (!kept || !node) return
+    el.scrollTop = anchoredScrollTop(el.scrollTop, kept.offset, measureOffset(el, node))
   }, [firstId, room])
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>): void => {
@@ -472,19 +487,31 @@ function ChatPane({
   const handleLoadOlder = async (): Promise<void> => {
     if (loadingOlder) return
     const startedRoom = room
-    setLoadingOlderRoom(startedRoom)
+    setLoadingOlderRooms((current) => new Set(current).add(startedRoom))
     const el = scrollRef.current
-    const first = firstId ? document.getElementById(`msg-${firstId}`) : null
-    if (el && first && firstId) {
-      olderAnchor.current = { room: startedRoom, firstId, offset: measureOffset(el, first) }
-      stickToBottom.current = false
+    let anchor: typeof olderAnchor.current = null
+    if (el) {
+      const candidates: AnchorCandidate[] = []
+      for (const m of messages.slice(0, ANCHOR_CANDIDATES)) {
+        const node = document.getElementById(`msg-${m.id}`)
+        if (node) candidates.push({ id: m.id, offset: measureOffset(el, node) })
+      }
+      if (candidates.length > 0) {
+        anchor = { room: startedRoom, candidates }
+        olderAnchor.current = anchor
+        stickToBottom.current = false
+      }
     }
     await loadOlder(startedRoom)
-    setLoadingOlderRoom((current) => (current === startedRoom ? null : current))
-    // Nada novo (ou já aplicado no layout effect): não vale para a próxima mudança.
-    const anchor = olderAnchor.current
+    setLoadingOlderRooms((current) => {
+      const next = new Set(current)
+      next.delete(startedRoom)
+      return next
+    })
+    // Nada novo (ou já aplicado no layout effect): esta âncora não vale para
+    // a próxima mudança. Só a desta chamada — outra sala pode ter a sua.
     requestAnimationFrame(() => {
-      if (olderAnchor.current === anchor) olderAnchor.current = null
+      if (anchor && olderAnchor.current === anchor) olderAnchor.current = null
     })
   }
 

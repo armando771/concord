@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anchoredScrollTop, contentOffset } from './scrollAnchor'
+import { anchoredScrollTop, contentOffset, olderPagePrepended, pickAnchor } from './scrollAnchor'
 
 // Scroller com topo na tela em y=100. A mensagem âncora (a antiga primeira)
 // está 40px abaixo do topo visível, rolada 0.
@@ -44,5 +44,58 @@ describe('anchoredScrollTop', () => {
 
   it('sem nada novo acima não mexe', () => {
     expect(anchoredScrollTop(500, saved, saved)).toBe(500)
+  })
+})
+
+describe('pickAnchor', () => {
+  const candidates = [
+    { id: 'a', offset: 40 },
+    { id: 'b', offset: 120 },
+    { id: 'c', offset: 200 }
+  ]
+
+  it('usa a antiga primeira quando ela continua na tela', () => {
+    expect(pickAnchor(candidates, () => true)).toEqual({ id: 'a', offset: 40 })
+  })
+
+  it('apagada durante o carregamento: usa a seguinte que sobrou', () => {
+    expect(pickAnchor(candidates, (id) => id !== 'a')).toEqual({ id: 'b', offset: 120 })
+    expect(pickAnchor(candidates, (id) => id === 'c')).toEqual({ id: 'c', offset: 200 })
+  })
+
+  it('a reserva mantém a tela parada mesmo com a primeira apagada', () => {
+    // 'a' (80px) foi apagada e 2000px de página antiga entraram em cima:
+    // 'b' está em 120 - 80 + 2000 no conteúdo.
+    const kept = pickAnchor(candidates, (id) => id !== 'a')!
+    const now = 120 - 80 + 2000
+    const top = anchoredScrollTop(0, kept.offset, now)
+    expect(now - top).toBe(120) // mesma posição na tela do clique
+  })
+
+  it('nenhuma sobrou: sem âncora', () => {
+    expect(pickAnchor(candidates, () => false)).toBeNull()
+  })
+})
+
+describe('olderPagePrepended', () => {
+  const candidates = [
+    { id: 'a', offset: 40 },
+    { id: 'b', offset: 120 }
+  ]
+
+  it('nova primeira de fora da lista: entrou página antiga', () => {
+    expect(olderPagePrepended('z', candidates)).toBe(true)
+  })
+
+  it('a primeira continua a mesma (mensagem ao vivo embaixo): nada a fazer', () => {
+    expect(olderPagePrepended('a', candidates)).toBe(false)
+  })
+
+  it('só sumiu a de cima (apagada): a âncora espera a página', () => {
+    expect(olderPagePrepended('b', candidates)).toBe(false)
+  })
+
+  it('lista vazia: nada a fazer', () => {
+    expect(olderPagePrepended(undefined, candidates)).toBe(false)
   })
 })
