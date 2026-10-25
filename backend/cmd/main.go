@@ -9,6 +9,7 @@ import (
 
 	"gin-quickstart/backend/internal/auth"
 	"gin-quickstart/backend/internal/birthday"
+	"gin-quickstart/backend/internal/bot"
 	"gin-quickstart/backend/internal/call"
 	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/clientip"
@@ -20,6 +21,7 @@ import (
 	"gin-quickstart/backend/internal/livekit"
 	"gin-quickstart/backend/internal/media"
 	"gin-quickstart/backend/internal/message"
+	"gin-quickstart/backend/internal/music"
 	"gin-quickstart/backend/internal/server"
 	"gin-quickstart/backend/internal/soundboard"
 	"gin-quickstart/backend/internal/updates"
@@ -205,6 +207,44 @@ func main() {
 	// Reinício do servidor não derruba quem está em chamada.
 	callService.RestoreActive(context.Background())
 
+	// Maestro (bot de música): um player LiveKit por canal de voz.
+	musicManager := music.NewManager(music.ConfigFromEnv(liveKitPort), music.ManagerDeps{
+		Locate: func(userID string) (music.Location, bool) {
+			l, ok := callService.VoiceLocationOf(userID)
+			return music.Location{CallID: l.CallID, ChannelID: l.ChannelID, ServerID: l.ServerID}, ok
+		},
+		Humans: callService.ParticipantIDs,
+		BotEnabled: func(ctx context.Context, serverID string) bool {
+			ok, err := serverService.IsMember(ctx, serverID, bot.UserID)
+			return err == nil && ok
+		},
+		ChannelName: func(ctx context.Context, channelID string) string {
+			ch, err := channelService.FindByID(ctx, channelID)
+			if err != nil {
+				return ""
+			}
+			return ch.Name
+		},
+		User: func(ctx context.Context, userID string) (music.UserRef, error) {
+			u, err := userService.FindByID(ctx, userID)
+			if err != nil {
+				return music.UserRef{}, err
+			}
+			return music.UserRef{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, AvatarURL: u.AvatarURL}, nil
+		},
+		PostPublic: func(ctx context.Context, textChannelID, content string) error {
+			_, err := messageService.CreateSystemChannelMessage(ctx, textChannelID, bot.UserID, content, music.SystemKind)
+			return err
+		},
+		SendToUser:      hub.SendToUser,
+		BroadcastToCall: hub.BroadcastToCall,
+		BroadcastToRoom: hub.BroadcastToRoom,
+		Tokens:          liveKitTokens,
+	})
+	callService.OnParticipantLeft(musicManager.OnParticipantLeft)
+	callService.OnCallEnded(musicManager.OnCallEnded)
+	messageHandler.SetCommandHandler(musicManager)
+
 	// Aniversários (mensagem do servidor às 9h + modal para o aniversariante)
 	birthdayRepository := birthday.BirthdayRepository(db)
 	birthdayService := birthday.BirthdayService(birthdayRepository, messageService)
@@ -244,6 +284,7 @@ func main() {
 	soundboard.Routes(api, soundboardHandler, authMiddleware)
 	level.LevelRoutes(api, levelHandler, authMiddleware)
 	birthday.BirthdayRoutes(api, birthdayHandler, authMiddleware)
+	music.Routes(api, music.NewHandler(musicManager, authService), authMiddleware)
 
 	// Presence (protected)
 	presence := api.Group("/presence")

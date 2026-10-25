@@ -20,6 +20,7 @@ type Handler struct {
 	friendService       *friendship.Service
 	serverService       *server.Service
 	access              RoomAccess
+	commands            CommandHandler
 }
 
 func MessageHandler(service *Service, channelService *channel.Service, conversationService *conversation.Service, friendService *friendship.Service, serverService *server.Service) *Handler {
@@ -53,6 +54,21 @@ func parseListParams(c *gin.Context) (limit int, before string) {
 	return
 }
 
+// CommandHandler recebe comandos digitados no chat (ex.: /play do Maestro).
+type CommandHandler interface {
+	HandleCommand(serverID, channelID, userID, content string) bool
+}
+
+func (h *Handler) SetCommandHandler(c CommandHandler) { h.commands = c }
+
+// tryCommand: comando reconhecido não é gravado como mensagem.
+func (h *Handler) tryCommand(serverID, channelID, userID, content string, attachmentIDs []string) bool {
+	if h.commands == nil || len(attachmentIDs) > 0 {
+		return false
+	}
+	return h.commands.HandleCommand(serverID, channelID, userID, content)
+}
+
 func (h *Handler) CreateChannelMessage(c *gin.Context) {
 	channelID := c.Param("channelId")
 
@@ -81,6 +97,11 @@ func (h *Handler) CreateChannelMessage(c *gin.Context) {
 	isMember, err := h.serverService.IsMember(c.Request.Context(), ch.ServerID, userID)
 	if err != nil || !isMember {
 		c.JSON(http.StatusForbidden, gin.H{"error": "you are not a member of this server"})
+		return
+	}
+
+	if h.tryCommand(ch.ServerID, channelID, userID, input.Content, input.AttachmentIDs) {
+		c.JSON(http.StatusAccepted, gin.H{"command": true})
 		return
 	}
 
