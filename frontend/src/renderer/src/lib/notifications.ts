@@ -49,19 +49,21 @@ export function messageNotification(message: Message, meId: string): AppNotifica
   }
 }
 
-/** Notificação para uma mensagem de canal que menciona você (@nick). */
+/** Notificação para uma mensagem de canal que menciona você (@nick) ou responde sua mensagem. */
 export function mentionNotification(
   message: Message,
   me: { id: string; username: string },
   serverId: string | null
 ): AppNotification | null {
   if (!message.channel_id || !serverId || message.author_id === me.id) return null
-  if (!mentionsUser(message.content, me.username)) return null
+  const isReplyToMe = message.reply_to?.author_id === me.id
+  const isMention = mentionsUser(message.content, me.username)
+  if (!isMention && !isReplyToMe) return null
   const author = message.author?.display_name || message.author?.username || 'Alguém'
   return {
     kind: 'mention',
-    title: `${author} mencionou você`,
-    body: truncate(message.content),
+    title: isReplyToMe && !isMention ? `${author} respondeu você` : `${author} mencionou você`,
+    body: truncate(messagePreview(message)),
     route: `/servers/${serverId}/channels/${message.channel_id}`
   }
 }

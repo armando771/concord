@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"log"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -12,12 +15,16 @@ var (
 	ErrContentRequired = errors.New("content is required")
 	ErrMessageNotFound = errors.New("message not found")
 	ErrNotAuthor       = errors.New("only the author can delete this message")
+	ErrInvalidReply    = errors.New("invalid reply target")
+	ErrInvalidEmoji    = errors.New("invalid emoji reaction")
 )
 
 type EventPublisher interface {
 	PublishMessageCreate(event CreateEvent)
 	PublishMessageDelete(event DeleteEvent)
 	PublishPollUpdate(event PollUpdateEvent)
+	PublishReactionAdd(event ReactionEvent)
+	PublishReactionRemove(event ReactionEvent)
 }
 
 type ChannelResolver interface {
@@ -51,8 +58,33 @@ func MessageService(repository *Repository, publisher EventPublisher, channelRes
 	}
 }
 
-func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, authorID string, content string, attachmentIDs []string) (*Message, error) {
-	msg, err := s.create(ctx, channelID, "", authorID, content, attachmentIDs)
+func ValidateEmoji(emoji string) error {
+	if emoji == "" || len(emoji) > 32 || !utf8.ValidString(emoji) {
+		return ErrInvalidEmoji
+	}
+	for _, r := range emoji {
+		if unicode.IsSpace(r) || unicode.IsControl(r) {
+			return ErrInvalidEmoji
+		}
+	}
+	return nil
+}
+
+func SameRoomTarget(target *Message, channelID string, conversationID string) bool {
+	if target == nil {
+		return false
+	}
+	if channelID != "" {
+		return target.ChannelID != nil && *target.ChannelID == channelID && target.ConversationID == nil
+	}
+	if conversationID != "" {
+		return target.ConversationID != nil && *target.ConversationID == conversationID && target.ChannelID == nil
+	}
+	return false
+}
+
+func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, authorID string, content string, replyToID *string, attachmentIDs []string) (*Message, error) {
+	msg, err := s.create(ctx, channelID, "", authorID, content, replyToID, attachmentIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -71,8 +103,8 @@ func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, au
 	return msg, nil
 }
 
-func (s *Service) CreateConversationMessage(ctx context.Context, conversationID string, authorID string, content string, attachmentIDs []string) (*Message, error) {
-	msg, err := s.create(ctx, "", conversationID, authorID, content, attachmentIDs)
+func (s *Service) CreateConversationMessage(ctx context.Context, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string) (*Message, error) {
+	msg, err := s.create(ctx, "", conversationID, authorID, content, replyToID, attachmentIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -91,9 +123,21 @@ func (s *Service) CreateConversationMessage(ctx context.Context, conversationID 
 	return msg, nil
 }
 
-func (s *Service) create(ctx context.Context, channelID string, conversationID string, authorID string, content string, attachmentIDs []string) (*Message, error) {
+func (s *Service) create(ctx context.Context, channelID string, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string) (*Message, error) {
 	if err := validateNewMessage(content, attachmentIDs); err != nil {
 		return nil, err
+	}
+
+	var normalizedReplyID *string
+	if replyToID != nil {
+		trimmed := strings.TrimSpace(*replyToID)
+		if trimmed != "" {
+			target, err := s.repository.FindByID(ctx, trimmed)
+			if err != nil || !SameRoomTarget(target, channelID, conversationID) {
+				return nil, ErrInvalidReply
+			}
+			normalizedReplyID = &trimmed
+		}
 	}
 
 	msg := &Message{
@@ -101,6 +145,7 @@ func (s *Service) create(ctx context.Context, channelID string, conversationID s
 		AuthorID:       authorID,
 		ChannelID:      &channelID,
 		ConversationID: &conversationID,
+		ReplyToID:      normalizedReplyID,
 		Content:        content,
 	}
 
@@ -243,6 +288,106 @@ func (s *Service) deleteWithFiles(ctx context.Context, messageID string) error {
 				log.Printf("failed to remove attachment file %s: %v", id, err)
 			}
 		}
+	}
+	return nil
+}
+
+func (s *Service) AddChannelReaction(ctx context.Context, channelID string, messageID string, userID string, emoji string) error {
+	if err := ValidateEmoji(emoji); err != nil {
+		return err
+	}
+
+	msg, err := s.repository.FindByID(ctx, messageID)
+	if err != nil || !SameRoomTarget(msg, channelID, "") {
+		return ErrMessageNotFound
+	}
+
+	added, err := s.repository.AddReaction(ctx, messageID, userID, emoji)
+	if err != nil {
+		return err
+	}
+	if added {
+		s.publisher.PublishReactionAdd(ReactionEvent{
+			ChannelID: msg.ChannelID,
+			MessageID: msg.ID,
+			UserID:    userID,
+			Emoji:     emoji,
+		})
+	}
+	return nil
+}
+
+func (s *Service) RemoveChannelReaction(ctx context.Context, channelID string, messageID string, userID string, emoji string) error {
+	if err := ValidateEmoji(emoji); err != nil {
+		return err
+	}
+
+	msg, err := s.repository.FindByID(ctx, messageID)
+	if err != nil || !SameRoomTarget(msg, channelID, "") {
+		return ErrMessageNotFound
+	}
+
+	removed, err := s.repository.RemoveReaction(ctx, messageID, userID, emoji)
+	if err != nil {
+		return err
+	}
+	if removed {
+		s.publisher.PublishReactionRemove(ReactionEvent{
+			ChannelID: msg.ChannelID,
+			MessageID: msg.ID,
+			UserID:    userID,
+			Emoji:     emoji,
+		})
+	}
+	return nil
+}
+
+func (s *Service) AddConversationReaction(ctx context.Context, conversationID string, messageID string, userID string, emoji string) error {
+	if err := ValidateEmoji(emoji); err != nil {
+		return err
+	}
+
+	msg, err := s.repository.FindByID(ctx, messageID)
+	if err != nil || !SameRoomTarget(msg, "", conversationID) {
+		return ErrMessageNotFound
+	}
+
+	added, err := s.repository.AddReaction(ctx, messageID, userID, emoji)
+	if err != nil {
+		return err
+	}
+	if added {
+		s.publisher.PublishReactionAdd(ReactionEvent{
+			ConversationID: msg.ConversationID,
+			MessageID:      msg.ID,
+			UserID:         userID,
+			Emoji:          emoji,
+		})
+	}
+	return nil
+}
+
+func (s *Service) RemoveConversationReaction(ctx context.Context, conversationID string, messageID string, userID string, emoji string) error {
+	if err := ValidateEmoji(emoji); err != nil {
+		return err
+	}
+
+	msg, err := s.repository.FindByID(ctx, messageID)
+	if err != nil || !SameRoomTarget(msg, "", conversationID) {
+		return ErrMessageNotFound
+	}
+
+	removed, err := s.repository.RemoveReaction(ctx, messageID, userID, emoji)
+	if err != nil {
+		return err
+	}
+	if removed {
+		s.publisher.PublishReactionRemove(ReactionEvent{
+			ConversationID: msg.ConversationID,
+			MessageID:      msg.ID,
+			UserID:         userID,
+			Emoji:          emoji,
+		})
 	}
 	return nil
 }
