@@ -38,9 +38,13 @@ import { useServerStore } from './serverStore'
 import { useFriendStore } from './friendStore'
 import { useCallStore } from './callStore'
 import { useLevelStore } from './levelStore'
+import { useSoundboardStore } from './soundboardStore'
 import { showToast } from './toastStore'
 import { router } from '../router'
 import { MESSAGE_LIMIT } from '../api/messages'
+import type { PublicProfile } from '../api/users'
+import { useProfileStore } from './profileStore'
+import { prefsForStatus, presenceStatusOf, type PresenceStatus } from '../lib/presenceStatus'
 
 export type RoomKey = string
 
@@ -53,6 +57,8 @@ interface ChatState {
   channelsByServer: Record<string, string[]>
   activeRoom: RoomKey | null
   presence: Record<string, boolean>
+  /** Status de cada pessoa como os outros veem (invisível = offline). */
+  statuses: Record<string, PresenceStatus>
   conversations: ConversationSummary[]
   conversationsLoading: boolean
   connect: () => void
@@ -146,6 +152,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   channelsByServer: {},
   activeRoom: null,
   presence: {},
+  statuses: {},
   conversations: [],
   conversationsLoading: false,
 
@@ -386,7 +393,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     try {
       const map: PresenceMap = await fetchPresence(unique)
       if (useAuthStore.getState().accessToken !== token) return
-      set((state) => ({ presence: { ...state.presence, ...map } }))
+      const presence: Record<string, boolean> = {}
+      const statuses: Record<string, PresenceStatus> = {}
+      for (const [id, value] of Object.entries(map)) {
+        const status = presenceStatusOf(value, value === true)
+        statuses[id] = status
+        presence[id] = status !== 'offline'
+      }
+      set((state) => ({
+        presence: { ...state.presence, ...presence },
+        statuses: { ...state.statuses, ...statuses }
+      }))
     } catch (err) {
       console.error('[chatStore] fetchPresenceFor error:', err)
     }
@@ -423,6 +440,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   handleWsEvent: (event) => {
     const payload = event.payload as Record<string, unknown>
+
+    if (event.type === 'call:soundboard' || event.type.startsWith('soundboard:')) {
+      useSoundboardStore.getState().handleWsEvent(event)
+      return
+    }
 
     if (event.type.startsWith('call:')) {
       useCallStore.getState().handleWsEvent(event)
@@ -474,7 +496,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             messageNotification(msg, me.id) ??
             mentionNotification(msg, { id: me.id, username: me.username }, serverId)
           if (notification) {
-            const prefs = notificationPrefs()
+            // "Não perturbe" silencia o aviso, a barra de tarefas e o som.
+            const prefs = prefsForStatus(notificationPrefs(), me.status)
             notifyDesktop(notification, prefs)
             const looking = room === get().activeRoom && document.hasFocus()
             const sound = notificationSound(notification.kind, prefs)
@@ -729,8 +752,18 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     if (event.type === 'presence:update') {
       const userId = payload.user_id as string
-      const online = Boolean(payload.online)
-      set((state) => ({ presence: { ...state.presence, [userId]: online } }))
+      const status = presenceStatusOf(payload.status, Boolean(payload.online))
+      set((state) => ({
+        presence: { ...state.presence, [userId]: status !== 'offline' },
+        statuses: { ...state.statuses, [userId]: status }
+      }))
+      return
+    }
+
+    // Alguém mudou nome/foto/banner/bio: atualiza onde a pessoa aparece.
+    if (event.type === 'user:update') {
+      const profile = payload.user as PublicProfile | undefined
+      if (profile?.id) applyUserUpdate(profile)
       return
     }
 
@@ -844,7 +877,53 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       channelsByServer: {},
       activeRoom: null,
       presence: {},
+      statuses: {},
       conversations: [],
       conversationsLoading: false
     })
 }))
+
+/**
+ * Perfil novo de alguém (evento user:update): o cache de perfis (que avatar e
+ * nome leem em todo lugar), a própria sessão, a lista de membros e de amigos.
+ */
+function applyUserUpdate(profile: PublicProfile): void {
+  useProfileStore.getState().apply(profile)
+  const look = {
+    display_name: profile.display_name,
+    avatar_url: profile.avatar_url ?? null
+  }
+
+  const auth = useAuthStore.getState()
+  if (auth.user?.id === profile.id) {
+    // O status da sessão é o escolhido (ex.: invisível), não o efetivo.
+    auth.setUser({ ...auth.user, ...profile, status: auth.user.status })
+  }
+
+  const servers = useServerStore.getState()
+  const serverId = servers.currentServer?.id
+  if (serverId && servers.currentMembers.some((m) => m.user_id === profile.id)) {
+    const member = servers.currentMembers.find((m) => m.user_id === profile.id)
+    if (member) servers.updateMember(serverId, { ...member, ...look })
+  }
+
+  const friends = useFriendStore.getState().friends
+  if (friends.some((f) => f.id === profile.id)) {
+    useFriendStore.setState({
+      friends: friends.map((f) => (f.id === profile.id ? { ...f, ...look } : f))
+    })
+  }
+}
+
+/**
+ * Status para a bolinha do avatar: o que eu escolhi quando sou eu (invisível
+ * inclusive); dos outros, o que chegou pela presença.
+ */
+export function usePresenceStatus(userId: string | undefined): PresenceStatus {
+  const mine = useAuthStore((s) => (userId && s.user?.id === userId ? s.user.status : undefined))
+  const known = useChatStore((s) => (userId ? s.statuses[userId] : undefined))
+  const online = useChatStore((s) => (userId ? Boolean(s.presence[userId]) : false))
+  if (mine) return mine
+  if (!online) return 'offline'
+  return known && known !== 'offline' ? known : 'online'
+}

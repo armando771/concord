@@ -6,39 +6,35 @@ import { FriendsIcon, SearchIcon, DotsIcon, ChatBubbleIcon, TrashIcon } from '..
 import { useAuthStore, type User } from '../store/authStore'
 import { useFriendStore } from '../store/friendStore'
 import { useUIStore, type FriendsTab } from '../store/uiStore'
-import { useChatStore } from '../store/chatStore'
+import { useChatStore, usePresenceStatus } from '../store/chatStore'
+import UserAvatar from '../components/Avatar'
 import { searchUsers } from '../api/users'
 import { showToast } from '../store/toastStore'
 
 const friendUsernames = (friends: User[]): Set<string> => new Set(friends.map((f) => f.username))
 
+/** Avatar das listas de amigos (pendentes e busca vêm sem presença). */
 function Avatar({
   user,
   size = 'md',
   online
 }: {
-  user: Pick<User, 'display_name' | 'username'>
+  user: { id?: string; user_id?: string; display_name?: string; username: string; avatar_url?: string | null }
   size?: 'md' | 'lg'
   online?: boolean
 }): React.JSX.Element {
-  const initial = (user.display_name ?? user.username ?? '?').charAt(0).toUpperCase()
+  const userId = user.id ?? user.user_id
+  const status = usePresenceStatus(userId)
   return (
-    <div className="relative shrink-0">
-      <div
-        className={`flex items-center justify-center rounded-full bg-linear-to-br from-violet-600 to-indigo-600 font-bold text-white shadow-md ${
-          size === 'lg' ? 'h-11 w-11 text-base' : 'h-9 w-9 text-sm'
-        }`}
-      >
-        {initial}
-      </div>
-      {online !== undefined && (
-        <span
-          className={`absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-[#07080b] ${
-            online ? 'bg-[#23a55a]' : 'bg-gray-600'
-          }`}
-        />
-      )}
-    </div>
+    <UserAvatar
+      userId={userId}
+      name={user.display_name || user.username}
+      avatarUrl={user.avatar_url}
+      size={size === 'lg' ? 44 : 36}
+      status={online === undefined ? null : status}
+      cutoutColor="#07080b"
+      fallbackClassName="bg-linear-to-br from-violet-600 to-indigo-600"
+    />
   )
 }
 

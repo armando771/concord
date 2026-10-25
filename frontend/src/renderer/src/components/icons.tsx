@@ -637,3 +637,49 @@ export function XIcon({ className = '' }: IconProps): React.JSX.Element {
     </svg>
   )
 }
+
+/** Ícone de Mesa de Áudio (Soundboard / pads musicais). */
+export function SoundboardIcon({ className = '' }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <path d="M15 17.5h5M17.5 15v5" />
+    </svg>
+  )
+}
+
+/** Estrela de favorito (mesa de áudio): vazada ou cheia. */
+export function FavoriteStarIcon({
+  className = '',
+  filled = false
+}: IconProps & { filled?: boolean }): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  )
+}

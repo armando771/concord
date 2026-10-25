@@ -14,6 +14,7 @@ import CallControlsDock from './CallControlsDock'
 import CallStage from './CallStage'
 import { formatDuration, useElapsed } from './callUtils'
 import useSpeaking from './useSpeaking'
+import Avatar from '../Avatar'
 
 function DmCallView({ children }: { children?: React.ReactNode }): React.JSX.Element | null {
   const status = useCallStore((s) => s.status)
@@ -48,13 +49,16 @@ function DmCallView({ children }: { children?: React.ReactNode }): React.JSX.Ele
       <>
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/6 bg-[#07080b] px-4">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white transition-colors ${
-                speaking.has(peer.id) ? 'bg-[#23a55a]' : 'bg-violet-600'
+            <Avatar
+              userId={peer.id}
+              name={peer.display_name}
+              avatarUrl={peer.avatar_url}
+              size={32}
+              animate="always"
+              className={`rounded-full transition-shadow ${
+                speaking.has(peer.id) ? 'ring-2 ring-[#23a55a]' : ''
               }`}
-            >
-              {peer.display_name.charAt(0).toUpperCase()}
-            </div>
+            />
             <div className="min-w-0 leading-tight">
               <p className="truncate text-sm font-bold text-white">{peer.display_name}</p>
               <p className="text-[11px] text-gray-400">{statusLabel}</p>

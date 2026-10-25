@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { AUTH_STORAGE_KEY } from '../lib/authRefresh'
+import type { ChosenStatus } from '../lib/presenceStatus'
+
+export interface ProfileLink {
+  url: string
+}
 
 export interface User {
   id: string
@@ -8,6 +13,15 @@ export interface User {
   display_name: string
   email: string
   avatar_url?: string | null
+  // Perfil (Configurações → Perfis). Opcionais: listas de amigos e sessões
+  // salvas antes do perfil existir não trazem.
+  banner_url?: string | null
+  banner_color?: string | null
+  pronouns?: string
+  bio?: string
+  status_text?: string
+  links?: ProfileLink[]
+  status?: ChosenStatus
   created_at: string
   updated_at: string
 }

@@ -9,6 +9,8 @@ export interface ProfileCardTarget {
   username?: string
   anchor: Rect
   side: CardSide
+  /** O que foi clicado: clicar nele de novo fecha (não conta como "fora"). */
+  anchorEl?: HTMLElement
 }
 
 interface ProfileCardState {
@@ -43,7 +45,8 @@ export function profileCardHandler(
       name,
       username,
       side,
-      anchor: { top: r.top, left: r.left, right: r.right, bottom: r.bottom }
+      anchor: { top: r.top, left: r.left, right: r.right, bottom: r.bottom },
+      anchorEl: e.currentTarget
     })
   }
 }

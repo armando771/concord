@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useServerStore } from '../store/serverStore'
-import { useFriendStore } from '../store/friendStore'
-import { useInviteStore } from '../store/inviteStore'
 import { useUIStore } from '../store/uiStore'
 import { useChatStore } from '../store/chatStore'
 import { useCallStore } from '../store/callStore'
@@ -17,8 +15,6 @@ import { sortVoiceMembers } from '../lib/voiceOrder'
 import LevelBadge from './level/LevelBadge'
 import { userMenuHandler } from '../store/userMenuStore'
 import { profileCardHandler } from '../store/profileCardStore'
-import { logout } from '../api/auth'
-import { clearSession } from '../api/client'
 import type { Channel, ChannelType } from '../api/channels'
 import { listActiveServerCalls, moveToVoiceChannel, type CallStateResponse } from '../api/calls'
 import { canMoveVoiceUser, VOICE_USER_DRAG } from '../lib/voiceMove'
@@ -34,10 +30,11 @@ import Modal from './Modal'
 import Button from './Button'
 import Input from './Input'
 import VoiceConnectedPanel from './call/VoiceConnectedPanel'
+import UserBar from './UserBar'
+import Avatar from './Avatar'
 import {
   ChevronDownIcon,
   ChevronUpIcon,
-  GearIcon,
   UserPlusIcon,
   PlusIcon,
   PencilIcon,
@@ -48,10 +45,8 @@ import {
 } from './icons'
 import { setPrimaryChannel } from '../api/servers'
 import { primaryChannelId } from '../lib/primaryChannel'
-import VoiceSettings from './VoiceSettings'
 import ResizeHandle from './ResizeHandle'
 import { useResizableWidth } from './useResizableWidth'
-import AppSettings from './AppSettings'
 
 /**
  * Nomes longos quebram linha em vez de cortar com "…" (o canal "predador-🐺-vs…"
@@ -94,9 +89,7 @@ export function ServerSidebar(): React.JSX.Element {
 
   // Mesma preferência de largura na barra de canais e na de DMs/amigos.
   const sidebar = useResizableWidth('channels')
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [loggingOut, setLoggingOut] = useState(false)
   const [channelName, setChannelName] = useState('')
   const [channelType, setChannelType] = useState<ChannelType>('text')
   const [creatingChannel, setCreatingChannel] = useState(false)
@@ -292,23 +285,6 @@ export function ServerSidebar(): React.JSX.Element {
       })
   }
 
-  const handleLogout = async (): Promise<void> => {
-    setLoggingOut(true)
-    try {
-      await logout()
-    } catch {
-      // Limpa sessão local
-    } finally {
-      useFriendStore.getState().reset()
-      useServerStore.getState().reset()
-      useInviteStore.getState().reset()
-      useChatStore.getState().disconnect()
-      await clearSession()
-      setSettingsOpen(false)
-      navigate('/login')
-    }
-  }
-
   const handleSaveChannel = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
     const name = channelName.trim().toLowerCase().replace(/\s+/g, '-')
@@ -391,7 +367,6 @@ export function ServerSidebar(): React.JSX.Element {
     }
   }
 
-  const initial = (user?.display_name ?? user?.username ?? '?').charAt(0).toUpperCase()
   const serverName = currentServer?.name ?? 'Servidor'
 
   /** Botão direito no canal abre o mesmo menu do "•••" (moderadores). */
@@ -793,13 +768,15 @@ export function ServerSidebar(): React.JSX.Element {
                                 isMe ? 'bg-white/5 hover:bg-white/10' : 'hover:bg-white/[0.06]'
                               } ${canMove(p.user_id) ? 'cursor-pointer active:cursor-grabbing' : 'cursor-pointer'}`}
                             >
-                              <div
-                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[9px] font-bold text-white transition-shadow ${
+                              <Avatar
+                                userId={p.user_id}
+                                name={name}
+                                avatarUrl={p.avatar_url}
+                                size={20}
+                                className={`rounded-full transition-shadow ${
                                   talking ? 'ring-2 ring-[#23a55a]' : ''
                                 }`}
-                              >
-                                {name.charAt(0).toUpperCase()}
-                              </div>
+                              />
                               <span
                                 title={name}
                                 className={`min-w-0 truncate text-xs transition-colors group-hover/voiceuser:text-white ${
@@ -836,32 +813,7 @@ export function ServerSidebar(): React.JSX.Element {
         {/* Painel de voz conectada (estilo Discord) */}
         <VoiceConnectedPanel />
 
-        {/* User Control Card at Bottom Left */}
-        <div className="flex shrink-0 items-center justify-between border-t border-white/6 bg-[#07080b]/90 px-2 py-2">
-          <div
-            className="flex min-w-0 items-center gap-2 rounded-md p-1 hover:bg-white/5 transition-colors cursor-pointer"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <div className="relative shrink-0">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white shadow-md">
-                {initial}
-              </div>
-            </div>
-            <div className="min-w-0 leading-tight">
-              <p className="truncate text-sm font-semibold text-white">{user?.display_name}</p>
-              <p className="truncate text-[11px] text-gray-400">@{user?.username}</p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setSettingsOpen(true)}
-            aria-label="Configurações do usuário"
-            title="Configurações do usuário"
-            className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
-          >
-            <GearIcon className="h-4 w-4" />
-          </button>
-        </div>
+        <UserBar />
       </aside>
 
       {/* Create / Edit Channel Modal */}
@@ -1034,32 +986,6 @@ export function ServerSidebar(): React.JSX.Element {
             onClick={() => void handleDeleteServer()}
           >
             {deletingServer ? 'Deletando...' : 'Deletar servidor'}
-          </Button>
-        </div>
-      </Modal>
-
-      {/* User Settings Modal */}
-      <Modal
-        open={settingsOpen}
-        title="Configurações de Usuário"
-        onClose={() => setSettingsOpen(false)}
-      >
-        <div className="flex flex-col gap-4">
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-violet-600 text-lg font-bold text-white">
-                {initial}
-              </div>
-              <div>
-                <p className="font-semibold text-white text-base">{user?.display_name}</p>
-                <p className="text-sm text-gray-400">@{user?.username}</p>
-              </div>
-            </div>
-          </div>
-          {settingsOpen && <VoiceSettings />}
-          {settingsOpen && <AppSettings />}
-          <Button variant="danger" onClick={handleLogout} disabled={loggingOut}>
-            {loggingOut ? 'Saindo...' : 'Sair da conta'}
           </Button>
         </div>
       </Modal>
