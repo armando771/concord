@@ -2,6 +2,8 @@ import { useEffect, useMemo } from 'react'
 import { useAuthStore } from '../../store/authStore'
 import { useServerStore } from '../../store/serverStore'
 import { mergeCallPeople } from '../../lib/callParticipants'
+import { serverDisplayName, withServerNames } from '../../lib/serverNames'
+import { useCallNicknames } from '../../store/useServerNames'
 import { sortVoiceMembers } from '../../lib/voiceOrder'
 import { useLevelStore } from '../../store/levelStore'
 import { streamAudioKey, useUserAudioStore } from '../../store/userAudioStore'
@@ -61,14 +63,19 @@ function CallStage({
   const channelEntry = useCallStore((s) => (s.channelId ? s.serverCalls[s.channelId] : undefined))
 
   const meId = me?.id ?? 'me'
+  // Call num canal de voz: cada um com o apelido daquele servidor.
+  const nicknames = useCallNicknames()
   // Lista do backend + quem está na sala de mídia (o backend pode ter perdido alguém).
   const participants = useMemo(
     () =>
-      mergeCallPeople(backendParticipants, mediaPeers, meId, (id) => {
-        const m = members.find((x) => x.user_id === id)
-        return m?.display_name || m?.username
-      }),
-    [backendParticipants, mediaPeers, meId, members]
+      withServerNames(
+        mergeCallPeople(backendParticipants, mediaPeers, meId, (id) => {
+          const m = members.find((x) => x.user_id === id)
+          return m?.display_name || m?.username
+        }),
+        nicknames
+      ),
+    [backendParticipants, mediaPeers, meId, members, nicknames]
   )
   // Mesma ordem da lista do canal na barra lateral (nível, entrada, nome). O
   // mosaico de vídeo tem a ordem que a pessoa arrumou e não passa por aqui.
@@ -89,7 +96,7 @@ function CallStage({
   const meInfo: CallUserInfo = {
     id: meId,
     username: me?.username ?? '',
-    display_name: me?.display_name ?? 'Você'
+    display_name: serverDisplayName({ nickname: nicknames?.[meId] }, me, 'Você')
   }
 
   const nameOf = (userId: string): CallUserInfo =>

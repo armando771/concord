@@ -33,6 +33,10 @@ const (
 	MoveMembers       int64 = 1 << 21
 	UseSoundboard     int64 = 1 << 22
 	ManageExpressions int64 = 1 << 23
+	// Apelido no servidor: o próprio (todo mundo, como no Discord) e o dos
+	// outros (moderação, respeitando a hierarquia). Mesmos bits do Discord.
+	ChangeNickname  int64 = 1 << 26
+	ManageNicknames int64 = 1 << 27
 )
 
 // Names: nome de cada bit (o mesmo do app e de testdata/vectors.json).
@@ -59,22 +63,27 @@ var Names = map[string]int64{
 	"MOVE_MEMBERS":         MoveMembers,
 	"USE_SOUNDBOARD":       UseSoundboard,
 	"MANAGE_EXPRESSIONS":   ManageExpressions,
+	"CHANGE_NICKNAME":      ChangeNickname,
+	"MANAGE_NICKNAMES":     ManageNicknames,
 }
 
 // All é a soma de todos os bits conhecidos (dono e ADMINISTRATOR).
 const All = ViewChannel | ManageChannels | ManageRoles | ManageServer | CreateInvite |
 	KickMembers | BanMembers | Administrator | SendMessages | AttachFiles | AddReactions |
 	MentionEveryone | ManageMessages | ReadHistory | Connect | Speak | Stream |
-	MuteMembers | DeafenMembers | MoveMembers | UseSoundboard | ManageExpressions
+	MuteMembers | DeafenMembers | MoveMembers | UseSoundboard | ManageExpressions |
+	ChangeNickname | ManageNicknames
 
-// DefaultEveryone: o que qualquer membro faz num servidor novo.
+// DefaultEveryone: o que qualquer membro faz num servidor novo. Nos servidores
+// que já existiam, a migration 000039 ligou o CHANGE_NICKNAME no @everyone.
 const DefaultEveryone = ViewChannel | SendMessages | AttachFiles | AddReactions | ReadHistory |
-	CreateInvite | Connect | Speak | Stream | UseSoundboard
+	CreateInvite | Connect | Speak | Stream | UseSoundboard | ChangeNickname
 
 // DefaultModerator equivale ao antigo cargo "admin": cuida de canais, do
 // servidor e da moderação, mas não mexe em cargos nem bane (só o dono fazia).
 const DefaultModerator = DefaultEveryone | ManageChannels | ManageServer | MentionEveryone |
-	ManageMessages | MoveMembers | MuteMembers | DeafenMembers | KickMembers | ManageExpressions
+	ManageMessages | MoveMembers | MuteMembers | DeafenMembers | KickMembers | ManageExpressions |
+	ManageNicknames
 
 // ModeratorName é o nome do cargo criado junto com o servidor.
 const ModeratorName = "Moderador"

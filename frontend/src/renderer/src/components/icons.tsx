@@ -741,3 +741,60 @@ export function CrosshairIcon({ className = '' }: IconProps): React.JSX.Element 
     </svg>
   )
 }
+
+/** Sinal da conexão de voz (o "Voz conectada" do painel). */
+export function SignalIcon({ className = '' }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M5 19.5h.01" strokeWidth="3.5" />
+      <path d="M4.5 13a6.5 6.5 0 0 1 6.5 6.5" />
+      <path d="M4.5 7.5a12 12 0 0 1 12 12" />
+      <path d="M4.5 2.5a17 17 0 0 1 17 17" />
+    </svg>
+  )
+}
+
+export function CheckIcon({ className = '' }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  )
+}
+
+/** Telefone "no gancho": sair da chamada (painel Voz conectada). */
+export function HangUpIcon({ className = '' }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.996.996 0 0 1 0-1.41C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.39.39.39 1.02 0 1.41l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.27 11.27 0 0 0-2.67-1.85.996.996 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z" />
+    </svg>
+  )
+}

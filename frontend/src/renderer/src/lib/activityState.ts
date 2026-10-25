@@ -1,4 +1,5 @@
 import { activityLaunchUrl, findActivity, validateActivityLink } from '../../../shared/activities'
+import { serverDisplayName } from './serverNames'
 
 // Estado das atividades na chamada. Puro para poder testar: o activityStore só
 // despacha ações (eventos do WS, estado da chamada, janela/painel do jogo).
@@ -151,15 +152,34 @@ export interface ActivityBanner {
   launchUrl: string
 }
 
+/**
+ * Quem abriu a atividade. Numa call de canal, `nicknames` traz os apelidos
+ * daquele servidor; na DM não vem (vale o nome de exibição).
+ */
+export function activityStarterName(
+  shared: CallActivity,
+  nicknames: Record<string, string> | undefined
+): string {
+  return serverDisplayName(
+    { nickname: nicknames?.[shared.startedBy.id] },
+    shared.startedBy,
+    'Alguém'
+  )
+}
+
 /** O que a barra da atividade mostra na chamada; null = nenhuma aberta. */
-export function activityBanner(state: ActivityState, meId: string | null): ActivityBanner | null {
+export function activityBanner(
+  state: ActivityState,
+  meId: string | null,
+  nicknames?: Record<string, string>
+): ActivityBanner | null {
   const shared = state.shared
   if (!shared) return null
   const activity = findActivity(shared.activityId)
   const launchUrl = activityLaunchUrl(shared.activityId, shared.url)
   if (!activity || !launchUrl) return null
   const mine = meId !== null && shared.startedBy.id === meId
-  const who = shared.startedBy.display_name || shared.startedBy.username || 'Alguém'
+  const who = activityStarterName(shared, nicknames)
   return {
     text: `${mine ? 'Você' : who} abriu ${activity.name}`,
     activityName: activity.name,

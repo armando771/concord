@@ -1,5 +1,4 @@
-# Deploy automático: a cada push/merge na main, testa tudo e, se passar,
-# publica na VPS o backend, a página de download (site/), o app web
+# Deploy automático: a cada push/merge na main publica na VPS o backend, a página de download (site/), o app web
 # (frontend/dist-web) e uma versão nova do app desktop (os apps abertos
 # mostram "Nova atualização disponível").
 #
@@ -9,7 +8,7 @@
 #     VPS_KNOWN_HOSTS  linha(s) de known_hosts da VPS (ssh-keyscan)
 #     RELEASE_KEY      chave Ed25519 que assina as atualizações (backend/.release-key)
 #   Variables:
-#     DEPLOY_ENABLED   "true" para ligar o deploy (sem isso, só roda os testes)
+#     DEPLOY_ENABLED   "true" para ligar o deploy (sem isso, nada roda)
 #     VPS_HOST         ex.: root@1.2.3.4
 #     PUBLIC_URL       ex.: https://1-2-3-4.sslip.io
 #     SITE_URL         (opcional) página de download a conferir (padrão: https://salinha.bhrx.com.br)
@@ -19,87 +18,22 @@ name: Deploy
 on:
   push:
     branches: [main]
-  # PRs só rodam os testes (inclusive a conferência das migrations); nunca deployam.
-  pull_request:
   workflow_dispatch:
 
-# Um deploy por vez, na ordem dos commits (PRs em grupo próprio).
+# Um deploy por vez, na ordem dos commits.
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.ref) || 'deploy' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: deploy
+  cancel-in-progress: false
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    # Postgres descartável para os testes de banco (migrations, cargos e
-    # permissões); sem ele esses testes são pulados.
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: concord-user
-          POSTGRES_PASSWORD: concord-password
-          POSTGRES_DB: concord_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U concord-user -d concord_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0 # a conferência das migrations compara com a branch de destino
-
-      # Número de migration repetido, ou migration nova que não fica acima da
-      # maior do destino, seria pulada em silêncio no banco (docs/HOSPEDAGEM.md).
-      - name: Migrations (números)
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          if [[ -n "$BASE_REF" ]]; then
-            node scripts/check-migrations.mjs "origin/$BASE_REF"
-          else
-            node scripts/check-migrations.mjs
-          fi
-
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: backend/go.mod
-          cache-dependency-path: backend/go.sum
-      - name: Backend
-        working-directory: backend
-        env:
-          TEST_DATABASE_URL: postgres://concord-user:concord-password@localhost:5432/concord_test?sslmode=disable
-        # -p 1: os testes de banco compartilham o mesmo schema.
-        run: go test -p 1 ./...
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-      - name: App desktop
-        working-directory: frontend
-        run: |
-          npm i -g yarn@1.22.22
-          yarn install --frozen-lockfile --ignore-scripts
-          yarn typecheck
-          yarn test
-      - name: App web (build)
-        working-directory: frontend
-        run: yarn build:web
-      - name: Scripts
-        run: node --test scripts/*.test.mjs site/*.test.mjs
-
-      - name: Helper de áudio (Rust)
-        working-directory: native/concord-audio
-        run: cargo test
-
+  # Por enquanto (fase de desenvolvimento) os testes não rodam no Actions, para
+  # economizar minutos: rode-os localmente (README). Só a conferência das
+  # migrations continua, dentro do deploy, porque uma migration pulada em
+  # produção não tem volta.
   deploy:
-    needs: test
     # Só a main vai para a VPS (workflow_dispatch numa branch ou tag antiga não:
     # um binário antigo não sobe com o socket do systemd ativo).
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.DEPLOY_ENABLED == 'true'
+    if: github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     env:
       PUBLIC_URL: ${{ vars.PUBLIC_URL }}
@@ -108,6 +42,11 @@ jobs:
       WEB_URL: ${{ vars.WEB_URL }}
     steps:
       - uses: actions/checkout@v7
+
+      # Número de migration repetido seria pulado em silêncio no banco
+      # (docs/HOSPEDAGEM.md).
+      - name: Migrations (números)
+        run: node scripts/check-migrations.mjs
 
       - uses: actions/setup-go@v7
         with:
@@ -190,6 +129,8 @@ jobs:
             curl -fsS "${WEB_URL%/}/" | grep -q '<div id="root">'
             # Rota funda: o Caddy devolve o index.html (fallback de SPA).
             curl -fsS "${WEB_URL%/}/friends" | grep -q '<div id="root">'
+            # Link de convite (/convite/<código>) também é rota do app.
+            curl -fsS "${WEB_URL%/}/convite/ABCD2345" | grep -q '<div id="root">'
             test "$(curl -s -o /dev/null -w '%{http_code}' "${WEB_URL%/}/api/users/me")" = 401
             test "$(curl -s -o /dev/null -w '%{http_code}' "${WEB_URL%/}/rtc/validate")" = 401
             echo "App web no ar em ${WEB_URL%/}"

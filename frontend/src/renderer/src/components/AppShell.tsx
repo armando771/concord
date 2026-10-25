@@ -12,6 +12,10 @@ import ActivityPanel from './call/ActivityPanel'
 import ScreenSharePickerModal from './call/ScreenSharePickerModal'
 import LevelUpBanner from './level/LevelUpBanner'
 import LevelUpScreen from './level/LevelUpScreen'
+import InviteConfirmModal from './invite/InviteConfirmModal'
+import LevelUpMilestone from './level/LevelUpMilestone'
+import BadgesModal from './badges/BadgesModal'
+import BadgeUnlockToast from './badges/BadgeUnlockToast'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { IS_WEB } from '../lib/config'
@@ -48,8 +52,12 @@ function AppShell(): React.JSX.Element {
       {/* No navegador o seletor de tela é o do próprio navegador. */}
       {!IS_WEB && <ScreenSharePickerModal />}
       <LevelUpScreen />
+      <InviteConfirmModal />
+      <LevelUpMilestone />
 
       <LevelUpBanner />
+      <BadgeUnlockToast />
+      <BadgesModal />
     </div>
   )
 }

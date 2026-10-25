@@ -35,18 +35,20 @@ function SystemMessage({ message }: { message: Message }): React.JSX.Element {
       id={`msg-${message.id}`}
       className="mx-2 my-1 flex gap-3 rounded-lg border border-amber-400/20 bg-gradient-to-r from-amber-500/10 via-pink-500/5 to-transparent px-3 py-2.5"
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-pink-500 text-sm font-bold text-white shadow-md">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-pink-500 text-ds-md font-bold text-white shadow-md">
         {serverName.charAt(0).toUpperCase()}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="text-sm font-semibold text-amber-200">{serverName}</span>
+          <span className="text-ds-chat font-medium text-amber-200">{serverName}</span>
           <span className="rounded bg-amber-400/20 px-1 py-px text-[9px] font-bold uppercase tracking-wide text-amber-200">
             Servidor
           </span>
-          <span className="text-[10px] text-gray-500">{formatTime(message.created_at)}</span>
+          <span className="text-ds-xs font-medium text-gray-500">
+            {formatTime(message.created_at)}
+          </span>
         </div>
-        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-100">
+        <p className="whitespace-pre-wrap break-words text-ds-chat text-gray-100">
           {at >= 0 ? (
             <>
               {renderText(message.content.slice(0, at), 0)}O servidor{' '}

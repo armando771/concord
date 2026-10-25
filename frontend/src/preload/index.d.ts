@@ -52,6 +52,8 @@ export interface BackgroundApi {
     toast?: boolean
     /** Piscar + selo de não lidas na barra de tarefas (padrão: ligado). */
     taskbar?: boolean
+    /** A conversa não está na tela: o toast aparece mesmo com a janela em foco. */
+    elsewhere?: boolean
   }): void
   quit(): void
   /** null = não suportado nesta plataforma */
@@ -60,6 +62,14 @@ export interface BackgroundApi {
   onToggleMute(cb: () => void): () => void
   onQuitRequested(cb: () => void): () => void
   onNavigate(cb: (route: string) => void): () => void
+}
+
+/** Links salinha://convite/<código> que abriram o app. */
+export interface InviteLinksApi {
+  /** Convite que chegou e ainda não foi aberto (busca uma vez só), ou null. */
+  takePending(): Promise<string | null>
+  /** Chegou um convite (busque com takePending). Retorna unsubscribe. */
+  onPending(cb: () => void): () => void
 }
 
 export interface ActivitiesApi {
@@ -118,6 +128,7 @@ declare global {
       screenAudio?: ScreenAudioApi
       screenShare?: ScreenShareApi
       overlay?: OverlayApi
+      inviteLinks?: InviteLinksApi
       activities?: ActivitiesApi
     }
   }

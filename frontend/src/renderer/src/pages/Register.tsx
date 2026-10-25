@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import AuthLayout from '../components/AuthLayout'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -20,12 +20,16 @@ import { register } from '../api/auth'
 import { registerErrorMessage } from '../lib/loginError'
 import { getMe } from '../api/users'
 import { useAuthStore } from '../store/authStore'
+import { useInviteLinkStore } from '../store/inviteLinkStore'
+import { authPathWithInvite, inviteCodeFromSearch } from '../lib/inviteLink'
 
 const STRENGTH_LABEL = ['', 'Fraca', 'Razoável', 'Boa', 'Forte']
 const STRENGTH_COLOR = ['', 'bg-red-400', 'bg-orange-400', 'bg-yellow-400', 'bg-emerald-400']
 
 function Register(): React.JSX.Element {
   const navigate = useNavigate()
+  // Veio de um link de convite: depois de criar a conta, abre a confirmação.
+  const inviteCode = inviteCodeFromSearch(useLocation().search)
   const setTokens = useAuthStore((s) => s.setTokens)
   const setUser = useAuthStore((s) => s.setUser)
 
@@ -72,6 +76,7 @@ function Register(): React.JSX.Element {
             }
           : {})
       })
+      if (inviteCode) useInviteLinkStore.getState().open(inviteCode)
       setTokens(tokens.access_token, tokens.refresh_token)
       const me = await getMe()
       setUser(me)
@@ -93,6 +98,11 @@ function Register(): React.JSX.Element {
   return (
     <AuthLayout wide>
       <h1 className="text-2xl font-semibold text-gray-50">Criar uma conta</h1>
+      {inviteCode && (
+        <p className="mt-3 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-200">
+          Crie sua conta para aceitar o convite.
+        </p>
+      )}
       <p className="mb-6 mt-1 text-sm text-gray-400">
         Enviaremos um e-mail para confirmar o seu endereço.
       </p>
@@ -174,7 +184,10 @@ function Register(): React.JSX.Element {
         </Button>
       </form>
       <p className="mt-4 text-sm text-gray-400">
-        <Link to="/login" className="font-medium text-violet-400 hover:underline">
+        <Link
+          to={authPathWithInvite('/login', inviteCode)}
+          className="font-medium text-violet-400 hover:underline"
+        >
           Já tem uma conta?
         </Link>
       </p>

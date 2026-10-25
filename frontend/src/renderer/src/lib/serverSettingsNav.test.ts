@@ -23,6 +23,11 @@ describe('seções das configurações do servidor', () => {
     expect(ids(Perm.MANAGE_ROLES)).toEqual(['roles', 'members'])
     expect(ids(Perm.KICK_MEMBERS)).toEqual(['members'])
     expect(ids(Perm.BAN_MEMBERS)).toEqual(['members', 'bans'])
+    expect(ids(Perm.MANAGE_NICKNAMES)).toEqual(['members'])
+  })
+
+  it('"Alterar apelido" (o próprio) não abre as configurações', () => {
+    expect(ids(Perm.CHANGE_NICKNAME)).toEqual([])
   })
 
   it('o moderador padrão (editar servidor + expulsar) vê visão geral e membros', () => {

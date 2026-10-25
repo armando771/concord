@@ -3,6 +3,7 @@ import type { WsEvent } from '../api/ws'
 import { activityLaunchUrl, findActivity, validateActivityLink } from '../../../shared/activities'
 import {
   activityReducer,
+  activityStarterName,
   INITIAL_ACTIVITY_STATE,
   type ActivityAction,
   type ActivityState,
@@ -11,6 +12,7 @@ import {
 import { IS_WEB } from '../lib/config'
 import { useAuthStore } from './authStore'
 import { useChatStore } from './chatStore'
+import { useServerStore } from './serverStore'
 import { showToast } from './toastStore'
 
 // Atividades da chamada. O estado compartilhado vem do backend (call:activity);
@@ -31,8 +33,13 @@ interface ActivityStoreState extends ActivityState {
   /** Fecha o jogo aqui (quem abriu, ao fechar, encerra para todos). */
   closeLocal: () => void
   setPanelMinimized: (minimized: boolean) => void
-  /** Chamada atual (callStore). */
-  setCall: (callId: string | null) => void
+  /**
+   * Servidor da call de canal atual (null em DM): o aviso "X abriu …" sai com
+   * o apelido de lá.
+   */
+  callServerId: string | null
+  /** Chamada atual (callStore); serverId só em call de canal. */
+  setCall: (callId: string | null, serverId?: string | null) => void
   /** Estado da chamada lido do backend. */
   hydrate: (callId: string, activity: RawCallActivity | null) => void
   handleWsEvent: (event: WsEvent) => void
@@ -118,6 +125,7 @@ export const useActivityStore = create<ActivityStoreState>()((set, get) => {
   return {
     ...INITIAL_ACTIVITY_STATE,
     panelMinimized: false,
+    callServerId: null,
 
     start: async (callId, activityId, link) => {
       const activity = findActivity(activityId)
@@ -187,7 +195,10 @@ export const useActivityStore = create<ActivityStoreState>()((set, get) => {
 
     setPanelMinimized: (panelMinimized) => set({ panelMinimized }),
 
-    setCall: (callId) => dispatch({ type: 'call', callId }),
+    setCall: (callId, serverId = null) => {
+      if (get().callServerId !== serverId) set({ callServerId: serverId })
+      dispatch({ type: 'call', callId })
+    },
 
     hydrate: (callId, activity) => dispatch({ type: 'hydrate', callId, activity }),
 
@@ -210,7 +221,11 @@ export const useActivityStore = create<ActivityStoreState>()((set, get) => {
               before.startedBy.id !== after.startedBy.id)
           if (isNew && after.startedBy.id !== meId()) {
             const name = findActivity(after.activityId)?.name ?? 'uma atividade'
-            const who = after.startedBy.display_name || after.startedBy.username || 'Alguém'
+            const serverId = get().callServerId
+            const who = activityStarterName(
+              after,
+              serverId ? useServerStore.getState().nicknames?.[serverId] : undefined
+            )
             showToast.info(`${who} abriu ${name} na chamada.`)
           }
           return

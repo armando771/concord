@@ -4,6 +4,7 @@ import { setStatus } from '../api/users'
 import type { ChosenStatus } from '../lib/presenceStatus'
 import router from '../router'
 import { useAuthStore } from './authStore'
+import { useChannelNameStore } from './channelNameStore'
 import { useChatStore } from './chatStore'
 import { useFriendStore } from './friendStore'
 import { useInviteStore } from './inviteStore'
@@ -27,6 +28,7 @@ export async function logoutAndReset(): Promise<void> {
     useServerStore.getState().reset()
     useInviteStore.getState().reset()
     useProfileStore.getState().reset()
+    useChannelNameStore.getState().reset()
     useChatStore.getState().disconnect()
     useProfileCardStore.getState().close()
     useSettingsStore.getState().forceClose()

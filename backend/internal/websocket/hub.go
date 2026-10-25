@@ -419,6 +419,19 @@ func (h *Hub) IsOnline(userID string) bool {
 	return h.presence[userID] > 0
 }
 
+// OnlineUserIDs lista quem tem pelo menos uma conexão aberta (badges).
+func (h *Hub) OnlineUserIDs() []string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	ids := make([]string, 0, len(h.presence))
+	for id, n := range h.presence {
+		if n > 0 {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 // PresenceMap devolve o status efetivo de cada id ("offline" se desconectado
 // ou invisível).
 func (h *Hub) PresenceMap(userIDs []string) map[string]string {
@@ -434,7 +447,8 @@ func (h *Hub) PresenceMap(userIDs []string) map[string]string {
 	return result
 }
 
-// messageRooms são as salas por onde chegam message:create e message:delete:
+// messageRooms são as salas por onde chegam message:create, message:update e
+// message:delete:
 // o canal e o servidor dele, ou a DM e a sala pessoal de cada participante.
 func messageRooms(channelID *string, serverID string, conversationID *string, userIDs []string) []string {
 	var rooms []string
@@ -470,6 +484,11 @@ func (h *Hub) publishMessage(data []byte, channelID *string, serverID string, co
 
 func (h *Hub) PublishMessageCreate(event message.CreateEvent) {
 	h.publishMessage(writeEvent("message:create", event), event.ChannelID, event.ServerID, event.ConversationID, event.UserIDs)
+}
+
+// PublishMessageUpdate (mensagem editada) vai pelas mesmas salas do create.
+func (h *Hub) PublishMessageUpdate(event message.UpdateEvent) {
+	h.publishMessage(writeEvent("message:update", event), event.ChannelID, event.ServerID, event.ConversationID, event.UserIDs)
 }
 
 func (h *Hub) PublishMessageDelete(event message.DeleteEvent) {
@@ -537,6 +556,12 @@ func (h *Hub) PublishMemberUpdate(event server.MemberJoinEvent) {
 	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:update", event))
 }
 
+// PublishMemberNickname: o apelido de alguém mudou; todo o servidor atualiza
+// o nome na hora (lista de membros, chat, voz).
+func (h *Hub) PublishMemberNickname(event server.NicknameEvent) {
+	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:nickname", event))
+}
+
 func (h *Hub) PublishMemberJoin(event server.MemberJoinEvent) {
 	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:join", event))
 }
@@ -591,6 +616,24 @@ func (h *Hub) PublishPermissionsChanged(serverID string) {
 	if hook != nil {
 		go hook(serverID)
 	}
+}
+
+// O server.Service avisa do link novo por aqui (type assertion no publisher).
+var _ server.InviteCodePublisher = (*Hub)(nil)
+
+// PublishInviteCode: o link de convite do servidor mudou ("Gerar novo link").
+// Só quem pode convidar (CREATE_INVITE) recebe o código novo.
+func (h *Hub) PublishInviteCode(serverID, code string) {
+	snap := h.snapshot(serverID)
+	if snap == nil {
+		return
+	}
+	h.BroadcastToRoomFiltered("server:"+serverID, writeEvent("server:invite_code", map[string]string{
+		"server_id": serverID,
+		"code":      code,
+	}), func(userID string) bool {
+		return permission.Has(snap.Server(userID), permission.CreateInvite)
+	})
 }
 
 // SendToUser delivers an event directly to every connection of a user

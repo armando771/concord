@@ -8,6 +8,8 @@ import { buildLoginInput, loginIdentifierError } from '../lib/loginIdentifier'
 import { loginErrorMessage } from '../lib/loginError'
 import { getMe } from '../api/users'
 import { useAuthStore } from '../store/authStore'
+import { useInviteLinkStore } from '../store/inviteLinkStore'
+import { authPathWithInvite, inviteCodeFromSearch } from '../lib/inviteLink'
 
 const INVALID_LOGIN = 'Login ou senha inválidos.'
 
@@ -15,6 +17,8 @@ function Login(): React.JSX.Element {
   const navigate = useNavigate()
   const location = useLocation()
   const notice = (location.state as { notice?: string } | null)?.notice ?? null
+  // Veio de um link de convite: depois de entrar, abre a confirmação.
+  const inviteCode = inviteCodeFromSearch(location.search)
   const setTokens = useAuthStore((s) => s.setTokens)
   const setUser = useAuthStore((s) => s.setUser)
 
@@ -38,6 +42,7 @@ function Login(): React.JSX.Element {
     setLoading(true)
     try {
       const tokens = await login(buildLoginInput(identifier, password))
+      if (inviteCode) useInviteLinkStore.getState().open(inviteCode)
       setTokens(tokens.access_token, tokens.refresh_token)
       const me = await getMe()
       setUser(me)
@@ -60,6 +65,11 @@ function Login(): React.JSX.Element {
     <AuthLayout>
       <h1 className="text-2xl font-semibold text-gray-50">Boas-vindas de volta!</h1>
       <p className="mb-6 mt-1 text-sm text-gray-400">Que bom te ver de novo na Salinha.</p>
+      {inviteCode && (
+        <p className="mb-4 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-200">
+          Entre na sua conta para aceitar o convite.
+        </p>
+      )}
       {notice && (
         <p className="mb-4 rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-3 py-2 text-sm text-emerald-300">
           {notice}
@@ -106,7 +116,10 @@ function Login(): React.JSX.Element {
       </form>
       <p className="mt-4 text-sm text-gray-400">
         Precisando de uma conta?{' '}
-        <Link to="/register" className="font-medium text-violet-400 hover:underline">
+        <Link
+          to={authPathWithInvite('/register', inviteCode)}
+          className="font-medium text-violet-400 hover:underline"
+        >
           Registre-se
         </Link>
       </p>

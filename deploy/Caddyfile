@@ -97,7 +97,14 @@ concord.bhrx.com.br {
 	redir https://salinha.bhrx.com.br{uri} permanent
 }
 
-# App no navegador (atrás do proxy do Cloudflare).
+# App no navegador. DNS com o proxy do Cloudflare DESLIGADO (nuvem cinza): o
+# Caddy vê o IP de verdade de quem conecta e o passa no X-Forwarded-For, que é
+# a chave dos limites por IP do backend (prévia do convite, login, cadastro,
+# confirmação de e-mail e senha). Se um dia ligar o proxy aqui, configure antes
+# no bloco global `servers { trusted_proxies static <faixas do Cloudflare> }`
+# para o X-Forwarded-For trazer o cliente real; sem isso todo mundo cai nos
+# poucos IPs do Cloudflare e divide os mesmos limites. Não confie no
+# CF-Connecting-IP de qualquer origem.
 app-salinha.bhrx.com.br {
 	encode zstd gzip
 	header {
@@ -126,7 +133,8 @@ app-salinha.bhrx.com.br {
 		file_server
 	}
 
-	# O resto é o app: qualquer rota (/servers/…, /dm/…) devolve o index.html,
+	# O resto é o app: qualquer rota (/servers/…, /dm/…, os links de convite
+	# /convite/…) devolve o index.html,
 	# sempre revalidado para pegar a versão nova logo depois do deploy.
 	handle {
 		root * /opt/concord/web

@@ -10,6 +10,7 @@ import Modal from './Modal'
 import Button from './Button'
 import Input from './Input'
 import { joinServerByCode } from '../api/servers'
+import { parseInviteInput } from '../lib/inviteLink'
 
 function ServerRail(): React.JSX.Element {
   const location = useLocation()
@@ -95,10 +96,16 @@ function ServerRail(): React.JSX.Element {
   const handleJoinByCode = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
     if (!joinCode.trim()) return
+    // Aceita o código ou o link de convite colado inteiro.
+    const code = parseInviteInput(joinCode)
+    if (!code) {
+      showToast.error('Link ou código de convite inválido.')
+      return
+    }
 
     setJoining(true)
     try {
-      const server = await joinServerByCode(joinCode)
+      const server = await joinServerByCode(code)
       await fetchServers()
       showToast.success(`Você entrou em "${server.name}"!`)
       setJoinCode('')
@@ -238,7 +245,7 @@ function ServerRail(): React.JSX.Element {
           </p>
 
           <Input
-            label="NOME DO SERVIDOR"
+            label="Nome do servidor"
             placeholder="Ex: Servidor dos Brothers"
             value={serverName}
             onChange={(e) => setServerName(e.target.value)}
@@ -268,13 +275,14 @@ function ServerRail(): React.JSX.Element {
           className="mt-5 flex flex-col gap-3 border-t border-white/10 pt-5"
         >
           <p className="text-sm font-semibold text-white">Entrar com código</p>
+          <p className="-mt-1 text-xs text-gray-400">Cole o link de convite ou digite o código.</p>
           <div className="flex gap-2">
             <Input
-              placeholder="Ex: K7P2QX9M"
+              placeholder="Ex: K7P2QX9M ou https://app-salinha.bhrx.com.br/convite/K7P2QX9M"
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value)}
-              aria-label="Código de convite"
-              className="font-mono uppercase tracking-widest"
+              aria-label="Código ou link de convite"
+              className="font-mono"
             />
             <Button type="submit" variant="success" disabled={joining || !joinCode.trim()}>
               {joining ? 'Entrando...' : 'Entrar'}

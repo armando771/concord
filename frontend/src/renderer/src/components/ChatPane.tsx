@@ -8,14 +8,18 @@ import Avatar from './Avatar'
 import { useUserLook } from '../store/profileStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import { userMenuHandler } from '../store/userMenuStore'
+import { useServerNickname, useServerNicknames } from '../store/useServerNames'
+import { serverDisplayName } from '../lib/serverNames'
 import { useFriendStore } from '../store/friendStore'
+import { applyMention, mentionQuery, mentionSuggestions, messageMentionsMe } from '../lib/mentions'
 import {
-  applyMention,
-  mentionQuery,
-  mentionSuggestions,
-  messageMentionsMe,
-  splitMentions
-} from '../lib/mentions'
+  canEditMessage,
+  editErrorMessage,
+  editOutcome,
+  lastEditableMessage
+} from '../lib/messageEdit'
+import MessageText from './chat/MessageText'
+import MessageEditor from './chat/MessageEditor'
 import { filterEmoteCategories, QUICK_EMOTES } from '../lib/emotes'
 import { messagePreview } from '../lib/polls'
 import PollCard from './poll/PollCard'
@@ -61,10 +65,17 @@ import {
 export interface Mentionable {
   username: string
   display_name: string
+  /** Apelido no servidor (só em canal de servidor). */
+  nickname?: string | null
 }
 
 interface ChatPaneProps {
   room: string
+  /**
+   * Canal de servidor: os nomes saem com o apelido de cada um naquele
+   * servidor. Sem isso (DM, grupo), vale o nome de exibição.
+   */
+  serverId?: string
   placeholder?: string
   /** Quem pode ser marcado com @ (membros do servidor, ou a pessoa da DM). */
   mentionable?: Mentionable[]
@@ -82,6 +93,23 @@ const ANCHOR_CANDIDATES = 20
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+}
+
+/** Tem texto selecionado que pega (ao menos em parte) este elemento? */
+function selectionTouches(el: Element): boolean {
+  const selection = window.getSelection()
+  return Boolean(selection && !selection.isCollapsed && selection.containsNode(el, true))
+}
+
+function formatEditedAt(iso: string): string {
+  const when = new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+  return `Editada em ${when}`
 }
 
 function EmotePickerPopover({
@@ -159,6 +187,7 @@ function EmotePickerPopover({
 
 function MessageItem({
   message,
+  serverId,
   isHighlighted,
   onReply,
   onReact,
@@ -166,10 +195,18 @@ function MessageItem({
   onDelete,
   onVote,
   onEndPoll,
+  onCopy,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  isEditing,
+  savingEdit,
   canReact,
   canModerate
 }: {
   message: Message
+  /** Canal de servidor: autor e resposta com o apelido daquele servidor. */
+  serverId?: string
   isHighlighted: boolean
   onReply: () => void
   onReact: (emoji: string) => void
@@ -177,6 +214,13 @@ function MessageItem({
   onDelete: () => void
   onVote: (answerIds: number[]) => Promise<void>
   onEndPoll: () => Promise<void>
+  onCopy: () => void
+  onStartEdit: () => void
+  onSaveEdit: (draft: string) => void
+  onCancelEdit: () => void
+  /** Esta mensagem está aberta na edição. */
+  isEditing: boolean
+  savingEdit: boolean
   /** ADD_REACTIONS no canal. */
   canReact: boolean
   /** MANAGE_MESSAGES no canal: apaga mensagem de outros e encerra enquete. */
@@ -193,7 +237,9 @@ function MessageItem({
       'Desconhecido',
     avatarUrl: author?.avatar_url
   })
-  const name = look.name
+  const nickname = useServerNickname(serverId, message.author_id)
+  const name = serverDisplayName({ nickname }, { display_name: look.name })
+  const replyNickname = useServerNickname(serverId, message.reply_to?.author_id)
   const openProfile = profileCardHandler(message.author_id, name, author?.username, 'right')
   const [hover, setHover] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -204,17 +250,17 @@ function MessageItem({
   const onAuthorMenu = userMenuHandler(message.author_id, name, me?.id, author?.username)
 
   const mentionsMe = messageMentionsMe(message, me)
+  const editable = canEditMessage(message, me?.id)
   const reactions = message.reactions ?? []
   const hasReplyReference = Boolean(message.reply_to_id || message.reply_to)
-  const replyAuthorName =
-    message.reply_to?.author?.display_name ?? message.reply_to?.author?.username ?? 'Usuário'
+  const replyAuthorName = serverDisplayName({ nickname: replyNickname }, message.reply_to?.author)
 
   if (message.system_kind) return <SystemMessage message={message} />
 
   // Mensagem de quem você bloqueou: escondida, como no Discord.
   if (authorBlocked && !revealBlocked) {
     return (
-      <div id={`msg-${message.id}`} className="px-4 py-1 text-xs text-gray-500">
+      <div id={`msg-${message.id}`} className="px-4 py-1 text-ds-sm text-gray-500">
         1 mensagem bloqueada —{' '}
         <button
           type="button"
@@ -239,10 +285,15 @@ function MessageItem({
       }`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      onContextMenu={onAuthorMenu}
+      onContextMenu={(e) => {
+        // Sobre texto selecionado desta linha ou link fica o menu do
+        // navegador/app (copiar, copiar link); no resto da linha, o do autor.
+        if (selectionTouches(e.currentTarget) || (e.target as Element).closest('a')) return
+        onAuthorMenu?.(e)
+      }}
     >
       {hasReplyReference && (
-        <div className="flex items-center gap-1.5 pl-4 text-xs text-gray-400">
+        <div className="flex items-center gap-1.5 pl-4 text-ds-sm text-gray-400">
           <span className="h-2.5 w-5 shrink-0 rounded-tl-md border-l-2 border-t-2 border-gray-600" />
           {message.reply_to ? (
             <button
@@ -266,36 +317,39 @@ function MessageItem({
           type="button"
           onClick={openProfile}
           aria-label={`Perfil de ${name}`}
-          className="h-9 shrink-0 cursor-pointer self-start rounded-full"
+          className="h-10 shrink-0 cursor-pointer self-start rounded-full"
         >
-          <Avatar userId={message.author_id} name={name} avatarUrl={look.avatarUrl} size={36} />
+          <Avatar userId={message.author_id} name={name} avatarUrl={look.avatarUrl} size={40} />
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <button
               type="button"
               onClick={openProfile}
-              className="cursor-pointer text-sm font-semibold text-white hover:underline"
+              className="cursor-pointer text-ds-chat font-medium text-white hover:underline"
             >
               {name}
             </button>
-            <span className="text-[10px] text-gray-500">{formatTime(message.created_at)}</span>
+            <span className="text-ds-xs font-medium text-gray-500">
+              {formatTime(message.created_at)}
+            </span>
+            {message.edited_at && (
+              <span className="text-ds-xs text-gray-500" title={formatEditedAt(message.edited_at)}>
+                (editada)
+              </span>
+            )}
           </div>
-          {message.content && (
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">
-              {splitMentions(message.content, message.mention_everyone ?? null).map((part, i) =>
-                part.mention ? (
-                  <span
-                    key={i}
-                    className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]"
-                  >
-                    {part.text}
-                  </span>
-                ) : (
-                  part.text
-                )
-              )}
-            </p>
+          {isEditing ? (
+            <MessageEditor
+              initial={message.content}
+              saving={savingEdit}
+              onSave={onSaveEdit}
+              onCancel={onCancelEdit}
+            />
+          ) : (
+            message.content && (
+              <MessageText content={message.content} everyone={message.mention_everyone ?? null} />
+            )
           )}
           {message.attachments?.length ? (
             <MessageAttachments attachments={message.attachments} />
@@ -377,6 +431,26 @@ function MessageItem({
             >
               Responder
             </button>
+            {message.content && (
+              <button
+                type="button"
+                onClick={onCopy}
+                title="Copiar texto"
+                className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                Copiar texto
+              </button>
+            )}
+            {editable && !isEditing && (
+              <button
+                type="button"
+                onClick={onStartEdit}
+                title="Editar mensagem"
+                className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                Editar
+              </button>
+            )}
             {(isMine || canModerate) && (
               <button
                 type="button"
@@ -403,6 +477,7 @@ function MessageItem({
 
 function ChatPane({
   room,
+  serverId,
   placeholder = 'Digite sua mensagem',
   mentionable = [],
   canMentionEveryone = false,
@@ -425,7 +500,13 @@ function ChatPane({
   const createPollInRoom = useChatStore((s) => s.createPollInRoom)
   const votePollInRoom = useChatStore((s) => s.votePollInRoom)
   const endPollInRoom = useChatStore((s) => s.endPollInRoom)
+  const editInRoom = useChatStore((s) => s.editInRoom)
   const [pollOpen, setPollOpen] = useState(false)
+  // Mensagem aberta na edição, por sala (o ServerView reaproveita o ChatPane).
+  const [editState, setEditState] = useState<{ room: string; id: string } | null>(null)
+  const editingId = editState?.room === room ? editState.id : null
+  const [savingEdit, setSavingEdit] = useState(false)
+  const meId = useAuthStore((s) => s.user?.id)
 
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -465,6 +546,7 @@ function ChatPane({
       mountedRef.current = false
     }
   }, [])
+  const nicknames = useServerNicknames(serverId)
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
   const [highlightChoice, setHighlight] = useState<number | null>(null)
   const meUsername = useAuthStore((s) => s.user?.username)
@@ -512,9 +594,63 @@ function ChatPane({
       // Sem item escolhido, Enter/Tab seguem normais (nada de @all sem querer).
       if (e.key === 'Enter' || e.key === 'Tab') return
     }
+    // ↑ no campo vazio edita a sua última mensagem (como no Discord).
+    if (e.key === 'ArrowUp' && draft === '' && !e.shiftKey && !e.altKey && !e.ctrlKey) {
+      const last = lastEditableMessage(messages, meId)
+      if (last) {
+        e.preventDefault()
+        startEdit(last.id)
+        return
+      }
+    }
     if (e.key === 'Escape' && replyingTo) {
       setReplyState(null)
     }
+  }
+
+  const startEdit = (messageId: string): void => {
+    setEditState({ room, id: messageId })
+    requestAnimationFrame(() =>
+      document.getElementById(`msg-${messageId}`)?.scrollIntoView({ block: 'nearest' })
+    )
+  }
+
+  const closeEdit = (): void => {
+    setEditState(null)
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  const handleSaveEdit = async (message: Message, draft: string): Promise<void> => {
+    const outcome = editOutcome(message.content, draft, Boolean(message.attachments?.length))
+    if (outcome.kind === 'unchanged') {
+      closeEdit()
+      return
+    }
+    if (outcome.kind === 'empty') {
+      showToast.error('A mensagem não pode ficar vazia.')
+      return
+    }
+    const editedRoom = room
+    setSavingEdit(true)
+    try {
+      await editInRoom(editedRoom, message.id, outcome.content)
+      if (roomRef.current === editedRoom) closeEdit()
+    } catch (err) {
+      showToast.error(editErrorMessage(err) ?? actionErrorMessage(err, 'Falha ao editar mensagem.'))
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  const handleCopy = (text: string): void => {
+    if (!navigator.clipboard) {
+      showToast.error('Não deu para copiar.')
+      return
+    }
+    navigator.clipboard.writeText(text).then(
+      () => showToast.success('Copiado'),
+      () => showToast.error('Não deu para copiar.')
+    )
   }
   // Por sala: o ServerView reaproveita o ChatPane entre canais, e o
   // carregamento de um canal não pode travar (nem destravar) o botão do outro.
@@ -770,8 +906,10 @@ function ChatPane({
     }, 1600)
   }
 
-  const replyTargetAuthor =
-    replyingTo?.author?.display_name ?? replyingTo?.author?.username ?? 'Usuário'
+  const replyTargetAuthor = serverDisplayName(
+    { nickname: replyingTo ? nicknames?.[replyingTo.author_id] : undefined },
+    replyingTo?.author
+  )
 
   return (
     <div
@@ -820,6 +958,7 @@ function ChatPane({
               <MessageItem
                 key={m.id}
                 message={m}
+                serverId={serverId}
                 isHighlighted={highlightedId === m.id}
                 onReply={() => handleStartReply(m)}
                 onReact={(emoji) => void handleReact(m.id, emoji)}
@@ -827,6 +966,12 @@ function ChatPane({
                 onDelete={() => handleDelete(m.id)}
                 onVote={(answerIds) => votePollInRoom(room, m.id, answerIds)}
                 onEndPoll={() => endPollInRoom(room, m.id)}
+                onCopy={() => handleCopy(m.content)}
+                onStartEdit={() => startEdit(m.id)}
+                onSaveEdit={(text) => void handleSaveEdit(m, text)}
+                onCancelEdit={closeEdit}
+                isEditing={editingId === m.id}
+                savingEdit={savingEdit && editingId === m.id}
                 canReact={permissions.canReact}
                 canModerate={permissions.canModerate}
               />
@@ -864,7 +1009,7 @@ function ChatPane({
                   </>
                 ) : (
                   <>
-                    <span className="font-semibold">{m.display_name}</span>
+                    <span className="font-semibold">{serverDisplayName(m, m)}</span>
                     <span className="text-xs text-gray-400">@{m.username}</span>
                   </>
                 )}
@@ -874,7 +1019,7 @@ function ChatPane({
         )}
         <ComposerAttachments drafts={drafts} onRemove={removeAttachment} />
         {replyingTo && (
-          <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#18191c] px-3 py-1.5 text-xs text-gray-300">
+          <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#18191c] px-3 py-1.5 text-ds-sm text-gray-300">
             <div className="min-w-0 truncate">
               Respondendo a <span className="font-semibold text-white">@{replyTargetAuthor}</span>
               <span className="ml-2 text-gray-400">{messagePreview(replyingTo)}</span>
@@ -943,7 +1088,7 @@ function ChatPane({
               onBlur={() => setMention(null)}
               placeholder={replyingTo ? `Responder a @${replyTargetAuthor}...` : placeholder}
               maxLength={2000}
-              className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 outline-none"
+              className="min-w-0 flex-1 bg-transparent text-ds-chat text-white placeholder:text-gray-500 outline-none"
             />
             {permissions.canAttach && (
               <VoiceRecordButton key={room} disabled={sendingVoice} onRecorded={handleRecorded} />
@@ -951,7 +1096,7 @@ function ChatPane({
             <button
               type="submit"
               disabled={sending || !submittable}
-              className="cursor-pointer rounded-lg bg-[#5865f2] px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-40"
+              className="cursor-pointer rounded-lg bg-[#5865f2] px-3 py-1.5 text-ds-sm font-medium text-white transition-all hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {attachmentState.uploading
                 ? 'Enviando arquivos...'
@@ -961,7 +1106,7 @@ function ChatPane({
             </button>
           </form>
         )}
-        <TypingIndicator room={room} />
+        <TypingIndicator room={room} serverId={serverId} />
       </div>
       <CreatePollModal
         open={pollOpen}

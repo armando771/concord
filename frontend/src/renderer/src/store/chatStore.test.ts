@@ -73,7 +73,9 @@ vi.mock('../lib/notifications', () => ({
   mentionNotification: () => null,
   messageNotification: () => null,
   notificationSound: () => null,
-  notifyDesktop: vi.fn()
+  notifyDesktop: vi.fn(),
+  deliverDesktop: vi.fn(),
+  messageAlert: () => null
 }))
 vi.mock('../lib/sounds', () => ({ playSound: vi.fn() }))
 vi.mock('../router', () => ({ router: { navigate: vi.fn() } }))

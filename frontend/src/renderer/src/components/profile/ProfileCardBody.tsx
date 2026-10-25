@@ -13,6 +13,8 @@ export const CARD_BG = '#111214'
 export interface CardProfile {
   id?: string
   display_name: string
+  /** Apelido no servidor aberto: aparece em destaque, com o nome de verdade embaixo. */
+  nickname?: string | null
   username?: string
   avatar_url?: string | null
   banner_url?: string | null
@@ -32,6 +34,8 @@ interface ProfileCardBodyProps {
   avatarFallbackClassName?: string
   /** Canto direito, na altura do avatar (selo de nível). */
   badge?: ReactNode
+  /** Fileira de badges ao lado do username. */
+  badges?: ReactNode
   /** Só no próprio perfil: avatar e nota vazia levam ao editor. */
   onEditProfile?: () => void
   /** Prévia do editor: o avatar não usa o profileStore (mostra o rascunho). */
@@ -50,6 +54,7 @@ function ProfileCardBody({
   fallbackBanner,
   avatarFallbackClassName,
   badge,
+  badges,
   onEditProfile,
   preview = false,
   children
@@ -83,7 +88,7 @@ function ProfileCardBody({
             <div className="relative shrink-0 rounded-full p-1.5" style={{ background: CARD_BG }}>
               <Avatar
                 userId={preview ? undefined : profile.id}
-                name={profile.display_name}
+                name={profile.nickname || profile.display_name}
                 avatarUrl={profile.avatar_url}
                 size={80}
                 animate="always"
@@ -137,17 +142,28 @@ function ProfileCardBody({
 
         <div className="mt-2">
           <p className="truncate text-xl font-bold text-white">
-            {profile.display_name || ' '}
+            {profile.nickname || profile.display_name || ' '}
             {isMe && !preview && (
               <span className="ml-1.5 text-xs font-medium text-gray-400">(você)</span>
             )}
           </p>
-          {(profile.username || profile.pronouns) && (
-            <p className="truncate text-sm text-gray-300">
-              {profile.username && <span>{profile.username}</span>}
-              {profile.username && profile.pronouns && <span className="text-gray-500"> • </span>}
-              {profile.pronouns && <span className="text-gray-400">{profile.pronouns}</span>}
+          {profile.nickname && (
+            <p
+              className="truncate text-ds-sm font-semibold text-gray-200"
+              title="Nome de exibição (fora deste servidor)"
+            >
+              {profile.display_name}
             </p>
+          )}
+          {(profile.username || profile.pronouns || badges) && (
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="min-w-0 truncate text-sm text-gray-300">
+                {profile.username && <span>{profile.username}</span>}
+                {profile.username && profile.pronouns && <span className="text-gray-500"> • </span>}
+                {profile.pronouns && <span className="text-gray-400">{profile.pronouns}</span>}
+              </p>
+              {badges}
+            </div>
           )}
         </div>
 

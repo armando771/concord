@@ -1,4 +1,14 @@
-import { app, shell, BrowserWindow, desktopCapturer, ipcMain, Menu, session } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  clipboard,
+  desktopCapturer,
+  ipcMain,
+  Menu,
+  session,
+  type MenuItemConstructorOptions
+} from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -7,10 +17,13 @@ import { PendingDisplayRequest } from './displayPicker'
 import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './background'
 import { setupUpdater } from './updater'
 import { setupOverlay } from './overlay'
+import { handleInviteArgs, setupInviteProtocol } from './inviteProtocol'
 import { closeActivity, setupActivities } from './activityWindow'
 import { APP_USER_MODEL_ID } from './toastPolicy'
 import { setupToasts } from './toasts'
 import { TITLE_BAR_COLOR, titleBarOptions } from './windowPolicy'
+import { isSafeExternalUrl } from '../shared/externalUrl'
+import { contextMenuItems } from './contextMenu'
 import {
   audioLogPath,
   hwndFromSourceId,
@@ -169,9 +182,32 @@ function createWindow(): void {
     mainWindow = null
   })
 
+  // Link do chat (target="_blank") abre no navegador de fora. Só http/https:
+  // o openExternal abriria qualquer esquema (file:, smb:, ms-settings:…).
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    if (isSafeExternalUrl(details.url)) void shell.openExternal(details.url)
     return { action: 'deny' }
+  })
+
+  // Botão direito: copiar seleção, copiar/abrir link e editar campos de texto
+  // (o Electron não tem menu padrão). Onde o app abre o próprio menu, o
+  // renderer cancela o contextmenu e este evento não vem.
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    const template: MenuItemConstructorOptions[] = contextMenuItems(params).map((item) => {
+      if ('type' in item) return { type: 'separator' }
+      if ('role' in item)
+        return { label: item.label, role: item.role, enabled: item.enabled ?? true }
+      const { url } = item
+      return {
+        label: item.label,
+        click: () => {
+          if (item.action === 'copyLink') clipboard.writeText(url)
+          else if (isSafeExternalUrl(url)) void shell.openExternal(url)
+        }
+      }
+    })
+    if (template.length > 0 && mainWindow)
+      Menu.buildFromTemplate(template).popup({ window: mainWindow })
   })
 
   // HMR for renderer base on electron-vite cli.
@@ -191,7 +227,18 @@ function createWindow(): void {
 // O app se chamava Concord: a pasta de dados continua a mesma para ninguém
 // perder o login nem as configurações (antes do lock, que mora nela).
 app.setPath('userData', join(app.getPath('appData'), 'Concord'))
-if (!ensureSingleInstance(() => mainWindow)) app.exit(0)
+if (
+  !ensureSingleInstance(
+    () => mainWindow,
+    (argv) => handleInviteArgs(argv, () => mainWindow)
+  )
+) {
+  app.exit(0)
+} else {
+  // Link salinha://convite/<código>: registra o protocolo e guarda o convite
+  // que abriu o app (o renderer busca quando carregar).
+  setupInviteProtocol(() => mainWindow)
+}
 
 app.whenReady().then(() => {
   // Set app user model id for windows. Mantém o id do Concord (nome antigo):

@@ -118,13 +118,13 @@ function PersonRow({
         cutoutColor={MAIN_BG}
       />
       <div className="min-w-0 flex-1">
-        <p className="flex items-baseline gap-1.5 truncate text-[15px] font-semibold text-white">
+        <p className="flex items-baseline gap-1.5 truncate text-ds-md font-semibold text-white">
           {look.name}
-          <span className="hidden truncate text-sm font-normal text-gray-400 group-hover:inline">
+          <span className="hidden truncate text-ds-sm font-normal text-gray-400 group-hover:inline">
             {user.username}
           </span>
         </p>
-        <p className="truncate text-[13px] text-gray-400">{subtitle}</p>
+        <p className="truncate text-ds-sm text-gray-400">{subtitle}</p>
       </div>
       <div className="flex shrink-0 items-center gap-2.5">{children}</div>
     </div>
@@ -235,7 +235,7 @@ function BlockedRow({ user }: { user: PublicUser }): React.JSX.Element {
             showToast.error(err instanceof Error ? err.message : 'Falha ao desbloquear.')
           )
         }
-        className="cursor-pointer rounded-md bg-[#111214] px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+        className="cursor-pointer rounded-md bg-[#111214] px-3 py-1.5 text-ds-sm font-medium text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
       >
         Desbloquear
       </button>
@@ -285,8 +285,8 @@ function AddFriend(): React.JSX.Element {
     : 'border-black/40'
   return (
     <section className="border-b border-white/6 pb-5">
-      <h2 className="text-base font-bold uppercase tracking-wide text-white">Adicionar amigo</h2>
-      <p className="mt-1 text-sm text-gray-400">
+      <h2 className="text-ds-lg font-semibold text-white">Adicionar amigo</h2>
+      <p className="mt-1 text-ds-sm text-gray-400">
         Você pode adicionar amigos com o nome de usuário deles no Salinha.
       </p>
       <form
@@ -302,7 +302,7 @@ function AddFriend(): React.JSX.Element {
           }}
           maxLength={32}
           placeholder="Você pode adicionar amigos com o nome de usuário deles."
-          className="min-w-0 flex-1 bg-transparent text-[15px] text-white outline-none placeholder:text-gray-500"
+          className="min-w-0 flex-1 bg-transparent text-ds-md text-white outline-none placeholder:text-gray-500"
         />
         <button
           type="submit"
@@ -313,7 +313,7 @@ function AddFriend(): React.JSX.Element {
         </button>
       </form>
       {feedback && (
-        <p className={`mt-2 text-sm ${feedback.ok ? 'text-[#23a55a]' : 'text-[#f23f43]'}`}>
+        <p className={`mt-2 text-ds-sm ${feedback.ok ? 'text-[#23a55a]' : 'text-[#f23f43]'}`}>
           {feedback.text}
         </p>
       )}
@@ -334,11 +334,11 @@ function ActiveNow({ friends }: { friends: PublicUser[] }): React.JSX.Element {
 
   return (
     <aside className="hidden w-[360px] shrink-0 border-l border-white/6 px-4 py-4 xl:block">
-      <h2 className="text-xl font-extrabold text-white">Ativo agora</h2>
+      <h2 className="text-ds-lg font-bold text-white">Ativo agora</h2>
       {inVoice.length === 0 ? (
         <div className="mt-4 text-center">
-          <p className="text-[15px] font-semibold text-white">Por enquanto está tudo quieto...</p>
-          <p className="mt-1 text-sm text-gray-400">
+          <p className="text-ds-md font-semibold text-white">Por enquanto está tudo quieto...</p>
+          <p className="mt-1 text-ds-sm text-gray-400">
             Quando um amigo entrar numa conversa de voz, ele aparece aqui.
           </p>
         </div>
@@ -353,10 +353,10 @@ function ActiveNow({ friends }: { friends: PublicUser[] }): React.JSX.Element {
                 size={32}
               />
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-white">
+                <p className="truncate text-ds-md font-medium text-white">
                   {f.display_name || f.username}
                 </p>
-                <p className="truncate text-xs text-gray-400">Em um canal de voz</p>
+                <p className="truncate text-ds-xs text-gray-400">Em um canal de voz</p>
               </div>
             </div>
           ))}
@@ -372,7 +372,7 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }): Re
       <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white/5 text-gray-500">
         {icon}
       </div>
-      <p className="max-w-xs text-sm text-gray-400">{text}</p>
+      <p className="max-w-xs text-ds-md text-gray-400">{text}</p>
     </div>
   )
 }
@@ -423,7 +423,7 @@ function Friends(): React.JSX.Element {
   const filteredBlocked = blocked.filter((u) => matches(u, filterText))
 
   const sectionTitle = (label: string, n: number): React.JSX.Element => (
-    <h3 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">
+    <h3 className="mb-2 mt-4 text-ds-sm font-medium text-gray-400">
       {label} — {n}
     </h3>
   )
@@ -484,7 +484,7 @@ function Friends(): React.JSX.Element {
     }
 
     if (loading && friends.length === 0) {
-      return <p className="mt-6 text-sm text-gray-500">Carregando…</p>
+      return <p className="mt-6 text-ds-md text-gray-500">Carregando…</p>
     }
     if ((tab === 'online' ? online : friends).length === 0) {
       return (
@@ -531,7 +531,7 @@ function Friends(): React.JSX.Element {
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-0.5 text-[15px] font-medium transition-colors ${
+                className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-0.5 text-ds-md font-medium transition-colors ${
                   active
                     ? 'bg-white/10 text-white'
                     : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
@@ -549,7 +549,7 @@ function Friends(): React.JSX.Element {
           <button
             type="button"
             onClick={() => setTab('add')}
-            className={`shrink-0 cursor-pointer rounded-md px-2.5 py-0.5 text-[15px] font-medium transition-colors ${
+            className={`shrink-0 cursor-pointer rounded-md px-2.5 py-0.5 text-ds-md font-medium transition-colors ${
               tab === 'add'
                 ? 'bg-transparent text-[#23a55a]'
                 : 'bg-[#248046] text-white hover:bg-[#1a6334]'
@@ -568,7 +568,7 @@ function Friends(): React.JSX.Element {
                 value={filterText}
                 onChange={(e) => setFilterText(e.target.value)}
                 placeholder="Buscar"
-                className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-gray-500"
+                className="min-w-0 flex-1 bg-transparent text-ds-md text-white outline-none placeholder:text-gray-500"
               />
               <SearchIcon className="h-4 w-4 text-gray-500" />
             </label>

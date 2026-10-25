@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"gin-quickstart/backend/internal/auth"
+	"gin-quickstart/backend/internal/badge"
 	"gin-quickstart/backend/internal/birthday"
 	"gin-quickstart/backend/internal/call"
 	"gin-quickstart/backend/internal/channel"
@@ -225,7 +226,10 @@ func main() {
 	// Server
 	serverRepository := server.ServerRepository(db)
 	serverService := server.ServerService(serverRepository, hub, roleRepository)
+	// Online na prévia do link de convite (invisível conta como offline).
+	serverService.SetPresence(hub.PresenceMap)
 	moderationService := server.ModerationService(serverRepository, permissionService, hub)
+	nicknameService := server.NicknameService(serverRepository, permissionService, hub)
 
 	// Friendship
 	friendshipRepository := friendship.FriendshipRepository(db)
@@ -237,7 +241,7 @@ func main() {
 	channelService := channel.ChannelService(channelRepository, hub)
 	channelHandler := channel.ChannelHandler(channelService, permissionService)
 
-	serverHandler := server.ServerHandler(serverService, friendshipService, userService, channelService, permissionService, roleService, moderationService)
+	serverHandler := server.ServerHandler(serverService, friendshipService, userService, channelService, permissionService, roleService, moderationService, nicknameService)
 
 	// Conversation (DM)
 	conversationRepository := conversation.ConversationRepository(db)
@@ -339,6 +343,18 @@ func main() {
 	levelHandler := level.LevelHandler(levelService)
 	go levelService.Run(ctx)
 
+	// Badges do perfil (tempo transmitindo, madrugada, maior call... somados
+	// olhando as chamadas; o resto vem dos contadores do banco)
+	// Horas de Coruja/Madrugador em Brasília (nil), não no relógio da VPS. No
+	// desligamento grava o que estava na memória antes de fechar o banco.
+	badgeService := badge.BadgeService(badge.BadgeRepository(db), hub, callService, hub, nil)
+	badgeHandler := badge.BadgeHandler(badgeService)
+	badgeDone := make(chan struct{})
+	go func() {
+		defer close(badgeDone)
+		badgeService.Run(ctx)
+	}()
+
 	// WebSocket handler
 	// "Fulano está digitando…": mesma regra de escrita das mensagens.
 	typing := websocket.NewTyping(hub, roomAccess, userService.FindByID)
@@ -371,7 +387,7 @@ func main() {
 		}
 		return u.EmailVerifiedAt != nil, nil
 	})
-	server.ServerRoutes(api, serverHandler, authMiddleware, requireVerified)
+	server.ServerRoutes(api, serverHandler, authMiddleware, requireVerified, auth.OptionalAuthMiddleware(authService))
 	channel.ChannelRoutes(api, channelHandler, authMiddleware)
 	role.RoleRoutes(api, roleHandler, authMiddleware)
 	conversation.ConversationRoutes(api, conversationHandler, authMiddleware)
@@ -380,6 +396,7 @@ func main() {
 	call.CallRoutes(api, callHandler, authMiddleware)
 	soundboard.Routes(api, soundboardHandler, authMiddleware)
 	level.LevelRoutes(api, levelHandler, authMiddleware)
+	badge.BadgeRoutes(api, badgeHandler, authMiddleware)
 	birthday.BirthdayRoutes(api, birthdayHandler, authMiddleware)
 
 	// Presence (protected)
@@ -445,6 +462,13 @@ func main() {
 	}
 	if err != nil {
 		log.Printf("desligamento: requisições ainda em andamento após %s foram cortadas", shutdownTimeout)
+	}
+	// Os badges gravam o último minuto e as maratonas em andamento (o ctx já
+	// foi cancelado pelo SIGTERM); o db.Close do defer vem depois.
+	select {
+	case <-badgeDone:
+	case <-time.After(5 * time.Second):
+		log.Println("desligamento: badges não terminaram de gravar a tempo")
 	}
 	log.Println("servidor desligado")
 }

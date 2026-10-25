@@ -194,19 +194,22 @@ export function applyMention(
 export interface UserSuggestionInput {
   username: string
   display_name: string
+  /** Apelido no servidor (só em canal de servidor). */
+  nickname?: string | null
 }
 
 /** Item do autocompletar: alguém do canal ou @all/@here. */
 export type MentionSuggestion =
-  | { kind: 'user'; username: string; display_name: string }
+  | { kind: 'user'; username: string; display_name: string; nickname?: string | null }
   | { kind: 'everyone'; username: MentionEveryone; description: string }
 
 /**
- * Monta o autocompletar do "@". @all/@here (só para quem pode) aparecem no
- * topo quando o que foi digitado bate com eles ("@a", "@h"), ou com só "@"
- * se ninguém mais bate. O item padrão (Tab/Enter) é sempre uma pessoa quando
- * há alguma, para nunca marcar @all sem querer; com só "@" e nenhuma pessoa,
- * não há padrão (-1).
+ * Monta o autocompletar do "@". Casa pelo apelido no servidor, pelo nick ou
+ * pelo nome; escolher sempre escreve o @nick. @all/@here (só para quem pode)
+ * aparecem no topo quando o que foi digitado bate com eles ("@a", "@h"), ou
+ * com só "@" se ninguém mais bate. O item padrão (Tab/Enter) é sempre uma
+ * pessoa quando há alguma, para nunca marcar @all sem querer; com só "@" e
+ * nenhuma pessoa, não há padrão (-1).
  */
 export function mentionSuggestions(
   query: string,
@@ -217,9 +220,16 @@ export function mentionSuggestions(
   const q = query.toLowerCase()
   const people: MentionSuggestion[] = users
     .filter((u) => u.username !== exclude && !isReserved(u.username))
-    .filter((u) => [u.username, u.display_name].some((v) => v.toLowerCase().startsWith(q)))
+    .filter((u) =>
+      [u.nickname, u.username, u.display_name].some((v) => v && v.toLowerCase().startsWith(q))
+    )
     .slice(0, max)
-    .map((u) => ({ kind: 'user', username: u.username, display_name: u.display_name }))
+    .map((u) => ({
+      kind: 'user',
+      username: u.username,
+      display_name: u.display_name,
+      nickname: u.nickname
+    }))
   const everyone: MentionSuggestion[] =
     q || people.length === 0
       ? everyoneSuggestions(q, canMentionEveryone).map((e) => ({ kind: 'everyone', ...e }))
