@@ -264,12 +264,17 @@ for manifest in latest.yml latest-linux-tar.yml latest-linux.yml; do
     rsync -az --chmod=F644 "$ROOT/backend/updates/$manifest" "$HOST:$DIR/updates/"
   fi
 done
-# Guarda só os 3 instaladores mais recentes (cada um tem ~120 MB). Concord-* é
-# o nome antigo do app.
+# Guarda só os arquivos que os manifests atuais citam (instalador, .blockmap e
+# .sig de cada sistema): versões antigas não servem para nada, já que o app
+# sempre baixa a mais nova. Concord-* é o nome antigo do app.
 remote DIR="$DIR" <<'REMOTE'
 set -euo pipefail
 cd "$DIR/updates"
-{ ls -t Salinha-*-setup.exe Concord-*-setup.exe 2>/dev/null || true; } | tail -n +4 | while read -r f; do rm -f "$f" "$f.blockmap" "$f.sig"; done
-{ ls -t Salinha-*-x64.AppImage 2>/dev/null || true; } | tail -n +4 | while read -r f; do rm -f "$f" "$f.sig"; done
-{ ls -t Salinha-*-x64.tar.gz 2>/dev/null || true; } | tail -n +4 | while read -r f; do rm -f "$f" "$f.sig"; done
+keep=$(grep -hE '^[[:space:]]*(-[[:space:]]*)?(url|path):' latest*.yml 2>/dev/null | sed -E 's/.*:[[:space:]]*//' | sort -u || true)
+[[ -n "$keep" ]] || exit 0
+for f in Salinha-* Concord-*; do
+  [[ -e "$f" ]] || continue
+  base=${f%.sig}; base=${base%.blockmap}
+  grep -qxF "$base" <<<"$keep" || rm -f -- "$f"
+done
 REMOTE
