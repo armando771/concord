@@ -274,10 +274,57 @@ describe('updater', () => {
     expect(h.state.sent.some(([ch]) => ch === 'update:error')).toBe(true)
   })
 
-  it('checa de novo a cada 5 minutos com o app aberto', async () => {
+  it('checa de novo a cada minuto com o app aberto', async () => {
     await startUpdater()
     expect(h.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1)
-    vi.advanceTimersByTime(5 * 60_000)
+    await flush()
+    vi.advanceTimersByTime(60_000)
     expect(h.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(2)
+  })
+
+  it('o renderer pede checagem na hora (aviso do servidor / WS reconectou)', async () => {
+    vi.useRealTimers()
+    vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout'] })
+    await startUpdater()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(h.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1)
+
+    h.state.handlers['update:check-now']({ sender: win.webContents })
+    h.state.handlers['update:check-now']({ sender: win.webContents })
+    vi.advanceTimersByTime(1000)
+    expect(h.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignora pedido de checagem de outra janela', async () => {
+    vi.useRealTimers()
+    vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout'] })
+    await startUpdater()
+    await vi.advanceTimersByTimeAsync(0)
+    h.state.handlers['update:check-now']({ sender: {} })
+    vi.advanceTimersByTime(1000)
+    expect(h.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1)
+  })
+
+  it('pedido com uma checagem em andamento não faz nada', async () => {
+    vi.useRealTimers()
+    vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout'] })
+    h.autoUpdater.checkForUpdates.mockImplementationOnce(() => new Promise(() => {}))
+    await startUpdater()
+    h.state.handlers['update:check-now']({ sender: win.webContents })
+    vi.advanceTimersByTime(1000)
+    expect(h.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1)
+  })
+
+  it('aviso de versão nova em chamada continua sem baixar', async () => {
+    vi.useRealTimers()
+    vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout'] })
+    h.state.inCall = true
+    await startUpdater()
+    await vi.advanceTimersByTimeAsync(0)
+    h.state.handlers['update:check-now']({ sender: win.webContents })
+    vi.advanceTimersByTime(1000)
+    await h.autoUpdater.emit('update-available', { version: '0.7.0' })
+    expect(h.state.sent).toContainEqual(['update:available', '0.7.0'])
+    expect(h.autoUpdater.downloadUpdate).not.toHaveBeenCalled()
   })
 })

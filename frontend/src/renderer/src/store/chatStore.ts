@@ -29,6 +29,7 @@ import {
 } from '../api/messages'
 import { applyReactionAdd, applyReactionRemove } from '../lib/emotes'
 import { applyPollUpdate, messagePreview, type PollUpdate } from '../lib/polls'
+import { APP_UPDATE_EVENT, requestUpdateCheck } from '../lib/appUpdate'
 import type { ConversationSummary } from '../api/conversations'
 import { listConversations } from '../api/conversations'
 import type { PresenceMap } from '../api/presence'
@@ -137,7 +138,12 @@ const client = new WsClient({
   getToken: () => useAuthStore.getState().accessToken,
   getUserId: () => useAuthStore.getState().user?.id ?? null,
   onEvent: (event) => useChatStore.getState().handleWsEvent(event),
-  onOpen: () => useCallStore.getState().handleWsReconnect()
+  onOpen: () => {
+    useCallStore.getState().handleWsReconnect()
+    // Reconexão costuma ser deploy: checa atualização (o aviso app:update é o
+    // caminho principal; isto cobre o manifesto publicado antes do reinício).
+    requestUpdateCheck()
+  }
 })
 
 /** Mensagens que já geraram notificação (chegam por mais de uma sala). */
@@ -440,6 +446,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   handleWsEvent: (event) => {
     const payload = event.payload as Record<string, unknown>
+
+    if (event.type === APP_UPDATE_EVENT) {
+      requestUpdateCheck()
+      return
+    }
 
     if (event.type === 'call:soundboard' || event.type.startsWith('soundboard:')) {
       useSoundboardStore.getState().handleWsEvent(event)

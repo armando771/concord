@@ -77,6 +77,10 @@ const api = {
     /** Instala (baixando antes, se precisar) e reinicia o app. */
     install(): void {
       ipcRenderer.send('update:install')
+    },
+    /** Checa atualização agora (servidor avisou de versão nova / WS reconectou). */
+    checkNow(): void {
+      ipcRenderer.send('update:check-now')
     }
   },
   background: {

@@ -237,6 +237,11 @@ func main() {
 		updatesDir = "updates"
 	}
 	updates.Routes(router, updatesDir)
+	// Versão nova publicada: avisa os apps na hora (sem esperar a checagem periódica).
+	go updates.NewWatcher(updatesDir, func(r updates.Release) {
+		log.Printf("[updates] nova versão em %s: %s", r.File, r.Version)
+		hub.PublishAppUpdate(r.File, r.Version)
+	}).Run(context.Background(), updates.PollInterval)
 
 	// Sinalização do LiveKit (auth pelo token do LiveKit em ?access_token=)
 	router.Any("/rtc", rtcProxy)
