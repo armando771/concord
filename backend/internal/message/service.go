@@ -3,6 +3,7 @@ package message
 import (
 	"context"
 	"errors"
+	"gin-quickstart/backend/internal/permission"
 	"log"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ var (
 	ErrContentRequired = errors.New("content is required")
 	ErrMessageNotFound = errors.New("message not found")
 	ErrNotAuthor       = errors.New("only the author can delete this message")
+	ErrMessageHidden   = errors.New("message not found")
 	ErrInvalidReply    = errors.New("invalid reply target")
 	ErrInvalidEmoji    = errors.New("invalid emoji reaction")
 )
@@ -34,6 +36,8 @@ type ChannelResolver interface {
 
 type ConversationResolver interface {
 	ConversationParticipantIDs(ctx context.Context, conversationID string) ([]string, error)
+	// RevealConversation reabre a DM para quem tinha fechado.
+	RevealConversation(ctx context.Context, conversationID string) error
 }
 
 // FileRemover apaga o arquivo de um anexo do disco (media.Store).
@@ -47,18 +51,18 @@ type Service struct {
 	channelResolver ChannelResolver
 	convResolver    ConversationResolver
 	files           FileRemover
-	moderators      ModeratorChecker
+	perms           PermissionChecker
 	mentionLimiter  *mentionLimiter
 }
 
-func MessageService(repository *Repository, publisher EventPublisher, channelResolver ChannelResolver, convResolver ConversationResolver, files FileRemover, moderators ModeratorChecker) *Service {
+func MessageService(repository *Repository, publisher EventPublisher, channelResolver ChannelResolver, convResolver ConversationResolver, files FileRemover, perms PermissionChecker) *Service {
 	return &Service{
 		repository:      repository,
 		publisher:       publisher,
 		channelResolver: channelResolver,
 		convResolver:    convResolver,
 		files:           files,
-		moderators:      moderators,
+		perms:           perms,
 		mentionLimiter:  newMentionLimiter(mentionEveryoneCooldown, time.Now),
 	}
 }
@@ -126,6 +130,10 @@ func (s *Service) CreateConversationMessage(ctx context.Context, conversationID 
 
 	var userIDs []string
 	if s.convResolver != nil {
+		// Mensagem nova reabre a DM para quem tinha fechado (como no Discord).
+		if err := s.convResolver.RevealConversation(ctx, conversationID); err != nil {
+			log.Printf("[message] reveal conversation %s: %v", conversationID, err)
+		}
 		userIDs, _ = s.convResolver.ConversationParticipantIDs(ctx, conversationID)
 	}
 
@@ -222,6 +230,25 @@ func (s *Service) ListConversationMessages(ctx context.Context, conversationID s
 	return messages, nil
 }
 
+// canModerate: no canal, apaga (ou encerra enquete) quem vê o canal e é o
+// autor, ou tem MANAGE_MESSAGES.
+func (s *Service) canModerate(ctx context.Context, channelID string, authorID string, userID string) error {
+	if s.perms == nil {
+		if authorID != userID {
+			return ErrNotAuthor
+		}
+		return nil
+	}
+	perms, err := s.perms.ChannelPerms(ctx, channelID, userID)
+	if err != nil || perms&permission.ViewChannel == 0 {
+		return ErrMessageNotFound
+	}
+	if authorID != userID && !permission.Has(perms, permission.ManageMessages) {
+		return ErrNotAuthor
+	}
+	return nil
+}
+
 func (s *Service) DeleteChannelMessage(ctx context.Context, channelID string, messageID string, userID string) error {
 	msg, err := s.repository.FindByID(ctx, messageID)
 	if err != nil {
@@ -232,8 +259,8 @@ func (s *Service) DeleteChannelMessage(ctx context.Context, channelID string, me
 		return ErrMessageNotFound
 	}
 
-	if msg.AuthorID != userID {
-		return ErrNotAuthor
+	if err := s.canModerate(ctx, channelID, msg.AuthorID, userID); err != nil {
+		return err
 	}
 
 	if err := s.deleteWithFiles(ctx, messageID); err != nil {

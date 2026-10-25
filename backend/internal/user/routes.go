@@ -10,6 +10,8 @@ func UserRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin.Ha
 		users.GET("/me/birthday", handler.GetBirthday)
 		users.PUT("/me/birthday", handler.SetBirthday)
 		users.GET("/search", handler.SearchUsers)
+		users.GET("/me/privacy", handler.GetPrivacy)
+		users.PUT("/me/privacy", handler.UpdatePrivacy)
 	}
 }
 

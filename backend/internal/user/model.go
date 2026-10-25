@@ -18,7 +18,10 @@ type User struct {
 	StatusText   string        `json:"status_text"`
 	Links        []ProfileLink `json:"links"`
 	Status       string        `json:"status"`
-	Active       bool          `json:"-"`
+	// Privacidade: só a própria pessoa vê (vai no SelfUser).
+	FriendRequestPolicy string `json:"-"`
+	AllowServerDMs      bool   `json:"-"`
+	Active              bool   `json:"-"`
 	CreatedAt    time.Time     `json:"created_at"`
 	UpdatedAt    time.Time     `json:"updated_at"`
 }
@@ -28,6 +31,34 @@ type User struct {
 type SelfUser struct {
 	User
 	Email string `json:"email"`
+}
+
+// Privacy: quem pode mandar pedido de amizade e se membros de servidores em
+// comum (que não são amigos) podem mandar DM.
+type Privacy struct {
+	FriendRequestPolicy string `json:"friend_request_policy"`
+	AllowServerDMs      bool   `json:"allow_server_dms"`
+}
+
+const (
+	FriendPolicyEveryone      = "everyone"
+	FriendPolicyMutualFriends = "mutual_friends"
+	FriendPolicyMutualServers = "mutual_servers"
+	FriendPolicyNobody        = "nobody"
+)
+
+// ValidFriendPolicy diz se a política existe.
+func ValidFriendPolicy(p string) bool {
+	switch p {
+	case FriendPolicyEveryone, FriendPolicyMutualFriends, FriendPolicyMutualServers, FriendPolicyNobody:
+		return true
+	}
+	return false
+}
+
+// Privacy devolve as opções de privacidade da pessoa.
+func (u *User) Privacy() Privacy {
+	return Privacy{FriendRequestPolicy: u.FriendRequestPolicy, AllowServerDMs: u.AllowServerDMs}
 }
 
 // Self monta a resposta das rotas da própria conta, com o e-mail.

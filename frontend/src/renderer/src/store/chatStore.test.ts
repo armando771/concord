@@ -51,7 +51,7 @@ vi.mock('./serverStore', () => ({
   }
 }))
 vi.mock('./friendStore', () => ({
-  useFriendStore: { getState: () => ({ loadAll: vi.fn(async () => {}) }) }
+  useFriendStore: { getState: () => ({ loadAll: vi.fn(async () => {}), blocked: [] }) }
 }))
 vi.mock('./callStore', () => ({
   useCallStore: { getState: () => ({ handleWsReconnect: vi.fn(), handleWsEvent: vi.fn() }) }
@@ -99,7 +99,7 @@ beforeEach(() => {
 })
 
 describe('chatStore — reconexão (deploy)', () => {
-  it('relê só as salas carregadas e só conta como não lido o que é novo', async () => {
+  it('relê só as salas abertas e só conta como não lido o que é novo', async () => {
     messagesApi.listChannelMessages.mockImplementation(async (id: string) =>
       id === 'a' ? page(msg('a1', 1, 'a')) : page(msg('b1', 1, 'b'))
     )
@@ -126,11 +126,77 @@ describe('chatStore — reconexão (deploy)', () => {
     const fetched = messagesApi.listChannelMessages.mock.calls.map((c) => c[0])
     expect(fetched.sort()).toEqual(['a', 'b'])
     expect(useChatStore.getState().unreadByRoom['channel:c']).toBe(1)
-    expect(ids('channel:c')).toEqual(['c9'])
+    // Sala fechada não guarda lista (só o contador).
+    expect(ids('channel:c')).toEqual([])
     expect(ids('channel:a')).toEqual(['a1', 'a2'])
     expect(useChatStore.getState().unreadByRoom['channel:a']).toBe(1)
     // A sala aberta não ganha não lidas.
     expect(useChatStore.getState().unreadByRoom['channel:b']).toBe(0)
+  })
+
+  it('sala cuja primeira carga falhou é carregada na reconexão, sem não lidas', async () => {
+    messagesApi.listChannelMessages.mockRejectedValueOnce(new Error('servidor reiniciando'))
+    await useChatStore.getState().openRoom('channel:a')
+    await useChatStore.getState().openRoom('channel:b') // a deixa de ser a ativa
+    expect(ids('channel:a')).toEqual([])
+
+    messagesApi.listChannelMessages.mockReset()
+    messagesApi.listChannelMessages.mockImplementation(async (id: string) =>
+      id === 'a' ? page(msg('a1', 1, 'a'), msg('a2', 2, 'a')) : page()
+    )
+    await useChatStore.getState().resyncAfterReconnect()
+
+    expect(ids('channel:a')).toEqual(['a1', 'a2'])
+    // A página é o histórico da sala, não mensagem nova.
+    expect(useChatStore.getState().unreadByRoom['channel:a']).toBe(0)
+
+    // Da próxima vez ela já conta como carregada: só o novo é não lido.
+    messagesApi.listChannelMessages.mockImplementation(async (id: string) =>
+      id === 'a' ? page(msg('a1', 1, 'a'), msg('a2', 2, 'a'), msg('a3', 3, 'a')) : page()
+    )
+    await useChatStore.getState().resyncAfterReconnect()
+    expect(ids('channel:a')).toEqual(['a1', 'a2', 'a3'])
+    expect(useChatStore.getState().unreadByRoom['channel:a']).toBe(1)
+  })
+
+  it('junta pela ordem do chat: (created_at, id), uma por id, com o que chegou pelo WS', async () => {
+    const same = '2026-10-25T10:05:00.123456Z'
+    messagesApi.listChannelMessages.mockResolvedValue(page(msg('m1', 1, 'a')))
+    await useChatStore.getState().openRoom('channel:a')
+
+    // Durante a busca chega pelo WS uma mensagem que também vem na página.
+    messagesApi.listChannelMessages.mockReset()
+    messagesApi.listChannelMessages.mockImplementation(async () => {
+      ws.config!.onEvent({
+        type: 'message:create',
+        payload: { message: { ...msg('m3', 0, 'a'), created_at: same }, server_id: 's1' }
+      })
+      return page(
+        msg('m1', 1, 'a'),
+        { ...msg('m2', 0, 'a'), created_at: same },
+        {
+          ...msg('m3', 0, 'a'),
+          created_at: same
+        }
+      )
+    })
+    await useChatStore.getState().resyncAfterReconnect()
+
+    expect(ids('channel:a')).toEqual(['m1', 'm2', 'm3'])
+  })
+
+  it('sala fechada durante a busca não volta a ter lista', async () => {
+    messagesApi.listChannelMessages.mockResolvedValue(page(msg('a1', 1, 'a')))
+    await useChatStore.getState().openRoom('channel:a')
+    messagesApi.listChannelMessages.mockReset()
+    messagesApi.listChannelMessages.mockImplementation(async () => {
+      useChatStore.getState().closeRoom('channel:a')
+      return page(msg('a1', 1, 'a'), msg('a2', 2, 'a'))
+    })
+
+    await useChatStore.getState().resyncAfterReconnect()
+
+    expect(useChatStore.getState().messagesByRoom['channel:a']).toBeUndefined()
   })
 
   it('sala fechada não é mais relida', async () => {

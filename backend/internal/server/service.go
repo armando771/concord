@@ -14,7 +14,13 @@ var (
 	ErrAlreadyMember    = errors.New("you are already a member of this server")
 	ErrInvalidCode      = errors.New("código de convite inválido")
 	ErrNotServerMember  = errors.New("you are not a member of this server")
+	ErrBanned           = errors.New("você foi banido deste servidor")
 )
+
+// RoleDefaults cria os cargos padrão (@everyone e Moderador) de um servidor novo.
+type RoleDefaults interface {
+	CreateDefaults(ctx context.Context, serverID string) error
+}
 
 type EventPublisher interface {
 	PublishServerUpdate(event UpdateEvent)
@@ -27,12 +33,14 @@ type EventPublisher interface {
 type Service struct {
 	repository *Repository
 	publisher  EventPublisher
+	roles      RoleDefaults
 }
 
-func ServerService(repository *Repository, publisher EventPublisher) *Service {
+func ServerService(repository *Repository, publisher EventPublisher, roles RoleDefaults) *Service {
 	return &Service{
 		repository: repository,
 		publisher:  publisher,
+		roles:      roles,
 	}
 }
 
@@ -54,8 +62,14 @@ func (s *Service) Create(
 		return err
 	}
 
+	if s.roles != nil {
+		if err := s.roles.CreateDefaults(ctx, server.ID); err != nil {
+			return err
+		}
+	}
+
 	member := &ServerMember{}
-	if err := s.repository.AddingUserServer(ctx, server, member, server.OwnerID, "admin"); err != nil {
+	if err := s.repository.AddingUserServer(ctx, server, member, server.OwnerID, "member"); err != nil {
 		return err
 	}
 
@@ -156,6 +170,11 @@ func (s *Service) IsMember(ctx context.Context, serverID string, userID string) 
 }
 
 func (s *Service) InviteUser(ctx context.Context, serverID string, inviterID string, inviteeID string) error {
+	if banned, err := s.repository.IsBanned(ctx, serverID, inviteeID); err != nil {
+		return err
+	} else if banned {
+		return ErrBanned
+	}
 	invite := &ServerInvite{
 		ID:        uuid.New().String(),
 		ServerID:  serverID,
@@ -197,6 +216,11 @@ func (s *Service) AcceptInvite(ctx context.Context, inviteID string, userID stri
 	}
 	if isMember {
 		return ErrAlreadyMember
+	}
+	if banned, err := s.repository.IsBanned(ctx, invite.ServerID, userID); err != nil {
+		return err
+	} else if banned {
+		return ErrBanned
 	}
 
 	member := &ServerMember{}
@@ -257,6 +281,11 @@ func (s *Service) JoinByCode(ctx context.Context, rawCode string, userID string)
 		return nil, err
 	}
 	if !isMember {
+		if banned, err := s.repository.IsBanned(ctx, serverID, userID); err != nil {
+			return nil, err
+		} else if banned {
+			return nil, ErrBanned
+		}
 		member := &ServerMember{}
 		if err := s.repository.AddingUserServer(ctx, &Server{ID: serverID}, member, userID, "member"); err != nil {
 			return nil, err
@@ -268,28 +297,6 @@ func (s *Service) JoinByCode(ctx context.Context, rawCode string, userID string)
 	}
 
 	return s.repository.FindByID(ctx, serverID)
-}
-
-// SetMemberRole: o dono torna alguém moderador ou membro comum.
-func (s *Service) SetMemberRole(ctx context.Context, serverID, actorID, targetID, role string) (*ServerMember, error) {
-	server, err := s.repository.FindByID(ctx, serverID)
-	if err != nil {
-		return nil, err
-	}
-	if err := validateRoleChange(actorID, server.OwnerID, targetID, role); err != nil {
-		return nil, err
-	}
-	if err := s.repository.UpdateMemberRole(ctx, serverID, targetID, role); err != nil {
-		return nil, err
-	}
-	member, err := s.repository.FindMemberByUserID(ctx, serverID, targetID)
-	if err != nil {
-		return nil, err
-	}
-	if s.publisher != nil {
-		s.publisher.PublishMemberUpdate(MemberJoinEvent{ServerID: serverID, Member: *member})
-	}
-	return member, nil
 }
 
 // CanDirectMessage: DM é liberada entre amigos ou entre quem divide um
@@ -313,4 +320,8 @@ func (s *Service) DeclineInvite(ctx context.Context, inviteID string, userID str
 	}
 
 	return s.repository.UpdateInviteStatus(ctx, inviteID, "declined")
+}
+
+func (s *Service) MutualServers(ctx context.Context, userA string, userB string) ([]MutualServer, error) {
+	return s.repository.MutualServers(ctx, userA, userB)
 }

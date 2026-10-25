@@ -121,6 +121,9 @@ type VoiceEvent struct {
 	UserID    string  `json:"user_id"`
 	Muted     bool    `json:"muted"`
 	Deafened  bool    `json:"deafened"`
+	// Impostos por um moderador; o app soma ao mudo/ensurdecido do próprio.
+	ServerMuted    bool `json:"server_muted"`
+	ServerDeafened bool `json:"server_deafened"`
 }
 
 type VoicePayload struct {

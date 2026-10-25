@@ -1,4 +1,5 @@
 import { request } from './client'
+import type { Role } from '../lib/permissions'
 
 export interface Server {
   id: string
@@ -14,7 +15,10 @@ export interface Server {
 export interface ServerMember {
   server_id: string
   user_id: string
+  /** Legado: "admin" se pode gerenciar canais. Os cargos de verdade estão em role_ids. */
   role: string
+  /** Cargos do membro (sem o @everyone). */
+  role_ids?: string[]
   joined_at?: string
   username?: string
   display_name?: string
@@ -24,6 +28,8 @@ export interface ServerMember {
 export interface GetServerResponse {
   server: Server
   members: ServerMember[]
+  /** Cargos do servidor, do mais alto para o mais baixo (o @everyone por último). */
+  roles?: Role[]
 }
 
 export interface CreateServerInput {
@@ -76,16 +82,41 @@ export async function joinServerByCode(code: string): Promise<Server> {
   return request<Server>('/invites/join', { method: 'POST', body: JSON.stringify({ code }) })
 }
 
-/** O dono torna alguém moderador ("admin") ou membro comum. */
-export async function setMemberRole(
-  serverId: string,
-  userId: string,
-  role: 'admin' | 'member'
-): Promise<ServerMember> {
-  return request<ServerMember>(`/servers/${serverId}/members/${userId}/role`, {
-    method: 'PUT',
-    body: JSON.stringify({ role })
+/** Quem tem KICK_MEMBERS expulsa o membro (ele pode voltar por convite). */
+export function kickMember(serverId: string, userId: string): Promise<void> {
+  return request<void>(`/servers/${serverId}/members/${userId}`, { method: 'DELETE' })
+}
+
+/** Sai do servidor (o dono não sai: apaga o servidor). */
+export function leaveServer(serverId: string): Promise<void> {
+  return request<void>(`/servers/${serverId}/leave`, { method: 'POST' })
+}
+
+export interface ServerBan {
+  server_id: string
+  user_id: string
+  username: string
+  display_name: string
+  avatar_url?: string | null
+  banned_by?: string | null
+  reason?: string | null
+  created_at: string
+}
+
+export function listBans(serverId: string): Promise<ServerBan[]> {
+  return request<ServerBan[]>(`/servers/${serverId}/bans`)
+}
+
+/** Bane o membro (vale também para quem já saiu). */
+export function banMember(serverId: string, userId: string, reason?: string): Promise<void> {
+  return request<void>(`/servers/${serverId}/bans`, {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId, reason: reason ?? '' })
   })
+}
+
+export function unbanMember(serverId: string, userId: string): Promise<void> {
+  return request<void>(`/servers/${serverId}/bans/${userId}`, { method: 'DELETE' })
 }
 
 /** Dono/moderador: escolhe o canal principal (avisos do servidor). */

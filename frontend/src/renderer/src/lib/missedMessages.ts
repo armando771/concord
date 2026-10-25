@@ -1,14 +1,17 @@
 // Mensagens perdidas enquanto o WebSocket do chat estava fora (ex.: deploy do
 // servidor): ao reconectar, o app busca a página mais nova de cada sala aberta
-// e junta com o que já tinha, sem duplicar nem tocar som.
-
-export interface TimedMessage {
-  id: string
-  created_at: string
-}
+// e junta com o que já tinha, sem duplicar nem tocar som. A junção em si é a
+// mesma de todo o chat (mergeMessages: uma por id, em ordem (created_at, id));
+// aqui só se decide o que da lista atual fica e o que conta como não lido.
+import {
+  compareMessages,
+  compareTimestamps,
+  mergeMessages,
+  type OrderedMessage
+} from './messageOrder'
 
 export interface MergedMessages<T> {
-  /** Lista nova da sala, da mais antiga para a mais nova. */
+  /** Lista nova da sala, em ordem (created_at, id). */
   messages: T[]
   /** O que não estava na lista. */
   added: T[]
@@ -22,48 +25,54 @@ export interface MergedMessages<T> {
   reset: boolean
 }
 
-const time = (m: TimedMessage): number => Date.parse(m.created_at)
-
-/** Horário da mensagem mais nova (-Infinity numa sala vazia). */
-export function newestTime(messages: TimedMessage[]): number {
-  return messages.length > 0 ? Math.max(...messages.map(time)) : -Infinity
+/** A mensagem mais nova pela ordem do chat (null numa sala vazia). */
+export function newestMessage<T extends OrderedMessage>(messages: T[]): T | null {
+  let newest: T | null = null
+  for (const m of messages) if (!newest || compareMessages(m, newest) > 0) newest = m
+  return newest
 }
 
 /**
- * `latest` é a página mais nova do servidor (da mais nova para a mais antiga,
- * como a API devolve). Dentro do intervalo da página vale o servidor (apagadas
- * somem, reações e enquetes atualizam); fora dele fica o que já estava: as
- * antigas carregadas e as que chegaram pelo WebSocket depois da busca.
- * Mensagens com o mesmo horário da borda (o Date.parse corta microssegundos)
- * ficam, para nada sumir por engano.
+ * `latest` é a página mais nova do servidor (em qualquer ordem; a API manda da
+ * mais nova para a mais antiga). Dentro do intervalo da página vale o servidor
+ * (apagadas somem, reações e enquetes atualizam); fora dele fica o que já
+ * estava: as antigas carregadas e as que chegaram pelo WebSocket depois da
+ * busca. Mensagens com o mesmo horário de uma borda da página ficam (podem
+ * estar logo fora dela), para nada sumir por engano.
  *
- * `knownBefore`: horário da mensagem mais nova que a sala tinha quando a busca
- * começou (o padrão é o de `current`). Uma mensagem que chegou pelo WS durante
- * a busca não pode fazer as perdidas, mais velhas que ela, deixarem de contar.
+ * `knownBefore`: a mensagem mais nova que a sala tinha quando a busca começou
+ * (o padrão é a de `current`). Uma mensagem que chegou pelo WS durante a busca
+ * não pode fazer as perdidas, mais velhas que ela, deixarem de contar.
  */
-export function mergeMissedMessages<T extends TimedMessage>(
+export function mergeMissedMessages<T extends OrderedMessage>(
   current: T[],
   latest: T[],
-  knownBefore: number = newestTime(current)
+  knownBefore: T | null = newestMessage(current)
 ): MergedMessages<T> {
   // Página vazia: nada a acrescentar, e não dá para saber o que apagar.
   if (latest.length === 0) return { messages: current, added: [], unseen: [], reset: false }
 
-  const page = [...latest].reverse()
+  const page = mergeMessages([], latest)
   const known = new Set(current.map((m) => m.id))
   const added = page.filter((m) => !known.has(m.id))
-  const unseen = added.filter((m) => time(m) > knownBefore)
+  const unseen = knownBefore ? added.filter((m) => compareMessages(m, knownBefore) > 0) : added
 
   const pageIds = new Set(page.map((m) => m.id))
-  const oldest = time(page[0])
-  const newest = time(page[page.length - 1])
+  const oldest = page[0].created_at
+  const newest = page[page.length - 1].created_at
   const outside = current.filter((m) => !pageIds.has(m.id))
-  const before = outside.filter((m) => time(m) <= oldest)
-  const after = outside.filter((m) => time(m) >= newest && !before.includes(m))
+  const before = outside.filter((m) => compareTimestamps(m.created_at, oldest) <= 0)
+  const beforeIds = new Set(before.map((m) => m.id))
+  const after = outside.filter(
+    (m) => !beforeIds.has(m.id) && compareTimestamps(m.created_at, newest) >= 0
+  )
 
-  const lastKnown = current.filter((m) => !after.includes(m)).at(-1)
-  const reset = !!lastKnown && !pageIds.has(lastKnown.id) && time(lastKnown) < oldest
-  if (reset) return { messages: [...page, ...after], added, unseen, reset }
+  // A lista atual não encosta na página: perdeu mais que uma página.
+  const afterIds = new Set(after.map((m) => m.id))
+  const lastKnown = newestMessage(current.filter((m) => !afterIds.has(m.id)))
+  const reset =
+    !!lastKnown && !pageIds.has(lastKnown.id) && compareTimestamps(lastKnown.created_at, oldest) < 0
+  const kept = reset ? after : [...before, ...after]
 
-  return { messages: [...before, ...page, ...after], added, unseen, reset: false }
+  return { messages: mergeMessages(kept, page), added, unseen, reset }
 }

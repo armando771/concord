@@ -18,6 +18,8 @@ function VoiceControls(): React.JSX.Element {
   const deafened = useCallStore((s) => s.deafened)
   const sharing = useCallStore((s) => s.isScreenSharing)
   const connected = useCallStore((s) => s.status === 'active')
+  const canSpeak = useCallStore((s) => s.canSpeak)
+  const canStream = useCallStore((s) => s.canStream)
   const callType = useCallStore((s) => s.type)
   const cameraOn = useCallStore((s) => s.localCameraStream !== null)
   const toggleMute = useCallStore((s) => s.toggleMute)
@@ -44,10 +46,16 @@ function VoiceControls(): React.JSX.Element {
       <button
         onClick={toggleMute}
         aria-label={muted ? 'Ativar Microfone' : 'Silenciar Microfone'}
-        title={muted ? 'Ativar Microfone' : 'Silenciar Microfone'}
+        title={
+          !canSpeak
+            ? 'Você não pode falar neste canal'
+            : muted
+              ? 'Ativar Microfone'
+              : 'Silenciar Microfone'
+        }
         className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-colors ${
           muted ? 'bg-white text-[#07080b]' : 'bg-white/5 text-gray-200 hover:bg-white/10'
-        }`}
+        } ${canSpeak ? '' : 'opacity-50'}`}
       >
         {muted ? <MicOffIcon className="h-5 w-5" /> : <MicIcon className="h-5 w-5" />}
       </button>
@@ -63,11 +71,17 @@ function VoiceControls(): React.JSX.Element {
       </button>
       <button
         onClick={() => void toggleCamera()}
-        disabled={!connected}
+        disabled={!connected || (!canStream && !cameraOn)}
         aria-label={cameraOn ? 'Desligar câmera' : 'Ligar câmera'}
-        title={cameraOn ? 'Desligar câmera' : 'Ligar câmera'}
+        title={
+          !canStream && !cameraOn
+            ? 'Você não pode transmitir neste canal'
+            : cameraOn
+              ? 'Desligar câmera'
+              : 'Ligar câmera'
+        }
         className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-          !connected
+          !connected || (!canStream && !cameraOn)
             ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
             : cameraOn
               ? 'cursor-pointer bg-[#23a55a] text-white hover:bg-[#1e8c4a]'
@@ -78,11 +92,17 @@ function VoiceControls(): React.JSX.Element {
       </button>
       <button
         onClick={handleToggleScreen}
-        disabled={!connected}
+        disabled={!connected || (!canStream && !sharing)}
         aria-label={sharing ? 'Parar de compartilhar tela' : 'Compartilhar tela'}
-        title={sharing ? 'Parar de compartilhar' : 'Compartilhar tela'}
+        title={
+          !canStream && !sharing
+            ? 'Você não pode transmitir neste canal'
+            : sharing
+              ? 'Parar de compartilhar'
+              : 'Compartilhar tela'
+        }
         className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-          !connected
+          !connected || (!canStream && !sharing)
             ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
             : sharing
               ? 'cursor-pointer bg-[#23a55a] text-white hover:bg-[#1e8c4a]'

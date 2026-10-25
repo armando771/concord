@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mergeMissedMessages, newestTime } from './missedMessages'
+import { mergeMissedMessages, newestMessage } from './missedMessages'
 
 interface Msg {
   id: string
@@ -128,7 +128,7 @@ describe('mergeMissedMessages', () => {
     const current = [msg('a', 1), msg('c', 5)]
     const page = newestFirst(msg('a', 1), msg('b', 3))
 
-    const result = mergeMissedMessages(current, page, newestTime(before))
+    const result = mergeMissedMessages(current, page, newestMessage(before))
 
     expect(result.unseen.map((m) => m.id)).toEqual(['b'])
     expect(result.messages.map((m) => m.id)).toEqual(['a', 'b', 'c'])
@@ -152,12 +152,39 @@ describe('mergeMissedMessages', () => {
 
     const result = mergeMissedMessages(current, page)
 
-    expect(result.messages.map((m) => m.id)).toEqual(['velha', 'a', 'b'])
+    // Fica, na ordem do chat: mesmo horário desempata pelo id.
+    expect(result.messages.map((m) => m.id)).toEqual(['a', 'velha', 'b'])
   })
 
   it('página de uma mensagem só não duplica quem tem o mesmo horário', () => {
     const current = [msg('irma', 1), msg('a', 1)]
     const result = mergeMissedMessages(current, newestFirst(msg('a', 1)))
-    expect(result.messages.map((m) => m.id)).toEqual(['irma', 'a'])
+    expect(result.messages.map((m) => m.id)).toEqual(['a', 'irma'])
+  })
+})
+
+describe('mergeMissedMessages pela ordem do chat (mergeMessages)', () => {
+  it('mesmo milissegundo: ordena pelos microssegundos e depois pelo id', () => {
+    const current = [
+      { id: 'z', created_at: '2026-10-25T10:00:00.123100Z' },
+      { id: 'a', created_at: '2026-10-25T10:00:00.123200Z' }
+    ]
+    const page = [
+      { id: 'b', created_at: '2026-10-25T10:00:00.123200Z' },
+      { id: 'a', created_at: '2026-10-25T10:00:00.123200Z' },
+      { id: 'z', created_at: '2026-10-25T10:00:00.123100Z' }
+    ]
+
+    const result = mergeMissedMessages(current, page)
+
+    expect(result.messages.map((m) => m.id)).toEqual(['z', 'a', 'b'])
+    // b tem o mesmo horário de a, mas vem depois na ordem (id): é nova.
+    expect(result.unseen.map((m) => m.id)).toEqual(['b'])
+  })
+
+  it('lista atual fora de ordem sai em ordem e sem repetição', () => {
+    const current = [msg('c', 3), msg('a', 1), msg('c', 3)]
+    const result = mergeMissedMessages(current, newestFirst(msg('a', 1), msg('b', 2), msg('c', 3)))
+    expect(result.messages.map((m) => m.id)).toEqual(['a', 'b', 'c'])
   })
 })

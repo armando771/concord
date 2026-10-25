@@ -166,7 +166,12 @@ yarn build:web && yarn preview:web   # dist-web/ em http://localhost:4173
 ### 3. Testes
 ```bash
 cd backend && go test ./...
+# Testes que usam o Postgres de verdade (migrations, cargos e permissões); só rodam
+# com um banco DESCARTÁVEL em TEST_DATABASE_URL (senão são pulados):
+cd backend && TEST_DATABASE_URL=postgres://usuario:senha@localhost:5432/teste go test -p 1 ./...
 cd frontend && yarn test
+# E2E dos cargos em tempo real (backend ligado + banco descartável; Node 22+):
+node scripts/e2e-roles-ws.mjs
 # E2E de chamadas (dois navegadores com mídia fake) — ver cabeçalho do script:
 node scripts/e2e-voice.mjs
 # E2E do deploy sem queda: reinicia o backend no meio da chamada (Caddy + LiveKit

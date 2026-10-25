@@ -1,6 +1,10 @@
 package channel
 
-import "time"
+import (
+	"time"
+
+	"gin-quickstart/backend/internal/permission"
+)
 
 const (
 	TypeText  = "text"
@@ -16,6 +20,9 @@ type Channel struct {
 	CreatedBy string    `json:"created_by"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// Overwrites: sobrescritas de permissão do canal (canal privado = deny de
+	// VIEW_CHANNEL no @everyone). Preenchido a partir do snapshot de permissões.
+	Overwrites []permission.Overwrite `json:"overwrites"`
 }
 
 type CreateEvent struct {
@@ -27,6 +34,7 @@ type DeleteEvent struct {
 	ServerID  string `json:"server_id"`
 	ChannelID string `json:"channel_id"`
 }
+
 // ReorderEvent: nova ordem dos canais de um tipo (texto ou voz) do servidor.
 // RequestID é o que o cliente mandou no pedido: ele reconhece o próprio eco.
 type ReorderEvent struct {

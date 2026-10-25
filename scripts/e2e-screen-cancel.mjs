@@ -62,8 +62,8 @@ try {
 
   const page = await app.firstWindow()
   page.on('console', (m) => { if (m.type() === 'error') console.log('console:', m.text()) })
-  await page.waitForSelector('input[type=email]', { timeout: 30000 })
-  await page.fill('input[type=email]', email)
+  await page.waitForSelector('input[autocomplete=username]', { timeout: 30000 })
+  await page.fill('input[autocomplete=username]', email)
   await page.fill('input[type=password]', password)
   await page.click('button[type=submit]')
   await page.getByText('Adicionar amigo').first().waitFor({ timeout: 30000 })

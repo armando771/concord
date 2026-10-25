@@ -28,6 +28,8 @@ import (
 	"gin-quickstart/backend/internal/livekit"
 	"gin-quickstart/backend/internal/media"
 	"gin-quickstart/backend/internal/message"
+	"gin-quickstart/backend/internal/permission"
+	"gin-quickstart/backend/internal/role"
 	"gin-quickstart/backend/internal/server"
 	"gin-quickstart/backend/internal/soundboard"
 	"gin-quickstart/backend/internal/updates"
@@ -177,7 +179,7 @@ func main() {
 		// O app empacotado carrega via file:// e a auth é por Bearer (sem
 		// cookies), então qualquer origem pode chamar a API.
 		AllowOriginFunc:  func(string) bool { return true },
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
@@ -209,9 +211,20 @@ func main() {
 	hub := websocket.NewHub()
 	hub.SetStatusLookup(userRepository.GetStatus)
 
+	// Permissões (cargos, @everyone, sobrescritas por canal)
+	permissionRepository := permission.PermissionRepository(db)
+	permissionService := permission.PermissionService(permissionRepository)
+	hub.SetVisibility(permissionService)
+
+	// Cargos
+	roleRepository := role.RoleRepository(db)
+	roleService := role.RoleService(roleRepository, permissionService, hub)
+	roleHandler := role.RoleHandler(roleService)
+
 	// Server
 	serverRepository := server.ServerRepository(db)
-	serverService := server.ServerService(serverRepository, hub)
+	serverService := server.ServerService(serverRepository, hub, roleRepository)
+	moderationService := server.ModerationService(serverRepository, permissionService, hub)
 
 	// Friendship
 	friendshipRepository := friendship.FriendshipRepository(db)
@@ -221,14 +234,17 @@ func main() {
 	// Channel
 	channelRepository := channel.ChannelRepository(db)
 	channelService := channel.ChannelService(channelRepository, hub)
-	channelHandler := channel.ChannelHandler(channelService)
+	channelHandler := channel.ChannelHandler(channelService, permissionService)
 
-	serverHandler := server.ServerHandler(serverService, friendshipService, userService, channelService)
+	serverHandler := server.ServerHandler(serverService, friendshipService, userService, channelService, permissionService, roleService, moderationService)
 
 	// Conversation (DM)
 	conversationRepository := conversation.ConversationRepository(db)
 	conversationService := conversation.ConversationService(conversationRepository)
-	conversationHandler := conversation.ConversationHandler(conversationService, friendshipService, serverService, userService)
+	conversationService.SetDependencies(friendshipService, hub)
+	friendshipService.SetServers(serverService, func(ctx context.Context, a, b string) (any, error) {
+		return serverService.MutualServers(ctx, a, b)
+	})
 
 	// Mídia do chat (arquivos no disco, fora do binário e do deploy)
 	uploadsDir := os.Getenv("UPLOADS_DIR")
@@ -242,12 +258,12 @@ func main() {
 
 	// Message
 	messageRepository := message.MessageRepository(db)
-	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository, uploads, channelRepository)
+	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository, uploads, permissionService)
 	// Limpeza horária de arquivos sem dono (cascatas e uploads abandonados).
 	go message.NewJanitor(messageRepository, uploads).Run(ctx, time.Hour)
-	messageHandler := message.MessageHandler(messageService, channelService, conversationService, friendshipService, serverService)
+	messageHandler := message.MessageHandler(messageService, channelService, conversationService, friendshipService, permissionService)
 	uploadSpace := media.NewSpace(uploadsDir, media.ReserveFromEnv(os.Getenv("UPLOADS_MIN_FREE_GB")))
-	roomAccess := message.NewServiceRoomAccess(channelService, serverService, conversationService, friendshipService)
+	roomAccess := message.NewServiceRoomAccess(channelService, permissionService, conversationService, friendshipService)
 	attachmentHandler := message.NewAttachmentHandler(messageRepository, uploads, uploadSpace, roomAccess, authService)
 
 	// Mesa de áudio (Soundboard) compartilhada por servidor
@@ -256,7 +272,7 @@ func main() {
 		log.Fatalf("failed to open soundboard uploads dir: %v", err)
 	}
 	soundboardRepository := soundboard.NewRepository(db)
-	soundboardHandler := soundboard.NewHandler(soundboardRepository, soundboardUploads, uploadSpace, serverService, channelService, authService, hub)
+	soundboardHandler := soundboard.NewHandler(soundboardRepository, soundboardUploads, uploadSpace, serverService, permissionService, authService, hub)
 
 	// Perfil (avatar/banner numa subpasta que a limpeza dos anexos não varre)
 	profileMediaDir := filepath.Join(uploadsDir, user.ProfileMediaDir)
@@ -270,6 +286,7 @@ func main() {
 	}
 	profileService := user.NewProfileService(userRepository, hub)
 	profileHandler := user.NewProfileHandler(profileService, profileMedia, profileStatic, uploadSpace)
+	conversationHandler := conversation.ConversationHandler(conversationService, userService, profileHandler)
 
 	// LiveKit (mídia das chamadas)
 	liveKitKey, liveKitSecret := os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET")
@@ -290,6 +307,16 @@ func main() {
 	callRepository := call.CallRepository(db)
 	callService := call.CallService(callRepository, hub, conversationService, serverService, channelService, userService, hub.IsOnline)
 	callService.SetSoundLookup(soundboard.NewCallLookup(soundboardRepository))
+	callService.SetPermissions(permissionService)
+	callService.SetMediaAdmin(livekit.NewAdmin("http://127.0.0.1:"+liveKitPort, liveKitKey, liveKitSecret))
+	// Mudou cargo ou canal: quem está em voz sem acesso sai; quem perdeu falar
+	// ou transmitir tem a mídia atualizada na hora.
+	hub.SetPermissionsChangedHook(func(serverID string) {
+		callService.RevalidateServer(context.Background(), serverID)
+	})
+	// Expulso, banido ou saiu do servidor: sai da chamada de voz dele.
+	moderationService.SetOnRemoved(callService.RemoveFromServerCalls)
+	callService.SetBlockedCheck(friendshipService.IsBlockedEither)
 	callHandler := call.CallHandler(callService, liveKitTokens)
 	// Reinício do servidor não derruba quem está em chamada. Sem conseguir
 	// recarregar as chamadas o servidor não fica pronto (a porta nem abre):
@@ -312,7 +339,9 @@ func main() {
 	go levelService.Run(ctx)
 
 	// WebSocket handler
-	wsHandler := websocket.WsHandler(hub, authService, channelService, serverService, conversationService, callService)
+	// "Fulano está digitando…": mesma regra de escrita das mensagens.
+	typing := websocket.NewTyping(hub, roomAccess, userService.FindByID)
+	wsHandler := websocket.WsHandler(hub, authService, permissionService, serverService, conversationService, callService, typing)
 	hub.SetDisconnectHandler(callService.HandleDisconnect)
 
 	// Auth middleware
@@ -331,6 +360,7 @@ func main() {
 	friendship.FriendRoutes(api, friendshipHandler, authMiddleware)
 	server.ServerRoutes(api, serverHandler, authMiddleware)
 	channel.ChannelRoutes(api, channelHandler, authMiddleware)
+	role.RoleRoutes(api, roleHandler, authMiddleware)
 	conversation.ConversationRoutes(api, conversationHandler, authMiddleware)
 	message.MessageRoutes(api, messageHandler, authMiddleware)
 	message.AttachmentRoutes(api, attachmentHandler, authMiddleware)
@@ -356,6 +386,11 @@ func main() {
 		updatesDir = "updates"
 	}
 	updates.Routes(router, updatesDir)
+	// Versão nova publicada: avisa os apps na hora (sem esperar a checagem periódica).
+	go updates.NewWatcher(updatesDir, func(r updates.Release) {
+		log.Printf("[updates] nova versão em %s: %s", r.File, r.Version)
+		hub.PublishAppUpdate(r.File, r.Version)
+	}).Run(context.Background(), updates.PollInterval)
 
 	// Sinalização do LiveKit (auth pelo token do LiveKit em ?access_token=)
 	router.Any("/rtc", rtcProxy)

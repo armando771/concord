@@ -22,6 +22,10 @@ import Avatar from '../components/Avatar'
 import { useUserLook } from '../store/profileStore'
 import ResizeHandle from '../components/ResizeHandle'
 import { useResizableWidth } from '../components/useResizableWidth'
+import { useServerAccess } from '../store/useServerAccess'
+import { groupMembers, memberColor } from '../lib/memberGroups'
+import { chatPermissionsFor } from '../lib/chatPermissions'
+import { Perm, roleColorCss } from '../lib/permissions'
 
 interface MemberRowProps {
   userId: string
@@ -30,6 +34,8 @@ interface MemberRowProps {
   avatarUrl?: string | null
   colorClass: string
   nameClass: string
+  /** Cor do cargo mais alto que tem cor (CSS); sem ela vale nameClass. */
+  nameColor?: string
   online: boolean
 }
 
@@ -40,6 +46,7 @@ function MemberRow({
   avatarUrl,
   colorClass,
   nameClass,
+  nameColor,
   online
 }: MemberRowProps): React.JSX.Element {
   const meId = useAuthStore((s) => s.user?.id)
@@ -69,7 +76,11 @@ function MemberRow({
       </div>
       <div className="relative min-w-0 leading-tight">
         <div className="flex min-w-0 items-center gap-1.5">
-          <p title={look.name} className={`truncate text-sm font-semibold ${nameClass}`}>
+          <p
+            title={look.name}
+            style={nameColor ? { color: nameColor } : undefined}
+            className={`truncate text-sm font-semibold ${nameColor ? '' : nameClass}`}
+          >
             {look.name}
           </p>
           <LevelBadge userId={userId} />
@@ -102,6 +113,8 @@ export function ServerView(): React.JSX.Element {
 
   const currentServer = useServerStore((s) => s.currentServer)
   const currentMembers = useServerStore((s) => s.currentMembers)
+  const roles = useServerStore((s) => s.roles)
+  const access = useServerAccess()
   const channels = useServerStore((s) => s.channels)
   const serverInvites = useServerStore((s) => s.serverInvites)
   const loading = useServerStore((s) => s.loading)
@@ -174,10 +187,9 @@ export function ServerView(): React.JSX.Element {
   }
 
   const memberUserIds = new Set(currentMembers.map((m) => m.user_id))
-  // Mesma regra de quem gerencia canais; o backend confere de novo ao gravar.
-  const canMentionEveryone =
-    currentServer.owner_id === me?.id ||
-    currentMembers.some((m) => m.user_id === me?.id && m.role === 'admin')
+  // O que a pessoa pode no canal aberto; o servidor confere de novo ao gravar.
+  const chatPermissions = chatPermissionsFor(channelId ? access.channelPerms(channelId) : 0)
+  const canMentionEveryone = chatPermissions.canMentionEveryone
   const pendingInviteUserIds = new Set(serverInvites.map((i) => i.invitee_id))
 
   const inviteTerm = inviteFilter.trim().toLowerCase()
@@ -189,16 +201,13 @@ export function ServerView(): React.JSX.Element {
     )
   })
 
-  // Offline fica só no grupo Offline; os grupos de papel (Dono, Admin, Membro) mostram só quem está online
-  const onlineMembers = currentMembers.filter((m) => presence[m.user_id])
-  const offlineMembers = currentMembers.filter((m) => !presence[m.user_id])
-  const ownerMembers = onlineMembers.filter((m) => m.user_id === currentServer.owner_id)
-  const adminMembers = onlineMembers.filter(
-    (m) => m.user_id !== currentServer.owner_id && m.role === 'admin'
-  )
-  const regularMembers = onlineMembers.filter(
-    (m) => m.user_id !== currentServer.owner_id && m.role !== 'admin'
-  )
+  // Como no Discord: dono, cargos exibidos separadamente (online), membros e offline.
+  const memberGroups = groupMembers({
+    members: currentMembers,
+    roles,
+    ownerId: currentServer.owner_id,
+    isOnline: (userId) => Boolean(presence[userId])
+  })
 
   const activeChannel = channels.find((c) => c.id === channelId)
 
@@ -231,15 +240,17 @@ export function ServerView(): React.JSX.Element {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Qualquer membro pode convidar */}
-            <Button
-              variant="secondary"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
-              onClick={openInviteModal}
-            >
-              <UserPlusIcon className="h-4 w-4" />
-              <span>Convidar</span>
-            </Button>
+            {/* Quem tem CREATE_INVITE convida (por padrão, todo membro) */}
+            {access.can(Perm.CREATE_INVITE) && (
+              <Button
+                variant="secondary"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
+                onClick={openInviteModal}
+              >
+                <UserPlusIcon className="h-4 w-4" />
+                <span>Convidar</span>
+              </Button>
+            )}
           </div>
         </header>
 
@@ -250,6 +261,7 @@ export function ServerView(): React.JSX.Element {
             room={`channel:${channelId}`}
             placeholder={`Mensagem para #${activeChannel?.name ?? 'canal'}`}
             canMentionEveryone={canMentionEveryone}
+            permissions={chatPermissions}
             mentionable={currentMembers
               .filter((m) => m.username)
               .map((m) => ({
@@ -276,120 +288,43 @@ export function ServerView(): React.JSX.Element {
 
       {/* Right Column: Server Members List */}
       <MembersAside>
-        {/* Owner Group */}
-        {ownerMembers.length > 0 && (
-          <div>
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
-              Dono do Servidor — {ownerMembers.length}
-            </p>
-            <div className="flex flex-col gap-1">
-              {ownerMembers.map((m) => {
-                const displayName =
-                  m.display_name ?? m.username ?? (m.user_id === me?.id ? me?.display_name : 'Dono')
-                const handle = m.username ?? (m.user_id === me?.id ? me?.username : 'dono')
-                return (
-                  <MemberRow
-                    key={m.user_id}
-                    userId={m.user_id}
-                    displayName={displayName}
-                    avatarUrl={m.avatar_url}
-                    handle={handle}
-                    colorClass="bg-amber-600"
-                    nameClass="text-amber-300"
-                    online
-                  />
-                )
-              })}
+        {memberGroups.map((group) => {
+          const offline = group.key === 'offline'
+          return (
+            <div key={group.key}>
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                {group.title} — {group.members.length}
+              </p>
+              <div className={`flex flex-col gap-1 ${offline ? 'opacity-70' : ''}`}>
+                {group.members.map((m) => {
+                  const isOwner = m.user_id === currentServer.owner_id
+                  const displayName =
+                    m.display_name ??
+                    m.username ??
+                    (m.user_id === me?.id ? me?.display_name : 'Membro')
+                  const handle = m.username ?? (m.user_id === me?.id ? me?.username : 'membro')
+                  return (
+                    <MemberRow
+                      key={m.user_id}
+                      userId={m.user_id}
+                      displayName={displayName ?? 'Membro'}
+                      avatarUrl={m.avatar_url}
+                      handle={handle ?? 'membro'}
+                      colorClass={
+                        offline ? 'bg-gray-600' : isOwner ? 'bg-amber-600' : 'bg-indigo-600'
+                      }
+                      nameClass={
+                        offline ? 'text-gray-400' : isOwner ? 'text-amber-300' : 'text-gray-200'
+                      }
+                      nameColor={roleColorCss(memberColor(roles, m.role_ids))}
+                      online={!offline}
+                    />
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        )}
-
-        {/* Admin Group */}
-        {adminMembers.length > 0 && (
-          <div>
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
-              Moderadores — {adminMembers.length}
-            </p>
-            <div className="flex flex-col gap-1">
-              {adminMembers.map((m) => {
-                const displayName = m.display_name ?? m.username ?? 'Admin'
-                const handle = m.username ?? 'admin'
-                return (
-                  <MemberRow
-                    key={m.user_id}
-                    userId={m.user_id}
-                    displayName={displayName}
-                    avatarUrl={m.avatar_url}
-                    handle={handle}
-                    colorClass="bg-violet-600"
-                    nameClass="text-violet-300"
-                    online
-                  />
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Regular Members Group */}
-        {regularMembers.length > 0 && (
-          <div>
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
-              Membros — {regularMembers.length}
-            </p>
-            <div className="flex flex-col gap-1">
-              {regularMembers.map((m) => {
-                const displayName =
-                  m.display_name ??
-                  m.username ??
-                  (m.user_id === me?.id ? me?.display_name : 'Membro')
-                const handle = m.username ?? (m.user_id === me?.id ? me?.username : 'membro')
-                return (
-                  <MemberRow
-                    key={m.user_id}
-                    userId={m.user_id}
-                    displayName={displayName}
-                    avatarUrl={m.avatar_url}
-                    handle={handle}
-                    colorClass="bg-indigo-600"
-                    nameClass="text-gray-200"
-                    online
-                  />
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Offline Group */}
-        {offlineMembers.length > 0 && (
-          <div>
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
-              Offline — {offlineMembers.length}
-            </p>
-            <div className="flex flex-col gap-1 opacity-70">
-              {offlineMembers.map((m) => {
-                const displayName =
-                  m.display_name ??
-                  m.username ??
-                  (m.user_id === me?.id ? me?.display_name : 'Membro')
-                const handle = m.username ?? (m.user_id === me?.id ? me?.username : 'membro')
-                return (
-                  <MemberRow
-                    key={m.user_id}
-                    userId={m.user_id}
-                    displayName={displayName}
-                    avatarUrl={m.avatar_url}
-                    handle={handle}
-                    colorClass="bg-gray-600"
-                    nameClass="text-gray-400"
-                    online={false}
-                  />
-                )
-              })}
-            </div>
-          </div>
-        )}
+          )
+        })}
       </MembersAside>
 
       {/* Modal Convidar Amigos */}
