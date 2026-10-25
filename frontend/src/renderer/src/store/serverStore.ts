@@ -16,8 +16,10 @@ import {
   listChannels as apiListChannels,
   createChannel as apiCreateChannel,
   updateChannel as apiUpdateChannel,
-  deleteChannel as apiDeleteChannel
+  deleteChannel as apiDeleteChannel,
+  reorderChannels as apiReorderChannels
 } from '../api/channels'
+import { applyChannelOrder } from '../lib/channelOrder'
 
 interface ServerState {
   servers: Server[]
@@ -35,6 +37,13 @@ interface ServerState {
   createChannel: (serverId: string, name: string, type?: ChannelType) => Promise<void>
   updateChannel: (serverId: string, channelId: string, name: string) => Promise<void>
   deleteChannel: (serverId: string, channelId: string) => Promise<void>
+  /**
+   * Nova ordem de uma seção: aplica na hora e manda ao servidor; se ele
+   * recusar, volta a ordem de antes e repassa o erro.
+   */
+  reorderChannels: (serverId: string, type: ChannelType, channelIds: string[]) => Promise<void>
+  /** Ordem que chegou pelo WS (outro moderador mudou). */
+  applyChannelOrder: (serverId: string, type: ChannelType, channelIds: string[]) => void
   updateServer: (serverId: string, name: string, iconUrl?: string) => Promise<void>
   deleteServer: (serverId: string) => Promise<void>
   updateLocalServer: (server: Server) => void
@@ -126,6 +135,23 @@ export const useServerStore = create<ServerState>()((set, get) => ({
   deleteChannel: async (serverId: string, channelId: string) => {
     await apiDeleteChannel(serverId, channelId)
     await get().fetchChannels(serverId)
+  },
+  reorderChannels: async (serverId, type, channelIds) => {
+    const previous = get()
+      .channels.filter((c) => (c.type ?? 'text') === type)
+      .map((c) => c.id)
+    get().applyChannelOrder(serverId, type, channelIds)
+    try {
+      await apiReorderChannels(serverId, type, channelIds)
+    } catch (err) {
+      get().applyChannelOrder(serverId, type, previous)
+      throw err
+    }
+  },
+  applyChannelOrder: (serverId, type, channelIds) => {
+    if (get().currentServer?.id !== serverId) return
+    const channels = applyChannelOrder(get().channels, type, channelIds)
+    if (channels !== get().channels) set({ channels })
   },
   updateServer: async (serverId: string, name: string, iconUrl?: string) => {
     const updated = await apiUpdateServer(serverId, { name, icon_url: iconUrl ?? '' })

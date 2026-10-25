@@ -2,6 +2,7 @@ package channel
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -161,6 +162,45 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "channel deleted"})
+}
+
+// Reorder: PUT /servers/:id/channels/order {type, channel_ids}. Mesma
+// permissão de criar/editar/apagar canais (dono ou moderador).
+func (h *Handler) Reorder(c *gin.Context) {
+	serverID := c.Param("id")
+
+	var input struct {
+		Type       string   `json:"type"`
+		ChannelIDs []string `json:"channel_ids"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.requireAdmin(c.Request.Context(), serverID, userID.(string)); err != nil {
+		c.JSON(err.Status, gin.H{"error": err.Message})
+		return
+	}
+
+	err := h.service.Reorder(c.Request.Context(), serverID, input.Type, input.ChannelIDs)
+	switch {
+	case errors.Is(err, ErrInvalidType), errors.Is(err, ErrInvalidOrder):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	case err != nil:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reorder channels"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"type": input.Type, "channel_ids": input.ChannelIDs})
 }
 
 type handlerError struct {

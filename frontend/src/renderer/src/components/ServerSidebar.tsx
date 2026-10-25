@@ -22,12 +22,21 @@ import { clearSession } from '../api/client'
 import type { Channel, ChannelType } from '../api/channels'
 import { listActiveServerCalls, moveToVoiceChannel, type CallStateResponse } from '../api/calls'
 import { canMoveVoiceUser, VOICE_USER_DRAG } from '../lib/voiceMove'
+import {
+  channelDragType,
+  dropInsertionIndex,
+  insertionToTarget,
+  isNoopDrop,
+  moveItem
+} from '../lib/channelOrder'
 import { showToast } from '../store/toastStore'
 import Modal from './Modal'
 import Button from './Button'
 import Input from './Input'
 import VoiceConnectedPanel from './call/VoiceConnectedPanel'
 import {
+  ChevronDownIcon,
+  ChevronUpIcon,
   GearIcon,
   UserPlusIcon,
   PlusIcon,
@@ -125,6 +134,112 @@ export function ServerSidebar(): React.JSX.Element {
     } catch (err) {
       showToast.error(err instanceof Error ? err.message : 'Não foi possível mover.')
     }
+  }
+
+  // Reordenar canais arrastando (dono/moderadores), cada um na sua seção.
+  /** Canal sendo arrastado. */
+  const [channelDrag, setChannelDrag] = useState<{ id: string; type: ChannelType } | null>(null)
+  /** Onde aparece a linha de soltar: índice de inserção (0..n) na seção. */
+  const [channelDropAt, setChannelDropAt] = useState<{
+    type: ChannelType
+    index: number
+  } | null>(null)
+  const sectionOf = (type: ChannelType): Channel[] =>
+    type === 'text' ? textChannels : voiceChannels
+
+  /** Muda a ordem na hora; se o servidor recusar, volta e avisa. */
+  const reorderSection = async (type: ChannelType, from: number, to: number): Promise<void> => {
+    if (!currentServer || from === to) return
+    const ids = moveItem(
+      sectionOf(type).map((c) => c.id),
+      from,
+      to
+    )
+    try {
+      await useServerStore.getState().reorderChannels(currentServer.id, type, ids)
+    } catch {
+      showToast.error('Não foi possível mudar a ordem dos canais.')
+    }
+  }
+
+  /** Props da linha do canal que pode ser arrastada (nada para quem não pode). */
+  const channelDragSource = (
+    ch: Channel,
+    type: ChannelType
+  ): React.HTMLAttributes<HTMLDivElement> & { draggable?: boolean } =>
+    isAdmin
+      ? {
+          draggable: true,
+          onDragStart: (e) => {
+            e.dataTransfer.setData(channelDragType(type), ch.id)
+            e.dataTransfer.effectAllowed = 'move'
+            setChannelMenuFor(null)
+            setChannelDrag({ id: ch.id, type })
+          },
+          onDragEnd: () => {
+            setChannelDrag(null)
+            setChannelDropAt(null)
+          }
+        }
+      : {}
+
+  /** Insere antes (metade de cima do bloco do canal) ou depois (de baixo). */
+  const insertionAt = (e: React.DragEvent<HTMLElement>, index: number): number => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    return dropInsertionIndex(index, e.clientY - rect.top, rect.height)
+  }
+
+  /** Bloco do canal como alvo de soltar outro canal da mesma seção. */
+  const channelDropTarget = (
+    type: ChannelType,
+    index: number
+  ): {
+    onDragOver: (e: React.DragEvent<HTMLElement>) => void
+    onDrop: (e: React.DragEvent<HTMLElement>) => void
+  } => ({
+    onDragOver: (e) => {
+      if (!isAdmin || !e.dataTransfer.types.includes(channelDragType(type))) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      const insertion = insertionAt(e, index)
+      const from = channelDrag ? sectionOf(type).findIndex((c) => c.id === channelDrag.id) : -1
+      const next = from >= 0 && isNoopDrop(from, insertion) ? null : { type, index: insertion }
+      setChannelDropAt((cur) =>
+        cur?.type === next?.type && cur?.index === next?.index ? cur : next
+      )
+    },
+    onDrop: (e) => {
+      const id = e.dataTransfer.getData(channelDragType(type))
+      if (!isAdmin || !id) return
+      e.preventDefault()
+      const insertion = insertionAt(e, index)
+      const from = sectionOf(type).findIndex((c) => c.id === id)
+      setChannelDrag(null)
+      setChannelDropAt(null)
+      if (from < 0 || isNoopDrop(from, insertion)) return
+      void reorderSection(type, from, insertionToTarget(from, insertion))
+    }
+  })
+
+  /** Linha de soltar acima (ou, no último canal, abaixo) do bloco. */
+  const dropLine = (type: ChannelType, index: number, last: boolean): React.JSX.Element | null => {
+    if (channelDropAt?.type !== type) return null
+    const before = channelDropAt.index === index
+    const after = last && channelDropAt.index === index + 1
+    if (!before && !after) return null
+    return (
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-x-1 z-20 h-0.5 rounded-full bg-violet-500 shadow-[0_0_6px_rgba(139,92,246,0.8)] ${
+          before ? '-top-0.5' : '-bottom-0.5'
+        }`}
+      />
+    )
+  }
+
+  /** Saiu da seção arrastando: some a linha. */
+  const clearDropOnLeave = (e: React.DragEvent<HTMLElement>): void => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setChannelDropAt(null)
   }
 
   // A sala do servidor (eventos, menções, não lidas) é assinada pela
@@ -318,44 +433,72 @@ export function ServerSidebar(): React.JSX.Element {
     }
   }
 
-  const channelMenu = (ch: Channel): React.JSX.Element => (
-    <>
-      <div className="fixed inset-0 z-20" onClick={() => setChannelMenuFor(null)} />
-      <div className="absolute right-1.5 top-full z-30 mt-1 flex w-48 flex-col rounded-xl border border-white/10 bg-[#0d0e15]/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in">
-        {(ch.type ?? 'text') === 'text' && ch.id !== primaryId && (
+  const channelMenu = (ch: Channel): React.JSX.Element => {
+    const type: ChannelType = (ch.type ?? 'text') === 'voice' ? 'voice' : 'text'
+    const section = sectionOf(type)
+    const index = section.findIndex((c) => c.id === ch.id)
+    const move = (to: number) => () => {
+      setChannelMenuFor(null)
+      void reorderSection(type, index, to)
+    }
+    return (
+      <>
+        <div className="fixed inset-0 z-20" onClick={() => setChannelMenuFor(null)} />
+        <div className="absolute right-1.5 top-full z-30 mt-1 flex w-48 flex-col rounded-xl border border-white/10 bg-[#0d0e15]/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in">
+          {/* Alternativa ao arrastar (teclado/leitor de tela). */}
+          {index > 0 && (
+            <button
+              onClick={move(index - 1)}
+              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+            >
+              <span>Mover para cima</span>
+              <ChevronUpIcon className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {index >= 0 && index < section.length - 1 && (
+            <button
+              onClick={move(index + 1)}
+              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+            >
+              <span>Mover para baixo</span>
+              <ChevronDownIcon className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {(ch.type ?? 'text') === 'text' && ch.id !== primaryId && (
+            <button
+              onClick={() => void makePrimary(ch)}
+              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+            >
+              <span>Definir como principal</span>
+              <StarIcon className="h-3.5 w-3.5 text-amber-400" />
+            </button>
+          )}
           <button
-            onClick={() => void makePrimary(ch)}
+            onClick={() => {
+              setChannelMenuFor(null)
+              setChannelName(ch.name)
+              setEditingChannel(ch)
+              openCreateChannelModal()
+            }}
             className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
           >
-            <span>Definir como principal</span>
-            <StarIcon className="h-3.5 w-3.5 text-amber-400" />
+            <span>Editar canal</span>
+            <PencilIcon className="h-3.5 w-3.5" />
           </button>
-        )}
-        <button
-          onClick={() => {
-            setChannelMenuFor(null)
-            setChannelName(ch.name)
-            setEditingChannel(ch)
-            openCreateChannelModal()
-          }}
-          className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
-        >
-          <span>Editar canal</span>
-          <PencilIcon className="h-3.5 w-3.5" />
-        </button>
-        <button
-          onClick={() => {
-            setChannelMenuFor(null)
-            setDeletingChannel(ch)
-          }}
-          className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/15 cursor-pointer"
-        >
-          <span>Deletar canal</span>
-          <TrashIcon className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </>
-  )
+          <button
+            onClick={() => {
+              setChannelMenuFor(null)
+              setDeletingChannel(ch)
+            }}
+            className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/15 cursor-pointer"
+          >
+            <span>Deletar canal</span>
+            <TrashIcon className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </>
+    )
+  }
 
   return (
     <>
@@ -443,15 +586,23 @@ export function ServerSidebar(): React.JSX.Element {
                 </button>
               )}
             </div>
-            <div className="mt-1 flex flex-col gap-0.5">
+            <div className="mt-1 flex flex-col gap-0.5" onDragLeave={clearDropOnLeave}>
               {textChannels.length === 0 && (
                 <p className="px-2 text-xs text-gray-500 italic">Nenhum canal ainda.</p>
               )}
-              {textChannels.map((ch) => {
+              {textChannels.map((ch, index) => {
                 const active = ch.id === channelId
                 const unread = unreadByRoom[`channel:${ch.id}`] ?? 0
                 return (
-                  <div key={ch.id} className="relative">
+                  <div
+                    key={ch.id}
+                    className={`relative transition-opacity ${
+                      channelDrag?.id === ch.id ? 'opacity-40' : ''
+                    }`}
+                    {...channelDragSource(ch, 'text')}
+                    {...channelDropTarget('text', index)}
+                  >
+                    {dropLine('text', index, index === textChannels.length - 1)}
                     <button
                       onClick={() => navigate(`/servers/${currentServer?.id}/channels/${ch.id}`)}
                       onContextMenu={channelContextMenu(ch)}
@@ -518,11 +669,11 @@ export function ServerSidebar(): React.JSX.Element {
                 </button>
               )}
             </div>
-            <div className="mt-1 flex flex-col gap-0.5">
+            <div className="mt-1 flex flex-col gap-0.5" onDragLeave={clearDropOnLeave}>
               {voiceChannels.length === 0 && (
                 <p className="px-2 text-xs text-gray-500 italic">Nenhum canal de voz ainda.</p>
               )}
-              {voiceChannels.map((ch) => {
+              {voiceChannels.map((ch, index) => {
                 const callState = serverCalls[ch.id]
                 // O backend manda em ordem de entrada; aqui vale nível (ver voiceOrder).
                 const participants = sortVoiceMembers(callState?.participants ?? [], (p) => ({
@@ -539,8 +690,12 @@ export function ServerSidebar(): React.JSX.Element {
                 return (
                   <div
                     key={ch.id}
-                    className="relative"
+                    className={`relative transition-opacity ${
+                      channelDrag?.id === ch.id ? 'opacity-40' : ''
+                    }`}
                     onDragOver={(e) => {
+                      // Arrastando um canal de voz (reordenar) ou uma pessoa (mover).
+                      channelDropTarget('voice', index).onDragOver(e)
                       if (!isAdmin || !e.dataTransfer.types.includes(VOICE_USER_DRAG)) return
                       e.preventDefault()
                       e.dataTransfer.dropEffect = 'move'
@@ -552,6 +707,7 @@ export function ServerSidebar(): React.JSX.Element {
                       }
                     }}
                     onDrop={(e) => {
+                      channelDropTarget('voice', index).onDrop(e)
                       const userId = e.dataTransfer.getData(VOICE_USER_DRAG)
                       setVoiceDropTarget(null)
                       if (!userId || participants.some((p) => p.user_id === userId)) return
@@ -561,7 +717,8 @@ export function ServerSidebar(): React.JSX.Element {
                   >
                     {/* O "•••" é absoluto, alinhado à primeira linha do nome: precisa ficar
                         preso à linha do canal, não ao bloco todo (que cresce com a lista). */}
-                    <div className="group/voicech relative">
+                    {dropLine('voice', index, index === voiceChannels.length - 1)}
+                    <div className="group/voicech relative" {...channelDragSource(ch, 'voice')}>
                       <button
                         onClick={() => handleVoiceClick(ch)}
                         onContextMenu={channelContextMenu(ch)}

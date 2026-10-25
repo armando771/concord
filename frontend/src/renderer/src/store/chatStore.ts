@@ -629,6 +629,20 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return
     }
 
+    if (event.type === 'channel:reorder') {
+      const reorder = payload as { server_id?: string; type?: string; channel_ids?: string[] }
+      if (
+        reorder.server_id &&
+        (reorder.type === 'text' || reorder.type === 'voice') &&
+        Array.isArray(reorder.channel_ids)
+      ) {
+        useServerStore
+          .getState()
+          .applyChannelOrder(reorder.server_id, reorder.type, reorder.channel_ids)
+      }
+      return
+    }
+
     if (event.type === 'channel:delete') {
       const serverId = payload.server_id as string
       const channelId = payload.channel_id as string
@@ -721,8 +735,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
 
     const friendUser = payload.user as
-      | { id: string; username: string; display_name: string }
-      | undefined
+      { id: string; username: string; display_name: string } | undefined
 
     if (event.type === 'friend:request') {
       useFriendStore.getState().loadAll()
