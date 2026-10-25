@@ -416,3 +416,23 @@ func TestLoginRejectsPasswordOver72BytesWithoutBcrypt(t *testing.T) {
 		t.Error("senha longa não pode procurar conta nem gastar bcrypt")
 	}
 }
+
+// Um panic no compare (recuperado pelo gin.Recovery) não pode vazar a vaga.
+func TestLoginPanicInCompareReleasesBcryptSlot(t *testing.T) {
+	logins := &fakeLogins{user: &user.User{ID: "u1", Username: "nicccls", PasswordHash: "x"}}
+	h, _ := testHandler(logins)
+	h.guard.bcryptSlots = make(chan struct{}, 1)
+	h.compareHash = func(_, _ []byte) error { panic("boom") }
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(gin.Recovery())
+	AuthRoutes(router.Group(""), h, func(c *gin.Context) { c.Next() })
+
+	w := postLogin(router, "198.51.100.1", `{"login":"nicccls","password":"x"}`)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500 do Recovery", w.Code)
+	}
+	if got := len(h.guard.bcryptSlots); got != 0 {
+		t.Errorf("%d vagas presas após o panic, want 0", got)
+	}
+}

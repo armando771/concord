@@ -157,7 +157,23 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	hashedPassword, err := h.hashPassword([]byte(reg.Password))
+	// Mesmo semáforo global do login; release deferido contra panic.
+	var hashedPassword []byte
+	gotSlot, err := func() (bool, error) {
+		if !h.guard.acquireBcrypt(c.Request.Context()) {
+			return false, nil
+		}
+		defer h.guard.releaseBcrypt()
+		var err error
+		hashedPassword, err = h.hashPassword([]byte(reg.Password))
+		return true, err
+	}()
+	if !gotSlot {
+		h.registerByIP.Undo(ipSlot)
+		c.Header("Retry-After", ratelimit.RetryAfterSeconds(h.guard.bcryptWait))
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many registrations"})
+		return
+	}
 	if err != nil {
 		h.registerByIP.Undo(ipSlot)
 		log.Printf("[auth] hash password: %v", err)
@@ -272,13 +288,20 @@ func (h *Handler) Login(c *gin.Context) {
 	if foundUser != nil {
 		hash = []byte(foundUser.PasswordHash)
 	}
-	if !h.guard.acquireBcrypt(c.Request.Context()) {
+	// O release é deferido: um panic no compare (recuperado pelo gin.Recovery)
+	// não pode vazar a vaga.
+	gotSlot, err := func() (bool, error) {
+		if !h.guard.acquireBcrypt(c.Request.Context()) {
+			return false, nil
+		}
+		defer h.guard.releaseBcrypt()
+		return true, h.compareHash(hash, []byte(input.Password))
+	}()
+	if !gotSlot {
 		h.guard.undo(identifier)
 		tooManyAttempts(c, h.guard.bcryptWait)
 		return
 	}
-	err = h.compareHash(hash, []byte(input.Password))
-	h.guard.releaseBcrypt()
 	if foundUser == nil || err != nil {
 		// A reserva feita em begin fica: é a falha contada.
 		invalidCredentials(c)

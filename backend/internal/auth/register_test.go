@@ -171,3 +171,30 @@ func TestRegisterDoesNotCountInvalidOrInternalErrors(t *testing.T) {
 		}
 	}
 }
+
+// O hash do cadastro usa o mesmo semáforo global do login.
+func TestRegisterReturns429WhenBcryptSaturated(t *testing.T) {
+	accounts := &fakeAccounts{}
+	h, hashes := registerHandler(accounts)
+	h.guard.bcryptSlots = make(chan struct{}, 1)
+	h.guard.bcryptSlots <- struct{}{}
+	h.guard.bcryptWait = 20 * time.Millisecond
+	body := `{"username":"nicccls","display_name":"N","email":"n@x.com","password":"12345678"}`
+
+	w := postRegister(h, body)
+	if w.Code != http.StatusTooManyRequests || w.Header().Get("Retry-After") == "" {
+		t.Fatalf("saturado: %d Retry-After=%q, want 429 com Retry-After", w.Code, w.Header().Get("Retry-After"))
+	}
+	if *hashes != 0 || accounts.created != nil {
+		t.Error("sem vaga não pode haver hash nem Create")
+	}
+	<-h.guard.bcryptSlots
+	// A vaga do limitador foi devolvida: hash com erro (500, também devolve a
+	// vaga) nunca esgota o limite por IP.
+	h.hashPassword = func([]byte) ([]byte, error) { return nil, errors.New("boom") }
+	for i := 0; i < registrationsPerIP+2; i++ {
+		if w := postRegister(h, body); w.Code != http.StatusInternalServerError {
+			t.Fatalf("pedido %d: status = %d, want 500 (a vaga do limite não foi devolvida?)", i+1, w.Code)
+		}
+	}
+}
