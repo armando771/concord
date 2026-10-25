@@ -39,6 +39,7 @@ import { useFriendStore } from './friendStore'
 import { useCallStore } from './callStore'
 import { useLevelStore } from './levelStore'
 import { useSoundboardStore } from './soundboardStore'
+import { useTypingStore } from './typingStore'
 import { showToast } from './toastStore'
 import { router } from '../router'
 import { MESSAGE_LIMIT } from '../api/messages'
@@ -137,7 +138,11 @@ const client = new WsClient({
   getToken: () => useAuthStore.getState().accessToken,
   getUserId: () => useAuthStore.getState().user?.id ?? null,
   onEvent: (event) => useChatStore.getState().handleWsEvent(event),
-  onOpen: () => useCallStore.getState().handleWsReconnect()
+  onOpen: () => {
+    // Avisos de digitando de antes da queda podem nunca receber o stop.
+    useTypingStore.getState().reset()
+    useCallStore.getState().handleWsReconnect()
+  }
 })
 
 /** Mensagens que já geraram notificação (chegam por mais de uma sala). */
@@ -451,6 +456,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return
     }
 
+    if (event.type === 'typing' || event.type === 'typing:stop') {
+      useTypingStore.getState().handleWsEvent(event)
+      return
+    }
+
     if (event.type.startsWith('level:')) {
       useLevelStore.getState().handleWsEvent(event)
       return
@@ -463,6 +473,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         : `conversation:${msg.conversation_id}`
       const serverId = (payload.server_id as string) || null
       if (!room.endsWith(':')) {
+        useTypingStore.getState().messageArrived(room, msg.author_id)
         set((state) => {
           const nextMessages = {
             ...state.messagesByRoom,
@@ -882,7 +893,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
-  reset: () =>
+  reset: () => {
+    useTypingStore.getState().reset()
     set({
       messagesByRoom: {},
       hasMoreByRoom: {},
@@ -896,6 +908,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       conversations: [],
       conversationsLoading: false
     })
+  }
 }))
 
 /**

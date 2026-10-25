@@ -95,11 +95,15 @@ describe('typersIn', () => {
   }
 
   it('nunca mostra a mim mesmo nem quem já venceu', () => {
-    expect(typersIn(state, ROOM, 2000, 'eu').map((t) => t.userId)).toEqual(['ana'])
+    expect(typersIn(state, ROOM, 'eu', 2000).map((t) => t.userId)).toEqual(['ana'])
+  })
+
+  it('sem horário confia no store (só me tira)', () => {
+    expect(typersIn(state, ROOM, 'eu').map((t) => t.userId)).toEqual(['ana', 'bia'])
   })
 
   it('sala sem ninguém dá lista vazia', () => {
-    expect(typersIn(state, 'channel:vazia', 0, 'eu')).toEqual([])
+    expect(typersIn(state, 'channel:vazia', 'eu', 0)).toEqual([])
   })
 })
 

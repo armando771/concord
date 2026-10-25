@@ -22,6 +22,8 @@ export type WsEventType =
   | 'friend:request:declined'
   | 'friend:request:cancelled'
   | 'friend:removed'
+  | 'typing'
+  | 'typing:stop'
 
 export interface WsEvent<T = unknown> {
   type: WsEventType | string

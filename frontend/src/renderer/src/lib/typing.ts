@@ -62,12 +62,15 @@ export function nextTypingExpiry(state: TypingByRoom): number | null {
   return next
 }
 
-/** Quem aparece digitando na sala: nunca eu, nunca quem já venceu. */
+/**
+ * Quem aparece digitando na sala: nunca eu, nunca quem já venceu. Sem now
+ * (na tela), confia no store, que já tira quem venceu.
+ */
 export function typersIn(
   state: TypingByRoom,
   room: string,
-  now: number,
-  meId: string | null | undefined
+  meId: string | null | undefined,
+  now = -Infinity
 ): Typer[] {
   return (state[room] ?? []).filter((t) => t.userId !== meId && t.expiresAt > now)
 }
