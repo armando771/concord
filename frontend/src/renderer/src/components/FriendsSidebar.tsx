@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useUIStore, type FriendsTab } from '../store/uiStore'
 import { useFriendStore } from '../store/friendStore'
@@ -69,8 +70,15 @@ export function FriendsSidebar(): React.JSX.Element {
   const conversationsLoading = useChatStore((s) => s.conversationsLoading)
   const unreadByRoom = useChatStore((s) => s.unreadByRoom)
   const fetchConversations = useChatStore((s) => s.fetchConversations)
-  const typingByRoom = useTypingStore((s) => s.byRoom)
   const meId = useAuthStore((s) => s.user?.id)
+  // Só as DMs com alguém digitando: aviso de canal não redesenha a lista.
+  const typingDms = useTypingStore(
+    useShallow((s) =>
+      Object.keys(s.byRoom).filter(
+        (room) => room.startsWith('conversation:') && typersIn(s.byRoom, room, meId).length > 0
+      )
+    )
+  )
 
   // Mesma preferência de largura na barra de canais e na de DMs/amigos.
   const sidebar = useResizableWidth('channels')
@@ -144,7 +152,7 @@ export function FriendsSidebar(): React.JSX.Element {
               {conversations.map((conv) => {
                 const active = conv.other_user.id === userId
                 const unread = unreadByRoom[`conversation:${conv.id}`] ?? 0
-                const typing = typersIn(typingByRoom, `conversation:${conv.id}`, meId).length > 0
+                const typing = typingDms.includes(`conversation:${conv.id}`)
                 const lastPreview = conv.last_message?.content ?? 'Inicie uma conversa!'
                 const lastTime = formatLastMessageTime(conv.last_message?.created_at)
                 return (

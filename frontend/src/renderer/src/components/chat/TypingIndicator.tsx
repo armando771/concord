@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow'
 import { useAuthStore } from '../../store/authStore'
 import { useTypingStore } from '../../store/typingStore'
 import { typersIn, typingSegments } from '../../lib/typing'
@@ -7,9 +8,10 @@ import { typersIn, typingSegments } from '../../lib/typing'
  * mesmo vazia, para o chat não pular quando ela aparece.
  */
 function TypingIndicator({ room }: { room: string }): React.JSX.Element {
-  const byRoom = useTypingStore((s) => s.byRoom)
   const meId = useAuthStore((s) => s.user?.id)
-  const names = typersIn(byRoom, room, meId).map((t) => t.name)
+  // Só os nomes desta sala: aviso em outra sala (ou renovação sem mudança)
+  // não redesenha a linha.
+  const names = useTypingStore(useShallow((s) => typersIn(s.byRoom, room, meId).map((t) => t.name)))
   const segments = typingSegments(names)
 
   return (
