@@ -3,17 +3,20 @@
 //!   concord-audio window <hwnd>    som do processo dono da janela (e filhos)
 //!   concord-audio include <pid>    som do processo <pid> (e filhos)
 //!   concord-audio exclude <pid>    som do sistema todo, menos <pid> (e filhos)
+//!   concord-audio foreground       informa a janela em tela cheia (overlay de jogo)
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Mode {
     Window(u64),
     Include(u32),
     Exclude(u32),
+    Foreground,
 }
 
 pub fn parse_args(args: &[String]) -> Result<Mode, String> {
-    let usage = || "uso: concord-audio window <hwnd> | include <pid> | exclude <pid>".to_string();
+    let usage = || "uso: concord-audio window <hwnd> | include <pid> | exclude <pid> | foreground".to_string();
     match args {
+        [mode] if mode == "foreground" => Ok(Mode::Foreground),
         [mode, value] => {
             let number = |v: &str| v.parse::<u64>().map_err(|_| format!("número inválido: {v}"));
             match mode.as_str() {
@@ -63,5 +66,11 @@ mod tests {
         assert!(parse_args(&args(&["include", "0"])).is_err());
         assert!(parse_args(&args(&["include", "99999999999"])).is_err());
         assert!(parse_args(&args(&["tocar", "1"])).is_err());
+    }
+
+    #[test]
+    fn modo_foreground() {
+        assert_eq!(parse_args(&args(&["foreground"])), Ok(Mode::Foreground));
+        assert!(parse_args(&args(&["foreground", "1"])).is_err());
     }
 }

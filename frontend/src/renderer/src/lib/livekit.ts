@@ -1,12 +1,22 @@
 import {
   AudioPresets,
+  ConnectionState,
   DisconnectReason,
   Room,
   RoomEvent,
   Track,
   type RemoteParticipant
 } from 'livekit-client'
-import { groupTracks, StreamCache, type MediaKind, type TrackEntry } from './callMedia'
+import {
+  groupTracks,
+  listScreenPublishers,
+  StreamCache,
+  wantsSubscription,
+  type MediaKind,
+  type PublicationEntry,
+  type TrackEntry
+} from './callMedia'
+import { pruneWatched } from './screenWatch'
 
 // Mídia das chamadas via SFU (LiveKit): cada pessoa envia uma cópia de cada
 // track para o servidor, que distribui para os demais. Substitui o mesh P2P.
@@ -22,6 +32,13 @@ export interface RemoteMedia {
   videoStreams: Record<string, MediaStream>
   /** userId -> nome de quem está na sala de mídia (com ou sem tracks) */
   mediaPeers: Record<string, string>
+  /** userIds com tela publicada (assistida ou não — a não assistida não é baixada) */
+  availableScreens: string[]
+  /**
+   * Sala reconectando: os participantes somem por um instante sem terem saído
+   * nem parado de transmitir — quem assiste não deve perder o que assistia.
+   */
+  reconnecting?: boolean
 }
 
 export interface CallMediaHandlers {
@@ -43,6 +60,9 @@ export class CallMedia {
   private closing = false
   /** Tela/câmera pedidas antes disso são publicadas por quem chamou connect(). */
   private connected = false
+  /** De quem baixar a tela: transmissão dos outros começa pausada (ver setWatchedScreens). */
+  private watched = new Set<string>()
+  private refreshQueued = false
 
   constructor(private readonly handlers: CallMediaHandlers) {
     this.room = new Room({
@@ -62,17 +82,38 @@ export class CallMedia {
       }
     })
 
-    const refresh = (): void => this.emitRemoteMedia()
+    // Rajadas de eventos viram uma emissão só, depois do handler do SDK. Numa
+    // reconexão completa ele desmonta todos os participantes e só depois muda
+    // o estado para Reconnecting — emitir no meio leria "pararam de transmitir".
+    const refresh = (): void => {
+      if (this.refreshQueued) return
+      this.refreshQueued = true
+      queueMicrotask(() => {
+        this.refreshQueued = false
+        if (!this.closing) this.emitRemoteMedia()
+      })
+    }
+    const published = (): void => {
+      this.applySubscriptions()
+      refresh()
+    }
     this.room
+      .on(RoomEvent.TrackPublished, published)
+      .on(RoomEvent.TrackUnpublished, refresh)
       .on(RoomEvent.TrackSubscribed, refresh)
       .on(RoomEvent.TrackUnsubscribed, refresh)
       .on(RoomEvent.TrackMuted, refresh)
       .on(RoomEvent.TrackUnmuted, refresh)
-      .on(RoomEvent.ParticipantConnected, refresh)
+      .on(RoomEvent.ParticipantConnected, published)
       .on(RoomEvent.ParticipantDisconnected, refresh)
       .on(RoomEvent.ParticipantNameChanged, refresh)
       .on(RoomEvent.Reconnecting, () => this.handlers.onReconnecting())
-      .on(RoomEvent.Reconnected, () => this.handlers.onReconnected())
+      .on(RoomEvent.Reconnected, () => {
+        // Assina de novo o que eu assistia e só então poda quem de fato parou.
+        this.applySubscriptions()
+        this.emitRemoteMedia()
+        this.handlers.onReconnected()
+      })
       .on(RoomEvent.ActiveSpeakersChanged, (speakers) =>
         this.handlers.onActiveSpeakers(speakers.map((p) => p.identity))
       )
@@ -83,7 +124,10 @@ export class CallMedia {
   }
 
   async connect(url: string, token: string, mic: MediaStreamTrack, muted: boolean): Promise<void> {
-    await this.room.connect(url, token, { autoSubscribe: true })
+    // Assinatura manual: tela e som da tela só de quem estou assistindo.
+    await this.room.connect(url, token, { autoSubscribe: false })
+    // TrackPublished não dispara para o que já estava publicado ao entrar.
+    this.applySubscriptions()
     const publication = await this.room.localParticipant.publishTrack(mic, {
       source: Track.Source.Microphone,
       name: 'microphone'
@@ -148,6 +192,22 @@ export class CallMedia {
     await this.room.localParticipant.unpublishTracks(tracks)
   }
 
+  /** Passa a baixar a tela (e o som dela) só dessas pessoas. */
+  setWatchedScreens(userIds: string[]): void {
+    this.watched = new Set(userIds)
+    this.applySubscriptions()
+  }
+
+  private applySubscriptions(): void {
+    this.room.remoteParticipants.forEach((participant: RemoteParticipant) => {
+      participant.trackPublications.forEach((publication) => {
+        const want = wantsSubscription(publication.source, participant.identity, this.watched)
+        // Com autoSubscribe desligado, isDesired começa false.
+        if (publication.isDesired !== want) publication.setSubscribed(want)
+      })
+    })
+  }
+
   disconnect(): void {
     this.closing = true
     this.cache.clear()
@@ -156,10 +216,12 @@ export class CallMedia {
 
   private emitRemoteMedia(): void {
     const entries: TrackEntry[] = []
+    const publications: PublicationEntry[] = []
     const mediaPeers: Record<string, string> = {}
     this.room.remoteParticipants.forEach((participant: RemoteParticipant) => {
       mediaPeers[participant.identity] = participant.name ?? ''
       participant.trackPublications.forEach((publication) => {
+        publications.push({ userId: participant.identity, source: publication.source })
         const track = publication.track
         if (!publication.isSubscribed || !track) return
         // Vídeo pausado (câmera desligada pelo SO, etc.) some da UI.
@@ -184,12 +246,20 @@ export class CallMedia {
       return out
     }
 
+    const availableScreens = listScreenPublishers(publications)
+    const reconnecting = this.room.state !== ConnectionState.Connected
+    // Parou de transmitir: sai dos assistidos — se voltar, começa pausada de novo.
+    // Reconectando, a lista está vazia por engano: poda no Reconnected.
+    if (!reconnecting) this.watched = new Set(pruneWatched([...this.watched], availableScreens))
+
     const media: RemoteMedia = {
       streams: toStreams('voice'),
       screenStreams: toStreams('screen'),
       screenAudioStreams: toStreams('screenAudio'),
       videoStreams: toStreams('camera'),
-      mediaPeers
+      mediaPeers,
+      availableScreens,
+      reconnecting
     }
     this.cache.prune(inUse)
     this.handlers.onRemoteMedia(media)

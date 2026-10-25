@@ -83,6 +83,8 @@ type Service struct {
 	leaveAfterDisconnect func(ctx context.Context, callID string, userID string) error
 	// Nome exibido no token do LiveKit (ver Handler.Token).
 	mediaName func(ctx context.Context, userID string) string
+	// Dados do usuário nos eventos de tela (trocável nos testes).
+	lookupUser func(ctx context.Context, userID string) (UserInfo, error)
 }
 
 const defaultDisconnectGrace = 15 * time.Second
@@ -110,6 +112,7 @@ func CallService(
 		disconnectGrace:     defaultDisconnectGrace,
 	}
 	s.leaveAfterDisconnect = s.Leave
+	s.lookupUser = s.userInfo
 	s.mediaName = func(ctx context.Context, userID string) string {
 		info, err := s.userInfo(ctx, userID)
 		if err != nil {
@@ -380,23 +383,13 @@ func (s *Service) Join(ctx context.Context, callID string, userID string) error 
 }
 
 func (s *Service) Leave(ctx context.Context, callID string, userID string) error {
-	s.mu.Lock()
-	ac, ok := s.calls[callID]
-	if !ok {
-		s.mu.Unlock()
-		return ErrNotFound
+	remaining, removed, err := s.detachParticipant(callID, userID)
+	if err != nil {
+		return err
 	}
-	if _, ok := ac.participants[userID]; !ok {
-		s.mu.Unlock()
+	if !removed {
 		return nil
 	}
-	delete(ac.participants, userID)
-	delete(s.busy, userID)
-	if sharers, ok := s.screenSharers[callID]; ok {
-		delete(sharers, userID)
-	}
-	remaining := len(ac.participants)
-	s.mu.Unlock()
 
 	if err := s.repository.MarkParticipantLeft(ctx, callID, userID); err != nil {
 		log.Printf("[call] persist leave %s failed: %v", userID, err)
@@ -417,19 +410,54 @@ func (s *Service) Leave(ctx context.Context, callID string, userID string) error
 	return nil
 }
 
-func (s *Service) End(ctx context.Context, callID string) error {
+// detachParticipant tira o usuário da chamada em memória (participantes,
+// ocupado, transmissão). Se ele saiu transmitindo, avisa o servidor na hora
+// para o selo LIVE sumir. removed = false se ele não estava na chamada.
+func (s *Service) detachParticipant(callID, userID string) (remaining int, removed bool, err error) {
 	s.mu.Lock()
 	ac, ok := s.calls[callID]
 	if !ok {
 		s.mu.Unlock()
-		return ErrNotFound
+		return 0, false, ErrNotFound
 	}
-	for pid := range ac.participants {
-		delete(s.busy, pid)
+	if _, ok := ac.participants[userID]; !ok {
+		s.mu.Unlock()
+		return len(ac.participants), false, nil
 	}
-	delete(s.calls, callID)
-	delete(s.screenSharers, callID)
+	delete(ac.participants, userID)
+	delete(s.busy, userID)
+	wasSharing := false
+	if sharers, ok := s.screenSharers[callID]; ok {
+		_, wasSharing = sharers[userID]
+		delete(sharers, userID)
+	}
+	remaining = len(ac.participants)
+	var serverID string
+	if ac.info.ServerID != nil {
+		serverID = *ac.info.ServerID
+	}
+	channelID := ac.info.ChannelID
 	s.mu.Unlock()
+
+	if wasSharing {
+		s.publishLive(serverID, LiveEvent{CallID: callID, ChannelID: channelID, UserID: userID, Active: false})
+	}
+	return remaining, true, nil
+}
+
+// publishLive avisa a sala do servidor que alguém entrou/saiu do ar. Chamadas
+// sem servidor (DM) não têm lista de canal de voz: nada a fazer.
+func (s *Service) publishLive(serverID string, ev LiveEvent) {
+	if serverID == "" {
+		return
+	}
+	s.publisher.BroadcastToRoom("server:"+serverID, marshalEvent("call:live", ev))
+}
+
+func (s *Service) End(ctx context.Context, callID string) error {
+	if err := s.closeCall(callID); err != nil {
+		return err
+	}
 
 	if err := s.repository.EndCall(ctx, callID); err != nil {
 		log.Printf("[call] persist end %s failed: %v", callID, err)
@@ -439,6 +467,34 @@ func (s *Service) End(ctx context.Context, callID string) error {
 		CallID: callID,
 	}))
 
+	return nil
+}
+
+// closeCall tira a chamada da memória. Quem ainda transmitia sai do ar no
+// servidor na hora (o selo LIVE não espera o próximo polling).
+func (s *Service) closeCall(callID string) error {
+	s.mu.Lock()
+	ac, ok := s.calls[callID]
+	if !ok {
+		s.mu.Unlock()
+		return ErrNotFound
+	}
+	for pid := range ac.participants {
+		delete(s.busy, pid)
+	}
+	sharers := s.screenSharers[callID]
+	var serverID string
+	if ac.info.ServerID != nil {
+		serverID = *ac.info.ServerID
+	}
+	channelID := ac.info.ChannelID
+	delete(s.calls, callID)
+	delete(s.screenSharers, callID)
+	s.mu.Unlock()
+
+	for userID := range sharers {
+		s.publishLive(serverID, LiveEvent{CallID: callID, ChannelID: channelID, UserID: userID, Active: false})
+	}
 	return nil
 }
 
@@ -459,8 +515,9 @@ func (s *Service) EndByUser(ctx context.Context, callID string, userID string) e
 	return s.End(ctx, callID)
 }
 
-// SetScreenShare marca/desmarca um participante como compartilhando tela e
-// publica call:screen para os demais participantes da chamada.
+// SetScreenShare marca/desmarca um participante como compartilhando tela,
+// publica call:screen para os demais participantes da chamada e call:live
+// para o servidor (selo LIVE na lista do canal de voz).
 func (s *Service) SetScreenShare(ctx context.Context, callID string, userID string, active bool) error {
 	s.mu.Lock()
 	ac, ok := s.calls[callID]
@@ -490,9 +547,16 @@ func (s *Service) SetScreenShare(ctx context.Context, callID string, userID stri
 			targets = append(targets, pid)
 		}
 	}
+	var serverID string
+	if ac.info.ServerID != nil {
+		serverID = *ac.info.ServerID
+	}
+	channelID := ac.info.ChannelID
 	s.mu.Unlock()
 
-	userInfo, err := s.userInfo(ctx, userID)
+	s.publishLive(serverID, LiveEvent{CallID: callID, ChannelID: channelID, UserID: userID, Active: active})
+
+	userInfo, err := s.lookupUser(ctx, userID)
 	if err != nil {
 		return err
 	}

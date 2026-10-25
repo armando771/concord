@@ -33,6 +33,15 @@ export default defineConfig({
       }
     },
     plugins: [react(), tailwindcss(), connectSrcPlugin],
+    // Duas páginas: o app e o overlay de jogo (janela à parte, sem rede).
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/renderer/index.html'),
+          overlay: resolve('src/renderer/overlay.html')
+        }
+      }
+    },
     // O WASM do RNNoise entra inline (lib/noiseSuppression.ts).
     assetsInclude: ['**/*.wasm']
   }

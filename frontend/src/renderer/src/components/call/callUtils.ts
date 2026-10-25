@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { CallKind } from '../../store/callStore'
 
 export function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60)
@@ -22,4 +23,18 @@ export function useElapsed(startedAt: number | null): number {
     }
   }, [startedAt])
   return elapsed
+}
+
+/** Rota da tela da chamada atual (canal de voz ou DM), ou null sem dados para chegar lá. */
+export function callRoute(call: {
+  type: CallKind | null
+  serverId: string | null
+  channelId: string | null
+  peerId: string | null
+}): string | null {
+  if (call.type === 'channel' && call.serverId && call.channelId) {
+    return `/servers/${call.serverId}/channels/${call.channelId}`
+  }
+  if (call.type === 'dm' && call.peerId) return `/dm/${call.peerId}`
+  return null
 }

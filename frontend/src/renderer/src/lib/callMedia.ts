@@ -33,6 +33,34 @@ export function groupTracks(entries: TrackEntry[]): GroupedTracks {
   return grouped
 }
 
+export interface PublicationEntry {
+  userId: string
+  source: TrackSourceName
+}
+
+const SCREEN_SOURCES = new Set<TrackSourceName>(['screen_share', 'screen_share_audio'])
+
+/**
+ * Se devo baixar essa publicação: microfone/câmera sempre; tela e som da tela
+ * só de quem estou assistindo (transmissão começa pausada).
+ */
+export function wantsSubscription(
+  source: TrackSourceName,
+  userId: string,
+  watched: ReadonlySet<string>
+): boolean {
+  return !SCREEN_SOURCES.has(source) || watched.has(userId)
+}
+
+/** Quem publica tela (assinada ou não), sem repetir, na ordem de chegada. */
+export function listScreenPublishers(pubs: PublicationEntry[]): string[] {
+  const ids = new Set<string>()
+  for (const { userId, source } of pubs) {
+    if (source === 'screen_share') ids.add(userId)
+  }
+  return [...ids]
+}
+
 /**
  * Mantém o mesmo objeto de stream enquanto o conjunto de tracks não muda —
  * evita que <video>/<audio> e o analisador de fala reiniciem a cada evento.

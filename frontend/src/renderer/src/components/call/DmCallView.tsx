@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useCallStore } from '../../store/callStore'
 import {
   CameraIcon,
@@ -11,7 +10,7 @@ import {
   MicOffIcon,
   PhoneOffIcon
 } from '../icons'
-import VoiceControls from './VoiceControls'
+import CallControlsDock from './CallControlsDock'
 import CallStage from './CallStage'
 import { formatDuration, useElapsed } from './callUtils'
 import useSpeaking from './useSpeaking'
@@ -29,7 +28,9 @@ function DmCallView({ children }: { children?: React.ReactNode }): React.JSX.Ele
   const toggleCamera = useCallStore((s) => s.toggleCamera)
   const endCall = useCallStore((s) => s.endCall)
 
-  const [minimized, setMinimized] = useState(false)
+  // No store: a miniatura da transmissão expande a DM ao ser clicada.
+  const minimized = useCallStore((s) => s.dmMinimized)
+  const setMinimized = useCallStore((s) => s.setDmMinimized)
 
   const dmActive = type === 'dm' && status === 'active'
   const elapsed = useElapsed(dmActive ? startedAt : null)
@@ -158,11 +159,7 @@ function DmCallView({ children }: { children?: React.ReactNode }): React.JSX.Ele
         <CallStage speaking={speaking} />
       </div>
 
-      <div className="pointer-events-none absolute bottom-6 left-0 right-0 flex justify-center">
-        <div className="pointer-events-auto">
-          <VoiceControls />
-        </div>
-      </div>
+      <CallControlsDock />
     </div>
   )
 }
