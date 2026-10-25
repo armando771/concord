@@ -25,6 +25,7 @@ var (
 type EventPublisher interface {
 	PublishMessageCreate(event CreateEvent)
 	PublishMessageDelete(event DeleteEvent)
+	PublishMessageUpdate(event UpdateEvent)
 	PublishPollUpdate(event PollUpdateEvent)
 	PublishReactionAdd(event ReactionEvent)
 	PublishReactionRemove(event ReactionEvent)
@@ -47,6 +48,7 @@ type FileRemover interface {
 
 type Service struct {
 	repository      *Repository
+	edits           editStore
 	publisher       EventPublisher
 	channelResolver ChannelResolver
 	convResolver    ConversationResolver
@@ -58,6 +60,7 @@ type Service struct {
 func MessageService(repository *Repository, publisher EventPublisher, channelResolver ChannelResolver, convResolver ConversationResolver, files FileRemover, perms PermissionChecker) *Service {
 	return &Service{
 		repository:      repository,
+		edits:           repository,
 		publisher:       publisher,
 		channelResolver: channelResolver,
 		convResolver:    convResolver,

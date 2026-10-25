@@ -366,7 +366,8 @@ func (h *Hub) PresenceMap(userIDs []string) map[string]string {
 	return result
 }
 
-// messageRooms são as salas por onde chegam message:create e message:delete:
+// messageRooms são as salas por onde chegam message:create, message:update e
+// message:delete:
 // o canal e o servidor dele, ou a DM e a sala pessoal de cada participante.
 func messageRooms(channelID *string, serverID string, conversationID *string, userIDs []string) []string {
 	var rooms []string
@@ -402,6 +403,11 @@ func (h *Hub) publishMessage(data []byte, channelID *string, serverID string, co
 
 func (h *Hub) PublishMessageCreate(event message.CreateEvent) {
 	h.publishMessage(writeEvent("message:create", event), event.ChannelID, event.ServerID, event.ConversationID, event.UserIDs)
+}
+
+// PublishMessageUpdate (mensagem editada) vai pelas mesmas salas do create.
+func (h *Hub) PublishMessageUpdate(event message.UpdateEvent) {
+	h.publishMessage(writeEvent("message:update", event), event.ChannelID, event.ServerID, event.ConversationID, event.UserIDs)
 }
 
 func (h *Hub) PublishMessageDelete(event message.DeleteEvent) {

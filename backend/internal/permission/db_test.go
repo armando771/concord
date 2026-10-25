@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
-	"strings"
 	"testing"
 
 	"gin-quickstart/backend/internal/channel"
@@ -514,7 +513,9 @@ func TestDBMigrationBackfillsExistingServers(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), "000029_") {
+		// Só as anteriores: com uma posterior no diretório (030+), o Migrate
+		// avançaria a versão e pularia a 029 na segunda passada.
+		if entry.Name() >= "000029_" {
 			continue
 		}
 		raw, err := os.ReadFile(filepath.Join("../../migrations", entry.Name()))
