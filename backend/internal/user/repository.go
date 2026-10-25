@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -50,6 +51,56 @@ func (r *Repository) FindByEmail(ctx context.Context, email string) (*User, erro
 		return nil, err
 	}
 	return user, nil
+}
+
+// FindLoginCandidates traz até duas contas cuja coluna (username ou email)
+// bate com value ignorando caixa, com a que bate exatamente primeiro.
+// Duas linhas sem nenhuma exata = ambíguo (ver pickLoginMatch).
+func (r *Repository) FindLoginCandidates(ctx context.Context, column loginColumn, value string) ([]User, error) {
+	rows, err := r.db.Query(
+		ctx,
+		fmt.Sprintf(`
+		SELECT
+			id,
+			username,
+			display_name,
+			email,
+			password_hash,
+			avatar_url,
+			active,
+			created_at,
+			updated_at
+		FROM users
+		WHERE lower(%[1]s) = lower($1)
+		ORDER BY (%[1]s = $1) DESC
+		LIMIT 2
+		`, column),
+		value,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(
+			&u.ID,
+			&u.Username,
+			&u.DisplayName,
+			&u.Email,
+			&u.PasswordHash,
+			&u.AvatarURL,
+			&u.Active,
+			&u.CreatedAt,
+			&u.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
 }
 
 func (r *Repository) FindByID(ctx context.Context, id string) (*User, error) {

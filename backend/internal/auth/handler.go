@@ -3,6 +3,7 @@ package auth
 import (
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -10,6 +11,12 @@ import (
 
 	"gin-quickstart/backend/internal/user"
 )
+
+// dummyPasswordHash é um hash qualquer, com o mesmo custo dos reais.
+var dummyPasswordHash = sync.OnceValue(func() []byte {
+	hash, _ := bcrypt.GenerateFromPassword([]byte("salinha-login-sem-conta"), bcrypt.DefaultCost)
+	return hash
+})
 
 type Handler struct {
 	service     *Service
@@ -91,6 +98,9 @@ func (h *Handler) Register(c *gin.Context) {
 
 func (h *Handler) Login(c *gin.Context) {
 	var input struct {
+		// Login: e-mail ou nome de usuário (campo novo).
+		Login string `json:"login"`
+		// Email: campo antigo, mantido para os apps desktop já instalados.
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
@@ -100,8 +110,24 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	foundUser, err := h.userService.FindByEmail(c.Request.Context(), input.Email)
+	// Toda falha responde igual: não dá para saber se a conta existe.
+	identifier, ok := ParseLoginIdentifier(input.Login, input.Email)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		return
+	}
+
+	var foundUser *user.User
+	var err error
+	if identifier.Kind == IdentifierEmail {
+		foundUser, err = h.userService.FindLoginByEmail(c.Request.Context(), identifier.Value)
+	} else {
+		foundUser, err = h.userService.FindLoginByUsername(c.Request.Context(), identifier.Value)
+	}
 	if err != nil {
+		// Gasta o mesmo bcrypt de uma senha errada, para o tempo de resposta
+		// também não denunciar que a conta não existe.
+		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash(), []byte(input.Password))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
