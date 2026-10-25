@@ -125,7 +125,7 @@ func main() {
 	messageHandler := message.MessageHandler(messageService, channelService, conversationService, friendshipService, serverService)
 	uploadSpace := media.NewSpace(uploadsDir, media.ReserveFromEnv(os.Getenv("UPLOADS_MIN_FREE_GB")))
 	roomAccess := message.NewServiceRoomAccess(channelService, serverService, conversationService, friendshipService)
-	attachmentHandler := message.NewAttachmentHandler(messageRepository, uploads, uploadSpace, roomAccess, nil)
+	attachmentHandler := message.NewAttachmentHandler(messageRepository, uploads, uploadSpace, roomAccess, authService)
 
 	// LiveKit (mídia das chamadas)
 	liveKitKey, liveKitSecret := os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET")

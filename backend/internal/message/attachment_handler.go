@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"time"
 
@@ -212,4 +213,85 @@ func (h *AttachmentHandler) upload(c *gin.Context, room Room) {
 	keep = true
 
 	c.JSON(http.StatusCreated, a.Attachment)
+}
+
+// MediaToken entrega o token curto que o app põe na URL dos arquivos.
+func (h *AttachmentHandler) MediaToken(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	token, expiresAt, err := h.tokens.GenerateMediaToken(userID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create media token"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"token": token, "expires_at": expiresAt.UTC().Format(time.RFC3339)})
+}
+
+// ServeFile entrega o arquivo de um anexo. A cada pedido confere de novo se o
+// dono do token ainda acessa a sala; quem não acessa recebe 404, sem saber se
+// o arquivo existe.
+func (h *AttachmentHandler) ServeFile(c *gin.Context) {
+	token := c.Query("token")
+	if token == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid media token"})
+		return
+	}
+	userID, err := h.tokens.VerifyMediaToken(token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid media token"})
+		return
+	}
+
+	ctx := c.Request.Context()
+	notFound := func() { c.JSON(http.StatusNotFound, gin.H{"error": "attachment not found"}) }
+
+	a, err := h.repo.FindAttachment(ctx, c.Param("attachmentId"))
+	if errors.Is(err, ErrAttachmentNotFound) {
+		notFound()
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load attachment"})
+		return
+	}
+	// Pendente: ainda não foi mandado em mensagem nenhuma.
+	if a.MessageID == nil {
+		notFound()
+		return
+	}
+
+	room := Room{}
+	if a.ChannelID != nil {
+		room.ChannelID = *a.ChannelID
+	} else if a.ConversationID != nil {
+		room.ConversationID = *a.ConversationID
+	}
+	if err := h.access.CanRead(ctx, room, userID); err != nil {
+		if errors.Is(err, ErrRoomNotFound) || errors.Is(err, ErrNoRoomAccess) {
+			notFound()
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check access"})
+		return
+	}
+
+	file, err := h.store.Open(a.ID)
+	if err != nil {
+		// Linha existe mas o arquivo sumiu do disco.
+		log.Printf("attachment %s has no file: %v", a.ID, err)
+		notFound()
+		return
+	}
+	defer file.Close()
+
+	header := c.Writer.Header()
+	header.Set("Content-Type", a.ContentType)
+	header.Set("X-Content-Type-Options", "nosniff")
+	header.Set("Cache-Control", "private, max-age=3600")
+	header.Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": a.Filename}))
+	// ServeContent responde Range (seek de vídeo/áudio) e If-Modified-Since.
+	http.ServeContent(c.Writer, c.Request, "", a.CreatedAt, file)
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"net/textproto"
 	"strings"
 	"testing"
+	"time"
 
 	"gin-quickstart/backend/internal/media"
 
@@ -46,6 +48,19 @@ type fakeSpace struct{ ok bool }
 
 func (s fakeSpace) HasRoom(int64) bool { return s.ok }
 
+type fakeTokens struct{}
+
+func (fakeTokens) GenerateMediaToken(userID string) (string, time.Time, error) {
+	return "bom", time.Now().Add(time.Hour), nil
+}
+
+func (fakeTokens) VerifyMediaToken(token string) (string, error) {
+	if token == "bom" {
+		return "u1", nil
+	}
+	return "", errors.New("invalid token")
+}
+
 type attachmentEnv struct {
 	router *gin.Engine
 	h      *AttachmentHandler
@@ -61,7 +76,7 @@ func newAttachmentEnv(t *testing.T, access fakeAccess, space fakeSpace) *attachm
 		t.Fatal(err)
 	}
 	repo := &fakeAttachmentRepo{rows: map[string]*storedAttachment{}}
-	h := NewAttachmentHandler(repo, store, space, access, nil)
+	h := NewAttachmentHandler(repo, store, space, access, fakeTokens{})
 	router := gin.New()
 	fakeAuth := func(c *gin.Context) {
 		c.Set("userID", "u1")
@@ -226,5 +241,107 @@ func TestUploadKeepsCleanFilename(t *testing.T) {
 	json.Unmarshal(rec.Body.Bytes(), &got)
 	if got.Filename != "voz.ogg" || got.Kind != "audio" {
 		t.Fatalf("resposta = %+v", got)
+	}
+}
+
+// storedImage deixa no repo e no disco uma imagem do canal c1 (ligada a
+// messageID, ou pendente se nil).
+func (e *attachmentEnv) storedImage(t *testing.T, messageID *string) (string, []byte) {
+	t.Helper()
+	id := "5f0c7c43-6c1a-4f53-9d43-2c9f3b6a0a11"
+	data := pngBytes(64)
+	if _, _, err := e.store.Save(id, bytes.NewReader(data), 1024); err != nil {
+		t.Fatal(err)
+	}
+	channelID := "c1"
+	e.repo.rows[id] = &storedAttachment{
+		Attachment: Attachment{ID: id, Kind: "image", ContentType: "image/png", Filename: "foto.png", SizeBytes: int64(len(data))},
+		UploaderID: "u1",
+		MessageID:  messageID,
+		ChannelID:  &channelID,
+		CreatedAt:  time.Now().Add(-time.Minute),
+	}
+	return id, data
+}
+
+func (e *attachmentEnv) get(path string, header map[string]string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	for k, v := range header {
+		req.Header.Set(k, v)
+	}
+	rec := httptest.NewRecorder()
+	e.router.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestServeFileStreamsStoredType(t *testing.T) {
+	env := newAttachmentEnv(t, fakeAccess{}, fakeSpace{ok: true})
+	messageID := "m1"
+	id, data := env.storedImage(t, &messageID)
+	rec := env.get("/api/media/"+id+"?token=bom", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "image/png" {
+		t.Fatalf("Content-Type = %q", got)
+	}
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("X-Content-Type-Options = %q", got)
+	}
+	if !bytes.Equal(rec.Body.Bytes(), data) {
+		t.Fatal("corpo diferente do arquivo salvo")
+	}
+}
+
+func TestServeFileSupportsRange(t *testing.T) {
+	env := newAttachmentEnv(t, fakeAccess{}, fakeSpace{ok: true})
+	messageID := "m1"
+	id, data := env.storedImage(t, &messageID)
+	rec := env.get("/api/media/"+id+"?token=bom", map[string]string{"Range": "bytes=0-3"})
+	if rec.Code != http.StatusPartialContent || !bytes.Equal(rec.Body.Bytes(), data[:4]) {
+		t.Fatalf("status = %d, corpo = %q", rec.Code, rec.Body.Bytes())
+	}
+}
+
+func TestServeFileRequiresValidToken(t *testing.T) {
+	env := newAttachmentEnv(t, fakeAccess{}, fakeSpace{ok: true})
+	messageID := "m1"
+	id, _ := env.storedImage(t, &messageID)
+	for _, path := range []string{"/api/media/" + id, "/api/media/" + id + "?token=ruim"} {
+		if rec := env.get(path, nil); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("%s: status = %d, want 401", path, rec.Code)
+		}
+	}
+}
+
+func TestServeFileHidesFromOutsiders(t *testing.T) {
+	env := newAttachmentEnv(t, fakeAccess{readErr: ErrNoRoomAccess}, fakeSpace{ok: true})
+	messageID := "m1"
+	id, _ := env.storedImage(t, &messageID)
+	if rec := env.get("/api/media/"+id+"?token=bom", nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestServeFileHidesPending(t *testing.T) {
+	env := newAttachmentEnv(t, fakeAccess{}, fakeSpace{ok: true})
+	id, _ := env.storedImage(t, nil)
+	if rec := env.get("/api/media/"+id+"?token=bom", nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestMediaTokenEndpoint(t *testing.T) {
+	env := newAttachmentEnv(t, fakeAccess{}, fakeSpace{ok: true})
+	rec := env.get("/api/media/token", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Token     string `json:"token"`
+		ExpiresAt string `json:"expires_at"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || body.Token == "" || body.ExpiresAt == "" {
+		t.Fatalf("corpo = %s (%v)", rec.Body.String(), err)
 	}
 }

@@ -16,4 +16,11 @@ func AttachmentRoutes(router *gin.RouterGroup, h *AttachmentHandler, authMiddlew
 		conversations.POST("", h.UploadToConversation)
 		conversations.POST("/", h.UploadToConversation)
 	}
+
+	media := router.Group("/media")
+	{
+		media.GET("/token", authMiddleware, h.MediaToken)
+		// Sem Bearer: <img>/<video>/<audio> mandam o token de mídia em ?token=.
+		media.GET("/:attachmentId", h.ServeFile)
+	}
 }
