@@ -20,6 +20,7 @@ type Handler struct {
 	friendService       *friendship.Service
 	perms               PermissionChecker
 	access              RoomAccess
+	commands            CommandHandler
 }
 
 func MessageHandler(service *Service, channelService *channel.Service, conversationService *conversation.Service, friendService *friendship.Service, perms PermissionChecker) *Handler {
@@ -68,6 +69,21 @@ func parseListParams(c *gin.Context) (limit int, before string) {
 	return
 }
 
+// CommandHandler recebe comandos digitados no chat (ex.: /play do Maestro).
+type CommandHandler interface {
+	HandleCommand(serverID, channelID, userID, content string) bool
+}
+
+func (h *Handler) SetCommandHandler(c CommandHandler) { h.commands = c }
+
+// tryCommand: comando reconhecido não é gravado como mensagem.
+func (h *Handler) tryCommand(serverID, channelID, userID, content string, attachmentIDs []string) bool {
+	if h.commands == nil || len(attachmentIDs) > 0 {
+		return false
+	}
+	return h.commands.HandleCommand(serverID, channelID, userID, content)
+}
+
 func (h *Handler) CreateChannelMessage(c *gin.Context) {
 	channelID := c.Param("channelId")
 
@@ -93,6 +109,13 @@ func (h *Handler) CreateChannelMessage(c *gin.Context) {
 	}
 	if !h.requireChannel(c, channelID, userID, want) {
 		return
+	}
+
+	if len(input.AttachmentIDs) == 0 && h.commands != nil {
+		if ch, err := h.channelService.FindByID(c.Request.Context(), channelID); err == nil && h.tryCommand(ch.ServerID, channelID, userID, input.Content, input.AttachmentIDs) {
+			c.JSON(http.StatusAccepted, gin.H{"command": true})
+			return
+		}
 	}
 
 	msg, err := h.service.CreateChannelMessage(c.Request.Context(), channelID, userID, input.Content, input.ReplyToID, input.AttachmentIDs)

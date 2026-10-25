@@ -116,6 +116,10 @@ type Service struct {
 	// Dados do usuário nos eventos de tela (trocável nos testes).
 	lookupUser  func(ctx context.Context, userID string) (UserInfo, error)
 	soundLookup SoundLookup
+
+	// Hooks do bot de música (internal/music): saída de alguém e fim da call.
+	onParticipantLeft []func(callID, userID string)
+	onCallEnded       []func(callID string)
 	// Onde o mudo/ensurdecido e a tela ficam salvos para o reinício (o banco).
 	stateStore participantStateStore
 	// De onde RestoreActive lê as chamadas na subida (o banco).
@@ -576,10 +580,14 @@ func (s *Service) detachParticipant(callID, userID string) (remaining int, remov
 		serverID = *ac.info.ServerID
 	}
 	channelID := ac.info.ChannelID
+	hooks := append([]func(string, string){}, s.onParticipantLeft...)
 	// Quem abriu a atividade saiu: ela acaba para os que ficaram.
 	activityStop := s.dropActivityOfLocked(callID, userID)
 	targets := participantIDsLocked(ac)
 	s.mu.Unlock()
+	for _, fn := range hooks {
+		fn(callID, userID)
+	}
 
 	if activityStop != nil {
 		s.sendToAll(targets, activityStop)
@@ -637,8 +645,12 @@ func (s *Service) closeCall(callID string) error {
 	knockers := pendingRequestersLocked(ac)
 	delete(s.calls, callID)
 	delete(s.screenSharers, callID)
+	endHooks := append([]func(string){}, s.onCallEnded...)
 	delete(s.activities, callID)
 	s.mu.Unlock()
+	for _, fn := range endHooks {
+		fn(callID)
+	}
 
 	for userID := range sharers {
 		s.publishLive(serverID, LiveEvent{CallID: callID, ChannelID: channelID, UserID: userID, Active: false})
@@ -1137,4 +1149,28 @@ func (s *Service) handleStartError(userID string, callID string, err error) {
 		return
 	}
 	s.sendError(userID, callID, err.Error())
+}
+
+// OnParticipantLeft registra quem quer saber que alguém saiu de uma chamada.
+func (s *Service) OnParticipantLeft(fn func(callID, userID string)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onParticipantLeft = append(s.onParticipantLeft, fn)
+}
+
+// OnCallEnded registra quem quer saber que uma chamada acabou.
+func (s *Service) OnCallEnded(fn func(callID string)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onCallEnded = append(s.onCallEnded, fn)
+}
+
+// ParticipantIDs: quem está na chamada, na ordem de entrada.
+func (s *Service) ParticipantIDs(callID string) []string {
+	infos := s.participantInfos(callID)
+	ids := make([]string, len(infos))
+	for i, p := range infos {
+		ids[i] = p.UserID
+	}
+	return ids
 }

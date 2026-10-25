@@ -39,4 +39,11 @@ describe('mergeCallPeople', () => {
   it('mantém quem está no backend mas ainda não conectou a mídia', () => {
     expect(mergeCallPeople([ana], {}, 'eu')).toEqual([ana])
   })
+
+  it('o Maestro entra no palco com o nome e marcado como bot', () => {
+    const people = mergeCallPeople([], { 'bot-music:v1': 'Maestro' }, 'me')
+    expect(people).toEqual([
+      { id: 'bot-music:v1', username: '', display_name: 'Maestro', is_bot: true }
+    ])
+  })
 })

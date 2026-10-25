@@ -1,3 +1,5 @@
+import { isMaestroIdentity } from './music'
+
 // Quem aparece no palco da chamada. A lista do backend pode perder alguém que
 // continua na sala de mídia (ex.: o WS de chat caiu além da tolerância e o
 // backend o tirou da chamada) — o LiveKit é quem sabe quem está de fato lá.
@@ -7,6 +9,7 @@ export interface CallPerson {
   username: string
   display_name: string
   avatar_url?: string | null
+  is_bot?: boolean
 }
 
 export const UNKNOWN_NAME = 'Usuário'
@@ -30,7 +33,12 @@ export function mergeCallPeople(
   const known = new Set(merged.map((p) => p.id))
   for (const id of Object.keys(mediaPeers)) {
     if (id === meId || known.has(id)) continue
-    merged.push({ id, username: '', display_name: nameFor(id) })
+    merged.push({
+      id,
+      username: '',
+      display_name: nameFor(id),
+      ...(isMaestroIdentity(id) ? { is_bot: true } : {})
+    })
   }
   return merged
 }

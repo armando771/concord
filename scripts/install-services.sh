@@ -6,7 +6,9 @@
 #
 #   scripts/install-services.sh
 #
-# Requer `playit` no PATH e PUBLIC_URL em backend/.env (para o vigia).
+#   concord-ytdlp-update.timer   atualiza o yt-dlp do Maestro todo dia
+#
+# Requer `playit`, `ffmpeg` no PATH e PUBLIC_URL em backend/.env (para o vigia).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,6 +22,21 @@ if [[ -z "$PLAYIT" ]]; then
   exit 1
 fi
 
+# Maestro (bot de música): ffmpeg + yt-dlp. O yt-dlp se atualiza todo dia
+# porque o YouTube muda com frequência e quebra versões antigas.
+if ! command -v ffmpeg >/dev/null; then
+  echo "ffmpeg não encontrado — instale com: sudo apt-get install -y ffmpeg" >&2
+  exit 1
+fi
+YTDLP_BIN="$HOME/.local/bin/yt-dlp"
+if ! command -v yt-dlp >/dev/null; then
+  mkdir -p "$(dirname "$YTDLP_BIN")"
+  curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o "$YTDLP_BIN"
+  chmod a+rx "$YTDLP_BIN"
+fi
+YTDLP_BIN="$(command -v yt-dlp || echo "$YTDLP_BIN")"
+FFMPEG_BIN="$(command -v ffmpeg)"
+
 mkdir -p "$UNITS" "$PLAYIT_DATA" "$(dirname "$PLAYIT_SECRET")"
 (cd "$ROOT/backend" && go build -o concord-server ./cmd)
 
@@ -32,6 +49,9 @@ StartLimitIntervalSec=0
 
 [Service]
 WorkingDirectory=$ROOT/backend
+# Units do usuário não enxergam ~/.local/bin: caminhos absolutos para o Maestro.
+Environment=MUSIC_YTDLP=$YTDLP_BIN
+Environment=MUSIC_FFMPEG=$FFMPEG_BIN
 ExecStart=$ROOT/backend/concord-server
 Restart=always
 RestartSec=1
@@ -79,8 +99,31 @@ OnUnitActiveSec=1min
 WantedBy=timers.target
 UNIT
 
+# Se o yt-dlp veio do apt (/usr/bin/yt-dlp), o -U falha sem quebrar nada; o
+# binário oficial é o recomendado (docs/HOSPEDAGEM.md).
+cat > "$UNITS/concord-ytdlp-update.service" <<UNIT
+[Unit]
+Description=Atualiza o yt-dlp do Maestro
+
+[Service]
+Type=oneshot
+ExecStart=$YTDLP_BIN -U
+UNIT
+
+cat > "$UNITS/concord-ytdlp-update.timer" <<UNIT
+[Unit]
+Description=Atualiza o yt-dlp todo dia
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+
 systemctl --user daemon-reload
-systemctl --user enable --now concord-playit concord-server concord-playit-watchdog.timer
+systemctl --user enable --now concord-playit concord-server concord-playit-watchdog.timer concord-ytdlp-update.timer
 
 echo
 echo "Serviços instalados. Se o playit ainda não foi vinculado à sua conta:"

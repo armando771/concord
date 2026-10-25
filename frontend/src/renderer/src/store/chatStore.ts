@@ -56,6 +56,7 @@ import { useProposalStore } from './proposalStore'
 import { useNotifySettingsStore } from './notifySettingsStore'
 import { mentionKindOf, muteDecision } from '../lib/notificationMute'
 import { useSoundboardStore } from './soundboardStore'
+import { useMusicStore } from './musicStore'
 import { useActivityStore } from './activityStore'
 import { useTypingStore } from './typingStore'
 import { usePresenceActivityStore } from './presenceActivityStore'
@@ -710,6 +711,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     if (event.type === 'call:soundboard' || event.type.startsWith('soundboard:')) {
       useSoundboardStore.getState().handleWsEvent(event)
+      return
+    }
+
+    if (event.type.startsWith('music:')) {
+      useMusicStore.getState().handleWsEvent(event)
       return
     }
 

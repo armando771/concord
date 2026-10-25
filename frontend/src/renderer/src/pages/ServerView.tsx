@@ -4,6 +4,9 @@ import { profileCardHandler } from '../store/profileCardStore'
 import InviteCodeBox from '../components/InviteCodeBox'
 import { Navigate, useParams } from 'react-router-dom'
 import { useServerStore } from '../store/serverStore'
+import { useMusicStore } from '../store/musicStore'
+import MaestroAvatar from '../components/music/MaestroAvatar'
+import { T18 } from '../lib/music'
 import { useFriendStore } from '../store/friendStore'
 import { useAuthStore } from '../store/authStore'
 import { useUIStore } from '../store/uiStore'
@@ -47,6 +50,7 @@ interface MemberRowProps {
   /** Cor do cargo mais alto que tem cor (CSS); sem ela vale nameClass. */
   nameColor?: string
   online: boolean
+  isBot?: boolean
 }
 
 function MemberRow({
@@ -58,7 +62,8 @@ function MemberRow({
   colorClass,
   nameClass,
   nameColor,
-  online
+  online,
+  isBot = false
 }: MemberRowProps): React.JSX.Element {
   const meId = useAuthStore((s) => s.user?.id)
   const status = usePresenceStatus(userId)
@@ -81,15 +86,19 @@ function MemberRow({
       <LevelRowShimmer userId={userId} />
       <div className="relative shrink-0">
         <LevelUpBurst userId={userId} />
-        <Avatar
-          userId={userId}
-          name={name}
-          avatarUrl={avatarUrl}
-          size={32}
-          status={status}
-          cutoutColor="#07080b"
-          fallbackClassName={colorClass}
-        />
+        {isBot ? (
+          <MaestroAvatar size={32} />
+        ) : (
+          <Avatar
+            userId={userId}
+            name={name}
+            avatarUrl={avatarUrl}
+            size={32}
+            status={status}
+            cutoutColor="#07080b"
+            fallbackClassName={colorClass}
+          />
+        )}
       </div>
       <div className="relative min-w-0">
         <div className="flex min-w-0 items-center gap-1.5">
@@ -100,7 +109,13 @@ function MemberRow({
           >
             {name}
           </p>
-          <LevelBadge userId={userId} />
+          {isBot ? (
+            <span className="rounded bg-violet-400/30 px-1 text-[9px] font-bold uppercase text-violet-100">
+              {T18.tag}
+            </span>
+          ) : (
+            <LevelBadge userId={userId} />
+          )}
         </div>
         {activityShown ? (
           <ActivityLine
@@ -171,6 +186,10 @@ export function ServerView(): React.JSX.Element {
         showToast.error(err instanceof Error ? err.message : 'Falha ao carregar servidor.')
       })
       fetchChannels(id)
+      useMusicStore
+        .getState()
+        .loadPresence(id)
+        .catch(() => {})
     }
   }, [id, selectServer, fetchChannels])
 
@@ -239,7 +258,9 @@ export function ServerView(): React.JSX.Element {
     members: currentMembers,
     roles,
     ownerId: currentServer.owner_id,
-    isOnline: (userId) => Boolean(presence[userId])
+    // O Maestro não tem websocket: está sempre online.
+    isOnline: (userId) =>
+      Boolean(presence[userId]) || currentMembers.some((m) => m.user_id === userId && m.is_bot)
   })
 
   const activeChannel = channels.find((c) => c.id === channelId)

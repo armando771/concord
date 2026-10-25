@@ -24,6 +24,7 @@ export interface ServerMember {
   username?: string
   display_name?: string
   avatar_url?: string | null
+  is_bot?: boolean
   /** Apelido neste servidor (null = sem; vale o display_name). */
   nickname?: string | null
 }

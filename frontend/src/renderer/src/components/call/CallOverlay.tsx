@@ -1,4 +1,5 @@
 import { useCallStore } from '../../store/callStore'
+import { useMusicDucking } from '../music/useMusicDucking'
 import RemoteAudio from './RemoteAudio'
 import { remoteAudioEntries } from './remoteAudioEntries'
 
@@ -12,6 +13,7 @@ function CallOverlay(): React.JSX.Element | null {
   const streams = useCallStore((s) => s.streams)
   const screenAudioStreams = useCallStore((s) => s.screenAudioStreams)
   const deafened = useCallStore((s) => s.deafened)
+  const musicGain = useMusicDucking()
 
   if (status === 'idle' || status === 'ringing') return null
 
@@ -19,7 +21,13 @@ function CallOverlay(): React.JSX.Element | null {
   return (
     <>
       {remoteAudioEntries({ streams, screenAudioStreams, deafened }).map((e) => (
-        <RemoteAudio key={e.key} stream={e.stream} muted={e.muted} userId={e.volumeKey} />
+        <RemoteAudio
+          key={e.key}
+          stream={e.stream}
+          muted={e.muted}
+          userId={e.volumeKey}
+          gain={e.music ? musicGain : 1}
+        />
       ))}
     </>
   )

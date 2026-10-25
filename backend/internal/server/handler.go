@@ -526,3 +526,23 @@ func (h *Handler) DeleteIcon(c *gin.Context) {
 	h.images.RemoveMediaURL(old)
 	c.JSON(http.StatusOK, updated)
 }
+
+func (h *Handler) EnableMusicBot(c *gin.Context)  { h.setMusicBot(c, true) }
+func (h *Handler) DisableMusicBot(c *gin.Context) { h.setMusicBot(c, false) }
+
+func (h *Handler) setMusicBot(c *gin.Context, enabled bool) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if err := h.service.SetMusicBot(c.Request.Context(), c.Param("id"), userID.(string), enabled); err != nil {
+		if errors.Is(err, ErrOnlyOwnerBot) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}

@@ -162,7 +162,7 @@ func respondError(c *gin.Context, err error) {
 		status, code = http.StatusConflict, "you_blocked"
 	case errors.Is(err, ErrRequestNotAllowed):
 		status, code = http.StatusForbidden, "not_allowed"
-	case errors.Is(err, ErrCannotAddSelf), errors.Is(err, ErrCannotBlockSelf):
+	case errors.Is(err, ErrCannotAddSelf), errors.Is(err, ErrCannotBlockSelf), errors.Is(err, ErrBotUser):
 		code = "self"
 	case errors.Is(err, ErrNotAddressee), errors.Is(err, ErrNotRequester),
 		errors.Is(err, ErrNotPending), errors.Is(err, ErrNotFriends):

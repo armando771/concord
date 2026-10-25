@@ -16,6 +16,7 @@ import (
 	"gin-quickstart/backend/internal/auth"
 	"gin-quickstart/backend/internal/badge"
 	"gin-quickstart/backend/internal/birthday"
+	"gin-quickstart/backend/internal/bot"
 	"gin-quickstart/backend/internal/call"
 	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/clientip"
@@ -25,13 +26,14 @@ import (
 	"gin-quickstart/backend/internal/health"
 	"gin-quickstart/backend/internal/httplog"
 	"gin-quickstart/backend/internal/level"
-	"gin-quickstart/backend/internal/proposal"
 	"gin-quickstart/backend/internal/lifecycle"
 	"gin-quickstart/backend/internal/livekit"
 	"gin-quickstart/backend/internal/media"
 	"gin-quickstart/backend/internal/message"
+	"gin-quickstart/backend/internal/music"
 	"gin-quickstart/backend/internal/notifysettings"
 	"gin-quickstart/backend/internal/permission"
+	"gin-quickstart/backend/internal/proposal"
 	"gin-quickstart/backend/internal/role"
 	"gin-quickstart/backend/internal/server"
 	"gin-quickstart/backend/internal/soundboard"
@@ -39,10 +41,10 @@ import (
 	"gin-quickstart/backend/internal/user"
 	"gin-quickstart/backend/internal/websocket"
 
+	"gin-quickstart/backend/internal/mailer"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"gin-quickstart/backend/internal/mailer"
 )
 
 func loadEnv() {
@@ -386,6 +388,49 @@ func main() {
 		log.Fatalf("não foi possível recarregar as chamadas: %v", err)
 	}
 
+	// Maestro (bot de música): um player LiveKit por canal de voz.
+	musicManager := music.NewManager(music.ConfigFromEnv(liveKitPort), music.ManagerDeps{
+		Locate: func(userID string) (music.Location, bool) {
+			l, ok := callService.VoiceLocationOf(userID)
+			return music.Location{CallID: l.CallID, ChannelID: l.ChannelID, ServerID: l.ServerID}, ok
+		},
+		Humans: callService.ParticipantIDs,
+		IsMember: func(ctx context.Context, serverID, userID string) bool {
+			ok, err := serverService.IsMember(ctx, serverID, userID)
+			return err == nil && ok
+		},
+		BotEnabled: func(ctx context.Context, serverID string) bool {
+			ok, err := serverService.IsMember(ctx, serverID, bot.UserID)
+			return err == nil && ok
+		},
+		ChannelName: func(ctx context.Context, channelID string) string {
+			ch, err := channelService.FindByID(ctx, channelID)
+			if err != nil {
+				return ""
+			}
+			return ch.Name
+		},
+		User: func(ctx context.Context, userID string) (music.UserRef, error) {
+			u, err := userService.FindByID(ctx, userID)
+			if err != nil {
+				return music.UserRef{}, err
+			}
+			return music.UserRef{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, AvatarURL: u.AvatarURL}, nil
+		},
+		PostPublic: func(ctx context.Context, textChannelID, content string) error {
+			_, err := messageService.CreateSystemChannelMessage(ctx, textChannelID, bot.UserID, content, music.SystemKind)
+			return err
+		},
+		SendToUser:      hub.SendToUser,
+		BroadcastToCall: hub.BroadcastToCall,
+		BroadcastToRoom: hub.BroadcastToRoom,
+		Tokens:          liveKitTokens,
+	})
+	callService.OnParticipantLeft(musicManager.OnParticipantLeft)
+	callService.OnCallEnded(musicManager.OnCallEnded)
+	serverService.OnMusicBotDisabled(musicManager.CloseServer)
+	messageHandler.SetCommandHandler(musicManager)
+
 	// Aniversários (mensagem do servidor às 9h + modal para o aniversariante)
 	birthdayRepository := birthday.BirthdayRepository(db)
 	birthdayService := birthday.BirthdayService(birthdayRepository, messageService)
@@ -475,6 +520,7 @@ func main() {
 	notifysettings.Routes(api, notifySettingsHandler, authMiddleware)
 	proposal.ProposalRoutes(api, proposalHandler, authMiddleware, requireVerified)
 	birthday.BirthdayRoutes(api, birthdayHandler, authMiddleware)
+	music.Routes(api, music.NewHandler(musicManager, authService), authMiddleware)
 
 	// Presence (protected)
 	presence := api.Group("/presence")
