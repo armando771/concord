@@ -1,17 +1,57 @@
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCallStore } from '../../store/callStore'
+import {
+  clampMiniPlayer,
+  draggedOffset,
+  isDrag,
+  loadMiniPlayerOffset,
+  saveMiniPlayerOffset,
+  type MiniPlayerOffset,
+  type MiniPlayerViewport
+} from '../../lib/miniPlayerPosition'
 import { miniPlayerTarget } from '../../lib/screenWatch'
 import { XIcon } from '../icons'
 import { VideoFill } from './ParticipantTile'
 import { callRoute } from './callUtils'
 
+// w-72 + aspect-video (no render; nos eventos vale o tamanho medido).
+const MINI_PLAYER_SIZE = { width: 288, height: 162 }
+
+/** Janela menos a barra de título própria (var --titlebar-height do TitleBar). */
+function readViewport(): MiniPlayerViewport {
+  const bar = getComputedStyle(document.documentElement).getPropertyValue('--titlebar-height')
+  return { width: window.innerWidth, height: window.innerHeight, top: parseFloat(bar) || 0 }
+}
+
+function sizeOf(el: HTMLElement | null): { width: number; height: number } {
+  return el && el.offsetWidth > 0
+    ? { width: el.offsetWidth, height: el.offsetHeight }
+    : MINI_PLAYER_SIZE
+}
+
+interface DragState {
+  pointerId: number
+  x: number
+  y: number
+  start: MiniPlayerOffset
+  last: MiniPlayerOffset
+  moved: boolean
+}
+
 /**
  * Transmissão assistida fora da tela da call (outro canal, servidor, DM ou
- * DM minimizada): miniatura no canto que continua passando. O som segue no
- * CallOverlay. Clicar volta à call com a transmissão em destaque.
+ * DM minimizada): miniatura que continua passando, no canto ou onde o usuário
+ * arrastar (lembrado entre aberturas). O som segue no CallOverlay. Clicar sem
+ * arrastar volta à call com a transmissão em destaque.
  */
 function ScreenMiniPlayer(): React.JSX.Element | null {
   const navigate = useNavigate()
+  const ref = useRef<HTMLDivElement>(null)
+  const drag = useRef<DragState | null>(null)
+  const [offset, setOffset] = useState(loadMiniPlayerOffset)
+  const [viewport, setViewport] = useState(readViewport)
+  const [dragging, setDragging] = useState(false)
   const status = useCallStore((s) => s.status)
   const type = useCallStore((s) => s.type)
   const serverId = useCallStore((s) => s.serverId)
@@ -25,8 +65,20 @@ function ScreenMiniPlayer(): React.JSX.Element | null {
   const focusWatchedScreen = useCallStore((s) => s.focusWatchedScreen)
   const stopWatchingScreen = useCallStore((s) => s.stopWatchingScreen)
 
+  // Janela redimensionada: a posição salva é reencaixada para continuar à vista.
+  // Lê de novo ao montar: a altura da barra de título só existe depois do
+  // layout effect do TitleBar.
+  useEffect(() => {
+    const onResize = (): void => setViewport(readViewport())
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
   const id = miniPlayerTarget(watchedScreenIds, focusedScreenUserId, screenStreams)
   if (status !== 'active' || stageVisible || !id) return null
+
+  const shown = clampMiniPlayer(offset, MINI_PLAYER_SIZE, viewport)
 
   const name = participants.find((p) => p.id === id)?.display_name || mediaPeers[id] || 'Usuário'
 
@@ -36,12 +88,64 @@ function ScreenMiniPlayer(): React.JSX.Element | null {
     if (route) navigate(route)
   }
 
+  const moveTo = (e: React.PointerEvent, d: DragState): MiniPlayerOffset => {
+    const next = draggedOffset(d.start, e.clientX - d.x, e.clientY - d.y)
+    return clampMiniPlayer(next, sizeOf(ref.current), readViewport())
+  }
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>): void => {
+    if (e.button !== 0) return
+    drag.current = {
+      pointerId: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      start: shown,
+      last: shown,
+      moved: false
+    }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>): void => {
+    const d = drag.current
+    if (!d || d.pointerId !== e.pointerId) return
+    if (!d.moved && !isDrag(e.clientX - d.x, e.clientY - d.y)) return
+    if (!d.moved) setDragging(true)
+    d.moved = true
+    d.last = moveTo(e, d)
+    setOffset(d.last)
+  }
+
+  const endDrag = (e: React.PointerEvent<HTMLDivElement>, cancelled: boolean): void => {
+    const d = drag.current
+    if (!d || d.pointerId !== e.pointerId) return
+    drag.current = null
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+    if (d.moved) {
+      const final = cancelled ? d.last : moveTo(e, d)
+      setOffset(final)
+      setDragging(false)
+      saveMiniPlayerOffset(final)
+    } else if (!cancelled) {
+      handleOpen()
+    }
+  }
+
   return (
     <div
-      onClick={handleOpen}
+      ref={ref}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={(e) => endDrag(e, false)}
+      onPointerCancel={(e) => endDrag(e, true)}
       role="button"
-      title="Voltar para a chamada"
-      className="fixed bottom-24 right-4 z-40 aspect-video w-72 cursor-pointer overflow-hidden rounded-2xl bg-black shadow-xl ring-2 ring-[#23a55a]"
+      title="Voltar para a chamada (arraste para mover)"
+      style={{ right: shown.right, bottom: shown.bottom }}
+      className={`fixed z-40 aspect-video w-72 touch-none select-none overflow-hidden rounded-2xl bg-black shadow-xl ring-2 ring-[#23a55a] ${
+        dragging ? 'cursor-grabbing' : 'cursor-pointer'
+      }`}
     >
       <VideoFill stream={screenStreams[id]} fit="contain" />
       <div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-[#f23f43] px-1.5 py-0.5">
@@ -49,6 +153,8 @@ function ScreenMiniPlayer(): React.JSX.Element | null {
         <span className="text-[10px] font-bold uppercase tracking-wide text-white">Ao vivo</span>
       </div>
       <button
+        // O X não começa arrasto nem conta como clique de voltar à call.
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation()
           stopWatchingScreen(id)
