@@ -4,6 +4,11 @@ import { splitMentions, type MessagePart } from './mentions'
 
 // Links clicáveis no texto das mensagens: http(s)://… e www.… viram <a>.
 // Só gera http/https (www. vira https://), nunca javascript:/data:.
+//
+// Roda a cada render da mensagem, para todo mundo na sala, com texto de
+// qualquer membro: tem que ser linear no tamanho do texto. Cada caractere é
+// visto um número fixo de vezes (um candidato rejeitado pula a palavra
+// inteira, e o fim do link é aparado com contadores, sem reler o link).
 
 export interface LinkPart {
   text: string
@@ -25,49 +30,63 @@ const START = /https?:\/\/|www\./giu
  */
 const GLUED_BEFORE = /[\p{L}\p{N}@./:_-]/u
 
-/** O link acaba no primeiro espaço, aspas, crase ou < >. */
-const STOP = /[\s<>"`“”‘’«»]/u
+/**
+ * O link acaba no primeiro espaço, aspas, crase, < > ou controle de direção
+ * do texto (U+202A–U+202E, U+2066–U+2069), que poderia inverter o que se vê.
+ */
+const STOP = /[\s<>"`“”‘’«»\u202A-\u202E\u2066-\u2069]/u
+
+/** Link maior que isso fica texto (navegadores e servidores cortam por aí). */
+const MAX_LINK_LENGTH = 2048
+
+/** Links por mensagem; daí em diante o resto fica texto. */
+const MAX_LINKS = 50
 
 /** Pontuação que, no fim, é da frase e não do link. */
 const TRAILING = ".,!?:;'*~"
 
-/** Fecha → abre: só fica no fim se estiver balanceado dentro do link. */
-const PAIRS: Record<string, string> = { ')': '(', ']': '[' }
-
-function count(text: string, ch: string): number {
-  let n = 0
-  for (const c of text) if (c === ch) n++
-  return n
-}
-
-/** Tira do fim a pontuação da frase: ".,!?" e o ")" que não abriu no link. */
+/**
+ * Tira do fim a pontuação da frase: ".,!?" e o ")" ou "]" que não abriu no
+ * link. Conta os pares uma vez só e desconta a cada um tirado (linear).
+ */
 function trimTrailing(candidate: string): string {
+  // saldo = abertos − fechados no que sobra do link
+  let parens = 0
+  let brackets = 0
+  for (const c of candidate) {
+    if (c === '(') parens++
+    else if (c === ')') parens--
+    else if (c === '[') brackets++
+    else if (c === ']') brackets--
+  }
   let end = candidate.length
   while (end > 0) {
     const ch = candidate[end - 1]
     if (TRAILING.includes(ch)) {
       end--
-      continue
+    } else if (ch === ')' && parens < 0) {
+      parens++
+      end--
+    } else if (ch === ']' && brackets < 0) {
+      brackets++
+      end--
+    } else {
+      break
     }
-    const open = PAIRS[ch]
-    if (open) {
-      const body = candidate.slice(0, end)
-      if (count(body, ch) > count(body, open)) {
-        end--
-        continue
-      }
-    }
-    break
   }
   return candidate.slice(0, end)
 }
 
-/** O link tem um host de verdade (algo com letra ou número antes do caminho)? */
+/**
+ * O link tem um host de verdade (algo com letra ou número antes do caminho)
+ * e sem usuário? "good.com@evil.com" abre evil.com mas parece good.com, então
+ * não vira link.
+ */
 function hasHost(link: string): boolean {
   const rest = link.replace(/^https?:\/\//i, '')
   const authority = rest.split(/[/?#]/, 1)[0]
-  const host = authority.slice(authority.lastIndexOf('@') + 1)
-  return /[\p{L}\p{N}]/u.test(host) && !host.startsWith('.')
+  if (authority.includes('@')) return false
+  return /[\p{L}\p{N}]/u.test(authority) && !authority.startsWith('.')
 }
 
 function hrefFor(link: string): string | null {
@@ -91,22 +110,29 @@ export function linkify(text: string): LinkPart[] {
   }
 
   let last = 0
+  let found = 0
   START.lastIndex = 0
-  for (let match = START.exec(text); match; match = START.exec(text)) {
+  for (let match = START.exec(text); match && found < MAX_LINKS; match = START.exec(text)) {
     const start = match.index
+    let end = start + match[0].length
+    while (end < text.length && !STOP.test(text[end])) end++
+    // Rejeitado: a busca segue depois desta palavra, não dentro dela.
+    START.lastIndex = end
+
     // Último caractere antes do link (um emoji ocupa duas posições).
     const prevChar = Array.from(text.slice(Math.max(0, start - 2), start)).pop() ?? ''
     if (prevChar && GLUED_BEFORE.test(prevChar)) continue
+    if (end - start > MAX_LINK_LENGTH) continue
 
-    let end = start + match[0].length
-    while (end < text.length && !STOP.test(text[end])) end++
     const link = trimTrailing(text.slice(start, end))
     const href = link.length > match[0].length ? hrefFor(link) : null
     if (!href) continue
 
     pushText(text.slice(last, start))
     parts.push({ text: link, href })
+    found++
     last = start + link.length
+    // O que foi aparado do fim (".", ")") volta para a busca: não tem "h"/"w".
     START.lastIndex = last
   }
   pushText(text.slice(last))

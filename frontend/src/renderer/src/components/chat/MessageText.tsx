@@ -1,5 +1,15 @@
+import { memo, useMemo } from 'react'
 import type { MentionEveryone } from '../../api/messages'
 import { messageParts } from '../../lib/linkify'
+
+/** Host de verdade do link (em punycode: "аpple.com" cirílico aparece xn--…). */
+function hostOf(href: string): string {
+  try {
+    return new URL(href).host
+  } catch {
+    return href
+  }
+}
 
 /**
  * Texto da mensagem: menções em chip e links clicáveis. É a única parte da
@@ -16,15 +26,18 @@ function MessageText({
   content: string
   everyone: MentionEveryone | null
 }): React.JSX.Element {
+  // Quebra o texto só quando ele muda (hover e reações re-renderizam a linha).
+  const parts = useMemo(() => messageParts(content, everyone), [content, everyone])
   return (
     <p className="cursor-text select-text whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">
-      {messageParts(content, everyone).map((part, i) =>
+      {parts.map((part, i) =>
         part.href ? (
           <a
             key={i}
             href={part.href}
             target="_blank"
             rel="noopener noreferrer"
+            title={hostOf(part.href)}
             className="text-[#00a8fc] hover:underline"
           >
             {part.text}
@@ -41,4 +54,4 @@ function MessageText({
   )
 }
 
-export default MessageText
+export default memo(MessageText)

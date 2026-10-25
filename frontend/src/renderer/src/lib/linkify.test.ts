@@ -75,6 +75,20 @@ describe('linkify', () => {
     expect(links('xhttps://x.com')).toEqual([])
   })
 
+  it('link com usuário (good.com@evil.com) não vira link: o texto enganaria', () => {
+    expect(links('http://good.com@evil.com/x')).toEqual([])
+    expect(links('https://user:senha@exemplo.com')).toEqual([])
+    // "@" no caminho é normal (medium.com/@ana).
+    expect(links('https://medium.com/@ana')).toEqual([
+      ['https://medium.com/@ana', 'https://medium.com/@ana']
+    ])
+  })
+
+  it('controle de direção do texto (bidi) encerra o link', () => {
+    expect(links('https://x.com/a\u202Ebad')).toEqual([['https://x.com/a', 'https://x.com/a']])
+    expect(links('https://x.com/a\u2066b')).toEqual([['https://x.com/a', 'https://x.com/a']])
+  })
+
   it('sem host não é link', () => {
     expect(links('https://')).toEqual([])
     expect(links('https:// x')).toEqual([])
@@ -128,5 +142,48 @@ describe('messageParts (links + menções)', () => {
       { text: '@ana', mention: 'ana' },
       { text: ', tudo?' }
     ])
+  })
+})
+
+describe('linkify: tempo linear (mensagem maliciosa não trava o app)', () => {
+  // Payloads da revisão: muitos começos de link rejeitados no mesmo token e
+  // muitos ")" no fim. A versão antiga levava 35 s com 4000 caracteres.
+  const WORST: Record<string, string> = {
+    'https://.( × 200 + ) × 2000': 'https://.('.repeat(200) + ')'.repeat(2000),
+    'https://.( × 100 + ) × 1000': 'https://.('.repeat(100) + ')'.repeat(1000),
+    'https:// colado × 500': 'https://'.repeat(500),
+    'www. colado × 1000': 'www.'.repeat(1000),
+    'link + ) × 3986': 'https://a.com/' + ')'.repeat(3986),
+    'link + ( × 3986': 'https://a.com/' + '('.repeat(3986),
+    '(https://a.co/ × 285': '(https://a.co/'.repeat(285),
+    'links válidos × 266': 'https://a.co/x '.repeat(266),
+    'www.a.( × 570': 'www.a.('.repeat(570),
+    '@x.https:// × 363': '@x.https://'.repeat(363)
+  }
+
+  for (const [name, payload] of Object.entries(WORST)) {
+    it(`${name} (${payload.length} caracteres) em menos de 20 ms`, () => {
+      expect(payload.length).toBeLessThanOrEqual(4000)
+      messageParts(payload, null) // aquece o JIT
+      const start = performance.now()
+      const parts = messageParts(payload, null)
+      const elapsed = performance.now() - start
+      expect(parts.map((p) => p.text).join('')).toBe(payload)
+      expect(elapsed).toBeLessThan(20)
+    })
+  }
+
+  it('no máximo 50 links por mensagem; o resto fica texto', () => {
+    const text = 'https://a.co/x '.repeat(80)
+    const parts = linkify(text)
+    expect(parts.filter((p) => p.href)).toHaveLength(50)
+    expect(parts.map((p) => p.text).join('')).toBe(text)
+  })
+
+  it('link com mais de 2048 caracteres fica texto', () => {
+    const long = 'https://a.com/' + 'x'.repeat(2100)
+    expect(links(`veja ${long} ok`)).toEqual([])
+    const ok = 'https://a.com/' + 'x'.repeat(2000)
+    expect(links(ok)).toEqual([[ok, ok]])
   })
 })
