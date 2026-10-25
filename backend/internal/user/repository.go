@@ -37,6 +37,7 @@ const userColumns = `
 	friend_request_policy,
 	allow_server_dms,
 	active,
+	email_verified_at,
 	created_at,
 	updated_at
 `
@@ -60,6 +61,7 @@ func scanUser(row pgx.Row) (*User, error) {
 		&user.FriendRequestPolicy,
 		&user.AllowServerDMs,
 		&user.Active,
+		&user.EmailVerifiedAt,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -147,6 +149,23 @@ func (r *Repository) CountCaseConflicts(ctx context.Context) (usernameGroups, em
 
 func (r *Repository) FindByEmail(ctx context.Context, email string) (*User, error) {
 	return scanUser(r.db.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE email = $1`, email))
+}
+
+// FindByEmailFold acha pelo e-mail ignorando caixa (recuperação de senha).
+func (r *Repository) FindByEmailFold(ctx context.Context, email string) (*User, error) {
+	return scanUser(r.db.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE lower(email) = lower($1) ORDER BY (email = $1) DESC LIMIT 1`, email))
+}
+
+// MarkEmailVerified grava a confirmação do e-mail (mantém a data se já havia).
+func (r *Repository) MarkEmailVerified(ctx context.Context, id string) error {
+	_, err := r.db.Exec(ctx, `UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()), updated_at = NOW() WHERE id = $1`, id)
+	return err
+}
+
+// SetPassword troca o hash da senha.
+func (r *Repository) SetPassword(ctx context.Context, id, hash string) error {
+	_, err := r.db.Exec(ctx, `UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1`, id, hash)
+	return err
 }
 
 func (r *Repository) FindByID(ctx context.Context, id string) (*User, error) {

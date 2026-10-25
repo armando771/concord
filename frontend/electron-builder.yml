@@ -18,6 +18,11 @@ files:
   - '!**/*.test.ts'
 asarUnpack:
   - resources/**
+# Licença da fonte Outfit (OFL-1.1): legível fora do asar. O renderer também
+# leva uma cópia em out/renderer/assets/OFL.txt (vite.renderer.shared.ts).
+extraResources:
+  - from: node_modules/@fontsource-variable/outfit/LICENSE
+    to: licenses/Outfit-OFL.txt
 win:
   executableName: Salinha
   # Helper do som da janela compartilhada (gerado por scripts/build-win.sh)
@@ -31,9 +36,19 @@ portable:
   artifactName: Salinha-${version}-portable.${ext}
 nsis:
   artifactName: Salinha-${version}-setup.${ext}
+  # Registra o protocolo salinha:// (links de convite) na instalação. O
+  # "protocols" abaixo não vale para o NSIS no electron-builder 26.
+  include: build/installer.nsh
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+# Links de convite (salinha://convite/<código>): macOS (Info.plist) e Linux
+# (.desktop). No Windows quem registra é o build/installer.nsh e o próprio app
+# (app.setAsDefaultProtocolClient).
+protocols:
+  - name: Salinha
+    schemes:
+      - salinha
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:

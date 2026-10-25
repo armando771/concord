@@ -62,7 +62,7 @@ function Invites(): React.JSX.Element {
         </header>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">
+          <p className="mb-2 text-ds-sm font-mediumr text-gray-400">
             Convites pendentes — {invites.length}
           </p>
 

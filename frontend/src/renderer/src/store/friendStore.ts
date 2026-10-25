@@ -3,6 +3,7 @@ import type { PublicUser } from './authStore'
 import { useAuthStore } from './authStore'
 import type { PendingRequest, RelationshipType, SendRequestResult } from '../api/friends'
 import { relationshipOf } from '../lib/relationship'
+import { keepWithId } from '../lib/listGuards'
 import {
   listFriends,
   listPending,
@@ -58,7 +59,7 @@ export const useFriendStore = create<FriendState>()((set, get) => ({
     try {
       const friends = await listFriends()
       if (!isSameSession(token)) return
-      set({ friends: Array.isArray(friends) ? friends : [] })
+      set({ friends: keepWithId<PublicUser>(friends, 'id', 'friends') })
     } catch (err) {
       console.error('[friendStore] fetchFriends error:', err)
       if (isSameSession(token)) set({ friends: [] })
@@ -69,7 +70,7 @@ export const useFriendStore = create<FriendState>()((set, get) => ({
     try {
       const pending = await listPending()
       if (!isSameSession(token)) return
-      set({ pending: Array.isArray(pending) ? pending : [] })
+      set({ pending: keepWithId<PendingRequest>(pending, 'user_id', 'pending') })
     } catch (err) {
       console.error('[friendStore] fetchPending error:', err)
       if (isSameSession(token)) set({ pending: [] })
@@ -88,10 +89,12 @@ export const useFriendStore = create<FriendState>()((set, get) => ({
       if (!isSameSession(token)) return
 
       const resolvedFriends =
-        friends.status === 'fulfilled' && Array.isArray(friends.value) ? friends.value : []
+        friends.status === 'fulfilled' ? keepWithId<PublicUser>(friends.value, 'id', 'friends') : []
 
       const resolvedPending =
-        pending.status === 'fulfilled' && Array.isArray(pending.value) ? pending.value : []
+        pending.status === 'fulfilled'
+          ? keepWithId<PendingRequest>(pending.value, 'user_id', 'pending')
+          : []
 
       if (friends.status === 'rejected') {
         console.error('[friendStore] listFriends failed:', friends.reason)
@@ -101,7 +104,7 @@ export const useFriendStore = create<FriendState>()((set, get) => ({
       }
 
       const resolvedBlocked =
-        blocked.status === 'fulfilled' && Array.isArray(blocked.value) ? blocked.value : []
+        blocked.status === 'fulfilled' ? keepWithId<PublicUser>(blocked.value, 'id', 'blocked') : []
 
       set({ friends: resolvedFriends, pending: resolvedPending, blocked: resolvedBlocked })
     } finally {

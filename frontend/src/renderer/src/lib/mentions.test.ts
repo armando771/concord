@@ -301,4 +301,30 @@ describe('mentionSuggestions', () => {
     expect(names(r)).toEqual(['user:x1'])
     expect(mentionSuggestions('', users, false, { max: 2 }).items).toHaveLength(2)
   })
+
+  it('casa também pelo apelido no servidor e insere o @ de verdade', () => {
+    const members = [
+      { username: 'caio', display_name: 'Caio Lúcio', nickname: 'Capitão' },
+      { username: 'bia', display_name: 'Beatriz', nickname: null }
+    ]
+    const r = mentionSuggestions('cap', members, false)
+    expect(r.items).toEqual([
+      { kind: 'user', username: 'caio', display_name: 'Caio Lúcio', nickname: 'Capitão' }
+    ])
+    // Escolher a sugestão escreve o @username, não o apelido.
+    const pick = r.items[r.defaultIndex]
+    expect(applyMention('oi @cap', 3, 7, pick.username).text).toBe('oi @caio ')
+  })
+
+  it('com apelido, o nome e o @ continuam valendo', () => {
+    const members = [{ username: 'caio', display_name: 'Caio Lúcio', nickname: 'Capitão' }]
+    expect(names(mentionSuggestions('cai', members, false))).toEqual(['user:caio'])
+    expect(names(mentionSuggestions('CAIO L', members, false))).toEqual(['user:caio'])
+    expect(names(mentionSuggestions('zz', members, false))).toEqual([])
+  })
+
+  it('apelido vazio não casa com tudo', () => {
+    const members = [{ username: 'x1', display_name: 'Xis', nickname: '' }]
+    expect(names(mentionSuggestions('q', members, false))).toEqual([])
+  })
 })

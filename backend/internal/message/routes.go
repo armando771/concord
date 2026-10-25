@@ -10,6 +10,7 @@ func MessageRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin
 		channels.POST("/", handler.CreateChannelMessage)
 		channels.GET("", handler.ListChannelMessages)
 		channels.GET("/", handler.ListChannelMessages)
+		channels.PATCH("/:messageId", handler.EditChannelMessage)
 		channels.DELETE("/:messageId", handler.DeleteChannelMessage)
 		channels.POST("/:messageId/reactions", handler.AddChannelReaction)
 		channels.DELETE("/:messageId/reactions", handler.RemoveChannelReaction)
@@ -31,6 +32,7 @@ func MessageRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin
 		conversations.POST("/", handler.CreateConversationMessage)
 		conversations.GET("", handler.ListConversationMessages)
 		conversations.GET("/", handler.ListConversationMessages)
+		conversations.PATCH("/:messageId", handler.EditConversationMessage)
 		conversations.DELETE("/:messageId", handler.DeleteConversationMessage)
 		channelsReactions := conversations.Group("/:messageId/reactions")
 		{

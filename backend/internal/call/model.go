@@ -35,6 +35,13 @@ type CallParticipant struct {
 	Role     string     `json:"role"`
 	JoinedAt time.Time  `json:"joined_at"`
 	LeftAt   *time.Time `json:"left_at,omitempty"`
+	// Estado de voz/tela guardado para o reinício do backend (RestoreActive).
+	Muted         bool `json:"muted"`
+	Deafened      bool `json:"deafened"`
+	ScreenSharing bool `json:"screen_sharing"`
+	// Silenciado/ensurdecido por um moderador.
+	ServerMuted    bool `json:"server_muted"`
+	ServerDeafened bool `json:"server_deafened"`
 }
 
 type UserInfo struct {
@@ -71,7 +78,8 @@ type StateEvent struct {
 }
 
 // ScreenEvent sinaliza que um participante começou ("active": true) ou parou
-// de compartilhar tela na chamada. Transitório — não é persistido.
+// de compartilhar tela na chamada. O estado fica salvo em call_participants
+// para voltar depois de um reinício do backend.
 type ScreenEvent struct {
 	CallID string   `json:"call_id"`
 	User   UserInfo `json:"user"`

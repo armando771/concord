@@ -28,9 +28,7 @@ const POLICIES: { id: FriendRequestPolicy; title: string; description: string }[
 ]
 
 function SectionTitle({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return (
-    <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-400">{children}</h2>
-  )
+  return <h2 className="mb-3 text-ds-sm font-medium text-gray-400">{children}</h2>
 }
 
 /**
@@ -77,7 +75,7 @@ export function PrivacySection(): React.JSX.Element {
     void router.navigate('/friends')
   }
 
-  if (!privacy) return <p className="text-sm text-gray-500">Carregando…</p>
+  if (!privacy) return <p className="text-ds-md text-gray-500">Carregando…</p>
 
   return (
     <div className="flex flex-col gap-8">
@@ -102,8 +100,8 @@ export function PrivacySection(): React.JSX.Element {
                   className="h-4 w-4 accent-[#5865f2]"
                 />
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-white">{p.title}</span>
-                  <span className="block text-xs text-gray-400">{p.description}</span>
+                  <span className="block text-ds-md font-medium text-white">{p.title}</span>
+                  <span className="block text-ds-sm text-gray-400">{p.description}</span>
                 </span>
               </label>
             )
@@ -124,7 +122,7 @@ export function PrivacySection(): React.JSX.Element {
       <section>
         <SectionTitle>Usuários bloqueados</SectionTitle>
         <div className="flex items-center justify-between gap-4">
-          <p className="text-sm text-gray-300">
+          <p className="text-ds-md text-gray-300">
             {blockedCount === 0
               ? 'Você não bloqueou ninguém.'
               : blockedCount === 1
@@ -134,7 +132,7 @@ export function PrivacySection(): React.JSX.Element {
           <button
             type="button"
             onClick={openBlocked}
-            className="cursor-pointer rounded-md bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/15"
+            className="cursor-pointer rounded-md bg-white/10 px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-white/15"
           >
             Ver bloqueados
           </button>

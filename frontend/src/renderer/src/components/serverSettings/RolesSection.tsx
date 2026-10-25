@@ -5,6 +5,7 @@ import { showToast } from '../../store/toastStore'
 import { actionErrorMessage } from '../../lib/permissionErrors'
 import { canGrant, parseColorCss, roleColorCss, type Role } from '../../lib/permissions'
 import { moveRoleId } from '../../lib/roleList'
+import { serverDisplayName } from '../../lib/serverNames'
 import Avatar from '../Avatar'
 import Button from '../Button'
 import Input from '../Input'
@@ -376,7 +377,7 @@ function RoleMembers({
   const removeMemberRole = useServerStore((s) => s.removeMemberRole)
   const [query, setQuery] = useState('')
 
-  const nameOf = (m: (typeof members)[number]): string => m.display_name || m.username || 'Usuário'
+  const nameOf = (m: (typeof members)[number]): string => serverDisplayName(m, m)
   const withRole = members.filter((m) => m.role_ids?.includes(role.id))
   const term = query.trim().toLowerCase()
   const candidates = members
@@ -433,7 +434,7 @@ function RoleMembers({
       )}
 
       <div>
-        <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">
+        <h3 className="mb-2 text-ds-sm font-medium text-gray-400">
           Com este cargo — {withRole.length}
         </h3>
         {withRole.length === 0 ? (

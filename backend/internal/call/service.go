@@ -51,6 +51,8 @@ type StateResponse struct {
 	Call          *Call             `json:"call"`
 	Participants  []ParticipantInfo `json:"participants"`
 	ScreenSharing []string          `json:"screen_sharing,omitempty"`
+	// Atividade aberta na chamada. Só vai para quem está nela (ver Handler.State).
+	Activity *ActivityEvent `json:"activity,omitempty"`
 }
 
 type participantState struct {
@@ -64,6 +66,8 @@ type participantState struct {
 	serverMuted    bool
 	serverDeafened bool
 	lastSoundAt    time.Time
+	// lastActivityAt: última vez que abriu ou trocou o link de uma atividade.
+	lastActivityAt time.Time
 }
 
 type activeCall struct {
@@ -89,6 +93,9 @@ type Service struct {
 	busy  map[string]string
 	// screenSharers: callID -> set de userIDs compartilhando tela (transitório)
 	screenSharers map[string]map[string]struct{}
+	// activities: callID -> atividade aberta (transitório)
+	activities       map[string]*callActivity
+	activityCooldown time.Duration
 
 	// Queda do WS de chat só tira o usuário da chamada se ele não voltar dentro
 	// desse prazo — a mídia (LiveKit) aguenta quedas curtas sozinha.
@@ -101,6 +108,72 @@ type Service struct {
 	// Dados do usuário nos eventos de tela (trocável nos testes).
 	lookupUser  func(ctx context.Context, userID string) (UserInfo, error)
 	soundLookup SoundLookup
+	// Onde o mudo/ensurdecido e a tela ficam salvos para o reinício (o banco).
+	stateStore participantStateStore
+	// De onde RestoreActive lê as chamadas na subida (o banco).
+	restoreStore restoreStore
+	// Grava a entrada de alguém na chamada (trocável nos testes).
+	addParticipant func(ctx context.Context, participant *CallParticipant) error
+}
+
+// participantStateStore guarda o estado de voz/tela de quem está na chamada,
+// que RestoreActive lê de volta quando o backend reinicia.
+type participantStateStore interface {
+	SaveVoiceState(ctx context.Context, callID string, userID string, muted bool, deafened bool) error
+	SaveScreenSharing(ctx context.Context, callID string, userID string, active bool) error
+	// Silenciar/ensurdecer de moderador: sem isso um deploy liberaria quem foi
+	// silenciado.
+	SaveServerVoiceState(ctx context.Context, callID string, userID string, serverMuted bool, serverDeafened bool) error
+	// A DM atendida passa a ativa no banco: senão continua "ringing" e o
+	// próximo reinício a encerra.
+	MarkCallActive(ctx context.Context, callID string) error
+}
+
+// Gravar o estado não pode travar o WebSocket de quem mutou.
+const saveStateTimeout = 2 * time.Second
+
+func (s *Service) saveVoiceState(callID, userID string, muted, deafened bool) {
+	if s.stateStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), saveStateTimeout)
+	defer cancel()
+	if err := s.stateStore.SaveVoiceState(ctx, callID, userID, muted, deafened); err != nil {
+		log.Printf("[call] persist voice state %s failed: %v", userID, err)
+	}
+}
+
+func (s *Service) saveServerVoiceState(callID, userID string, serverMuted, serverDeafened bool) {
+	if s.stateStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), saveStateTimeout)
+	defer cancel()
+	if err := s.stateStore.SaveServerVoiceState(ctx, callID, userID, serverMuted, serverDeafened); err != nil {
+		log.Printf("[call] persist server voice state %s failed: %v", userID, err)
+	}
+}
+
+func (s *Service) markCallActive(callID string) {
+	if s.stateStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), saveStateTimeout)
+	defer cancel()
+	if err := s.stateStore.MarkCallActive(ctx, callID); err != nil {
+		log.Printf("[call] persist active %s failed: %v", callID, err)
+	}
+}
+
+func (s *Service) saveScreenSharing(callID, userID string, active bool) {
+	if s.stateStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), saveStateTimeout)
+	defer cancel()
+	if err := s.stateStore.SaveScreenSharing(ctx, callID, userID, active); err != nil {
+		log.Printf("[call] persist screen share %s failed: %v", userID, err)
+	}
 }
 
 const defaultDisconnectGrace = 15 * time.Second
@@ -130,7 +203,16 @@ func CallService(
 		calls:               make(map[string]*activeCall),
 		busy:                make(map[string]string),
 		screenSharers:       make(map[string]map[string]struct{}),
+		activities:          make(map[string]*callActivity),
+		activityCooldown:    activityCooldown,
 		disconnectGrace:     defaultDisconnectGrace,
+	}
+	if repository != nil {
+		s.stateStore = repository
+		s.restoreStore = repository
+		s.addParticipant = repository.AddParticipant
+	} else {
+		s.addParticipant = func(context.Context, *CallParticipant) error { return nil }
 	}
 	s.leaveAfterDisconnect = s.Leave
 	s.leaveCall = s.Leave
@@ -227,7 +309,7 @@ func (s *Service) StartDM(ctx context.Context, initiatorID string, conversationI
 	if err := s.repository.Create(ctx, call); err != nil {
 		log.Printf("[call] persist call %s failed: %v", call.ID, err)
 	}
-	if err := s.repository.AddParticipant(ctx, &CallParticipant{
+	if err := s.addParticipant(ctx, &CallParticipant{
 		CallID: call.ID,
 		UserID: initiatorID,
 		Role:   RoleMember,
@@ -322,7 +404,7 @@ func (s *Service) Accept(ctx context.Context, callID string, userID string) erro
 		return ErrBusy
 	}
 
-	userInfo, err := s.userInfo(ctx, userID)
+	userInfo, err := s.lookupUser(ctx, userID)
 	if err != nil {
 		s.mu.Unlock()
 		return err
@@ -334,17 +416,25 @@ func (s *Service) Accept(ctx context.Context, callID string, userID string) erro
 		role:     RoleMember,
 		joinedAt: now,
 	}
+	wasRinging := ac.info.Status != StatusActive
 	ac.info.Status = StatusActive
 	s.busy[userID] = callID
 	callIDCopy := ac.info.ID
 	s.mu.Unlock()
 
-	if err := s.repository.AddParticipant(ctx, &CallParticipant{
+	// Primeiro quem entrou, depois o status: se o backend cair entre os dois,
+	// a DM fica "ringing" com os dois dentro e a subida a cura (restore). Na
+	// ordem inversa ficaria "active" só com quem ligou.
+	if err := s.addParticipant(ctx, &CallParticipant{
 		CallID: callID,
 		UserID: userID,
 		Role:   RoleMember,
 	}); err != nil {
 		log.Printf("[call] persist participant %s failed: %v", userID, err)
+	}
+
+	if wasRinging {
+		s.markCallActive(callID)
 	}
 
 	s.publisher.BroadcastToCall(callIDCopy, marshalEvent("call:accept", ResponseEvent{
@@ -464,8 +554,14 @@ func (s *Service) detachParticipant(callID, userID string) (remaining int, remov
 		serverID = *ac.info.ServerID
 	}
 	channelID := ac.info.ChannelID
+	// Quem abriu a atividade saiu: ela acaba para os que ficaram.
+	activityStop := s.dropActivityOfLocked(callID, userID)
+	targets := participantIDsLocked(ac)
 	s.mu.Unlock()
 
+	if activityStop != nil {
+		s.sendToAll(targets, activityStop)
+	}
 	if wasSharing {
 		s.publishLive(serverID, LiveEvent{CallID: callID, ChannelID: channelID, UserID: userID, Active: false})
 	}
@@ -517,6 +613,7 @@ func (s *Service) closeCall(callID string) error {
 	channelID := ac.info.ChannelID
 	delete(s.calls, callID)
 	delete(s.screenSharers, callID)
+	delete(s.activities, callID)
 	s.mu.Unlock()
 
 	for userID := range sharers {
@@ -562,6 +659,12 @@ func (s *Service) SetScreenShare(ctx context.Context, callID string, userID stri
 		sharers = make(map[string]struct{})
 		s.screenSharers[callID] = sharers
 	}
+	// O app reenvia o estado ao reconectar: sem mudança, ninguém é avisado
+	// (o selo LIVE não pisca).
+	if _, sharing := sharers[userID]; sharing == active {
+		s.mu.Unlock()
+		return nil
+	}
 	if active {
 		sharers[userID] = struct{}{}
 	} else {
@@ -581,6 +684,7 @@ func (s *Service) SetScreenShare(ctx context.Context, callID string, userID stri
 	channelID := ac.info.ChannelID
 	s.mu.Unlock()
 
+	s.saveScreenSharing(callID, userID, active)
 	s.publishLive(serverID, LiveEvent{CallID: callID, ChannelID: channelID, UserID: userID, Active: active})
 
 	userInfo, err := s.lookupUser(ctx, userID)
@@ -612,6 +716,11 @@ func (s *Service) SetVoiceState(callID string, userID string, muted bool, deafen
 		s.mu.Unlock()
 		return ErrNotAllowed
 	}
+	// O app reenvia o estado ao reconectar: sem mudança, ninguém é avisado.
+	if p.muted == muted && p.deafened == deafened {
+		s.mu.Unlock()
+		return nil
+	}
 	p.muted = muted
 	p.deafened = deafened
 	var serverID string
@@ -630,6 +739,7 @@ func (s *Service) SetVoiceState(callID string, userID string, muted bool, deafen
 	})
 	s.mu.Unlock()
 
+	s.saveVoiceState(callID, userID, muted, deafened)
 	s.publisher.BroadcastToCall(callID, event)
 	if serverID != "" {
 		s.broadcastServer(serverID, channelID, event)
@@ -746,7 +856,7 @@ func (s *Service) GetState(ctx context.Context, callID string) (*StateResponse, 
 	s.mu.RUnlock()
 
 	for i := range participants {
-		info, err := s.userInfo(ctx, participants[i].UserID)
+		info, err := s.lookupUser(ctx, participants[i].UserID)
 		if err != nil {
 			continue
 		}
@@ -860,6 +970,10 @@ func (s *Service) HandleCallMessage(userID string, evType string, payload json.R
 		}
 	case "call:soundboard":
 		s.handleSoundboardMessage(ctx, userID, payload)
+	case "call:activity":
+		s.handleActivityMessage(ctx, userID, payload)
+	case "call:activity:stop":
+		s.handleActivityStopMessage(userID, payload)
 	default:
 		log.Printf("[call] unhandled ws event %q from user %s", evType, userID)
 	}
@@ -887,10 +1001,13 @@ func (s *Service) joinLocked(ctx context.Context, ac *activeCall, userID string,
 		role:     role,
 		joinedAt: now,
 	}
-	ac.info.Status = StatusActive
+	if ac.info.Status != StatusActive {
+		ac.info.Status = StatusActive
+		s.markCallActive(ac.info.ID)
+	}
 	s.busy[userID] = ac.info.ID
 
-	if err := s.repository.AddParticipant(ctx, &CallParticipant{
+	if err := s.addParticipant(ctx, &CallParticipant{
 		CallID: ac.info.ID,
 		UserID: userID,
 		Role:   role,

@@ -6,6 +6,7 @@ import { readFileSync, realpathSync } from 'fs'
 import { basename, join } from 'path'
 import { isInCall, markQuitting, onCallStateChange } from './background'
 import {
+  autoUpdateUnavailable,
   backgroundDownloadDelayMs,
   canDownloadUpdate,
   installOnStartup,
@@ -164,6 +165,8 @@ let retryAt = 0
 /** .sig já baixado (antes do pacote) para o arquivo oferecido. */
 let signatureCache: { file: string; signature: string } | null = null
 let feedUrl = ''
+/** Linux fora do AppImage montado: o updater próprio está ativo. */
+let linuxSelfUpdating = false
 let sendToWindow: (channel: string, value: unknown) => void = () => {}
 /** Versão baixada e com assinatura válida — pronta para instalar. */
 let readyVersion: string | null = null
@@ -326,6 +329,14 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
       ? { version: availableVersion, ready: readyVersion === availableVersion }
       : null
   )
+  ipcMain.handle('update:unavailable', () =>
+    autoUpdateUnavailable({
+      platform: process.platform,
+      isPackaged: app.isPackaged,
+      appImage: process.env.APPIMAGE,
+      selfUpdating: linuxSelfUpdating
+    })
+  )
   // Botão Atualizar: instala na hora se já baixou; senão baixa agora (mesmo
   // em chamada — a pessoa pediu) e instala quando terminar.
   ipcMain.on('update:install', () => {
@@ -371,6 +382,7 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
     })
     setTimeout(() => linux.confirmStartup(), BOOT_CONFIRM_MS)
     backend = linux
+    linuxSelfUpdating = true
   } else {
     autoUpdater.setFeedURL({ provider: 'generic', url: config.feedUrl })
     autoUpdater.autoDownload = false

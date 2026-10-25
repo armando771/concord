@@ -5,6 +5,7 @@ import type { Message } from '../api/messages'
 // A API e o WebSocket são falsos e controlados pelo teste.
 
 const api = vi.hoisted(() => ({
+  editMessage: vi.fn(),
   pending: [] as Array<{
     room: string
     before?: string
@@ -23,6 +24,7 @@ vi.mock('../api/messages', () => ({
   listConversationMessages: deferredList('conversation'),
   sendChannelMessage: vi.fn(),
   sendConversationMessage: vi.fn(),
+  editMessage: api.editMessage,
   deleteChannelMessage: vi.fn(),
   deleteConversationMessage: vi.fn(),
   addChannelReaction: vi.fn(),
@@ -52,7 +54,9 @@ vi.mock('../lib/notifications', () => ({
   messageNotification: () => null,
   mentionNotification: () => null,
   notificationSound: () => null,
-  notifyDesktop: vi.fn()
+  notifyDesktop: vi.fn(),
+  deliverDesktop: vi.fn(),
+  messageAlert: () => null
 }))
 vi.mock('./authStore', () => ({
   useAuthStore: {
@@ -219,5 +223,46 @@ describe('ordem das mensagens no chatStore', () => {
     await respond(page(1, 50))
     await opening
     expect(useChatStore.getState().messagesByRoom[ROOM]).toBeUndefined()
+  })
+
+  it('message:update troca o texto sem tirar a mensagem do lugar nem contar como nova', async () => {
+    const opening = useChatStore.getState().openRoom(ROOM)
+    await respond(page(1, 5))
+    await opening
+    const target = msg(2)
+    const edited = {
+      ...target,
+      content: 'm2 editada',
+      edited_at: new Date(T0 + 60_000).toISOString()
+    }
+    useChatStore.getState().handleWsEvent({
+      type: 'message:update',
+      payload: { message: edited, conversation_id: CONV }
+    })
+    expect(contents()).toEqual(['m1', 'm2 editada', 'm3', 'm4', 'm5'])
+    expect(useChatStore.getState().unreadByRoom[ROOM] ?? 0).toBe(0)
+    // Edição de mensagem que não está carregada não cria entrada solta.
+    useChatStore.getState().handleWsEvent({
+      type: 'message:update',
+      payload: { message: { ...msg(99), content: 'fora' }, conversation_id: CONV }
+    })
+    expect(contents()).toEqual(['m1', 'm2 editada', 'm3', 'm4', 'm5'])
+  })
+
+  it('editInRoom aplica a resposta do PATCH, e o WS mais velho que chega depois não desfaz', async () => {
+    const opening = useChatStore.getState().openRoom(ROOM)
+    await respond(page(1, 3))
+    await opening
+    const target = msg(3, { author_id: 'me' })
+    const v1 = { ...target, content: 'v1', edited_at: new Date(T0 + 60_000).toISOString() }
+    const v2 = { ...target, content: 'v2', edited_at: new Date(T0 + 120_000).toISOString() }
+    api.editMessage.mockResolvedValueOnce(v2)
+    await useChatStore.getState().editInRoom(ROOM, target.id, 'v2')
+    expect(api.editMessage).toHaveBeenCalledWith(ROOM, target.id, 'v2')
+    useChatStore.getState().handleWsEvent({
+      type: 'message:update',
+      payload: { message: v1, conversation_id: CONV }
+    })
+    expect(contents()).toEqual(['m1', 'm2', 'v2'])
   })
 })

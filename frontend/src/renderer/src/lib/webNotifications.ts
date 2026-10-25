@@ -16,15 +16,22 @@ export interface PageState {
 
 /**
  * Para um aviso pedido pelo app: mostrar a notificação do navegador e/ou
- * contar uma não lida no título. Como no desktop, nada disso acontece com a
- * pessoa olhando para a aba; chamada recebida avisa mas não conta.
+ * contar uma não lida no título. Como no desktop: com a aba em foco, só o
+ * aviso e só se a conversa não está na tela (`elsewhere`), sem contar no
+ * título (ele só é limpo ao voltar para a aba); chamada recebida avisa mas
+ * não conta.
  */
 export function webNotificationAction(
   payload: DesktopPayload,
   permission: WebPermission,
   page: PageState
 ): { show: boolean; countUnread: boolean } {
-  if (page.visible && page.focused) return { show: false, countUnread: false }
+  if (page.visible && page.focused) {
+    return {
+      show: payload.elsewhere === true && payload.toast && permission === 'granted',
+      countUnread: false
+    }
+  }
   return {
     show: payload.toast && permission === 'granted',
     countUnread: payload.taskbar && !payload.urgent

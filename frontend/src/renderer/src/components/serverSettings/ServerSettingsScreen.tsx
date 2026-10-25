@@ -83,9 +83,7 @@ function ServerSettingsContent(): React.JSX.Element | null {
         className="flex w-[260px] shrink-0 flex-col border-r border-white/6"
         style={{ background: NAV_BG }}
       >
-        <p className="m-4 mb-2 truncate text-xs font-bold uppercase tracking-wide text-gray-400">
-          {server.name}
-        </p>
+        <p className="m-4 mb-2 truncate text-ds-sm font-medium text-gray-400">{server.name}</p>
         <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
           {sections.map((item) => (
             <button

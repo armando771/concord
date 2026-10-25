@@ -6,6 +6,7 @@ import BackgroundBridge from './components/BackgroundBridge'
 import OverlayBridge from './components/OverlayBridge'
 import UpdateNotice from './components/UpdateNotice'
 import SandboxNotice from './components/SandboxNotice'
+import AutoUpdateUnavailableNotice from './components/AutoUpdateUnavailableNotice'
 import UpdateCallBridge from './components/UpdateCallBridge'
 import UserContextMenu from './components/UserContextMenu'
 import UserProfileCard from './components/UserProfileCard'
@@ -38,6 +39,7 @@ function App(): React.JSX.Element {
           <OverlayBridge />
           <UpdateNotice />
           <SandboxNotice />
+          <AutoUpdateUnavailableNotice />
           <UpdateCallBridge />
         </>
       )}

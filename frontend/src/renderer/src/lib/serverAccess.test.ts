@@ -29,7 +29,8 @@ const DEFAULT_MOD =
   Perm.MUTE_MEMBERS |
   Perm.DEAFEN_MEMBERS |
   Perm.KICK_MEMBERS |
-  Perm.MANAGE_EXPRESSIONS
+  Perm.MANAGE_EXPRESSIONS |
+  Perm.MANAGE_NICKNAMES
 
 const roles = [
   role('everyone', 0, DEFAULT_EVERYONE, { is_default: true }),
@@ -148,5 +149,38 @@ describe('serverAccess — hierarquia', () => {
     expect(as('dono').canManage(roles[3])).toBe(true)
     expect(as('mod').canManage(roles[2])).toBe(true)
     expect(as('ana').canManage(roles[2])).toBe(false)
+  })
+})
+
+describe('serverAccess — apelidos', () => {
+  it('o próprio: quem tem "Alterar apelido" (todo mundo por padrão) e o dono', () => {
+    expect(as('ana').canChangeNickname('ana')).toBe(true)
+    expect(as('dono').canChangeNickname('dono')).toBe(true)
+    const noChange = [
+      role('everyone', 0, DEFAULT_EVERYONE & ~Perm.CHANGE_NICKNAME, { is_default: true }),
+      ...roles.slice(1)
+    ]
+    const ana = serverAccess({ ownerId: 'dono', meId: 'ana', members, roles: noChange, channels })
+    expect(ana.canChangeNickname('ana')).toBe(false)
+    const dono = serverAccess({ ownerId: 'dono', meId: 'dono', members, roles: noChange, channels })
+    expect(dono.canChangeNickname('dono')).toBe(true)
+  })
+
+  it('o dos outros: "Gerenciar apelidos" e cargo acima (o dono nunca é alvo)', () => {
+    const mod = as('mod')
+    expect(mod.canChangeNickname('ana')).toBe(true)
+    expect(mod.canChangeNickname('vip')).toBe(true)
+    expect(mod.canChangeNickname('mod2')).toBe(false)
+    expect(mod.canChangeNickname('ger')).toBe(false)
+    expect(mod.canChangeNickname('dono')).toBe(false)
+    expect(as('ana').canChangeNickname('vip')).toBe(false)
+    // gerente está acima, mas não tem "Gerenciar apelidos".
+    expect(as('ger').canChangeNickname('ana')).toBe(false)
+    expect(as('dono').canChangeNickname('ger')).toBe(true)
+  })
+
+  it('fora do servidor, nada', () => {
+    expect(as('zeca').canChangeNickname('zeca')).toBe(false)
+    expect(as(undefined).canChangeNickname('ana')).toBe(false)
   })
 })

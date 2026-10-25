@@ -12,6 +12,15 @@ import (
 	"gin-quickstart/backend/internal/role"
 	"gin-quickstart/backend/internal/server"
 	"gin-quickstart/backend/internal/user"
+
+	"github.com/coder/websocket"
+)
+
+// CloseServiceRestart (1012) avisa o app que o servidor está reiniciando: ele
+// reconecta logo, sem o backoff normal nem aviso de "reconectando".
+const (
+	CloseServiceRestart = websocket.StatusServiceRestart
+	closeRestartReason  = "servidor reiniciando"
 )
 
 type Hub struct {
@@ -22,6 +31,9 @@ type Hub struct {
 	statuses     map[string]string // status escolhido (online, idle, dnd, invisible)
 	statusLookup StatusLookup
 	onDisconnect func(userID string)
+	// Desligando (deploy): quem cai não "saiu", então nem presença offline
+	// nem saída da chamada — o processo novo recarrega tudo.
+	shuttingDown bool
 
 	visibility     VisibilityProvider
 	onPermsChanged func(serverID string)
@@ -76,8 +88,15 @@ func (h *Hub) SetDisconnectHandler(fn func(userID string)) {
 	h.mu.Unlock()
 }
 
-func (h *Hub) Register(client *Client) {
+// Register põe a conexão no hub. Devolve false (e não registra) se o
+// servidor já está desligando: a conexão chegou depois do Shutdown fechar as
+// outras, e quem a abriu deve ir para o processo novo.
+func (h *Hub) Register(client *Client) bool {
 	h.mu.Lock()
+	if h.shuttingDown {
+		h.mu.Unlock()
+		return false
+	}
 	h.clients[client] = struct{}{}
 	h.presence[client.userID]++
 	wasOffline := h.presence[client.userID] == 1
@@ -85,7 +104,7 @@ func (h *Hub) Register(client *Client) {
 	h.mu.Unlock()
 
 	if !wasOffline {
-		return
+		return true
 	}
 	status := user.StatusOnline
 	if lookup != nil {
@@ -105,6 +124,7 @@ func (h *Hub) Register(client *Client) {
 	if status != user.StatusInvisible {
 		h.broadcastPresence(client.userID, user.EffectiveStatus(status, true))
 	}
+	return true
 }
 
 func (h *Hub) Unregister(client *Client) {
@@ -120,7 +140,7 @@ func (h *Hub) Unregister(client *Client) {
 	if h.presence[client.userID] <= 0 {
 		delete(h.presence, client.userID)
 		delete(h.statuses, client.userID)
-		wasOnline = true
+		wasOnline = !h.shuttingDown
 	}
 	h.mu.Unlock()
 
@@ -131,6 +151,54 @@ func (h *Hub) Unregister(client *Client) {
 	if wasOnline {
 		h.broadcastPresence(client.userID, user.StatusOffline)
 	}
+}
+
+// Shutdown fecha todas as conexões com 1012 ("servidor reiniciando") e espera
+// os fechamentos até ctx acabar. Chamado no desligamento, depois de o servidor
+// HTTP parar de aceitar conexões, para os clientes reconectarem no processo novo.
+func (h *Hub) Shutdown(ctx context.Context) {
+	h.mu.Lock()
+	h.shuttingDown = true
+	conns := make([]*websocket.Conn, 0, len(h.clients))
+	cancels := make([]context.CancelFunc, 0, len(h.clients))
+	for client := range h.clients {
+		conns = append(conns, client.conn)
+		if client.cancel != nil {
+			cancels = append(cancels, client.cancel)
+		}
+	}
+	h.mu.Unlock()
+
+	var wg sync.WaitGroup
+	for _, conn := range conns {
+		wg.Add(1)
+		go func(conn *websocket.Conn) {
+			defer wg.Done()
+			// Close espera o "ok" do cliente (até 5 s, ou até o prazo do ctx).
+			_ = conn.Close(CloseServiceRestart, closeRestartReason)
+		}(conn)
+	}
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		// O 1012 já foi escrito; quem não confirmou (cliente parado) é
+		// derrubado: cancelar a leitura fecha a conexão e solta o Close.
+		for _, cancel := range cancels {
+			cancel()
+		}
+	}
+}
+
+// ShuttingDown diz se o servidor já começou a desligar.
+func (h *Hub) ShuttingDown() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.shuttingDown
 }
 
 // broadcastPresence avisa todo mundo do status efetivo. "online" continua no
@@ -351,6 +419,19 @@ func (h *Hub) IsOnline(userID string) bool {
 	return h.presence[userID] > 0
 }
 
+// OnlineUserIDs lista quem tem pelo menos uma conexão aberta (badges).
+func (h *Hub) OnlineUserIDs() []string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	ids := make([]string, 0, len(h.presence))
+	for id, n := range h.presence {
+		if n > 0 {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 // PresenceMap devolve o status efetivo de cada id ("offline" se desconectado
 // ou invisível).
 func (h *Hub) PresenceMap(userIDs []string) map[string]string {
@@ -366,7 +447,8 @@ func (h *Hub) PresenceMap(userIDs []string) map[string]string {
 	return result
 }
 
-// messageRooms são as salas por onde chegam message:create e message:delete:
+// messageRooms são as salas por onde chegam message:create, message:update e
+// message:delete:
 // o canal e o servidor dele, ou a DM e a sala pessoal de cada participante.
 func messageRooms(channelID *string, serverID string, conversationID *string, userIDs []string) []string {
 	var rooms []string
@@ -402,6 +484,11 @@ func (h *Hub) publishMessage(data []byte, channelID *string, serverID string, co
 
 func (h *Hub) PublishMessageCreate(event message.CreateEvent) {
 	h.publishMessage(writeEvent("message:create", event), event.ChannelID, event.ServerID, event.ConversationID, event.UserIDs)
+}
+
+// PublishMessageUpdate (mensagem editada) vai pelas mesmas salas do create.
+func (h *Hub) PublishMessageUpdate(event message.UpdateEvent) {
+	h.publishMessage(writeEvent("message:update", event), event.ChannelID, event.ServerID, event.ConversationID, event.UserIDs)
 }
 
 func (h *Hub) PublishMessageDelete(event message.DeleteEvent) {
@@ -469,6 +556,12 @@ func (h *Hub) PublishMemberUpdate(event server.MemberJoinEvent) {
 	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:update", event))
 }
 
+// PublishMemberNickname: o apelido de alguém mudou; todo o servidor atualiza
+// o nome na hora (lista de membros, chat, voz).
+func (h *Hub) PublishMemberNickname(event server.NicknameEvent) {
+	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:nickname", event))
+}
+
 func (h *Hub) PublishMemberJoin(event server.MemberJoinEvent) {
 	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:join", event))
 }
@@ -523,6 +616,24 @@ func (h *Hub) PublishPermissionsChanged(serverID string) {
 	if hook != nil {
 		go hook(serverID)
 	}
+}
+
+// O server.Service avisa do link novo por aqui (type assertion no publisher).
+var _ server.InviteCodePublisher = (*Hub)(nil)
+
+// PublishInviteCode: o link de convite do servidor mudou ("Gerar novo link").
+// Só quem pode convidar (CREATE_INVITE) recebe o código novo.
+func (h *Hub) PublishInviteCode(serverID, code string) {
+	snap := h.snapshot(serverID)
+	if snap == nil {
+		return
+	}
+	h.BroadcastToRoomFiltered("server:"+serverID, writeEvent("server:invite_code", map[string]string{
+		"server_id": serverID,
+		"code":      code,
+	}), func(userID string) bool {
+		return permission.Has(snap.Server(userID), permission.CreateInvite)
+	})
 }
 
 // SendToUser delivers an event directly to every connection of a user

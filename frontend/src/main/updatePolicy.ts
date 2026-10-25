@@ -80,3 +80,19 @@ export interface ReleaseId {
 export function isRefusedRelease(refused: ReleaseId | null, offer: ReleaseId): boolean {
   return !!refused && refused.version === offer.version && refused.sha512 === offer.sha512
 }
+
+/**
+ * No Linux, o electron-updater só atualiza o próprio AppImage (variável
+ * APPIMAGE, definida pelo runtime do AppImage). Fora dele (AppImage extraído,
+ * instalação por usuário) quem atualiza é o updater próprio (linuxUpdater.ts);
+ * só sem ele (build sem endereço/chave) o app avisa que não se atualiza.
+ */
+export function autoUpdateUnavailable(env: {
+  platform: string
+  isPackaged: boolean
+  appImage: string | undefined
+  /** o updater próprio do Linux está ativo */
+  selfUpdating: boolean
+}): boolean {
+  return env.platform === 'linux' && env.isPackaged && !env.appImage && !env.selfUpdating
+}

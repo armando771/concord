@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   launchedHidden,
   shouldHideOnClose,
-  shouldNotify,
+  notifyPlan,
   staleLoginItem,
   TITLE_BAR_COLOR,
   titleBarOptions
@@ -27,10 +27,26 @@ describe('windowPolicy', () => {
     expect(launchedHidden(['Salinha.exe'])).toBe(false)
   })
 
-  it('notifica só quando a janela não está à vista', () => {
-    expect(shouldNotify({ visible: false, focused: false })).toBe(true)
-    expect(shouldNotify({ visible: true, focused: false })).toBe(true)
-    expect(shouldNotify({ visible: true, focused: true })).toBe(false)
+  it('com a janela fora de vista: toast e barra de tarefas', () => {
+    const all = { toast: true, taskbar: true }
+    expect(notifyPlan({ visible: false, focused: false })).toEqual(all)
+    expect(notifyPlan({ visible: true, focused: false })).toEqual(all)
+    expect(notifyPlan({ visible: false, focused: false }, { elsewhere: true })).toEqual(all)
+  })
+
+  it('com a janela em foco e a conversa aberta: nada', () => {
+    expect(notifyPlan({ visible: true, focused: true })).toEqual({ toast: false, taskbar: false })
+    expect(notifyPlan({ visible: true, focused: true }, { elsewhere: false })).toEqual({
+      toast: false,
+      taskbar: false
+    })
+  })
+
+  it('com a janela em foco mas em outro chat: só o toast (sem piscar nem selo)', () => {
+    expect(notifyPlan({ visible: true, focused: true }, { elsewhere: true })).toEqual({
+      toast: true,
+      taskbar: false
+    })
   })
 
   describe('staleLoginItem (app renomeado de Concord para Salinha)', () => {

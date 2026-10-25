@@ -172,7 +172,7 @@ try {
   await pageB.getByText('voz-web', { exact: true }).first().click()
   await waitFor('ana ouve a bia', () => audioTracks(pageA), (t) => t.includes('live'), 30000)
   await waitFor('bia ouve a ana', () => audioTracks(pageB), (t) => t.includes('live'), 30000)
-  await pageA.getByRole('button', { name: 'Compartilhar tela' }).click()
+  await pageA.getByRole('button', { name: 'Compartilhar tela' }).first().click()
   await waitFor('ana compartilha a tela', () => pageA.getByRole('button', { name: 'Parar de compartilhar tela' }).count(), (n) => n > 0)
   check('sem o seletor do Electron no web', (await pageA.getByText('Compartilhe sua tela').count()) === 0)
   await pageB.getByRole('button', { name: 'Assistir transmissão' }).click()
@@ -183,7 +183,7 @@ try {
     return event.defaultPrevented
   })
   check('fechar a aba em chamada pede confirmação', beforeUnload === true)
-  await pageA.getByRole('button', { name: 'Parar de compartilhar tela' }).click()
+  await pageA.getByRole('button', { name: 'Parar de compartilhar tela' }).first().click()
 
   // Access token vencido: o refresh renova sem deslogar.
   await pageB.evaluate(() => {

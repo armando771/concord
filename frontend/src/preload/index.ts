@@ -31,6 +31,18 @@ const api = {
       ipcRenderer.send('screen-picker:cancel')
     }
   },
+  screenShare: {
+    /** A janela compartilhada sumiu da tela (minimizada): a live congela. */
+    onWindowHidden(cb: () => void): () => void {
+      const listener = (): void => cb()
+      ipcRenderer.on('screen-share:window-hidden', listener)
+      return () => ipcRenderer.removeListener('screen-share:window-hidden', listener)
+    },
+    /** O compartilhamento acabou: para de vigiar a janela. */
+    ended(): void {
+      ipcRenderer.send('screen-share:ended')
+    }
+  },
   screenAudio: {
     /** Não deu para capturar só a janela: o som vai ser o do sistema. */
     onFallback(cb: (logPath: string) => void): () => void {
@@ -53,6 +65,10 @@ const api = {
     /** Versão nova conhecida (e se já está pronta para instalar), ou null. */
     status(): Promise<{ version: string; ready: boolean } | null> {
       return ipcRenderer.invoke('update:status')
+    },
+    /** true = esta instalação não se atualiza sozinha (Linux sem AppImage). */
+    autoUpdateUnavailable(): Promise<boolean> {
+      return ipcRenderer.invoke('update:unavailable')
     },
     /** Existe versão nova (pode ainda estar baixando). */
     onAvailable(cb: (version: string) => void): () => void {
@@ -98,7 +114,8 @@ const api = {
     },
     /**
      * Notificação nativa e aviso na barra de tarefas (só se a janela não
-     * estiver à vista). `toast`/`taskbar` = preferências do usuário.
+     * estiver à vista; o toast também com ela em foco se `elsewhere`).
+     * `toast`/`taskbar` = preferências do usuário.
      */
     notify(payload: {
       title: string
@@ -107,6 +124,7 @@ const api = {
       urgent?: boolean
       toast?: boolean
       taskbar?: boolean
+      elsewhere?: boolean
     }): void {
       ipcRenderer.send('notify', payload)
     },
@@ -133,6 +151,33 @@ const api = {
       const listener = (_e: unknown, route: string): void => cb(route)
       ipcRenderer.on('navigate', listener)
       return () => ipcRenderer.removeListener('navigate', listener)
+    }
+  },
+  inviteLinks: {
+    /** Convite do salinha://convite/<código> ainda não aberto (uma vez só), ou null. */
+    takePending(): Promise<string | null> {
+      return ipcRenderer.invoke('invite:take-pending')
+    },
+    /** Chegou um convite (o app já estava aberto): busque com takePending. */
+    onPending(cb: () => void): () => void {
+      const listener = (): void => cb()
+      ipcRenderer.on('invite:open', listener)
+      return () => ipcRenderer.removeListener('invite:open', listener)
+    }
+  },
+  activities: {
+    /** Abre o jogo numa janela própria; false = link recusado pelo main. */
+    open(activityId: string, url: string): Promise<boolean> {
+      return ipcRenderer.invoke('activity:open', activityId, url)
+    },
+    close(): void {
+      ipcRenderer.send('activity:close')
+    },
+    /** A janela do jogo fechou (pelo usuário ou pelo app). */
+    onClosed(cb: (activityId: string) => void): () => void {
+      const listener = (_e: unknown, activityId: string): void => cb(activityId)
+      ipcRenderer.on('activity:closed', listener)
+      return () => ipcRenderer.removeListener('activity:closed', listener)
     }
   },
   overlay: {

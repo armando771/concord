@@ -34,8 +34,25 @@ func isNickByte(b byte) bool {
 // de token do @nick do app (lib/mentions.ts). O app não renderiza código
 // inline, então crase não muda nada.
 func DetectEveryoneMention(content string) string {
+	hasAll, hasHere := everyoneMentions(content)
+	switch {
+	case hasAll:
+		return MentionAll
+	case hasHere:
+		return MentionHere
+	}
+	return ""
+}
+
+// containsEveryone: o texto ainda marca este @all/@here (mesma regra de token)?
+func containsEveryone(content string, kind string) bool {
+	hasAll, hasHere := everyoneMentions(content)
+	return (kind == MentionAll && hasAll) || (kind == MentionHere && hasHere)
+}
+
+// everyoneMentions diz quais de @all e @here aparecem como palavra inteira.
+func everyoneMentions(content string) (hasAll bool, hasHere bool) {
 	lower := strings.ToLower(content)
-	found := ""
 	for i := 0; i < len(lower); i++ {
 		if lower[i] != '@' {
 			continue
@@ -49,12 +66,16 @@ func DetectEveryoneMention(content string) string {
 				continue
 			}
 			if word == MentionAll {
-				return MentionAll
+				hasAll = true
+			} else {
+				hasHere = true
 			}
-			found = MentionHere
+		}
+		if hasAll && hasHere {
+			return
 		}
 	}
-	return found
+	return
 }
 
 // opensToken: o que vem antes do "@" deixa começar uma menção? Só o começo

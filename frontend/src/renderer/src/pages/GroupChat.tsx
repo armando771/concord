@@ -61,7 +61,7 @@ function MemberRow({
         cutoutColor="#0b0c10"
       />
       <span
-        className={`min-w-0 flex-1 truncate text-[15px] ${
+        className={`min-w-0 flex-1 truncate text-ds-md font-medium ${
           status === 'offline' ? 'text-gray-500' : 'text-gray-200'
         }`}
       >
@@ -118,7 +118,7 @@ function GroupChat(): React.JSX.Element {
   if (!conv || conv.type !== 'group') {
     return (
       <div
-        className="flex h-full flex-1 items-center justify-center text-sm text-gray-400"
+        className="flex h-full flex-1 items-center justify-center text-ds-md text-gray-400"
         style={{ background: MAIN_BG }}
       >
         {conversationsLoading ? 'Abrindo conversa...' : 'Conversa não encontrada.'}
@@ -192,7 +192,7 @@ function GroupChat(): React.JSX.Element {
           maxLength={100}
           placeholder={title}
           aria-label="Nome do grupo"
-          className="min-w-0 max-w-xs flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-[15px] font-semibold text-white outline-none placeholder:text-white hover:border-black/40 focus:border-[#5865f2] focus:bg-[#111214]"
+          className="min-w-0 max-w-xs flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-ds-md font-semibold text-white outline-none placeholder:text-white hover:border-black/40 focus:border-[#5865f2] focus:bg-[#111214]"
         />
         <div className="ml-auto flex items-center gap-3 text-gray-400">
           <button
@@ -217,7 +217,7 @@ function GroupChat(): React.JSX.Element {
           <button
             type="button"
             onClick={() => setLeaving(true)}
-            className="cursor-pointer rounded-md px-2 py-1 text-sm font-medium text-[#f23f43] hover:bg-[#f23f43]/10"
+            className="cursor-pointer rounded-md px-2 py-1 text-ds-sm font-medium text-[#f23f43] hover:bg-[#f23f43]/10"
           >
             Sair do grupo
           </button>
@@ -237,7 +237,7 @@ function GroupChat(): React.JSX.Element {
         </div>
         {showMembers && (
           <aside className="w-60 shrink-0 overflow-y-auto border-l border-white/6 bg-[#0b0c10]/60 px-2 py-4">
-            <p className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <p className="px-2 pb-1 text-ds-sm font-medium text-gray-400">
               Membros — {conv.members.length}
             </p>
             {conv.members.map((m) => (

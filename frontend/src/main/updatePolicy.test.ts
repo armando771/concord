@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  autoUpdateUnavailable,
   backgroundDownloadDelayMs,
   canDownloadUpdate,
   DOWNLOAD_JITTER_MAX_MS,
@@ -135,5 +136,64 @@ describe('isRefusedRelease', () => {
     expect(
       isRefusedRelease({ version: '0.7.0', sha512: '' }, { version: '0.7.0', sha512: '' })
     ).toBe(true)
+  })
+})
+
+describe('autoUpdateUnavailable', () => {
+  it('Linux empacotado sem APPIMAGE (AppImage extraído) não atualiza sozinho', () => {
+    expect(
+      autoUpdateUnavailable({
+        platform: 'linux',
+        isPackaged: true,
+        appImage: undefined,
+        selfUpdating: false
+      })
+    ).toBe(true)
+    expect(
+      autoUpdateUnavailable({
+        platform: 'linux',
+        isPackaged: true,
+        appImage: '',
+        selfUpdating: false
+      })
+    ).toBe(true)
+  })
+
+  it('AppImage extraído ou instalação por usuário com o updater próprio: atualiza, não avisa', () => {
+    expect(
+      autoUpdateUnavailable({
+        platform: 'linux',
+        isPackaged: true,
+        appImage: undefined,
+        selfUpdating: true
+      })
+    ).toBe(false)
+  })
+
+  it('AppImage normal, Windows e dev não avisam', () => {
+    expect(
+      autoUpdateUnavailable({
+        platform: 'linux',
+        isPackaged: true,
+        appImage: '/home/a/S.AppImage',
+        selfUpdating: false
+      })
+    ).toBe(false)
+    expect(
+      autoUpdateUnavailable({
+        platform: 'win32',
+        isPackaged: true,
+        appImage: undefined,
+        selfUpdating: false
+      })
+    ).toBe(false)
+    expect(
+      autoUpdateUnavailable({
+        platform: 'linux',
+        isPackaged: false,
+        appImage: undefined,
+        selfUpdating: false
+      })
+    ).toBe(false)
   })
 })

@@ -52,6 +52,11 @@ export interface ServerAccess {
   highestOf: (userId: string) => number
   /** Pode expulsar, banir, silenciar, mover ou trocar cargos dessa pessoa. */
   canActOnMember: (userId: string) => boolean
+  /**
+   * Pode mudar o apelido dessa pessoa neste servidor: o próprio com "Alterar
+   * apelido"; o dos outros com "Gerenciar apelidos" e só abaixo do seu cargo.
+   */
+  canChangeNickname: (userId: string) => boolean
   /** Pode editar/dar esse cargo. */
   canManage: (role: Role) => boolean
   /** Canal com @everyone sem VIEW_CHANNEL. */
@@ -99,6 +104,11 @@ export function serverAccess(input: ServerAccessInput): ServerAccess {
     canInChannel: (channelId, want) => has(channelPerms(channelId), want),
     highestOf,
     canActOnMember: (userId) => canActOn(ownerId, meId, userId, highest, highestOf(userId)),
+    canChangeNickname: (userId) =>
+      userId === meId
+        ? has(perms, Perm.CHANGE_NICKNAME)
+        : has(perms, Perm.MANAGE_NICKNAMES) &&
+          canActOn(ownerId, meId, userId, highest, highestOf(userId)),
     canManage: (role) => canManageRole(isOwner, highest, role.position),
     isPrivate: (channelId) => {
       const ch = channelById.get(channelId)

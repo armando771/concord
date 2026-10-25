@@ -27,14 +27,18 @@ export const useUserMenuStore = create<UserMenuState>()((set) => ({
   close: () => set({ target: null })
 }))
 
-/** onContextMenu pronto para um usuário (não abre para você mesmo). */
+/**
+ * onContextMenu pronto para um usuário. Em você mesmo só abre com allowSelf
+ * (lista de membros do servidor: o menu curto, com "Alterar apelido").
+ */
 export function userMenuHandler(
   userId: string,
   name: string,
   meId: string | undefined,
-  username?: string
+  username?: string,
+  { allowSelf = false }: { allowSelf?: boolean } = {}
 ): ((e: React.MouseEvent) => void) | undefined {
-  if (!userId || userId === meId) return undefined
+  if (!userId || (userId === meId && !allowSelf)) return undefined
   return (e) => {
     e.preventDefault()
     useUserMenuStore.getState().open({ userId, name, username, x: e.clientX, y: e.clientY })

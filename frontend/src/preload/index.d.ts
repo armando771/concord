@@ -23,10 +23,16 @@ export interface ScreenAudioApi {
   stop(): void
 }
 
+export interface ScreenShareApi {
+  onWindowHidden(cb: () => void): () => void
+  ended(): void
+}
+
 export interface UpdatesApi {
   setCallSnapshot(snapshot: CallResume | null): void
   takeCallResume(): Promise<PendingCallResume | null>
   status(): Promise<{ version: string; ready: boolean } | null>
+  autoUpdateUnavailable(): Promise<boolean>
   onAvailable(cb: (version: string) => void): () => void
   onReady(cb: (version: string) => void): () => void
   onProgress(cb: (percent: number) => void): () => void
@@ -48,6 +54,8 @@ export interface BackgroundApi {
     toast?: boolean
     /** Piscar + selo de não lidas na barra de tarefas (padrão: ligado). */
     taskbar?: boolean
+    /** A conversa não está na tela: o toast aparece mesmo com a janela em foco. */
+    elsewhere?: boolean
   }): void
   quit(): void
   /** null = não suportado nesta plataforma */
@@ -56,6 +64,22 @@ export interface BackgroundApi {
   onToggleMute(cb: () => void): () => void
   onQuitRequested(cb: () => void): () => void
   onNavigate(cb: (route: string) => void): () => void
+}
+
+/** Links salinha://convite/<código> que abriram o app. */
+export interface InviteLinksApi {
+  /** Convite que chegou e ainda não foi aberto (busca uma vez só), ou null. */
+  takePending(): Promise<string | null>
+  /** Chegou um convite (busque com takePending). Retorna unsubscribe. */
+  onPending(cb: () => void): () => void
+}
+
+export interface ActivitiesApi {
+  /** Abre o jogo numa janela própria; false = link recusado pelo main. */
+  open(activityId: string, url: string): Promise<boolean>
+  close(): void
+  /** A janela do jogo fechou (pelo usuário ou pelo app). Retorna unsubscribe. */
+  onClosed(cb: (activityId: string) => void): () => void
 }
 
 /** Atalho do modo de edição e se outro programa já tem ele. */
@@ -104,7 +128,10 @@ declare global {
       background?: BackgroundApi
       updates?: UpdatesApi
       screenAudio?: ScreenAudioApi
+      screenShare?: ScreenShareApi
       overlay?: OverlayApi
+      inviteLinks?: InviteLinksApi
+      activities?: ActivitiesApi
     }
   }
 }

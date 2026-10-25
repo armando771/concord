@@ -22,6 +22,9 @@ type User struct {
 	FriendRequestPolicy string `json:"-"`
 	AllowServerDMs      bool   `json:"-"`
 	Active              bool   `json:"-"`
+	// EmailVerifiedAt: nulo = e-mail não confirmado. Só a própria pessoa vê
+	// (SelfUser.EmailVerified).
+	EmailVerifiedAt *time.Time `json:"-"`
 	CreatedAt    time.Time     `json:"created_at"`
 	UpdatedAt    time.Time     `json:"updated_at"`
 }
@@ -30,7 +33,8 @@ type User struct {
 // tudo de User mais o e-mail.
 type SelfUser struct {
 	User
-	Email string `json:"email"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
 }
 
 // Privacy: quem pode mandar pedido de amizade e se membros de servidores em
@@ -63,7 +67,7 @@ func (u *User) Privacy() Privacy {
 
 // Self monta a resposta das rotas da própria conta, com o e-mail.
 func (u *User) Self() SelfUser {
-	return SelfUser{User: *u, Email: u.Email}
+	return SelfUser{User: *u, Email: u.Email, EmailVerified: u.EmailVerifiedAt != nil}
 }
 
 // ProfileLink é um link do perfil (Steam, Twitch, site...). O app descobre o
