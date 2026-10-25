@@ -22,6 +22,7 @@ var (
 	ErrBusy           = errors.New("user is busy in another call")
 	ErrCalleeOffline  = errors.New("callee is offline")
 	ErrNotParticipant = errors.New("you are not a participant of this conversation")
+	ErrBlocked        = errors.New("you cannot call this user")
 	ErrNotMember      = errors.New("you are not a member of this server")
 	ErrNotAllowed     = errors.New("not allowed")
 	ErrInvalidType    = errors.New("invalid call type")
@@ -41,6 +42,9 @@ type ParticipantInfo struct {
 	JoinedAt time.Time `json:"joined_at"`
 	Muted    bool      `json:"muted"`
 	Deafened bool      `json:"deafened"`
+	// Impostos por um moderador (silenciar/ensurdecer no servidor).
+	ServerMuted    bool `json:"server_muted"`
+	ServerDeafened bool `json:"server_deafened"`
 }
 
 type StateResponse struct {
@@ -54,8 +58,12 @@ type participantState struct {
 	role     string
 	joinedAt time.Time
 	muted    bool
-	deafened    bool
-	lastSoundAt time.Time
+	deafened bool
+	// serverMuted/serverDeafened: impostos por quem tem MUTE/DEAFEN_MEMBERS;
+	// duram até o fim da chamada ou até um moderador liberar.
+	serverMuted    bool
+	serverDeafened bool
+	lastSoundAt    time.Time
 }
 
 type activeCall struct {
@@ -68,10 +76,13 @@ type Service struct {
 	repository          *Repository
 	publisher           EventPublisher
 	conversationService *conversation.Service
+	blockedCheck        func(ctx context.Context, a string, b string) (bool, error)
 	serverService       *server.Service
 	channelService      *channel.Service
 	userService         *user.Service
 	isOnline            func(userID string) bool
+	perms               PermissionSource
+	media               MediaAdmin
 
 	mu    sync.RWMutex
 	calls map[string]*activeCall
@@ -83,6 +94,8 @@ type Service struct {
 	// desse prazo — a mídia (LiveKit) aguenta quedas curtas sozinha.
 	disconnectGrace      time.Duration
 	leaveAfterDisconnect func(ctx context.Context, callID string, userID string) error
+	// Saída forçada por moderação (trocável nos testes, que não têm banco).
+	leaveCall func(ctx context.Context, callID string, userID string) error
 	// Nome exibido no token do LiveKit (ver Handler.Token).
 	mediaName func(ctx context.Context, userID string) string
 	// Dados do usuário nos eventos de tela (trocável nos testes).
@@ -91,6 +104,11 @@ type Service struct {
 }
 
 const defaultDisconnectGrace = 15 * time.Second
+
+// SetBlockedCheck liga a checagem de bloqueio da chamada na DM.
+func (s *Service) SetBlockedCheck(check func(ctx context.Context, a string, b string) (bool, error)) {
+	s.blockedCheck = check
+}
 
 func CallService(
 	repository *Repository,
@@ -115,6 +133,7 @@ func CallService(
 		disconnectGrace:     defaultDisconnectGrace,
 	}
 	s.leaveAfterDisconnect = s.Leave
+	s.leaveCall = s.Leave
 	s.lookupUser = s.userInfo
 	s.mediaName = func(ctx context.Context, userID string) string {
 		info, err := s.userInfo(ctx, userID)
@@ -132,13 +151,20 @@ func (s *Service) StartDM(ctx context.Context, initiatorID string, conversationI
 		return nil, ErrNotFound
 	}
 
-	if conv.UserAID != initiatorID && conv.UserBID != initiatorID {
+	// Chamada só na DM 1:1 (grupo não liga).
+	if conv.IsGroup() || (conv.UserAID != initiatorID && conv.UserBID != initiatorID) {
 		return nil, ErrNotParticipant
 	}
 
 	calleeID := conv.UserAID
 	if initiatorID == conv.UserAID {
 		calleeID = conv.UserBID
+	}
+
+	if s.blockedCheck != nil {
+		if blocked, err := s.blockedCheck(ctx, initiatorID, calleeID); err != nil || blocked {
+			return nil, ErrBlocked
+		}
 	}
 
 	if s.isOnline != nil && !s.isOnline(calleeID) {
@@ -229,9 +255,8 @@ func (s *Service) StartChannel(ctx context.Context, initiatorID string, channelI
 		return nil, ErrNotFound
 	}
 
-	isMember, err := s.serverService.IsMember(ctx, ch.ServerID, initiatorID)
-	if err != nil || !isMember {
-		return nil, ErrNotMember
+	if err := s.requireConnect(ctx, ch.ID, initiatorID); err != nil {
+		return nil, err
 	}
 
 	s.mu.Lock()
@@ -366,16 +391,15 @@ func (s *Service) Join(ctx context.Context, callID string, userID string) error 
 		return ErrNotFound
 	}
 	isChannel := ac.info.Type == TypeChannel
-	var serverID string
-	if isChannel && ac.info.ServerID != nil {
-		serverID = *ac.info.ServerID
+	var channelID string
+	if isChannel && ac.info.ChannelID != nil {
+		channelID = *ac.info.ChannelID
 	}
 	s.mu.Unlock()
 
 	if isChannel {
-		isMember, err := s.serverService.IsMember(ctx, serverID, userID)
-		if err != nil || !isMember {
-			return ErrNotMember
+		if err := s.requireConnect(ctx, channelID, userID); err != nil {
+			return err
 		}
 	}
 
@@ -454,7 +478,7 @@ func (s *Service) publishLive(serverID string, ev LiveEvent) {
 	if serverID == "" {
 		return
 	}
-	s.publisher.BroadcastToRoom("server:"+serverID, marshalEvent("call:live", ev))
+	s.broadcastServer(serverID, ev.ChannelID, marshalEvent("call:live", ev))
 }
 
 func (s *Service) End(ctx context.Context, callID string) error {
@@ -594,18 +618,21 @@ func (s *Service) SetVoiceState(callID string, userID string, muted bool, deafen
 	if ac.info.ServerID != nil {
 		serverID = *ac.info.ServerID
 	}
+	channelID := ac.info.ChannelID
 	event := marshalEvent("call:voice", VoiceEvent{
-		CallID:    callID,
-		ChannelID: ac.info.ChannelID,
-		UserID:    userID,
-		Muted:     muted,
-		Deafened:  deafened,
+		CallID:         callID,
+		ChannelID:      ac.info.ChannelID,
+		UserID:         userID,
+		Muted:          muted,
+		Deafened:       deafened,
+		ServerMuted:    p.serverMuted,
+		ServerDeafened: p.serverDeafened,
 	})
 	s.mu.Unlock()
 
 	s.publisher.BroadcastToCall(callID, event)
 	if serverID != "" {
-		s.publisher.BroadcastToRoom("server:"+serverID, event)
+		s.broadcastServer(serverID, channelID, event)
 	}
 	return nil
 }
@@ -630,6 +657,9 @@ func participantInfosLocked(callID string, ac *activeCall) []ParticipantInfo {
 			JoinedAt: p.joinedAt,
 			Muted:    p.muted,
 			Deafened: p.deafened,
+
+			ServerMuted:    p.serverMuted,
+			ServerDeafened: p.serverDeafened,
 		})
 	}
 	// Ordem estável (quem entrou primeiro, depois id): o map muda de ordem a

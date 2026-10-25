@@ -2,6 +2,7 @@ package message
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -127,7 +128,13 @@ func (s *Service) end(ctx context.Context, channelID *string, conversationID *st
 	if err != nil {
 		return nil, err
 	}
-	if msg.AuthorID != userID {
+	if channelID != nil {
+		if err := s.canModerate(ctx, *channelID, msg.AuthorID, userID); errors.Is(err, ErrNotAuthor) {
+			return nil, ErrNotPollAuthor
+		} else if err != nil {
+			return nil, ErrPollNotFound
+		}
+	} else if msg.AuthorID != userID {
 		return nil, ErrNotPollAuthor
 	}
 

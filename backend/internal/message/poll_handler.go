@@ -4,28 +4,13 @@ import (
 	"errors"
 	"net/http"
 
+	"gin-quickstart/backend/internal/permission"
+
 	"github.com/gin-gonic/gin"
 )
 
 type voteInput struct {
 	AnswerIDs []int `json:"answer_ids"`
-}
-
-// isChannelMember confere se userID é membro do servidor do canal; se não for,
-// já responde o erro.
-func (h *Handler) isChannelMember(c *gin.Context, channelID string, userID string) bool {
-	ch, err := h.channelService.FindByID(c.Request.Context(), channelID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "channel not found"})
-		return false
-	}
-
-	isMember, err := h.serverService.IsMember(c.Request.Context(), ch.ServerID, userID)
-	if err != nil || !isMember {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you are not a member of this server"})
-		return false
-	}
-	return true
 }
 
 func (h *Handler) isConversationParticipant(c *gin.Context, conversationID string, userID string) bool {
@@ -62,7 +47,7 @@ func (h *Handler) CreateChannelPoll(c *gin.Context) {
 		return
 	}
 
-	if !h.isChannelMember(c, channelID, userID) {
+	if !h.requireChannel(c, channelID, userID, permission.SendMessages) {
 		return
 	}
 
@@ -117,7 +102,7 @@ func (h *Handler) VoteChannelPoll(c *gin.Context) {
 		return
 	}
 
-	if !h.isChannelMember(c, channelID, userID) {
+	if !h.requireChannel(c, channelID, userID, 0) {
 		return
 	}
 
@@ -167,7 +152,7 @@ func (h *Handler) EndChannelPoll(c *gin.Context) {
 		return
 	}
 
-	if !h.isChannelMember(c, channelID, userID) {
+	if !h.requireChannel(c, channelID, userID, 0) {
 		return
 	}
 

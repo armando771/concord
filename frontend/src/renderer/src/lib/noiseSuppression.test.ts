@@ -133,7 +133,8 @@ interface FakeGain {
     setValueAtTime: (v: number) => void
     setTargetAtTime: (v: number) => void
   }
-  connect: (next: unknown) => unknown
+  connect: ReturnType<typeof vi.fn>
+  disconnect: ReturnType<typeof vi.fn>
 }
 
 const fake = {
@@ -154,10 +155,29 @@ function fakeGain(): FakeGain {
         g.gain.value = v
       }
     },
-    connect: (next) => next
+    connect: vi.fn((next: unknown) => next),
+    disconnect: vi.fn()
   }
   return g
 }
+
+/** AudioWorkletNode da detecção de fala (o do RNNoise é mockado à parte). */
+class FakeWorkletNode {
+  static instances: FakeWorkletNode[] = []
+  port = {
+    onmessage: null as ((e: { data: boolean }) => void) | null,
+    close: vi.fn()
+  }
+  connect = vi.fn((next: unknown) => next)
+  disconnect = vi.fn()
+  constructor(
+    public ctx: unknown,
+    public name: string
+  ) {
+    FakeWorkletNode.instances.push(this)
+  }
+}
+vi.stubGlobal('AudioWorkletNode', FakeWorkletNode)
 
 class FakeAudioContext {
   state = 'running'
@@ -175,9 +195,8 @@ class FakeAudioContext {
     this.gains.push(g)
     return g
   }
-  createMediaStreamDestination = (): { stream: { getTracks: () => unknown[] } } => ({
-    stream: { getTracks: () => [this.outTrack] }
-  })
+  destination = { stream: { getTracks: () => [this.outTrack] } }
+  createMediaStreamDestination = (): { stream: { getTracks: () => unknown[] } } => this.destination
   resume = async (): Promise<void> => {}
 }
 
@@ -257,6 +276,85 @@ describe('openMicrophone', () => {
       video: false
     })
     expect(useNoiseSuppressionStore.getState().available).toBe(false)
+    mic.stop()
+  })
+})
+
+describe('openMicrophone — detecção de fala no mesmo contexto', () => {
+  beforeEach(() => {
+    fake.contexts.length = 0
+    FakeWorkletNode.instances.length = 0
+    fake.addModule.mockReset().mockResolvedValue(undefined)
+    fake.getUserMedia.mockReset().mockImplementation(async () => rawStream())
+    useNoiseSuppressionStore.setState({ enabled: true, available: true })
+  })
+
+  it('liga o detector na soma wet+dry, sem abrir outro AudioContext', async () => {
+    const mic = await openMicrophone()
+    const changes: boolean[] = []
+    const tap = mic.watchSpeaking!((s) => changes.push(s))
+    await tap.ready
+
+    expect(fake.contexts).toHaveLength(1)
+    const ctx = fake.contexts[0] as unknown as FakeAudioContext
+    const vad = FakeWorkletNode.instances[0]
+    expect(vad.name).toBe('concord-voice-activity')
+    expect(vad.ctx).toBe(ctx)
+    const [wet, dry] = ctx.gains
+    expect(wet.connect).toHaveBeenCalledWith(vad)
+    expect(dry.connect).toHaveBeenCalledWith(vad)
+    // Puxado pelo destino do próprio microfone (a saída do worklet é muda).
+    expect(vad.connect).toHaveBeenCalledWith(ctx.destination)
+
+    vad.port.onmessage!({ data: true })
+    vad.port.onmessage!({ data: false })
+    expect(changes).toEqual([true, false])
+    mic.stop()
+  })
+
+  it('carrega o módulo uma vez por microfone; stop desliga e ignora o resto', async () => {
+    const mic = await openMicrophone()
+    const modulesBefore = fake.addModule.mock.calls.length
+    const changes: boolean[] = []
+    const first = mic.watchSpeaking!((s) => changes.push(s))
+    await first.ready
+    first.stop()
+    const ctx = fake.contexts[0] as unknown as FakeAudioContext
+    const vad = FakeWorkletNode.instances[0]
+    expect(ctx.gains[0].disconnect).toHaveBeenCalledWith(vad)
+    expect(ctx.gains[1].disconnect).toHaveBeenCalledWith(vad)
+    expect(vad.disconnect).toHaveBeenCalled()
+    expect(vad.port.close).toHaveBeenCalled()
+
+    const second = mic.watchSpeaking!(() => {})
+    await second.ready
+    expect(fake.addModule.mock.calls.length - modulesBefore).toBe(1)
+    expect(FakeWorkletNode.instances).toHaveLength(2)
+    expect(changes).toEqual([])
+    mic.stop()
+  })
+
+  it('parar antes do módulo carregar não cria o detector', async () => {
+    const mic = await openMicrophone()
+    const tap = mic.watchSpeaking!(() => {})
+    tap.stop()
+    await tap.ready
+    expect(FakeWorkletNode.instances).toHaveLength(0)
+    mic.stop()
+  })
+
+  it('worklet da detecção que não carrega: ready rejeita (quem chama volta ao servidor)', async () => {
+    const mic = await openMicrophone()
+    fake.addModule.mockRejectedValueOnce(new Error('CSP'))
+    await expect(mic.watchSpeaking!(() => {}).ready).rejects.toThrow('CSP')
+    mic.stop()
+  })
+
+  it('no fallback do Chromium não há detecção no contexto', async () => {
+    fake.addModule.mockRejectedValueOnce(new Error('CSP'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const mic = await openMicrophone()
+    expect(mic.watchSpeaking).toBeUndefined()
     mic.stop()
   })
 })

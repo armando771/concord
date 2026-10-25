@@ -3,6 +3,7 @@ import Home from './pages/Home'
 import Friends from './pages/Friends'
 import ServerView from './pages/ServerView'
 import DmChat from './pages/DmChat'
+import GroupChat from './pages/GroupChat'
 import Invites from './pages/Invites'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -29,6 +30,7 @@ export const router = createRouter([
       { path: 'friends', element: <Friends /> },
       { path: 'invites', element: <Invites /> },
       { path: 'dm/:userId', element: <DmChat /> },
+      { path: 'dm/c/:conversationId', element: <GroupChat /> },
       { path: 'servers/:id', element: <ServerView /> },
       { path: 'servers/:id/channels/:channelId', element: <ServerView /> }
     ]

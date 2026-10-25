@@ -28,6 +28,7 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   const muted = useCallStore((s) => s.muted)
   const deafened = useCallStore((s) => s.deafened)
   const toggleMute = useCallStore((s) => s.toggleMute)
+  const canSpeak = useCallStore((s) => s.canSpeak)
   const toggleDeafen = useCallStore((s) => s.toggleDeafen)
   const endCall = useCallStore((s) => s.endCall)
 
@@ -102,12 +103,18 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
           <button
             onClick={toggleMute}
             aria-label={muted ? 'Ativar Microfone' : 'Silenciar Microfone'}
-            title={muted ? 'Ativar Microfone' : 'Silenciar Microfone'}
+            title={
+              !canSpeak
+                ? 'Você não pode falar neste canal'
+                : muted
+                  ? 'Ativar Microfone'
+                  : 'Silenciar Microfone'
+            }
             className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors ${
               muted
                 ? 'bg-white text-[#07080b]'
                 : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'
-            }`}
+            } ${canSpeak ? '' : 'opacity-50'}`}
           >
             {muted ? <MicOffIcon className="h-4 w-4" /> : <MicIcon className="h-4 w-4" />}
           </button>

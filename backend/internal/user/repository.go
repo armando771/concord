@@ -34,6 +34,8 @@ const userColumns = `
 	status_text,
 	links,
 	status,
+	friend_request_policy,
+	allow_server_dms,
 	active,
 	created_at,
 	updated_at
@@ -55,6 +57,8 @@ func scanUser(row pgx.Row) (*User, error) {
 		&user.StatusText,
 		&user.Links,
 		&user.Status,
+		&user.FriendRequestPolicy,
+		&user.AllowServerDMs,
 		&user.Active,
 		&user.CreatedAt,
 		&user.UpdatedAt,
@@ -153,6 +157,23 @@ func (r *Repository) FindByUsername(ctx context.Context, username string) (*User
 	return scanUser(r.db.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE username = $1`, username))
 }
 
+// FindByUsernameFold acha pelo username ignorando maiúsculas/minúsculas
+// (pedido de amizade digitado à mão). Se houver "Hugo" e "hugo", prefere a
+// caixa exata.
+func (r *Repository) FindByUsernameFold(ctx context.Context, username string) (*User, error) {
+	return scanUser(r.db.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE lower(username) = lower($1) ORDER BY (username = $1) DESC LIMIT 1`, username))
+}
+
+// UpdatePrivacy grava as opções de privacidade.
+func (r *Repository) UpdatePrivacy(ctx context.Context, id string, p Privacy) (*User, error) {
+	return scanUser(r.db.QueryRow(
+		ctx,
+		`UPDATE users SET friend_request_policy = $2, allow_server_dms = $3, updated_at = NOW()
+		WHERE id = $1 RETURNING `+userColumns,
+		id, p.FriendRequestPolicy, p.AllowServerDMs,
+	))
+}
+
 // escapeLike escapa os curingas do LIKE/ILIKE (% e _) e a própria barra, para
 // a busca tratar o texto digitado como literal (com ESCAPE '\').
 func escapeLike(s string) string {
@@ -177,6 +198,11 @@ func (r *Repository) SearchByUsername(ctx context.Context, query string, exclude
 		FROM users
 		WHERE username ILIKE '%' || $1 || '%' ESCAPE '\'
 		AND id <> $2
+		AND NOT EXISTS (
+			SELECT 1 FROM user_blocks b
+			WHERE (b.blocker_id = $2 AND b.blocked_id = users.id)
+			   OR (b.blocker_id = users.id AND b.blocked_id = $2)
+		)
 		LIMIT 20
 		`,
 		escapeLike(query),

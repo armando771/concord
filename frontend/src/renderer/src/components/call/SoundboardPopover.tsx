@@ -4,6 +4,8 @@ import type { SoundboardItem } from '../../api/soundboard'
 import { useAuthStore } from '../../store/authStore'
 import { useCallStore } from '../../store/callStore'
 import { useServerStore } from '../../store/serverStore'
+import { useServerAccess } from '../../store/useServerAccess'
+import { Perm } from '../../lib/permissions'
 import { useSoundboardStore } from '../../store/soundboardStore'
 import { showToast } from '../../store/toastStore'
 import {
@@ -128,9 +130,10 @@ function SoundboardPopover({
   const ref = useRef<HTMLDivElement>(null)
   const serverId = useCallStore((s) => s.serverId)
   const meId = useAuthStore((s) => s.user?.id ?? '')
-  const currentServer = useServerStore((s) => s.currentServer)
-  const servers = useServerStore((s) => s.servers)
-  const members = useServerStore((s) => s.currentMembers)
+  const callChannelId = useCallStore((s) => s.channelId)
+  // Só dá para conferir cargos do servidor aberto; em outro, o servidor decide.
+  const viewingCallServer = useServerStore((s) => s.currentServer?.id === serverId)
+  const access = useServerAccess()
 
   const sounds = useSoundboardStore((s) =>
     serverId ? (s.soundsByServer[serverId] ?? EMPTY_SOUNDS) : EMPTY_SOUNDS
@@ -204,13 +207,11 @@ function SoundboardPopover({
     }
   }, [anchor, onClose, uploadOpen, recordingSoundId])
 
-  const isModeratorOrOwner = useMemo(() => {
-    if (!serverId || !meId) return false
-    const srv = currentServer?.id === serverId ? currentServer : servers.find((x) => x.id === serverId)
-    if (srv?.owner_id === meId) return true
-    const meMember = members.find((m) => m.server_id === serverId && m.user_id === meId)
-    return meMember?.role === 'admin'
-  }, [serverId, meId, currentServer, servers, members])
+  // Apagar áudio de outras pessoas: MANAGE_EXPRESSIONS (dono e administrador incluídos).
+  const isModeratorOrOwner = viewingCallServer && access.can(Perm.MANAGE_EXPRESSIONS)
+  // Tocar e enviar áudios: USE_SOUNDBOARD no canal de voz da chamada.
+  const canUseSoundboard =
+    !viewingCallServer || !callChannelId || access.canInChannel(callChannelId, Perm.USE_SOUNDBOARD)
 
   const playingSoundIds = useMemo(
     () => new Set(Object.values(activePlays).map((p) => p.soundId)),
@@ -273,14 +274,16 @@ function SoundboardPopover({
             <p className="text-sm font-bold text-white">Mesa de Áudio</p>
             <p className="text-[11px] text-gray-400">Toque sons na chamada para todos</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setUploadOpen(true)}
-            className="flex cursor-pointer items-center gap-1 rounded-lg bg-[#5865f2] px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#4752c4]"
-          >
-            <PlusIcon className="h-3.5 w-3.5" />
-            Adicionar som
-          </button>
+          {canUseSoundboard && (
+            <button
+              type="button"
+              onClick={() => setUploadOpen(true)}
+              className="flex cursor-pointer items-center gap-1 rounded-lg bg-[#5865f2] px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#4752c4]"
+            >
+              <PlusIcon className="h-3.5 w-3.5" />
+              Adicionar som
+            </button>
+          )}
         </div>
 
         {/* Controle de volume dedicado da mesa de áudio */}

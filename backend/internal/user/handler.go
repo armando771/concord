@@ -14,6 +14,7 @@ type userStore interface {
 	SearchByUsername(ctx context.Context, query string, excludeUserID string) ([]User, error)
 	GetBirthday(ctx context.Context, userID string) (*Birthday, error)
 	SetBirthday(ctx context.Context, userID string, b Birthday) error
+	UpdatePrivacy(ctx context.Context, id string, p Privacy) (*User, error)
 }
 
 type Handler struct {
@@ -106,4 +107,48 @@ func (h *Handler) SetBirthday(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, input)
+}
+
+// GetPrivacy devolve as opções de privacidade de quem está logado.
+func (h *Handler) GetPrivacy(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	foundUser, err := h.service.FindByID(c.Request.Context(), userID.(string))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, foundUser.Privacy())
+}
+
+// UpdatePrivacy grava quem pode mandar pedido de amizade e DM.
+func (h *Handler) UpdatePrivacy(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	var input Privacy
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	updated, err := h.service.UpdatePrivacy(c.Request.Context(), userID.(string), input)
+	if err != nil {
+		if errors.Is(err, ErrInvalidPrivacy) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update privacy"})
+		return
+	}
+
+	c.JSON(http.StatusOK, updated.Privacy())
 }

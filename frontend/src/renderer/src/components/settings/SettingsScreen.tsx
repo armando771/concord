@@ -14,6 +14,7 @@ import Avatar from '../Avatar'
 import { PencilIcon, SearchIcon, XIcon } from '../icons'
 import MyAccountSection from './sections/MyAccountSection'
 import ProfilesSection from './sections/ProfilesSection'
+import { PrivacySection } from './sections/PrivacySection'
 import { AppSection, NotificationsSection, VoiceSection } from './sections/SimpleSections'
 
 const NAV_BG = '#0b0c10'
@@ -27,6 +28,7 @@ const SECTIONS = SETTINGS_SECTIONS.filter((s) => s.id !== 'app' || showAppSectio
 const SECTION_VIEW: Record<SettingsSectionId, () => React.JSX.Element | null> = {
   account: MyAccountSection,
   profiles: ProfilesSection,
+  privacy: PrivacySection,
   voice: VoiceSection,
   notifications: NotificationsSection,
   app: AppSection
@@ -166,7 +168,10 @@ function SettingsContent(): React.JSX.Element {
           <h1 className="mb-6 text-xl font-bold text-white">{current.label}</h1>
           <View />
         </div>
-        <div className="fixed right-8 flex flex-col items-center gap-1" style={{ top: 'calc(var(--titlebar-height, 0px) + 56px)' }}>
+        <div
+          className="fixed right-8 flex flex-col items-center gap-1"
+          style={{ top: 'calc(var(--titlebar-height, 0px) + 56px)' }}
+        >
           <button
             type="button"
             onClick={close}

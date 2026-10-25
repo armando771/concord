@@ -10,6 +10,8 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/joho/godotenv v1.5.1
+	github.com/livekit/protocol v1.53.0
+	github.com/twitchtv/twirp v8.1.3+incompatible
 	golang.org/x/crypto v0.57.0
 )
 
@@ -49,7 +51,6 @@ require (
 	github.com/leodido/go-urn v1.5.0 // indirect
 	github.com/lithammer/shortuuid/v4 v4.3.0 // indirect
 	github.com/livekit/mageutil v0.0.0-20250511045019-0f1ff63f7731 // indirect
-	github.com/livekit/protocol v1.53.0 // indirect
 	github.com/livekit/psrpc v0.8.2 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -80,7 +81,6 @@ require (
 	github.com/puzpuzpuz/xsync/v4 v4.5.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.61.0 // indirect
-	github.com/twitchtv/twirp v8.1.3+incompatible // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.2 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect

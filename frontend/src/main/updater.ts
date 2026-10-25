@@ -4,7 +4,8 @@ import { readFile, rm, writeFile } from 'fs/promises'
 import { readFileSync } from 'fs'
 import { basename, join } from 'path'
 import { isInCall, markQuitting, onCallStateChange } from './background'
-import { canDownloadUpdate, installOnStartup } from './updatePolicy'
+import { backgroundDownloadDelayMs, canDownloadUpdate, installOnStartup } from './updatePolicy'
+import { createUpdateCheckGate } from './updateCheck'
 import { verifyInstaller } from './updateSignature'
 import { clearCallResume, saveCallResume, takeCallResume } from './callResume'
 import { validCallResume, type CallResume } from '../shared/callResume'
@@ -13,8 +14,10 @@ import { validCallResume, type CallResume } from '../shared/callResume'
 // (`<servidor>/updates/`). O instalador só é aceito com a assinatura Ed25519
 // do dono (chave pública embutida no build).
 
-// latest.yml tem poucas centenas de bytes: checar seguido não pesa.
-const CHECK_INTERVAL_MS = 5 * 60_000
+// latest.yml tem poucas centenas de bytes: checar seguido não pesa. O caminho
+// principal é o aviso do servidor (WS app:update → update:check-now); a
+// checagem periódica é a rede de segurança.
+const CHECK_INTERVAL_MS = 60_000
 
 interface UpdaterConfig {
   /** ex.: http://abc.ply.gg:1234/updates/ */
@@ -48,6 +51,8 @@ let readyVersion: string | null = null
 let downloading = false
 /** Ficou esperando o fim da chamada para baixar em segundo plano. */
 let pendingDownload = false
+/** Download em segundo plano esperando o sorteio (backgroundDownloadDelayMs). */
+let downloadTimer: ReturnType<typeof setTimeout> | null = null
 /** A pessoa clicou em Atualizar: instala assim que terminar de baixar. */
 let installRequested = false
 let callSnapshot: CallResume | null = null
@@ -88,6 +93,34 @@ async function fetchSignature(feedUrl: string, file: string): Promise<string> {
 
 /** Baixa a versão disponível. Em chamada, só se a pessoa pediu (force). */
 function startDownload(force = false): void {
+  if (downloading || readyVersion || !availableVersion) return
+  if (!force && !canDownloadUpdate(isInCall())) {
+    pendingDownload = true
+    return
+  }
+  if (downloadTimer) {
+    // Já esperando o sorteio: só o clique em Atualizar fura a fila.
+    if (!force) return
+    clearTimeout(downloadTimer)
+    downloadTimer = null
+  }
+  const delay = backgroundDownloadDelayMs({
+    force,
+    msSinceStart: Date.now() - startedAt,
+    random: Math.random()
+  })
+  if (delay > 0) {
+    downloadTimer = setTimeout(() => {
+      downloadTimer = null
+      // Entrou em chamada durante a espera: fica para o fim dela.
+      startDownloadNow(false)
+    }, delay)
+    return
+  }
+  startDownloadNow(force)
+}
+
+function startDownloadNow(force: boolean): void {
   if (downloading || readyVersion || !availableVersion) return
   if (!force && !canDownloadUpdate(isInCall())) {
     pendingDownload = true
@@ -206,9 +239,15 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
     if (!state.inCall && pendingDownload) startDownload()
   })
 
-  const check = (): void => {
+  const gate = createUpdateCheckGate(() =>
     autoUpdater.checkForUpdates().catch((err) => console.error('[update] checagem falhou:', err))
-  }
-  check()
-  setInterval(check, CHECK_INTERVAL_MS)
+  )
+  // O renderer pede na hora: o servidor avisou de versão nova (WS app:update)
+  // ou o WS reconectou (deploy reinicia o backend; o manifesto pode sair depois).
+  ipcMain.on('update:check-now', (event) => {
+    if (event.sender !== getWindow()?.webContents) return
+    gate.request()
+  })
+  gate.run()
+  setInterval(gate.run, CHECK_INTERVAL_MS)
 }

@@ -3,10 +3,10 @@ package server
 import "time"
 
 type Server struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	IconURL   string    `json:"icon_url"`
-	OwnerID   string    `json:"owner_id"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	IconURL string `json:"icon_url"`
+	OwnerID string `json:"owner_id"`
 	// Canal de texto onde vão os avisos do servidor (aniversários…). Se o
 	// escolhido não existe mais, é o primeiro canal de texto.
 	PrimaryChannelID *string   `json:"primary_channel_id,omitempty"`
@@ -15,14 +15,17 @@ type Server struct {
 }
 
 type ServerMember struct {
-	ServerID    string    `json:"server_id"`
-	UserID      string    `json:"user_id"`
-	Username    string    `json:"username"`
-	DisplayName string    `json:"display_name"`
-	AvatarURL   *string   `json:"avatar_url,omitempty"`
-	Role        string    `json:"role"`
-	JoinedAt    time.Time `json:"joined_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ServerID    string  `json:"server_id"`
+	UserID      string  `json:"user_id"`
+	Username    string  `json:"username"`
+	DisplayName string  `json:"display_name"`
+	AvatarURL   *string `json:"avatar_url,omitempty"`
+	// Role é legado (apps de antes dos cargos): "admin" se o membro pode
+	// gerenciar canais. Os cargos de verdade estão em RoleIDs.
+	Role      string    `json:"role"`
+	RoleIDs   []string  `json:"role_ids"`
+	JoinedAt  time.Time `json:"joined_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type ServerInvite struct {
@@ -56,4 +59,11 @@ type MemberJoinEvent struct {
 type MemberLeaveEvent struct {
 	ServerID string `json:"server_id"`
 	UserID   string `json:"user_id"`
+}
+
+// MutualServer é um servidor em comum com outra pessoa (cartão de perfil).
+type MutualServer struct {
+	ID      string  `json:"id"`
+	Name    string  `json:"name"`
+	IconURL *string `json:"icon_url,omitempty"`
 }
