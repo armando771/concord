@@ -12,6 +12,9 @@ import VoiceChannelTimer from './call/VoiceChannelTimer'
 import LiveBadge from './call/LiveBadge'
 import { liveUserIds } from '../lib/liveBadge'
 import { useUserAudioStore } from '../store/userAudioStore'
+import { useLevelStore } from '../store/levelStore'
+import { sortVoiceMembers } from '../lib/voiceOrder'
+import LevelBadge from './level/LevelBadge'
 import { userMenuHandler } from '../store/userMenuStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import { logout } from '../api/auth'
@@ -70,6 +73,8 @@ export function ServerSidebar(): React.JSX.Element {
   const serverCalls = useCallStore((s) => s.serverCalls)
   const screenSharers = useCallStore((s) => s.screenSharers)
   const joinVoiceChannel = useCallStore((s) => s.joinVoiceChannel)
+  const levels = useLevelStore((s) => s.levels)
+  const ensureLevels = useLevelStore((s) => s.ensureLevels)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -140,6 +145,16 @@ export function ServerSidebar(): React.JSX.Element {
       clearInterval(timer)
     }
   }, [currentServer?.id, callListVersion])
+
+  // Níveis de todo mundo nos canais de voz num pedido só: a lista é ordenada
+  // por nível e assim reordena uma vez quando chegam, não a cada badge.
+  const voiceUserIdsKey = Object.values(serverCalls)
+    .flatMap((entry) => entry.participants.map((p) => p.user_id))
+    .sort()
+    .join(',')
+  useEffect(() => {
+    if (voiceUserIdsKey) ensureLevels(voiceUserIdsKey.split(','))
+  }, [voiceUserIdsKey, ensureLevels])
 
   const handleVoiceClick = (ch: Channel): void => {
     // Estilo Discord: conectar ao canal e exibir a view de voz na área principal.
@@ -440,7 +455,13 @@ export function ServerSidebar(): React.JSX.Element {
               )}
               {voiceChannels.map((ch) => {
                 const callState = serverCalls[ch.id]
-                const participants = callState?.participants ?? []
+                // O backend manda em ordem de entrada; aqui vale nível (ver voiceOrder).
+                const participants = sortVoiceMembers(callState?.participants ?? [], (p) => ({
+                  id: p.user_id,
+                  name: p.display_name ?? p.username ?? 'Usuário',
+                  level: levels[p.user_id],
+                  joinedAt: p.joined_at
+                }))
                 const connectedHere =
                   callStatus !== 'idle' &&
                   activeCallType === 'channel' &&
@@ -543,6 +564,7 @@ export function ServerSidebar(): React.JSX.Element {
                                 {name}
                                 {isMe ? ' (você)' : ''}
                               </span>
+                              <LevelBadge userId={p.user_id} />
                               <span className="ml-auto flex items-center gap-0.5 pr-1">
                                 {live.has(p.user_id) && <LiveBadge />}
                                 {!isMe && locallyMuted[p.user_id]?.muted && (

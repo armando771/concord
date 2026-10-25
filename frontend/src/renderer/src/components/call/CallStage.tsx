@@ -2,6 +2,8 @@ import { useEffect, useMemo } from 'react'
 import { useAuthStore } from '../../store/authStore'
 import { useServerStore } from '../../store/serverStore'
 import { mergeCallPeople } from '../../lib/callParticipants'
+import { sortVoiceMembers } from '../../lib/voiceOrder'
+import { useLevelStore } from '../../store/levelStore'
 import { streamAudioKey, useUserAudioStore } from '../../store/userAudioStore'
 import { streamMenuHandler, userMenuHandler } from '../../store/userMenuStore'
 import { useCallStore } from '../../store/callStore'
@@ -53,6 +55,10 @@ function CallStage({
   const setFocused = useCallStore((s) => s.setFocusedScreenUser)
   const localCameraStream = useCallStore((s) => s.localCameraStream)
   const videoStreams = useCallStore((s) => s.videoStreams)
+  const levels = useLevelStore((s) => s.levels)
+  const ensureLevels = useLevelStore((s) => s.ensureLevels)
+  // joined_at só vem na lista do servidor (canal de voz); na DM fica sem.
+  const channelEntry = useCallStore((s) => (s.channelId ? s.serverCalls[s.channelId] : undefined))
 
   const meId = me?.id ?? 'me'
   // Lista do backend + quem está na sala de mídia (o backend pode ter perdido alguém).
@@ -64,6 +70,21 @@ function CallStage({
       }),
     [backendParticipants, mediaPeers, meId, members]
   )
+  // Mesma ordem da lista do canal na barra lateral (nível, entrada, nome). O
+  // mosaico de vídeo tem a ordem que a pessoa arrumou e não passa por aqui.
+  const peopleIdsKey = participants.map((p) => p.id).join(',')
+  useEffect(() => {
+    if (peopleIdsKey) ensureLevels(peopleIdsKey.split(','))
+  }, [peopleIdsKey, ensureLevels])
+  const people = useMemo(() => {
+    const joinedAt = new Map(channelEntry?.participants.map((p) => [p.user_id, p.joined_at]))
+    return sortVoiceMembers(participants, (p) => ({
+      id: p.id,
+      name: p.display_name,
+      level: levels[p.id],
+      joinedAt: joinedAt.get(p.id)
+    }))
+  }, [participants, levels, channelEntry])
   const meSpeaking = !muted && (speaking?.has(meId) ?? false)
   const meInfo: CallUserInfo = {
     id: meId,
@@ -142,7 +163,7 @@ function CallStage({
           deafened={deafened}
           speaking={meSpeaking}
         />
-        {participants.map((p) => (
+        {people.map((p) => (
           <ParticipantTile
             key={p.id}
             user={p}
@@ -221,7 +242,7 @@ function CallStage({
           }}
           renderTile={renderTile}
         />
-        {(!inMosaic.has(meId) || participants.some((p) => !inMosaic.has(p.id))) && (
+        {(!inMosaic.has(meId) || people.some((p) => !inMosaic.has(p.id))) && (
           <div className="flex shrink-0 flex-wrap items-center justify-center gap-3">
             {!inMosaic.has(meId) && (
               <ParticipantTile
@@ -232,7 +253,7 @@ function CallStage({
                 size="md"
               />
             )}
-            {participants
+            {people
               .filter((p) => !inMosaic.has(p.id))
               .map((p) => (
                 <ParticipantTile
@@ -302,7 +323,7 @@ function CallStage({
           videoStream={localCameraStream}
           mirror
         />
-        {participants
+        {people
           .filter((p) => p.id !== focused.userId && !availableScreens.includes(p.id))
           .map((p) => (
             <ParticipantTile
