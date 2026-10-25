@@ -20,6 +20,8 @@ import LevelRowShimmer from '../components/level/LevelRowShimmer'
 import LevelUpBurst from '../components/level/LevelUpBurst'
 import Avatar from '../components/Avatar'
 import { useUserLook } from '../store/profileStore'
+import ResizeHandle from '../components/ResizeHandle'
+import { useResizableWidth } from '../components/useResizableWidth'
 
 interface MemberRowProps {
   userId: string
@@ -67,12 +69,30 @@ function MemberRow({
       </div>
       <div className="relative min-w-0 leading-tight">
         <div className="flex min-w-0 items-center gap-1.5">
-          <p className={`truncate text-sm font-semibold ${nameClass}`}>{look.name}</p>
+          <p title={look.name} className={`truncate text-sm font-semibold ${nameClass}`}>
+            {look.name}
+          </p>
           <LevelBadge userId={userId} />
         </div>
-        <p className="truncate text-[11px] text-gray-400">@{handle}</p>
+        <p title={`@${handle}`} className="truncate text-[11px] text-gray-400">
+          @{handle}
+        </p>
       </div>
     </div>
+  )
+}
+
+/** Lista de membros à direita, com a borda de dentro arrastável. */
+function MembersAside({ children }: { children: React.ReactNode }): React.JSX.Element {
+  const panel = useResizableWidth('members')
+  return (
+    <aside
+      style={panel.panelStyle}
+      className="relative hidden shrink-0 flex-col border-l border-white/6 bg-[#07080b]/60 lg:flex"
+    >
+      <ResizeHandle {...panel.handleProps} />
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">{children}</div>
+    </aside>
   )
 }
 
@@ -154,6 +174,10 @@ export function ServerView(): React.JSX.Element {
   }
 
   const memberUserIds = new Set(currentMembers.map((m) => m.user_id))
+  // Mesma regra de quem gerencia canais; o backend confere de novo ao gravar.
+  const canMentionEveryone =
+    currentServer.owner_id === me?.id ||
+    currentMembers.some((m) => m.user_id === me?.id && m.role === 'admin')
   const pendingInviteUserIds = new Set(serverInvites.map((i) => i.invitee_id))
 
   const inviteTerm = inviteFilter.trim().toLowerCase()
@@ -197,7 +221,10 @@ export function ServerView(): React.JSX.Element {
               ) : (
                 <span className="text-gray-400 text-xl font-bold">#</span>
               )}
-              <span className="truncate text-white text-base">
+              <span
+                title={activeChannel?.name ?? currentServer.name}
+                className="truncate text-white text-base"
+              >
                 {activeChannel?.name ?? currentServer.name}
               </span>
             </div>
@@ -222,6 +249,7 @@ export function ServerView(): React.JSX.Element {
           <ChatPane
             room={`channel:${channelId}`}
             placeholder={`Mensagem para #${activeChannel?.name ?? 'canal'}`}
+            canMentionEveryone={canMentionEveryone}
             mentionable={currentMembers
               .filter((m) => m.username)
               .map((m) => ({
@@ -247,7 +275,7 @@ export function ServerView(): React.JSX.Element {
       </div>
 
       {/* Right Column: Server Members List */}
-      <aside className="hidden lg:flex w-64 shrink-0 flex-col overflow-y-auto border-l border-white/6 bg-[#07080b]/60 p-4 space-y-6">
+      <MembersAside>
         {/* Owner Group */}
         {ownerMembers.length > 0 && (
           <div>
@@ -257,9 +285,7 @@ export function ServerView(): React.JSX.Element {
             <div className="flex flex-col gap-1">
               {ownerMembers.map((m) => {
                 const displayName =
-                  m.display_name ??
-                  m.username ??
-                  (m.user_id === me?.id ? me?.display_name : 'Dono')
+                  m.display_name ?? m.username ?? (m.user_id === me?.id ? me?.display_name : 'Dono')
                 const handle = m.username ?? (m.user_id === me?.id ? me?.username : 'dono')
                 return (
                   <MemberRow
@@ -364,7 +390,7 @@ export function ServerView(): React.JSX.Element {
             </div>
           </div>
         )}
-      </aside>
+      </MembersAside>
 
       {/* Modal Convidar Amigos */}
       <Modal

@@ -39,10 +39,13 @@ type Message struct {
 	Reactions      []ReactionSummary `json:"reactions,omitempty"`
 	Content        string            `json:"content"`
 	// Mensagem do próprio servidor (ex.: "birthday"); nil = mensagem comum.
-	SystemKind     *string           `json:"system_kind,omitempty"`
-	Poll           *Poll             `json:"poll,omitempty"`
-	Attachments    []Attachment      `json:"attachments,omitempty"`
-	CreatedAt      time.Time         `json:"created_at"`
+	SystemKind *string `json:"system_kind,omitempty"`
+	// "all"/"here" quando a mensagem pinga o canal (só dono/moderador, com
+	// anti-spam); nil = não pinga ninguém, mesmo com "@all" no texto.
+	MentionEveryone *string      `json:"mention_everyone"`
+	Poll            *Poll        `json:"poll,omitempty"`
+	Attachments     []Attachment `json:"attachments,omitempty"`
+	CreatedAt       time.Time    `json:"created_at"`
 }
 
 type CreateEvent struct {

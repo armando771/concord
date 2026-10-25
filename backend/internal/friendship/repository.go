@@ -98,7 +98,6 @@ func (r *Repository) ListFriends(ctx context.Context, userID string) ([]user.Use
 			u.id,
 			u.username,
 			u.display_name,
-			u.email,
 			u.avatar_url,
 			u.created_at,
 			u.updated_at
@@ -127,7 +126,6 @@ func (r *Repository) ListFriends(ctx context.Context, userID string) ([]user.Use
 			&u.ID,
 			&u.Username,
 			&u.DisplayName,
-			&u.Email,
 			&u.AvatarURL,
 			&u.CreatedAt,
 			&u.UpdatedAt,

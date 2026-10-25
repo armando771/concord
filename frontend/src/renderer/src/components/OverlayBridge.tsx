@@ -14,6 +14,9 @@ function OverlayBridge(): null {
   const overlay = window.api?.overlay
   const enabled = useOverlayPrefsStore((s) => s.enabled)
   const opacity = useOverlayPrefsStore((s) => s.opacity)
+  const layout = useOverlayPrefsStore((s) => s.layout)
+  const shortcut = useOverlayPrefsStore((s) => s.shortcut)
+  const setLayout = useOverlayPrefsStore((s) => s.setLayout)
   const me = useAuthStore((s) => s.user)
   const status = useCallStore((s) => s.status)
   const backendParticipants = useCallStore((s) => s.participants)
@@ -34,6 +37,12 @@ function OverlayBridge(): null {
     [backendParticipants, mediaPeers, meId, members]
   )
 
+  // Posição/tamanho editados no jogo (Shift+Tab) chegam pelo main: salva aqui.
+  useEffect(() => {
+    if (!overlay?.supported) return
+    return overlay.onLayout(setLayout)
+  }, [overlay, setLayout])
+
   useEffect(() => {
     if (!overlay?.supported) return
     overlay.setState(
@@ -46,13 +55,17 @@ function OverlayBridge(): null {
         speakingIds,
         muted,
         deafened,
-        opacity
+        opacity,
+        layout,
+        shortcut
       })
     )
   }, [
     overlay,
     enabled,
     opacity,
+    layout,
+    shortcut,
     status,
     me,
     participants,

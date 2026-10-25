@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { User } from './authStore'
+import type { PublicUser } from './authStore'
 import { useAuthStore } from './authStore'
 import { useChatStore } from './chatStore'
 import type { PendingRequest } from '../api/friends'
@@ -14,7 +14,7 @@ import {
 } from '../api/friends'
 
 interface FriendState {
-  friends: User[]
+  friends: PublicUser[]
   pending: PendingRequest[]
   loading: boolean
   error: string | null

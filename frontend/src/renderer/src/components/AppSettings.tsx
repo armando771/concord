@@ -7,6 +7,7 @@ import { showToast } from '../store/toastStore'
 import BirthdayFields from './BirthdayFields'
 import { useNotificationPrefsStore } from '../store/notificationPrefsStore'
 import { useOverlayPrefsStore } from '../store/overlayPrefsStore'
+import OverlayShortcutField from './OverlayShortcutField'
 import { IS_WEB } from '../lib/config'
 import { permissionView, type WebPermission } from '../lib/webNotifications'
 import { browserPermission, requestBrowserPermission } from '../lib/browserNotifications'
@@ -195,6 +196,10 @@ export function DesktopSettings(): React.JSX.Element {
   const setOverlayEnabled = useOverlayPrefsStore((s) => s.setEnabled)
   const overlayOpacity = useOverlayPrefsStore((s) => s.opacity)
   const setOverlayOpacity = useOverlayPrefsStore((s) => s.setOpacity)
+  const overlayMoved = useOverlayPrefsStore(
+    (s) => s.layout.position !== null || s.layout.scale !== 1
+  )
+  const resetOverlayLayout = useOverlayPrefsStore((s) => s.resetLayout)
 
   useEffect(() => {
     void background?.getAutostart().then(setAutostart)
@@ -221,17 +226,36 @@ export function DesktopSettings(): React.JSX.Element {
           />
         </div>
       )}
+      {/* Overlay de jogo: só Windows (preload: process.platform, sandbox desligado). */}
       {hasOverlay && (
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-400">Overlay</h3>
           <Toggle
             title="Overlay nos jogos"
             description="Mostra quem está na chamada e quem está falando por cima de jogos em tela cheia (modo janela)."
             checked={overlayEnabled}
             onChange={() => setOverlayEnabled(!overlayEnabled)}
           />
+          <OverlayShortcutField disabled={!overlayEnabled} />
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <span>
+              <span className="block text-sm font-semibold text-white">Posição e tamanho</span>
+              <span className="block text-xs text-gray-400">
+                Volta para a esquerda, no meio da tela, no tamanho normal.
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={resetOverlayLayout}
+              disabled={!overlayMoved}
+              className="shrink-0 cursor-pointer rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/15 disabled:cursor-default disabled:opacity-50"
+            >
+              Restaurar posição
+            </button>
+          </div>
           <label className="mt-4 flex flex-col gap-2">
             <span className="flex items-center justify-between text-sm font-semibold text-white">
-              Opacidade do overlay
+              Opacidade do overlay (quem fala fica mais visível)
               <span className="text-xs font-medium text-gray-400">{overlayOpacity}%</span>
             </span>
             <input
@@ -245,6 +269,10 @@ export function DesktopSettings(): React.JSX.Element {
               aria-label="Opacidade do overlay"
               className="accent-[#5865f2] disabled:opacity-40"
             />
+            <span className="text-xs text-gray-400">
+              Bem fraquinho em repouso para não atrapalhar o jogo; quem está falando aparece mais
+              forte.
+            </span>
           </label>
         </div>
       )}

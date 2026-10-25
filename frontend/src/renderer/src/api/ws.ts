@@ -11,6 +11,7 @@ export type WsEventType =
   | 'channel:create'
   | 'channel:update'
   | 'channel:delete'
+  | 'channel:reorder'
   | 'server:update'
   | 'server:delete'
   | 'server:member:join'
