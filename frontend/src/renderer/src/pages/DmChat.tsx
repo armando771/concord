@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useFriendStore } from '../store/friendStore'
-import { useChatStore } from '../store/chatStore'
+import { useChatStore, usePresenceStatus } from '../store/chatStore'
+import { useUserLook } from '../store/profileStore'
+import { profileCardHandler } from '../store/profileCardStore'
+import { STATUS_META } from '../lib/presenceStatus'
+import Avatar from '../components/Avatar'
 import { useCallStore } from '../store/callStore'
 import { getOrCreateConversationWith } from '../api/conversations'
 import { showToast } from '../store/toastStore'
@@ -68,33 +72,41 @@ function DmChat(): React.JSX.Element {
     (userId === me?.id ? me?.display_name : 'Usuário') ??
     'Usuário'
   const otherHandle = other?.username ?? (userId === me?.id ? me?.username : '')
-  const initial = otherName.charAt(0).toUpperCase()
   const dmMentionable = otherHandle ? [{ username: otherHandle, display_name: otherName }] : []
   const online = Boolean(userId && presence[userId])
+  const status = usePresenceStatus(userId)
+  const look = useUserLook(userId, { name: otherName, avatarUrl: other?.avatar_url })
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-[#07080b]/90 backdrop-blur-2xl text-gray-100">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-white/6 px-4">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="relative shrink-0">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white">
-              {initial}
-            </div>
-            <span
-              className={`absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-[#07080b] ${
-                online ? 'bg-[#23a55a]' : 'bg-gray-600'
-              }`}
+          <button
+            type="button"
+            onClick={userId ? profileCardHandler(userId, look.name, otherHandle || undefined, 'right') : undefined}
+            aria-label={`Perfil de ${look.name}`}
+            className="cursor-pointer rounded-full"
+          >
+            <Avatar
+              userId={userId}
+              name={otherName}
+              avatarUrl={other?.avatar_url}
+              size={32}
+              animate="always"
+              status={status}
+              cutoutColor="#07080b"
             />
-          </div>
+          </button>
           <div className="min-w-0 leading-tight">
-            <p className="truncate text-sm font-bold text-white">{otherName}</p>
+            <p className="truncate text-sm font-bold text-white">{look.name}</p>
             {otherHandle && <p className="truncate text-[11px] text-gray-400">@{otherHandle}</p>}
           </div>
         </div>
         <span
-          className={`text-[11px] font-semibold ${online ? 'text-[#23a55a]' : 'text-gray-500'}`}
+          className="text-[11px] font-semibold"
+          style={{ color: STATUS_META[status].color }}
         >
-          {online ? 'Online' : 'Offline'}
+          {STATUS_META[status].label}
         </span>
         <div className="ml-auto">
           {inCallWithUser ? (

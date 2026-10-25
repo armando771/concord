@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CallUserInfo } from '../../store/callStore'
+import { useSoundboardStore } from '../../store/soundboardStore'
 import VoiceStateIcons from './VoiceStateIcons'
 import StreamAudioControls from './StreamAudioControls'
 import { VolumeOffIcon, XIcon } from '../icons'
@@ -7,6 +8,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useLevelStore } from '../../store/levelStore'
 import { levelUpEffects } from '../../lib/levels'
 import LevelUpBurst from '../level/LevelUpBurst'
+import Avatar from '../Avatar'
 
 export function VideoFill({
   stream,
@@ -96,7 +98,8 @@ function ParticipantTile({
   /** Live de outra pessoa: barra de mutar/volume (só para você) ao passar o mouse. */
   streamAudioUserId?: string
 }): React.JSX.Element {
-  const initial = user.display_name.charAt(0).toUpperCase()
+  const activeSound = useSoundboardStore((s) => (isScreen ? undefined : s.activePlays[user.id]))
+  const isPlayingSound = Boolean(activeSound)
   // 'fill': o maior retângulo com a proporção do vídeo que cabe no container
   // (o pai precisa ter container-type: size).
   const [aspect, setAspect] = useState(16 / 9)
@@ -105,7 +108,7 @@ function ParticipantTile({
     size === 'fill'
       ? { aspectRatio: String(aspect), width: `min(100cqw, calc(100cqh * ${aspect}))` }
       : undefined
-  const avatarDims = size === 'lg' ? 'h-24 w-24 text-3xl' : 'h-14 w-14 text-lg'
+  const avatarSize = size === 'lg' ? 96 : 56
   // Subida de nível: do 60 em diante o tile brilha na cor da faixa; o burst
   // no avatar é para os outros (quem subiu já tem a celebração na janela).
   const meId = useAuthStore((s) => s.user?.id)
@@ -122,7 +125,7 @@ function ParticipantTile({
       className={`group/tile relative flex items-center justify-center overflow-hidden rounded-2xl bg-white/[0.04] transition-all ${dims} ${
         isScreen
           ? 'ring-2 ring-[#23a55a] shadow-[0_0_24px_rgba(35,165,90,0.25)]'
-          : speaking
+          : speaking || isPlayingSound
             ? 'ring-2 ring-[#23a55a] shadow-[0_0_24px_rgba(35,165,90,0.25)]'
             : 'ring-1 ring-white/6'
       } ${onClick ? 'cursor-pointer hover:brightness-110' : ''}`}
@@ -149,18 +152,31 @@ function ParticipantTile({
       {!videoStream && (
         <div className="flex flex-col items-center gap-3">
           <div className="relative">
-            <div
-              className={`flex items-center justify-center rounded-full font-bold text-white transition-colors ${avatarDims} ${
-                speaking ? 'bg-[#23a55a]' : 'bg-violet-600'
+            <Avatar
+              userId={user.id}
+              name={user.display_name}
+              avatarUrl={user.avatar_url}
+              size={avatarSize}
+              animate="always"
+              className={`rounded-full transition-shadow ${
+                speaking || isPlayingSound ? 'ring-4 ring-[#23a55a]' : ''
               }`}
-            >
-              {initial}
-            </div>
+            />
             {!isScreen && user.id !== meId && (
               <LevelUpBurst userId={user.id} size={size === 'lg' ? 96 : 56} />
             )}
           </div>
           {action}
+        </div>
+      )}
+      {activeSound && (
+        <div
+          data-testid={`soundboard-badge-${user.id}`}
+          className="absolute left-2 top-2 z-10 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-full border border-[#23a55a]/50 bg-black/75 px-2.5 py-1 text-xs font-semibold text-white shadow-lg backdrop-blur-sm"
+        >
+          <span>{activeSound.emoji || '🔊'}</span>
+          <span className="truncate">{activeSound.soundName}</span>
+          <span className="h-1.5 w-1.5 shrink-0 animate-ping rounded-full bg-[#23a55a]" />
         </div>
       )}
       {onClose && (

@@ -35,3 +35,25 @@ describe('formatMemberSince', () => {
     expect(formatMemberSince('xx')).toBeNull()
   })
 })
+
+describe("placeProfileCard 'top' (barra de baixo)", () => {
+  const card = { width: 300, height: 400 }
+  const viewport = { width: 1280, height: 720 }
+
+  it('abre acima do item, alinhado à esquerda', () => {
+    const anchor = { top: 670, bottom: 710, left: 80, right: 230 }
+    expect(placeProfileCard(anchor, 'top', card, viewport)).toEqual({ left: 80, top: 262 })
+  })
+
+  it('sem espaço em cima, abre embaixo', () => {
+    const anchor = { top: 100, bottom: 140, left: 80, right: 230 }
+    expect(placeProfileCard(anchor, 'top', card, viewport).top).toBe(148)
+  })
+
+  it('fica dentro da janela', () => {
+    const anchor = { top: 300, bottom: 340, left: 1200, right: 1270 }
+    const pos = placeProfileCard(anchor, 'top', card, { width: 1280, height: 360 })
+    expect(pos.left).toBe(1280 - 300 - 8)
+    expect(pos.top).toBeGreaterThanOrEqual(8)
+  })
+})

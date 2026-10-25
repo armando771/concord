@@ -1,6 +1,8 @@
 import { request } from './client'
 
-export type PresenceMap = Record<string, boolean>
+// Status efetivo de cada id ("offline" se desconectado ou invisível). Backend
+// antigo mandava true/false.
+export type PresenceMap = Record<string, string | boolean>
 
 export function fetchPresence(userIds: string[]): Promise<PresenceMap> {
   const unique = Array.from(new Set(userIds.filter(Boolean)))
