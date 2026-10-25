@@ -126,10 +126,24 @@ computador". Basta clicar em **Mais informações → Executar assim mesmo**.
 **Linux x64:** mande `frontend/dist/Salinha-<versão>-x64.AppImage` ou o link da
 landing page. Nas propriedades do arquivo, permita executar como programa
 (ou use `chmod +x Salinha-<versão>-x64.AppImage`) e abra-o como usuário normal.
-Algumas distribuições exigem instalar o FUSE 2. Não use `sudo` nem desative o
+O AppImage precisa do **FUSE 2**, que várias distribuições não instalam por
+padrão:
+
+```bash
+sudo pacman -S fuse2          # Arch / Manjaro / EndeavourOS
+sudo apt install libfuse2     # Debian / Ubuntu até 23.10
+sudo apt install libfuse2t64  # Ubuntu 24.04+
+sudo dnf install fuse-libs    # Fedora
+```
+
+Sem ele o AppImage não abre ("dlopen(): error loading libfuse.so.2"). **Não
+extraia** o AppImage (`--appimage-extract`) para contornar: a cópia extraída
+abre, mas nunca se atualiza sozinha (o atualizador só troca o próprio
+AppImage, pela variável `APPIMAGE`) e fica para trás até quebrar com o
+servidor novo. O app avisa "Atualização automática indisponível nesta
+instalação" quando roda assim. Não use `sudo` para abrir o app nem desative o
 sandbox. Guarde o AppImage numa pasta sua com permissão de escrita: o
-atualizador substitui o arquivo nessa pasta. Executar uma cópia extraída em
-vez do AppImage não oferece atualização automática.
+atualizador substitui o arquivo nessa pasta.
 
 O release Linux usa a mesma chave Ed25519 do Windows e publica o AppImage,
 seu `.sig` e `latest-linux.yml`. O Windows continua usando `latest.yml`.
@@ -396,11 +410,12 @@ SIGTERM, o backend:
 O processo novo só sobe depois que o antigo sai, então essa espera é o tempo
 sem backend: no E2E, ~0,55 s com um download travado e um WebSocket morto
 (antes: 10 s). O processo novo espera o banco por até 30 s, recarrega as
-chamadas do banco, com o mudo/ensurdecido e quem está transmitindo de cada
-participante (ficam salvos em `call_participants`), e só então atende: os
-ícones de mudo e o selo LIVE não piscam. Se não conseguir ler as chamadas, não
-fica pronto (nada é encerrado por causa de um erro de leitura): tenta de novo
-por até 30 s e então sai com erro.
+chamadas do banco, com o mudo/ensurdecido, o silenciar/ensurdecer de
+moderador e quem está transmitindo de cada participante (ficam salvos em
+`call_participants`), e só então atende: os ícones de mudo e o selo LIVE não
+piscam, e um deploy não libera quem um moderador silenciou. Se não conseguir
+ler as chamadas, não fica pronto (nada é encerrado por causa de um erro de
+leitura): tenta de novo por até 30 s e então sai com erro.
 
 O app, ao receber o 1012, reconecta em 100–300 ms e não mostra aviso;
 "Reconectando ao servidor…" só aparece se a conexão ficar fora por mais de

@@ -12,6 +12,8 @@
 //   - a troca de processo fica abaixo de 1 s mesmo com um download longo em
 //     andamento (cliente que não lê) e um WebSocket morto (não confirma o
 //     fechamento) — os dois direto no backend;
+//   - quem foi silenciado por um moderador continua silenciado depois de um
+//     reinício (e liberar ainda funciona);
 //   - uma chamada de DM atravessa outro reinício: continua no servidor, os dois
 //     se ouvem, mudo e tela ainda chegam ao servidor e desligar encerra para os
 //     dois.
@@ -156,6 +158,8 @@ port, cwd = int(sys.argv[1]), sys.argv[2]
 s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 s.bind(("127.0.0.1", port)); s.listen(4096); fd = s.fileno()
 def pre():
+    # Se o supervisor morrer (o script caiu no meio), o backend morre junto.
+    import ctypes; ctypes.CDLL("libc.so.6").prctl(1, signal.SIGKILL)
     os.dup2(fd, 3)
     os.environ["LISTEN_FDS"] = "1"; os.environ["LISTEN_PID"] = str(os.getpid())
 child = None
@@ -258,6 +262,23 @@ async function api(path, { token, method = 'GET', body } = {}) {
   if (!res.ok) throw new Error(`${method} ${path} -> ${res.status} ${text}`)
   return text ? JSON.parse(text) : null
 }
+/**
+ * Confirma o e-mail como o usuário faria: sem SMTP o backend imprime o e-mail
+ * no log (LogMailer), e o link traz o token.
+ */
+async function verifyEmail(email) {
+  const start = Date.now()
+  while (Date.now() - start < 10000) {
+    const at = backendLog.lastIndexOf(`para ${email}`)
+    const token = at >= 0 && /\/verify-email\?token=([^\s&]+)/.exec(backendLog.slice(at))?.[1]
+    if (token) {
+      await api('/auth/verify-email', { method: 'POST', body: { token: decodeURIComponent(token) } })
+      return
+    }
+    await sleep(100)
+  }
+  throw new Error(`e-mail de confirmação de ${email} não apareceu no log do backend`)
+}
 async function makeUser(name) {
   const email = `${name}-${run}@teste.dev`
   const password = 'senha-forte-123'
@@ -265,6 +286,7 @@ async function makeUser(name) {
     method: 'POST',
     body: { username: `${name}${run}`, display_name: name, email, password }
   })
+  await verifyEmail(email)
   const me = await api('/users/me', { token: access_token })
   return { email, password, token: access_token, id: me.id ?? me.user?.id, username: `${name}${run}` }
 }
@@ -280,6 +302,7 @@ await api(`/servers/${serverId}/channels`, {
 })
 const channels = await api(`/servers/${serverId}/channels`, { token: ana.token })
 const textChannel = (Array.isArray(channels) ? channels : channels.channels).find((c) => c.type !== 'voice')
+const voiceChannel = (Array.isArray(channels) ? channels : channels.channels).find((c) => c.type === 'voice')
 await api(`/servers/${serverId}/invite`, { token: ana.token, method: 'POST', body: { user_id: bia.id } })
 const invites = await api('/invites', { token: bia.token })
 const invite = (Array.isArray(invites) ? invites : invites.invites).find((i) => (i.server_id ?? i.server?.id) === serverId)
@@ -555,6 +578,27 @@ try {
   check('mensagem de antes não duplicou', (await pageA.getByText(`antes ${run}`).count()) === 1,
     await pageA.getByText(`antes ${run}`).count())
   check('chamada continua (bia ouve a ana)', (await liveTracks(pageB)).includes('live'))
+
+  // ─── Silenciado por moderador atravessa o reinício ─────────────────────
+  // A ana (dona) silencia a bia no servidor; o reinício não pode liberá-la.
+  const channelState = () => api(`/calls/active?scope=channel&id=${voiceChannel.id}`, { token: ana.token })
+    .catch((err) => ({ error: err.message }))
+  const biaIn = (st) => st.participants?.find((p) => p.user_id === bia.id)
+  const channelCall = await channelState()
+  await api(`/calls/${channelCall.call.id}/participants/${bia.id}/server-mute`, {
+    token: ana.token, method: 'POST', body: { muted: true }
+  })
+  await waitFor('bia silenciada pela moderação', channelState, (st) => biaIn(st)?.server_muted === true)
+  await stopBackend()
+  await startBackend()
+  await waitHealthy()
+  const afterModRestart = await channelState()
+  check('silenciada pela moderação continua depois do reinício',
+    biaIn(afterModRestart)?.server_muted === true && biaIn(afterModRestart)?.muted === true, biaIn(afterModRestart))
+  await api(`/calls/${channelCall.call.id}/participants/${bia.id}/server-mute`, {
+    token: ana.token, method: 'POST', body: { muted: false }
+  })
+  await waitFor('liberar depois do reinício funciona', channelState, (st) => biaIn(st)?.server_muted === false)
 
   // ─── DM: reinício no meio de uma chamada de DM ─────────────────────────
   // Antes, atender a DM não ia para o banco ("ringing") e todo reinício a

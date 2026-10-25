@@ -13,6 +13,7 @@ import VerifyEmail from './pages/VerifyEmail'
 import RequireAuth from './components/RequireAuth'
 import RedirectIfAuthed from './components/RedirectIfAuthed'
 import AppShell from './components/AppShell'
+import { RouteErrorScreen } from './components/AppErrorScreen'
 import { IS_WEB } from './lib/config'
 
 // Desktop carrega de file:// e precisa do hash (#/rota). No navegador as rotas
@@ -20,6 +21,7 @@ import { IS_WEB } from './lib/config'
 // (try_files), então recarregar em /servers/… continua no mesmo lugar.
 const createRouter = IS_WEB ? createBrowserRouter : createHashRouter
 
+// errorElement: tela "Algo deu errado" em vez do erro cru do react-router.
 export const router = createRouter([
   {
     path: '/',
@@ -28,6 +30,7 @@ export const router = createRouter([
         <AppShell />
       </RequireAuth>
     ),
+    errorElement: <RouteErrorScreen />,
     children: [
       { index: true, element: <Home /> },
       { path: 'friends', element: <Friends /> },
@@ -44,7 +47,8 @@ export const router = createRouter([
       <RedirectIfAuthed>
         <Login />
       </RedirectIfAuthed>
-    )
+    ),
+    errorElement: <RouteErrorScreen />
   },
   {
     path: '/register',
@@ -52,7 +56,8 @@ export const router = createRouter([
       <RedirectIfAuthed>
         <Register />
       </RedirectIfAuthed>
-    )
+    ),
+    errorElement: <RouteErrorScreen />
   },
   {
     path: '/forgot-password',

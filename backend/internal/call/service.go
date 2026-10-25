@@ -114,6 +114,9 @@ type Service struct {
 type participantStateStore interface {
 	SaveVoiceState(ctx context.Context, callID string, userID string, muted bool, deafened bool) error
 	SaveScreenSharing(ctx context.Context, callID string, userID string, active bool) error
+	// Silenciar/ensurdecer de moderador: sem isso um deploy liberaria quem foi
+	// silenciado.
+	SaveServerVoiceState(ctx context.Context, callID string, userID string, serverMuted bool, serverDeafened bool) error
 	// A DM atendida passa a ativa no banco: senão continua "ringing" e o
 	// próximo reinício a encerra.
 	MarkCallActive(ctx context.Context, callID string) error
@@ -130,6 +133,17 @@ func (s *Service) saveVoiceState(callID, userID string, muted, deafened bool) {
 	defer cancel()
 	if err := s.stateStore.SaveVoiceState(ctx, callID, userID, muted, deafened); err != nil {
 		log.Printf("[call] persist voice state %s failed: %v", userID, err)
+	}
+}
+
+func (s *Service) saveServerVoiceState(callID, userID string, serverMuted, serverDeafened bool) {
+	if s.stateStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), saveStateTimeout)
+	defer cancel()
+	if err := s.stateStore.SaveServerVoiceState(ctx, callID, userID, serverMuted, serverDeafened); err != nil {
+		log.Printf("[call] persist server voice state %s failed: %v", userID, err)
 	}
 }
 

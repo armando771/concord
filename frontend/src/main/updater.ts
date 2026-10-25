@@ -4,7 +4,12 @@ import { readFile, rm, writeFile } from 'fs/promises'
 import { readFileSync } from 'fs'
 import { basename, join } from 'path'
 import { isInCall, markQuitting, onCallStateChange } from './background'
-import { backgroundDownloadDelayMs, canDownloadUpdate, installOnStartup } from './updatePolicy'
+import {
+  autoUpdateUnavailable,
+  backgroundDownloadDelayMs,
+  canDownloadUpdate,
+  installOnStartup
+} from './updatePolicy'
 import { createUpdateCheckGate } from './updateCheck'
 import { verifyInstaller } from './updateSignature'
 import { clearCallResume, saveCallResume, takeCallResume } from './callResume'
@@ -155,6 +160,13 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
     availableVersion
       ? { version: availableVersion, ready: readyVersion === availableVersion }
       : null
+  )
+  ipcMain.handle('update:unavailable', () =>
+    autoUpdateUnavailable({
+      platform: process.platform,
+      isPackaged: app.isPackaged,
+      appImage: process.env.APPIMAGE
+    })
   )
   // Botão Atualizar: instala na hora se já baixou; senão baixa agora (mesmo
   // em chamada — a pessoa pediu) e instala quando terminar.

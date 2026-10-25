@@ -39,6 +39,9 @@ type CallParticipant struct {
 	Muted         bool `json:"muted"`
 	Deafened      bool `json:"deafened"`
 	ScreenSharing bool `json:"screen_sharing"`
+	// Silenciado/ensurdecido por um moderador.
+	ServerMuted    bool `json:"server_muted"`
+	ServerDeafened bool `json:"server_deafened"`
 }
 
 type UserInfo struct {
