@@ -245,7 +245,7 @@ function ServerRail(): React.JSX.Element {
           </p>
 
           <Input
-            label="NOME DO SERVIDOR"
+            label="Nome do servidor"
             placeholder="Ex: Servidor dos Brothers"
             value={serverName}
             onChange={(e) => setServerName(e.target.value)}

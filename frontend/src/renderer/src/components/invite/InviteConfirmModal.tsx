@@ -135,8 +135,8 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
           {state.status === 'error' && (
             <div className="flex flex-col items-center text-center">
               <InviteServerIcon name="?" />
-              <h1 className="mt-4 text-xl font-bold text-white">Convite indisponível</h1>
-              <p className="mt-2 text-sm text-gray-300">{state.message}</p>
+              <h1 className="mt-4 text-ds-lg font-bold text-white">Convite indisponível</h1>
+              <p className="mt-2 text-ds-sm text-gray-300">{state.message}</p>
               <Button variant="secondary" className="mt-8 w-full" onClick={close}>
                 Fechar
               </Button>
@@ -151,13 +151,13 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
               {joinError && (
                 <p
                   role="alert"
-                  className="mt-6 w-full rounded-lg border border-red-400/30 bg-red-500/15 px-3 py-2 text-center text-sm text-red-300"
+                  className="mt-6 w-full rounded-lg border border-red-400/30 bg-red-500/15 px-3 py-2 text-center text-ds-sm text-red-300"
                 >
                   {joinError}
                 </p>
               )}
               {notice && (
-                <p className="mt-6 w-full text-center text-sm text-emerald-300">{notice}</p>
+                <p className="mt-6 w-full text-center text-ds-sm text-emerald-300">{notice}</p>
               )}
               {banned ? (
                 <Button variant="secondary" className="mt-6 w-full py-2.5" onClick={close}>
@@ -165,7 +165,7 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
                 </Button>
               ) : unverified && !isMember ? (
                 <>
-                  <p className="mt-6 text-center text-sm text-gray-200">
+                  <p className="mt-6 text-center text-ds-sm text-gray-200">
                     Confirme seu e-mail{me?.email ? ` (${me.email})` : ''} para entrar no servidor.
                     O link está no e-mail que enviamos.
                   </p>
@@ -179,14 +179,14 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
                   <div className="mt-3 flex gap-4">
                     <button
                       type="button"
-                      className="cursor-pointer text-sm font-medium text-violet-300 hover:text-white hover:underline"
+                      className="cursor-pointer text-ds-sm font-medium text-violet-300 hover:text-white hover:underline"
                       onClick={() => void resend()}
                     >
                       Reenviar e-mail
                     </button>
                     <button
                       type="button"
-                      className="cursor-pointer text-sm font-medium text-gray-300 hover:text-white hover:underline"
+                      className="cursor-pointer text-ds-sm font-medium text-gray-300 hover:text-white hover:underline"
                       onClick={close}
                     >
                       Não, obrigado
@@ -195,7 +195,7 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
                 </>
               ) : isMember ? (
                 <>
-                  <p className="mt-6 text-sm font-medium text-gray-200">
+                  <p className="mt-6 text-ds-sm font-medium text-gray-200">
                     Você já está neste servidor
                   </p>
                   <Button
@@ -206,7 +206,7 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
                   </Button>
                   <button
                     type="button"
-                    className="mt-3 cursor-pointer text-sm font-medium text-gray-300 hover:text-white hover:underline"
+                    className="mt-3 cursor-pointer text-ds-sm font-medium text-gray-300 hover:text-white hover:underline"
                     onClick={close}
                   >
                     Fechar
@@ -234,7 +234,7 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
                   </Button>
                   <button
                     type="button"
-                    className="mt-3 cursor-pointer text-sm font-medium text-gray-300 hover:text-white hover:underline disabled:opacity-50"
+                    className="mt-3 cursor-pointer text-ds-sm font-medium text-gray-300 hover:text-white hover:underline disabled:opacity-50"
                     onClick={close}
                     disabled={joining}
                   >

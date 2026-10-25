@@ -18,6 +18,11 @@ files:
   - '!**/*.test.ts'
 asarUnpack:
   - resources/**
+# Licença da fonte Outfit (OFL-1.1): legível fora do asar. O renderer também
+# leva uma cópia em out/renderer/assets/OFL.txt (vite.renderer.shared.ts).
+extraResources:
+  - from: node_modules/@fontsource-variable/outfit/LICENSE
+    to: licenses/Outfit-OFL.txt
 win:
   executableName: Salinha
   # Helper do som da janela compartilhada (gerado por scripts/build-win.sh)

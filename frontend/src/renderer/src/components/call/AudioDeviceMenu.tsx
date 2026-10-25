@@ -119,7 +119,7 @@ function AudioDeviceMenu({
       style={{ width: MENU_WIDTH, left, bottom }}
       className="fixed z-50 rounded-lg border border-white/10 bg-[#111214] p-1.5 shadow-2xl"
     >
-      <p className="px-2 pb-1 pt-0.5 text-[11px] font-bold uppercase tracking-wide text-gray-400">
+      <p className="px-2 pb-1 pt-0.5 text-ds-xs font-bold uppercase tracking-[0.02em] text-gray-400">
         {title}
       </p>
       {canChoose ? (
@@ -135,7 +135,7 @@ function AudioDeviceMenu({
                 tabIndex={-1}
                 onClick={() => choose(o.id)}
                 title={o.label}
-                className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-[#5865f2] hover:text-white focus-visible:bg-[#5865f2] focus-visible:text-white ${
+                className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-ds-sm font-medium outline-none transition-colors hover:bg-[#5865f2] hover:text-white focus-visible:bg-[#5865f2] focus-visible:text-white ${
                   checked ? 'text-white' : 'text-gray-300'
                 }`}
               >
@@ -146,7 +146,7 @@ function AudioDeviceMenu({
           })}
         </div>
       ) : (
-        <p className="px-2 py-1.5 text-xs text-gray-400">
+        <p className="px-2 py-1.5 text-ds-xs text-gray-400">
           Este navegador não deixa escolher a saída de áudio.
         </p>
       )}
@@ -159,7 +159,7 @@ function AudioDeviceMenu({
           onClose()
           openSettings('voice')
         }}
-        className="flex w-full cursor-pointer items-center rounded px-2 py-1.5 text-left text-sm text-gray-300 outline-none transition-colors hover:bg-[#5865f2] hover:text-white focus-visible:bg-[#5865f2] focus-visible:text-white"
+        className="flex w-full cursor-pointer items-center rounded px-2 py-1.5 text-left text-ds-sm font-medium text-gray-300 outline-none transition-colors hover:bg-[#5865f2] hover:text-white focus-visible:bg-[#5865f2] focus-visible:text-white"
       >
         Configurações de voz
       </button>

@@ -45,7 +45,7 @@ function InviteCodeBox({ serverId }: { serverId: string }): React.JSX.Element {
 
   return (
     <div className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-4">
-      <p className="text-xs font-bold uppercase tracking-wide text-gray-400">Link de convite</p>
+      <p className="text-ds-sm font-medium text-gray-400">Link de convite</p>
       <div className="flex items-center gap-2">
         <input
           readOnly
@@ -53,13 +53,13 @@ function InviteCodeBox({ serverId }: { serverId: string }): React.JSX.Element {
           value={link ?? ''}
           placeholder="Gerando link…"
           onFocus={(e) => e.currentTarget.select()}
-          className="min-w-0 flex-1 truncate rounded-lg bg-black/40 px-3 py-2 font-mono text-sm text-white outline-none focus:ring-2 focus:ring-violet-500/50"
+          className="min-w-0 flex-1 truncate rounded-lg bg-black/40 px-3 py-2 font-mono text-ds-sm text-white outline-none focus:ring-2 focus:ring-violet-500/50"
         />
         <Button variant="success" onClick={copy} disabled={!link}>
           Copiar
         </Button>
       </div>
-      <p className="text-xs text-gray-400">
+      <p className="text-ds-xs text-gray-400">
         Mande para seus amigos: o link abre no navegador ou no app. Também dá para colar o link (ou
         o código <code className="font-mono text-gray-300">{code ?? '········'}</code>) em{' '}
         <strong>+</strong> → <strong>Entrar com código</strong>.
@@ -68,7 +68,7 @@ function InviteCodeBox({ serverId }: { serverId: string }): React.JSX.Element {
         type="button"
         onClick={() => setConfirmReset(true)}
         disabled={!code}
-        className="cursor-pointer text-xs font-medium text-violet-300 hover:text-white hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+        className="cursor-pointer text-ds-xs font-medium text-violet-300 hover:text-white hover:underline disabled:cursor-not-allowed disabled:opacity-50"
       >
         Gerar novo link
       </button>

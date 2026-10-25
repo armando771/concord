@@ -93,11 +93,11 @@ function InviteCard({ code }: { code: string }): React.JSX.Element {
         {state.status === 'error' && (
           <div className="flex flex-col items-center text-center">
             <InviteServerIcon name="?" />
-            <h1 className="mt-4 text-xl font-bold text-white">Convite indisponível</h1>
-            <p className="mt-2 text-sm text-gray-300">{state.message}</p>
+            <h1 className="mt-4 text-ds-lg font-bold text-white">Convite indisponível</h1>
+            <p className="mt-2 text-ds-sm text-gray-300">{state.message}</p>
             <Link
               to="/"
-              className="mt-8 w-full rounded-lg bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/15"
+              className="mt-8 w-full rounded-lg bg-white/10 px-4 py-2.5 text-ds-sm font-semibold text-white transition-colors hover:bg-white/15"
             >
               Ir para a Salinha
             </Link>
@@ -116,7 +116,7 @@ function InviteCard({ code }: { code: string }): React.JSX.Element {
               </Button>
             </div>
             {showDownload && (
-              <p className="mt-4 text-center text-sm text-gray-300">
+              <p className="mt-4 text-center text-ds-sm text-gray-300">
                 Não abriu?{' '}
                 <a
                   href={DOWNLOAD_URL}
