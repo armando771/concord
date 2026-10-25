@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { serverIconSrc } from '../lib/serverIcon'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { PlusIcon, InboxIcon, DiamondIcon, SalinhaMarkIcon } from './icons'
+import { PlusIcon, InboxIcon, DiamondIcon, SalinhaMarkIcon, VolumeIcon } from './icons'
 import { useServerStore } from '../store/serverStore'
 import { useInviteStore } from '../store/inviteStore'
 import { useAuthStore } from '../store/authStore'
@@ -11,6 +11,9 @@ import { isMutedNow } from '../lib/notificationMute'
 import { useNow } from './useNow'
 import { badgeCount } from '../lib/proposals'
 import { useChatStore } from '../store/chatStore'
+import { useServersVoiceActivity } from './useServersVoiceActivity'
+import { useCallStore } from '../store/callStore'
+import { voiceServerId } from '../lib/voiceServer'
 import { useFriendStore } from '../store/friendStore'
 import { showToast } from '../store/toastStore'
 import Modal from './Modal'
@@ -46,6 +49,8 @@ function ServerRail(): React.JSX.Element {
     ? 0
     : badgeCount(proposals, proposalMentions, proposalsSeenAt, meId)
 
+  const voiceSrvId = useCallStore((s) => voiceServerId(s))
+  const voiceActiveServers = useServersVoiceActivity(servers.map((srv) => srv.id))
   const unreadByRoom = useChatStore((s) => s.unreadByRoom)
   const unreadByServer = useChatStore((s) => s.unreadByServer)
   const mentionsByServer = useChatStore((s) => s.mentionsByServer)
@@ -287,11 +292,22 @@ function ServerRail(): React.JSX.Element {
                   )}
                 </button>
                 {(mentions > 0 || unread > 0) && (
-                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-md">
+                  <span className="absolute -bottom-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-md">
                     {(() => {
                       const n = mentions > 0 ? mentions : unread
                       return n > 99 ? '99+' : n
                     })()}
+                  </span>
+                )}
+                {(srv.id === voiceSrvId || voiceActiveServers.has(srv.id)) && (
+                  <span
+                    title={srv.id === voiceSrvId ? 'Em chamada' : 'Chamada em andamento'}
+                    aria-label={srv.id === voiceSrvId ? 'Em chamada' : 'Chamada em andamento'}
+                    className={`absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border-2 border-[#12141d] shadow-md ${
+                      srv.id === voiceSrvId ? 'bg-discord-green text-white' : 'bg-[#12141d] text-white'
+                    }`}
+                  >
+                    <VolumeIcon className="h-2 w-2" />
                   </span>
                 )}
               </div>

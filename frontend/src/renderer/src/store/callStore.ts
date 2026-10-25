@@ -19,6 +19,7 @@ import type { MicHandle } from '../lib/noiseSuppression'
 import { CallMedia, type RemoteMedia } from '../lib/livekit'
 import { watchLocalSpeaking } from '../lib/localSpeaking'
 import { mergeLocalSpeaking, sameIds } from '../lib/voiceActivity'
+import { voiceServerId } from '../lib/voiceServer'
 import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
 import { micBlockReason, streamBlockReason } from '../lib/voicePermissions'
@@ -1716,7 +1717,7 @@ useCallStore.subscribe((s) => {
     .getState()
     .setCall(
       s.status === 'idle' ? null : s.callId,
-      s.status !== 'idle' && s.type === 'channel' ? s.serverId : null
+      voiceServerId(s)
     )
 })
 
