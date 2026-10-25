@@ -699,6 +699,49 @@ export function LockIcon({ className = '' }: IconProps): React.JSX.Element {
   )
 }
 
+/** Atividades da chamada (controle de jogo). */
+export function ActivityIcon({ className = '' }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 11h4M8 9v4M15 12h.01M18 10h.01" />
+      <path d="M17.32 5H6.68a4 4 0 0 0-3.98 3.59l-.69 6.2A3 3 0 0 0 5 18c1 0 1.5-.5 2-1l1.41-1.41A2 2 0 0 1 9.83 15h4.34a2 2 0 0 1 1.42.59L17 17c.5.5 1 1 2 1a3 3 0 0 0 2.99-3.21l-.69-6.2A4 4 0 0 0 17.32 5Z" />
+    </svg>
+  )
+}
+
+/** Mira (atividades de tiro, ex.: Krunker.io). */
+export function CrosshairIcon({ className = '' }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" />
+    </svg>
+  )
+}
+
 /** Sinal da conexão de voz (o "Voz conectada" do painel). */
 export function SignalIcon({ className = '' }: IconProps): React.JSX.Element {
   return (
@@ -717,25 +760,6 @@ export function SignalIcon({ className = '' }: IconProps): React.JSX.Element {
       <path d="M4.5 13a6.5 6.5 0 0 1 6.5 6.5" />
       <path d="M4.5 7.5a12 12 0 0 1 12 12" />
       <path d="M4.5 2.5a17 17 0 0 1 17 17" />
-    </svg>
-  )
-}
-
-/** Atividades (jogos e apps dentro da call). */
-export function ActivityIcon({ className = '' }: IconProps): React.JSX.Element {
-  return (
-    <svg
-      className={className}
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <circle cx="7" cy="7" r="4" />
-      <path d="M17 2.5l4.5 8h-9z" />
-      <rect x="3" y="13.5" width="8" height="8" rx="1.5" />
-      <path d="M17 13l1.3 2.7 2.7 1.3-2.7 1.3L17 21l-1.3-2.7L13 17l2.7-1.3z" />
     </svg>
   )
 }

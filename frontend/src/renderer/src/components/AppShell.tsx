@@ -6,7 +6,9 @@ import ServerSidebar from './ServerSidebar'
 import IncomingCallModal from './call/IncomingCallModal'
 import CallOverlay from './call/CallOverlay'
 import BirthdayModal from './BirthdayModal'
+import EmailVerifyBanner from './EmailVerifyBanner'
 import ScreenMiniPlayer from './call/ScreenMiniPlayer'
+import ActivityPanel from './call/ActivityPanel'
 import ScreenSharePickerModal from './call/ScreenSharePickerModal'
 import LevelUpBanner from './level/LevelUpBanner'
 import LevelUpScreen from './level/LevelUpScreen'
@@ -32,13 +34,17 @@ function AppShell(): React.JSX.Element {
     <div className="flex h-full">
       <ServerRail />
       {isServerPage ? <ServerSidebar /> : <FriendsSidebar />}
-      <main className="min-w-0 flex-1 overflow-hidden">
-        <Outlet />
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <EmailVerifyBanner />
+        <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
+          <Outlet />
+        </main>
+      </div>
       <IncomingCallModal />
       <CallOverlay />
       <BirthdayModal />
       <ScreenMiniPlayer />
+      <ActivityPanel />
       {/* No navegador o seletor de tela é o do próprio navegador. */}
       {!IS_WEB && <ScreenSharePickerModal />}
       <LevelUpScreen />

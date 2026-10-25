@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  autoUpdateUnavailable,
   backgroundDownloadDelayMs,
   canDownloadUpdate,
   DOWNLOAD_JITTER_MAX_MS,
@@ -101,5 +102,26 @@ describe('backgroundDownloadDelayMs', () => {
     expect(
       backgroundDownloadDelayMs({ force: false, msSinceStart: later, random: 0.5 }, 1000)
     ).toBe(500)
+  })
+})
+
+describe('autoUpdateUnavailable', () => {
+  it('Linux empacotado sem APPIMAGE (AppImage extraído) não atualiza sozinho', () => {
+    expect(
+      autoUpdateUnavailable({ platform: 'linux', isPackaged: true, appImage: undefined })
+    ).toBe(true)
+    expect(autoUpdateUnavailable({ platform: 'linux', isPackaged: true, appImage: '' })).toBe(true)
+  })
+
+  it('AppImage normal, Windows e dev não avisam', () => {
+    expect(
+      autoUpdateUnavailable({ platform: 'linux', isPackaged: true, appImage: '/home/a/S.AppImage' })
+    ).toBe(false)
+    expect(
+      autoUpdateUnavailable({ platform: 'win32', isPackaged: true, appImage: undefined })
+    ).toBe(false)
+    expect(
+      autoUpdateUnavailable({ platform: 'linux', isPackaged: false, appImage: undefined })
+    ).toBe(false)
   })
 })

@@ -24,7 +24,10 @@ export function compareTimestamps(a: string, b: string): number {
   return subMillis(a) - subMillis(b)
 }
 
-export function compareMessages(a: Message, b: Message): number {
+/** O que a ordem usa de uma mensagem. */
+export type OrderedMessage = Pick<Message, 'id' | 'created_at'>
+
+export function compareMessages(a: OrderedMessage, b: OrderedMessage): number {
   const byTime = compareTimestamps(a.created_at, b.created_at)
   if (byTime !== 0) return byTime
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
@@ -35,9 +38,9 @@ export function compareMessages(a: Message, b: Message): number {
  * último vence) e tudo em ordem (created_at, id). Entradas não precisam estar
  * ordenadas — páginas da API vêm da mais nova para a mais antiga.
  */
-export function mergeMessages(existing: Message[], incoming: Message[]): Message[] {
+export function mergeMessages<T extends OrderedMessage>(existing: T[], incoming: T[]): T[] {
   if (incoming.length === 0) return existing
-  const byId = new Map<string, Message>()
+  const byId = new Map<string, T>()
   for (const m of existing) byId.set(m.id, m)
   for (const m of incoming) byId.set(m.id, m)
   return [...byId.values()].sort(compareMessages)

@@ -64,6 +64,7 @@ func TestSetScreenShareStopAnnouncesLiveOff(t *testing.T) {
 	pub := &fakePublisher{}
 	s := channelCallWith(pub, "user-1", "user-2")
 	stubLookupUser(s)
+	s.screenSharers["call-1"] = map[string]struct{}{"user-1": {}}
 
 	if err := s.SetScreenShare(context.Background(), "call-1", "user-1", false); err != nil {
 		t.Fatalf("SetScreenShare: %v", err)
