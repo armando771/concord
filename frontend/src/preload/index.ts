@@ -173,6 +173,28 @@ const api = {
       return () => ipcRenderer.removeListener('activity:closed', listener)
     }
   },
+  keybinds: {
+    /** Atalhos de voz com o app em segundo plano; devolve, por ação, se ficou valendo. */
+    setGlobal(list: { id: string; binding: string }[]): Promise<Record<string, boolean>> {
+      return ipcRenderer.invoke('keybinds:set-global', list)
+    },
+    /** Gravando um atalho nas configurações: solta os globais enquanto isso. */
+    suspend(on: boolean): void {
+      ipcRenderer.send('keybinds:suspend', on)
+    },
+    /** Um atalho global foi acionado (id da ação). */
+    onFire(cb: (id: string) => void): () => void {
+      const listener = (_e: unknown, id: string): void => cb(id)
+      ipcRenderer.on('keybinds:fire', listener)
+      return () => ipcRenderer.removeListener('keybinds:fire', listener)
+    },
+    /** Os globais voltaram depois de uma suspensão: de novo o que ficou valendo. */
+    onStatus(cb: (status: Record<string, boolean>) => void): () => void {
+      const listener = (_e: unknown, status: Record<string, boolean>): void => cb(status)
+      ipcRenderer.on('keybinds:status', listener)
+      return () => ipcRenderer.removeListener('keybinds:status', listener)
+    }
+  },
   overlay: {
     /** Overlay de jogo existe nesta plataforma (só Windows). */
     supported: process.platform === 'win32',

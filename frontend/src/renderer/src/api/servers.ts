@@ -1,4 +1,5 @@
 import { request } from './client'
+import { uploadImage } from './users'
 import type { Role } from '../lib/permissions'
 
 export interface Server {
@@ -61,7 +62,8 @@ export async function inviteMember(serverId: string, userId: string): Promise<vo
   })
 }
 
-export async function updateServer(serverId: string, input: CreateServerInput): Promise<Server> {
+/** Só o nome: sem icon_url o backend mantém o ícone atual. */
+export async function updateServer(serverId: string, input: { name: string }): Promise<Server> {
   return request<Server>(`/servers/${serverId}`, {
     method: 'PUT',
     body: JSON.stringify(input)
@@ -153,4 +155,18 @@ export async function setPrimaryChannel(serverId: string, channelId: string): Pr
     method: 'PUT',
     body: JSON.stringify({ channel_id: channelId })
   })
+}
+
+/** Ícone por upload (PNG, JPG, WebP ou GIF): o mesmo pipeline do avatar. */
+export function uploadServerIcon(
+  serverId: string,
+  file: Blob,
+  staticFrame?: Blob,
+  onProgress?: (fraction: number) => void
+): Promise<Server> {
+  return uploadImage<Server>(`/servers/${serverId}/icon`, 'icon', file, staticFrame, onProgress)
+}
+
+export async function removeServerIcon(serverId: string): Promise<Server> {
+  return request<Server>(`/servers/${serverId}/icon`, { method: 'DELETE' })
 }

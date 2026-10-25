@@ -72,6 +72,17 @@ export interface InviteLinksApi {
   onPending(cb: () => void): () => void
 }
 
+export interface KeybindsApi {
+  /** Atalhos de voz com o app em segundo plano; devolve, por ação, se ficou valendo. */
+  setGlobal(list: { id: string; binding: string }[]): Promise<Record<string, boolean>>
+  /** Gravando um atalho nas configurações: solta os globais enquanto isso. */
+  suspend(on: boolean): void
+  /** Um atalho global foi acionado (id da ação). Retorna unsubscribe. */
+  onFire(cb: (id: string) => void): () => void
+  /** Os globais voltaram depois de uma suspensão: o que ficou valendo. Retorna unsubscribe. */
+  onStatus(cb: (status: Record<string, boolean>) => void): () => void
+}
+
 export interface ActivitiesApi {
   /** Abre o jogo numa janela própria; false = link recusado pelo main. */
   open(activityId: string, url: string): Promise<boolean>
@@ -130,6 +141,7 @@ declare global {
       overlay?: OverlayApi
       inviteLinks?: InviteLinksApi
       activities?: ActivitiesApi
+      keybinds?: KeybindsApi
     }
   }
 }

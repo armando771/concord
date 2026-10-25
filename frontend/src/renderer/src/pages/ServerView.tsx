@@ -27,6 +27,11 @@ import { groupMembers, memberColor } from '../lib/memberGroups'
 import { chatPermissionsFor } from '../lib/chatPermissions'
 import { Perm, roleColorCss } from '../lib/permissions'
 import { serverDisplayName } from '../lib/serverNames'
+import {
+  lastServerChannel,
+  rememberServerChannel,
+  resolveServerChannel
+} from '../lib/serverChannel'
 
 interface MemberRowProps {
   userId: string
@@ -155,6 +160,13 @@ export function ServerView(): React.JSX.Element {
     }
   }, [id, selectServer, fetchChannels])
 
+  // Guarda o canal de texto aberto para voltar nele ao reabrir o servidor.
+  useEffect(() => {
+    if (!id || !channelId) return
+    const ch = channels.find((c) => c.id === channelId && c.server_id === id)
+    if (ch && (ch.type ?? 'text') === 'text') rememberServerChannel(id, channelId)
+  }, [id, channelId, channels])
+
   useEffect(() => {
     if (currentMembers.length > 0) {
       fetchPresenceFor(currentMembers.map((m) => m.user_id))
@@ -184,7 +196,8 @@ export function ServerView(): React.JSX.Element {
     }
   }
 
-  if (loading || !currentServer) {
+  // currentServer ainda é o anterior no 1º render após clicar noutro servidor.
+  if (loading || !currentServer || currentServer.id !== id) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-[#07080b]/90 text-gray-400">
         <p className="text-ds-md">Carregando servidor...</p>
@@ -217,10 +230,15 @@ export function ServerView(): React.JSX.Element {
 
   const activeChannel = channels.find((c) => c.id === channelId)
 
-  const firstTextChannelId = channels.find((c) => (c.type ?? 'text') === 'text')?.id
-
-  if (!channelId && firstTextChannelId) {
-    return <Navigate to={`/servers/${id}/channels/${firstTextChannelId}`} replace />
+  if (!channelId) {
+    // Só canais deste servidor: `channels` ainda é o do anterior até a busca voltar.
+    const target = resolveServerChannel(
+      id ?? '',
+      currentServer,
+      channels,
+      id ? lastServerChannel(id) : null
+    )
+    if (target) return <Navigate to={`/servers/${id}/channels/${target}`} replace />
   }
 
   return (

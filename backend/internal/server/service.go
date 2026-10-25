@@ -112,7 +112,7 @@ func (s *Service) SetPrimaryChannel(ctx context.Context, serverID string, channe
 	return updated, nil
 }
 
-func (s *Service) Update(ctx context.Context, id string, name string, iconURL string) (*Server, error) {
+func (s *Service) Update(ctx context.Context, id string, name string, iconURL *string) (*Server, error) {
 	if name == "" {
 		return nil, errors.New("name is required")
 	}
@@ -122,7 +122,11 @@ func (s *Service) Update(ctx context.Context, id string, name string, iconURL st
 		return nil, errors.New("server not found")
 	}
 
-	if err := s.repository.Update(ctx, id, name, iconURL); err != nil {
+	icon := srv.IconURL
+	if iconURL != nil {
+		icon = *iconURL
+	}
+	if err := s.repository.Update(ctx, id, name, icon); err != nil {
 		return nil, err
 	}
 
@@ -139,6 +143,23 @@ func (s *Service) Update(ctx context.Context, id string, name string, iconURL st
 	}
 
 	return updated, nil
+}
+
+// SetIcon troca o ícone (nil tira), avisa os membros com server:update e
+// devolve o ícone antigo para quem chama apagar o arquivo.
+func (s *Service) SetIcon(ctx context.Context, id string, url *string) (*Server, *string, error) {
+	old, err := s.repository.SetIcon(ctx, id, url)
+	if err != nil {
+		return nil, nil, errors.New("server not found")
+	}
+	updated, err := s.repository.FindByID(ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	if s.publisher != nil {
+		s.publisher.PublishServerUpdate(UpdateEvent{ServerID: updated.ID, Server: *updated})
+	}
+	return updated, old, nil
 }
 
 func (s *Service) Delete(ctx context.Context, id string) error {

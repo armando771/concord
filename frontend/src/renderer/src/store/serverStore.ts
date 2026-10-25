@@ -10,6 +10,8 @@ import {
   createServer as apiCreateServer,
   inviteMember as apiInviteMember,
   updateServer as apiUpdateServer,
+  uploadServerIcon,
+  removeServerIcon,
   deleteServer as apiDeleteServer,
   kickMember as apiKickMember,
   leaveServer as apiLeaveServer,
@@ -87,7 +89,12 @@ interface ServerState {
     channelIds: string[],
     requestId?: string
   ) => void
-  updateServer: (serverId: string, name: string, iconUrl?: string) => Promise<void>
+  updateServer: (serverId: string, name: string) => Promise<void>
+  /** Troca o ícone por upload (null tira). O servidor avisa os outros com server:update. */
+  setServerIcon: (
+    serverId: string,
+    icon: { file: Blob; staticFrame?: Blob } | null
+  ) => Promise<void>
   deleteServer: (serverId: string) => Promise<void>
   updateLocalServer: (server: Server) => void
   removeLocalServer: (serverId: string) => void
@@ -312,12 +319,15 @@ export const useServerStore = create<ServerState>()((set, get) => ({
     const channels = applyChannelOrder(get().channels, type, channelIds)
     if (channels !== get().channels) set({ channels })
   },
-  updateServer: async (serverId: string, name: string, iconUrl?: string) => {
-    const updated = await apiUpdateServer(serverId, { name, icon_url: iconUrl ?? '' })
-    set({ servers: get().servers.map((s) => (s.id === serverId ? updated : s)) })
-    if (get().currentServer?.id === serverId) {
-      set({ currentServer: updated })
-    }
+  updateServer: async (serverId: string, name: string) => {
+    get().updateLocalServer(await apiUpdateServer(serverId, { name }))
+  },
+  setServerIcon: async (serverId: string, icon) => {
+    get().updateLocalServer(
+      icon
+        ? await uploadServerIcon(serverId, icon.file, icon.staticFrame)
+        : await removeServerIcon(serverId)
+    )
   },
   deleteServer: async (serverId: string) => {
     await apiDeleteServer(serverId)
