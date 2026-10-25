@@ -2,41 +2,12 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useNoiseSuppressionStore } from '../../store/noiseSuppressionStore'
 import MicTest from './MicTest'
+import Switch from '../Switch'
 
 const RNNOISE_URL = 'https://jmvalin.ca/demo/rnnoise/'
 const POPOVER_WIDTH = 320
 const GAP = 8
 const MARGIN = 8
-
-/** Interruptor estilo Discord. */
-export function Switch({
-  checked,
-  onChange,
-  label
-}: {
-  checked: boolean
-  onChange: (checked: boolean) => void
-  label: string
-}): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className={`relative h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors ${
-        checked ? 'bg-[#5865f2]' : 'bg-white/20'
-      }`}
-    >
-      <span
-        className={`absolute top-0.5 left-0 h-5 w-5 rounded-full bg-white transition-transform ${
-          checked ? 'translate-x-5.5' : 'translate-x-0.5'
-        }`}
-      />
-    </button>
-  )
-}
 
 /** Conteúdo do popover (também usado em Configurações → Voz). */
 export function NoiseSuppressionSettings(): React.JSX.Element {

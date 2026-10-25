@@ -7,7 +7,7 @@ import { useServerStore } from '../store/serverStore'
 import { useFriendStore } from '../store/friendStore'
 import { useAuthStore } from '../store/authStore'
 import { useUIStore } from '../store/uiStore'
-import { useChatStore } from '../store/chatStore'
+import { useChatStore, usePresenceStatus } from '../store/chatStore'
 import { showToast } from '../store/toastStore'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -18,11 +18,14 @@ import { UserPlusIcon, SearchIcon, VolumeIcon } from '../components/icons'
 import LevelBadge from '../components/level/LevelBadge'
 import LevelRowShimmer from '../components/level/LevelRowShimmer'
 import LevelUpBurst from '../components/level/LevelUpBurst'
+import Avatar from '../components/Avatar'
+import { useUserLook } from '../store/profileStore'
 
 interface MemberRowProps {
   userId: string
   displayName: string
   handle: string
+  avatarUrl?: string | null
   colorClass: string
   nameClass: string
   online: boolean
@@ -32,37 +35,39 @@ function MemberRow({
   userId,
   displayName,
   handle,
+  avatarUrl,
   colorClass,
   nameClass,
   online
 }: MemberRowProps): React.JSX.Element {
-  const initial = displayName.charAt(0).toUpperCase()
   const meId = useAuthStore((s) => s.user?.id)
+  const status = usePresenceStatus(userId)
+  const look = useUserLook(userId, { name: displayName, avatarUrl })
   return (
     <div
       key={userId}
       onContextMenu={userMenuHandler(userId, displayName, meId, handle)}
       onClick={profileCardHandler(userId, displayName, handle, 'left')}
-      className="relative flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-white/5"
+      className={`group relative flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-white/5 ${
+        online ? '' : 'opacity-60 hover:opacity-100'
+      }`}
     >
       <LevelRowShimmer userId={userId} />
       <div className="relative shrink-0">
         <LevelUpBurst userId={userId} />
-        <div
-          className={`flex h-8 w-8 items-center justify-center rounded-full font-bold text-xs text-white ${colorClass}`}
-        >
-          {initial}
-        </div>
-        <span
-          className={`absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-[#07080b] ${
-            online ? 'bg-[#23a55a]' : 'bg-gray-600'
-          }`}
-          title={online ? 'Online' : 'Offline'}
+        <Avatar
+          userId={userId}
+          name={displayName}
+          avatarUrl={avatarUrl}
+          size={32}
+          status={status}
+          cutoutColor="#07080b"
+          fallbackClassName={colorClass}
         />
       </div>
       <div className="relative min-w-0 leading-tight">
         <div className="flex min-w-0 items-center gap-1.5">
-          <p className={`truncate text-sm font-semibold ${nameClass}`}>{displayName}</p>
+          <p className={`truncate text-sm font-semibold ${nameClass}`}>{look.name}</p>
           <LevelBadge userId={userId} />
         </div>
         <p className="truncate text-[11px] text-gray-400">@{handle}</p>
@@ -261,6 +266,7 @@ export function ServerView(): React.JSX.Element {
                     key={m.user_id}
                     userId={m.user_id}
                     displayName={displayName}
+                    avatarUrl={m.avatar_url}
                     handle={handle}
                     colorClass="bg-amber-600"
                     nameClass="text-amber-300"
@@ -287,6 +293,7 @@ export function ServerView(): React.JSX.Element {
                     key={m.user_id}
                     userId={m.user_id}
                     displayName={displayName}
+                    avatarUrl={m.avatar_url}
                     handle={handle}
                     colorClass="bg-violet-600"
                     nameClass="text-violet-300"
@@ -316,6 +323,7 @@ export function ServerView(): React.JSX.Element {
                     key={m.user_id}
                     userId={m.user_id}
                     displayName={displayName}
+                    avatarUrl={m.avatar_url}
                     handle={handle}
                     colorClass="bg-indigo-600"
                     nameClass="text-gray-200"
@@ -345,6 +353,7 @@ export function ServerView(): React.JSX.Element {
                     key={m.user_id}
                     userId={m.user_id}
                     displayName={displayName}
+                    avatarUrl={m.avatar_url}
                     handle={handle}
                     colorClass="bg-gray-600"
                     nameClass="text-gray-400"
@@ -391,7 +400,6 @@ export function ServerView(): React.JSX.Element {
                 const alreadyInServer = memberUserIds.has(f.id)
                 const alreadyInvited = pendingInviteUserIds.has(f.id)
                 const isInviting = invitingId === f.id
-                const initialChar = (f.display_name ?? f.username).charAt(0).toUpperCase()
 
                 return (
                   <div
@@ -399,9 +407,12 @@ export function ServerView(): React.JSX.Element {
                     className="flex items-center justify-between rounded-xl border border-white/6 bg-white/3 p-2.5"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-600 font-bold text-xs text-white">
-                        {initialChar}
-                      </div>
+                      <Avatar
+                        userId={f.id}
+                        name={f.display_name ?? f.username}
+                        avatarUrl={f.avatar_url}
+                        size={32}
+                      />
                       <div className="leading-tight">
                         <p className="text-sm font-semibold text-white">{f.display_name}</p>
                         <p className="text-[11px] text-gray-400">@{f.username}</p>
