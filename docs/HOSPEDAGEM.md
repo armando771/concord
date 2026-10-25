@@ -304,6 +304,14 @@ chamadas recarregadas) e `503` enquanto sobe ou desliga. Não aparece no log.
   está fechada, o Caddy tenta de novo a cada 100 ms por até 15 s, em vez de
   devolver 502. Vale para qualquer método (POST e uploads inclusive), porque só
   repete o que nem chegou a conectar;
+- `request_buffers 1MB`: para repetir um POST, o Caddy precisa ter guardado o
+  corpo. 1 MB cobre toda a API (JSON); um upload de arquivo maior que isso que
+  comece bem na janela do reinício (~0,1–0,5 s) ainda falha e o app mostra o
+  erro;
+- `transport http { keepalive off }`: no desligamento o backend fecha as
+  conexões ociosas, e um POST mandado numa conexão reaproveitada daria 502 (o
+  Caddy só repete GET depois que a conexão abriu). Sem reaproveitar, a porta
+  fechada sempre cai na nova tentativa;
 - `health_uri /healthz` (a cada 500 ms, duas falhas seguidas): só manda tráfego
   para um backend pronto.
 

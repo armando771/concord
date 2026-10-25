@@ -38,6 +38,17 @@
 		health_timeout 2s
 		health_fails 2
 		stream_close_delay 12h
+		# Para repetir um POST o Caddy precisa ter o corpo guardado: 1 MB
+		# cobre toda a API (JSON). Upload de arquivo maior que isso que comece
+		# bem na janela do reinício ainda falha (o app mostra o erro).
+		request_buffers 1MB
+		# Sem reaproveitar conexões com o backend: no desligamento ele fecha
+		# as ociosas, e um POST mandado numa delas daria 502 (o Caddy só
+		# repete GET depois que conectou). Conexão nova a cada requisição é
+		# barato em 127.0.0.1, e uma porta fechada sempre cai no lb_try acima.
+		transport http {
+			keepalive off
+		}
 	}
 }
 
