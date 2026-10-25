@@ -55,3 +55,10 @@ func TestRestoreCallsGivesUp(t *testing.T) {
 		t.Fatalf("esperou %v", waited)
 	}
 }
+
+func TestMigrationsDirFromEnv(t *testing.T) {
+	t.Setenv("MIGRATIONS_DIR", "migrations.new")
+	if got := findMigrationsDir(); got != "migrations.new" {
+		t.Fatalf("findMigrationsDir = %q, want migrations.new", got)
+	}
+}

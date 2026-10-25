@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -51,6 +52,11 @@ func loadEnv() {
 }
 
 func findMigrationsDir() string {
+	// O deploy aplica as migrations novas de uma pasta à parte antes de
+	// trocá-las pelas do binário no ar (scripts/deploy-vps.sh).
+	if dir := os.Getenv("MIGRATIONS_DIR"); dir != "" {
+		return dir
+	}
 	candidates := []string{"migrations", "../migrations", "../../migrations", "backend/migrations"}
 	for _, path := range candidates {
 		if info, err := os.Stat(path); err == nil && info.IsDir() {
@@ -106,6 +112,15 @@ func restoreCalls(ctx context.Context, calls interface {
 }
 
 func main() {
+	// `concord-server capabilities`: o que este binário sabe fazer, sem tocar
+	// em banco nem porta. O deploy procura a marca no arquivo (sem executá-lo)
+	// para não instalar, com o socket do systemd ativo, um binário que não sabe
+	// usá-lo.
+	if len(os.Args) > 1 && os.Args[1] == "capabilities" {
+		fmt.Println(lifecycle.SocketActivationCapability)
+		return
+	}
+
 	loadEnv()
 
 	// SIGTERM (systemctl restart/stop) ou Ctrl+C: desliga com calma (ver lifecycle.Run).

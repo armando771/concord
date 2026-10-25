@@ -78,7 +78,9 @@ jobs:
 
   deploy:
     needs: test
-    if: github.event_name != 'pull_request' && vars.DEPLOY_ENABLED == 'true'
+    # Só a main vai para a VPS (workflow_dispatch numa branch ou tag antiga não:
+    # um binário antigo não sobe com o socket do systemd ativo).
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     env:
       PUBLIC_URL: ${{ vars.PUBLIC_URL }}
