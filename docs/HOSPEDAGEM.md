@@ -245,7 +245,8 @@ Caddy é sempre um passo manual.
 - **Todo bloco de site que serve o app precisa da rota `/rtc*`**: o endereço
   da API (`PUBLIC_URL`), a versão web (ex.: `app-salinha.bhrx.com.br`) e
   qualquer repasse antigo (ex.: o bloco `:8080` da migração). Basta pôr
-  `import salinha_rtc` no começo do bloco, antes dos outros `handle`. Um bloco
+  `import salinha_rtc` no começo do bloco, antes dos outros `handle`, e
+  `import salinha_backend` onde o bloco repassa ao backend. Um bloco
   sem ela continua funcionando pelo proxy `/rtc` do backend, mas volta a travar
   a voz a cada deploy.
 - `stream_close_delay 12h`: recarregar o Caddy (`systemctl reload caddy`) não
@@ -259,9 +260,12 @@ Caddy é sempre um passo manual.
 tem. O reload que aplica este arquivo pela primeira vez **fecha todos os
 WebSockets uma vez**: o chat reconecta sozinho, mas quem estiver em chamada
 perde a sinalização e a chamada reconecta (ou cai). Faça quando ninguém estiver
-em chamada:
+em chamada, e **só depois de um deploy deste backend** (que tem o `/healthz`):
+sem ele, o health check do Caddy marca o backend como fora e toda requisição
+espera 15 s e dá 502.
 
 ```bash
+curl -s http://127.0.0.1:8090/healthz   # tem que responder {"status":"ok"} antes
 cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak
 # edite /etc/caddy/Caddyfile a partir do deploy/Caddyfile (endereços e portas)
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
