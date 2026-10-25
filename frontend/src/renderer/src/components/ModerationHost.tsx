@@ -165,7 +165,7 @@ function NicknameModal(): React.JSX.Element | null {
         }}
       >
         <label
-          className="flex items-center justify-between text-xs font-semibold text-gray-400"
+          className="flex items-center justify-between text-ds-xs font-semibold text-gray-400"
           htmlFor="nickname-input"
         >
           <span>Apelido</span>
@@ -180,10 +180,10 @@ function NicknameModal(): React.JSX.Element | null {
           onChange={(e) => setDraft({ key, value: e.target.value })}
           placeholder={target.displayName}
           aria-invalid={!check.ok}
-          className="glass-input mt-1 w-full text-sm"
+          className="glass-input mt-1 w-full text-ds-sm"
         />
-        {!check.ok && <p className="mt-1.5 text-xs text-[#f23f43]">{check.error}</p>}
-        <p className="mt-2 text-xs leading-relaxed text-gray-400">
+        {!check.ok && <p className="mt-1.5 text-ds-xs text-[#f23f43]">{check.error}</p>}
+        <p className="mt-2 text-ds-xs text-gray-400">
           {target.self ? 'Seu nome' : 'O nome'} só muda neste servidor, para todo mundo daqui. O
           nome de exibição e o @ continuam os mesmos.
         </p>

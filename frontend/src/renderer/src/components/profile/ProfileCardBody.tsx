@@ -146,7 +146,7 @@ function ProfileCardBody({
           </p>
           {profile.nickname && (
             <p
-              className="truncate text-sm font-semibold text-gray-200"
+              className="truncate text-ds-sm font-semibold text-gray-200"
               title="Nome de exibição (fora deste servidor)"
             >
               {profile.display_name}

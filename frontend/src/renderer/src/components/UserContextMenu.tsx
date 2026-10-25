@@ -327,9 +327,9 @@ function UserContextMenu(): React.JSX.Element | null {
         role="menu"
         aria-label={`Opções de ${target.name}`}
         style={{ left, top, width: MENU_WIDTH }}
-        className="fixed z-[60] flex flex-col gap-1 rounded-lg border border-white/10 bg-[#111214] p-2 text-sm text-gray-200 shadow-2xl"
+        className="fixed z-[60] flex flex-col gap-1 rounded-lg border border-white/10 bg-[#111214] p-2 text-ds-sm text-gray-200 shadow-2xl"
       >
-        <p className="truncate px-2 pb-1 pt-0.5 text-xs font-bold text-gray-400">{target.name}</p>
+        <p className="truncate px-2 pb-1 pt-0.5 text-ds-xs font-bold text-gray-400">{target.name}</p>
         <button role="menuitem" onClick={openProfile} className={itemClass}>
           Perfil
         </button>

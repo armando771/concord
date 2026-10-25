@@ -284,7 +284,7 @@ function UserProfileCard(): React.JSX.Element | null {
   }
   const nicknameButton = canNickname && (
     <MenuButton
-      icon={<span className="text-sm font-black leading-none">@</span>}
+      icon={<span className="text-ds-sm font-black leading-none">@</span>}
       label="Alterar apelido"
       onClick={editNickname}
     />

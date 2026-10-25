@@ -91,7 +91,7 @@ function MembersSection(): React.JSX.Element {
                   {access.canChangeNickname(m.user_id) && (
                     <Button
                       variant="ghost"
-                      className="px-3 py-1 text-xs"
+                      className="px-3 py-1 text-ds-xs"
                       onClick={() =>
                         askNickname({
                           serverId: server.id,

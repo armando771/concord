@@ -551,7 +551,7 @@ export function ServerSidebar(): React.JSX.Element {
                       self: true
                     })
                   }}
-                  className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+                  className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-white/10 cursor-pointer"
                 >
                   <span>Alterar apelido</span>
                   <PencilIcon className="h-3.5 w-3.5" />
