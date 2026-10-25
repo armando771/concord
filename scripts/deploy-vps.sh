@@ -20,14 +20,30 @@ if [[ -z "$HOST" ]]; then
 fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN="$(mktemp)"
-trap 'rm -f "$BIN"' EXIT
+SITE="$(mktemp -d)"
+trap 'rm -rf "$BIN" "$SITE"' EXIT
+
+# Página de download com a chave pública embutida no install.sh: o instalador
+# confere a assinatura Ed25519 do pacote já na primeira instalação.
+KEY="$ROOT/backend/.release-key"
+cp -a "$ROOT/site/." "$SITE/"
+if [[ -f "$KEY" ]]; then
+  openssl pkey -in "$KEY" -pubout >"$SITE/.release-key.pub"
+  "$ROOT/scripts/embed-pubkey.sh" "$ROOT/site/install.sh" "$SITE/.release-key.pub" "$SITE/install.sh"
+  rm -f "$SITE/.release-key.pub"
+elif [[ -n "${CI:-}" ]]; then
+  echo "chave de assinatura ausente em $KEY: install.sh ficaria sem a chave pública" >&2
+  exit 1
+else
+  echo "aviso: $KEY não existe — install.sh vai sem a chave (só HTTPS + sha512)" >&2
+fi
 
 (cd "$ROOT/backend" && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "$BIN" ./cmd)
 ssh "$HOST" 'mkdir -p /opt/concord/updates /opt/concord/uploads /opt/concord/web'
 rsync -az "$BIN" "$HOST:/opt/concord/concord-server.new"
 rsync -az --delete "$ROOT/backend/migrations/" "$HOST:/opt/concord/migrations/"
 rsync -az "$ROOT/backend/docker-compose.yml" "$HOST:/opt/concord/"
-rsync -az --delete --chmod=D755,F644 "$ROOT/site/" "$HOST:/opt/concord/site/"
+rsync -az --delete --chmod=D755,F644 "$SITE/" "$HOST:/opt/concord/site/"
 # App web: os assets (nomes com hash) antes, o index.html por último — quem
 # abrir no meio do envio não pega um index apontando para arquivo que falta.
 # O --delete só limpa /opt/concord/web.

@@ -168,6 +168,8 @@ jobs:
             curl -fsS "${SITE_URL%/}/updates/latest-linux.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
             curl -fsS "${SITE_URL%/}/updates/latest-linux-tar.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
             curl -fsS "${SITE_URL%/}/install.sh" | grep -q 'latest-linux-tar.yml'
+            # A chave pública embutida é a mesma que assina as atualizações.
+            curl -fsS "${SITE_URL%/}/install.sh" | grep -A20 "^SALINHA_PUBKEY='" | grep -q "$(openssl pkey -in backend/.release-key -pubout | sed -n 2p)"
             echo "Página de download no ar em ${SITE_URL%/}"
           fi
           if [[ -n "$WEB_URL" ]]; then

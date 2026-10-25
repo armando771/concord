@@ -134,21 +134,68 @@ Ele instala em `~/.local/share/salinha/versions/<versão>/` (um `.tar.gz` por
 versão), aponta `~/.local/share/salinha/current` para ela e cria o comando
 `~/.local/bin/salinha` e o atalho `~/.local/share/applications/salinha.desktop`.
 Não precisa de FUSE, root nem pacote nenhum (só `tar`, `sha512sum` e `curl` ou
-`wget`, que toda distribuição traz). Daí em diante o próprio app se atualiza:
-baixa o `.tar.gz`, confere sha512 e a assinatura Ed25519, extrai numa pasta
-nova e troca o `current` de uma vez, guardando a versão anterior. Se a versão
-nova não abrir três vezes seguidas, o lançador volta sozinho para a anterior.
-Para outro servidor: `curl -fsSL <endereço>/install.sh | SALINHA_URL=<endereço> sh`.
-Para remover: `rm -rf ~/.local/share/salinha ~/.local/bin/salinha
-~/.local/share/applications/salinha.desktop` (login e configurações ficam em
-`~/.config/Concord`).
+`wget`, que toda distribuição traz). O instalador confere tamanho, sha512 e,
+com OpenSSL 3, a **assinatura Ed25519** do pacote com a chave pública que o
+`deploy-vps.sh` embute nele (`scripts/embed-pubkey.sh`; o CI confere que é a
+mesma chave das atualizações). Sem OpenSSL 3 ele só aceita HTTPS; por HTTP
+puro, só com a assinatura conferida. O script inteiro fica numa função chamada
+na última linha: um download cortado no meio não executa nada.
 
-Sandbox: sem root não existe o `chrome-sandbox` SUID, então o Chromium usa o
-sandbox de user namespaces do kernel, ligado na maioria das distribuições.
-Onde eles estão desligados (`kernel.unprivileged_userns_clone=0`,
-`user.max_user_namespaces=0`) ou restritos (AppArmor do Ubuntu 24.04+), o
-lançador abre com `--no-sandbox` como último recurso e registra em
-`~/.local/share/salinha/launcher.log`. `SALINHA_SANDBOX=1` ou `0` força.
+Daí em diante o próprio app se atualiza: busca o `.sig` primeiro, baixa o
+`.tar.gz`, confere sha512 e a assinatura, extrai numa pasta nova (dos mesmos
+bytes conferidos) e troca o `current` de uma vez, guardando a versão anterior.
+Atualização recusada (assinatura ou pacote inválido) fica anotada com o sha512
+e não é baixada de novo; falhas de rede esperam cada vez mais (1 min, 5 min,
+30 min, 2 h, até 6 h) em vez de baixar ~140 MB a cada checagem.
+
+**Volta automática:** se a versão nova não confirmar que abriu (o app confirma
+após 10 s aberto) em 2 partidas, a 3ª partida volta para a anterior. A versão
+ruim vai para `~/.local/share/salinha/bad-versions` e os arquivos dela são
+apagados; o app não a oferece de novo, só uma versão estritamente mais nova
+(que limpa a lista). Partidas com a Salinha já aberta não contam. Migração (a
+mesma versão, vinda do AppImage extraído) e versões ruins nunca instalam
+sozinhas ao abrir, só com o clique em Atualizar.
+
+Para outro servidor (só HTTPS): `curl -fsSL https://<endereço>/install.sh | SALINHA_URL=https://<endereço> sh`.
+Para remover: `rm -rf ~/.local/share/salinha ~/.local/bin/salinha
+~/.local/share/applications/salinha.desktop` (e `sudo rm -f
+/etc/apparmor.d/salinha`, se instalou o perfil). Login e configurações ficam em
+`~/.config/Concord`. Erros de atualização: `~/.config/Concord/logs/update.log`.
+
+**Sandbox:** sem root não existe o `chrome-sandbox` SUID, então o Chromium usa o
+sandbox de user namespaces do kernel, ligado na maioria das distribuições. Dois
+casos não deixam:
+
+- **Ubuntu 24.04+ (AppArmor restringe user namespaces):** o instalador
+  pergunta *"Instalar perfil do AppArmor para manter a proteção (sandbox)?
+  Precisa de sudo. [s/N]"*. Com **s**, grava `/etc/apparmor.d/salinha` (perfil
+  mínimo, só para `~/.local/share/salinha/versions/*/salinha`) e o recarrega:
+
+  ```
+  abi <abi/4.0>,
+  include <tunables/global>
+
+  profile salinha "/home/<você>/.local/share/salinha/versions/*/salinha" flags=(unconfined) {
+    userns,
+
+    include if exists <local/salinha>
+  }
+  ```
+
+  Para fazer depois: rode o instalador de novo e responda **s** (ou
+  `SALINHA_APPARMOR=s` sem terminal), ou grave o arquivo acima à mão e rode
+  `sudo apparmor_parser -r /etc/apparmor.d/salinha`.
+- **Sem o perfil, ou com user namespaces desligados**
+  (`kernel.unprivileged_userns_clone=0`, `user.max_user_namespaces=0`): o
+  lançador abre com `--no-sandbox` como último recurso, registra em
+  `~/.local/share/salinha/launcher.log` e o app mostra **uma vez** o aviso
+  *"Proteção do navegador (sandbox) desativada neste sistema — veja como
+  ativar"*, com link para a página de download (`#sandbox`). No Debian, os
+  user namespaces voltam com `sudo sysctl -w kernel.unprivileged_userns_clone=1`.
+
+`SALINHA_SANDBOX=1` ou `0` força. O lançador também descarta `APPIMAGE`/`APPDIR`
+herdados (terminal aberto dentro de outro AppImage), e o app só usa o
+electron-updater quando roda de dentro do próprio AppImage montado.
 
 **Quem usa o AppImage extraído** (por exemplo em `~/.local/opt/salinha`, com o
 lançador `~/.local/bin/salinha`): rode o mesmo comando uma vez. Ele guarda o

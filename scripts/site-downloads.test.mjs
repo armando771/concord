@@ -76,6 +76,9 @@ test('comando de instalação do Linux aponta para o servidor da página', async
     other.get('[data-install-cmd]').textContent,
     'curl -fsSL https://outra.exemplo/install.sh | SALINHA_URL=https://outra.exemplo sh'
   );
-  const file = await load({}, { protocol: 'file:', origin: 'null' });
-  assert.equal(file.get('[data-install-cmd]').textContent, 'curl -fsSL https://salinha.bhrx.com.br/install.sh | sh');
+  for (const location of [{ protocol: 'file:', origin: 'null' }, { protocol: 'http:', origin: 'http://1.2.3.4:8080' }]) {
+    const page = await load({}, location);
+    // Nunca um comando por HTTP puro.
+    assert.equal(page.get('[data-install-cmd]').textContent, 'curl -fsSL https://salinha.bhrx.com.br/install.sh | sh');
+  }
 });

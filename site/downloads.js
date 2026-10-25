@@ -1,9 +1,10 @@
 // Cada plataforma usa o mesmo manifesto que seu atualizador, sem depender da outra.
 (async () => {
   const $$ = (selector) => document.querySelectorAll(selector);
-  // Comando de instalação do Linux apontando para este mesmo servidor.
+  // Comando de instalação do Linux apontando para este mesmo servidor — só
+  // por HTTPS: por HTTP puro qualquer um no caminho trocaria o instalador.
   const DEFAULT_ORIGIN = 'https://salinha.bhrx.com.br';
-  const origin = typeof location !== 'undefined' && /^https?:$/.test(location.protocol)
+  const origin = typeof location !== 'undefined' && location.protocol === 'https:'
     ? location.origin
     : DEFAULT_ORIGIN;
   $$('[data-install-cmd]').forEach((el) => {
