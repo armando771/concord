@@ -10,13 +10,14 @@ type Author struct {
 }
 
 type Message struct {
-	ID             string     `json:"id"`
-	AuthorID       string     `json:"author_id"`
-	Author         *Author    `json:"author,omitempty"`
-	ChannelID      *string    `json:"channel_id,omitempty"`
-	ConversationID *string    `json:"conversation_id,omitempty"`
-	Content        string     `json:"content"`
-	CreatedAt      time.Time  `json:"created_at"`
+	ID             string    `json:"id"`
+	AuthorID       string    `json:"author_id"`
+	Author         *Author   `json:"author,omitempty"`
+	ChannelID      *string   `json:"channel_id,omitempty"`
+	ConversationID *string   `json:"conversation_id,omitempty"`
+	Content        string    `json:"content"`
+	Poll           *Poll     `json:"poll,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type CreateEvent struct {
