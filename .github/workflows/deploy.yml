@@ -1,6 +1,7 @@
 # Deploy automático: a cada push/merge na main, testa tudo e, se passar,
-# publica na VPS o backend, a página de download (site/) e uma versão nova do
-# app desktop (os apps abertos mostram "Nova atualização disponível").
+# publica na VPS o backend, a página de download (site/), o app web
+# (frontend/dist-web) e uma versão nova do app desktop (os apps abertos
+# mostram "Nova atualização disponível").
 #
 # Configuração do repositório (Settings → Secrets and variables → Actions):
 #   Secrets:
@@ -12,6 +13,7 @@
 #     VPS_HOST         ex.: root@1.2.3.4
 #     PUBLIC_URL       ex.: https://1-2-3-4.sslip.io
 #     SITE_URL         (opcional) página de download a conferir (padrão: https://salinha.bhrx.com.br)
+#     WEB_URL          (opcional) app web a conferir, ex.: https://app-salinha.bhrx.com.br
 name: Deploy
 
 on:
@@ -48,6 +50,9 @@ jobs:
           yarn install --frozen-lockfile --ignore-scripts
           yarn typecheck
           yarn test
+      - name: App web (build)
+        working-directory: frontend
+        run: yarn build:web
       - name: Scripts
         run: node --test scripts/next-version.test.mjs
 
@@ -63,6 +68,7 @@ jobs:
       PUBLIC_URL: ${{ vars.PUBLIC_URL }}
       VPS_HOST: ${{ vars.VPS_HOST }}
       SITE_URL: ${{ vars.SITE_URL || 'https://salinha.bhrx.com.br' }}
+      WEB_URL: ${{ vars.WEB_URL }}
     steps:
       - uses: actions/checkout@v7
 
@@ -108,10 +114,18 @@ jobs:
           echo "publicada: ${published:-nenhuma} → nova: $version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      # Antes do instalador: se o build web quebrar, nada é publicado.
+      - name: App web
+        working-directory: frontend
+        run: |
+          npm i -g yarn@1.22.22
+          yarn install --frozen-lockfile --ignore-scripts
+          yarn build:web
+
       - name: App desktop (instalador assinado)
         run: scripts/release-win.sh "${{ steps.version.outputs.version }}"
 
-      - name: Publicar na VPS (backend + página de download + atualização do app)
+      - name: Publicar na VPS (backend + página de download + app web + atualização do app)
         run: scripts/deploy-vps.sh "$VPS_HOST"
 
       - name: Conferir
@@ -122,6 +136,14 @@ jobs:
             curl -fsS "${SITE_URL%/}/" | grep -q 'data-download'
             curl -fsS "${SITE_URL%/}/updates/latest.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
             echo "Página de download no ar em ${SITE_URL%/}"
+          fi
+          if [[ -n "$WEB_URL" ]]; then
+            curl -fsS "${WEB_URL%/}/" | grep -q '<div id="root">'
+            # Rota funda: o Caddy devolve o index.html (fallback de SPA).
+            curl -fsS "${WEB_URL%/}/friends" | grep -q '<div id="root">'
+            test "$(curl -s -o /dev/null -w '%{http_code}' "${WEB_URL%/}/api/users/me")" = 401
+            test "$(curl -s -o /dev/null -w '%{http_code}' "${WEB_URL%/}/rtc/validate")" = 401
+            echo "App web no ar em ${WEB_URL%/}"
           fi
           echo "Salinha ${{ steps.version.outputs.version }} no ar em ${PUBLIC_URL%/}"
 
