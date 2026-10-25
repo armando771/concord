@@ -120,10 +120,12 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Server, error) {
 }
 
 // primaryChannelColumn: o canal principal escolhido ou, sem escolha (ou se ele
-// foi apagado), o primeiro canal de texto do servidor. Precisa do alias "s".
+// foi apagado), o canal de texto mais antigo do servidor. De propósito não
+// segue a ordem da barra lateral (channels.position): reordenar canais não muda
+// para onde vão os avisos. Precisa do alias "s".
 const primaryChannelColumn = `COALESCE(
 			s.primary_channel_id,
-			(SELECT c.id FROM channels c WHERE c.server_id = s.id AND c.type = 'text' ORDER BY c.position, c.created_at, c.id LIMIT 1)
+			(SELECT c.id FROM channels c WHERE c.server_id = s.id AND c.type = 'text' ORDER BY c.created_at, c.id LIMIT 1)
 		)`
 
 // SetPrimaryChannel escolhe o canal principal; o canal tem que ser de texto e
