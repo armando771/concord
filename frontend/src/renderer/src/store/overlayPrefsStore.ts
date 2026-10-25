@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import {
   clampOverlayOpacity,
   migrateOverlayPrefs,
+  OVERLAY_PREFS_VERSION,
   OVERLAY_OPACITY_DEFAULT
 } from '../lib/overlayState'
 import {
@@ -38,9 +39,10 @@ export const useOverlayPrefsStore = create<OverlayPrefsState>()(
     }),
     {
       name: 'concord-overlay-prefs',
-      // v1: opacidade virou "em repouso" (10–60%); a salva antes é encaixada.
-      version: 1,
-      migrate: (persisted) => migrateOverlayPrefs(persisted) as unknown as OverlayPrefsState
+      // v1: opacidade virou "em repouso" (10–60%); a salva antes volta a 30%.
+      version: OVERLAY_PREFS_VERSION,
+      migrate: (persisted, version) =>
+        migrateOverlayPrefs(persisted, version) as unknown as OverlayPrefsState
     }
   )
 )

@@ -3,6 +3,7 @@ import {
   buildOverlaySnapshot,
   clampOverlayOpacity,
   migrateOverlayPrefs,
+  OVERLAY_PREFS_VERSION,
   OVERLAY_OPACITY_DEFAULT,
   overlayRowOpacity,
   type OverlayInput
@@ -187,28 +188,34 @@ describe('overlayRowOpacity', () => {
 })
 
 describe('migrateOverlayPrefs', () => {
-  it('opacidade antiga (20–100%) é encaixada na faixa nova', () => {
-    expect(migrateOverlayPrefs({ enabled: true, opacity: 70 })).toEqual({
-      enabled: true,
-      opacity: 60
-    })
-    expect(migrateOverlayPrefs({ enabled: false, opacity: 20 })).toEqual({
-      enabled: false,
-      opacity: 20
-    })
-    expect(migrateOverlayPrefs({ enabled: true, opacity: 100 }).opacity).toBe(60)
+  it('versão da opacidade em repouso é a 1', () => {
+    expect(OVERLAY_PREFS_VERSION).toBe(1)
   })
 
-  it('sem opacidade salva (ou estragada) fica com o padrão; o resto é mantido', () => {
-    expect(migrateOverlayPrefs({ enabled: false })).toEqual({
-      enabled: false,
-      opacity: OVERLAY_OPACITY_DEFAULT
+  it('opacidade salva antes (v0, 20–100% na lista toda) volta para 30%; o resto é mantido', () => {
+    expect(migrateOverlayPrefs({ enabled: true, opacity: 70 }, 0)).toEqual({
+      enabled: true,
+      opacity: 30
     })
-    expect(migrateOverlayPrefs({ opacity: 'x' }).opacity).toBe(OVERLAY_OPACITY_DEFAULT)
+    expect(migrateOverlayPrefs({ enabled: false, opacity: 20 }, 0)).toEqual({
+      enabled: false,
+      opacity: 30
+    })
+    expect(migrateOverlayPrefs({ opacity: 45 }, 0).opacity).toBe(30)
+  })
+
+  it('opacidade salva depois (v1+) é mantida, encaixada em 10–60%', () => {
+    expect(migrateOverlayPrefs({ enabled: true, opacity: 45 }, 1)).toEqual({
+      enabled: true,
+      opacity: 45
+    })
+    expect(migrateOverlayPrefs({ opacity: 90 }, 1).opacity).toBe(60)
+    expect(migrateOverlayPrefs({ opacity: 3 }, 2).opacity).toBe(10)
+    expect(migrateOverlayPrefs({ opacity: 'x' }, 1).opacity).toBe(OVERLAY_OPACITY_DEFAULT)
   })
 
   it('nada salvo não quebra', () => {
-    expect(migrateOverlayPrefs(undefined)).toEqual({ opacity: OVERLAY_OPACITY_DEFAULT })
-    expect(migrateOverlayPrefs(null)).toEqual({ opacity: OVERLAY_OPACITY_DEFAULT })
+    expect(migrateOverlayPrefs(undefined, 0)).toEqual({ opacity: OVERLAY_OPACITY_DEFAULT })
+    expect(migrateOverlayPrefs(null, 1)).toEqual({ opacity: OVERLAY_OPACITY_DEFAULT })
   })
 })

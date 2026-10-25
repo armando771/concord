@@ -75,13 +75,24 @@ export function overlayRowOpacity(resting: number, speaking: boolean): number {
 }
 
 /**
- * Preferências salvas antes da opacidade em repouso (20–100%, padrão 70%):
- * encaixa na faixa nova e mantém o resto.
+ * Versão das preferências salvas do overlay. v0: opacidade da lista inteira
+ * (20–100%, padrão 70%). v1: opacidade de cada pílula em repouso (10–60%).
  */
-export function migrateOverlayPrefs(persisted: unknown): Record<string, unknown> {
+export const OVERLAY_PREFS_VERSION = 1
+
+/**
+ * Preferências salvas → versão atual, mantendo o resto. A opacidade de antes
+ * da v1 mudou de sentido (não é mais a da lista inteira): volta ao padrão. A
+ * de depois é mantida, encaixada na faixa.
+ */
+export function migrateOverlayPrefs(persisted: unknown, version: number): Record<string, unknown> {
   const saved =
     persisted && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {}
-  return { ...saved, opacity: clampOverlayOpacity(saved.opacity as number) }
+  const opacity =
+    version < OVERLAY_PREFS_VERSION
+      ? OVERLAY_OPACITY_DEFAULT
+      : clampOverlayOpacity(saved.opacity as number)
+  return { ...saved, opacity }
 }
 
 function nameOf(person: OverlayPerson): string {
