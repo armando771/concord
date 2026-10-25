@@ -34,13 +34,22 @@ fi
 HOST="${ARGS[0]}"
 FILE="${ARGS[1]}"
 
-ssh "$HOST" 'cat > /etc/caddy/Caddyfile.new' < "$FILE"
-ssh "$HOST" bash -s -- "$FORCE" "$ALSO" <<'REMOTE'
-set -euo pipefail
-FORCE="$1"
-ALSO="$2"
 CADDY_DIR="${CADDY_DIR:-/etc/caddy}"
 CONCORD_DIR="${CONCORD_DIR:-/opt/concord}"
+
+# O ssh junta os argumentos num texto só (um argumento vazio some e um com
+# espaços se parte): os valores vão como VAR=valor já citados.
+remote() {
+  local assigns="" kv
+  for kv in "$@"; do
+    assigns+="${kv%%=*}=$(printf '%q' "${kv#*=}") "
+  done
+  ssh "$HOST" "${assigns}bash -s"
+}
+
+ssh "$HOST" "cat > $(printf '%q' "$CADDY_DIR/Caddyfile.new")" < "$FILE"
+remote FORCE="$FORCE" ALSO="${ALSO# }" CADDY_DIR="$CADDY_DIR" CONCORD_DIR="$CONCORD_DIR" <<'REMOTE'
+set -euo pipefail
 NEW="$CADDY_DIR/Caddyfile.new"
 CUR="$CADDY_DIR/Caddyfile"
 
@@ -56,16 +65,23 @@ if ! out=$(caddy validate --config "$NEW" --adapter caddyfile 2>&1); then
   fail "Caddyfile inválido (nada mudou)"
 fi
 
-port=$(env_value PORT)
+# Com o socket do systemd a porta é a dele (o backend ignora o PORT do .env).
+if systemctl is-active -q concord-server.socket 2>/dev/null; then
+  listen=$(systemctl show -p Listen --value concord-server.socket | awk '{print $1}')
+  port="${listen##*:}"
+else
+  port=$(env_value PORT)
+fi
 curl -fs -m 2 -o /dev/null "http://127.0.0.1:${port:-8080}/healthz" ||
   { rm -f "$NEW"; fail "backend sem /healthz em 127.0.0.1:${port:-8080} — faça o deploy do backend antes"; }
 
 in_call=$(docker exec concord-postgres psql -U concord-user -d concord -tAc \
-  "SELECT count(*) FROM call_participants p JOIN calls c ON c.id = p.call_id WHERE p.left_at IS NULL AND c.status = 'active'" | tr -d '[:space:]')
+  "SELECT count(*) FROM call_participants p JOIN calls c ON c.id = p.call_id WHERE p.left_at IS NULL AND c.status <> 'ended'" | tr -d '[:space:]')
 if [[ "$in_call" != 0 && "$FORCE" != 1 ]]; then
   rm -f "$NEW"
   fail "$in_call pessoa(s) em chamada agora — o reload derrubaria a chamada delas. Tente depois (ou --force)."
 fi
+echo "ninguém em chamada agora; recarregando (quem entrar numa chamada nos próximos segundos pode sentir uma travada)."
 
 backup="$CUR.bak-$(date +%Y%m%d-%H%M%S)"
 cp -p "$CUR" "$backup"
