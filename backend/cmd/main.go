@@ -131,6 +131,7 @@ func main() {
 	serverRepository := server.ServerRepository(db)
 	serverService := server.ServerService(serverRepository, hub, roleRepository)
 	moderationService := server.ModerationService(serverRepository, permissionService, hub)
+	nicknameService := server.NicknameService(serverRepository, permissionService, hub)
 
 	// Friendship
 	friendshipRepository := friendship.FriendshipRepository(db)
@@ -142,7 +143,7 @@ func main() {
 	channelService := channel.ChannelService(channelRepository, hub)
 	channelHandler := channel.ChannelHandler(channelService, permissionService)
 
-	serverHandler := server.ServerHandler(serverService, friendshipService, userService, channelService, permissionService, roleService, moderationService)
+	serverHandler := server.ServerHandler(serverService, friendshipService, userService, channelService, permissionService, roleService, moderationService, nicknameService)
 
 	// Conversation (DM)
 	conversationRepository := conversation.ConversationRepository(db)

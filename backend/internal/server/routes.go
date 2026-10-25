@@ -17,6 +17,7 @@ func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin.
 		servers.GET("/:id/invites", handler.ListServerInvites)
 		servers.GET("/:id/invite-code", handler.InviteCode)
 		servers.DELETE("/:id/members/:userId", handler.Kick)
+		servers.PUT("/:id/members/:userId/nickname", handler.SetNickname)
 		servers.POST("/:id/leave", handler.Leave)
 		servers.GET("/:id/bans", handler.ListBans)
 		servers.POST("/:id/bans", handler.Ban)

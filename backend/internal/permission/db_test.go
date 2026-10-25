@@ -507,14 +507,15 @@ func TestDBMigrationBackfillsExistingServers(t *testing.T) {
 	db := testDB(t)
 	ctx := context.Background()
 
-	// Banco só com as migrations anteriores à 029, como produção hoje.
+	// Banco só com as migrations anteriores à 029, como produção antes dos
+	// cargos (a 031, dos apelidos, também fica para depois: ela mexe nos cargos).
 	dir := t.TempDir()
 	entries, err := os.ReadDir("../../migrations")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), "000029_") {
+		if entry.Name() >= "000029_" {
 			continue
 		}
 		raw, err := os.ReadFile(filepath.Join("../../migrations", entry.Name()))
@@ -526,6 +527,9 @@ func TestDBMigrationBackfillsExistingServers(t *testing.T) {
 		}
 	}
 	if _, err := db.Exec(ctx, `DROP TABLE IF EXISTS server_bans, channel_overwrites, member_roles, roles CASCADE`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, `ALTER TABLE server_members DROP COLUMN IF EXISTS nickname`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(ctx, `UPDATE schema_migrations SET version = 28`); err != nil {
@@ -548,7 +552,7 @@ func TestDBMigrationBackfillsExistingServers(t *testing.T) {
 		}
 	}
 
-	// Agora aplica a 029 em cima dos dados.
+	// Agora aplica a 029 (e a 031) em cima dos dados.
 	if err := database.Migrate(db, "../../migrations"); err != nil {
 		t.Fatal(err)
 	}
@@ -578,5 +582,68 @@ func TestDBMigrationBackfillsExistingServers(t *testing.T) {
 	}
 	if snap.Server(owner) != permission.All {
 		t.Error("o dono continua com tudo")
+	}
+	// 000031: todo mundo pode mudar o próprio apelido; o Moderador, o dos outros.
+	if !permission.Has(snap.Server(plain), permission.ChangeNickname) || permission.Has(snap.Server(plain), permission.ManageNicknames) {
+		t.Error("membro comum muda só o próprio apelido")
+	}
+	if !permission.Has(snap.Server(admin), permission.ChangeNickname|permission.ManageNicknames) {
+		t.Error("o Moderador muda apelidos")
+	}
+}
+
+func TestDBNicknameRoundTrip(t *testing.T) {
+	e := newEnv(t)
+	owner, plain := newUser(t, e.db, e.ctx), newUser(t, e.db, e.ctx)
+	srv := e.newServer(t, owner)
+	e.join(t, srv.ID, plain)
+	nicknames := server.NicknameService(e.servers, e.permissions, nil)
+
+	nickOf := func(userID string) *string {
+		t.Helper()
+		members, err := e.serverSvc.ListMembers(e.ctx, srv.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range members {
+			if m.UserID == userID {
+				return m.Nickname
+			}
+		}
+		t.Fatalf("%s não está na lista", userID)
+		return nil
+	}
+
+	if nickOf(plain) != nil {
+		t.Fatal("começa sem apelido")
+	}
+	// 32 caracteres com acento e emoji cabem na coluna (conta caractere).
+	long := strings.Repeat("é", 31) + "🎮"
+	if _, err := nicknames.Set(e.ctx, srv.ID, plain, plain, "  "+long+"  "); err != nil {
+		t.Fatal(err)
+	}
+	if got := nickOf(plain); got == nil || *got != long {
+		t.Fatalf("apelido = %v", got)
+	}
+	if _, err := nicknames.Set(e.ctx, srv.ID, owner, plain, "Pelo dono"); err != nil {
+		t.Fatal(err)
+	}
+	if got := nickOf(plain); got == nil || *got != "Pelo dono" {
+		t.Fatalf("apelido = %v", got)
+	}
+	if _, err := nicknames.Set(e.ctx, srv.ID, plain, plain, ""); err != nil {
+		t.Fatal(err)
+	}
+	if nickOf(plain) != nil {
+		t.Fatal("vazio devia tirar o apelido")
+	}
+	// Membro comum não muda o do dono.
+	if _, err := nicknames.Set(e.ctx, srv.ID, plain, owner, "x"); !errors.Is(err, permission.ErrMissingPermission) {
+		t.Fatalf("err = %v", err)
+	}
+	// O nome de verdade não muda.
+	var displayName string
+	if err := e.db.QueryRow(e.ctx, `SELECT display_name FROM users WHERE id = $1`, plain).Scan(&displayName); err != nil || strings.HasPrefix(displayName, "Pelo") {
+		t.Fatalf("display_name = %q, %v", displayName, err)
 	}
 }
