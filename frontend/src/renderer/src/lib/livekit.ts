@@ -18,6 +18,7 @@ import {
 } from './callMedia'
 import { pruneWatched } from './screenWatch'
 import { canPublishSource, type PublishSource } from './mediaPermissions'
+import { reportLatency } from './connectionStats'
 
 // Mídia das chamadas via SFU (LiveKit): cada pessoa envia uma cópia de cada
 // track para o servidor, que distribui para os demais. Substitui o mesh P2P.
@@ -156,6 +157,29 @@ export class CallMedia {
     this.connected = true
     this.emitRemoteMedia()
     this.emitPublishPermissions()
+  }
+
+  /** RTT até o SFU pelas estatísticas públicas das tracks, inclusive em modo ouvinte. */
+  async getLatency(): Promise<number | null> {
+    if (this.closing || this.room.state !== ConnectionState.Connected) return null
+    const publications = [
+      ...this.room.localParticipant.trackPublications.values(),
+      ...Array.from(this.room.remoteParticipants.values()).flatMap((participant) =>
+        Array.from(participant.trackPublications.values())
+      )
+    ]
+    for (const publication of publications) {
+      if (!publication.track) continue
+      try {
+        const report = await publication.track.getRTCStatsReport()
+        if (this.closing || this.room.state !== ConnectionState.Connected) return null
+        const ms = report ? reportLatency(report) : null
+        if (ms !== null) return ms
+      } catch {
+        // Track removida durante a consulta: tenta outra, sem interferir na chamada.
+      }
+    }
+    return null
   }
 
   /** Pode publicar essa fonte, segundo as permissões que o servidor deu. */

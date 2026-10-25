@@ -284,6 +284,13 @@ let resyncing = false
 /** Conexão com o servidor de mídia (LiveKit) da chamada atual. */
 let media: CallMedia | null = null
 
+/** Leitura sob demanda; o histórico pertence somente ao popover. */
+export async function readCallLatency(): Promise<number | null> {
+  const connection = media
+  const ms = await connection?.getLatency()
+  return connection === media ? (ms ?? null) : null
+}
+
 /** Quem está falando segundo o servidor (ActiveSpeakersChanged). */
 let serverSpeakers: string[] = []
 /** Fala do próprio usuário detectada aqui; null = sem detecção local. */

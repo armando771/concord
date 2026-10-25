@@ -19,6 +19,7 @@ import { setupUpdater } from './updater'
 import { setupOverlay } from './overlay'
 import { setupGlobalKeybinds } from './globalKeybinds'
 import { setupGames } from './games'
+import { setupAppMetrics } from './appMetrics'
 import { handleInviteArgs, setupInviteProtocol } from './inviteProtocol'
 import { closeActivity, setupActivities } from './activityWindow'
 import { APP_USER_MODEL_ID } from './toastPolicy'
@@ -258,6 +259,7 @@ app.whenReady().then(() => {
   setupGlobalKeybinds(() => mainWindow)
   setupActivities(() => mainWindow)
   setupGames(() => mainWindow)
+  setupAppMetrics(() => mainWindow)
   setupUpdater(() => mainWindow, {
     feedUrl: __CONCORD_UPDATE_URL__,
     publicKeyPem: __CONCORD_UPDATE_PUBKEY__
