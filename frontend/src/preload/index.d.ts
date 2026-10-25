@@ -23,6 +23,11 @@ export interface ScreenAudioApi {
   stop(): void
 }
 
+export interface ScreenShareApi {
+  onWindowHidden(cb: () => void): () => void
+  ended(): void
+}
+
 export interface UpdatesApi {
   setCallSnapshot(snapshot: CallResume | null): void
   takeCallResume(): Promise<PendingCallResume | null>
@@ -103,6 +108,7 @@ declare global {
       background?: BackgroundApi
       updates?: UpdatesApi
       screenAudio?: ScreenAudioApi
+      screenShare?: ScreenShareApi
       overlay?: OverlayApi
     }
   }
