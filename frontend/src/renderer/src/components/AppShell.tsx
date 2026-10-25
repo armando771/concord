@@ -10,6 +10,7 @@ import EmailVerifyBanner from './EmailVerifyBanner'
 import ScreenMiniPlayer from './call/ScreenMiniPlayer'
 import ScreenSharePickerModal from './call/ScreenSharePickerModal'
 import LevelUpBanner from './level/LevelUpBanner'
+import BoostBanner from './level/BoostBanner'
 import LevelUpScreen from './level/LevelUpScreen'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
@@ -48,6 +49,7 @@ function AppShell(): React.JSX.Element {
       <LevelUpScreen />
 
       <LevelUpBanner />
+      <BoostBanner />
     </div>
   )
 }
