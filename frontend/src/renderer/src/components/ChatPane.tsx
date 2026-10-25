@@ -287,6 +287,7 @@ function MessageItem({
             reactions={reactions}
             meId={me?.id}
             canReact={canReact}
+            serverId={serverId}
             onReact={onReact}
             onOpenPicker={() => setPickerOpen((v) => !v)}
           />
