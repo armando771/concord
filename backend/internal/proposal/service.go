@@ -34,7 +34,7 @@ type store interface {
 	UpsertVote(ctx context.Context, id, userID string, approve bool, now time.Time) (bool, error)
 	DeleteVote(ctx context.Context, id, userID string, now time.Time) (bool, error)
 	Delete(ctx context.Context, id string) error
-	SetStatus(ctx context.Context, id, status string) error
+	SetStatus(ctx context.Context, id, userID, status string) error
 	CloseDue(ctx context.Context, now time.Time) ([]string, error)
 	WithoutIssue(ctx context.Context) ([]Proposal, error)
 	SetIssue(ctx context.Context, id string, number int, url string) error
@@ -243,7 +243,7 @@ func (s *Service) SetStatus(ctx context.Context, id, userID, status string) (*Pr
 	if p.Status == status {
 		return nil, ErrInvalidStatus
 	}
-	if err := s.store.SetStatus(ctx, id, status); err != nil {
+	if err := s.store.SetStatus(ctx, id, userID, status); err != nil {
 		return nil, err
 	}
 	if status != StatusRejected {

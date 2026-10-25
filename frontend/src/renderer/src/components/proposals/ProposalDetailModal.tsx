@@ -5,6 +5,7 @@ import {
   canDeleteProposal,
   canEditProposal,
   canVote,
+  closeLabel,
   proposalImageSrc,
   REJECTED_COLUMN,
   timeLeftLabel,
@@ -107,6 +108,8 @@ function ProposalDetailModal({
                 ))}
               </ul>
             )}
+
+            {closeLabel(p) && <p className="text-xs text-gray-400">{closeLabel(p)}</p>}
 
             {(p.status === 'voting' || total > 0) && (
               <div className="flex flex-col gap-1.5 rounded-xl border border-white/8 bg-white/3 p-3">

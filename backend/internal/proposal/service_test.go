@@ -15,6 +15,7 @@ type fakeStore struct {
 	items map[string]*Proposal
 	votes map[string]map[string]bool // proposal -> user -> approve
 	seq   int
+	moves int // quantas vezes SetStatus rodou (dá o moved_at do fake)
 
 	// imagens: id -> {dono do upload, proposta (vazio = pendente)}
 	images map[string]fakeImage
@@ -173,13 +174,19 @@ func (f *fakeStore) Delete(_ context.Context, id string) error {
 	return nil
 }
 
-func (f *fakeStore) SetStatus(_ context.Context, id, status string) error {
+func (f *fakeStore) SetStatus(_ context.Context, id, userID, status string) error {
 	p := f.items[id]
+	if p.Status == StatusVoting {
+		reason, by := CloseManual, userID
+		p.CloseReason, p.ClosedByName = &reason, &by
+	}
 	p.Status = status
 	if p.ClosedAt == nil {
 		closed := t0
 		p.ClosedAt = &closed
 	}
+	f.moves++
+	p.MovedAt = t0.Add(time.Duration(f.moves) * time.Minute)
 	return nil
 }
 
@@ -194,8 +201,8 @@ func (f *fakeStore) CloseDue(_ context.Context, now time.Time) ([]string, error)
 		} else {
 			p.Status = StatusRejected
 		}
-		closed := now
-		p.ClosedAt = &closed
+		closed, reason := now, CloseDeadline
+		p.ClosedAt, p.MovedAt, p.CloseReason = &closed, now, &reason
 		ids = append(ids, id)
 	}
 	return ids, nil
@@ -767,3 +774,78 @@ func TestCommentRateLimit(t *testing.T) {
 		t.Fatalf("limite por minuto: got %v", err)
 	}
 }
+
+func TestSetStatusEarlyRecordsWhoClosed(t *testing.T) {
+	s, st, _ := newTestService(nil)
+	ctx := context.Background()
+	p, _ := s.Create(ctx, "u1", "Encerrada na mão", "", nil)
+
+	if _, err := s.SetStatus(ctx, p.ID, "tech", StatusInProgress); err != nil {
+		t.Fatal(err)
+	}
+	got := st.items[p.ID]
+	if got.CloseReason == nil || *got.CloseReason != CloseManual {
+		t.Fatalf("close_reason: %v", got.CloseReason)
+	}
+	if got.ClosedByName == nil || *got.ClosedByName != "tech" {
+		t.Fatalf("closed_by: %v", got.ClosedByName)
+	}
+
+	// Mover de novo não troca quem encerrou a votação.
+	st.items[p.ID].ClosedByName = ptr("alguém")
+	if _, err := s.SetStatus(ctx, p.ID, "tech", StatusDone); err != nil {
+		t.Fatal(err)
+	}
+	if *st.items[p.ID].ClosedByName != "alguém" {
+		t.Fatal("só a saída da votação grava closed_by")
+	}
+}
+
+func TestMovedAtGrowsWithEachMove(t *testing.T) {
+	s, _, _ := newTestService(nil)
+	ctx := context.Background()
+	p, _ := s.Create(ctx, "u1", "Sobe ao topo", "", nil)
+	first, err := s.SetStatus(ctx, p.ID, "tech", StatusProposed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := s.SetStatus(ctx, p.ID, "tech", StatusInProgress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !second.MovedAt.After(first.MovedAt) {
+		t.Fatalf("moved_at precisa avançar: %v -> %v", first.MovedAt, second.MovedAt)
+	}
+}
+
+func TestVoteRefusedAfterEarlyMove(t *testing.T) {
+	s, _, _ := newTestService(nil)
+	ctx := context.Background()
+	p, _ := s.Create(ctx, "u1", "Votação encerrada cedo", "", nil)
+	if _, err := s.Vote(ctx, p.ID, "u2", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetStatus(ctx, p.ID, "tech", StatusProposed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Vote(ctx, p.ID, "u3", true); !errors.Is(err, ErrVotingClosed) {
+		t.Fatalf("votar depois de mover: got %v", err)
+	}
+	if _, err := s.RemoveVote(ctx, p.ID, "u2"); !errors.Is(err, ErrVotingClosed) {
+		t.Fatalf("retirar voto depois de mover: got %v", err)
+	}
+}
+
+func TestTickClosesByDeadline(t *testing.T) {
+	s, st, _ := newTestService(nil)
+	ctx := context.Background()
+	p, _ := s.Create(ctx, "u1", "Vence o prazo", "", nil)
+	s.now = func() time.Time { return p.VotingEndsAt.Add(time.Minute) }
+	s.Tick(ctx)
+	got := st.items[p.ID]
+	if got.CloseReason == nil || *got.CloseReason != CloseDeadline || got.ClosedByName != nil {
+		t.Fatalf("fechamento por prazo: reason=%v by=%v", got.CloseReason, got.ClosedByName)
+	}
+}
+
+func ptr[T any](v T) *T { return &v }

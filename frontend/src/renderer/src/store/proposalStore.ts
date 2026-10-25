@@ -21,7 +21,7 @@ import {
   voteProposal
 } from '../api/proposals'
 import type { WsEvent } from '../api/ws'
-import { mergeProposal } from '../lib/proposals'
+import { mergeProposal, moveProposal, restoreProposal } from '../lib/proposals'
 import { useAuthStore } from './authStore'
 import { showToast } from './toastStore'
 
@@ -86,7 +86,10 @@ export const useProposalStore = create<ProposalState>()((set, get) => {
   /** Troca o card pela resposta da API (traz o meu voto). */
   const apply = (p: Proposal): void => set({ proposals: mergeProposal(get().proposals, p) })
 
-  const setComments = (id: string, update: (list: ProposalComment[]) => ProposalComment[]): void => {
+  const setComments = (
+    id: string,
+    update: (list: ProposalComment[]) => ProposalComment[]
+  ): void => {
     const current = get().commentsByProposal[id]
     // Só mexe em quem já abriu os comentários; o resto carrega do servidor ao abrir.
     if (!current) return
@@ -140,7 +143,18 @@ export const useProposalStore = create<ProposalState>()((set, get) => {
       // A resposta já vem sem o meu voto: força o nulo no merge.
       set({ proposals: get().proposals.map((x) => (x.id === id ? { ...p, my_vote: null } : x)) })
     },
-    setStatus: async (id, status) => apply(await setProposalStatus(id, status)),
+    setStatus: async (id, status) => {
+      // O card muda de coluna antes da resposta (o arrasto não espera a rede);
+      // se o servidor recusar, ele volta como estava.
+      const previous = get().proposals.find((p) => p.id === id)
+      if (previous) set({ proposals: moveProposal(get().proposals, id, status) })
+      try {
+        apply(await setProposalStatus(id, status))
+      } catch (err) {
+        if (previous) set({ proposals: restoreProposal(get().proposals, previous) })
+        throw err
+      }
+    },
     remove: async (id) => {
       await deleteProposal(id)
       set({ proposals: get().proposals.filter((p) => p.id !== id) })

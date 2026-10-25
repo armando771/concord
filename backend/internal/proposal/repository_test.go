@@ -125,12 +125,31 @@ func TestRepositoryDB(t *testing.T) {
 	}
 
 	// Mover antes do prazo marca o fechamento e a proposta segue no quadro.
-	if err := repo.SetStatus(ctx, id, StatusInProgress); err != nil {
+	before := p.MovedAt
+	if err := repo.SetStatus(ctx, id, other, StatusInProgress); err != nil {
 		t.Fatal(err)
 	}
 	p, _ = repo.Get(ctx, id, nil)
 	if p.Status != StatusInProgress || p.ClosedAt == nil {
 		t.Fatalf("mover antes do prazo: %+v", p)
+	}
+	if !p.MovedAt.After(before) {
+		t.Fatalf("moved_at não avançou: %v -> %v", before, p.MovedAt)
+	}
+	if p.CloseReason == nil || *p.CloseReason != CloseManual || p.ClosedByName == nil {
+		t.Fatalf("quem encerrou a votação: reason=%v by=%v", p.CloseReason, p.ClosedByName)
+	}
+	// Mover de novo avança moved_at e mantém quem encerrou a votação.
+	firstMove, closedBy := p.MovedAt, *p.ClosedByName
+	if err := repo.SetStatus(ctx, id, third, StatusDone); err != nil {
+		t.Fatal(err)
+	}
+	p, _ = repo.Get(ctx, id, nil)
+	if !p.MovedAt.After(firstMove) || *p.ClosedByName != closedBy {
+		t.Fatalf("segundo move: moved_at %v -> %v, closed_by %q -> %q", firstMove, p.MovedAt, closedBy, *p.ClosedByName)
+	}
+	if err := repo.SetStatus(ctx, id, other, StatusInProgress); err != nil {
+		t.Fatal(err)
 	}
 	missing, _ := repo.WithoutIssue(ctx)
 	if !slices.ContainsFunc(missing, func(m Proposal) bool { return m.ID == id }) {

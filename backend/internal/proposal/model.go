@@ -2,6 +2,12 @@ package proposal
 
 import "time"
 
+// Por que a votação acabou (proposals.close_reason).
+const (
+	CloseManual   = "manual"   // o time tech moveu o card antes do prazo
+	CloseDeadline = "deadline" // o prazo de 7 dias venceu
+)
+
 const (
 	StatusVoting     = "voting"
 	StatusProposed   = "proposed"
@@ -88,6 +94,11 @@ type Proposal struct {
 	CreatedAt         time.Time  `json:"created_at"`
 	VotingEndsAt      time.Time  `json:"voting_ends_at"`
 	ClosedAt          *time.Time `json:"closed_at,omitempty"`
+	// MovedAt: quando o card entrou na coluna atual (ordena as colunas).
+	MovedAt time.Time `json:"moved_at"`
+	// CloseReason e ClosedByName: como a votação acabou e, se foi o time tech, quem.
+	CloseReason   *string `json:"close_reason,omitempty"`
+	ClosedByName  *string `json:"closed_by_name,omitempty"`
 	EditedAt          *time.Time `json:"edited_at,omitempty"`
 	GithubIssueNumber *int       `json:"github_issue_number,omitempty"`
 	GithubIssueURL    *string    `json:"github_issue_url,omitempty"`
