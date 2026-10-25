@@ -419,6 +419,19 @@ func (h *Hub) IsOnline(userID string) bool {
 	return h.presence[userID] > 0
 }
 
+// OnlineUserIDs lista quem tem pelo menos uma conexão aberta (badges).
+func (h *Hub) OnlineUserIDs() []string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	ids := make([]string, 0, len(h.presence))
+	for id, n := range h.presence {
+		if n > 0 {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 // PresenceMap devolve o status efetivo de cada id ("offline" se desconectado
 // ou invisível).
 func (h *Hub) PresenceMap(userIDs []string) map[string]string {

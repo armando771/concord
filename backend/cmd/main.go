@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"gin-quickstart/backend/internal/auth"
+	"gin-quickstart/backend/internal/badge"
 	"gin-quickstart/backend/internal/birthday"
 	"gin-quickstart/backend/internal/call"
 	"gin-quickstart/backend/internal/channel"
@@ -339,6 +340,12 @@ func main() {
 	levelHandler := level.LevelHandler(levelService)
 	go levelService.Run(ctx)
 
+	// Badges do perfil (tempo transmitindo, madrugada, maior call... somados
+	// olhando as chamadas; o resto vem dos contadores do banco)
+	badgeService := badge.BadgeService(badge.BadgeRepository(db), hub, callService, hub, time.Local)
+	badgeHandler := badge.BadgeHandler(badgeService)
+	go badgeService.Run(context.Background())
+
 	// WebSocket handler
 	// "Fulano está digitando…": mesma regra de escrita das mensagens.
 	typing := websocket.NewTyping(hub, roomAccess, userService.FindByID)
@@ -380,6 +387,7 @@ func main() {
 	call.CallRoutes(api, callHandler, authMiddleware)
 	soundboard.Routes(api, soundboardHandler, authMiddleware)
 	level.LevelRoutes(api, levelHandler, authMiddleware)
+	badge.BadgeRoutes(api, badgeHandler, authMiddleware)
 	birthday.BirthdayRoutes(api, birthdayHandler, authMiddleware)
 
 	// Presence (protected)
