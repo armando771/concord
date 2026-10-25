@@ -34,6 +34,7 @@ type loginUsers interface {
 
 // accountCreator é a parte do user.Service que o cadastro usa.
 type accountCreator interface {
+	CheckAvailable(ctx context.Context, username, email string) error
 	Create(ctx context.Context, u *user.User) error
 	SetBirthday(ctx context.Context, userID string, b user.Birthday) error
 }
@@ -45,6 +46,21 @@ type Handler struct {
 	guard    *loginGuard
 	// compareHash é o bcrypt do login (trocável nos testes).
 	compareHash func(hash, password []byte) error
+	// registerByIP: cadastros por IP (só 409 e sucesso contam).
+	registerByIP *ratelimit.Limiter
+	// hashPassword é o bcrypt do cadastro (trocável nos testes).
+	hashPassword func(password []byte) ([]byte, error)
+}
+
+// Cadastros por IP por hora: cada um custa um bcrypt, e o 409 conjunto
+// ainda permite sondar e-mails.
+const (
+	registrationsPerIP = 5
+	registrationWindow = time.Hour
+)
+
+func defaultHashPassword(password []byte) ([]byte, error) {
+	return bcrypt.GenerateFromPassword(password, bcrypt.DefaultCost)
 }
 
 func AuthHandler(service *Service, userService *user.Service) *Handler {
@@ -54,7 +70,9 @@ func AuthHandler(service *Service, userService *user.Service) *Handler {
 		logins:   userService,
 		guard:    newLoginGuard(),
 
-		compareHash: bcrypt.CompareHashAndPassword,
+		compareHash:  bcrypt.CompareHashAndPassword,
+		registerByIP: ratelimit.New(registrationsPerIP, registrationWindow, loginLimiterMaxKeys),
+		hashPassword: defaultHashPassword,
 	}
 }
 
@@ -124,8 +142,25 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	// Só agora conta no limite por IP: erro de validação não custa nada.
+	// Nome/e-mail já usado (409) conta; erro interno devolve a vaga.
+	ipSlot := ipKey(c.ClientIP())
+	if retry, ok := h.registerByIP.Reserve(ipSlot); !ok {
+		c.Header("Retry-After", ratelimit.RetryAfterSeconds(retry))
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many registrations"})
+		return
+	}
+
+	// Antes do bcrypt: nome ou e-mail já usado não gasta CPU.
+	if err := h.accounts.CheckAvailable(c.Request.Context(), reg.Username, reg.Email); err != nil {
+		h.respondCreateError(c, ipSlot, err)
+		return
+	}
+
+	hashedPassword, err := h.hashPassword([]byte(reg.Password))
 	if err != nil {
+		h.registerByIP.Undo(ipSlot)
+		log.Printf("[auth] hash password: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
 		return
 	}
@@ -139,16 +174,7 @@ func (h *Handler) Register(c *gin.Context) {
 	}
 
 	if err := h.accounts.Create(c.Request.Context(), newUser); err != nil {
-		switch {
-		case errors.Is(err, user.ErrIdentityTaken):
-			// Mesma mensagem para usuário e e-mail; nada do Postgres na resposta.
-			c.JSON(http.StatusConflict, gin.H{"error": user.ErrIdentityTaken.Error()})
-		case errors.Is(err, user.ErrUsernameRequired), errors.Is(err, user.ErrEmailRequired):
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		default:
-			log.Printf("[auth] create user: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
-		}
+		h.respondCreateError(c, ipSlot, err)
 		return
 	}
 
@@ -177,6 +203,23 @@ func (h *Handler) Register(c *gin.Context) {
 	})
 }
 
+// respondCreateError responde a falha do cadastro. Só o nome/e-mail já usado
+// mantém a vaga do IP; o resto devolve.
+func (h *Handler) respondCreateError(c *gin.Context, ipSlot string, err error) {
+	switch {
+	case errors.Is(err, user.ErrIdentityTaken):
+		// Mesma mensagem para usuário e e-mail; nada do Postgres na resposta.
+		c.JSON(http.StatusConflict, gin.H{"error": user.ErrIdentityTaken.Error()})
+	case errors.Is(err, user.ErrUsernameRequired), errors.Is(err, user.ErrEmailRequired):
+		h.registerByIP.Undo(ipSlot)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	default:
+		h.registerByIP.Undo(ipSlot)
+		log.Printf("[auth] create user: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+	}
+}
+
 func (h *Handler) Login(c *gin.Context) {
 	var input struct {
 		// Login: e-mail ou nome de usuário (campo novo).
@@ -202,7 +245,8 @@ func (h *Handler) Login(c *gin.Context) {
 		tooManyAttempts(c, retry)
 		return
 	}
-	if !ok {
+	// Senha acima do limite do bcrypt nunca é a certa: sem busca nem bcrypt.
+	if !ok || user.PasswordTooLong(input.Password) {
 		invalidCredentials(c)
 		return
 	}

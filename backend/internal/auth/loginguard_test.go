@@ -403,3 +403,16 @@ func TestLoginBodyAndIdentifierAreCapped(t *testing.T) {
 		t.Errorf("register com corpo grande: status = %d, want 413", reg.Code)
 	}
 }
+
+func TestLoginRejectsPasswordOver72BytesWithoutBcrypt(t *testing.T) {
+	logins := &fakeLogins{user: &user.User{ID: "u1", Username: "nicccls", PasswordHash: "x"}}
+	h, cc := testHandler(logins)
+	router := loginRouter(h)
+	w := postLogin(router, "198.51.100.1", `{"login":"nicccls","password":"`+strings.Repeat("a", 73)+`"}`)
+	if w.Code != http.StatusUnauthorized || !strings.Contains(w.Body.String(), "invalid credentials") {
+		t.Fatalf("senha de 73 bytes: %d %s, want 401 genérico", w.Code, w.Body.String())
+	}
+	if cc.calls.Load() != 0 || logins.calls.Load() != 0 {
+		t.Error("senha longa não pode procurar conta nem gastar bcrypt")
+	}
+}

@@ -50,19 +50,10 @@ func (s *Service) Create(
 		return ErrEmailRequired
 	}
 
-	// Reservado responde como nome já usado (mesmo 409 genérico).
-	if IsReservedUsername(user.Username) {
-		return ErrIdentityTaken
-	}
-
-	// O UNIQUE do banco só pega a caixa exata (e o índice em lower(username)
-	// pode não existir; ver migration 000021): confere sem diferenciar caixa.
-	taken, err := s.repository.IdentityTaken(ctx, user.Username, user.Email)
-	if err != nil {
+	// De novo aqui (o handler já conferiu antes do bcrypt): fecha a janela
+	// entre a checagem e o INSERT o máximo possível.
+	if err := s.CheckAvailable(ctx, user.Username, user.Email); err != nil {
 		return err
-	}
-	if taken {
-		return ErrIdentityTaken
 	}
 
 	user.ID = uuid.New().String()
@@ -73,6 +64,25 @@ func (s *Service) Create(
 			return ErrIdentityTaken
 		}
 		return err
+	}
+	return nil
+}
+
+// CheckAvailable devolve ErrIdentityTaken se o nome for reservado ou se já
+// existir conta com esse username ou e-mail. O UNIQUE do banco só pega a
+// caixa exata (e o índice em lower(username) pode não existir; ver migration
+// 000021), então confere sem diferenciar caixa.
+func (s *Service) CheckAvailable(ctx context.Context, username, email string) error {
+	// Reservado responde como nome já usado (mesmo 409 genérico).
+	if IsReservedUsername(username) {
+		return ErrIdentityTaken
+	}
+	taken, err := s.repository.IdentityTaken(ctx, username, email)
+	if err != nil {
+		return err
+	}
+	if taken {
+		return ErrIdentityTaken
 	}
 	return nil
 }

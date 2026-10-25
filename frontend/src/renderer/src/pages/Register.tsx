@@ -7,6 +7,7 @@ import BirthdayFields from '../components/BirthdayFields'
 import { birthdayError, type BirthdayValue } from '../lib/birthday'
 import { register } from '../api/auth'
 import { registerErrorMessage } from '../lib/loginError'
+import { PASSWORD_TOO_LONG, passwordTooLong } from '../lib/password'
 import { getMe } from '../api/users'
 import { useAuthStore } from '../store/authStore'
 
@@ -38,6 +39,9 @@ function Register(): React.JSX.Element {
     }
     if (password.length < 8) {
       return 'Senha deve ter pelo menos 8 caracteres.'
+    }
+    if (passwordTooLong(password)) {
+      return PASSWORD_TOO_LONG
     }
     if (password !== confirm) {
       return 'As senhas não conferem.'

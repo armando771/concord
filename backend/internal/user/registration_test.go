@@ -15,6 +15,8 @@ func TestValidateRegistration(t *testing.T) {
 		{Username: "nicccls", DisplayName: "Nic", Email: "nic@exemplo.com", Password: "12345678"},
 		{Username: "SHACO_2", DisplayName: "S", Email: "a@b.co", Password: "senha longa"},
 		{Username: strings.Repeat("a", 32), DisplayName: strings.Repeat("é", 64), Email: "x@y.z", Password: "çççççççç"},
+		{Username: "nicccls", DisplayName: "N", Email: "x@y.z", Password: strings.Repeat("a", 72)},
+		{Username: "nicccls", DisplayName: "N", Email: "x@y.z", Password: strings.Repeat("é", 36)},
 	}
 	for _, r := range ok {
 		if err := ValidateRegistration(r); err != nil {
@@ -42,6 +44,8 @@ func TestValidateRegistration(t *testing.T) {
 		{"e-mail com dois @", func(r *Registration) { r.Email = "a@b@c.com" }, ErrInvalidEmail},
 		{"e-mail longo", func(r *Registration) { r.Email = strings.Repeat("a", 250) + "@b.com" }, ErrInvalidEmail},
 		{"senha curta", func(r *Registration) { r.Password = "1234567" }, ErrPasswordTooShort},
+		{"senha com 73 bytes", func(r *Registration) { r.Password = strings.Repeat("a", 73) }, ErrPasswordTooLong},
+		{"senha com 37 é (74 bytes)", func(r *Registration) { r.Password = strings.Repeat("é", 37) }, ErrPasswordTooLong},
 	}
 	for _, c := range bad {
 		t.Run(c.name, func(t *testing.T) {
@@ -126,5 +130,14 @@ func TestMissingLoginIndexesError(t *testing.T) {
 				t.Errorf("MissingLoginIndexesError(%v, %v) = %q, falta %q", c.username, c.email, got, want)
 			}
 		}
+	}
+}
+
+func TestPasswordTooLongMessageIsPortuguese(t *testing.T) {
+	if ErrPasswordTooLong.Error() != "Senha muito longa (máx. 72 bytes)" {
+		t.Errorf("mensagem = %q", ErrPasswordTooLong.Error())
+	}
+	if !PasswordTooLong(strings.Repeat("a", 73)) || PasswordTooLong(strings.Repeat("a", 72)) {
+		t.Error("PasswordTooLong deveria contar bytes, com limite 72")
 	}
 }

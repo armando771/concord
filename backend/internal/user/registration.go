@@ -17,7 +17,17 @@ var (
 	ErrDisplayNameTooLong  = errors.New("display name is too long")
 	ErrInvalidEmail        = errors.New("invalid email")
 	ErrPasswordTooShort    = errors.New("password must have at least 8 characters")
+	// O bcrypt só aceita até 72 bytes (acima disso dava 500).
+	ErrPasswordTooLong = errors.New("Senha muito longa (máx. 72 bytes)")
 )
+
+// maxPasswordBytes é o limite do bcrypt.
+const maxPasswordBytes = 72
+
+// PasswordTooLong diz se a senha passa do limite do bcrypt (em bytes).
+func PasswordTooLong(password string) bool {
+	return len(password) > maxPasswordBytes
+}
 
 // ErrIdentityTaken: já existe conta com esse nome de usuário ou e-mail, sem
 // diferenciar maiúsculas/minúsculas. Uma mensagem só para os dois casos.
@@ -63,6 +73,9 @@ func ValidateRegistration(r Registration) error {
 	}
 	if utf8.RuneCountInString(r.Password) < 8 {
 		return ErrPasswordTooShort
+	}
+	if PasswordTooLong(r.Password) {
+		return ErrPasswordTooLong
 	}
 	return nil
 }
