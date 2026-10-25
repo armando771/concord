@@ -241,8 +241,6 @@ func main() {
 	channelService := channel.ChannelService(channelRepository, hub)
 	channelHandler := channel.ChannelHandler(channelService, permissionService)
 
-	serverHandler := server.ServerHandler(serverService, friendshipService, userService, channelService, permissionService, roleService, moderationService, nicknameService)
-
 	// Conversation (DM)
 	conversationRepository := conversation.ConversationRepository(db)
 	conversationService := conversation.ConversationService(conversationRepository)
@@ -292,6 +290,8 @@ func main() {
 	profileService := user.NewProfileService(userRepository, hub)
 	profileHandler := user.NewProfileHandler(profileService, profileMedia, profileStatic, uploadSpace)
 	conversationHandler := conversation.ConversationHandler(conversationService, userService, profileHandler)
+	// O ícone do servidor usa o mesmo upload do avatar.
+	serverHandler := server.ServerHandler(serverService, friendshipService, userService, channelService, permissionService, roleService, moderationService, nicknameService, profileHandler)
 
 	// LiveKit (mídia das chamadas)
 	liveKitKey, liveKitSecret := os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET")
