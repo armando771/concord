@@ -1414,7 +1414,12 @@ export const useCallStore = create<CallState>()((set, get) => {
 
 // Atividades seguem a chamada atual: sair/trocar de chamada fecha o jogo aqui.
 useCallStore.subscribe((s) => {
-  useActivityStore.getState().setCall(s.status === 'idle' ? null : s.callId)
+  useActivityStore
+    .getState()
+    .setCall(
+      s.status === 'idle' ? null : s.callId,
+      s.status !== 'idle' && s.type === 'channel' ? s.serverId : null
+    )
 })
 
 // Os efeitos sonoros saem no mesmo dispositivo escolhido para as vozes.

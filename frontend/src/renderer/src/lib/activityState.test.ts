@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   activityBanner,
   activityReducer,
+  activityStarterName,
   INITIAL_ACTIVITY_STATE,
   type ActivityState,
   type RawCallActivity
@@ -230,6 +231,15 @@ describe('activityBanner', () => {
     })
   })
 
+  it('call de canal: quem abriu aparece pelo apelido do servidor', () => {
+    expect(activityBanner(open, 'u-bia', { 'u-ana': 'Aninha' })?.text).toBe(
+      'Aninha abriu Krunker.io'
+    )
+    expect(activityBanner(open, 'u-bia', { 'u-outra': 'X' })?.text).toBe('Ana abriu Krunker.io')
+    // Para quem abriu continua "Você".
+    expect(activityBanner(open, 'u-ana', { 'u-ana': 'Aninha' })?.text).toBe('Você abriu Krunker.io')
+  })
+
   it('já com o jogo aberto aqui: joined', () => {
     const joined = { ...open, local: { activityId: 'krunker', url: 'https://krunker.io/' } }
     expect(activityBanner(joined, 'u-bia')?.joined).toBe(true)
@@ -241,5 +251,14 @@ describe('activityBanner', () => {
       activity: raw({ started_by: { ...ana, display_name: '' } })
     })
     expect(activityBanner(anon, 'u-bia')?.text).toBe('ana abriu Krunker.io')
+  })
+})
+
+describe('activityStarterName (aviso "X abriu … na chamada")', () => {
+  const shared = activityReducer(inCall, { type: 'started', activity: raw() }).shared!
+
+  it('apelido do servidor na call de canal; sem mapa (DM), o nome de exibição', () => {
+    expect(activityStarterName(shared, { 'u-ana': 'Aninha' })).toBe('Aninha')
+    expect(activityStarterName(shared, undefined)).toBe('Ana')
   })
 })
