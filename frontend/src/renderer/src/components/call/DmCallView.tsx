@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useCallStore } from '../../store/callStore'
 import {
   CameraIcon,
@@ -29,7 +28,9 @@ function DmCallView({ children }: { children?: React.ReactNode }): React.JSX.Ele
   const toggleCamera = useCallStore((s) => s.toggleCamera)
   const endCall = useCallStore((s) => s.endCall)
 
-  const [minimized, setMinimized] = useState(false)
+  // No store: a miniatura da transmissão expande a DM ao ser clicada.
+  const minimized = useCallStore((s) => s.dmMinimized)
+  const setMinimized = useCallStore((s) => s.setDmMinimized)
 
   const dmActive = type === 'dm' && status === 'active'
   const elapsed = useElapsed(dmActive ? startedAt : null)
