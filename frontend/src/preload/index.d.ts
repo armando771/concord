@@ -83,6 +83,20 @@ export interface KeybindsApi {
   onStatus(cb: (status: Record<string, boolean>) => void): () => void
 }
 
+export interface DetectedGameInfo {
+  name: string
+  /** Unix em ms de quando a Salinha o viu abrir. */
+  startedAt: number
+}
+
+export interface GamesApi {
+  /** Liga/desliga a detecção de jogos (Em atividade). Só Windows. */
+  watch(enabled: boolean): void
+  current(): Promise<DetectedGameInfo | null>
+  /** O jogo em andamento mudou (null = parou). Retorna unsubscribe. */
+  onChange(cb: (game: DetectedGameInfo | null) => void): () => void
+}
+
 export interface ActivitiesApi {
   /** Abre o jogo numa janela própria; false = link recusado pelo main. */
   open(activityId: string, url: string): Promise<boolean>
@@ -141,6 +155,7 @@ declare global {
       overlay?: OverlayApi
       inviteLinks?: InviteLinksApi
       activities?: ActivitiesApi
+      games?: GamesApi
       keybinds?: KeybindsApi
     }
   }

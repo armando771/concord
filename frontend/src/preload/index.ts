@@ -158,6 +158,22 @@ const api = {
       return () => ipcRenderer.removeListener('invite:open', listener)
     }
   },
+  games: {
+    /** Liga/desliga a detecção de jogos (Em atividade). Só Windows. */
+    watch(enabled: boolean): void {
+      ipcRenderer.send('games:watch', enabled)
+    },
+    current(): Promise<{ name: string; startedAt: number } | null> {
+      return ipcRenderer.invoke('games:current')
+    },
+    /** O jogo em andamento mudou (null = parou). Retorna unsubscribe. */
+    onChange(cb: (game: { name: string; startedAt: number } | null) => void): () => void {
+      const listener = (_e: unknown, game: { name: string; startedAt: number } | null): void =>
+        cb(game)
+      ipcRenderer.on('games:current', listener)
+      return () => ipcRenderer.removeListener('games:current', listener)
+    }
+  },
   activities: {
     /** Abre o jogo numa janela própria; false = link recusado pelo main. */
     open(activityId: string, url: string): Promise<boolean> {
