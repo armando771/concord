@@ -39,13 +39,47 @@ describe('compareVoiceMembers', () => {
     expect(ids(sortVoiceMembers(list, (m) => m))).toEqual(['w', 'x', 'y', 'z'])
   })
 
-  it('horário inválido ou faltando de um lado cai no nome', () => {
+  it('sem horário (ou inválido) conta como quem entrou por último', () => {
     const list = [
       { id: 'a', name: 'Caio', level: 1, joinedAt: '2026-10-01T20:00:00Z' },
       { id: 'b', name: 'Bia', level: 1, joinedAt: 'ontem' },
       { id: 'c', name: 'Ana', level: 1 }
     ]
-    expect(ids(sortVoiceMembers(list, (m) => m))).toEqual(['c', 'b', 'a'])
+    expect(ids(sortVoiceMembers(list, (m) => m))).toEqual(['a', 'c', 'b'])
+  })
+
+  it('ordem total mesmo misturando quem tem e quem não tem horário', () => {
+    // Antes: A < B (entrada), B < C (nome), C < A (nome) — um ciclo.
+    const list = [
+      { id: 'A', name: 'Z', level: 3, joinedAt: '2026-10-01T20:01:00Z' },
+      { id: 'B', name: 'A', level: 3, joinedAt: '2026-10-01T20:02:00Z' },
+      { id: 'C', name: 'M', level: 3 }
+    ]
+    const permutations = [
+      [0, 1, 2],
+      [0, 2, 1],
+      [1, 0, 2],
+      [1, 2, 0],
+      [2, 0, 1],
+      [2, 1, 0]
+    ]
+    for (const order of permutations) {
+      expect(
+        ids(
+          sortVoiceMembers(
+            order.map((i) => list[i]),
+            (m) => m
+          )
+        )
+      ).toEqual(['A', 'B', 'C'])
+    }
+    for (const x of list)
+      for (const y of list)
+        for (const z of list) {
+          if (compareVoiceMembers(x, y) < 0 && compareVoiceMembers(y, z) < 0) {
+            expect(compareVoiceMembers(x, z)).toBeLessThan(0)
+          }
+        }
   })
 
   it('é determinístico: qualquer ordem de entrada dá a mesma saída', () => {

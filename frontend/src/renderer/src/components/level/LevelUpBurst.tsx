@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLevelStore } from '../../store/levelStore'
 import { levelUpEffects } from '../../lib/levels'
+import { anchorFrame, clipRect, frameEquals, type BurstFrame } from '../../lib/burstFrame'
 
 /** Tamanho do avatar da lista de membros, base das medidas abaixo. */
 const BASE_AVATAR = 32
@@ -18,7 +19,9 @@ const BASE_AVATAR = 32
  * O efeito em si vai num portal no <body>, `fixed` em cima do avatar: os
  * raios e o burst dos níveis altos são maiores que o tile da chamada e que
  * o painel de membros (ambos com overflow escondido) e seriam cortados.
- * Continua click-through (pointer-events: none).
+ * Enquanto toca, segue o avatar quadro a quadro (o grid da chamada recentra,
+ * a lista de membros muda) e fica invisível quando o avatar sai da área
+ * visível dos containers que cortam. Continua click-through.
  */
 function LevelUpBurst({
   userId,
@@ -29,23 +32,40 @@ function LevelUpBurst({
 }): React.JSX.Element | null {
   const celebration = useLevelStore((s) => s.celebrations[userId])
   const anchorRef = useRef<HTMLSpanElement | null>(null)
-  const [frame, setFrame] = useState<DOMRect | null>(null)
+  const [frame, setFrame] = useState<BurstFrame | null>(null)
 
-  // Acompanha o avatar enquanto a animação toca (rolagem e redimensionamento).
+  // Segue o avatar a cada quadro enquanto a animação está viva (o loop para
+  // quando ela acaba ou o avatar desmonta); só re-renderiza se mudou.
   const active = celebration?.key
   useLayoutEffect(() => {
-    if (active === undefined) return
-    const measure = (): void => {
-      const el = anchorRef.current
-      if (el) setFrame(el.getBoundingClientRect())
+    const anchor = anchorRef.current
+    if (active === undefined || !anchor) return
+    // Containers que cortam o conteúdo (lista rolável, tile…): fora deles
+    // o avatar não aparece, então o burst também não.
+    const clips: Element[] = []
+    for (let el = anchor.parentElement; el && el !== document.body; el = el.parentElement) {
+      const style = getComputedStyle(el)
+      if (style.overflowX !== 'visible' || style.overflowY !== 'visible') clips.push(el)
     }
-    measure()
-    window.addEventListener('resize', measure)
-    window.addEventListener('scroll', measure, true)
-    return () => {
-      window.removeEventListener('resize', measure)
-      window.removeEventListener('scroll', measure, true)
+    let last: BurstFrame | null = null
+    let raf = 0
+    const tick = (): void => {
+      const viewport = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }
+      const next = anchorFrame(
+        anchor.getBoundingClientRect(),
+        clipRect(
+          viewport,
+          clips.map((c) => c.getBoundingClientRect())
+        )
+      )
+      if (!frameEquals(last, next)) {
+        last = next
+        setFrame(next)
+      }
+      raf = requestAnimationFrame(tick)
     }
+    tick()
+    return () => cancelAnimationFrame(raf)
   }, [active])
 
   const fx = useMemo(
@@ -82,7 +102,15 @@ function LevelUpBurst({
       className="level-anim pointer-events-none fixed z-30"
       style={
         frame
-          ? { ...vars, left: frame.left, top: frame.top, width: frame.width, height: frame.height }
+          ? {
+              ...vars,
+              left: frame.left,
+              top: frame.top,
+              width: frame.width,
+              height: frame.height,
+              // Esconde sem desmontar: a animação segue no tempo certo.
+              visibility: frame.visible ? undefined : 'hidden'
+            }
           : vars
       }
     >
@@ -164,7 +192,7 @@ function LevelUpBurst({
 
   return (
     <span ref={anchorRef} aria-hidden="true" className="pointer-events-none absolute inset-0">
-      {frame && frame.width > 0 && createPortal(burst, document.body)}
+      {frame && createPortal(burst, document.body)}
     </span>
   )
 }

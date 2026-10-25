@@ -574,6 +574,10 @@
   .level-anim.level-fade .level-roll {
     transform: translateY(calc(var(--roll) * -1em));
   }
+  /* Sem a animação de saída, o número antigo ficaria em cima do novo. */
+  .level-anim .level-num-old {
+    display: none !important;
+  }
   /* Partículas, raios, emblema e afins: nada se mexendo. */
   .level-anim .level-motion {
     display: none !important;

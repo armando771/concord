@@ -9,14 +9,16 @@ export interface VoiceMemberKey {
   name: string
   /** Nível do levelStore; ainda não carregado conta como 0. */
   level?: number
-  /** `joined_at` do backend (ISO), quando disponível. */
+  /** `joined_at` do backend (ISO); sem ele, vai depois de quem tem. */
   joinedAt?: string
 }
 
-const joinedMs = (value?: string): number | null => {
-  if (!value) return null
+// Sem horário (ou inválido) conta como quem entrou por último: assim a ordem
+// é total mesmo misturando quem tem e quem não tem (pares só do LiveKit).
+const joinedMs = (value?: string): number => {
+  if (!value) return Infinity
   const ms = Date.parse(value)
-  return Number.isNaN(ms) ? null : ms
+  return Number.isNaN(ms) ? Infinity : ms
 }
 
 export function compareVoiceMembers(a: VoiceMemberKey, b: VoiceMemberKey): number {
@@ -25,7 +27,7 @@ export function compareVoiceMembers(a: VoiceMemberKey, b: VoiceMemberKey): numbe
 
   const aJoined = joinedMs(a.joinedAt)
   const bJoined = joinedMs(b.joinedAt)
-  if (aJoined !== null && bJoined !== null && aJoined !== bJoined) return aJoined - bJoined
+  if (aJoined !== bJoined) return aJoined < bJoined ? -1 : 1
 
   const byName = a.name.localeCompare(b.name, 'pt-BR')
   if (byName !== 0) return byName

@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { useAuthStore } from '../../store/authStore'
 import { useLevelStore } from '../../store/levelStore'
 import { isMilestone, levelUpEffects, type LevelTier } from '../../lib/levels'
-import { playSound } from '../../lib/sounds'
+import { oncePerKey, playSound } from '../../lib/sounds'
 import LevelBadge from './LevelBadge'
 
 /** Emblema da faixa (80+): escudo com estrela, nas cores da faixa. */
@@ -31,6 +31,9 @@ function TierEmblem({ tier, size }: { tier: LevelTier; size: number }): React.JS
   )
 }
 
+// Em dev o StrictMode roda o efeito duas vezes: o som toca uma vez por subida.
+const firstPlay = oncePerKey()
+
 /**
  * Faixa no topo da janela quando VOCÊ sobe de nível: aparece mesmo que você
  * esteja num canal de texto e não esteja vendo o seu tile na chamada. Cresce
@@ -51,7 +54,7 @@ function LevelUpBanner(): React.JSX.Element | null {
   const chime = fx?.chime
   const key = celebration?.key
   useEffect(() => {
-    if (key !== undefined && chime) playSound(chime)
+    if (key !== undefined && chime && firstPlay(key)) playSound(chime)
   }, [key, chime])
 
   const confetti = useMemo(() => {

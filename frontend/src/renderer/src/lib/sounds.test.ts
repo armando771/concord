@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LEVEL_SOUNDS, peakVolume, SOUNDS } from './sounds'
+import { LEVEL_SOUNDS, oncePerKey, peakVolume, SOUNDS } from './sounds'
 
 const first = (name: keyof typeof SOUNDS): number => SOUNDS[name][0].freq
 const last = (name: keyof typeof SOUNDS): number => SOUNDS[name][SOUNDS[name].length - 1].freq
@@ -68,5 +68,15 @@ describe('sons de subir de nível', () => {
         { freq: 3, at: 2, duration: 1, volume: 0.6 }
       ])
     ).toBeCloseTo(0.7)
+  })
+})
+
+describe('oncePerKey', () => {
+  it('roda uma vez por chave (StrictMode monta efeitos duas vezes em dev)', () => {
+    const first = oncePerKey()
+    expect(first(1)).toBe(true)
+    expect(first(1)).toBe(false)
+    expect(first(2)).toBe(true)
+    expect(first(2)).toBe(false)
   })
 })

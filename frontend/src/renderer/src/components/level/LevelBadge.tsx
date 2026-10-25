@@ -85,7 +85,7 @@ function LevelBadge({
             <>
               <span
                 aria-hidden="true"
-                className="absolute inset-0"
+                className="level-num-old absolute inset-0"
                 style={{ animation: 'level-num-out 450ms ease-in 250ms both' }}
               >
                 {celebration.previous}

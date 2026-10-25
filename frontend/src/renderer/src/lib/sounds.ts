@@ -110,3 +110,16 @@ export function playSound(name: SoundName): void {
     osc.stop(t1 + 0.02)
   }
 }
+
+/**
+ * `true` só na primeira vez de cada chave: efeitos que o StrictMode repete
+ * em dev (ex.: o som de subir de nível) não tocam duas vezes.
+ */
+export function oncePerKey(): (key: number) => boolean {
+  let last: number | undefined
+  return (key) => {
+    if (key === last) return false
+    last = key
+    return true
+  }
+}
