@@ -82,6 +82,28 @@ func isLongDownload(r *http.Request) bool {
 		(strings.HasPrefix(p, "/api/media/") && p != "/api/media/token")
 }
 
+// restoreCalls repete RestoreActive até dar certo ou passar `wait`.
+func restoreCalls(ctx context.Context, calls interface {
+	RestoreActive(context.Context) error
+}, wait time.Duration) error {
+	deadline := time.Now().Add(wait)
+	for {
+		err := calls.RestoreActive(ctx)
+		if err == nil {
+			return nil
+		}
+		if time.Now().After(deadline) || ctx.Err() != nil {
+			return err
+		}
+		log.Printf("[call] restore falhou (%v); tentando de novo", err)
+		select {
+		case <-time.After(time.Second):
+		case <-ctx.Done():
+			return err
+		}
+	}
+}
+
 func main() {
 	loadEnv()
 
@@ -210,8 +232,13 @@ func main() {
 	callRepository := call.CallRepository(db)
 	callService := call.CallService(callRepository, hub, conversationService, serverService, channelService, userService, hub.IsOnline)
 	callHandler := call.CallHandler(callService, liveKitTokens)
-	// Reinício do servidor não derruba quem está em chamada.
-	callService.RestoreActive(ctx)
+	// Reinício do servidor não derruba quem está em chamada. Sem conseguir
+	// recarregar as chamadas o servidor não fica pronto (a porta nem abre):
+	// tenta de novo por até 30 s e então desiste (o systemd reinicia e o
+	// deploy volta ao binário anterior).
+	if err := restoreCalls(ctx, callService, 30*time.Second); err != nil {
+		log.Fatalf("não foi possível recarregar as chamadas: %v", err)
+	}
 
 	// Aniversários (mensagem do servidor às 9h + modal para o aniversariante)
 	birthdayRepository := birthday.BirthdayRepository(db)

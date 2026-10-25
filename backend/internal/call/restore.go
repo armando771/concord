@@ -2,32 +2,44 @@ package call
 
 import (
 	"context"
+	"fmt"
 	"log"
 )
+
+// restoreStore é o que a subida lê do banco (trocável nos testes).
+type restoreStore interface {
+	ListUnended(ctx context.Context) ([]*Call, error)
+	ListParticipants(ctx context.Context, callID string) ([]CallParticipant, error)
+	EndCall(ctx context.Context, id string) error
+}
 
 // RestoreActive recoloca em memória as chamadas que estavam ativas quando o
 // servidor reiniciou (o estado das chamadas vive em memória; o banco guarda o
 // histórico e o mudo/ensurdecido/tela de cada um). A mídia segue no LiveKit,
 // então quem reconectar o WebSocket dentro da tolerância continua na chamada
 // sem perceber; quem não voltar sai.
-func (s *Service) RestoreActive(ctx context.Context) {
-	calls, err := s.repository.ListUnended(ctx)
+//
+// Qualquer erro de leitura devolve erro sem mudar nada (nem memória nem
+// banco): o servidor não fica pronto e quem chamou tenta de novo. Encerrar uma
+// chamada porque a lista de participantes não veio derrubaria todo mundo.
+func (s *Service) RestoreActive(ctx context.Context) error {
+	calls, err := s.restoreStore.ListUnended(ctx)
 	if err != nil {
-		log.Printf("[call] restore: %v", err)
-		return
+		return fmt.Errorf("listar chamadas ativas: %w", err)
 	}
 	participants := make(map[string][]CallParticipant, len(calls))
 	for _, c := range calls {
-		list, err := s.repository.ListParticipants(ctx, c.ID)
+		list, err := s.restoreStore.ListParticipants(ctx, c.ID)
 		if err != nil {
-			log.Printf("[call] restore participants %s: %v", c.ID, err)
-			continue
+			return fmt.Errorf("participantes da chamada %s: %w", c.ID, err)
 		}
 		participants[c.ID] = list
 	}
 
 	for _, id := range s.restore(calls, participants) {
-		if err := s.repository.EndCall(ctx, id); err != nil {
+		// Só tocava ou estava vazia: encerrar é o certo; se falhar, ela fica
+		// para a próxima subida.
+		if err := s.restoreStore.EndCall(ctx, id); err != nil {
 			log.Printf("[call] restore end %s: %v", id, err)
 		}
 	}
@@ -43,6 +55,7 @@ func (s *Service) RestoreActive(ctx context.Context) {
 		s.HandleDisconnect(userID)
 	}
 	log.Printf("[call] restore: %d chamada(s) ativa(s), %d participante(s)", len(s.calls), len(users))
+	return nil
 }
 
 // restore monta o estado em memória e devolve as chamadas a encerrar: as que

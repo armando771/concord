@@ -91,6 +91,8 @@ type Service struct {
 	lookupUser func(ctx context.Context, userID string) (UserInfo, error)
 	// Onde o mudo/ensurdecido e a tela ficam salvos para o reinício (o banco).
 	stateStore participantStateStore
+	// De onde RestoreActive lê as chamadas na subida (o banco).
+	restoreStore restoreStore
 }
 
 // participantStateStore guarda o estado de voz/tela de quem está na chamada,
@@ -151,6 +153,7 @@ func CallService(
 	}
 	if repository != nil {
 		s.stateStore = repository
+		s.restoreStore = repository
 	}
 	s.leaveAfterDisconnect = s.Leave
 	s.lookupUser = s.userInfo
