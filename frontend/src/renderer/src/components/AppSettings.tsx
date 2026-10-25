@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { NotificationPrefs } from '../lib/notifications'
 import { useNotificationPrefsStore } from '../store/notificationPrefsStore'
 import { useOverlayPrefsStore } from '../store/overlayPrefsStore'
+import LevelUpPreview from './level/LevelUpPreview'
 
 function Toggle({
   title,
@@ -62,7 +63,10 @@ function AppSettings(): React.JSX.Element | null {
     void background?.getAutostart().then(setAutostart)
   }, [background])
 
-  if (!background) return null
+  // Prévia da animação de nível: só no build de dev (some do build final).
+  const devPreview = import.meta.env.DEV ? <LevelUpPreview /> : null
+
+  if (!background) return devPreview
 
   const toggleAutostart = (): void => {
     void background.setAutostart(!autostart).then((value) => {
@@ -108,6 +112,7 @@ function AppSettings(): React.JSX.Element | null {
           ))}
         </div>
       </div>
+      {devPreview}
     </div>
   )
 }
