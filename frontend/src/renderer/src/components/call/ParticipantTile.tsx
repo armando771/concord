@@ -8,6 +8,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useLevelStore } from '../../store/levelStore'
 import { levelUpEffects } from '../../lib/levels'
 import LevelUpBurst from '../level/LevelUpBurst'
+import Avatar from '../Avatar'
 
 export function VideoFill({
   stream,
@@ -97,7 +98,6 @@ function ParticipantTile({
   /** Live de outra pessoa: barra de mutar/volume (só para você) ao passar o mouse. */
   streamAudioUserId?: string
 }): React.JSX.Element {
-  const initial = user.display_name.charAt(0).toUpperCase()
   const activeSound = useSoundboardStore((s) => (isScreen ? undefined : s.activePlays[user.id]))
   const isPlayingSound = Boolean(activeSound)
   // 'fill': o maior retângulo com a proporção do vídeo que cabe no container
@@ -108,7 +108,7 @@ function ParticipantTile({
     size === 'fill'
       ? { aspectRatio: String(aspect), width: `min(100cqw, calc(100cqh * ${aspect}))` }
       : undefined
-  const avatarDims = size === 'lg' ? 'h-24 w-24 text-3xl' : 'h-14 w-14 text-lg'
+  const avatarSize = size === 'lg' ? 96 : 56
   // Subida de nível: do 60 em diante o tile brilha na cor da faixa; o burst
   // no avatar é para os outros (quem subiu já tem a celebração na janela).
   const meId = useAuthStore((s) => s.user?.id)
@@ -152,13 +152,16 @@ function ParticipantTile({
       {!videoStream && (
         <div className="flex flex-col items-center gap-3">
           <div className="relative">
-            <div
-              className={`flex items-center justify-center rounded-full font-bold text-white transition-colors ${avatarDims} ${
-                speaking || isPlayingSound ? 'bg-[#23a55a]' : 'bg-violet-600'
+            <Avatar
+              userId={user.id}
+              name={user.display_name}
+              avatarUrl={user.avatar_url}
+              size={avatarSize}
+              animate="always"
+              className={`rounded-full transition-shadow ${
+                speaking || isPlayingSound ? 'ring-4 ring-[#23a55a]' : ''
               }`}
-            >
-              {initial}
-            </div>
+            />
             {!isScreen && user.id !== meId && (
               <LevelUpBurst userId={user.id} size={size === 'lg' ? 96 : 56} />
             )}

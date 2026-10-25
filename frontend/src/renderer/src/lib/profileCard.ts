@@ -5,8 +5,11 @@ export interface Rect {
   bottom: number
 }
 
-/** Lado preferido do cartão em relação ao que foi clicado. */
-export type CardSide = 'left' | 'right'
+/**
+ * Lado preferido do cartão em relação ao que foi clicado. 'top' é o da barra
+ * de baixo: abre acima, alinhado à esquerda do item.
+ */
+export type CardSide = 'left' | 'right' | 'top'
 
 const MARGIN = 8
 
@@ -21,6 +24,7 @@ export function placeProfileCard(
   card: { width: number; height: number },
   viewport: { width: number; height: number }
 ): { left: number; top: number } {
+  if (side === 'top') return placeAbove(anchor, card, viewport)
   const leftOf = anchor.left - MARGIN - card.width
   const rightOf = anchor.right + MARGIN
   const fitsLeft = leftOf >= MARGIN
@@ -31,6 +35,20 @@ export function placeProfileCard(
 
   const maxTop = viewport.height - card.height - MARGIN
   const top = Math.max(MARGIN, Math.min(anchor.top, maxTop))
+  return { left, top }
+}
+
+/** Acima do item; se não couber, abaixo; sempre dentro da janela. */
+function placeAbove(
+  anchor: Rect,
+  card: { width: number; height: number },
+  viewport: { width: number; height: number }
+): { left: number; top: number } {
+  const above = anchor.top - MARGIN - card.height
+  const below = anchor.bottom + MARGIN
+  let top = above >= MARGIN ? above : below
+  top = Math.max(MARGIN, Math.min(top, viewport.height - card.height - MARGIN))
+  const left = Math.max(MARGIN, Math.min(anchor.left, viewport.width - card.width - MARGIN))
   return { left, top }
 }
 

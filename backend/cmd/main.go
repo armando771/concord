@@ -93,6 +93,7 @@ func main() {
 
 	// WebSocket hub (created before services that publish events)
 	hub := websocket.NewHub()
+	hub.SetStatusLookup(userRepository.GetStatus)
 
 	// Server
 	serverRepository := server.ServerRepository(db)
@@ -142,6 +143,19 @@ func main() {
 	}
 	soundboardRepository := soundboard.NewRepository(db)
 	soundboardHandler := soundboard.NewHandler(soundboardRepository, soundboardUploads, uploadSpace, serverService, channelService, authService, hub)
+
+	// Perfil (avatar/banner numa subpasta que a limpeza dos anexos não varre)
+	profileMediaDir := filepath.Join(uploadsDir, user.ProfileMediaDir)
+	profileMedia, err := media.NewStore(profileMediaDir)
+	if err != nil {
+		log.Fatalf("failed to open profile media dir: %v", err)
+	}
+	profileStatic, err := media.NewStore(filepath.Join(profileMediaDir, "static"))
+	if err != nil {
+		log.Fatalf("failed to open profile media dir: %v", err)
+	}
+	profileService := user.NewProfileService(userRepository, hub)
+	profileHandler := user.NewProfileHandler(profileService, profileMedia, profileStatic, uploadSpace)
 
 	// LiveKit (mídia das chamadas)
 	liveKitKey, liveKitSecret := os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET")
@@ -194,6 +208,7 @@ func main() {
 	// Protected routes
 	userHandler := user.UserHandler(userService)
 	user.UserRoutes(api, userHandler, authMiddleware)
+	user.ProfileRoutes(api, profileHandler, authMiddleware)
 	friendship.FriendRoutes(api, friendshipHandler, authMiddleware)
 	server.ServerRoutes(api, serverHandler, authMiddleware)
 	channel.ChannelRoutes(api, channelHandler, authMiddleware)
