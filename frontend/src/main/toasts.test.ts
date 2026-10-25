@@ -1,3 +1,4 @@
+import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
@@ -37,7 +38,7 @@ vi.mock('fs', () => ({
 }))
 vi.mock('./appLog', () => ({ appendLog: vi.fn() }))
 
-const programs = '/appdata/Microsoft/Windows/Start Menu/Programs'
+const programs = join('/appdata', 'Microsoft', 'Windows', 'Start Menu', 'Programs')
 const realPlatform = process.platform
 const realExecPath = process.execPath
 
@@ -70,7 +71,7 @@ describe('setupToasts', () => {
     expect(h.state.clsid).toMatch(/^\{[0-9A-F-]{36}\}$/)
     expect(h.state.writes).toHaveLength(1)
     const [path, op, options] = h.state.writes[0]
-    expect(path).toBe(`${programs}/Salinha.lnk`)
+    expect(path).toBe(join(programs, 'Salinha.lnk'))
     expect(op).toBe('create')
     expect(options).toMatchObject({
       target: '/apps/concord/Salinha.exe',
@@ -81,7 +82,7 @@ describe('setupToasts', () => {
 
   it('atalho já correto não é regravado', async () => {
     const { TOAST_ACTIVATOR_CLSID } = await import('./toastPolicy')
-    h.state.links[`${programs}/Salinha.lnk`] = {
+    h.state.links[join(programs, 'Salinha.lnk')] = {
       target: '/apps/concord/Salinha.exe',
       appUserModelId: 'com.concord.app',
       toastActivatorClsid: TOAST_ACTIVATOR_CLSID
@@ -91,19 +92,19 @@ describe('setupToasts', () => {
   })
 
   it('Concord.lnk antigo com o nosso AUMID é apagado: só sobra o Salinha', async () => {
-    h.state.links[`${programs}/Concord.lnk`] = {
+    h.state.links[join(programs, 'Concord.lnk')] = {
       target: '/apps/concord/Concord.exe',
       appUserModelId: 'com.concord.app'
     }
     await setup()
-    expect(h.state.deleted).toEqual([`${programs}/Concord.lnk`])
+    expect(h.state.deleted).toEqual([join(programs, 'Concord.lnk')])
     expect(h.state.writes.map(([p, op]) => [p, op])).toEqual([
-      [`${programs}/Salinha.lnk`, 'create']
+      [join(programs, 'Salinha.lnk'), 'create']
     ])
   })
 
   it('Concord.lnk de outro programa fica onde está', async () => {
-    h.state.links[`${programs}/Concord.lnk`] = { target: '/outro/Concord.exe', appUserModelId: 'x' }
+    h.state.links[join(programs, 'Concord.lnk')] = { target: '/outro/Concord.exe', appUserModelId: 'x' }
     await setup()
     expect(h.state.deleted).toEqual([])
   })

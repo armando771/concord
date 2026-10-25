@@ -57,6 +57,18 @@ func (s *Service) voiceLocationOf(userID string) (voiceLocation, bool) {
 	return voiceLocation{callID: callID, channelID: *ac.info.ChannelID, serverID: *ac.info.ServerID}, true
 }
 
+// VoiceLocation é onde alguém está num canal de voz (usado pelo bot de música).
+type VoiceLocation struct {
+	CallID    string
+	ChannelID string
+	ServerID  string
+}
+
+func (s *Service) VoiceLocationOf(userID string) (VoiceLocation, bool) {
+	loc, ok := s.voiceLocationOf(userID)
+	return VoiceLocation{CallID: loc.callID, ChannelID: loc.channelID, ServerID: loc.serverID}, ok
+}
+
 // checkMove aplica as regras de quem pode mover quem, e para onde.
 func checkMove(actorIsModerator bool, actorID, ownerID, targetID string, from voiceLocation, inVoice bool, dest *channel.Channel) error {
 	if dest.Type != channel.TypeVoice {

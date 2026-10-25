@@ -1,4 +1,6 @@
 import { useEffect, useMemo } from 'react'
+import { useMusicStore } from '../../store/musicStore'
+import MusicVideo from '../music/MusicVideo'
 import { useAuthStore } from '../../store/authStore'
 import { useServerStore } from '../../store/serverStore'
 import { mergeCallPeople } from '../../lib/callParticipants'
@@ -25,9 +27,12 @@ import StreamMosaic from './StreamMosaic'
  */
 function CallStage({
   gap = 'gap-6',
-  speaking
+  speaking,
+  serverId
 }: {
   gap?: string
+  /** servidor da call (habilita o vídeo do Maestro no palco) */
+  serverId?: string
   /** ids dos usuários falando agora (useSpeaking) */
   speaking?: Set<string>
 }): React.JSX.Element {
@@ -46,6 +51,15 @@ function CallStage({
   const watchScreen = useCallStore((s) => s.watchScreen)
   const stopWatchingScreen = useCallStore((s) => s.stopWatchingScreen)
   const setStageVisible = useCallStore((s) => s.setStageVisible)
+  const stageVideo = useMusicStore((s) => s.stageVideo)
+  const setStageVideo = useMusicStore((s) => s.setStageVideo)
+  const musicNow = useMusicStore((s) => s.state?.now ?? null)
+  const musicStage = stageVideo && !!serverId && !!musicNow?.item.has_video
+
+  // Música sem vídeo (ou Maestro saiu): desliga o vídeo no palco.
+  useEffect(() => {
+    if (stageVideo && !musicNow?.item.has_video) setStageVideo(false)
+  }, [stageVideo, musicNow?.item.has_video, setStageVideo])
 
   // Montado = tela da call visível (canal conectado ou DM expandida); fora
   // dela a transmissão assistida vira miniatura (ScreenMiniPlayer).
@@ -160,6 +174,60 @@ function CallStage({
         streamAudioUserId={entry.local ? undefined : entry.userId}
         fullscreenable={!entry.local}
       />
+    )
+  }
+
+  // Vídeo da música em destaque (como uma tela em foco) + faixa com as pessoas.
+  if (musicStage && musicNow && serverId) {
+    return (
+      <div className="flex h-full w-full flex-col gap-4">
+        <div
+          data-music-video-stage
+          className="relative flex min-h-0 flex-1 items-center justify-center bg-black"
+        >
+          <MusicVideo
+            serverId={serverId}
+            item={musicNow.item}
+            startedAt={musicNow.started_at}
+            variant="stage"
+          />
+          <button
+            type="button"
+            onClick={() => setStageVideo(false)}
+            aria-label="Fechar"
+            className="absolute right-2 top-2 cursor-pointer rounded-full bg-black/60 p-1 text-white"
+          >
+            <XIcon className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center justify-center gap-3">
+          {screens.map((entry) => screenTile(entry, 'md'))}
+          <ParticipantTile
+            user={meInfo}
+            selfMuted={muted}
+            deafened={deafened}
+            speaking={meSpeaking}
+            size="md"
+            videoStream={localCameraStream}
+            mirror
+          />
+          {people
+            .filter((p) => !availableScreens.includes(p.id))
+            .map((p) => (
+              <ParticipantTile
+                key={p.id}
+                user={p}
+                selfMuted={voiceStates[p.id]?.muted}
+                onContextMenu={userMenuHandler(p.id, p.display_name, meId, p.username)}
+                locallyMuted={localAudio[p.id]?.muted ?? false}
+                deafened={voiceStates[p.id]?.deafened}
+                size="md"
+                speaking={speaking?.has(p.id) ?? false}
+                videoStream={videoStreams[p.id] ?? null}
+              />
+            ))}
+        </div>
+      </div>
     )
   }
 

@@ -5,6 +5,10 @@ import { useChatStore } from '../store/chatStore'
 import type { Message } from '../api/messages'
 import { showToast } from '../store/toastStore'
 import SystemMessage from './SystemMessage'
+import MusicMessage from './music/MusicMessage'
+import MusicEphemeralList from './music/MusicEphemeralList'
+import SlashSuggestions from './music/SlashSuggestions'
+import { useMusicStore } from '../store/musicStore'
 import Avatar from './Avatar'
 import { useUserLook } from '../store/profileStore'
 import { profileCardHandler } from '../store/profileCardStore'
@@ -187,6 +191,7 @@ function MessageItem({
   const hasReplyReference = Boolean(message.reply_to_id || message.reply_to)
   const replyAuthorName = serverDisplayName({ nickname: replyNickname }, message.reply_to?.author)
 
+  if (message.system_kind === 'music') return <MusicMessage message={message} />
   if (message.system_kind) return <SystemMessage message={message} />
 
   // Mensagem de quem você bloqueou: escondida, como no Discord.
@@ -505,6 +510,7 @@ function ChatPane({
   const [loadingOlderRooms, setLoadingOlderRooms] = useState<ReadonlySet<string>>(new Set())
   const loadingOlder = loadingOlderRooms.has(room)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const ephemeralCount = useMusicStore((s) => s.ephemeral.length)
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
   const firstRender = useRef(true)
@@ -531,7 +537,7 @@ function ChatPane({
     if (stickToBottom.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages.length])
+  }, [messages.length, ephemeralCount])
 
   const firstId = messages[0]?.id
   useLayoutEffect(() => {
@@ -824,6 +830,7 @@ function ChatPane({
                 canModerate={permissions.canModerate}
               />
             ))}
+            <MusicEphemeralList room={room} serverId={serverId ?? null} />
             <div ref={bottomRef} />
           </div>
         )}
@@ -891,6 +898,15 @@ function ChatPane({
             onSubmit={handleSubmit}
             className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
           >
+            {room.startsWith('channel:') && !mention && (
+              <SlashSuggestions
+                input={draft}
+                onPick={(text) => {
+                  setDraft(text)
+                  inputRef.current?.focus()
+                }}
+              />
+            )}
             {permissions.canAttach && (
               <button
                 type="button"

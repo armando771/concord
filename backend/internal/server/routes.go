@@ -31,6 +31,8 @@ func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware, req
 		servers.POST("/:id/bans", handler.Ban)
 		servers.DELETE("/:id/bans/:userId", handler.Unban)
 		servers.PUT("/:id/primary-channel", handler.SetPrimaryChannel)
+		servers.POST("/:id/music-bot", handler.EnableMusicBot)
+		servers.DELETE("/:id/music-bot", handler.DisableMusicBot)
 	}
 
 	invites := router.Group("/invites")

@@ -108,3 +108,29 @@ func TestGrantPermissionMirrorsToken(t *testing.T) {
 		t.Fatalf("sem falar mas com tela: %+v", p)
 	}
 }
+
+func TestIssueBotTokenPublishesOnly(t *testing.T) {
+	issuer := NewTokenIssuer(testKey, testSecret)
+	raw, err := issuer.IssueBot("call-1", "bot-music:ch1", "Maestro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifier, err := auth.ParseAPIToken(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, grants, err := verifier.Verify(testSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := grants.Video
+	if grants.Identity != "bot-music:ch1" || v == nil || v.Room != "call-1" || !v.RoomJoin {
+		t.Fatalf("grants = %+v", grants)
+	}
+	if v.CanSubscribe == nil || *v.CanSubscribe {
+		t.Fatal("o bot não pode assinar (não escuta ninguém)")
+	}
+	if v.CanPublish == nil || !*v.CanPublish {
+		t.Fatal("o bot precisa publicar")
+	}
+}

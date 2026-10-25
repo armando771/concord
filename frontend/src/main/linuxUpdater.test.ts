@@ -15,6 +15,9 @@ import {
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// symlink exige privilégio no Windows; estas suítes cobrem só o Linux
+const describeUnix = process.platform === 'win32' ? describe.skip : describe
 import { LinuxUpdater, type LinuxUpdaterOptions } from './linuxUpdater'
 
 const FEED = 'http://srv/updates/'
@@ -109,7 +112,7 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
 
-describe('checkForUpdates', () => {
+describeUnix('checkForUpdates', () => {
   it('avisa versão nova do manifesto', async () => {
     publish('1.0.1', tarball('1.0.1'))
     const u = makeUpdater()
@@ -150,7 +153,7 @@ describe('checkForUpdates', () => {
   })
 })
 
-describe('downloadUpdate', () => {
+describeUnix('downloadUpdate', () => {
   it('baixa, confere o sha512 e entrega o arquivo', async () => {
     const data = tarball('1.0.1')
     publish('1.0.1', data)
@@ -191,7 +194,7 @@ describe('downloadUpdate', () => {
   })
 })
 
-describe('stage', () => {
+describeUnix('stage', () => {
   async function downloaded(data: Buffer, version = '1.0.1'): Promise<[LinuxUpdater, string]> {
     publish(version, data)
     const u = makeUpdater()
@@ -237,7 +240,7 @@ describe('stage', () => {
   })
 })
 
-describe('quitAndInstall', () => {
+describeUnix('quitAndInstall', () => {
   it('troca current, guarda previous, integra e reabre pelo lançador', async () => {
     publish('1.0.1', tarball('1.0.1'))
     const u = makeUpdater()
@@ -280,7 +283,7 @@ describe('quitAndInstall', () => {
   })
 })
 
-describe('confirmStartup', () => {
+describeUnix('confirmStartup', () => {
   it('confirma a abertura e apaga versões antigas e downloads', () => {
     for (const v of ['0.8.0', '0.9.0']) mkdirSync(join(root, 'versions', v))
     mkdirSync(join(root, 'versions', '.staging-1.0.1-42'))
@@ -307,7 +310,7 @@ describe('confirmStartup', () => {
   })
 })
 
-describe('versão que voltou atrás (C1)', () => {
+describeUnix('versão que voltou atrás (C1)', () => {
   const LAUNCHER = join(__dirname, '../../build/linux/salinha-launcher')
 
   function fakeVersion(version: string): void {

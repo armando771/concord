@@ -22,6 +22,7 @@ type ServerMember struct {
 	AvatarURL   *string `json:"avatar_url,omitempty"`
 	// Nickname: apelido neste servidor (null = sem; vale o display_name).
 	Nickname *string `json:"nickname"`
+	IsBot    bool    `json:"is_bot"`
 	// Role é legado (apps de antes dos cargos): "admin" se o membro pode
 	// gerenciar canais. Os cargos de verdade estão em RoleIDs.
 	Role      string    `json:"role"`

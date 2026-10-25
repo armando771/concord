@@ -63,5 +63,16 @@ services:
           empty_timeout: 300
           max_participants: 25
 
+  # Opcional (Maestro): gera PO tokens para o yt-dlp quando o YouTube marca o
+  # IP do servidor como bot. Ligar: docker compose --profile music up -d
+  # e MUSIC_POT_URL=http://127.0.0.1:4416 no .env.
+  bgutil-pot:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    container_name: concord-bgutil-pot
+    profiles: ["music"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4416:4416"
+
 volumes:
   concord_postgres_data:

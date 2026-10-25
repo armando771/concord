@@ -18,6 +18,9 @@ import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+// symlink exige privilégio no Windows; estas suítes cobrem só o Linux
+const describeUnix = process.platform === 'win32' ? describe.skip : describe
+
 const LAUNCHER = resolve(__dirname, '../../build/linux/salinha-launcher')
 
 let dir: string
@@ -92,7 +95,7 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
 
-describe('sandbox', () => {
+describeUnix('sandbox', () => {
   it('com user namespaces abre com o sandbox (sem --no-sandbox)', () => {
     run(['--hidden'])
     expect(launches()).toEqual(['1.0.0 --ozone-platform-hint=auto --hidden'])
@@ -144,7 +147,7 @@ describe('sandbox', () => {
   })
 })
 
-describe('volta automática', () => {
+describeUnix('volta automática', () => {
   beforeEach(() => {
     addVersion('0.9.0')
     symlinkSync('versions/0.9.0', join(root, 'previous'))
@@ -190,7 +193,7 @@ describe('volta automática', () => {
   })
 })
 
-describe('--integrate', () => {
+describeUnix('--integrate', () => {
   it('cria ~/.local/bin/salinha e o atalho apontando para current', () => {
     run(['--integrate'])
     const stub = readFileSync(join(home, '.local/bin/salinha'), 'utf8')

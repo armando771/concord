@@ -77,3 +77,21 @@ func (t *TokenIssuer) Issue(room, identity, name string, g Grant) (string, error
 		SetVideoGrant(grant)
 	return token.ToJWT()
 }
+
+// IssueBot é o token do bot de música: entra na sala e só publica áudio
+// (não assina ninguém — não escuta a call).
+func (t *TokenIssuer) IssueBot(room, identity, name string) (string, error) {
+	canPublish, canSubscribe := true, false
+	token := auth.NewAccessToken(t.apiKey, t.apiSecret).
+		SetIdentity(identity).
+		SetName(name).
+		SetValidFor(tokenTTL).
+		SetVideoGrant(&auth.VideoGrant{
+			RoomJoin:          true,
+			Room:              room,
+			CanPublish:        &canPublish,
+			CanSubscribe:      &canSubscribe,
+			CanPublishSources: []string{"microphone"},
+		})
+	return token.ToJWT()
+}

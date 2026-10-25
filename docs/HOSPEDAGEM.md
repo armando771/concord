@@ -819,6 +819,64 @@ maior aplicada antes dela faz a 000025 nunca rodar). Ela é idempotente: rode
 `psql "$DATABASE_URL" -f /opt/concord/migrations/000025_add_login_lower_indexes.up.sql`
 e reinicie o backend.
 
+## Bot de música (Maestro)
+
+O Maestro toca música do YouTube nas chamadas de voz (`/play`, `/skip`...). Ele
+precisa de dois programas no PATH do servidor; sem eles o backend sobe normalmente
+e o Maestro responde "fora do ar".
+
+- **ffmpeg**: `sudo apt-get install -y ffmpeg`.
+- **yt-dlp**: use o **binário oficial** (o do `apt` fica velho e o `yt-dlp -U`
+  não funciona nele). O `scripts/install-services.sh` baixa o binário para
+  `~/.local/bin/yt-dlp` se não achar um no PATH, e instala o timer
+  `concord-ytdlp-update.timer`, que roda `yt-dlp -U` todo dia (o YouTube muda
+  com frequência e quebra versões antigas). O script também recusa seguir sem
+  `ffmpeg`.
+
+### Variáveis (`backend/.env`)
+
+Todas opcionais; os padrões e comentários estão no `backend/.env.example`.
+
+| Variável | Para quê |
+|---|---|
+| `MUSIC_MAX_PLAYERS=5` | canais de voz tocando ao mesmo tempo |
+| `MUSIC_QUEUE_MAX=100` | músicas por fila |
+| `MUSIC_IDLE_TIMEOUT=5m` | sem música por esse tempo, o Maestro sai da call |
+| `MUSIC_CACHE_DIR` | cache das faixas (padrão: pasta temporária do sistema/concord-music) |
+| `MUSIC_YT_COOKIES` | caminho do `cookies.txt` de uma conta Premium (veja abaixo) |
+| `MUSIC_POT_URL` | provedor de PO token, ex.: `http://127.0.0.1:4416` (veja abaixo) |
+| `MUSIC_TEST_SOURCE=1` | só para testes/e2e: tons do ffmpeg no lugar do YouTube |
+
+### Cookies do YouTube Premium (opcional, 256 kbps)
+
+Com uma conta Premium o yt-dlp pega o formato 774 (~256 kbps) em vez de ~160 kbps.
+
+1. Numa **janela anônima**, entre na conta Premium no YouTube.
+2. Exporte o `cookies.txt` com a extensão "Get cookies.txt LOCALLY" e feche a janela.
+3. Salve o arquivo **fora do repositório** (ex.: `/opt/concord/cookies.txt`, só você lê).
+4. Aponte `MUSIC_YT_COOKIES=/opt/concord/cookies.txt` no `.env` e reinicie o backend.
+
+Os cookies expiram: renove quando o Maestro voltar a ~160 kbps ou falhar com
+"Sign in".
+
+### PO token (quando o YouTube bloquear o IP)
+
+Se o YouTube marcar o IP do servidor como bot, o yt-dlp precisa de um PO token:
+
+1. Suba o provedor: `docker compose --profile music up -d` (em `backend/`). Ele
+   escuta só em `127.0.0.1:4416`.
+2. Instale o plugin do yt-dlp na máquina: `pip install --user bgutil-ytdlp-pot-provider`
+   (ou baixe o zip do plugin para `~/.config/yt-dlp/plugins/`).
+3. Defina `MUSIC_POT_URL=http://127.0.0.1:4416` no `.env` e reinicie o backend.
+
+### Uso de recursos
+
+- ~1 encoder `ffmpeg` por canal tocando, além dos downloads das faixas.
+- ~320 kbps de upload por pessoa ouvindo, mais o vídeo só para quem abrir.
+
+O teste de ponta a ponta fica em `scripts/e2e-music.mjs` (backend com
+`MUSIC_TEST_SOURCE=1 MUSIC_IDLE_TIMEOUT=5s`).
+
 ## Segurança
 
 Com o playit, login e mensagens trafegam **sem criptografia** (HTTP). Na VPS

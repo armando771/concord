@@ -1,3 +1,4 @@
+import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 import {
   badVersionCheck,
@@ -96,11 +97,11 @@ describe('sandboxNoticeReason', () => {
 
 describe('defaultInstallRoot', () => {
   it('fica em ~/.local/share/salinha, respeitando XDG_DATA_HOME absoluto', () => {
-    expect(defaultInstallRoot({}, '/home/a')).toBe('/home/a/.local/share/salinha')
-    expect(defaultInstallRoot({ XDG_DATA_HOME: '/dados' }, '/home/a')).toBe('/dados/salinha')
+    expect(defaultInstallRoot({}, '/home/a')).toBe(join('/home/a', '.local', 'share', 'salinha'))
+    expect(defaultInstallRoot({ XDG_DATA_HOME: '/dados' }, '/home/a')).toBe(join('/dados', 'salinha'))
     // relativo é inválido pela especificação XDG: ignora
     expect(defaultInstallRoot({ XDG_DATA_HOME: 'rel' }, '/home/a')).toBe(
-      '/home/a/.local/share/salinha'
+      join('/home/a', '.local', 'share', 'salinha')
     )
   })
 })
