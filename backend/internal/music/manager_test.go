@@ -3,6 +3,7 @@ package music
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"strings"
 	"sync"
@@ -234,5 +235,76 @@ func TestManagerCallEndedClosesPlayer(t *testing.T) {
 	eventually(t, "fechado", func() bool { return len(m.Presence("srv1")) == 0 })
 	if s := hub.last("music:state"); s == nil || s.body["closed"] != true {
 		t.Fatalf("estado final = %+v", s)
+	}
+}
+
+func TestManagerConcurrentPlaySharesStartedPlayer(t *testing.T) {
+	m, hub := newTestManager(t, true, true)
+	release := make(chan struct{})
+	var mu sync.Mutex
+	calls := 0
+	m.deps.NewOutput = func(_ context.Context, _, _ string, s FrameSource) (Output, error) {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+		<-release
+		return &fakeOutput{src: s, done: make(chan error, 1)}, nil
+	}
+	m.HandleCommand("srv1", "txt", "u1", "/play https://youtu.be/dQw4w9WgXcQ")
+	eventually(t, "1ª conexão", func() bool { mu.Lock(); defer mu.Unlock(); return calls == 1 })
+	m.HandleCommand("srv1", "txt", "u1", "/play https://youtu.be/dQw4w9WgXcQ")
+	time.Sleep(100 * time.Millisecond)
+	if len(m.Presence("srv1")) != 0 {
+		t.Fatal("player não iniciado não pode aparecer")
+	}
+	close(release)
+	eventually(t, "2 avisos", func() bool { return len(hub.publics()) == 2 })
+	mu.Lock()
+	n := calls
+	mu.Unlock()
+	if n != 1 {
+		t.Fatalf("NewOutput chamado %d vezes", n)
+	}
+	var queued int
+	for _, p := range hub.publics() {
+		if strings.Contains(p, "posição") {
+			queued++
+		}
+	}
+	if queued != 1 || len(m.Presence("srv1")) != 1 {
+		t.Fatalf("avisos = %q", hub.publics())
+	}
+}
+
+func TestManagerStartFailureFailsAllWaiters(t *testing.T) {
+	m, hub := newTestManager(t, true, true)
+	release := make(chan struct{})
+	var mu sync.Mutex
+	calls := 0
+	m.deps.NewOutput = func(context.Context, string, string, FrameSource) (Output, error) {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+		<-release
+		return nil, errors.New("livekit fora")
+	}
+	m.HandleCommand("srv1", "txt", "u1", "/play https://youtu.be/dQw4w9WgXcQ")
+	eventually(t, "conexão", func() bool { mu.Lock(); defer mu.Unlock(); return calls == 1 })
+	m.HandleCommand("srv1", "txt", "u1", "/play https://youtu.be/dQw4w9WgXcQ")
+	time.Sleep(100 * time.Millisecond)
+	close(release)
+	eventually(t, "2 respostas", func() bool {
+		n := 0
+		hub.mu.Lock()
+		for _, s := range hub.sent {
+			if s.event == "music:reply" && s.body["text"] == TextUnavailable {
+				n++
+			}
+		}
+		hub.mu.Unlock()
+		return n == 2
+	})
+	if len(hub.publics()) != 0 || len(m.Presence("srv1")) != 0 {
+		t.Fatalf("publics=%v presence=%v", hub.publics(), m.Presence("srv1"))
 	}
 }

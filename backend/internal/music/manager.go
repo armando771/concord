@@ -63,13 +63,21 @@ type searchSession struct {
 	expires                         time.Time
 }
 
+// pendingPlayer: player conectando; quem chega junto espera em ready.
+type pendingPlayer struct {
+	ready chan struct{}
+	p     *Player
+	err   error
+}
+
 type Manager struct {
 	cfg       Config
 	deps      ManagerDeps
 	available bool
 
 	mu       sync.Mutex
-	players  map[string]*Player // channelID -> player
+	players  map[string]*Player // channelID -> player já iniciado
+	pending  map[string]*pendingPlayer
 	searches map[string]searchSession
 }
 
@@ -93,7 +101,7 @@ func NewManager(cfg Config, deps ManagerDeps) *Manager {
 	if deps.Available == nil {
 		deps.Available = func() bool { return binariesPresent(cfg) }
 	}
-	m := &Manager{cfg: cfg, deps: deps, players: map[string]*Player{}, searches: map[string]searchSession{}}
+	m := &Manager{cfg: cfg, deps: deps, players: map[string]*Player{}, pending: map[string]*pendingPlayer{}, searches: map[string]searchSession{}}
 	m.available = deps.Available()
 	if !m.available {
 		log.Printf("[music] yt-dlp/ffmpeg não encontrados: o Maestro fica indisponível")
@@ -349,7 +357,17 @@ func (m *Manager) playerFor(ctx context.Context, loc Location) (*Player, error) 
 		m.mu.Unlock()
 		return p, nil
 	}
-	if len(m.players) >= m.cfg.MaxPlayers {
+	if pe, ok := m.pending[loc.ChannelID]; ok {
+		// Outro comando já está conectando esse canal: espera o resultado.
+		m.mu.Unlock()
+		select {
+		case <-pe.ready:
+			return pe.p, pe.err
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	if len(m.players)+len(m.pending) >= m.cfg.MaxPlayers {
 		m.mu.Unlock()
 		return nil, errTooManyPlayers
 	}
@@ -360,13 +378,21 @@ func (m *Manager) playerFor(ctx context.Context, loc Location) (*Player, error) 
 		QueueMax: m.cfg.QueueMax, IdleTimeout: m.cfg.IdleTimeout,
 		Crossfade: crossfade, SkipFade: skipFade,
 	})
-	m.players[loc.ChannelID] = p // reserva a vaga antes de conectar
+	pe := &pendingPlayer{ready: make(chan struct{})}
+	m.pending[loc.ChannelID] = pe // reserva a vaga; só entra em players depois de iniciado
 	m.mu.Unlock()
 
-	if err := p.Start(context.Background()); err != nil {
-		m.mu.Lock()
-		delete(m.players, loc.ChannelID)
-		m.mu.Unlock()
+	err := p.Start(context.Background())
+	m.mu.Lock()
+	delete(m.pending, loc.ChannelID)
+	if err == nil {
+		m.players[loc.ChannelID] = p
+		pe.p = p
+	}
+	pe.err = err
+	m.mu.Unlock()
+	close(pe.ready)
+	if err != nil {
 		return nil, err
 	}
 	m.deps.BroadcastToRoom("server:"+loc.ServerID, event("music:presence", map[string]any{
