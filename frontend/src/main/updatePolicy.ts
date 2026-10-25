@@ -54,3 +54,16 @@ export function backgroundDownloadDelayMs(
   const r = Math.min(Math.max(state.random, 0), 1)
   return Math.floor(r * maxMs)
 }
+
+/**
+ * No Linux, o electron-updater só atualiza o próprio AppImage (variável
+ * APPIMAGE, definida pelo runtime do AppImage). AppImage extraído (sem FUSE 2)
+ * ou outra instalação roda sem ela e nunca acha versão nova: o app avisa.
+ */
+export function autoUpdateUnavailable(env: {
+  platform: string
+  isPackaged: boolean
+  appImage: string | undefined
+}): boolean {
+  return env.platform === 'linux' && env.isPackaged && !env.appImage
+}

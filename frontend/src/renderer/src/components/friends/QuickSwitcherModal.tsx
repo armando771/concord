@@ -39,7 +39,10 @@ function QuickSwitcherModal({
       all.push({
         key: c.id,
         label: conversationTitle(c, meId),
-        hint: c.type === 'group' ? `${c.members.length} membros` : (c.other_user?.username ?? ''),
+        hint:
+          c.type === 'group'
+            ? `${(c.members ?? []).length} membros`
+            : (c.other_user?.username ?? ''),
         route,
         avatar: c.other_user ? { userId: c.other_user.id, url: c.other_user.avatar_url } : undefined
       })

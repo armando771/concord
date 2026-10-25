@@ -126,10 +126,24 @@ computador". Basta clicar em **Mais informações → Executar assim mesmo**.
 **Linux x64:** mande `frontend/dist/Salinha-<versão>-x64.AppImage` ou o link da
 landing page. Nas propriedades do arquivo, permita executar como programa
 (ou use `chmod +x Salinha-<versão>-x64.AppImage`) e abra-o como usuário normal.
-Algumas distribuições exigem instalar o FUSE 2. Não use `sudo` nem desative o
+O AppImage precisa do **FUSE 2**, que várias distribuições não instalam por
+padrão:
+
+```bash
+sudo pacman -S fuse2          # Arch / Manjaro / EndeavourOS
+sudo apt install libfuse2     # Debian / Ubuntu até 23.10
+sudo apt install libfuse2t64  # Ubuntu 24.04+
+sudo dnf install fuse-libs    # Fedora
+```
+
+Sem ele o AppImage não abre ("dlopen(): error loading libfuse.so.2"). **Não
+extraia** o AppImage (`--appimage-extract`) para contornar: a cópia extraída
+abre, mas nunca se atualiza sozinha (o atualizador só troca o próprio
+AppImage, pela variável `APPIMAGE`) e fica para trás até quebrar com o
+servidor novo. O app avisa "Atualização automática indisponível nesta
+instalação" quando roda assim. Não use `sudo` para abrir o app nem desative o
 sandbox. Guarde o AppImage numa pasta sua com permissão de escrita: o
-atualizador substitui o arquivo nessa pasta. Executar uma cópia extraída em
-vez do AppImage não oferece atualização automática.
+atualizador substitui o arquivo nessa pasta.
 
 O release Linux usa a mesma chave Ed25519 do Windows e publica o AppImage,
 seu `.sig` e `latest-linux.yml`. O Windows continua usando `latest.yml`.
