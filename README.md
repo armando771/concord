@@ -161,6 +161,9 @@ cd backend && go test ./...
 cd frontend && yarn test
 # E2E de chamadas (dois navegadores com mídia fake) — ver cabeçalho do script:
 node scripts/e2e-voice.mjs
+# E2E do deploy sem queda: reinicia o backend no meio da chamada (Caddy + LiveKit
+# locais) e confere voz, tela, LIVE, mudo e chat — ver cabeçalho do script:
+node scripts/e2e-restart-call.mjs
 # E2E da supressão de ruído (RNNoise) e o RNNoise offline sobre um WAV:
 node scripts/e2e-noise.mjs
 node scripts/rnnoise-offline.mjs entrada.wav saida.wav

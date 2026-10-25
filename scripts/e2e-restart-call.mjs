@@ -1,0 +1,441 @@
+// E2E: reiniciar o backend no meio de uma chamada não pode ser percebido.
+// Dois clientes (Chromium, mídia fake) num canal de voz: a ana fala (tom
+// contínuo) e transmite a tela, a bia está mutada e assiste. O backend
+// reinicia (SIGTERM e sobe de novo, como o systemctl restart) e o script
+// confere que:
+//   - a sinalização do LiveKit não caiu (sem "ICE restart"/"resuming signal");
+//   - o áudio não parou (pacotes RTP contados a cada ~50 ms nos dois lados);
+//   - nenhum aviso de reconexão nem "saiu da chamada" apareceu;
+//   - o selo LIVE da ana e o ícone de mudo da bia não piscaram;
+//   - a mensagem mandada durante o reinício aparece uma vez (nem perdida nem
+//     duplicada) para a ana, que estava com o canal de texto aberto.
+//
+// Precisa do mesmo caminho da VPS: Caddy na frente (o deploy/Caddyfile de
+// verdade, com /rtc direto para o LiveKit), backend e LiveKit locais.
+//
+//   1. Postgres e LiveKit (portas de teste, para não brigar com o dev):
+//        docker run -d --name e2e-pg -e POSTGRES_USER=u -e POSTGRES_PASSWORD=p \
+//          -e POSTGRES_DB=concord -p 127.0.0.1:15432:5432 postgres:17.11
+//        docker run -d --name e2e-lk --network host \
+//          -e LIVEKIT_KEYS="devkey: devsecret-devsecret-devsecret-devsecret" \
+//          -e LIVEKIT_CONFIG="$(printf 'port: 17880\nbind_addresses: ["127.0.0.1"]\nrtc:\n  tcp_port: 17881\n  udp_port: 17882\n  use_external_ip: false\n  node_ip: "127.0.0.1"\n  enable_loopback_candidate: true\n')" \
+//          livekit/livekit-server:v1.13.10
+//   2. Caddy com o deploy/Caddyfile (endereço e portas trocados para o teste):
+//        node scripts/e2e-restart-call.mjs --caddyfile > /tmp/Caddyfile.e2e
+//        docker run -d --name e2e-caddy --network host \
+//          -v /tmp/Caddyfile.e2e:/etc/caddy/Caddyfile:ro caddy:2.10.2
+//   3. Backend numa pasta com .env (DATABASE_URL do passo 1, LIVEKIT_PORT=17880,
+//      as chaves acima, PORT=18090, HOST=127.0.0.1), migrations/ e o binário
+//      (cd backend && go build -o <pasta>/concord-server ./cmd). O script sobe
+//      e reinicia o backend sozinho (não deixe outro rodando na porta).
+//   4. Renderer apontando para o Caddy, servido em APP:
+//        cd frontend && VITE_SERVER_URL=http://127.0.0.1:18080 npx electron-vite build
+//        python3 -m http.server 5174 -d out/renderer
+//   5. BACKEND_DIR=<pasta> APP=http://localhost:5174/ node scripts/e2e-restart-call.mjs
+//
+// Variáveis: CADDY_PORT (18080), BACKEND_PORT (18090), LIVEKIT_PORT (17880),
+// MAX_AUDIO_STALL_MS (150), CHROME (Chromium alternativo).
+import { createRequire } from 'module'
+import { spawn } from 'child_process'
+import { readFileSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+
+const CADDY_PORT = process.env.CADDY_PORT ?? '18080'
+const BACKEND_PORT = process.env.BACKEND_PORT ?? '18090'
+const LIVEKIT_PORT = process.env.LIVEKIT_PORT ?? '17880'
+
+// deploy/Caddyfile com o endereço e as portas do teste (sem a página de download).
+if (process.argv[2] === '--caddyfile') {
+  const prod = readFileSync(new URL('../deploy/Caddyfile', import.meta.url), 'utf8')
+  const test = prod
+    .replace(/^salinha\.exemplo\.com \{[\s\S]*?^\}\n?/m, '')
+    .replace(/^1-2-3-4\.sslip\.io \{/m, `http://127.0.0.1:${CADDY_PORT} {`)
+    .replaceAll('127.0.0.1:7880', `127.0.0.1:${LIVEKIT_PORT}`)
+    .replaceAll('127.0.0.1:8090', `127.0.0.1:${BACKEND_PORT}`)
+  process.stdout.write(`{\n\tadmin off\n}\n\n${test}`)
+  process.exit(0)
+}
+
+const require = createRequire(new URL('../frontend/package.json', import.meta.url))
+const { chromium } = require('playwright')
+
+const API = process.env.API ?? `http://127.0.0.1:${CADDY_PORT}/api`
+const HEALTH = `http://127.0.0.1:${BACKEND_PORT}/healthz`
+const APP = process.env.APP ?? 'http://localhost:5174/'
+const BACKEND_DIR = process.env.BACKEND_DIR
+const MAX_AUDIO_STALL_MS = Number(process.env.MAX_AUDIO_STALL_MS ?? 150)
+const run = Date.now().toString(36)
+if (!BACKEND_DIR) {
+  console.error('defina BACKEND_DIR (pasta com .env, migrations/ e concord-server) — ver o cabeçalho')
+  process.exit(2)
+}
+
+// Tom contínuo como microfone: com o DTX, silêncio não manda pacote nenhum.
+function writeToneWav(path, seconds = 30, rate = 48000) {
+  const samples = seconds * rate
+  const buf = Buffer.alloc(44 + samples * 2)
+  buf.write('RIFF', 0); buf.writeUInt32LE(36 + samples * 2, 4); buf.write('WAVE', 8)
+  buf.write('fmt ', 12); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22)
+  buf.writeUInt32LE(rate, 24); buf.writeUInt32LE(rate * 2, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34)
+  buf.write('data', 36); buf.writeUInt32LE(samples * 2, 40)
+  for (let i = 0; i < samples; i++) {
+    buf.writeInt16LE(Math.round(12000 * Math.sin((2 * Math.PI * 440 * i) / rate)), 44 + i * 2)
+  }
+  writeFileSync(path, buf)
+}
+const TONE = join(tmpdir(), 'concord-e2e-restart-tone.wav')
+writeToneWav(TONE)
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+// ─── Backend: sobe e reinicia como o systemd (SIGTERM, espera sair, sobe) ───
+
+let backend = null
+let backendLog = ''
+function startBackend() {
+  backend = spawn('./concord-server', [], { cwd: BACKEND_DIR, stdio: ['ignore', 'pipe', 'pipe'] })
+  const keep = (d) => { backendLog = (backendLog + d.toString()).slice(-20000) }
+  backend.stdout.on('data', keep)
+  backend.stderr.on('data', keep)
+}
+async function waitHealthy(timeoutMs = 20000) {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const r = await fetch(HEALTH)
+      if (r.ok) return Date.now()
+    } catch {
+      // ainda subindo
+    }
+    await sleep(20)
+  }
+  throw new Error(`backend não respondeu ${HEALTH}\n${backendLog}`)
+}
+// Se o script morrer no meio, o backend que ele subiu não fica rodando.
+process.on('exit', () => {
+  if (backend && backend.exitCode === null) backend.kill('SIGKILL')
+})
+async function stopBackend() {
+  if (!backend || backend.exitCode !== null) return
+  const exited = new Promise((r) => backend.once('exit', r))
+  backend.kill('SIGTERM')
+  await exited
+}
+
+try {
+  await fetch(HEALTH)
+  console.error(`já há um backend em ${HEALTH}: pare-o (o script sobe o dele)`)
+  process.exit(2)
+} catch {
+  // porta livre
+}
+startBackend()
+await waitHealthy()
+
+// ─── Dados: ana e bia no mesmo servidor, com canal de voz ───────────────────
+
+async function api(path, { token, method = 'GET', body } = {}) {
+  const res = await fetch(API + path, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: body ? JSON.stringify(body) : undefined
+  })
+  const text = await res.text()
+  if (!res.ok) throw new Error(`${method} ${path} -> ${res.status} ${text}`)
+  return text ? JSON.parse(text) : null
+}
+async function makeUser(name) {
+  const email = `${name}-${run}@teste.dev`
+  const password = 'senha-forte-123'
+  const { access_token } = await api('/auth/register', {
+    method: 'POST',
+    body: { username: `${name}${run}`, display_name: name, email, password }
+  })
+  const me = await api('/users/me', { token: access_token })
+  return { email, password, token: access_token, id: me.id ?? me.user?.id, username: `${name}${run}` }
+}
+
+const ana = await makeUser('ana')
+const bia = await makeUser('bia')
+await api('/friends/request', { token: ana.token, method: 'POST', body: { username: bia.username } })
+await api(`/friends/${ana.username}/accept`, { token: bia.token, method: 'PUT' })
+const server = await api('/servers', { token: ana.token, method: 'POST', body: { name: `Reinício ${run}` } })
+const serverId = server.id ?? server.server?.id
+await api(`/servers/${serverId}/channels`, {
+  token: ana.token, method: 'POST', body: { name: 'voz-e2e', type: 'voice' }
+})
+const channels = await api(`/servers/${serverId}/channels`, { token: ana.token })
+const textChannel = (Array.isArray(channels) ? channels : channels.channels).find((c) => c.type !== 'voice')
+await api(`/servers/${serverId}/invite`, { token: ana.token, method: 'POST', body: { user_id: bia.id } })
+const invites = await api('/invites', { token: bia.token })
+const invite = (Array.isArray(invites) ? invites : invites.invites).find((i) => (i.server_id ?? i.server?.id) === serverId)
+await api(`/invites/${invite.id}/accept`, { token: bia.token, method: 'POST' })
+console.log('setup ok', { serverId, textChannel: textChannel.name })
+
+// ─── Navegadores ────────────────────────────────────────────────────────────
+
+const browser = await chromium.launch({
+  executablePath: process.env.CHROME,
+  args: [
+    '--use-fake-device-for-media-stream',
+    '--use-fake-ui-for-media-stream',
+    `--use-file-for-fake-audio-capture=${TONE}`,
+    '--auto-select-desktop-capture-source=Entire screen',
+    '--autoplay-policy=no-user-gesture-required'
+  ]
+})
+
+// Roda na página antes do app: guarda os RTCPeerConnection (para contar
+// pacotes) e anota todo aviso que apareça na tela.
+function instrument() {
+  window.__pcs = []
+  const Original = window.RTCPeerConnection
+  window.RTCPeerConnection = class extends Original {
+    constructor(...args) {
+      super(...args)
+      window.__pcs.push(this)
+    }
+  }
+  // Códigos de fechamento do WebSocket do chat (o 1012 do reinício).
+  window.__chatCloses = []
+  const OriginalWs = window.WebSocket
+  window.WebSocket = class extends OriginalWs {
+    constructor(url, ...rest) {
+      super(url, ...rest)
+      if (String(url).includes('/ws?')) {
+        this.addEventListener('close', (e) => window.__chatCloses.push(e.code))
+      }
+    }
+  }
+  window.__texts = []
+  new MutationObserver((records) => {
+    for (const r of records) {
+      for (const node of r.addedNodes) {
+        const text = node.textContent?.trim()
+        if (text) window.__texts.push([performance.now(), text.slice(0, 200)])
+      }
+    }
+  }).observe(document.documentElement, { childList: true, subtree: true })
+}
+
+/**
+ * Amostra a cada ~50 ms: pacotes de áudio/vídeo (recebidos e enviados), quantos
+ * selos LIVE há na tela e o ícone de voz de `watchName` na lista do canal.
+ */
+function startMonitor(watchName) {
+  const m = { on: true, samples: [] }
+  window.__monitor = m
+  const iconOf = (name) => {
+    const row = [...document.querySelectorAll('span')].find((el) => el.textContent === name)?.parentElement
+    return row?.querySelector('[title]')?.getAttribute('title') ?? 'nenhum'
+  }
+  ;(async () => {
+    while (m.on) {
+      const s = { t: performance.now(), audioIn: 0, videoIn: 0, audioOut: 0 }
+      for (const pc of window.__pcs) {
+        if (pc.connectionState === 'closed') continue
+        const stats = await pc.getStats()
+        stats.forEach((r) => {
+          if (r.type === 'inbound-rtp' && r.kind === 'audio') s.audioIn += r.packetsReceived ?? 0
+          if (r.type === 'inbound-rtp' && r.kind === 'video') s.videoIn += r.packetsReceived ?? 0
+          if (r.type === 'outbound-rtp' && r.kind === 'audio') s.audioOut += r.packetsSent ?? 0
+        })
+      }
+      s.live = [...document.querySelectorAll('span')].filter((el) => el.textContent === 'LIVE').length
+      s.icon = watchName ? iconOf(watchName) : null
+      m.samples.push(s)
+      await new Promise((r) => setTimeout(r, 50))
+    }
+  })()
+}
+
+// Segura a reconexão do WebSocket do chat da ana enquanto `chatHeld`: cada
+// tentativa é recusada na hora (o app tenta de novo sozinho). Assim a mensagem
+// mandada no reinício com certeza não chega pelo WebSocket, e só aparece se a
+// ressincronização ao reconectar a buscar.
+let chatHeld = false
+const consoleLines = []
+async function openClient(user, { holdableChat = false } = {}) {
+  const context = await browser.newContext({
+    permissions: ['microphone', 'camera'],
+    viewport: { width: 1600, height: 1000 }
+  })
+  const page = await context.newPage()
+  if (holdableChat) {
+    await page.routeWebSocket(/\/ws\?token=/, (ws) => {
+      if (chatHeld) {
+        ws.close({ code: 1011, reason: 'segurado pelo teste' })
+        return
+      }
+      ws.connectToServer()
+    })
+  }
+  await page.addInitScript(instrument)
+  page.on('console', (m) => consoleLines.push({ who: user.username, type: m.type(), text: m.text(), at: Date.now() }))
+  await page.goto(APP + '#/login')
+  await page.fill('input[type=email]', user.email)
+  await page.fill('input[type=password]', user.password)
+  await page.click('button[type=submit]')
+  await page.waitForURL((u) => !u.hash.includes('login'))
+  await page.getByText('Adicionar amigo').first().waitFor({ timeout: 30000 })
+  await page.goto(APP + `#/servers/${serverId}`)
+  await page.getByText('voz-e2e', { exact: true }).first().click()
+  return page
+}
+
+async function waitFor(desc, fn, ok, timeout = 20000) {
+  const start = Date.now()
+  let last
+  while (Date.now() - start < timeout) {
+    last = await fn()
+    if (ok(last)) { console.log(`PASS ${desc}`); return last }
+    await sleep(250)
+  }
+  throw new Error(`FAIL ${desc}: ${JSON.stringify(last)}`)
+}
+const failures = []
+function check(desc, ok, detail) {
+  if (ok) console.log(`PASS ${desc}`)
+  else { console.log(`FAIL ${desc}: ${JSON.stringify(detail)}`); failures.push(desc) }
+}
+
+/** Maior intervalo (ms) em que o contador `key` não subiu entre [from, to]. */
+function longestStall(samples, key, from, to) {
+  let worst = 0
+  let since = null
+  let prev = null
+  for (const s of samples) {
+    if (s.t < from || s.t > to) { prev = s; continue }
+    if (prev && s[key] > prev[key]) since = s.t
+    else if (prev) {
+      since ??= prev.t
+      worst = Math.max(worst, s.t - since)
+    }
+    prev = s
+  }
+  return Math.round(worst)
+}
+
+const liveTracks = (page) => page.evaluate(() =>
+  [...document.querySelectorAll('audio')].flatMap((el) =>
+    el.srcObject ? el.srcObject.getAudioTracks().map((t) => t.readyState) : []))
+const packets = (page) => page.evaluate(async () => {
+  let audioIn = 0, videoIn = 0, audioOut = 0
+  for (const pc of window.__pcs) {
+    if (pc.connectionState === 'closed') continue
+    ;(await pc.getStats()).forEach((r) => {
+      if (r.type === 'inbound-rtp' && r.kind === 'audio') audioIn += r.packetsReceived ?? 0
+      if (r.type === 'inbound-rtp' && r.kind === 'video') videoIn += r.packetsReceived ?? 0
+      if (r.type === 'outbound-rtp' && r.kind === 'audio') audioOut += r.packetsSent ?? 0
+    })
+  }
+  return { audioIn, videoIn, audioOut }
+})
+
+let failed = false
+try {
+  const pageA = await openClient(ana, { holdableChat: true })
+  const pageB = await openClient(bia)
+  await waitFor('ana ouve a bia', () => liveTracks(pageA), (t) => t.includes('live'))
+  await waitFor('bia ouve a ana', () => liveTracks(pageB), (t) => t.includes('live'))
+
+  // bia mutada; ana transmite a tela e a bia assiste.
+  await pageB.getByRole('button', { name: 'Silenciar microfone' }).first().click()
+  await pageA.getByRole('button', { name: 'Compartilhar tela' }).first().click()
+  await pageB.getByText('Assistir transmissão').first().click({ timeout: 20000 })
+  await waitFor('bia recebe a tela da ana', () => packets(pageB), (p) => p.videoIn > 0)
+
+  // A ana vai para o canal de texto (continua na chamada) e manda uma mensagem.
+  await pageA.getByText(textChannel.name, { exact: true }).first().click()
+  await api(`/channels/${textChannel.id}/messages`, { token: bia.token, method: 'POST', body: { content: `antes ${run}` } })
+  await waitFor('ana vê a mensagem de antes', () => pageA.getByText(`antes ${run}`).count(), (n) => n === 1)
+  await waitFor('ana vê a bia mutada', () => pageA.evaluate((name) => {
+    const row = [...document.querySelectorAll('span')].find((el) => el.textContent === name)?.parentElement
+    return row?.querySelector('[title]')?.getAttribute('title')
+  }, 'bia'), (t) => t === 'Microfone desativado')
+  await waitFor('bia vê o selo LIVE da ana', () => pageB.getByText('LIVE', { exact: true }).count(), (n) => n > 0)
+  await waitFor('ana vê o próprio selo LIVE', () => pageA.getByText('LIVE', { exact: true }).count(), (n) => n > 0)
+  await waitFor('áudio fluindo', () => packets(pageB), (p) => p.audioIn > 100)
+
+  await pageA.evaluate(startMonitor, 'bia')
+  await pageB.evaluate(startMonitor, null)
+  const clock = async (page) => page.evaluate(() => performance.now())
+  await sleep(2000)
+
+  // ─── Reinício ──────────────────────────────────────────────────────────
+  const consoleBefore = consoleLines.length
+  const t0 = { a: await clock(pageA), b: await clock(pageB) }
+  chatHeld = true
+  const stopAt = Date.now()
+  const stopping = stopBackend()
+  // Mandada no meio do reinício: o Caddy segura até o backend novo subir.
+  const during = api(`/channels/${textChannel.id}/messages`, {
+    token: bia.token, method: 'POST', body: { content: `durante ${run}` }
+  }).then(() => Date.now(), (err) => err)
+  await stopping
+  const exitedAt = Date.now()
+  startBackend()
+  const healthyAt = await waitHealthy()
+  const sentAt = await during
+  // A ana volta só agora: a mensagem já foi criada sem ela conectada.
+  chatHeld = false
+  console.log(`backend: SIGTERM→saiu ${exitedAt - stopAt} ms, saiu→/healthz ${healthyAt - exitedAt} ms`)
+  const sent = typeof sentAt === 'number'
+  check('mensagem mandada durante o reinício foi aceita (o Caddy segurou)', sent, sent ? null : sentAt.message)
+  if (sent) {
+    console.log(`  aceita ${sentAt - stopAt} ms após o SIGTERM`)
+    await waitFor('ana vê a mensagem mandada durante o reinício', () => pageA.getByText(`durante ${run}`).count(), (n) => n >= 1, 10000)
+  }
+  await sleep(6000)
+  const t1 = { a: await clock(pageA), b: await clock(pageB) }
+  const monA = await pageA.evaluate(() => { window.__monitor.on = false; return window.__monitor.samples })
+  const monB = await pageB.evaluate(() => { window.__monitor.on = false; return window.__monitor.samples })
+  const textsA = await pageA.evaluate((from) => window.__texts.filter(([t]) => t >= from).map(([, x]) => x), t0.a)
+  const textsB = await pageB.evaluate((from) => window.__texts.filter(([t]) => t >= from).map(([, x]) => x), t0.b)
+  const closesB = await pageB.evaluate(() => window.__chatCloses)
+  check('o chat da bia caiu com 1012 (servidor reiniciando)', closesB.includes(1012), closesB)
+
+  // ─── Conferências ──────────────────────────────────────────────────────
+  const signal = consoleLines.slice(consoleBefore).filter((l) =>
+    /ICE restart|resuming signal|signal disconnected|reconnecting/i.test(l.text))
+  check('sinalização do LiveKit não caiu (sem ICE restart / resume)', signal.length === 0, signal)
+
+  const stallIn = longestStall(monB, 'audioIn', t0.b, t1.b)
+  const stallOut = longestStall(monA, 'audioOut', t0.a, t1.a)
+  console.log(`maior pausa: áudio recebido pela bia ${stallIn} ms, enviado pela ana ${stallOut} ms (limite ${MAX_AUDIO_STALL_MS} ms)`)
+  check('áudio da ana chegou sem pausa para a bia', stallIn < MAX_AUDIO_STALL_MS, { stallIn })
+  check('áudio da ana saiu sem pausa', stallOut < MAX_AUDIO_STALL_MS, { stallOut })
+  const videoAfter = monB.filter((s) => s.t > t0.b)
+  check('tela da ana continuou chegando',
+    videoAfter.length > 1 && videoAfter.at(-1).videoIn > videoAfter[0].videoIn, videoAfter.at(-1))
+
+  const liveMinA = Math.min(...monA.filter((s) => s.t >= t0.a).map((s) => s.live))
+  const liveMinB = Math.min(...monB.filter((s) => s.t >= t0.b).map((s) => s.live))
+  check('selo LIVE não piscou (ana)', liveMinA > 0, { liveMinA })
+  check('selo LIVE não piscou (bia)', liveMinB > 0, { liveMinB })
+  const icons = [...new Set(monA.filter((s) => s.t >= t0.a).map((s) => s.icon))]
+  check('ícone de mudo da bia não piscou (visto pela ana)',
+    icons.length === 1 && icons[0] === 'Microfone desativado', icons)
+
+  const warnings = [...textsA, ...textsB].filter((x) =>
+    /reconect|saiu da chamada|perdida|Não foi possível/i.test(x))
+  check('nenhum aviso de reconexão ou queda na tela', warnings.length === 0, warnings)
+
+  if (sent) {
+    check('mensagem de durante aparece uma vez só', (await pageA.getByText(`durante ${run}`).count()) === 1,
+      await pageA.getByText(`durante ${run}`).count())
+  }
+  check('mensagem de antes não duplicou', (await pageA.getByText(`antes ${run}`).count()) === 1,
+    await pageA.getByText(`antes ${run}`).count())
+  check('chamada continua (bia ouve a ana)', (await liveTracks(pageB)).includes('live'))
+
+  if (failures.length) throw new Error(`${failures.length} conferência(s) falharam`)
+} catch (err) {
+  failed = true
+  console.error(err.message)
+} finally {
+  await browser.close()
+  await stopBackend()
+}
+process.exit(failed ? 1 : 0)

@@ -330,6 +330,25 @@ systemctl show concord-server -p KillSignal -p TimeoutStopUSec -p RestartUSec
 
 No PC de casa, `scripts/install-services.sh` já gera o serviço com isso.
 
+### Conferir que o deploy não foi percebido
+
+Durante um deploy, com alguém em chamada:
+
+- no app, **não** aparece "Chamada reconectada.", "Reconectando a chamada…",
+  "Reconectando ao servidor…" nem "<nome> saiu da chamada";
+- no console do app (Ctrl+Shift+I → Console), **não** aparecem
+  `signal disconnected`, `resuming signal connection` nem
+  `triggering ICE restart` (é o que travava a voz);
+- o selo LIVE e os ícones de mudo na lista do canal de voz não piscam;
+- uma mensagem mandada no meio do deploy aparece uma vez para todo mundo;
+- na VPS: `journalctl -u concord-server -n 20` mostra `servidor desligado` e,
+  logo depois, `servidor pronto`, e `curl -s https://<endereço>/healthz`
+  responde `{"status":"ok"}`.
+
+O teste automático disso é o `scripts/e2e-restart-call.mjs` (Caddy com o
+`deploy/Caddyfile`, backend, LiveKit e dois navegadores; o cabeçalho do script
+explica como subir).
+
 ### Migrations: expandir e contrair
 
 As migrations (`backend/migrations`) rodam **antes** de o binário novo
