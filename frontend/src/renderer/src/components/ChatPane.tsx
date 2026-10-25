@@ -6,7 +6,20 @@ import { showToast } from '../store/toastStore'
 import { applyMention, mentionQuery, mentionsUser, splitMentions } from '../lib/mentions'
 import PollCard from './poll/PollCard'
 import CreatePollModal from './poll/CreatePollModal'
-import { PollIcon } from './icons'
+import MessageAttachments from './chat/MessageAttachments'
+import { PaperclipIcon, PollIcon } from './icons'
+import {
+  ACCEPT_ATTRIBUTE,
+  canSubmit,
+  draftStatus,
+  sendErrorMessage,
+  uploadErrorMessage
+} from '../lib/attachments'
+import { uploadAttachment } from '../api/attachments'
+import { ApiError } from '../api/client'
+import VoiceRecordButton from './chat/VoiceRecordButton'
+import ComposerAttachments from './chat/ComposerAttachments'
+import { useAttachmentDraft } from './chat/useAttachmentDraft'
 
 export interface Mentionable {
   username: string
@@ -77,6 +90,9 @@ function MessageItem({
             )}
           </p>
         )}
+        {message.attachments?.length ? (
+          <MessageAttachments attachments={message.attachments} />
+        ) : null}
         {message.poll && (
           <PollCard poll={message.poll} isAuthor={isMine} onVote={onVote} onEnd={onEndPoll} />
         )}
@@ -117,6 +133,20 @@ function ChatPane({
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { drafts, addFiles, remove: removeAttachment } = useAttachmentDraft(room)
+  const attachmentState = draftStatus(drafts)
+  const submittable = canSubmit(draft, drafts)
+  // dragenter/dragleave disparam a cada filho; o contador evita piscar.
+  const dragDepth = useRef(0)
+  const [dragging, setDragging] = useState(false)
+  const [sendingVoice, setSendingVoice] = useState(false)
+  // Sala atual, para um envio que termina depois da troca de sala não limpar
+  // o campo da sala nova.
+  const roomRef = useRef(room)
+  useEffect(() => {
+    roomRef.current = room
+  }, [room])
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
   const [highlight, setHighlight] = useState(0)
   const meUsername = useAuthStore((s) => s.user?.username)
@@ -194,16 +224,41 @@ function ChatPane({
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
-    const content = draft.trim()
-    if (!content || sending) return
+    if (!submittable || sending) return
     setSending(true)
+    const sentRoom = room
+    // Só sai do rascunho o que foi enviado: arquivo adicionado durante o envio fica.
+    const sentDrafts = drafts.filter((d) => d.status === 'done').map((d) => d.localId)
     try {
-      await sendToRoom(room, content)
-      setDraft('')
+      await sendToRoom(room, draft.trim(), attachmentState.readyIds)
+      if (roomRef.current === sentRoom) {
+        setDraft('')
+        sentDrafts.forEach(removeAttachment)
+      }
     } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Falha ao enviar mensagem.')
+      showToast.error(
+        err instanceof ApiError
+          ? sendErrorMessage(err.status, err.message)
+          : 'Falha ao enviar mensagem.'
+      )
     } finally {
       setSending(false)
+    }
+  }
+
+  // Áudio gravado vai sozinho; o texto digitado continua no campo.
+  const handleRecorded = async (blob: Blob, durationMs: number): Promise<void> => {
+    setSendingVoice(true)
+    try {
+      const attachment = await uploadAttachment(room, blob, {
+        filename: 'gravacao.webm',
+        duration_ms: durationMs
+      })
+      await sendToRoom(room, '', [attachment.id])
+    } catch (err) {
+      showToast.error(uploadErrorMessage(err instanceof ApiError ? err.status : 0))
+    } finally {
+      setSendingVoice(false)
     }
   }
 
@@ -215,8 +270,51 @@ function ChatPane({
     }
   }
 
+  const hasFiles = (e: React.DragEvent): boolean => e.dataTransfer.types.includes('Files')
+
+  const handleDragEnter = (e: React.DragEvent): void => {
+    if (!hasFiles(e)) return
+    e.preventDefault()
+    dragDepth.current += 1
+    setDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent): void => {
+    if (!hasFiles(e)) return
+    dragDepth.current = Math.max(0, dragDepth.current - 1)
+    if (dragDepth.current === 0) setDragging(false)
+  }
+
+  const handleDrop = (e: React.DragEvent): void => {
+    if (!hasFiles(e)) return
+    e.preventDefault()
+    dragDepth.current = 0
+    setDragging(false)
+    addFiles(Array.from(e.dataTransfer.files))
+  }
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>): void => {
+    // Colar texto continua normal; só arquivo (ex.: print) vira anexo.
+    if (e.clipboardData.files.length === 0) return
+    e.preventDefault()
+    addFiles(Array.from(e.clipboardData.files))
+  }
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div
+      className="relative flex min-h-0 flex-1 flex-col"
+      onDragEnter={handleDragEnter}
+      onDragOver={(e) => {
+        if (hasFiles(e)) e.preventDefault()
+      }}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {dragging && (
+        <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-violet-400/70 bg-black/60 text-sm font-semibold text-white">
+          Solte os arquivos para enviar
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto" onScroll={handleScroll}>
         {loading ? (
           <div className="flex h-full items-center justify-center text-sm text-gray-400">
@@ -281,10 +379,31 @@ function ChatPane({
             ))}
           </ul>
         )}
+        <ComposerAttachments drafts={drafts} onRemove={removeAttachment} />
         <form
           onSubmit={handleSubmit}
-          className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
+          className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
         >
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            title="Anexar arquivo"
+            aria-label="Anexar arquivo"
+            className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <PaperclipIcon className="h-5 w-5" />
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={ACCEPT_ATTRIBUTE}
+            hidden
+            onChange={(e) => {
+              addFiles(Array.from(e.target.files ?? []))
+              e.target.value = ''
+            }}
+          />
           <button
             type="button"
             onClick={() => setPollOpen(true)}
@@ -303,17 +422,23 @@ function ChatPane({
               setHighlight(0)
             }}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             onBlur={() => setMention(null)}
             placeholder={placeholder}
             maxLength={2000}
             className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 outline-none"
           />
+          <VoiceRecordButton key={room} disabled={sendingVoice} onRecorded={handleRecorded} />
           <button
             type="submit"
-            disabled={sending || !draft.trim()}
+            disabled={sending || !submittable}
             className="cursor-pointer rounded-lg bg-[#5865f2] px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {sending ? 'Enviando...' : 'Enviar'}
+            {attachmentState.uploading
+              ? 'Enviando arquivos...'
+              : sending
+                ? 'Enviando...'
+                : 'Enviar'}
           </button>
         </form>
       </div>

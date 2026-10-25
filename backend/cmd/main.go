@@ -12,8 +12,10 @@ import (
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/database"
 	"gin-quickstart/backend/internal/friendship"
+	"gin-quickstart/backend/internal/httplog"
 	"gin-quickstart/backend/internal/level"
 	"gin-quickstart/backend/internal/livekit"
+	"gin-quickstart/backend/internal/media"
 	"gin-quickstart/backend/internal/message"
 	"gin-quickstart/backend/internal/server"
 	"gin-quickstart/backend/internal/updates"
@@ -63,7 +65,9 @@ func main() {
 		log.Fatalf("failed to run migrations: %v", err)
 	}
 
-	router := gin.Default()
+	// Como o gin.Default(), mas o log não grava tokens que vão na URL.
+	router := gin.New()
+	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{Formatter: httplog.Formatter}), gin.Recovery())
 
 	router.Use(cors.New(cors.Config{
 		// O app empacotado carrega via file:// e a auth é por Bearer (sem
@@ -108,10 +112,25 @@ func main() {
 	conversationService := conversation.ConversationService(conversationRepository)
 	conversationHandler := conversation.ConversationHandler(conversationService, friendshipService, serverService, userService)
 
+	// Mídia do chat (arquivos no disco, fora do binário e do deploy)
+	uploadsDir := os.Getenv("UPLOADS_DIR")
+	if uploadsDir == "" {
+		uploadsDir = "uploads"
+	}
+	uploads, err := media.NewStore(uploadsDir)
+	if err != nil {
+		log.Fatalf("failed to open uploads dir: %v", err)
+	}
+
 	// Message
 	messageRepository := message.MessageRepository(db)
-	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository)
+	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository, uploads)
+	// Limpeza horária de arquivos sem dono (cascatas e uploads abandonados).
+	go message.NewJanitor(messageRepository, uploads).Run(context.Background(), time.Hour)
 	messageHandler := message.MessageHandler(messageService, channelService, conversationService, friendshipService, serverService)
+	uploadSpace := media.NewSpace(uploadsDir, media.ReserveFromEnv(os.Getenv("UPLOADS_MIN_FREE_GB")))
+	roomAccess := message.NewServiceRoomAccess(channelService, serverService, conversationService, friendshipService)
+	attachmentHandler := message.NewAttachmentHandler(messageRepository, uploads, uploadSpace, roomAccess, authService)
 
 	// LiveKit (mídia das chamadas)
 	liveKitKey, liveKitSecret := os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET")
@@ -162,6 +181,7 @@ func main() {
 	channel.ChannelRoutes(api, channelHandler, authMiddleware)
 	conversation.ConversationRoutes(api, conversationHandler, authMiddleware)
 	message.MessageRoutes(api, messageHandler, authMiddleware)
+	message.AttachmentRoutes(api, attachmentHandler, authMiddleware)
 	call.CallRoutes(api, callHandler, authMiddleware)
 	level.LevelRoutes(api, levelHandler, authMiddleware)
 
