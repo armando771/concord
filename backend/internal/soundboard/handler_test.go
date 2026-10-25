@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"gin-quickstart/backend/internal/permission"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,16 +71,29 @@ func (r *fakeRepo) Delete(_ context.Context, id string) error {
 }
 
 type fakeServers struct {
-	members map[string]bool
-	mods    map[string]bool
+	members      map[string]bool
+	mods         map[string]bool
+	noSoundboard map[string]bool
 }
 
 func (f *fakeServers) IsMember(_ context.Context, _, userID string) (bool, error) {
 	return f.members[userID], nil
 }
 
-func (f *fakeServers) IsAdminOrOwner(_ context.Context, _, userID string) (bool, error) {
-	return f.mods[userID], nil
+// ServerPerms: membro comum tem as permissões padrão; mods também gerenciam
+// os áudios dos outros; mudos (sem USE_SOUNDBOARD) não enviam.
+func (f *fakeServers) ServerPerms(_ context.Context, _, userID string) (int64, error) {
+	if !f.members[userID] {
+		return 0, nil
+	}
+	perms := permission.DefaultEveryone
+	if f.mods[userID] {
+		perms |= permission.ManageExpressions
+	}
+	if f.noSoundboard[userID] {
+		perms &^= permission.UseSoundboard
+	}
+	return perms, nil
 }
 
 type fakeSpace struct{ ok bool }
@@ -143,6 +158,8 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *Handler, *fakeRepo, *fakePubli
 	srv := &fakeServers{
 		members: map[string]bool{"user-1": true, "user-2": true, "mod-1": true},
 		mods:    map[string]bool{"mod-1": true},
+		// user-2 perdeu USE_SOUNDBOARD (cargo ou @everyone sem a permissão).
+		noSoundboard: map[string]bool{"user-2": true},
 	}
 	tokens := fakeTokens{users: map[string]string{"tok-1": "user-1", "tok-outsider": "outsider"}}
 	pub := &fakePublisher{}
@@ -284,5 +301,21 @@ func TestDeletePermissions(t *testing.T) {
 	r.ServeHTTP(w2, req2)
 	if w2.Code != http.StatusOK {
 		t.Fatalf("expected 200 for moderator delete, got %d: %s", w2.Code, w2.Body.String())
+	}
+}
+
+func TestUploadRequiresUseSoundboard(t *testing.T) {
+	r, _, repo, _ := setupTestRouter(t)
+	body, contentType := buildMultipart(t, map[string]string{"name": "Corneta", "duration_ms": "1500"}, validWAV(), "audio/wav")
+	req := httptest.NewRequest(http.MethodPost, "/api/servers/srv-1/soundboard", body)
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("X-User-ID", "user-2")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "missing_permission") {
+		t.Fatalf("status = %d (%s), want 403 missing_permission", w.Code, w.Body.String())
+	}
+	if len(repo.sounds) != 0 {
+		t.Fatal("o áudio não devia ser salvo")
 	}
 }

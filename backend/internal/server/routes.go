@@ -16,7 +16,11 @@ func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin.
 		servers.POST("/:id/invite", handler.InviteMember)
 		servers.GET("/:id/invites", handler.ListServerInvites)
 		servers.GET("/:id/invite-code", handler.InviteCode)
-		servers.PUT("/:id/members/:userId/role", handler.SetMemberRole)
+		servers.DELETE("/:id/members/:userId", handler.Kick)
+		servers.POST("/:id/leave", handler.Leave)
+		servers.GET("/:id/bans", handler.ListBans)
+		servers.POST("/:id/bans", handler.Ban)
+		servers.DELETE("/:id/bans/:userId", handler.Unban)
 		servers.PUT("/:id/primary-channel", handler.SetPrimaryChannel)
 	}
 
