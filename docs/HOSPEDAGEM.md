@@ -266,6 +266,28 @@ curl -s -o /dev/null -w '%{http_code}\n' https://<endereço>/rtc/validate   # 40
 
 Depois disso, reloads do Caddy não derrubam ninguém.
 
+### Postgres e LiveKit não são recriados no deploy
+
+O LiveKit roda sem Redis: as salas só existem na memória dele, então
+**recriar o container do LiveKit derruba todas as chamadas**. Recriar o
+Postgres derruba o backend por alguns segundos. Por isso o deploy:
+
+- sobe só o que estiver parado ou faltando (`docker compose up -d --no-recreate`);
+- compara a configuração nova de cada serviço (o hash que o Compose usa para
+  decidir recriar) com a dos containers rodando. Se algo mudou no
+  `docker-compose.yml` ou no `/opt/concord/.env` (imagem, portas, `LIVEKIT_*`,
+  `POSTGRES_*`), ele **avisa, mantém o compose antigo e segue só com o
+  backend**. No GitHub Actions o aviso aparece como *warning* no resumo do job;
+- só recria com `--infra`. Rode quando ninguém estiver em chamada:
+  ```bash
+  scripts/deploy-vps.sh --infra root@IP
+  ```
+
+As imagens têm versão fixa (`postgres:17.11`, `livekit/livekit-server:v1.13.10`).
+Trocar a versão é uma mudança de infraestrutura como qualquer outra: entra no
+próximo `--infra`. Comentários YAML no compose não contam, mas o texto dentro
+do `LIVEKIT_CONFIG` (comentários inclusive) vira variável do container e conta.
+
 **Página de download:** `site/` é uma página estática que lê
 `/updates/latest.yml` (Windows) e `/updates/latest-linux.yml` (Linux) e aponta
 cada botão para o artefato correspondente. A falha de um manifesto não bloqueia

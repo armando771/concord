@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:17
+    # Versão fixa: trocar a imagem recria o container (scripts/deploy-vps.sh
+    # só faz isso com --infra).
+    image: postgres:17.11
     container_name: concord-postgres
     restart: unless-stopped
 
