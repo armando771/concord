@@ -175,7 +175,7 @@ function ProfileCardBody({
           <div className="mt-3 rounded-lg bg-white/5 p-2.5">
             <p className="text-ds-xs font-bold uppercase text-gray-400">Jogando agora</p>
             <p className="mt-1 flex items-center gap-1.5 text-ds-md font-semibold text-white">
-              <GameIcon name={game.name} className="h-4 w-4 shrink-0" />
+              <GameIcon name={game.name} appId={game.app_id} iconHash={game.icon_hash} className="h-4 w-4 shrink-0" />
               <span className="truncate">{game.name}</span>
               <span className="shrink-0 text-ds-xs font-normal text-gray-400">
                 <Elapsed startedAt={game.started_at} />

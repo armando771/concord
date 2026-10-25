@@ -17,6 +17,11 @@ de membros, amigos, DMs, barra do usuário, painel de voz e perfil) e na coluna
    appid do jogo aberto em `HKCU\Software\Valve\Steam\RunningAppID`; o título
    vem do `appmanifest_<appid>.acf` local (bibliotecas em `libraryfolders.vdf`).
    O catálogo tem prioridade; sem entrada, o jogo aparece com o nome da Steam.
+   O ícone do jogo vem do cache local (`appcache/librarycache/<appid>/<sha1>.jpg`):
+   o detector manda `app_id` + `icon_hash` e todo cliente monta a imagem no CDN
+   da comunidade da Steam (`GameIcon`); sem hash, ou se a imagem falhar, o
+   controle genérico. O servidor só repassa os dois campos depois de validar
+   (appid inteiro positivo e hash sha1 em hexadecimal).
 2. **IPC.** `main/games.ts` liga/desliga o detector (`games:watch`) e avisa o
    renderer (`games:current`); exposto como `window.api.games`.
 3. **Publicação.** `GameActivityBridge` + `presenceActivityStore` mandam
@@ -36,5 +41,5 @@ de membros, amigos, DMs, barra do usuário, painel de voz e perfil) e na coluna
 
 ## Fora do escopo (por enquanto)
 
-Streaks/"faixas", ícones dos jogos, detecção no Linux/web e jogos fora do catálogo
+Streaks/"faixas", detecção no Linux/web e jogos fora do catálogo
 que não sejam da Steam (Epic, GOG, etc.).

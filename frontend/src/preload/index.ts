@@ -176,12 +176,12 @@ const api = {
     watch(enabled: boolean): void {
       ipcRenderer.send('games:watch', enabled)
     },
-    current(): Promise<{ name: string; startedAt: number } | null> {
+    current(): Promise<{ name: string; startedAt: number; appId?: number; iconHash?: string } | null> {
       return ipcRenderer.invoke('games:current')
     },
     /** O jogo em andamento mudou (null = parou). Retorna unsubscribe. */
-    onChange(cb: (game: { name: string; startedAt: number } | null) => void): () => void {
-      const listener = (_e: unknown, game: { name: string; startedAt: number } | null): void =>
+    onChange(cb: (game: { name: string; startedAt: number; appId?: number; iconHash?: string } | null) => void): () => void {
+      const listener = (_e: unknown, game: { name: string; startedAt: number; appId?: number; iconHash?: string } | null): void =>
         cb(game)
       ipcRenderer.on('games:current', listener)
       return () => ipcRenderer.removeListener('games:current', listener)

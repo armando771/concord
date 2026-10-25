@@ -1,6 +1,6 @@
 import { execFile } from 'child_process'
 import { detectGame } from '../shared/gameCatalog'
-import { detectSteamGame } from './steamGames'
+import { detectSteamGame, type SteamGame } from './steamGames'
 
 // "Em atividade": olha os processos em andamento (como o Discord, não só a
 // janela da frente) e avisa quando um jogo do catálogo abre ou fecha.
@@ -9,6 +9,9 @@ export interface DetectedGame {
   name: string
   /** Unix em ms de quando a Salinha o viu abrir. */
   startedAt: number
+  /** appid e ícone na Steam; só em jogos da Steam fora do catálogo. */
+  appId?: number
+  iconHash?: string
 }
 
 const POLL_INTERVAL_MS = 15_000
@@ -31,12 +34,19 @@ export function nextGame(
   previous: DetectedGame | null,
   runningExes: readonly string[],
   now: number,
-  steamGame: string | null = null
+  steamGame: SteamGame | null = null
 ): DetectedGame | null {
-  const name = detectGame(runningExes)?.name ?? steamGame
+  const catalog = detectGame(runningExes)
+  const name = catalog?.name ?? steamGame?.name
   if (!name) return null
   if (previous && previous.name === name) return previous
-  return { name, startedAt: now }
+  if (catalog || !steamGame) return { name, startedAt: now }
+  return {
+    name,
+    startedAt: now,
+    appId: steamGame.appId,
+    ...(steamGame.iconHash ? { iconHash: steamGame.iconHash } : {})
+  }
 }
 
 function listProcesses(): Promise<string[]> {
