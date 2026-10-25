@@ -23,6 +23,11 @@ export interface ScreenAudioApi {
   stop(): void
 }
 
+export interface ScreenShareApi {
+  onWindowHidden(cb: () => void): () => void
+  ended(): void
+}
+
 export interface UpdatesApi {
   setCallSnapshot(snapshot: CallResume | null): void
   takeCallResume(): Promise<PendingCallResume | null>
@@ -63,6 +68,14 @@ export interface InviteLinksApi {
   takePending(): Promise<string | null>
   /** Chegou um convite (busque com takePending). Retorna unsubscribe. */
   onPending(cb: () => void): () => void
+}
+
+export interface ActivitiesApi {
+  /** Abre o jogo numa janela própria; false = link recusado pelo main. */
+  open(activityId: string, url: string): Promise<boolean>
+  close(): void
+  /** A janela do jogo fechou (pelo usuário ou pelo app). Retorna unsubscribe. */
+  onClosed(cb: (activityId: string) => void): () => void
 }
 
 /** Atalho do modo de edição e se outro programa já tem ele. */
@@ -111,8 +124,10 @@ declare global {
       background?: BackgroundApi
       updates?: UpdatesApi
       screenAudio?: ScreenAudioApi
+      screenShare?: ScreenShareApi
       overlay?: OverlayApi
       inviteLinks?: InviteLinksApi
+      activities?: ActivitiesApi
     }
   }
 }

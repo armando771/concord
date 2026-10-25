@@ -31,6 +31,18 @@ const api = {
       ipcRenderer.send('screen-picker:cancel')
     }
   },
+  screenShare: {
+    /** A janela compartilhada sumiu da tela (minimizada): a live congela. */
+    onWindowHidden(cb: () => void): () => void {
+      const listener = (): void => cb()
+      ipcRenderer.on('screen-share:window-hidden', listener)
+      return () => ipcRenderer.removeListener('screen-share:window-hidden', listener)
+    },
+    /** O compartilhamento acabou: para de vigiar a janela. */
+    ended(): void {
+      ipcRenderer.send('screen-share:ended')
+    }
+  },
   screenAudio: {
     /** Não deu para capturar só a janela: o som vai ser o do sistema. */
     onFallback(cb: (logPath: string) => void): () => void {
@@ -142,6 +154,21 @@ const api = {
       const listener = (): void => cb()
       ipcRenderer.on('invite:open', listener)
       return () => ipcRenderer.removeListener('invite:open', listener)
+    }
+  },
+  activities: {
+    /** Abre o jogo numa janela própria; false = link recusado pelo main. */
+    open(activityId: string, url: string): Promise<boolean> {
+      return ipcRenderer.invoke('activity:open', activityId, url)
+    },
+    close(): void {
+      ipcRenderer.send('activity:close')
+    },
+    /** A janela do jogo fechou (pelo usuário ou pelo app). */
+    onClosed(cb: (activityId: string) => void): () => void {
+      const listener = (_e: unknown, activityId: string): void => cb(activityId)
+      ipcRenderer.on('activity:closed', listener)
+      return () => ipcRenderer.removeListener('activity:closed', listener)
     }
   },
   overlay: {
