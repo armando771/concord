@@ -136,10 +136,12 @@ func (r *Repository) ListByUserID(ctx context.Context, userID string) ([]Summary
 			ELSE c.user_a_id
 		END
 		LEFT JOIN LATERAL (
-			SELECT id, author_id, content, created_at
-			FROM messages
-			WHERE conversation_id = c.id
-			ORDER BY created_at DESC
+			-- Mensagem só com enquete: a prévia mostra a pergunta.
+			SELECT m.id, m.author_id, COALESCE(NULLIF(m.content, ''), '📊 ' || p.question, '') AS content, m.created_at
+			FROM messages m
+			LEFT JOIN polls p ON p.message_id = m.id
+			WHERE m.conversation_id = c.id
+			ORDER BY m.created_at DESC
 			LIMIT 1
 		) lm ON TRUE
 		WHERE c.user_a_id = $1 OR c.user_b_id = $1

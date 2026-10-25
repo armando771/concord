@@ -13,11 +13,11 @@ import (
 )
 
 type Handler struct {
-	service            *Service
-	channelService     *channel.Service
+	service             *Service
+	channelService      *channel.Service
 	conversationService *conversation.Service
-	friendService      *friendship.Service
-	serverService      *server.Service
+	friendService       *friendship.Service
+	serverService       *server.Service
 }
 
 func MessageHandler(service *Service, channelService *channel.Service, conversationService *conversation.Service, friendService *friendship.Service, serverService *server.Service) *Handler {
@@ -110,7 +110,7 @@ func (h *Handler) ListChannelMessages(c *gin.Context) {
 
 	limit, before := parseListParams(c)
 
-	messages, err := h.service.ListChannelMessages(c.Request.Context(), channelID, limit, before)
+	messages, err := h.service.ListChannelMessages(c.Request.Context(), channelID, userID, limit, before)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list messages"})
 		return
@@ -153,10 +153,31 @@ func (h *Handler) CreateConversationMessage(c *gin.Context) {
 		return
 	}
 
+	if !h.canSendToConversation(c, conversationID, userID) {
+		return
+	}
+
+	msg, err := h.service.CreateConversationMessage(c.Request.Context(), conversationID, userID, input.Content)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, msg)
+}
+
+// canSendToConversation confere se userID pode escrever na DM; se não puder,
+// já responde o erro.
+func (h *Handler) canSendToConversation(c *gin.Context, conversationID string, userID string) bool {
 	conv, err := h.conversationService.FindByID(c.Request.Context(), conversationID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "conversation not found"})
-		return
+		return false
+	}
+
+	if conv.UserAID != userID && conv.UserBID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you are not a participant of this conversation"})
+		return false
 	}
 
 	otherUserID := conv.UserAID
@@ -170,17 +191,11 @@ func (h *Handler) CreateConversationMessage(c *gin.Context) {
 		shares, err := h.serverService.SharesServer(c.Request.Context(), userID, otherUserID)
 		if err != nil || !shares {
 			c.JSON(http.StatusForbidden, gin.H{"error": "you can only message friends or people from your servers"})
-			return
+			return false
 		}
 	}
 
-	msg, err := h.service.CreateConversationMessage(c.Request.Context(), conversationID, userID, input.Content)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusCreated, msg)
+	return true
 }
 
 func (h *Handler) ListConversationMessages(c *gin.Context) {
@@ -199,7 +214,7 @@ func (h *Handler) ListConversationMessages(c *gin.Context) {
 
 	limit, before := parseListParams(c)
 
-	messages, err := h.service.ListConversationMessages(c.Request.Context(), conversationID, limit, before)
+	messages, err := h.service.ListConversationMessages(c.Request.Context(), conversationID, userID, limit, before)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list messages"})
 		return

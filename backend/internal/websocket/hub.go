@@ -181,6 +181,18 @@ func (h *Hub) PublishMessageDelete(event message.DeleteEvent) {
 	}
 }
 
+// PublishPollUpdate vai só para a sala da conversa/canal: quem não está com a
+// sala aberta recebe a enquete atualizada ao carregar as mensagens.
+func (h *Hub) PublishPollUpdate(event message.PollUpdateEvent) {
+	if event.ChannelID != nil {
+		h.BroadcastToRoom("channel:"+*event.ChannelID, writeEvent("message:poll:update", event))
+		return
+	}
+	if event.ConversationID != nil {
+		h.BroadcastToRoom("conversation:"+*event.ConversationID, writeEvent("message:poll:update", event))
+	}
+}
+
 func (h *Hub) PublishChannelCreate(event channel.CreateEvent) {
 	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("channel:create", event))
 }
