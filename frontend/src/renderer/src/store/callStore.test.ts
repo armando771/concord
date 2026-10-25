@@ -158,6 +158,54 @@ beforeEach(() => {
 })
 
 describe('callStore — mídia via LiveKit', () => {
+  it('retoma ensurdecido sem publicar áudio e restaura o mute anterior ao desensurdecer', async () => {
+    const mic = fakeMic()
+    rtc.getAudioStream.mockResolvedValue(mic)
+    await useCallStore.getState().startChannelCall('canal-1', {
+      userId: 'eu',
+      backendUrl: 'api',
+      serverId: 's',
+      channelId: 'canal-1',
+      muted: true,
+      deafened: true,
+      mutedBeforeDeafen: false
+    })
+    await flush()
+    expect(mic.stream.getAudioTracks()[0].enabled).toBe(false)
+    expect(media.connect).toHaveBeenCalledWith('ws://servidor', 'tok', expect.anything(), true)
+    expect(useCallStore.getState().deafened).toBe(true)
+    expect(media.publishCamera).not.toHaveBeenCalled()
+    expect(media.publishScreen).not.toHaveBeenCalled()
+    useCallStore.getState().toggleDeafen()
+    expect(useCallStore.getState().muted).toBe(false)
+    expect(mic.stream.getAudioTracks()[0].enabled).toBe(true)
+  })
+
+  it('não entra se a retomada foi cancelada enquanto o microfone abria', async () => {
+    const waiting = deferred<ReturnType<typeof fakeMic>>()
+    rtc.getAudioStream.mockReturnValue(waiting.promise)
+    const abort = new AbortController()
+    const work = useCallStore.getState().startChannelCall(
+      'canal-1',
+      {
+        userId: 'eu',
+        backendUrl: 'api',
+        serverId: 's',
+        channelId: 'canal-1',
+        muted: false,
+        deafened: false,
+        mutedBeforeDeafen: false
+      },
+      abort.signal
+    )
+    abort.abort()
+    const mic = fakeMic()
+    waiting.resolve(mic)
+    await work
+    expect(api.startCall).not.toHaveBeenCalled()
+    expect(allStopped(mic.stream)).toBe(true)
+  })
+
   it('descarta a tela escolhida quando a chamada acabou com o seletor aberto', async () => {
     await joinChannel()
     const picked = deferred<MediaStream>()

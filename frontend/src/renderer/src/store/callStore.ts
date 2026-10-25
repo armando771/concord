@@ -34,6 +34,7 @@ import { loadAudioPrefs, resolveDeviceId, saveAudioPrefs } from '../lib/audioDev
 import { useChatStore } from './chatStore'
 import { useAuthStore } from './authStore'
 import { showToast } from './toastStore'
+import type { CallResume } from '../../../shared/callResume'
 
 export type CallStatus = 'idle' | 'ringing' | 'outgoing' | 'active'
 export type CallKind = 'dm' | 'channel'
@@ -140,13 +141,15 @@ interface CallState {
   muted: boolean
   deafened: boolean
   startedAt: number | null
+  /** Mute de antes de ensurdecer — volta a ele ao desensurdecer. */
+  mutedBeforeDeafen: boolean
   /** incrementa a cada evento call:* relevante — usado pela UI p/ revalidar listas */
   listVersion: number
   /** chamadas ativas por canal do servidor aberto (polling da sidebar) */
   serverCalls: Record<string, CallStateResponse>
 
   startDMCall: (conversationId: string, peer: CallUserInfo) => Promise<void>
-  startChannelCall: (channelId: string) => Promise<void>
+  startChannelCall: (channelId: string, resume?: CallResume, signal?: AbortSignal) => Promise<void>
   acceptCall: () => Promise<void>
   declineCall: () => void
   endCall: () => void
@@ -176,6 +179,7 @@ interface CallState {
 /** Microfone da chamada (o stream processado + o que precisa ser fechado). */
 let localMic: MicHandle | null = null
 let transitioning = false
+let callGeneration = 0
 /** Reentrada na chamada de canal em andamento (ver resyncChannelCall). */
 let resyncing = false
 /** Conexão com o servidor de mídia (LiveKit) da chamada atual. */
@@ -190,9 +194,6 @@ let localCameraStream: MediaStream | null = null
 
 /** call:live recentes, reaplicados sobre o polling da lista do servidor. */
 let recentLive: LiveRecord[] = []
-
-/** Mute de antes de ensurdecer — volta a ele ao desensurdecer (como no Discord). */
-let mutedBeforeDeafen = false
 
 const TOKEN_ATTEMPTS = 10
 const TOKEN_RETRY_DELAY_MS = 400
@@ -421,6 +422,7 @@ export const useCallStore = create<CallState>()((set, get) => {
 
   const cleanup = (): void => {
     speakingReporter.reset()
+    callGeneration++
     const callId = get().callId
     if (callId) useChatStore.getState().unsubscribeRoom(`call:${callId}`)
     media?.disconnect()
@@ -453,6 +455,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       focusedScreenUserId: null,
       muted: false,
       deafened: false,
+      mutedBeforeDeafen: false,
       startedAt: null
     })
   }
@@ -518,6 +521,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     focusedScreenUserId: null,
     muted: false,
     deafened: false,
+    mutedBeforeDeafen: false,
     startedAt: null,
     listVersion: 0,
     serverCalls: {},
@@ -557,20 +561,41 @@ export const useCallStore = create<CallState>()((set, get) => {
       }
     },
 
-    startChannelCall: async (channelId) => {
+    startChannelCall: async (channelId, resume, signal) => {
       if (get().status !== 'idle' || transitioning) return
       transitioning = true
+      const generation = callGeneration
+      const cancelled = (): boolean =>
+        !!resume &&
+        (signal?.aborted === true ||
+          generation !== callGeneration ||
+          useAuthStore.getState().user?.id !== resume.userId)
       try {
         localMic = await openMic()
+        if (cancelled()) {
+          stopLocalStream()
+          transitioning = false
+          return
+        }
       } catch {
         showToast.error('Não foi possível acessar o microfone.')
         transitioning = false
+        if (resume) throw new Error('Não foi possível acessar o microfone.')
         return
       }
 
       try {
         // Idempotente no backend: se já há chamada ativa no canal, entra nela.
         const call = await startCallApi({ type: 'channel', channel_id: channelId })
+        if (cancelled()) {
+          stopLocalStream()
+          useChatStore.getState().sendEvent('call:leave', { call_id: call.id })
+          return
+        }
+        const muted = !!resume && (resume.muted || resume.deafened)
+        localMic.stream.getAudioTracks().forEach((track) => {
+          track.enabled = !muted
+        })
         set({
           status: 'active',
           callId: call.id,
@@ -581,8 +606,9 @@ export const useCallStore = create<CallState>()((set, get) => {
           participants: [],
           isInitiator: false,
           streams: {},
-          muted: false,
-          deafened: false,
+          muted,
+          deafened: resume?.deafened ?? false,
+          mutedBeforeDeafen: resume?.mutedBeforeDeafen ?? false,
           startedAt: Date.now()
         })
         playSound('join')
@@ -595,6 +621,7 @@ export const useCallStore = create<CallState>()((set, get) => {
         bumpList()
       } catch (err) {
         stopLocalStream()
+        if (resume) throw err
         showToast.error(err instanceof Error ? err.message : 'Não foi possível entrar na chamada.')
       } finally {
         transitioning = false
@@ -662,12 +689,11 @@ export const useCallStore = create<CallState>()((set, get) => {
     toggleDeafen: () => {
       const next = !get().deafened
       if (next) {
-        mutedBeforeDeafen = get().muted
-        set({ deafened: true, muted: true })
+        set({ mutedBeforeDeafen: get().muted, deafened: true, muted: true })
         applyMute(true)
       } else {
-        set({ deafened: false, muted: mutedBeforeDeafen })
-        applyMute(mutedBeforeDeafen)
+        set({ deafened: false, muted: get().mutedBeforeDeafen })
+        applyMute(get().mutedBeforeDeafen)
       }
       sendVoiceState()
       playSound(next ? 'deafen' : 'undeafen')

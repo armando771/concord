@@ -1,5 +1,6 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
+import type { CallResume, PendingCallResume } from '../shared/callResume'
 
 export interface ScreenSourceInfo {
   id: string
@@ -22,6 +23,8 @@ export interface ScreenAudioApi {
 }
 
 export interface UpdatesApi {
+  setCallSnapshot(snapshot: CallResume | null): void
+  takeCallResume(): Promise<PendingCallResume | null>
   status(): Promise<{ version: string; ready: boolean } | null>
   onAvailable(cb: (version: string) => void): () => void
   onReady(cb: (version: string) => void): () => void

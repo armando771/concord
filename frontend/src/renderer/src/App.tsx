@@ -5,6 +5,7 @@ import ToastContainer from './components/ToastContainer'
 import BackgroundBridge from './components/BackgroundBridge'
 import OverlayBridge from './components/OverlayBridge'
 import UpdateNotice from './components/UpdateNotice'
+import UpdateCallBridge from './components/UpdateCallBridge'
 import UserContextMenu from './components/UserContextMenu'
 import TitleBar from './components/TitleBar'
 import { currentPlatform, hasCustomTitleBar } from './lib/titleBar'
@@ -19,6 +20,7 @@ function App(): React.JSX.Element {
       <BackgroundBridge />
       <OverlayBridge />
       <UpdateNotice />
+      <UpdateCallBridge />
       <UserContextMenu />
       {customTitleBar ? (
         <div className="flex h-full flex-col">
