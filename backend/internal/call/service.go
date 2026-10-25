@@ -455,18 +455,9 @@ func (s *Service) publishLive(serverID string, ev LiveEvent) {
 }
 
 func (s *Service) End(ctx context.Context, callID string) error {
-	s.mu.Lock()
-	ac, ok := s.calls[callID]
-	if !ok {
-		s.mu.Unlock()
-		return ErrNotFound
+	if err := s.closeCall(callID); err != nil {
+		return err
 	}
-	for pid := range ac.participants {
-		delete(s.busy, pid)
-	}
-	delete(s.calls, callID)
-	delete(s.screenSharers, callID)
-	s.mu.Unlock()
 
 	if err := s.repository.EndCall(ctx, callID); err != nil {
 		log.Printf("[call] persist end %s failed: %v", callID, err)
@@ -476,6 +467,34 @@ func (s *Service) End(ctx context.Context, callID string) error {
 		CallID: callID,
 	}))
 
+	return nil
+}
+
+// closeCall tira a chamada da memória. Quem ainda transmitia sai do ar no
+// servidor na hora (o selo LIVE não espera o próximo polling).
+func (s *Service) closeCall(callID string) error {
+	s.mu.Lock()
+	ac, ok := s.calls[callID]
+	if !ok {
+		s.mu.Unlock()
+		return ErrNotFound
+	}
+	for pid := range ac.participants {
+		delete(s.busy, pid)
+	}
+	sharers := s.screenSharers[callID]
+	var serverID string
+	if ac.info.ServerID != nil {
+		serverID = *ac.info.ServerID
+	}
+	channelID := ac.info.ChannelID
+	delete(s.calls, callID)
+	delete(s.screenSharers, callID)
+	s.mu.Unlock()
+
+	for userID := range sharers {
+		s.publishLive(serverID, LiveEvent{CallID: callID, ChannelID: channelID, UserID: userID, Active: false})
+	}
 	return nil
 }
 

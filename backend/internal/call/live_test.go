@@ -124,3 +124,24 @@ func TestDetachNonSharerSendsNothing(t *testing.T) {
 		t.Fatalf("sent %d events, want 0", len(pub.sent))
 	}
 }
+
+func TestCloseCallAnnouncesLiveOffForRemainingSharers(t *testing.T) {
+	pub := &fakePublisher{}
+	s := channelCallWith(pub, "user-1", "user-2")
+	s.screenSharers["call-1"] = map[string]struct{}{"user-2": {}}
+
+	if err := s.closeCall("call-1"); err != nil {
+		t.Fatalf("closeCall: %v", err)
+	}
+
+	live := liveEvents(pub, "server:server-1")
+	if len(live) != 1 || live[0].Active || live[0].UserID != "user-2" {
+		t.Fatalf("call:live = %+v, want active=false de user-2", live)
+	}
+	if _, ok := s.calls["call-1"]; ok {
+		t.Fatal("chamada continua em memória")
+	}
+	if s.IsBusy("user-1") {
+		t.Fatal("user-1 continua ocupado")
+	}
+}
