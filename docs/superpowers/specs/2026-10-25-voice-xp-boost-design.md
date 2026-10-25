@@ -23,7 +23,11 @@ e letra; sem fonte, logo ou arte do jogo).
 | 10+       | x2.0 (teto) | SSS | Smokin' Sexy Style! |
 
 Implementação em inteiros: `boostPercent(eligible int) int` devolve 100, 125,
-150, 175 ou 200. O XP creditado é `minutes * XPPerMinute * percent / 100`.
+150, 175 ou 200. O XP é calculado em centésimos: `minutes * XPPerMinute * percent`
+ mais o resto carregado do usuário; credita-se `total / 100` e guarda-se
+ `total % 100` (a fração não se perde: 12,5 vira 12 e 13 em minutos alternados,
+ e a média paga bate com o rótulo). O resto é descartado quando a pessoa deixa
+ de ser elegível.
 O multiplicador vale no instante em que o minuto fecha (sem média retroativa).
 
 ## Backend (`backend/internal/level`)
@@ -68,7 +72,9 @@ O multiplicador vale no instante em que o minuto fecha (sem média retroativa).
 
 - Tudo em CSS/SVG (transform e opacity, sem libs novas) para não pesar; as
   partículas são poucos elementos animados por keyframes.
-- Descer de rank não dispara banner; só atualiza o visual. Se o buff acaba,
+- Quem está mutado/surdo não ganha o buff, então o banner de ativação não
+  toca para essa pessoa (o badge cinza continua). Descer de rank não dispara
+  banner; só atualiza o visual. Se o buff acaba,
   a letra sai com fade curto.
 - `prefers-reduced-motion` desliga slam, tremida, flash, partículas, glitch e
   pulso; mantém só o badge estático e o banner sem movimento.
@@ -77,9 +83,11 @@ O multiplicador vale no instante em que o minuto fecha (sem média retroativa).
 
 - Go: tabela de degraus de `boostPercent`; `accrue` com várias calls e
   mutados/surdos que não contam; XP creditado multiplicado; `voice:boost`
-  emitido só na mudança de degrau e no fim do buff.
+  emitido a cada tick enquanto há buff (batimento, antes das gravações de XP)
+  e uma vez com `percent: 100` no fim; resto fracionário de XP carregado por
+  usuário.
 - Frontend: store e `boostRank` (rank/texto/rótulo por percentual); banner só
-  dispara ao ativar ou subir de rank.
+  dispara ao ativar ou subir de rank e o buff zera ao sair da call.
 
 ## Fora de escopo
 
