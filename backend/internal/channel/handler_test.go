@@ -144,6 +144,7 @@ func TestReorderValidatesIDsAndType(t *testing.T) {
 		"texto no lugar de voz": `{"type":"voice","channel_ids":["v1","t1"]}`,
 		"repetido":              `{"type":"text","channel_ids":["t1","t1","t2"]}`,
 		"json quebrado":         `{"type":`,
+		"request_id enorme":     `{"type":"text","channel_ids":["t3","t1","t2"],"request_id":"` + strings.Repeat("x", 65) + `"}`,
 	}
 	for name, body := range cases {
 		store, pub := newFakeStore(), &fakePublisher{}
@@ -166,6 +167,18 @@ func TestReorderOtherServerChannels(t *testing.T) {
 	rec := reorderRequest(t, store, pub, "mod", "s2", `{"type":"text","channel_ids":["t1","t2","t3"]}`)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestReorderEchoesRequestID(t *testing.T) {
+	store, pub := newFakeStore(), &fakePublisher{}
+	rec := reorderRequest(t, store, pub, "mod", "s1", `{"type":"voice","channel_ids":["v2","v1"],"request_id":"req-123"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d (%s)", rec.Code, rec.Body.String())
+	}
+	want := []ReorderEvent{{ServerID: "s1", Type: TypeVoice, ChannelIDs: []string{"v2", "v1"}, RequestID: "req-123"}}
+	if !reflect.DeepEqual(pub.reorders, want) {
+		t.Fatalf("events = %+v, want %+v", pub.reorders, want)
 	}
 }
 

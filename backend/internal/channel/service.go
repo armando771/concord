@@ -127,9 +127,12 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 
 // Reorder muda a ordem dos canais de um tipo (texto ou voz) do servidor; ids
 // tem que ser exatamente os canais daquela seção. Avisa a sala do servidor.
-func (s *Service) Reorder(ctx context.Context, serverID string, chType string, ids []string) error {
+func (s *Service) Reorder(ctx context.Context, serverID string, chType string, ids []string, requestID string) error {
 	if chType != TypeText && chType != TypeVoice {
 		return ErrInvalidType
+	}
+	if len(requestID) > MaxRequestIDLength {
+		return ErrInvalidRequestID
 	}
 	if ids == nil {
 		ids = []string{}
@@ -144,6 +147,7 @@ func (s *Service) Reorder(ctx context.Context, serverID string, chType string, i
 			ServerID:   serverID,
 			Type:       chType,
 			ChannelIDs: ids,
+			RequestID:  requestID,
 		})
 	}
 

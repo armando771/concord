@@ -42,8 +42,18 @@ interface ServerState {
    * recusar, volta a ordem de antes e repassa o erro.
    */
   reorderChannels: (serverId: string, type: ChannelType, channelIds: string[]) => Promise<void>
-  /** Ordem que chegou pelo WS (outro moderador mudou). */
+  /** Aplica uma ordem na lista local (sem falar com o servidor). */
   applyChannelOrder: (serverId: string, type: ChannelType, channelIds: string[]) => void
+  /**
+   * Ordem que chegou pelo WS (channel:reorder). Ignora o eco das próprias
+   * reordenações; com uma nossa a caminho, adia e ressincroniza no fim.
+   */
+  receiveChannelOrder: (
+    serverId: string,
+    type: ChannelType,
+    channelIds: string[],
+    requestId?: string
+  ) => void
   updateServer: (serverId: string, name: string, iconUrl?: string) => Promise<void>
   deleteServer: (serverId: string) => Promise<void>
   updateLocalServer: (server: Server) => void
@@ -55,6 +65,34 @@ interface ServerState {
   clearCurrentServer: () => void
   reset: () => void
 }
+
+// Reordenação de canais: uma fila por seção (servidor + tipo). Os pedidos saem
+// um de cada vez, então um mais novo nunca é ultrapassado por um mais antigo.
+interface ReorderSection {
+  /** Último pedido da fila (o próximo espera ele terminar). */
+  queue: Promise<unknown>
+  /** Pedidos ainda sem resposta. */
+  inFlight: number
+  /** Conta as reordenações locais; falha só desfaz se nenhuma veio depois. */
+  generation: number
+  /** Chegou ordem de outra pessoa no meio: buscar a lista ao terminar. */
+  stale: boolean
+}
+const reorderSections = new Map<string, ReorderSection>()
+const reorderSection = (serverId: string, type: ChannelType): ReorderSection => {
+  const key = `${serverId}:${type}`
+  let section = reorderSections.get(key)
+  if (!section) {
+    section = { queue: Promise.resolve(), inFlight: 0, generation: 0, stale: false }
+    reorderSections.set(key, section)
+  }
+  return section
+}
+/** request_id das nossas reordenações, para ignorar o eco pelo WS. */
+const ownReorderRequests = new Set<string>()
+const OWN_REQUEST_TTL_MS = 60_000
+const newRequestId = (): string =>
+  globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 const isSameSession = (tokenAtStart: string | null): boolean =>
   useAuthStore.getState().accessToken === tokenAtStart
@@ -137,16 +175,44 @@ export const useServerStore = create<ServerState>()((set, get) => ({
     await get().fetchChannels(serverId)
   },
   reorderChannels: async (serverId, type, channelIds) => {
+    const section = reorderSection(serverId, type)
     const previous = get()
       .channels.filter((c) => (c.type ?? 'text') === type)
       .map((c) => c.id)
+    const generation = ++section.generation
     get().applyChannelOrder(serverId, type, channelIds)
+
+    const requestId = newRequestId()
+    ownReorderRequests.add(requestId)
+    setTimeout(() => ownReorderRequests.delete(requestId), OWN_REQUEST_TTL_MS)
+
+    section.inFlight++
+    const sent = section.queue.then(() => apiReorderChannels(serverId, type, channelIds, requestId))
+    section.queue = sent.catch(() => {})
     try {
-      await apiReorderChannels(serverId, type, channelIds)
+      await sent
     } catch (err) {
-      get().applyChannelOrder(serverId, type, previous)
+      // Só volta se nada mais novo foi feito depois; de todo jeito busca a
+      // lista do servidor (a nossa pode estar velha: canal criado/apagado).
+      if (section.generation === generation) get().applyChannelOrder(serverId, type, previous)
+      section.stale = true
       throw err
+    } finally {
+      section.inFlight--
+      if (section.inFlight === 0 && section.stale) {
+        section.stale = false
+        void get().fetchChannels(serverId)
+      }
     }
+  },
+  receiveChannelOrder: (serverId, type, channelIds, requestId) => {
+    if (requestId && ownReorderRequests.delete(requestId)) return
+    const section = reorderSections.get(`${serverId}:${type}`)
+    if (section && section.inFlight > 0) {
+      section.stale = true
+      return
+    }
+    get().applyChannelOrder(serverId, type, channelIds)
   },
   applyChannelOrder: (serverId, type, channelIds) => {
     if (get().currentServer?.id !== serverId) return

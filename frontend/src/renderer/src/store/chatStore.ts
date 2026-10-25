@@ -653,7 +653,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
 
     if (event.type === 'channel:reorder') {
-      const reorder = payload as { server_id?: string; type?: string; channel_ids?: string[] }
+      const reorder = payload as {
+        server_id?: string
+        type?: string
+        channel_ids?: string[]
+        request_id?: string
+      }
       if (
         reorder.server_id &&
         (reorder.type === 'text' || reorder.type === 'voice') &&
@@ -661,7 +666,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       ) {
         useServerStore
           .getState()
-          .applyChannelOrder(reorder.server_id, reorder.type, reorder.channel_ids)
+          .receiveChannelOrder(
+            reorder.server_id,
+            reorder.type,
+            reorder.channel_ids,
+            reorder.request_id
+          )
       }
       return
     }

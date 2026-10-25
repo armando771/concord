@@ -42,14 +42,18 @@ export function deleteChannel(serverId: string, channelId: string): Promise<void
   })
 }
 
-/** Nova ordem dos canais de um tipo (dono/moderadores). */
+/**
+ * Nova ordem dos canais de um tipo (dono/moderadores). `requestId` volta no
+ * evento channel:reorder do WS, para quem pediu reconhecer o próprio eco.
+ */
 export function reorderChannels(
   serverId: string,
   type: ChannelType,
-  channelIds: string[]
+  channelIds: string[],
+  requestId?: string
 ): Promise<{ type: ChannelType; channel_ids: string[] }> {
   return request(`/servers/${serverId}/channels/order`, {
     method: 'PUT',
-    body: JSON.stringify({ type, channel_ids: channelIds })
+    body: JSON.stringify({ type, channel_ids: channelIds, request_id: requestId })
   })
 }

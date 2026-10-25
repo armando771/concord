@@ -172,6 +172,7 @@ func (h *Handler) Reorder(c *gin.Context) {
 	var input struct {
 		Type       string   `json:"type"`
 		ChannelIDs []string `json:"channel_ids"`
+		RequestID  string   `json:"request_id"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -190,9 +191,9 @@ func (h *Handler) Reorder(c *gin.Context) {
 		return
 	}
 
-	err := h.service.Reorder(c.Request.Context(), serverID, input.Type, input.ChannelIDs)
+	err := h.service.Reorder(c.Request.Context(), serverID, input.Type, input.ChannelIDs, input.RequestID)
 	switch {
-	case errors.Is(err, ErrInvalidType), errors.Is(err, ErrInvalidOrder):
+	case errors.Is(err, ErrInvalidType), errors.Is(err, ErrInvalidOrder), errors.Is(err, ErrInvalidRequestID):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	case err != nil:
