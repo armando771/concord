@@ -72,6 +72,7 @@ vi.mock('./toastStore', () => ({ showToast: {} }))
 vi.mock('./notificationPrefsStore', () => ({ notificationPrefs: () => env.prefs }))
 
 const { useChatStore } = await import('./chatStore')
+const { useNotifySettingsStore } = await import('./notifySettingsStore')
 const { deliverDesktop } = await import('../lib/notifications')
 const { playSound } = await import('../lib/sounds')
 
@@ -205,5 +206,78 @@ describe('aviso de DM e menção com a conversa fechada', () => {
     arrive(m)
     arrive(m)
     expect(deliverDesktop).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('silenciar servidor e canal', () => {
+  const muted = {
+    muted: true,
+    muted_until: null,
+    level: 'all' as const,
+    suppress_everyone: false
+  }
+
+  beforeEach(() => {
+    useNotifySettingsStore.getState().reset()
+  })
+
+  it('canal silenciado: sem aviso, sem som e sem não lida; menção direta vira selo', async () => {
+    useNotifySettingsStore.setState({ channels: { geral: muted } })
+    await open('channel:outro')
+    arrive(channelMsg('bom dia'))
+    arrive(channelMsg('oi @bia'))
+    expect(deliverDesktop).not.toHaveBeenCalled()
+    expect(playSound).not.toHaveBeenCalled()
+    const state = useChatStore.getState()
+    expect(state.unreadByRoom['channel:geral']).toBeUndefined()
+    expect(state.unreadByServer.s1).toBeUndefined()
+    expect(state.mentionsByRoom['channel:geral']).toBe(1)
+    expect(state.mentionsByServer.s1).toBe(1)
+  })
+
+  it('servidor silenciado vale para todos os canais; o prazo vencido libera', async () => {
+    useNotifySettingsStore.setState({ servers: { s1: muted } })
+    arrive(channelMsg('oi @bia'))
+    expect(deliverDesktop).not.toHaveBeenCalled()
+
+    useNotifySettingsStore.setState({
+      servers: { s1: { ...muted, muted_until: '2020-01-01T00:00:00Z' } }
+    })
+    arrive(channelMsg('de novo @bia'))
+    expect(deliverDesktop).toHaveBeenCalledTimes(1)
+  })
+
+  it('só menções: mensagem comum não conta; @bia avisa', async () => {
+    useNotifySettingsStore.setState({
+      servers: { s1: { ...muted, muted: false, level: 'mentions' } }
+    })
+    arrive(channelMsg('bom dia'))
+    expect(useChatStore.getState().unreadByRoom['channel:geral']).toBeUndefined()
+    arrive(channelMsg('oi @bia'))
+    expect(deliverDesktop).toHaveBeenCalledTimes(1)
+    expect(useChatStore.getState().mentionsByRoom['channel:geral']).toBe(1)
+  })
+
+  it('ignorar @all: o @all não avisa, a menção direta avisa', () => {
+    useNotifySettingsStore.setState({
+      servers: { s1: { ...muted, muted: false, suppress_everyone: true } }
+    })
+    arrive(channelMsg('@all reunião', { mention_everyone: 'all' }))
+    expect(deliverDesktop).not.toHaveBeenCalled()
+    arrive(channelMsg('oi @bia'))
+    expect(deliverDesktop).toHaveBeenCalledTimes(1)
+  })
+
+  it('DM nunca é afetada por mute de servidor', () => {
+    useNotifySettingsStore.setState({ servers: { s1: muted }, channels: { c1: muted } })
+    arrive(dmMsg('oi'))
+    expect(deliverDesktop).toHaveBeenCalledTimes(1)
+  })
+
+  it('abrir a sala zera as menções', async () => {
+    arrive(channelMsg('oi @bia'))
+    expect(useChatStore.getState().mentionsByRoom['channel:geral']).toBe(1)
+    await open('channel:geral')
+    expect(useChatStore.getState().mentionsByRoom['channel:geral']).toBe(0)
   })
 })

@@ -1,3 +1,4 @@
+import NotifySettingsModal from './NotifySettingsModal'
 import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import ServerRail from './ServerRail'
@@ -71,6 +72,7 @@ function AppShell(): React.JSX.Element {
       <BoostBanner />
       <BadgeUnlockToast />
       <BadgesModal />
+      <NotifySettingsModal />
       {quickSwitcherOpen && <QuickSwitcherModal open onClose={() => setQuickSwitcherOpen(false)} />}
       <ShortcutsModal />
     </div>

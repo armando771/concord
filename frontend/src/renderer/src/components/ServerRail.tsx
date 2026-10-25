@@ -5,6 +5,9 @@ import { PlusIcon, InboxIcon, DiamondIcon, SalinhaMarkIcon } from './icons'
 import { useServerStore } from '../store/serverStore'
 import { useInviteStore } from '../store/inviteStore'
 import { useProposalStore } from '../store/proposalStore'
+import { useNotifySettingsStore } from '../store/notifySettingsStore'
+import { isMutedNow } from '../lib/notificationMute'
+import { useNow } from './useNow'
 import { pendingVoteCount } from '../lib/proposals'
 import { useChatStore } from '../store/chatStore'
 import { useFriendStore } from '../store/friendStore'
@@ -37,6 +40,10 @@ function ServerRail(): React.JSX.Element {
 
   const unreadByRoom = useChatStore((s) => s.unreadByRoom)
   const unreadByServer = useChatStore((s) => s.unreadByServer)
+  const mentionsByServer = useChatStore((s) => s.mentionsByServer)
+  const notifyServers = useNotifySettingsStore((s) => s.servers)
+  const openNotifyModal = useNotifySettingsStore((s) => s.openModal)
+  const now = useNow()
   const conversations = useChatStore((s) => s.conversations)
   const incomingRequests = useFriendStore(
     (s) => s.pending.filter((p) => p.direction === 'incoming').length
@@ -232,7 +239,9 @@ function ServerRail(): React.JSX.Element {
           {servers.map((srv) => {
             const isActive = location.pathname === `/servers/${srv.id}`
             const initialChar = srv.name.charAt(0).toUpperCase()
-            const unread = unreadByServerId(srv.id)
+            const muted = isMutedNow(notifyServers[srv.id], now)
+            const mentions = mentionsByServer[srv.id] ?? 0
+            const unread = muted ? 0 : unreadByServerId(srv.id)
             return (
               <div key={srv.id} className="relative flex items-center justify-center group/srv">
                 <span
@@ -242,8 +251,14 @@ function ServerRail(): React.JSX.Element {
                 />
                 <button
                   onClick={() => navigate(`/servers/${srv.id}`)}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    openNotifyModal({ serverId: srv.id, name: srv.name })
+                  }}
                   title={srv.name}
                   className={`group/btn relative flex h-12 w-12 items-center justify-center font-bold text-base text-white transition-all duration-200 cursor-pointer overflow-hidden ${
+                    muted && !isActive && mentions === 0 ? 'opacity-50' : ''
+                  } ${
                     isActive
                       ? 'rounded-2xl bg-violet-600 shadow-md shadow-violet-500/30'
                       : 'rounded-3xl bg-[#12141d]/80 border border-white/10 hover:rounded-2xl hover:bg-violet-600 hover:shadow-md hover:shadow-violet-500/30'
@@ -259,9 +274,12 @@ function ServerRail(): React.JSX.Element {
                     <span>{initialChar}</span>
                   )}
                 </button>
-                {unread > 0 && (
+                {(mentions > 0 || unread > 0) && (
                   <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-md">
-                    {unread > 99 ? '99+' : unread}
+                    {(() => {
+                      const n = mentions > 0 ? mentions : unread
+                      return n > 99 ? '99+' : n
+                    })()}
                   </span>
                 )}
               </div>
