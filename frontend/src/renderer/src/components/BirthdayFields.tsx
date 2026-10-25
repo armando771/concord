@@ -24,7 +24,7 @@ function BirthdayFields({
 
   return (
     <div className="flex w-full flex-col gap-1.5">
-      <span className="text-sm font-medium text-gray-300">{label}</span>
+      <span className="text-xs font-semibold uppercase tracking-wide text-gray-300">{label}</span>
       <div className="flex gap-2">
         <select
           aria-label="Dia do aniversário"
