@@ -59,25 +59,30 @@ func newMixTrack(tag string, r io.ReadCloser) *mixTrack {
 	return &mixTrack{tag: tag, r: r, raw: make([]byte, 32*1024)}
 }
 
-// fill lê até ter want floats no buffer (ou até o fim da faixa).
-func (t *mixTrack) fill(want int) {
-	for len(t.buf) < want && !t.eof {
-		n, err := t.r.Read(t.raw)
-		data := append(t.rem, t.raw[:n]...)
-		whole := len(data) / 4 * 4
-		for i := 0; i < whole; i += 4 {
-			t.buf = append(t.buf, math.Float32frombits(binary.LittleEndian.Uint32(data[i:])))
-		}
-		t.rem = append([]byte(nil), data[whole:]...)
-		if err != nil {
-			t.eof = true
-		}
+// readOnce faz uma única leitura (bloqueante) e decodifica o que veio.
+func (t *mixTrack) readOnce() {
+	n, err := t.r.Read(t.raw)
+	data := append(t.rem, t.raw[:n]...)
+	whole := len(data) / 4 * 4
+	for i := 0; i < whole; i += 4 {
+		t.buf = append(t.buf, math.Float32frombits(binary.LittleEndian.Uint32(data[i:])))
+	}
+	t.rem = append([]byte(nil), data[whole:]...)
+	if err != nil {
+		t.eof = true
 	}
 }
 
-// take tira até n floats do começo do buffer.
+// fill lê até ter want floats no buffer (ou até o fim da faixa). Faz I/O:
+// só a goroutine de ReadFrame chama, e nunca com o lock.
+func (t *mixTrack) fill(want int) {
+	for len(t.buf) < want && !t.eof {
+		t.readOnce()
+	}
+}
+
+// take tira até n floats do começo do buffer, sem I/O (o ReadFrame já encheu).
 func (t *mixTrack) take(n int) []float32 {
-	t.fill(n)
 	if n > len(t.buf) {
 		n = len(t.buf)
 	}
@@ -123,30 +128,42 @@ func (m *Mixer) emit(events []MixEvent) {
 	}
 }
 
+// closeAll fecha leitores fora do lock: o Close de um pipe pode demorar e é
+// ele que destrava um Read parado.
+func closeAll(rs []io.Closer) {
+	for _, r := range rs {
+		_ = r.Close()
+	}
+}
+
 func (m *Mixer) SetNext(tag string, r io.ReadCloser) {
 	m.mu.Lock()
 	var events []MixEvent
+	var toClose []io.Closer
 	t := newMixTrack(tag, r)
 	if m.cur == nil && m.fade == nil {
 		m.cur = t
 		events = append(events, MixEvent{EventStarted, tag})
 	} else {
 		if m.next != nil {
-			_ = m.next.r.Close()
+			toClose = append(toClose, m.next.r)
 		}
 		m.next = t
 	}
 	m.mu.Unlock()
+	closeAll(toClose)
 	m.emit(events)
 }
 
 func (m *Mixer) ClearNext() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	var toClose []io.Closer
 	if m.next != nil {
-		_ = m.next.r.Close()
+		toClose = append(toClose, m.next.r)
 		m.next = nil
 	}
+	m.mu.Unlock()
+	closeAll(toClose)
 }
 
 func (m *Mixer) HasNext() bool {
@@ -158,15 +175,16 @@ func (m *Mixer) HasNext() bool {
 func (m *Mixer) Idle() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.cur == nil && m.fade == nil
+	return m.cur == nil && m.fade == nil && m.next == nil
 }
 
 // Skip faz a atual sumir em skipFade; a próxima (se houver) entra já.
 func (m *Mixer) Skip() {
 	m.mu.Lock()
 	var events []MixEvent
+	var toClose []io.Closer
 	if m.fade != nil {
-		_ = m.fade.out.r.Close()
+		toClose = append(toClose, m.fade.out.r)
 		events = append(events, MixEvent{EventEnded, m.fade.out.tag})
 		m.fade = nil
 	}
@@ -179,54 +197,83 @@ func (m *Mixer) Skip() {
 		}
 	}
 	m.mu.Unlock()
+	closeAll(toClose)
 	m.emit(events)
 }
 
 func (m *Mixer) Close() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	var toClose []io.Closer
 	for _, t := range []*mixTrack{m.cur, m.next} {
 		if t != nil {
-			_ = t.r.Close()
+			toClose = append(toClose, t.r)
 		}
 	}
 	if m.fade != nil {
-		_ = m.fade.out.r.Close()
+		toClose = append(toClose, m.fade.out.r)
 	}
 	m.cur, m.next, m.fade = nil, nil, nil
+	m.mu.Unlock()
+	closeAll(toClose)
 }
 
 func (m *Mixer) ReadFrame(dst []float32) {
+	// Fase 1: só olha o estado; o I/O (que pode parar) roda sem o lock.
+	m.mu.Lock()
+	cur, next := m.cur, m.next
+	var fadeOut *mixTrack
+	if m.fade != nil {
+		fadeOut = m.fade.out
+	}
+	ahead := m.crossfade*Channels + FrameLen
+	m.mu.Unlock()
+	// Só esta goroutine mexe no buffer das faixas, então encher fora do lock é seguro.
+	if fadeOut != nil {
+		fadeOut.fill(FrameLen)
+	}
+	if cur != nil {
+		cur.fill(FrameLen)
+		// O crossfade só começa depois de ver o EOF. O lookahead cresce no máximo
+		// uma leitura por frame (evita um pico de ~2 MB num único frame de 20 ms).
+		if next != nil && len(cur.buf) < ahead && !cur.eof {
+			cur.readOnce()
+		}
+	}
+	if next != nil {
+		next.fill(FrameLen)
+	}
+
+	// Fase 2: decide e mistura, sem I/O.
 	m.mu.Lock()
 	var events []MixEvent
+	var toClose []io.Closer
 	for i := range dst {
 		dst[i] = 0
 	}
 
+	// Ninguém tocando (fade de skip em andamento) e chegou uma próxima: entra já.
+	if m.cur == nil && m.next != nil {
+		m.cur, m.next = m.next, nil
+		events = append(events, MixEvent{EventStarted, m.cur.tag})
+	}
+
 	// Perto do fim da atual, com próxima pronta: começa o crossfade.
-	if m.fade == nil && m.cur != nil {
+	if m.fade == nil && m.cur != nil && m.cur.eof {
+		rem := m.cur.remaining()
 		if m.next != nil {
-			m.cur.fill(m.crossfade*Channels + FrameLen)
-		} else {
-			m.cur.fill(FrameLen)
-		}
-		if m.cur.eof {
-			rem := m.cur.remaining()
-			if m.next != nil {
-				xf := m.crossfade
-				if half := (m.cur.played + rem) / 2; half < xf {
-					xf = half
-				}
-				if rem <= xf {
-					m.fade = &fadeState{out: m.cur, total: rem}
-					m.cur, m.next = m.next, nil
-					events = append(events, MixEvent{EventStarted, m.cur.tag})
-				}
-			} else if rem == 0 {
-				_ = m.cur.r.Close()
-				events = append(events, MixEvent{EventEnded, m.cur.tag})
-				m.cur = nil
+			xf := m.crossfade
+			if half := (m.cur.played + rem) / 2; half < xf {
+				xf = half
 			}
+			if rem <= xf {
+				m.fade = &fadeState{out: m.cur, total: rem}
+				m.cur, m.next = m.next, nil
+				events = append(events, MixEvent{EventStarted, m.cur.tag})
+			}
+		} else if rem == 0 {
+			toClose = append(toClose, m.cur.r)
+			events = append(events, MixEvent{EventEnded, m.cur.tag})
+			m.cur = nil
 		}
 	}
 
@@ -252,7 +299,7 @@ func (m *Mixer) ReadFrame(dst []float32) {
 		}
 		f.pos += FrameSamples
 		if f.pos >= f.total || (f.out.eof && f.out.remaining() == 0) {
-			_ = f.out.r.Close()
+			toClose = append(toClose, f.out.r)
 			events = append(events, MixEvent{EventEnded, f.out.tag})
 			m.fade = nil
 		}
@@ -268,5 +315,6 @@ func (m *Mixer) ReadFrame(dst []float32) {
 		}
 	}
 	m.mu.Unlock()
+	closeAll(toClose)
 	m.emit(events)
 }

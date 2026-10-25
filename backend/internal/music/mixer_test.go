@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"io"
 	"math"
+	"sync"
 	"testing"
 	"testing/iotest"
 	"time"
@@ -164,5 +165,108 @@ func TestClearNextAndClose(t *testing.T) {
 	m.Close()
 	if !a.closed || !m.Idle() {
 		t.Fatal("Close deve fechar tudo")
+	}
+}
+
+func TestSetNextDuringSkipFadePlays(t *testing.T) {
+	rec := &recorder{}
+	m := NewMixer(5*time.Second, time.Second, rec.on)
+	m.SetNext("a", src(30, 0.5))
+	run(m, 10, rec)
+	m.Skip()
+	run(m, 5, rec)
+	m.SetNext("b", src(30, 0.5))
+	if m.Idle() {
+		t.Fatal("com próxima guardada não pode estar ocioso")
+	}
+	marks, out := run(m, 60, rec)
+	if _, ok := marks["start:b"]; !ok {
+		t.Fatalf("b nunca começou: %v", marks)
+	}
+	if marks["end:a"] != 44 {
+		t.Fatalf("end:a = %d", marks["end:a"])
+	}
+	if out[55][0] != 0.5 || m.Idle() {
+		t.Fatalf("b deveria tocar: %v idle=%v", out[55][0], m.Idle())
+	}
+}
+
+// blockingReader trava no Read até ser fechado, como um ffmpeg parado.
+type blockingReader struct {
+	started chan struct{}
+	done    chan struct{}
+	once    sync.Once
+}
+
+func (b *blockingReader) Read([]byte) (int, error) {
+	b.once.Do(func() { close(b.started) })
+	<-b.done
+	return 0, io.EOF
+}
+
+func (b *blockingReader) Close() error {
+	select {
+	case <-b.done:
+	default:
+		close(b.done)
+	}
+	return nil
+}
+
+func TestCloseUnblocksStalledRead(t *testing.T) {
+	m := NewMixer(5*time.Second, time.Second, nil)
+	br := &blockingReader{started: make(chan struct{}), done: make(chan struct{})}
+	m.SetNext("a", br)
+	frameDone := make(chan struct{})
+	go func() { m.ReadFrame(make([]float32, FrameLen)); close(frameDone) }()
+	<-br.started
+	finished := make(chan struct{})
+	go func() {
+		m.Idle()
+		m.SetNext("b", src(1, 0.5))
+		m.ClearNext()
+		m.Close()
+		close(finished)
+	}()
+	select {
+	case <-finished:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close/SetNext travaram com o Read parado")
+	}
+	select {
+	case <-frameDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("ReadFrame não voltou depois do Close")
+	}
+}
+
+type countingReader struct {
+	io.Reader
+	n int
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.Reader.Read(p)
+	c.n += n
+	return n, err
+}
+
+func (c *countingReader) Close() error { return nil }
+
+func TestLookaheadGrowsGradually(t *testing.T) {
+	m := NewMixer(5*time.Second, time.Second, nil)
+	cr := &countingReader{Reader: bytes.NewReader(pcm(60, 0.5))}
+	m.SetNext("a", cr)
+	m.SetNext("b", src(60, 0.5))
+	most := 0
+	for i := 0; i < 200; i++ {
+		before := cr.n
+		m.ReadFrame(make([]float32, FrameLen))
+		if d := cr.n - before; d > most {
+			most = d
+		}
+	}
+	if most > 2*32*1024 {
+		t.Fatalf("um frame leu %d bytes", most)
 	}
 }
