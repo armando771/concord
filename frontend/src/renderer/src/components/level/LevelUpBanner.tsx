@@ -1,7 +1,8 @@
 import { useEffect, useMemo } from 'react'
 import { useAuthStore } from '../../store/authStore'
 import { useLevelStore } from '../../store/levelStore'
-import { isMilestone, levelUpEffects, type LevelTier } from '../../lib/levels'
+import { useCallStore } from '../../store/callStore'
+import { levelUpEffects, type LevelTier } from '../../lib/levels'
 import { oncePerKey, playSound } from '../../lib/sounds'
 import LevelBadge from './LevelBadge'
 
@@ -37,9 +38,11 @@ const firstPlay = oncePerKey()
 /**
  * Faixa no topo da janela quando VOCÊ sobe de nível: aparece mesmo que você
  * esteja num canal de texto e não esteja vendo o seu tile na chamada. Cresce
- * com o nível (levelUpEffects): do 40 em diante a borda gira na cor da faixa
- * e toca um chime, do 60 sai confete, do 80 um emblema grande aparece atrás.
- * Entrando numa faixa nova, mostra "Nova faixa: <nome>!".
+ * a cada nível (levelUpEffects): mais confete, que vai mais longe e com mais
+ * cores, brilho mais forte e uma tremida (só da faixa) que aumenta. Do 40 em
+ * diante a borda gira na cor da faixa e toca um chime, do 80 um emblema
+ * grande aparece atrás. Nos marcos toca o jingle do marco. Entrando numa
+ * faixa nova, mostra "Nova faixa: <nome>!".
  */
 function LevelUpBanner(): React.JSX.Element | null {
   const meId = useAuthStore((s) => s.user?.id)
@@ -51,24 +54,28 @@ function LevelUpBanner(): React.JSX.Element | null {
   )
 
   // O som toca mesmo com prefers-reduced-motion (só a animação some).
-  const chime = fx?.chime
+  // Um som de nível novo corta o anterior (playSound), então não se sobrepõem.
+  const sound = fx?.sound
   const key = celebration?.key
   useEffect(() => {
-    if (key !== undefined && chime && firstPlay(key)) playSound(chime)
-  }, [key, chime])
+    if (key === undefined || !sound || !firstPlay(key)) return
+    // Ensurdecido (deafen): nada de som, como no soundboard.
+    if (!useCallStore.getState().deafened) playSound(sound)
+  }, [key, sound])
 
   const confetti = useMemo(() => {
     if (!fx) return []
     return Array.from({ length: fx.confetti }, (_, i) => {
       // Leque para cima e para os lados; depois cai (keyframe level-confetti).
       const angle = ((-170 + (160 / Math.max(1, fx.confetti - 1)) * i) * Math.PI) / 180
-      const reach = 110 + ((i * 37) % 90)
+      // O alcance cresce com o nível (fx.radius: ~90 px no 1, ~280 no 100).
+      const reach = fx.radius * (0.6 + ((i * 37) % 40) / 100)
       return {
         dx: Math.cos(angle) * reach,
-        dy: Math.sin(angle) * (20 + ((i * 29) % 40)),
+        dy: Math.sin(angle) * (20 + ((i * 29) % 40)) * (0.6 + fx.power * 0.6),
         rot: (i % 2 === 0 ? 1 : -1) * (300 + ((i * 53) % 360)),
         wide: i % 3 === 0,
-        color: [fx.tier.color, fx.tier.accent, '#ffffff'][i % 3],
+        color: fx.colors[i % fx.colors.length],
         delay: 250 + (i % 5) * 35
       }
     })
@@ -76,13 +83,19 @@ function LevelUpBanner(): React.JSX.Element | null {
 
   if (!meId || !celebration || !fx) return null
 
-  const { tier } = fx
-  const milestone = isMilestone(celebration.level)
+  const { tier, milestone } = fx
   const vars = {
     '--level-color': tier.color,
     '--level-accent': tier.accent,
-    '--level-fade-ms': `${fx.durationMs}ms`
+    '--level-fade-ms': `${fx.durationMs}ms`,
+    '--shake': `${fx.shake}px`
   } as React.CSSProperties
+  // Brilho da faixa: maior e mais forte a cada nível.
+  const glowPx = Math.round(18 + 42 * fx.glow)
+  const glowAlpha = Math.round(0x40 + 0x80 * Math.min(1, fx.glow))
+    .toString(16)
+    .padStart(2, '0')
+  const shadow = `0 0 ${glowPx}px ${tier.color}${glowAlpha}`
 
   const content = (
     <>
@@ -95,13 +108,16 @@ function LevelUpBanner(): React.JSX.Element | null {
         }}
       />
       <span className="relative text-xl" aria-hidden="true">
-        {fx.legendary ? '👑' : milestone ? '🏆' : '⬆️'}
+        {fx.stage === 5 ? '👑' : milestone ? '🏆' : '⬆️'}
       </span>
       <div className="relative leading-tight">
         <p className="text-sm font-bold text-white">
-          {milestone ? 'Marco alcançado!' : 'Você subiu de nível!'}
+          {milestone ? `Marco ${milestone.level} alcançado!` : 'Você subiu de nível!'}
         </p>
-        <p className="text-[11px] text-gray-400">Faixa {tier.name}</p>
+        <p className="text-[11px] text-gray-400">
+          Faixa {tier.name}
+          {milestone ? ` · ${milestone.title}` : ''}
+        </p>
       </div>
       <LevelBadge userId={meId} size="md" className="relative" />
     </>
@@ -118,44 +134,55 @@ function LevelUpBanner(): React.JSX.Element | null {
         className="relative"
         style={{ animation: `level-banner ${fx.durationMs}ms ease-in-out both` }}
       >
-        {fx.emblem && (
-          <span
-            className="level-motion absolute left-1/2 top-1/2"
-            style={{
-              animation: `level-emblem ${Math.min(2600, fx.durationMs)}ms ease-out 150ms both`
-            }}
-          >
-            <TierEmblem tier={tier} size={200} />
-          </span>
-        )}
-
-        {fx.bannerBorder ? (
-          // Borda girando: um quadrado de gradiente maior que a faixa gira
-          // atrás do conteúdo e só os 2px da borda aparecem.
-          <div
-            className="relative overflow-hidden rounded-2xl p-[2px]"
-            style={{ boxShadow: `0 0 32px ${tier.color}66` }}
-          >
+        {/* Tremida só da faixa (transform), nunca do layout do app. */}
+        <div
+          className="relative"
+          style={{
+            animation:
+              fx.shake > 0
+                ? `level-shake ${420 + Math.round(fx.power * 300)}ms linear 180ms both`
+                : undefined
+          }}
+        >
+          {fx.emblem && (
             <span
-              aria-hidden="true"
-              className="level-motion absolute left-1/2 top-1/2 aspect-square w-[160%]"
+              className="level-motion absolute left-1/2 top-1/2"
               style={{
-                background: `conic-gradient(from 0deg, ${tier.color}, transparent 25%, ${tier.accent} 50%, transparent 75%, ${tier.color})`,
-                animation: 'level-border-spin 1.8s linear infinite'
+                animation: `level-emblem ${Math.min(2600, fx.durationMs)}ms ease-out 150ms both`
               }}
-            />
-            <div className="relative flex items-center gap-3 overflow-hidden rounded-[14px] bg-[#0b0b10]/95 px-4 py-2.5 backdrop-blur-xl">
+            >
+              <TierEmblem tier={tier} size={200} />
+            </span>
+          )}
+
+          {fx.bannerBorder ? (
+            // Borda girando: um quadrado de gradiente maior que a faixa gira
+            // atrás do conteúdo e só os 2px da borda aparecem.
+            <div
+              className="relative overflow-hidden rounded-2xl p-[2px]"
+              style={{ boxShadow: shadow }}
+            >
+              <span
+                aria-hidden="true"
+                className="level-motion absolute left-1/2 top-1/2 aspect-square w-[160%]"
+                style={{
+                  background: `conic-gradient(from 0deg, ${tier.color}, transparent 25%, ${tier.accent} 50%, transparent 75%, ${tier.color})`,
+                  animation: 'level-border-spin 1.8s linear infinite'
+                }}
+              />
+              <div className="relative flex items-center gap-3 overflow-hidden rounded-[14px] bg-[#0b0b10]/95 px-4 py-2.5 backdrop-blur-xl">
+                {content}
+              </div>
+            </div>
+          ) : (
+            <div
+              className="relative flex items-center gap-3 overflow-hidden rounded-2xl border bg-[#0b0b10]/90 px-4 py-2.5 shadow-2xl backdrop-blur-xl"
+              style={{ borderColor: `${tier.color}66`, boxShadow: shadow }}
+            >
               {content}
             </div>
-          </div>
-        ) : (
-          <div
-            className="relative flex items-center gap-3 overflow-hidden rounded-2xl border bg-[#0b0b10]/90 px-4 py-2.5 shadow-2xl backdrop-blur-xl"
-            style={{ borderColor: `${tier.color}66`, boxShadow: `0 0 28px ${tier.color}55` }}
-          >
-            {content}
-          </div>
-        )}
+          )}
+        </div>
 
         {confetti.map((piece, i) => (
           <span

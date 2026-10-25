@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { WsEvent } from '../api/ws'
 import { fetchLevels, fetchMyLevel, type LevelProgress } from '../api/levels'
 import { useAuthStore } from './authStore'
-import { levelUpEffects } from '../lib/levels'
+import { levelUpEffects, milestoneFor, nextMilestone } from '../lib/levels'
 
 export interface Celebration {
   level: number
@@ -26,6 +26,8 @@ interface LevelState {
    * verdade (o nível real volta quando ela acaba).
    */
   previewLevelUp: (level: number) => void
+  /** Só em dev: prévia do próximo marco (10, 20…) depois do seu nível. */
+  previewNextMilestone: () => void
   reset: () => void
 }
 
@@ -35,10 +37,48 @@ let queued = new Set<string>()
 let flushTimer: ReturnType<typeof setTimeout> | null = null
 let celebrationSeq = 0
 
+/** Cena de marco tocando agora, por usuário (chave da celebração e quando acaba). */
+const scenes = new Map<string, { key: number; endsAt: number }>()
+/** Subida que chegou durante a cena de um marco e espera ela acabar. */
+const waiting = new Map<
+  string,
+  { level: number; previous: number; timer: ReturnType<typeof setTimeout> }
+>()
+
 export const useLevelStore = create<LevelState>()((set, get) => {
-  /** Liga a animação de `userId`; ela some sozinha depois do tempo do nível. */
+  /**
+   * Liga a animação de `userId`; ela some sozinha depois do tempo do nível.
+   * Se a cena de um marco ainda está tocando, não corta: uma subida comum só
+   * atualiza o selo (a cena e o jingle seguem) e outro marco entra na fila e
+   * toca logo depois. Vários na fila viram um só, do nível mais alto.
+   */
   const celebrate = (userId: string, level: number, previous: number): void => {
+    const now = Date.now()
+    const scene = scenes.get(userId)
+    const playing =
+      scene !== undefined && scene.endsAt > now && get().celebrations[userId]?.key === scene.key
+    if (playing) {
+      set((state) => ({ levels: { ...state.levels, [userId]: level } }))
+      const wait = waiting.get(userId)
+      if (wait) {
+        wait.level = Math.max(wait.level, level)
+        wait.previous = Math.min(wait.previous, previous)
+        return
+      }
+      if (!milestoneFor(level, previous)) return
+      const timer = setTimeout(() => {
+        const next = waiting.get(userId)
+        waiting.delete(userId)
+        if (next) celebrate(userId, next.level, next.previous)
+      }, scene.endsAt - now)
+      waiting.set(userId, { level, previous, timer })
+      return
+    }
+
     const key = ++celebrationSeq
+    const milestone = milestoneFor(level, previous)
+    if (milestone) scenes.set(userId, { key, endsAt: now + milestone.durationMs })
+    else scenes.delete(userId)
     set((state) => ({
       levels: { ...state.levels, [userId]: level },
       celebrations: { ...state.celebrations, [userId]: { level, previous, key } }
@@ -132,7 +172,17 @@ export const useLevelStore = create<LevelState>()((set, get) => {
       )
     },
 
+    previewNextMilestone: () => {
+      const meId = useAuthStore.getState().user?.id
+      if (!meId) return
+      const real = get().me?.level ?? get().levels[meId] ?? 0
+      get().previewLevelUp(nextMilestone(real))
+    },
+
     reset: () => {
+      for (const wait of waiting.values()) clearTimeout(wait.timer)
+      waiting.clear()
+      scenes.clear()
       requested.clear()
       queued = new Set()
       set({ levels: {}, me: null, celebrations: {} })
