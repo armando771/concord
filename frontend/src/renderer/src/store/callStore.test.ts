@@ -188,9 +188,8 @@ describe('callStore — mídia via LiveKit', () => {
     chat.sendEvent.mockClear()
     const watched = useCallStore.getState().watchedScreenIds
     const sharers = useCallStore.getState().screenSharers
-    expect(
-      await useCallStore.getState().updateScreenQuality({ resolution: '720p', frameRate: 60 })
-    ).toBe(true)
+    useCallStore.getState().updateScreenQuality({ resolution: '720p', frameRate: 60 })
+    await flush()
     expect(media.updateScreenQuality).toHaveBeenCalledWith(stream, {
       resolution: '720p',
       frameRate: 60
@@ -198,7 +197,7 @@ describe('callStore — mídia via LiveKit', () => {
     expect(useCallStore.getState()).toMatchObject({
       isScreenSharing: true,
       localScreenStream: stream,
-      screenQualityUpdating: false,
+      pendingScreenQuality: null,
       screenShareQuality: { resolution: '720p', frameRate: 60 },
       screenSharers: sharers,
       watchedScreenIds: watched
@@ -208,27 +207,65 @@ describe('callStore — mídia via LiveKit', () => {
     expect(allStopped(stream)).toBe(false)
   })
 
-  it('serializa atualizações e ignora conclusão após encerrar o share', async () => {
+  it('ignora escolha igual à qualidade atual', async () => {
+    await joinChannel()
+    rtc.getDisplayStream.mockResolvedValueOnce(fakeStream('video'))
+    await useCallStore.getState().startScreenShare()
+    useCallStore.getState().updateScreenQuality({ resolution: '1080p', frameRate: 30 })
+    await flush()
+    expect(media.updateScreenQuality).not.toHaveBeenCalled()
+    expect(useCallStore.getState().pendingScreenQuality).toBeNull()
+  })
+
+  it('aplica a última escolha sem perder trocas feitas durante uma atualização', async () => {
     await joinChannel()
     const stream = fakeStream('video')
     rtc.getDisplayStream.mockResolvedValueOnce(stream)
     await useCallStore.getState().startScreenShare()
     const waiting = deferred<void>()
     media.updateScreenQuality.mockReturnValueOnce(waiting.promise)
-    const pending = useCallStore
-      .getState()
-      .updateScreenQuality({ resolution: '720p', frameRate: 60 })
-    expect(useCallStore.getState().screenQualityUpdating).toBe(true)
-    expect(
-      await useCallStore.getState().updateScreenQuality({ resolution: 'source', frameRate: 60 })
-    ).toBe(false)
+    const store = useCallStore.getState()
+    store.updateScreenQuality({ resolution: '720p', frameRate: 60 })
+    store.updateScreenQuality({ resolution: '1080p', frameRate: 60 })
+    store.updateScreenQuality({ resolution: 'source', frameRate: 30 })
+    expect(useCallStore.getState().pendingScreenQuality).toEqual({
+      resolution: 'source',
+      frameRate: 30
+    })
+    expect(media.updateScreenQuality).toHaveBeenCalledTimes(1)
+    waiting.resolve()
+    await flush()
+    expect(media.updateScreenQuality).toHaveBeenCalledTimes(2)
+    expect(media.updateScreenQuality).toHaveBeenLastCalledWith(stream, {
+      resolution: 'source',
+      frameRate: 30
+    })
+    expect(useCallStore.getState()).toMatchObject({
+      pendingScreenQuality: null,
+      screenShareQuality: { resolution: 'source', frameRate: 30 }
+    })
+  })
+
+  it('descarta a conclusão de uma troca depois de parar a transmissão', async () => {
+    await joinChannel()
+    rtc.getDisplayStream.mockResolvedValueOnce(fakeStream('video'))
+    await useCallStore.getState().startScreenShare()
+    const waiting = deferred<void>()
+    media.updateScreenQuality.mockReturnValueOnce(waiting.promise)
+    useCallStore.getState().updateScreenQuality({ resolution: '720p', frameRate: 60 })
+    expect(useCallStore.getState().pendingScreenQuality).toEqual({
+      resolution: '720p',
+      frameRate: 60
+    })
     useCallStore.getState().stopScreenShare()
     waiting.resolve()
-    expect(await pending).toBe(false)
+    await flush()
     expect(useCallStore.getState()).toMatchObject({
+      isScreenSharing: false,
       screenShareQuality: null,
-      screenQualityUpdating: false
+      pendingScreenQuality: null
     })
+    expect(showToast.error).not.toHaveBeenCalled()
   })
 
   it('mantém a qualidade ativa e a transmissão quando a atualização falha', async () => {
@@ -237,13 +274,12 @@ describe('callStore — mídia via LiveKit', () => {
     await useCallStore.getState().startScreenShare()
     const previous = useCallStore.getState().screenShareQuality
     media.updateScreenQuality.mockRejectedValueOnce(new Error('encoder'))
-    expect(
-      await useCallStore.getState().updateScreenQuality({ resolution: '720p', frameRate: 60 })
-    ).toBe(false)
+    useCallStore.getState().updateScreenQuality({ resolution: '720p', frameRate: 60 })
+    await flush()
     expect(useCallStore.getState()).toMatchObject({
       isScreenSharing: true,
       screenShareQuality: previous,
-      screenQualityUpdating: false
+      pendingScreenQuality: null
     })
     expect(showToast.error).toHaveBeenCalled()
   })
