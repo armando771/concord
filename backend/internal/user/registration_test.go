@@ -80,7 +80,11 @@ func TestCaseConflictWarning(t *testing.T) {
 			t.Errorf("CaseConflictWarning(2, 1) = %q, falta %q", got, want)
 		}
 	}
-	if got := CaseConflictWarning(0, 3); !strings.Contains(got, "3") || !strings.Contains(got, "WARNING") {
+	got = CaseConflictWarning(0, 3)
+	if !strings.Contains(got, "3") || !strings.Contains(got, "WARNING") {
 		t.Errorf("só e-mail: %q", got)
+	}
+	if strings.Contains(got, "lower(username)") {
+		t.Errorf("só e-mail não pode dizer que faltou o índice de username: %q", got)
 	}
 }

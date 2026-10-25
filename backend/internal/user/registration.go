@@ -78,11 +78,13 @@ func CaseConflictWarning(usernameGroups, emailGroups int) string {
 	if usernameGroups == 0 && emailGroups == 0 {
 		return ""
 	}
-	return fmt.Sprintf(
-		"WARNING: %d grupo(s) de usernames e %d grupo(s) de e-mails que só diferem na caixa. "+
-			"O índice único em lower(username) não foi criado (a migration 000019 caiu no índice comum) "+
-			"e o login dessas contas só funciona com a caixa exata. "+
-			"Resolva os duplicados e crie o índice: veja docs/HOSPEDAGEM.md (\"Nomes de usuário sem diferenciar caixa\").",
+	msg := fmt.Sprintf(
+		"WARNING: %d grupo(s) de usernames e %d grupo(s) de e-mails que só diferem na caixa; "+
+			"o login dessas contas só funciona com a caixa exata.",
 		usernameGroups, emailGroups,
 	)
+	if usernameGroups > 0 {
+		msg += " Por isso a migration 000019 não criou o índice único em lower(username) (caiu no índice comum)."
+	}
+	return msg + " Resolva os duplicados: veja docs/HOSPEDAGEM.md (\"Nomes de usuário sem diferenciar caixa\")."
 }
