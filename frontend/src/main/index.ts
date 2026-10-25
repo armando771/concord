@@ -10,6 +10,7 @@ import { setupOverlay } from './overlay'
 import { APP_USER_MODEL_ID } from './toastPolicy'
 import { setupToasts } from './toasts'
 import { TITLE_BAR_COLOR, titleBarOptions } from './windowPolicy'
+import { isSafeExternalUrl } from '../shared/externalUrl'
 import {
   audioLogPath,
   hwndFromSourceId,
@@ -122,8 +123,10 @@ function createWindow(): void {
     mainWindow = null
   })
 
+  // Link do chat (target="_blank") abre no navegador de fora. Só http/https:
+  // o openExternal abriria qualquer esquema (file:, smb:, ms-settings:…).
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    if (isSafeExternalUrl(details.url)) void shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
