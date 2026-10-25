@@ -1,5 +1,6 @@
 import { execFile } from 'child_process'
 import { detectGame } from '../shared/gameCatalog'
+import { detectSteamGame } from './steamGames'
 
 // "Em atividade": olha os processos em andamento (como o Discord, não só a
 // janela da frente) e avisa quando um jogo do catálogo abre ou fecha.
@@ -22,16 +23,20 @@ export function parseTasklist(output: string): string[] {
   return names
 }
 
-/** Mantém o início se for o mesmo jogo; senão, começa agora (ou some). */
+/**
+ * Mantém o início se for o mesmo jogo; senão, começa agora (ou some).
+ * O catálogo vence; `steamGame` (jogo da Steam fora do catálogo) é o plano B.
+ */
 export function nextGame(
   previous: DetectedGame | null,
   runningExes: readonly string[],
-  now: number
+  now: number,
+  steamGame: string | null = null
 ): DetectedGame | null {
-  const game = detectGame(runningExes)
-  if (!game) return null
-  if (previous && previous.name === game.name) return previous
-  return { name: game.name, startedAt: now }
+  const name = detectGame(runningExes)?.name ?? steamGame
+  if (!name) return null
+  if (previous && previous.name === name) return previous
+  return { name, startedAt: now }
 }
 
 function listProcesses(): Promise<string[]> {
@@ -52,7 +57,8 @@ let current: DetectedGame | null = null
 export function startGameDetector(onChange: (game: DetectedGame | null) => void): void {
   if (timer || process.platform !== 'win32') return
   const tick = async (): Promise<void> => {
-    const next = nextGame(current, await listProcesses(), Date.now())
+    const [exes, steamGame] = await Promise.all([listProcesses(), detectSteamGame()])
+    const next = nextGame(current, exes, Date.now(), steamGame)
     if (next?.name === current?.name) return
     current = next
     onChange(next)

@@ -13,6 +13,10 @@ de membros, amigos, DMs, barra do usuário, painel de voz e perfil) e na coluna
    lista os processos (`tasklist`) a cada 15 s e procura executáveis do
    catálogo `frontend/src/shared/gameCatalog.ts`. Processo fora do catálogo
    nunca sai do PC. Para incluir um jogo, adicione uma entrada em `GAMES`.
+   **Jogos da Steam fora do catálogo** (`main/steamGames.ts`): a Steam grava o
+   appid do jogo aberto em `HKCU\Software\Valve\Steam\RunningAppID`; o título
+   vem do `appmanifest_<appid>.acf` local (bibliotecas em `libraryfolders.vdf`).
+   O catálogo tem prioridade; sem entrada, o jogo aparece com o nome da Steam.
 2. **IPC.** `main/games.ts` liga/desliga o detector (`games:watch`) e avisa o
    renderer (`games:current`); exposto como `window.api.games`.
 3. **Publicação.** `GameActivityBridge` + `presenceActivityStore` mandam
@@ -32,4 +36,5 @@ de membros, amigos, DMs, barra do usuário, painel de voz e perfil) e na coluna
 
 ## Fora do escopo (por enquanto)
 
-Streaks/"faixas", ícones dos jogos, detecção no Linux/web e jogos fora do catálogo.
+Streaks/"faixas", ícones dos jogos, detecção no Linux/web e jogos fora do catálogo
+que não sejam da Steam (Epic, GOG, etc.).
