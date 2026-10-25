@@ -1,42 +1,44 @@
-# /etc/caddy/Caddyfile da VPS — cópia versionada. O deploy (scripts/deploy-vps.sh)
-# NÃO envia este arquivo.
+# /etc/caddy/Caddyfile da VPS — cópia versionada, com os blocos que estão no
+# ar. O deploy (scripts/deploy-vps.sh) NÃO envia este arquivo.
 #
 # ┌─ COMO APLICAR (leia antes) ───────────────────────────────────────────────┐
-# │ 1. Troque 1-2-3-4.sslip.io pelo host do PUBLIC_URL e salinha.exemplo.com  │
-# │    pelo da página de download (ou apague esse bloco). As portas são as do │
-# │    /opt/concord/.env: 8090 = PORT do backend, 7880 = LIVEKIT_PORT.        │
-# │ 2. Aplique com ninguém em chamada: o PRIMEIRO reload com este arquivo     │
-# │    fecha todos os WebSockets uma vez (chat reconecta; chamadas caem).     │
-# │ 3. Use scripts/apply-caddyfile.sh root@IP <arquivo>: valida, confere que  │
-# │    ninguém está em chamada, guarda backup, recarrega, testa /rtc e a API  │
-# │    e volta o backup se algo falhar.                                       │
-# │ Caddy testado: 2.10.x (use 2.10 ou mais novo; 2.7 é o mínimo do           │
-# │ stream_close_delay, mas a repetição de POST só foi testada no 2.10).      │
+# │ 1. Antes: backend com /healthz no ar (um deploy desta versão) e o socket  │
+# │    do systemd ativo (docs/HOSPEDAGEM.md, "Porta do backend com o          │
+# │    systemd"). As portas são as do /opt/concord/.env: 8090 = PORT do       │
+# │    backend (= ListenStream do concord-server.socket), 7880 = LIVEKIT_PORT.│
+# │ 2. Com ninguém em chamada: todo reload do Caddy 2.6 fecha os WebSockets   │
+# │    (chat reconecta sozinho; quem está em chamada perde a sinalização um   │
+# │    instante e o app reconecta a chamada).                                 │
+# │ 3. Use scripts/apply-caddyfile.sh root@IP deploy/Caddyfile: valida,       │
+# │    confere /healthz e que ninguém está em chamada, guarda backup,         │
+# │    recarrega, testa /rtc, a API e /updates e volta o backup se falhar.    │
+# │ Feito para o Caddy 2.6.2 do Debian (testado com 2.6.2 e 2.10.2).          │
 # └───────────────────────────────────────────────────────────────────────────┘
 #
-# Sem health check ativo de propósito: o backend só abre a porta quando está
-# pronto e fecha antes de desligar, então "conectou" já quer dizer "pronto" e
-# o lb_try abaixo segura as requisições durante o reinício.
+# Por que funciona sem perder requisição no deploy: a porta 8090 é do systemd
+# (concord-server.socket) e não fecha quando o backend reinicia; o Caddy
+# conecta na hora e a requisição espera na fila até o processo novo atender.
+# O lb_try abaixo só entra se a porta estiver fechada de verdade (backend sem
+# o socket, ou parado), e aí só ajuda requisição sem corpo.
+#
+# Caddy 2.7+ tem stream_close_delay, que faria o reload não fechar os
+# WebSockets; o 2.6 não tem. Ver docs/HOSPEDAGEM.md para atualizar o Caddy e
+# acrescentar `stream_close_delay 12h` aos dois reverse_proxy.
 
 # Sinalização do LiveKit (/rtc, /rtc/v1, /rtc/validate…) direto para o
 # LiveKit, sem passar pelo backend: reiniciar o backend não corta a
 # sinalização, e o cliente não faz o "ICE restart" que travava voz e tela por
 # ~1 s. O app já pede /rtc no mesmo endereço da API, então funciona sem
-# atualizar o app. Todo bloco de site que serve o app (endereço da API, versão
-# web…) precisa importar este trecho.
+# atualizar o app. Todo bloco que serve o app precisa deste trecho.
 (salinha_rtc) {
 	handle /rtc* {
-		reverse_proxy 127.0.0.1:7880 {
-			# Recarregar o Caddy não corta as conexões abertas (o padrão é
-			# fechar todo WebSocket a cada reload).
-			stream_close_delay 12h
-		}
+		reverse_proxy 127.0.0.1:7880
 	}
 }
 
-# Atualizações do app (instaladores de ~120 MB, .sig, latest*.yml) direto do
-# disco: um download em andamento não segura o reinício do backend e não cai
-# no deploy. Mesmo conteúdo que o backend serviria (sem listagem de pasta).
+# Atualizações do app desktop (instaladores de ~120 MB, .sig, latest*.yml)
+# direto do disco: um download em andamento não segura o reinício do backend e
+# não cai no deploy. Mesmo conteúdo que o backend serviria (sem listagem).
 (salinha_updates) {
 	handle /updates/* {
 		uri strip_prefix /updates
@@ -48,28 +50,21 @@
 # Backend (API, WebSocket do chat).
 (salinha_backend) {
 	reverse_proxy 127.0.0.1:8090 {
-		# Deploy: enquanto o backend reinicia (porta fechada por um instante)
-		# a requisição espera e tenta de novo, em vez de dar 502. Vale para
-		# POST e uploads também (só repete o que nem chegou a conectar).
+		# Porta fechada de verdade (backend parado): tenta de novo por até
+		# 15 s em vez de 502. No reinício normal a porta não fecha (socket).
 		lb_try_duration 15s
 		lb_try_interval 100ms
-		stream_close_delay 12h
-		# Para repetir um POST o Caddy precisa ter o corpo guardado: 1 MB
-		# cobre toda a API (JSON). Upload de arquivo maior que isso que comece
-		# bem na janela do reinício ainda falha (o app mostra o erro).
-		request_buffers 1MB
-		# Sem reaproveitar conexões com o backend: no desligamento ele fecha
-		# as ociosas, e um POST mandado numa delas daria 502 (o Caddy só
-		# repete GET depois que conectou). Conexão nova a cada requisição é
-		# barato em 127.0.0.1, e uma porta fechada sempre cai no lb_try acima.
+		# Sem reaproveitar conexões: no desligamento o backend fecha as
+		# ociosas, e um POST mandado numa delas daria 502. Conexão nova a cada
+		# requisição é barato em 127.0.0.1.
 		transport http {
 			keepalive off
 		}
 	}
 }
 
-# Endereço do app (PUBLIC_URL).
-1-2-3-4.sslip.io {
+# App desktop completo: sinalização, atualizações e o resto no backend.
+(salinha_app) {
 	import salinha_rtc
 	import salinha_updates
 	handle {
@@ -77,12 +72,66 @@
 	}
 }
 
-# Página de download (site/), opcional.
-salinha.exemplo.com {
+# PUBLIC_URL dos apps desktop.
+74-0-5-252.sslip.io {
+	import salinha_app
+}
+
+# Repasse antigo (apps que ainda falam com o endereço do playit).
+:8080 {
+	import salinha_app
+}
+
+# Página de download (atrás do proxy do Cloudflare).
+salinha.bhrx.com.br {
 	encode zstd gzip
 	import salinha_updates
 	handle {
 		root * /opt/concord/site
+		file_server
+	}
+}
+
+# Endereço antigo da página.
+concord.bhrx.com.br {
+	redir https://salinha.bhrx.com.br{uri} permanent
+}
+
+# App no navegador (atrás do proxy do Cloudflare).
+app-salinha.bhrx.com.br {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+
+	# Chamadas: sinalização direto no LiveKit (antes do @backend).
+	import salinha_rtc
+
+	# Backend: API (inclui os arquivos do chat em /api/media) e WebSocket do
+	# chat. O reverse_proxy repassa o upgrade de WS.
+	@backend path /api /api/* /ws
+	handle @backend {
+		import salinha_backend
+	}
+
+	# Arquivos com hash no nome: cache longo. Arquivo que não existe é 404
+	# (não cai no index.html).
+	handle /assets/* {
+		root * /opt/concord/web
+		@exists file
+		header @exists Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	# O resto é o app: qualquer rota (/servers/…, /dm/…) devolve o index.html,
+	# sempre revalidado para pegar a versão nova logo depois do deploy.
+	handle {
+		root * /opt/concord/web
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
 		file_server
 	}
 }

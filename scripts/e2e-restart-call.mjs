@@ -14,7 +14,8 @@
 //     fechamento) — os dois direto no backend.
 //
 // Precisa do mesmo caminho da VPS: Caddy na frente (o deploy/Caddyfile de
-// verdade, com /rtc direto para o LiveKit), backend e LiveKit locais.
+// verdade, com /rtc direto para o LiveKit), backend com a porta segurada como
+// pelo concord-server.socket (o script faz esse papel) e LiveKit locais.
 //
 //   1. Postgres e LiveKit (portas de teste, para não brigar com o dev):
 //        docker run -d --name e2e-pg -e POSTGRES_USER=u -e POSTGRES_PASSWORD=p \
@@ -23,14 +24,17 @@
 //          -e LIVEKIT_KEYS="devkey: devsecret-devsecret-devsecret-devsecret" \
 //          -e LIVEKIT_CONFIG="$(printf 'port: 17880\nbind_addresses: ["127.0.0.1"]\nrtc:\n  tcp_port: 17881\n  udp_port: 17882\n  use_external_ip: false\n  node_ip: "127.0.0.1"\n  enable_loopback_candidate: true\n')" \
 //          livekit/livekit-server:v1.13.10
-//   2. Caddy com o deploy/Caddyfile (endereço e portas trocados para o teste):
+//   2. Caddy com os trechos do deploy/Caddyfile (endereço e portas do teste), na
+//      mesma versão da VPS:
 //        node scripts/e2e-restart-call.mjs --caddyfile > /tmp/Caddyfile.e2e
 //        docker run -d --name e2e-caddy --network host \
-//          -v /tmp/Caddyfile.e2e:/etc/caddy/Caddyfile:ro caddy:2.10.2
+//          -v /tmp/Caddyfile.e2e:/etc/caddy/Caddyfile:ro caddy:2.6.2
 //   3. Backend numa pasta com .env (DATABASE_URL do passo 1, LIVEKIT_PORT=17880,
 //      as chaves acima, PORT=18090, HOST=127.0.0.1), migrations/ e o binário
-//      (cd backend && go build -o <pasta>/concord-server ./cmd). O script sobe
-//      e reinicia o backend sozinho (não deixe outro rodando na porta).
+//      (cd backend && go build -o <pasta>/concord-server ./cmd). O script segura
+//      a porta (python3) e sobe/reinicia o backend sozinho; não deixe outro
+//      rodando na porta. BACKEND_SOCKET=0 testa sem o socket (o backend escuta
+//      sozinho e fecha a porta no reinício).
 //   4. Renderer apontando para o Caddy, servido em APP:
 //        cd frontend && VITE_SERVER_URL=http://127.0.0.1:18080 npx electron-vite build
 //        python3 -m http.server 5174 -d out/renderer
@@ -49,12 +53,12 @@ const CADDY_PORT = process.env.CADDY_PORT ?? '18080'
 const BACKEND_PORT = process.env.BACKEND_PORT ?? '18090'
 const LIVEKIT_PORT = process.env.LIVEKIT_PORT ?? '17880'
 
-// deploy/Caddyfile com o endereço e as portas do teste (sem a página de download).
+// deploy/Caddyfile com o endereço e as portas do teste: os trechos (snippets)
+// de verdade e um bloco de site local no lugar dos da VPS.
 if (process.argv[2] === '--caddyfile') {
   const prod = readFileSync(new URL('../deploy/Caddyfile', import.meta.url), 'utf8')
-  const test = prod
-    .replace(/^salinha\.exemplo\.com \{[\s\S]*?^\}\n?/m, '')
-    .replace(/^1-2-3-4\.sslip\.io \{/m, `http://127.0.0.1:${CADDY_PORT} {`)
+  const snippets = prod.slice(0, prod.indexOf('# PUBLIC_URL dos apps desktop.'))
+  const test = `${snippets}http://127.0.0.1:${CADDY_PORT} {\n\timport salinha_app\n}\n`
     .replaceAll('127.0.0.1:7880', `127.0.0.1:${LIVEKIT_PORT}`)
     .replaceAll('127.0.0.1:8090', `127.0.0.1:${BACKEND_PORT}`)
   process.stdout.write(`{\n\tadmin off\n}\n\n${test}`)
@@ -138,19 +142,67 @@ function deadWebSocket(token) {
 
 // ─── Backend: sobe e reinicia como o systemd (SIGTERM, espera sair, sobe) ───
 
+// Como na VPS, a porta é de um "systemd" (concord-server.socket): um processo
+// à parte segura o socket e o passa ao backend (LISTEN_FDS) a cada subida, então
+// a porta nunca fecha no reinício. BACKEND_SOCKET=0 testa o backend escutando
+// sozinho (sem o socket).
+const SOCKET_ACTIVATION = process.env.BACKEND_SOCKET !== '0'
+const SUPERVISOR = `
+import os, signal, socket, subprocess, sys
+port, cwd = int(sys.argv[1]), sys.argv[2]
+s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("127.0.0.1", port)); s.listen(4096); fd = s.fileno()
+def pre():
+    os.dup2(fd, 3)
+    os.environ["LISTEN_FDS"] = "1"; os.environ["LISTEN_PID"] = str(os.getpid())
+child = None
+print("listening", flush=True)
+for line in sys.stdin:
+    cmd = line.strip()
+    if cmd == "start":
+        child = subprocess.Popen(["./concord-server"], cwd=cwd, preexec_fn=pre, pass_fds=(fd,))
+        print("started", flush=True)
+    elif cmd == "stop" and child:
+        child.send_signal(signal.SIGTERM); child.wait(); print("exited", flush=True)
+    elif cmd == "kill" and child and child.poll() is None:
+        child.kill(); child.wait()
+`
+let supervisor = null
 let backend = null
 let backendLog = ''
-function startBackend() {
+const keepLog = (d) => { backendLog = (backendLog + d.toString()).slice(-20000) }
+const supervisorReplies = []
+function supervisorSays(word) {
+  return new Promise((resolve) => supervisorReplies.push({ word, resolve }))
+}
+async function startBackend() {
+  if (SOCKET_ACTIVATION) {
+    if (!supervisor) {
+      supervisor = spawn('python3', ['-c', SUPERVISOR, BACKEND_PORT, BACKEND_DIR], { stdio: ['pipe', 'pipe', 'pipe'] })
+      supervisor.stderr.on('data', keepLog)
+      supervisor.stdout.on('data', (d) => {
+        for (const word of d.toString().split('\n').filter(Boolean)) {
+          const i = supervisorReplies.findIndex((r) => r.word === word)
+          if (i >= 0) supervisorReplies.splice(i, 1)[0].resolve()
+          else keepLog(word + '\n')
+        }
+      })
+      await supervisorSays('listening')
+    }
+    const started = supervisorSays('started')
+    supervisor.stdin.write('start\n')
+    await started
+    return
+  }
   backend = spawn('./concord-server', [], { cwd: BACKEND_DIR, stdio: ['ignore', 'pipe', 'pipe'] })
-  const keep = (d) => { backendLog = (backendLog + d.toString()).slice(-20000) }
-  backend.stdout.on('data', keep)
-  backend.stderr.on('data', keep)
+  backend.stdout.on('data', keepLog)
+  backend.stderr.on('data', keepLog)
 }
 async function waitHealthy(timeoutMs = 20000) {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
     try {
-      const r = await fetch(HEALTH)
+      const r = await fetch(HEALTH, { signal: AbortSignal.timeout(2000) })
       if (r.ok) return Date.now()
     } catch {
       // ainda subindo
@@ -162,8 +214,19 @@ async function waitHealthy(timeoutMs = 20000) {
 // Se o script morrer no meio, o backend que ele subiu não fica rodando.
 process.on('exit', () => {
   if (backend && backend.exitCode === null) backend.kill('SIGKILL')
+  if (supervisor && supervisor.exitCode === null) {
+    supervisor.stdin.write('kill\n')
+    supervisor.kill('SIGKILL')
+  }
 })
 async function stopBackend() {
+  if (SOCKET_ACTIVATION) {
+    if (!supervisor) return
+    const exited = supervisorSays('exited')
+    supervisor.stdin.write('stop\n')
+    await exited
+    return
+  }
   if (!backend || backend.exitCode !== null) return
   const exited = new Promise((r) => backend.once('exit', r))
   backend.kill('SIGTERM')
@@ -171,13 +234,13 @@ async function stopBackend() {
 }
 
 try {
-  await fetch(HEALTH)
+  await fetch(HEALTH, { signal: AbortSignal.timeout(1000) })
   console.error(`já há um backend em ${HEALTH}: pare-o (o script sobe o dele)`)
   process.exit(2)
 } catch {
   // porta livre
 }
-startBackend()
+await startBackend()
 await waitHealthy()
 
 // ─── Dados: ana e bia no mesmo servidor, com canal de voz ───────────────────
@@ -273,9 +336,12 @@ function instrument() {
 function startMonitor(watchName) {
   const m = { on: true, samples: [] }
   window.__monitor = m
+  // Ícone de voz ao lado do nome (outros [title] na linha, como o nível, não contam).
   const iconOf = (name) => {
     const row = [...document.querySelectorAll('span')].find((el) => el.textContent === name)?.parentElement
-    return row?.querySelector('[title]')?.getAttribute('title') ?? 'nenhum'
+    const icon = [...(row?.querySelectorAll('[title]') ?? [])].find((el) =>
+      /microfone|Áudio/i.test(el.getAttribute('title')))
+    return icon?.getAttribute('title') ?? 'nenhum'
   }
   ;(async () => {
     while (m.on) {
@@ -399,7 +465,9 @@ try {
   await waitFor('ana vê a mensagem de antes', () => pageA.getByText(`antes ${run}`).count(), (n) => n === 1)
   await waitFor('ana vê a bia mutada', () => pageA.evaluate((name) => {
     const row = [...document.querySelectorAll('span')].find((el) => el.textContent === name)?.parentElement
-    return row?.querySelector('[title]')?.getAttribute('title')
+    const icon = [...(row?.querySelectorAll('[title]') ?? [])].find((el) =>
+      /microfone|Áudio/i.test(el.getAttribute('title')))
+    return icon?.getAttribute('title')
   }, 'bia'), (t) => t === 'Microfone desativado')
   await waitFor('bia vê o selo LIVE da ana', () => pageB.getByText('LIVE', { exact: true }).count(), (n) => n > 0)
   await waitFor('ana vê o próprio selo LIVE', () => pageA.getByText('LIVE', { exact: true }).count(), (n) => n > 0)
@@ -425,7 +493,7 @@ try {
   }).then(() => Date.now(), (err) => err)
   await stopping
   const exitedAt = Date.now()
-  startBackend()
+  await startBackend()
   const healthyAt = await waitHealthy()
   const sentAt = await during
   // A ana volta só agora: a mensagem já foi criada sem ela conectada.
@@ -490,5 +558,6 @@ try {
 } finally {
   await browser.close()
   await stopBackend()
+  supervisor?.kill('SIGTERM')
 }
 process.exit(failed ? 1 : 0)
