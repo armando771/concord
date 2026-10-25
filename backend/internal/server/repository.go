@@ -713,4 +713,3 @@ func (r *Repository) AddMemberIfMissing(ctx context.Context, serverID string, us
 		serverID, userID, role)
 	return err
 }
-

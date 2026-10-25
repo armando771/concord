@@ -26,7 +26,6 @@ import (
 	"gin-quickstart/backend/internal/health"
 	"gin-quickstart/backend/internal/httplog"
 	"gin-quickstart/backend/internal/level"
-	"gin-quickstart/backend/internal/proposal"
 	"gin-quickstart/backend/internal/lifecycle"
 	"gin-quickstart/backend/internal/livekit"
 	"gin-quickstart/backend/internal/media"
@@ -34,6 +33,7 @@ import (
 	"gin-quickstart/backend/internal/music"
 	"gin-quickstart/backend/internal/notifysettings"
 	"gin-quickstart/backend/internal/permission"
+	"gin-quickstart/backend/internal/proposal"
 	"gin-quickstart/backend/internal/role"
 	"gin-quickstart/backend/internal/server"
 	"gin-quickstart/backend/internal/soundboard"
@@ -41,10 +41,10 @@ import (
 	"gin-quickstart/backend/internal/user"
 	"gin-quickstart/backend/internal/websocket"
 
+	"gin-quickstart/backend/internal/mailer"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"gin-quickstart/backend/internal/mailer"
 )
 
 func loadEnv() {
@@ -395,6 +395,10 @@ func main() {
 			return music.Location{CallID: l.CallID, ChannelID: l.ChannelID, ServerID: l.ServerID}, ok
 		},
 		Humans: callService.ParticipantIDs,
+		IsMember: func(ctx context.Context, serverID, userID string) bool {
+			ok, err := serverService.IsMember(ctx, serverID, userID)
+			return err == nil && ok
+		},
 		BotEnabled: func(ctx context.Context, serverID string) bool {
 			ok, err := serverService.IsMember(ctx, serverID, bot.UserID)
 			return err == nil && ok
@@ -424,6 +428,7 @@ func main() {
 	})
 	callService.OnParticipantLeft(musicManager.OnParticipantLeft)
 	callService.OnCallEnded(musicManager.OnCallEnded)
+	serverService.OnMusicBotDisabled(musicManager.CloseServer)
 	messageHandler.SetCommandHandler(musicManager)
 
 	// Aniversários (mensagem do servidor às 9h + modal para o aniversariante)

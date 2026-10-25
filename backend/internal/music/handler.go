@@ -31,7 +31,12 @@ func (h *Handler) State(c *gin.Context) {
 }
 
 func (h *Handler) Presence(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"channel_ids": h.m.Presence(c.Param("id"))})
+	ids, ok := h.m.PresenceFor(c.Request.Context(), userID(c), c.Param("id"))
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"channel_ids": ids})
 }
 
 func (h *Handler) Pick(c *gin.Context) {

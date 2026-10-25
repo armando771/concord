@@ -39,6 +39,9 @@ type Service struct {
 	roles      RoleDefaults
 	presence   PresenceLookup
 	previews   *previewCache
+
+	// Chamados quando o Maestro é removido de um servidor (fecha o player dele).
+	onMusicBotDisabled []func(serverID string)
 }
 
 func ServerService(repository *Repository, publisher EventPublisher, roles RoleDefaults) *Service {
@@ -98,6 +101,17 @@ func (s *Service) Create(
 	return nil
 }
 
+// OnMusicBotDisabled registra um hook para a remoção do Maestro (só no boot).
+func (s *Service) OnMusicBotDisabled(fn func(serverID string)) {
+	s.onMusicBotDisabled = append(s.onMusicBotDisabled, fn)
+}
+
+func (s *Service) notifyMusicBotDisabled(serverID string) {
+	for _, fn := range s.onMusicBotDisabled {
+		fn(serverID)
+	}
+}
+
 // SetMusicBot remove (enabled=false) ou readiciona o Maestro. Só o dono.
 func (s *Service) SetMusicBot(ctx context.Context, serverID, actorID string, enabled bool) error {
 	srv, err := s.repository.FindByID(ctx, serverID)
@@ -114,6 +128,7 @@ func (s *Service) SetMusicBot(ctx context.Context, serverID, actorID string, ena
 		if s.publisher != nil {
 			s.publisher.PublishMemberLeave(MemberLeaveEvent{ServerID: serverID, UserID: bot.UserID})
 		}
+		s.notifyMusicBotDisabled(serverID)
 		return nil
 	}
 	if err := s.repository.AddMemberIfMissing(ctx, serverID, bot.UserID, "member"); err != nil {

@@ -498,6 +498,21 @@ func (p *Player) stopIdleLocked() {
 	}
 }
 
+// IdleIfEmpty arma o timer de ociosidade se não há nada tocando nem na fila.
+func (p *Player) IdleIfEmpty() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.closed {
+		p.idleIfEmptyLocked()
+	}
+}
+
+func (p *Player) IsClosed() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.closed
+}
+
 // Close encerra o player (call acabou). Pode ser chamado mais de uma vez.
 func (p *Player) Close() { p.shutdown(false) }
 

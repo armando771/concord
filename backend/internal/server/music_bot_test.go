@@ -34,6 +34,8 @@ func TestMusicBotProvisioningDB(t *testing.T) {
 	}
 
 	svc := ServerService(ServerRepository(db), nil, nil)
+	var disabled []string
+	svc.OnMusicBotDisabled(func(id string) { disabled = append(disabled, id) })
 	s := &Server{Name: "Galera", OwnerID: owner}
 	if err := svc.Create(ctx, s); err != nil {
 		t.Fatal(err)
@@ -70,11 +72,25 @@ func TestMusicBotProvisioningDB(t *testing.T) {
 	if err := svc.SetMusicBot(ctx, s.ID, owner, false); err != nil || isMember() {
 		t.Fatalf("remover: err=%v member=%v", err, isMember())
 	}
+	if len(disabled) != 1 || disabled[0] != s.ID {
+		t.Fatalf("hook de remoção = %v", disabled)
+	}
 	if err := svc.SetMusicBot(ctx, s.ID, owner, true); err != nil || !isMember() {
 		t.Fatalf("readicionar: err=%v member=%v", err, isMember())
 	}
 	// Readicionar de novo não duplica nem falha.
 	if err := svc.SetMusicBot(ctx, s.ID, owner, true); err != nil {
 		t.Fatalf("readicionar duas vezes: %v", err)
+	}
+}
+
+func TestMusicBotDisabledHooksRun(t *testing.T) {
+	svc := &Service{}
+	var got []string
+	svc.OnMusicBotDisabled(func(id string) { got = append(got, "a:"+id) })
+	svc.OnMusicBotDisabled(func(id string) { got = append(got, "b:"+id) })
+	svc.notifyMusicBotDisabled("srv1")
+	if len(got) != 2 || got[0] != "a:srv1" || got[1] != "b:srv1" {
+		t.Fatalf("hooks = %v", got)
 	}
 }

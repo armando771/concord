@@ -82,6 +82,7 @@ func newTestManager(t *testing.T, inVoice bool, enabled bool) (*Manager, *fakeHu
 			return Location{CallID: "call1", ChannelID: "voz1", ServerID: "srv1"}, inVoice
 		},
 		Humans:      func(string) []string { return []string{"u1"} },
+		IsMember:    func(context.Context, string, string) bool { return true },
 		BotEnabled:  func(context.Context, string) bool { return enabled },
 		ChannelName: func(context.Context, string) string { return "Sala 1" },
 		User: func(_ context.Context, id string) (UserRef, error) {
@@ -221,7 +222,7 @@ func TestManagerTooManyPlayers(t *testing.T) {
 	m.deps.Locate = func(string) (Location, bool) {
 		return Location{CallID: "call2", ChannelID: "voz2", ServerID: "srv1"}, true
 	}
-	m.HandleCommand("srv1", "txt", "u1", "/play https://youtu.be/dQw4w9WgXcQ")
+	m.HandleCommand("srv1", "txt", "u2", "/play https://youtu.be/dQw4w9WgXcQ")
 	if got := waitReply(t, hub); got != TextTooManyPlayers {
 		t.Fatalf("got %q", got)
 	}
@@ -252,7 +253,7 @@ func TestManagerConcurrentPlaySharesStartedPlayer(t *testing.T) {
 	}
 	m.HandleCommand("srv1", "txt", "u1", "/play https://youtu.be/dQw4w9WgXcQ")
 	eventually(t, "1ª conexão", func() bool { mu.Lock(); defer mu.Unlock(); return calls == 1 })
-	m.HandleCommand("srv1", "txt", "u1", "/play https://youtu.be/dQw4w9WgXcQ")
+	m.HandleCommand("srv1", "txt", "u2", "/play https://youtu.be/dQw4w9WgXcQ")
 	time.Sleep(100 * time.Millisecond)
 	if len(m.Presence("srv1")) != 0 {
 		t.Fatal("player não iniciado não pode aparecer")
@@ -290,7 +291,7 @@ func TestManagerStartFailureFailsAllWaiters(t *testing.T) {
 	}
 	m.HandleCommand("srv1", "txt", "u1", "/play https://youtu.be/dQw4w9WgXcQ")
 	eventually(t, "conexão", func() bool { mu.Lock(); defer mu.Unlock(); return calls == 1 })
-	m.HandleCommand("srv1", "txt", "u1", "/play https://youtu.be/dQw4w9WgXcQ")
+	m.HandleCommand("srv1", "txt", "u2", "/play https://youtu.be/dQw4w9WgXcQ")
 	time.Sleep(100 * time.Millisecond)
 	close(release)
 	eventually(t, "2 respostas", func() bool {
@@ -306,5 +307,151 @@ func TestManagerStartFailureFailsAllWaiters(t *testing.T) {
 	})
 	if len(hub.publics()) != 0 || len(m.Presence("srv1")) != 0 {
 		t.Fatalf("publics=%v presence=%v", hub.publics(), m.Presence("srv1"))
+	}
+}
+
+func TestManagerThrottlesOneCommandPerUser(t *testing.T) {
+	m, hub := newTestManager(t, true, true)
+	release := make(chan struct{})
+	resolves := 0
+	var mu sync.Mutex
+	m.deps.Source = &blockingSource{mgrSource: mgrSource{fakeSource{fail: map[string]bool{}}}, release: release, mu: &mu, n: &resolves}
+	if !m.HandleCommand("srv1", "txt", "u1", "/play https://youtu.be/dQw4w9WgXcQ") {
+		t.Fatal("comando")
+	}
+	eventually(t, "resolve em andamento", func() bool { mu.Lock(); defer mu.Unlock(); return resolves == 1 })
+	// O 2º do mesmo usuário é comando (não vira mensagem) mas não dispara trabalho.
+	if !m.HandleCommand("srv1", "txt", "u1", "/play https://youtu.be/dQw4w9WgXcQ") {
+		t.Fatal("ainda é comando")
+	}
+	time.Sleep(100 * time.Millisecond)
+	mu.Lock()
+	if resolves != 1 {
+		mu.Unlock()
+		t.Fatalf("resolves = %d, want 1", resolves)
+	}
+	mu.Unlock()
+	close(release)
+	eventually(t, "aviso", func() bool { return len(hub.publics()) == 1 })
+	eventually(t, "livre de novo", func() bool {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		return len(m.busy) == 0
+	})
+	time.Sleep(50 * time.Millisecond)
+	if len(hub.publics()) != 1 {
+		t.Fatalf("publics = %v", hub.publics())
+	}
+}
+
+type blockingSource struct {
+	mgrSource
+	release chan struct{}
+	mu      *sync.Mutex
+	n       *int
+}
+
+func (s *blockingSource) Resolve(ctx context.Context, url string) (Track, error) {
+	s.mu.Lock()
+	*s.n++
+	s.mu.Unlock()
+	<-s.release
+	return s.mgrSource.Resolve(ctx, url)
+}
+
+type panicSource struct{ mgrSource }
+
+func (*panicSource) Resolve(context.Context, string) (Track, error) { panic("boom") }
+
+func TestManagerCommandPanicIsRecovered(t *testing.T) {
+	m, hub := newTestManager(t, true, true)
+	m.deps.Source = &panicSource{mgrSource{fakeSource{fail: map[string]bool{}}}}
+	m.HandleCommand("srv1", "txt", "u1", "/play https://youtu.be/dQw4w9WgXcQ")
+	eventually(t, "usuário liberado após o pânico", func() bool {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		return len(m.busy) == 0
+	})
+	// O manager segue vivo e atende o próximo comando do mesmo usuário.
+	m.HandleCommand("srv1", "txt", "u1", "/ajuda")
+	if got := waitReply(t, hub); got != TextHelp {
+		t.Fatalf("depois do pânico = %q", got)
+	}
+}
+
+func TestManagerPrunesExpiredSearches(t *testing.T) {
+	m, hub := newTestManager(t, true, true)
+	m.mu.Lock()
+	m.searches["velha"] = searchSession{userID: "x", expires: time.Now().Add(-time.Second)}
+	m.searches["valida"] = searchSession{userID: "x", expires: time.Now().Add(time.Minute)}
+	m.mu.Unlock()
+	m.HandleCommand("srv1", "txt", "u1", "/play never gonna")
+	eventually(t, "music:search", func() bool { return hub.last("music:search") != nil })
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.searches["velha"]; ok {
+		t.Fatal("busca vencida deveria ter sido removida")
+	}
+	if _, ok := m.searches["valida"]; !ok {
+		t.Fatal("busca válida não pode ser removida")
+	}
+}
+
+func TestManagerPresenceRequiresMembership(t *testing.T) {
+	m, _ := newTestManager(t, true, true)
+	m.HandleCommand("srv1", "txt", "u1", "/play https://youtu.be/dQw4w9WgXcQ")
+	eventually(t, "player", func() bool { return len(m.Presence("srv1")) == 1 })
+	if ids, ok := m.PresenceFor(context.Background(), "u1", "srv1"); !ok || len(ids) != 1 {
+		t.Fatalf("membro: %v %v", ids, ok)
+	}
+	m.deps.IsMember = func(context.Context, string, string) bool { return false }
+	if _, ok := m.PresenceFor(context.Background(), "intruso", "srv1"); ok {
+		t.Fatal("não-membro não pode listar a presença")
+	}
+	m.deps.IsMember = nil
+	if _, ok := m.PresenceFor(context.Background(), "u1", "srv1"); ok {
+		t.Fatal("sem checagem configurada, nega")
+	}
+}
+
+func TestManagerCloseServerStopsPlayers(t *testing.T) {
+	m, hub := newTestManager(t, true, true)
+	m.HandleCommand("srv1", "txt", "u1", "/play https://youtu.be/dQw4w9WgXcQ")
+	eventually(t, "player", func() bool { return len(m.Presence("srv1")) == 1 })
+	m.CloseServer("outro-servidor")
+	time.Sleep(50 * time.Millisecond)
+	if len(m.Presence("srv1")) != 1 {
+		t.Fatal("outro servidor não pode fechar este player")
+	}
+	m.CloseServer("srv1")
+	eventually(t, "fechado", func() bool { return len(m.Presence("srv1")) == 0 })
+	if s := hub.last("music:state"); s == nil || s.body["closed"] != true {
+		t.Fatalf("estado final = %+v", s)
+	}
+}
+
+func TestManagerUserLookupFailureArmsIdle(t *testing.T) {
+	m, hub := newTestManager(t, true, true)
+	m.cfg.IdleTimeout = 50 * time.Millisecond
+	m.deps.User = func(context.Context, string) (UserRef, error) { return UserRef{}, errors.New("banco fora") }
+	m.HandleCommand("srv1", "txt", "u1", "/play https://youtu.be/dQw4w9WgXcQ")
+	if got := waitReply(t, hub); got != TextUnavailable {
+		t.Fatalf("got %q", got)
+	}
+	eventually(t, "player ocioso fechado", func() bool { return len(m.Presence("srv1")) == 0 })
+}
+
+func TestManagerPlayerClosedBeforeInsertionIsNotKept(t *testing.T) {
+	m, _ := newTestManager(t, true, true)
+	// A saída já nasce encerrada: o player cai logo após o Start.
+	m.deps.NewOutput = func(_ context.Context, _, _ string, s FrameSource) (Output, error) {
+		o := &fakeOutput{src: s, done: make(chan error, 1)}
+		close(o.done)
+		return o, nil
+	}
+	loc := Location{CallID: "call1", ChannelID: "voz1", ServerID: "srv1"}
+	for i := 0; i < 20; i++ {
+		_, _ = m.playerFor(context.Background(), loc) // pode ter dado certo: o player cai logo depois
+		eventually(t, "sem entrada morta", func() bool { return m.player("voz1") == nil })
 	}
 }

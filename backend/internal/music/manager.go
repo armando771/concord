@@ -10,6 +10,7 @@ import (
 	"log"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"sync"
 	"time"
@@ -29,6 +30,7 @@ var (
 	ErrSearchExpired  = errors.New("busca expirada")
 	ErrNotInMusicCall = errors.New("você não está nessa call")
 	errTooManyPlayers = errors.New("muitos players")
+	errPlayerClosed   = errors.New("player encerrado antes de entrar no mapa")
 )
 
 type Location struct {
@@ -42,6 +44,7 @@ type ManagerDeps struct {
 	Locate          func(userID string) (Location, bool)
 	Humans          func(callID string) []string
 	BotEnabled      func(ctx context.Context, serverID string) bool
+	IsMember        func(ctx context.Context, serverID, userID string) bool
 	ChannelName     func(ctx context.Context, channelID string) string
 	User            func(ctx context.Context, userID string) (UserRef, error)
 	PostPublic      func(ctx context.Context, textChannelID, content string) error
@@ -79,6 +82,8 @@ type Manager struct {
 	players  map[string]*Player // channelID -> player já iniciado
 	pending  map[string]*pendingPlayer
 	searches map[string]searchSession
+	// Um comando por vez por usuário: não deixa ninguém disparar yt-dlp sem limite.
+	busy map[string]struct{}
 }
 
 func NewManager(cfg Config, deps ManagerDeps) *Manager {
@@ -101,7 +106,7 @@ func NewManager(cfg Config, deps ManagerDeps) *Manager {
 	if deps.Available == nil {
 		deps.Available = func() bool { return binariesPresent(cfg) }
 	}
-	m := &Manager{cfg: cfg, deps: deps, players: map[string]*Player{}, pending: map[string]*pendingPlayer{}, searches: map[string]searchSession{}}
+	m := &Manager{cfg: cfg, deps: deps, players: map[string]*Player{}, pending: map[string]*pendingPlayer{}, searches: map[string]searchSession{}, busy: map[string]struct{}{}}
 	m.available = deps.Available()
 	if !m.available {
 		log.Printf("[music] yt-dlp/ffmpeg não encontrados: o Maestro fica indisponível")
@@ -138,7 +143,24 @@ func (m *Manager) HandleCommand(serverID, textChannelID, userID, content string)
 	if !ok {
 		return false
 	}
-	go m.run(serverID, textChannelID, userID, cmd)
+	m.mu.Lock()
+	if _, working := m.busy[userID]; working {
+		m.mu.Unlock()
+		return true // já tem um comando dele em andamento: ignora em silêncio
+	}
+	m.busy[userID] = struct{}{}
+	m.mu.Unlock()
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[music] pânico no comando: %v %s", r, debug.Stack())
+			}
+			m.mu.Lock()
+			delete(m.busy, userID)
+			m.mu.Unlock()
+		}()
+		m.run(serverID, textChannelID, userID, cmd)
+	}()
 	return true
 }
 
@@ -211,6 +233,12 @@ func (m *Manager) play(ctx context.Context, loc Location, serverID, textChannelI
 		}
 		token := newToken()
 		m.mu.Lock()
+		now := time.Now()
+		for tk, ss := range m.searches {
+			if now.After(ss.expires) {
+				delete(m.searches, tk)
+			}
+		}
 		m.searches[token] = searchSession{userID: userID, serverID: serverID, textChannelID: textChannelID, results: results, expires: time.Now().Add(searchTTL)}
 		m.mu.Unlock()
 		views := make([]map[string]any, len(results))
@@ -273,6 +301,7 @@ func (m *Manager) enqueueTracks(ctx context.Context, loc Location, textChannelID
 	}
 	user, err := m.deps.User(ctx, userID)
 	if err != nil {
+		p.IdleIfEmpty() // player criado sem nada na fila não pode ficar na call para sempre
 		say(TextUnavailable)
 		return
 	}
@@ -286,6 +315,7 @@ func (m *Manager) enqueueTracks(ctx context.Context, loc Location, textChannelID
 		return
 	}
 	if err != nil {
+		p.IdleIfEmpty()
 		say(TextUnavailable)
 		return
 	}
@@ -385,6 +415,10 @@ func (m *Manager) playerFor(ctx context.Context, loc Location) (*Player, error) 
 	err := p.Start(context.Background())
 	m.mu.Lock()
 	delete(m.pending, loc.ChannelID)
+	if err == nil && p.IsClosed() {
+		// Caiu entre o Start e a inserção: não deixa uma entrada morta no mapa.
+		err = errPlayerClosed
+	}
 	if err == nil {
 		m.players[loc.ChannelID] = p
 		pe.p = p
@@ -480,6 +514,29 @@ func (m *Manager) StateFor(userID, serverID string) (*State, bool) {
 	}
 	st := BuildState(p, time.Now())
 	return &st, true
+}
+
+// PresenceFor: canais com o Maestro tocando, só para quem é membro do servidor.
+func (m *Manager) PresenceFor(ctx context.Context, userID, serverID string) ([]string, bool) {
+	if m.deps.IsMember == nil || !m.deps.IsMember(ctx, serverID, userID) {
+		return nil, false
+	}
+	return m.Presence(serverID), true
+}
+
+// CloseServer fecha os players do servidor (Maestro removido pelo dono).
+func (m *Manager) CloseServer(serverID string) {
+	m.mu.Lock()
+	var ps []*Player
+	for _, p := range m.players {
+		if p.ServerID == serverID {
+			ps = append(ps, p)
+		}
+	}
+	m.mu.Unlock()
+	for _, p := range ps {
+		go p.Close()
+	}
 }
 
 func (m *Manager) Presence(serverID string) []string {
