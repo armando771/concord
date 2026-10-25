@@ -10,6 +10,7 @@ import EmailVerifyBanner from './EmailVerifyBanner'
 import ScreenMiniPlayer from './call/ScreenMiniPlayer'
 import ActivityPanel from './call/ActivityPanel'
 import ScreenSharePickerModal from './call/ScreenSharePickerModal'
+import JoinRequestsStack from './call/JoinRequestsStack'
 import LevelUpBanner from './level/LevelUpBanner'
 import LevelUpScreen from './level/LevelUpScreen'
 import InviteConfirmModal from './invite/InviteConfirmModal'
@@ -52,6 +53,7 @@ function AppShell(): React.JSX.Element {
         </main>
       </div>
       <IncomingCallModal />
+      <JoinRequestsStack />
       <CallOverlay />
       <BirthdayModal />
       <ScreenMiniPlayer />

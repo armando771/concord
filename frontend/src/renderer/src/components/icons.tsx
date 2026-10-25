@@ -139,6 +139,44 @@ export function OnlineIcon({ className = '' }: IconProps): React.JSX.Element {
   )
 }
 
+export function LockIcon({ className = '' }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path
+        fillRule="evenodd"
+        d="M12 2a4 4 0 0 0-4 4v3H7a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a4 4 0 0 0-4-4zm2 7V6a2 2 0 1 0-4 0v3h4zm-2 5a1.5 1.5 0 0 0-.75 2.8v1.7a.75.75 0 0 0 1.5 0v-1.7A1.5 1.5 0 0 0 12 14z"
+        clipRule="evenodd"
+      />
+    </svg>
+  )
+}
+
+export function LockOpenIcon({ className = '' }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path
+        fillRule="evenodd"
+        d="M14 6a2 2 0 0 1 2 2h2a4 4 0 1 0-8 0v1H7a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2H12V8a2 2 0 0 1 2-2zm-2 8a1.5 1.5 0 0 0-.75 2.8v1.7a.75.75 0 0 0 1.5 0v-1.7A1.5 1.5 0 0 0 12 14z"
+        clipRule="evenodd"
+      />
+    </svg>
+  )
+}
+
 export function ClockIcon({ className = '' }: IconProps): React.JSX.Element {
   return (
     <svg
@@ -439,18 +477,29 @@ export function PollIcon({ className = '' }: IconProps): React.JSX.Element {
   )
 }
 
-/** Estrela (canal principal). */
-export function StarIcon({ className = '' }: IconProps): React.JSX.Element {
+/** Estrela (canal principal e favoritos). */
+export function StarIcon({
+  className = '',
+  filled = false
+}: IconProps & { filled?: boolean }): React.JSX.Element {
   return (
     <svg
       className={className}
       width="24"
       height="24"
       viewBox="0 0 24 24"
-      fill="currentColor"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth={filled ? '0' : '2'}
+      strokeLinecap="round"
+      strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+      {filled ? (
+        <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+      ) : (
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+      )}
     </svg>
   )
 }
@@ -619,6 +668,25 @@ export function PaperclipIcon({ className = '' }: IconProps): React.JSX.Element 
   )
 }
 
+export function CheckIcon({ className = '' }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
+
 export function XIcon({ className = '' }: IconProps): React.JSX.Element {
   return (
     <svg
@@ -722,21 +790,6 @@ export function FavoriteStarIcon({
   )
 }
 
-export function LockIcon({ className = '' }: IconProps): React.JSX.Element {
-  return (
-    <svg
-      className={className}
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm3 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" />
-    </svg>
-  )
-}
-
 /** Atividades da chamada (controle de jogo). */
 export function ActivityIcon({ className = '' }: IconProps): React.JSX.Element {
   return (
@@ -798,25 +851,6 @@ export function SignalIcon({ className = '' }: IconProps): React.JSX.Element {
       <path d="M4.5 13a6.5 6.5 0 0 1 6.5 6.5" />
       <path d="M4.5 7.5a12 12 0 0 1 12 12" />
       <path d="M4.5 2.5a17 17 0 0 1 17 17" />
-    </svg>
-  )
-}
-
-export function CheckIcon({ className = '' }: IconProps): React.JSX.Element {
-  return (
-    <svg
-      className={className}
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M20 6 9 17l-5-5" />
     </svg>
   )
 }

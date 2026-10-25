@@ -27,6 +27,9 @@ type Call struct {
 	Status         string     `json:"status"`
 	StartedAt      time.Time  `json:"started_at"`
 	EndedAt        *time.Time `json:"ended_at,omitempty"`
+	// Locked: sala de voz trancada — só entra quem for aceito por alguém de
+	// dentro. Transitório (memória), não é persistido.
+	Locked bool `json:"locked"`
 }
 
 type CallParticipant struct {
