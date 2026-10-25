@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -86,5 +87,23 @@ func TestCaseConflictWarning(t *testing.T) {
 	}
 	if strings.Contains(got, "lower(username)") {
 		t.Errorf("só e-mail não pode dizer que faltou o índice de username: %q", got)
+	}
+}
+
+func TestReservedUsernamesAreTaken(t *testing.T) {
+	for _, name := range []string{"all", "ALL", "Here", "here", "everyone", "EveryOne"} {
+		if !IsReservedUsername(name) {
+			t.Errorf("IsReservedUsername(%q) = false, want true", name)
+		}
+		// Recusa antes de qualquer consulta: o Service nem tem banco aqui.
+		err := (&Service{}).Create(context.Background(), &User{Username: name, Email: "a@b.com"})
+		if !errors.Is(err, ErrIdentityTaken) {
+			t.Errorf("Create(%q) = %v, want ErrIdentityTaken (409 genérico)", name, err)
+		}
+	}
+	for _, name := range []string{"allan", "here_", "everyone2", "nicccls"} {
+		if IsReservedUsername(name) {
+			t.Errorf("IsReservedUsername(%q) = true, want false", name)
+		}
 	}
 }

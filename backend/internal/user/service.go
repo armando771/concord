@@ -50,6 +50,11 @@ func (s *Service) Create(
 		return ErrEmailRequired
 	}
 
+	// Reservado responde como nome já usado (mesmo 409 genérico).
+	if IsReservedUsername(user.Username) {
+		return ErrIdentityTaken
+	}
+
 	// O UNIQUE do banco só pega a caixa exata (e o índice em lower(username)
 	// pode não existir; ver migration 000021): confere sem diferenciar caixa.
 	taken, err := s.repository.IdentityTaken(ctx, user.Username, user.Email)

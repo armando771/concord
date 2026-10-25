@@ -67,6 +67,21 @@ func ValidateRegistration(r Registration) error {
 	return nil
 }
 
+// reservedUsernames são as menções especiais do chat (@all, @here,
+// @everyone): ninguém novo pode se chamar assim. Contas antigas ficam como
+// estão.
+var reservedUsernames = []string{"all", "here", "everyone"}
+
+// IsReservedUsername diz se o nome é reservado, sem diferenciar caixa.
+func IsReservedUsername(username string) bool {
+	for _, r := range reservedUsernames {
+		if strings.EqualFold(username, r) {
+			return true
+		}
+	}
+	return false
+}
+
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
