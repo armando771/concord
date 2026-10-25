@@ -27,6 +27,8 @@ import { groupMembers, memberColor } from '../lib/memberGroups'
 import { chatPermissionsFor } from '../lib/chatPermissions'
 import { Perm, roleColorCss } from '../lib/permissions'
 import { serverDisplayName } from '../lib/serverNames'
+import { ActivityLine, useInVoice } from '../components/ActivityLine'
+import { useActivity } from '../store/presenceActivityStore'
 import {
   lastServerChannel,
   rememberServerChannel,
@@ -60,6 +62,10 @@ function MemberRow({
 }: MemberRowProps): React.JSX.Element {
   const meId = useAuthStore((s) => s.user?.id)
   const status = usePresenceStatus(userId)
+  // Só troca o @handle quando há jogo (ou "Em voz"): sem atividade, igual a antes.
+  const hasActivity = useActivity(userId) !== null
+  const inVoice = useInVoice(userId)
+  const activityShown = hasActivity || inVoice
   const look = useUserLook(userId, { name: displayName, avatarUrl })
   const name = serverDisplayName({ nickname }, { display_name: look.name })
   return (
@@ -96,9 +102,17 @@ function MemberRow({
           </p>
           <LevelBadge userId={userId} />
         </div>
-        <p title={`@${handle}`} className="-mt-0.5 truncate text-ds-xs font-medium text-gray-400">
-          @{handle}
-        </p>
+        {activityShown ? (
+          <ActivityLine
+            userId={userId}
+            statusLabel={`@${handle}`}
+            className="-mt-0.5 text-ds-xs font-medium text-gray-400"
+          />
+        ) : (
+          <p title={`@${handle}`} className="-mt-0.5 truncate text-ds-xs font-medium text-gray-400">
+            @{handle}
+          </p>
+        )}
       </div>
     </div>
   )

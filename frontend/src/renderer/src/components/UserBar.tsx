@@ -5,6 +5,7 @@ import { profileCardHandler } from '../store/profileCardStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { STATUS_META } from '../lib/presenceStatus'
 import Avatar from './Avatar'
+import { useActivity } from '../store/presenceActivityStore'
 import AudioDeviceMenu, { type AudioDeviceKind } from './call/AudioDeviceMenu'
 import { showVoicePanel, userBarSpeaking, userBarSubtitle } from './call/voicePanel'
 import {
@@ -110,7 +111,9 @@ function UserBar(): React.JSX.Element {
 
   const status = user?.status ?? 'online'
   const name = user?.display_name || user?.username || ''
+  const game = useActivity(user?.id)
   const subtitle = userBarSubtitle({
+    game: game?.name,
     inCall,
     note: user?.status_text,
     statusLabel: STATUS_META[status].label
@@ -145,7 +148,7 @@ function UserBar(): React.JSX.Element {
           {/* Como no Discord: "Em call", a nota (ou o status) e, com o mouse, o @. */}
           <p
             className={`truncate text-ds-xs leading-[13px] font-medium group-hover:hidden ${
-              inCall ? 'text-[#23a55a]' : 'text-gray-400'
+              inCall && !game ? 'text-[#23a55a]' : 'text-gray-400'
             }`}
           >
             {subtitle}

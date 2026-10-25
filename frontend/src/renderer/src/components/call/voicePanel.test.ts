@@ -118,6 +118,12 @@ describe('userBarSubtitle', () => {
     )
   })
 
+  it('jogando: o jogo vale mais que a chamada', () => {
+    expect(
+      userBarSubtitle({ inCall: true, note: 'x', statusLabel: 'Online', game: 'VALORANT' })
+    ).toBe('VALORANT')
+  })
+
   it('fora da chamada: a nota, ou o status', () => {
     expect(userBarSubtitle({ inCall: false, note: ' jogando ', statusLabel: 'Online' })).toBe(
       'jogando'

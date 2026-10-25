@@ -21,6 +21,7 @@ import Avatar from '../components/Avatar'
 import { STATUS_META } from '../lib/presenceStatus'
 import { friendRequestError } from '../lib/relationship'
 import { showToast } from '../store/toastStore'
+import { ActivityLine } from '../components/ActivityLine'
 import type { PendingRequest } from '../api/friends'
 
 const MAIN_BG = '#07080b'
@@ -147,7 +148,13 @@ function FriendRow({ friend }: { friend: PublicUser }): React.JSX.Element {
     <PersonRow
       user={friend}
       showStatus
-      subtitle={note && status !== 'offline' ? note : STATUS_META[status].label}
+      subtitle={
+        <ActivityLine
+          userId={friend.id}
+          note={status !== 'offline' ? note : null}
+          statusLabel={STATUS_META[status].label}
+        />
+      }
       onClick={() => navigate(`/dm/${friend.id}`)}
       onContextMenu={(e) => {
         e.preventDefault()
