@@ -95,6 +95,7 @@ vi.mock('./background', () => ({
   markQuitting: vi.fn(),
   onCallStateChange: (fn: (s: { inCall: boolean }) => void) => h.state.callListeners.push(fn)
 }))
+vi.mock('./appLog', () => ({ appendLog: vi.fn() }))
 vi.mock('./updateSignature', () => ({ verifyInstaller: () => h.state.validSignature }))
 vi.mock('./callResume', () => ({
   takeCallResume: vi.fn(() => null),
@@ -464,12 +465,17 @@ describe('updater', () => {
       expect(h.autoUpdater.quitAndInstall).not.toHaveBeenCalled()
     })
 
-    it('assinatura inválida: nem extrai', async () => {
+    it('assinatura inválida: nem extrai, e fica registrado em update.log', async () => {
       h.state.validSignature = false
       await startUpdater()
       await h.linux.emit('update-available', { version: '0.7.0' })
       await h.linux.emit('update-downloaded', { version: '0.7.0', downloadedFile: '/d/x.tar.gz' })
       expect(h.linux.stage).not.toHaveBeenCalled()
+      const { appendLog } = await import('./appLog')
+      expect(appendLog).toHaveBeenCalledWith(
+        'update.log',
+        expect.stringMatching(/instalador recusado: .*assinatura inválida/)
+      )
       expect(h.state.sent.some(([channel]) => channel === 'update:error')).toBe(true)
       expect(h.state.sent).not.toContainEqual(['update:ready', '0.7.0'])
     })

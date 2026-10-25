@@ -10,6 +10,7 @@ import { createUpdateCheckGate } from './updateCheck'
 import { verifyInstaller } from './updateSignature'
 import { clearCallResume, saveCallResume, takeCallResume } from './callResume'
 import { validCallResume, type CallResume } from '../shared/callResume'
+import { appendLog } from './appLog'
 import { updateBackendKind } from './linuxInstall'
 import { LinuxUpdater } from './linuxUpdater'
 
@@ -55,6 +56,12 @@ interface UpdaterConfig {
 
 const startedAt = Date.now()
 
+/** Console e, no Linux, ~/.config/Concord/logs/update.log (o app abre sem terminal). */
+function logUpdate(message: string, error: unknown): void {
+  console.error(`[update] ${message}:`, error)
+  if (process.platform === 'linux') appendLog('update.log', `${message}: ${String(error)}`)
+}
+
 // Versão já baixada e verificada (sobrevive ao reinício do app): só ela pode
 // ser instalada sozinha ao abrir.
 const verifiedPath = (): string => join(app.getPath('userData'), 'update-verified.json')
@@ -91,7 +98,7 @@ function install(onError: (message: string) => void): void {
   try {
     saveCallResume(callSnapshot)
   } catch (error) {
-    console.error('[update] não foi possível salvar a chamada:', error)
+    logUpdate('não foi possível salvar a chamada', error)
     onError('Não foi possível salvar a chamada antes de atualizar. Tente novamente.')
     return
   }
@@ -106,9 +113,9 @@ function install(onError: (message: string) => void): void {
     try {
       clearCallResume()
     } catch (cleanupError) {
-      console.error('[update] erro ao limpar retomada:', cleanupError)
+      logUpdate('erro ao limpar retomada', cleanupError)
     }
-    console.error('[update] instalação falhou:', error)
+    logUpdate('instalação falhou', error)
     onError('Não foi possível instalar a atualização.')
   }
 }
@@ -158,7 +165,7 @@ function startDownloadNow(force: boolean): void {
   downloading = true
   backend.downloadUpdate().catch((err) => {
     downloading = false
-    console.error('[update] download falhou:', err)
+    logUpdate('download falhou', err)
   })
 }
 
@@ -239,10 +246,10 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
     try {
       clearCallResume()
     } catch (error) {
-      console.error('[update] erro ao limpar retomada:', error)
+      logUpdate('erro ao limpar retomada', error)
     }
     downloading = false
-    console.error('[update] erro:', err)
+    logUpdate('erro', err)
     if (installRequested) send('update:error', String(err))
   })
   backend.on('update-downloaded', async (event: DownloadedUpdate) => {
@@ -258,7 +265,7 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
       // Só depois da assinatura: extrai e confere a versão dentro do pacote.
       if (backend.stage) await backend.stage(event)
     } catch (err) {
-      console.error('[update] instalador recusado:', err)
+      logUpdate('instalador recusado', err)
       await rm(event.downloadedFile, { force: true }).catch(() => {})
       installRequested = false
       send('update:error', 'A atualização baixada não passou na verificação de segurança.')
@@ -287,7 +294,7 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
   })
 
   const gate = createUpdateCheckGate(() =>
-    backend.checkForUpdates().catch((err) => console.error('[update] checagem falhou:', err))
+    backend.checkForUpdates().catch((err) => logUpdate('checagem falhou', err))
   )
   // O renderer pede na hora: o servidor avisou de versão nova (WS app:update)
   // ou o WS reconectou (deploy reinicia o backend; o manifesto pode sair depois).
