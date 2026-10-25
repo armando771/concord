@@ -6,6 +6,7 @@ import { showToast } from '../store/toastStore'
 import { applyMention, mentionQuery, mentionsUser, splitMentions } from '../lib/mentions'
 import PollCard from './poll/PollCard'
 import CreatePollModal from './poll/CreatePollModal'
+import MessageAttachments from './chat/MessageAttachments'
 import { PollIcon } from './icons'
 
 export interface Mentionable {
@@ -77,6 +78,9 @@ function MessageItem({
             )}
           </p>
         )}
+        {message.attachments?.length ? (
+          <MessageAttachments attachments={message.attachments} />
+        ) : null}
         {message.poll && (
           <PollCard poll={message.poll} isAuthor={isMine} onVote={onVote} onEnd={onEndPoll} />
         )}
