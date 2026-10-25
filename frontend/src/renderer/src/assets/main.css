@@ -217,13 +217,15 @@
   }
 }
 
+/* Brilho do tile na chamada (60+): a sombra é fixa, só a opacidade anima. */
 @keyframes level-tile-glow {
   0%,
   100% {
-    box-shadow: 0 0 0 0 transparent;
+    opacity: 0;
   }
-  25% {
-    box-shadow: 0 0 36px 6px var(--level-color);
+  25%,
+  55% {
+    opacity: 1;
   }
 }
 
@@ -275,19 +277,19 @@
 
 @keyframes level-banner {
   0% {
-    transform: translate(-50%, -140%);
+    transform: translateY(-140%) scale(0.9);
     opacity: 0;
   }
   10% {
-    transform: translate(-50%, 0);
+    transform: translateY(0) scale(1);
     opacity: 1;
   }
-  85% {
-    transform: translate(-50%, 0);
+  88% {
+    transform: translateY(0) scale(1);
     opacity: 1;
   }
   100% {
-    transform: translate(-50%, -140%);
+    transform: translateY(-140%) scale(0.95);
     opacity: 0;
   }
 }
@@ -322,10 +324,263 @@
   mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
 }
 
+/* --- Escada da subida de nível (ver levelUpEffects em lib/levels.ts) --- */
+
+/* 20+: raios de luz girando atrás do avatar. */
+@keyframes level-rays {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg) scale(0.4);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.9;
+  }
+  70% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(140deg) scale(1.25);
+    opacity: 0;
+  }
+}
+
+.level-rays {
+  background: repeating-conic-gradient(
+    from 0deg,
+    var(--level-color) 0deg 7deg,
+    transparent 7deg 30deg
+  );
+  mask: radial-gradient(farthest-side, transparent 38%, #000 46%, transparent 100%);
+}
+
+/* 20+: o número do selo rola pelos níveis até o novo (--roll = passos). */
+@keyframes level-roll {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(calc(var(--roll) * -1em));
+  }
+}
+
+/* 40+: anel de partículas girando em volta do avatar. */
+@keyframes level-orbit {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg) scale(0.5);
+    opacity: 0;
+  }
+  15% {
+    transform: translate(-50%, -50%) rotate(80deg) scale(1);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(560deg) scale(1.35);
+    opacity: 0;
+  }
+}
+
+/* 40+: borda da faixa (um quadrado de gradiente girando atrás do conteúdo). */
+@keyframes level-border-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+/* 60+: confete saindo da faixa: estoura para --dx/--dy e cai girando. */
+@keyframes level-confetti {
+  0% {
+    transform: translate(-50%, -50%) translate(0, 0) rotate(0deg) scale(0.4);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  40% {
+    transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) rotate(calc(var(--rot) * 0.5))
+      scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) translate(calc(var(--dx) * 1.3), calc(var(--dy) + 260px))
+      rotate(var(--rot)) scale(0.8);
+    opacity: 0;
+  }
+}
+
+/* 80+: vinheta na janela inteira, dois pulsos. */
+@keyframes level-vignette {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.9;
+  }
+  40% {
+    opacity: 0.25;
+  }
+  60% {
+    opacity: 0.7;
+  }
+}
+
+/* 80+: emblema grande da faixa que cresce e some atrás da faixa. */
+@keyframes level-emblem {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2) rotate(-40deg);
+    opacity: 0;
+  }
+  22% {
+    transform: translate(-50%, -50%) scale(1.12) rotate(6deg);
+    opacity: 0.95;
+  }
+  32% {
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  }
+  70% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.6) rotate(12deg);
+    opacity: 0;
+  }
+}
+
+/* Marco: "Nova faixa: <nome>!" entra por baixo da faixa. */
+@keyframes level-reveal {
+  0%,
+  12% {
+    transform: translateY(-10px) scale(0.6);
+    opacity: 0;
+  }
+  22% {
+    transform: translateY(0) scale(1.12);
+    opacity: 1;
+  }
+  30% {
+    transform: translateY(0) scale(1);
+  }
+  86% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-6px) scale(1);
+    opacity: 0;
+  }
+}
+
+/* 100+: faixa de aurora atravessando a tela. */
+@keyframes level-aurora {
+  0% {
+    transform: translateX(-70%) rotate(-18deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.45;
+  }
+  80% {
+    opacity: 0.3;
+  }
+  100% {
+    transform: translateX(70%) rotate(-18deg);
+    opacity: 0;
+  }
+}
+
+/* 100+: brilho do arco-íris na tela toda. */
+@keyframes level-wash {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  20%,
+  70% {
+    opacity: 1;
+  }
+}
+
+/* 100+: estrela caindo e girando. */
+@keyframes level-star-fall {
+  0% {
+    transform: translateY(-12vh) rotate(0deg) scale(0.6);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(112vh) rotate(var(--rot)) scale(1);
+    opacity: 0;
+  }
+}
+
+/* 100+: coroa e "LENDÁRIO" no meio da tela. */
+@keyframes level-crown {
+  0% {
+    transform: translateY(40px) scale(0.3);
+    opacity: 0;
+  }
+  18% {
+    transform: translateY(-6px) scale(1.15);
+    opacity: 1;
+  }
+  28% {
+    transform: translateY(0) scale(1);
+  }
+  80% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-20px) scale(1.25);
+    opacity: 0;
+  }
+}
+
+/* prefers-reduced-motion: os efeitos grandes viram só um fade. */
+@keyframes level-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  15%,
+  85% {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .level-anim,
   .level-anim * {
     animation-duration: 1ms !important;
+  }
+  /* Faixa, vinheta e celebração lendária: aparecem e somem paradas. */
+  .level-anim.level-fade {
+    animation: level-fade var(--level-fade-ms, 3000ms) ease-in-out both !important;
+  }
+  .level-anim.level-fade * {
+    animation: none !important;
+  }
+  /* Contador parado já no número novo. */
+  .level-anim.level-fade .level-roll {
+    transform: translateY(calc(var(--roll) * -1em));
+  }
+  /* Sem a animação de saída, o número antigo ficaria em cima do novo. */
+  .level-anim .level-num-old {
+    display: none !important;
+  }
+  /* Partículas, raios, emblema e afins: nada se mexendo. */
+  .level-anim .level-motion {
+    display: none !important;
   }
 }
 

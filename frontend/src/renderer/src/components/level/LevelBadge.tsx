@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useLevelStore } from '../../store/levelStore'
-import { levelTier, LEGENDARY_TIER } from '../../lib/levels'
+import { levelTier, levelUpEffects, LEGENDARY_TIER } from '../../lib/levels'
 
 interface LevelBadgeProps {
   userId: string
@@ -8,9 +8,13 @@ interface LevelBadgeProps {
   className?: string
 }
 
+/** Quantos números o contador passa antes de parar no nível novo. */
+const ROLL_STEPS = 6
+
 /**
  * Selo "Nv 12" com a cor da faixa. Quando a pessoa sobe de nível, o selo
- * pula e o número antigo sai por cima enquanto o novo entra por baixo.
+ * pula e o número antigo sai por cima enquanto o novo entra por baixo; do
+ * 20 em diante o número rola como um contador até o novo.
  */
 function LevelBadge({
   userId,
@@ -29,6 +33,9 @@ function LevelBadge({
 
   const tier = levelTier(level)
   const legendary = tier === LEGENDARY_TIER
+  const changed = celebration !== undefined && celebration.previous !== level
+  const rolling = changed && levelUpEffects(level).rollNumber
+  const rollFrom = Math.max(0, level - ROLL_STEPS)
   const text = size === 'md' ? 'text-[11px] px-1.5 py-0.5' : 'text-[9px] px-1 py-px'
 
   return (
@@ -57,11 +64,28 @@ function LevelBadge({
       >
         <span className="opacity-70">Nv</span>
         <span className="relative inline-flex overflow-hidden">
-          {celebration && celebration.previous !== level ? (
+          {rolling ? (
+            <span
+              className="level-roll flex flex-col tabular-nums"
+              style={
+                {
+                  '--roll': level - rollFrom,
+                  height: '1em',
+                  animation: 'level-roll 1.1s cubic-bezier(.12,.8,.2,1) 300ms both'
+                } as React.CSSProperties
+              }
+            >
+              {Array.from({ length: level - rollFrom + 1 }, (_, i) => (
+                <span key={i} aria-hidden={i < level - rollFrom} className="block h-[1em] shrink-0">
+                  {rollFrom + i}
+                </span>
+              ))}
+            </span>
+          ) : changed ? (
             <>
               <span
                 aria-hidden="true"
-                className="absolute inset-0"
+                className="level-num-old absolute inset-0"
                 style={{ animation: 'level-num-out 450ms ease-in 250ms both' }}
               >
                 {celebration.previous}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { NotificationPrefs } from '../lib/notifications'
+import { OVERLAY_OPACITY_MAX, OVERLAY_OPACITY_MIN, OVERLAY_OPACITY_STEP } from '../lib/overlayState'
 import { getBirthday, setBirthday, type Birthday } from '../api/birthdays'
 import { birthdayError } from '../lib/birthday'
 import { showToast } from '../store/toastStore'
@@ -9,6 +10,7 @@ import { useOverlayPrefsStore } from '../store/overlayPrefsStore'
 import { IS_WEB } from '../lib/config'
 import { permissionView, type WebPermission } from '../lib/webNotifications'
 import { browserPermission, requestBrowserPermission } from '../lib/browserNotifications'
+import LevelUpPreview from './level/LevelUpPreview'
 
 function Toggle({
   title,
@@ -172,15 +174,21 @@ function AppSettings(): React.JSX.Element | null {
   const prefs = useNotificationPrefsStore()
   const overlayEnabled = useOverlayPrefsStore((s) => s.enabled)
   const setOverlayEnabled = useOverlayPrefsStore((s) => s.setEnabled)
+  const overlayOpacity = useOverlayPrefsStore((s) => s.opacity)
+  const setOverlayOpacity = useOverlayPrefsStore((s) => s.setOpacity)
 
   useEffect(() => {
     void background?.getAutostart().then(setAutostart)
   }, [background])
 
+  // Prévia da animação de nível: só no build de dev (some do build final).
+  const devPreview = import.meta.env.DEV ? <LevelUpPreview /> : null
+
   if (!background && !IS_WEB) {
     return (
       <div className="flex flex-col gap-4">
         <ProfileSettings />
+        {devPreview}
       </div>
     )
   }
@@ -212,6 +220,23 @@ function AppSettings(): React.JSX.Element | null {
             checked={overlayEnabled}
             onChange={() => setOverlayEnabled(!overlayEnabled)}
           />
+          <label className="mt-4 flex flex-col gap-2">
+            <span className="flex items-center justify-between text-sm font-semibold text-white">
+              Opacidade do overlay
+              <span className="text-xs font-medium text-gray-400">{overlayOpacity}%</span>
+            </span>
+            <input
+              type="range"
+              min={OVERLAY_OPACITY_MIN}
+              max={OVERLAY_OPACITY_MAX}
+              step={OVERLAY_OPACITY_STEP}
+              value={overlayOpacity}
+              disabled={!overlayEnabled}
+              onChange={(e) => setOverlayOpacity(Number(e.target.value))}
+              aria-label="Opacidade do overlay"
+              className="accent-[#23a55a] disabled:opacity-40"
+            />
+          </label>
         </div>
       )}
       <div className="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -231,6 +256,7 @@ function AppSettings(): React.JSX.Element | null {
           ))}
         </div>
       </div>
+      {devPreview}
     </div>
   )
 }

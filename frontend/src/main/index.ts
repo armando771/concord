@@ -7,6 +7,8 @@ import { PendingDisplayRequest } from './displayPicker'
 import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './background'
 import { setupUpdater } from './updater'
 import { setupOverlay } from './overlay'
+import { APP_USER_MODEL_ID } from './toastPolicy'
+import { setupToasts } from './toasts'
 import { TITLE_BAR_COLOR, titleBarOptions } from './windowPolicy'
 import {
   audioLogPath,
@@ -147,7 +149,9 @@ if (!ensureSingleInstance(() => mainWindow)) app.exit(0)
 app.whenReady().then(() => {
   // Set app user model id for windows. Mantém o id do Concord (nome antigo):
   // é o que liga notificações, atalho de login e instalação ao mesmo app.
-  electronApp.setAppUserModelId('com.concord.app')
+  electronApp.setAppUserModelId(APP_USER_MODEL_ID)
+  // Antes de qualquer notificação: CLSID fixo e atalho do Menu Iniciar.
+  setupToasts()
   // Sem a barra "File Edit View Window" padrão do Electron (aparecia no Alt).
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
 

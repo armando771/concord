@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { OverlayMember, OverlaySnapshot } from '../lib/overlayState'
+import { clampOverlayOpacity, type OverlayMember, type OverlaySnapshot } from '../lib/overlayState'
 import VoiceStateIcons from '../components/call/VoiceStateIcons'
 
 /** Uma pessoa da call: avatar + nome + mic/fone cortados (estilo Discord). */
@@ -48,8 +48,13 @@ function OverlayApp(): React.JSX.Element | null {
   }, [])
 
   if (!snapshot || snapshot.members.length === 0) return null
+  // Opacidade na lista inteira (não na janela): transparência e click-through
+  // da janela continuam iguais.
   return (
-    <div className="flex h-full flex-col justify-center gap-1.5 pl-4">
+    <div
+      className="flex h-full flex-col justify-center gap-1.5 pl-4"
+      style={{ opacity: clampOverlayOpacity(snapshot.opacity) / 100 }}
+    >
       {snapshot.members.map((m) => (
         <OverlayPill key={m.id} member={m} />
       ))}

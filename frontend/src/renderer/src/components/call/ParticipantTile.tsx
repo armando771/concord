@@ -3,6 +3,10 @@ import type { CallUserInfo } from '../../store/callStore'
 import VoiceStateIcons from './VoiceStateIcons'
 import StreamAudioControls from './StreamAudioControls'
 import { VolumeOffIcon, XIcon } from '../icons'
+import { useAuthStore } from '../../store/authStore'
+import { useLevelStore } from '../../store/levelStore'
+import { levelUpEffects } from '../../lib/levels'
+import LevelUpBurst from '../level/LevelUpBurst'
 
 export function VideoFill({
   stream,
@@ -102,6 +106,11 @@ function ParticipantTile({
       ? { aspectRatio: String(aspect), width: `min(100cqw, calc(100cqh * ${aspect}))` }
       : undefined
   const avatarDims = size === 'lg' ? 'h-24 w-24 text-3xl' : 'h-14 w-14 text-lg'
+  // Subida de nível: do 60 em diante o tile brilha na cor da faixa; o burst
+  // no avatar é para os outros (quem subiu já tem a celebração na janela).
+  const meId = useAuthStore((s) => s.user?.id)
+  const celebration = useLevelStore((s) => (isScreen ? undefined : s.celebrations[user.id]))
+  const levelFx = celebration ? levelUpEffects(celebration.level, celebration.previous) : null
 
   return (
     <div
@@ -126,14 +135,30 @@ function ParticipantTile({
           onAspect={size === 'fill' ? setAspect : undefined}
         />
       )}
+      {celebration && levelFx?.tileGlow && (
+        <span
+          key={celebration.key}
+          aria-hidden="true"
+          className="level-anim pointer-events-none absolute inset-0 z-[1] rounded-2xl"
+          style={{
+            boxShadow: `inset 0 0 40px 8px ${levelFx.tier.color}, inset 0 0 0 2px ${levelFx.tier.color}`,
+            animation: 'level-tile-glow 1.6s ease-in-out 2 both'
+          }}
+        />
+      )}
       {!videoStream && (
         <div className="flex flex-col items-center gap-3">
-          <div
-            className={`flex items-center justify-center rounded-full font-bold text-white transition-colors ${avatarDims} ${
-              speaking ? 'bg-[#23a55a]' : 'bg-violet-600'
-            }`}
-          >
-            {initial}
+          <div className="relative">
+            <div
+              className={`flex items-center justify-center rounded-full font-bold text-white transition-colors ${avatarDims} ${
+                speaking ? 'bg-[#23a55a]' : 'bg-violet-600'
+              }`}
+            >
+              {initial}
+            </div>
+            {!isScreen && user.id !== meId && (
+              <LevelUpBurst userId={user.id} size={size === 'lg' ? 96 : 56} />
+            )}
           </div>
           {action}
         </div>

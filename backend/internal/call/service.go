@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -636,6 +637,15 @@ func participantInfosLocked(callID string, ac *activeCall) []ParticipantInfo {
 			Deafened: p.deafened,
 		})
 	}
+	// Ordem estável (quem entrou primeiro, depois id): o map muda de ordem a
+	// cada leitura e a lista do canal de voz pulava a cada polling.
+	sort.Slice(participants, func(i, j int) bool {
+		a, b := participants[i], participants[j]
+		if !a.JoinedAt.Equal(b.JoinedAt) {
+			return a.JoinedAt.Before(b.JoinedAt)
+		}
+		return a.UserID < b.UserID
+	})
 	return participants
 }
 
@@ -706,6 +716,7 @@ func (s *Service) GetState(ctx context.Context, callID string) (*StateResponse, 
 		for uid := range sharers {
 			screenSharing = append(screenSharing, uid)
 		}
+		sort.Strings(screenSharing)
 	}
 	s.mu.RUnlock()
 
