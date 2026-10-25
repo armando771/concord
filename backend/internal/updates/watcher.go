@@ -14,8 +14,9 @@ import (
 const PollInterval = 10 * time.Second
 
 // Manifests são os arquivos que os apps leem para saber da versão nova
-// (electron-updater): Windows e Linux.
-var Manifests = []string{"latest.yml", "latest-linux.yml"}
+// (electron-updater): Windows e AppImage; o .tar.gz do Linux tem o seu
+// (latest-linux-tar.yml, updater próprio do app).
+var Manifests = []string{"latest.yml", "latest-linux.yml", "latest-linux-tar.yml"}
 
 // Release é uma versão nova publicada num manifesto.
 type Release struct {

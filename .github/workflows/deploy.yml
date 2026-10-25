@@ -144,7 +144,7 @@ jobs:
       - name: App desktop (instalador assinado)
         run: scripts/release-win.sh "${{ steps.version.outputs.version }}"
 
-      - name: App desktop Linux (AppImage assinado)
+      - name: App desktop Linux (AppImage e .tar.gz assinados)
         run: scripts/release-linux.sh "${{ steps.version.outputs.version }}"
 
       - name: Publicar na VPS (backend + página de download + app web + atualização do app)
@@ -154,7 +154,8 @@ jobs:
         run: |
           curl -fsS "${PUBLIC_URL%/}/updates/latest.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
           curl -fsS "${PUBLIC_URL%/}/updates/latest-linux.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
-          for manifest in latest.yml latest-linux.yml; do
+          curl -fsS "${PUBLIC_URL%/}/updates/latest-linux-tar.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
+          for manifest in latest.yml latest-linux.yml latest-linux-tar.yml; do
             path=$(curl -fsS "${PUBLIC_URL%/}/updates/$manifest" | awk '/^path:/ {print $2}' | tr -d "\"'")
             test -n "$path"
             curl -fsSI "${PUBLIC_URL%/}/updates/$path"
@@ -165,6 +166,8 @@ jobs:
             curl -fsS "${SITE_URL%/}/" | grep -q 'data-download'
             curl -fsS "${SITE_URL%/}/updates/latest.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
             curl -fsS "${SITE_URL%/}/updates/latest-linux.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
+            curl -fsS "${SITE_URL%/}/updates/latest-linux-tar.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
+            curl -fsS "${SITE_URL%/}/install.sh" | grep -q 'latest-linux-tar.yml'
             echo "Página de download no ar em ${SITE_URL%/}"
           fi
           if [[ -n "$WEB_URL" ]]; then

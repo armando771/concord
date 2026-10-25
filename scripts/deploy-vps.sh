@@ -6,7 +6,8 @@
 # Envia o backend (binário Linux), migrations, docker-compose.yml, a página
 # de download (site/), o app web (frontend/dist-web, gerado por
 # `yarn build:web`) e as atualizações do app (backend/updates, geradas por
-# release-win.sh/release-linux.sh) para /opt/concord e reinicia o backend. Reiniciar não derruba chamadas: o
+# release-win.sh/release-linux.sh: instaladores, AppImage, .tar.gz do Linux e
+# manifestos) para /opt/concord e reinicia o backend. Reiniciar não derruba chamadas: o
 # backend recarrega as chamadas ativas e a mídia segue no LiveKit.
 # O .env da VPS (/opt/concord/.env) não é tocado.
 # A mídia do chat (/opt/concord/uploads) nunca é enviada nem apagada pelo deploy.
@@ -38,8 +39,9 @@ else
   echo "aviso: $WEB não existe (rode 'yarn build:web' em frontend/) — app web não atualizado" >&2
 fi
 # Manifestos por último: cada app só vê a versão nova com binário e assinatura no ar.
-rsync -az --exclude latest.yml --exclude latest-linux.yml "$ROOT/backend/updates/" "$HOST:/opt/concord/updates/"
-for manifest in latest.yml latest-linux.yml; do
+rsync -az --exclude latest.yml --exclude latest-linux.yml --exclude latest-linux-tar.yml \
+  "$ROOT/backend/updates/" "$HOST:/opt/concord/updates/"
+for manifest in latest.yml latest-linux-tar.yml latest-linux.yml; do
   if [[ -f "$ROOT/backend/updates/$manifest" ]]; then
     rsync -az "$ROOT/backend/updates/$manifest" "$HOST:/opt/concord/updates/"
   fi
@@ -48,4 +50,5 @@ done
 # o nome antigo do app.
 ssh "$HOST" 'cd /opt/concord/updates && ls -t Salinha-*-setup.exe Concord-*-setup.exe 2>/dev/null | tail -n +4 | while read -r f; do rm -f "$f" "$f.blockmap" "$f.sig"; done'
 ssh "$HOST" 'cd /opt/concord/updates && ls -t Salinha-*-x64.AppImage 2>/dev/null | tail -n +4 | while read -r f; do rm -f "$f" "$f.sig"; done'
+ssh "$HOST" 'cd /opt/concord/updates && ls -t Salinha-*-x64.tar.gz 2>/dev/null | tail -n +4 | while read -r f; do rm -f "$f" "$f.sig"; done'
 ssh "$HOST" 'cd /opt/concord && chmod +x concord-server.new && mv concord-server.new concord-server && docker compose up -d && systemctl restart concord-server && sleep 2 && systemctl is-active concord-server'
