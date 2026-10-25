@@ -73,7 +73,7 @@ jobs:
         working-directory: frontend
         run: yarn build:web
       - name: Scripts
-        run: node --test scripts/*.test.mjs
+        run: node --test scripts/*.test.mjs site/*.test.mjs
 
       - name: Helper de áudio (Rust)
         working-directory: native/concord-audio
