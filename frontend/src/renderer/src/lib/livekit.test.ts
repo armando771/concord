@@ -71,6 +71,7 @@ vi.mock('livekit-client', () => ({
 }))
 
 import { CallMedia, type RemoteMedia } from './livekit'
+import { rememberStreamQuality } from './screenShareQuality'
 
 function publication(source: string): FakePublication {
   const pub: FakePublication = {
@@ -318,6 +319,36 @@ describe('CallMedia — permissões de publicação', () => {
     } as unknown as MediaStream
     await expect(media.publishScreen(stream)).rejects.toThrow('no_stream_permission')
     await expect(media.publishCamera(stream)).rejects.toThrow('no_stream_permission')
+  })
+})
+
+describe('CallMedia — qualidade de tela', () => {
+  it('publica e republica com o encoding escolhido, sem alterar o áudio', async () => {
+    const media = createMedia()
+    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    room().localParticipant.publishTrack.mockClear()
+    const video = { getSettings: () => ({ width: 1920, height: 1080 }) }
+    const audio = {}
+    const stream = {
+      getVideoTracks: () => [video],
+      getAudioTracks: () => [audio]
+    } as unknown as MediaStream
+    rememberStreamQuality(stream, { resolution: '1080p', frameRate: 60 })
+    await media.publishScreen(stream)
+    await media.publishScreen(stream)
+    expect(room().localParticipant.publishTrack).toHaveBeenCalledWith(video, {
+      source: 'screen_share',
+      name: 'screen',
+      simulcast: false,
+      screenShareEncoding: { maxBitrate: 8_000_000, maxFramerate: 60 }
+    })
+    expect(room().localParticipant.publishTrack).toHaveBeenCalledWith(
+      audio,
+      expect.objectContaining({
+        source: 'screen_share_audio',
+        forceStereo: true
+      })
+    )
   })
 })
 

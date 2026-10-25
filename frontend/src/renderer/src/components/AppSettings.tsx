@@ -13,6 +13,7 @@ import { permissionView, type WebPermission } from '../lib/webNotifications'
 import { browserPermission, requestBrowserPermission } from '../lib/browserNotifications'
 import LevelUpPreview from './level/LevelUpPreview'
 import Switch from './Switch'
+import MutedNotifications from './MutedNotifications'
 
 /** Linha com título, descrição e o interruptor, como nas configurações do Discord. */
 export function Toggle({
@@ -165,20 +166,23 @@ export function BirthdaySettings(): React.JSX.Element {
 export function NotificationSettings(): React.JSX.Element {
   const prefs = useNotificationPrefsStore()
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-      <div className="flex flex-col gap-4">
-        {IS_WEB && <BrowserPermission />}
-        {NOTIFICATION_OPTIONS.map((option) => (
-          <Toggle
-            key={option.key}
-            title={option.title}
-            description={option.description}
-            checked={prefs[option.key]}
-            onChange={() => prefs.setPref(option.key, !prefs[option.key])}
-          />
-        ))}
+    <>
+      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+        <div className="flex flex-col gap-4">
+          {IS_WEB && <BrowserPermission />}
+          {NOTIFICATION_OPTIONS.map((option) => (
+            <Toggle
+              key={option.key}
+              title={option.title}
+              description={option.description}
+              checked={prefs[option.key]}
+              onChange={() => prefs.setPref(option.key, !prefs[option.key])}
+            />
+          ))}
+        </div>
       </div>
-    </div>
+      <MutedNotifications />
+    </>
   )
 }
 

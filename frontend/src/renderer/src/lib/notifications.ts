@@ -72,6 +72,21 @@ export function friendRequestNotification(requester: {
   }
 }
 
+/** Marcaram você num comentário de proposta: abre a proposta no quadro. */
+export function proposalMentionNotification(mention: {
+  proposal_id: string
+  proposal_title: string
+  author_name: string
+  snippet: string
+}): AppNotification {
+  return {
+    kind: 'mention',
+    title: `${mention.author_name} te marcou em "${mention.proposal_title}"`,
+    body: truncate(mention.snippet),
+    route: `/proposals?proposal=${mention.proposal_id}`
+  }
+}
+
 /**
  * Notificação para uma mensagem de canal que menciona você (@nick), responde
  * sua mensagem ou pinga o canal (@all/@here, pelo mention_everyone que o

@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { notePickedSource } from '../../lib/windowAudio'
 import type { ScreenSourceInfo } from '../../../../preload/index.d'
 import Button from '../Button'
 import { MonitorIcon } from '../icons'
 import { notePickerCancelled } from '../../lib/screenPickerCancel'
+import { loadScreenQuality, saveScreenQuality } from '../../lib/screenShareQuality'
+import ScreenQualityControls from './ScreenQualityControls'
+import { trapTab } from '../../lib/focusTrap'
 
 /**
  * Picker de fonte para compartilhamento de tela (estilo Discord).
@@ -16,6 +19,8 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
   const screenPicker = typeof window !== 'undefined' ? window.api?.screenPicker : undefined
 
   const [open, setOpen] = useState(false)
+  const [quality, setQuality] = useState(loadScreenQuality)
+  const dialogRef = useRef<HTMLDivElement>(null)
   const [sources, setSources] = useState<ScreenSourceInfo[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [tab, setTab] = useState<'screen' | 'window'>('screen')
@@ -24,6 +29,7 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
     if (!screenPicker) return
     const off = screenPicker.onShow(() => {
       setSelected(null)
+      setQuality(loadScreenQuality())
       setTab('screen')
       setOpen(true)
     })
@@ -59,20 +65,26 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
 
   const confirm = useCallback((): void => {
     if (!selected) return
+    saveScreenQuality(quality)
     notePickedSource(selected)
     screenPicker?.select(selected)
     close()
-  }, [screenPicker, selected, close])
+  }, [screenPicker, selected, close, quality])
 
   useEffect(() => {
     if (!open) return
+    const previousFocus = document.activeElement as HTMLElement | null
+    dialogRef.current?.focus()
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') cancel()
-      if (e.key === 'Enter' && selected) confirm()
+      trapTab(e, dialogRef.current)
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, selected, cancel, confirm])
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      previousFocus?.focus()
+    }
+  }, [open, cancel])
 
   if (!open) return null
 
@@ -82,7 +94,14 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="glass-card w-full max-w-2xl p-6">
+      <div
+        role="dialog"
+        ref={dialogRef}
+        tabIndex={-1}
+        aria-modal="true"
+        aria-label="Compartilhe sua tela"
+        className="glass-card max-h-[95vh] w-full max-w-2xl overflow-y-auto p-6"
+      >
         <h2 className="text-xl font-bold text-white">Compartilhe sua tela</h2>
         <div className="mt-4 flex gap-4 border-b border-white/10">
           <button
@@ -155,6 +174,8 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
             </button>
           ))}
         </div>
+
+        <ScreenQualityControls value={quality} onChange={setQuality} />
 
         <div className="mt-5 flex justify-end gap-3">
           <Button variant="ghost" onClick={cancel}>
