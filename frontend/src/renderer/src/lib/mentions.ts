@@ -14,6 +14,33 @@ const NICK = '[A-Za-z0-9_.]+'
  */
 const OPENER = `(^|[\\s([{"'<*~“‘«])`
 
+/** Pontuação que pode vir logo depois do nick (apóstrofo e ponto têm regra própria). */
+const CLOSERS = ',!?:;)]}"”»>*~'
+
+/**
+ * O nick acaba em `end`? Só se vier fim, espaço ou pontuação de fechamento.
+ * Letra, número, "-", "_", "@", "/" ou apóstrofo seguido de letra ("@all's")
+ * continuam a palavra; ponto seguido de nick também ("@ana.bot"), mas ponto
+ * final conta ("@ana."). Mesma regra do backend (tokenEndsAt em mention.go).
+ */
+function tokenEndsAt(text: string, end: number): boolean {
+  if (end >= text.length) return true
+  const ch = text[end]
+  if (/\s/.test(ch)) return true
+  if (ch === '.') {
+    let j = end
+    while (j < text.length && text[j] === '.') j++
+    if (j >= text.length) return true
+    if (/[A-Za-z0-9_]/.test(text[j])) return false
+    return tokenEndsAt(text, j)
+  }
+  if (ch === "'" || ch === '’') {
+    const next = text.codePointAt(end + 1)
+    return next === undefined || !/\p{L}/u.test(String.fromCodePoint(next))
+  }
+  return CLOSERS.includes(ch)
+}
+
 /** Nomes que nunca são menção pessoal: @all/@here só valem pelo mention_everyone. */
 const RESERVED = ['all', 'here', 'everyone']
 
@@ -31,7 +58,12 @@ function escape(text: string): string {
  */
 export function mentionsUser(content: string, username: string): boolean {
   if (!username || isReserved(username)) return false
-  return new RegExp(`${OPENER}@${escape(username)}(?![A-Za-z0-9_])`, 'i').test(content)
+  const re = new RegExp(`${OPENER}@${escape(username)}`, 'gi')
+  for (let match = re.exec(content); match; match = re.exec(content)) {
+    if (tokenEndsAt(content, match.index + match[0].length)) return true
+    re.lastIndex = match.index + match[1].length + 1
+  }
+  return false
 }
 
 export interface MessagePart {
@@ -69,7 +101,10 @@ export function splitMentions(
     const nick = match[2].replace(/\.+$/, '')
     const lower = nick.toLowerCase()
     if (start > last) pushText(content.slice(last, start))
-    if (isEveryone(lower) && lower === everyone) {
+    if (!tokenEndsAt(content, start + 1 + nick.length)) {
+      // "@all-hands", "@ana's": parte de uma palavra, não menção.
+      pushText(`@${nick}`)
+    } else if (isEveryone(lower) && lower === everyone) {
       parts.push({ text: `@${nick}`, mention: lower })
     } else if (isReserved(lower)) {
       pushText(`@${nick}`)

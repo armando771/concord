@@ -29,6 +29,43 @@ describe('mentionsUser', () => {
     expect(mentionsUser('(@fulano)', 'fulano')).toBe(true)
   })
 
+  it('depois do nick só vale fim, espaço ou pontuação de fechamento', () => {
+    for (const ok of [
+      '@fulano, oi',
+      '@fulano!',
+      '@fulano?',
+      '@fulano: bora',
+      '@fulano;',
+      '@fulano...',
+      '[@fulano]',
+      '{@fulano}',
+      '"@fulano"',
+      "'@fulano'",
+      '“@fulano”',
+      '‘@fulano’',
+      '«@fulano»',
+      '<@fulano>',
+      '*@fulano*',
+      '~@fulano~',
+      "@fulano'"
+    ]) {
+      expect(mentionsUser(ok, 'fulano'), ok).toBe(true)
+    }
+    for (const no of [
+      '@fulano-hands',
+      "@fulano's",
+      '@fulano’s',
+      '@fulano1',
+      '@fulano@x',
+      '@fulano/x',
+      '@fulanoé',
+      '@fulano.bot',
+      '@fulano.-'
+    ]) {
+      expect(mentionsUser(no, 'fulano'), no).toBe(false)
+    }
+  })
+
   it('quem se chama all, here ou everyone só é pingado pelo mention_everyone', () => {
     expect(mentionsUser('@all bora', 'all')).toBe(false)
     expect(mentionsUser('@HERE alguém?', 'here')).toBe(false)
@@ -86,6 +123,27 @@ describe('splitMentions', () => {
       { text: '["' },
       { text: '@ana', mention: 'ana' },
       { text: '"]' }
+    ])
+  })
+
+  it("@all-hands, @all's e afins não viram menção", () => {
+    expect(splitMentions('@all-hands amanhã', 'all')).toEqual([{ text: '@all-hands amanhã' }])
+    expect(splitMentions("@all's fine", 'all')).toEqual([{ text: "@all's fine" }])
+    expect(splitMentions('@here’s', 'here')).toEqual([{ text: '@here’s' }])
+    expect(splitMentions('@ana-bia oi')).toEqual([{ text: '@ana-bia oi' }])
+    expect(splitMentions('@all-hands e @here!', 'here')).toEqual([
+      { text: '@all-hands e ' },
+      { text: '@here', mention: 'here' },
+      { text: '!' }
+    ])
+    expect(splitMentions('@all, bora', 'all')).toEqual([
+      { text: '@all', mention: 'all' },
+      { text: ', bora' }
+    ])
+    expect(splitMentions('‘@ana’')).toEqual([
+      { text: '‘' },
+      { text: '@ana', mention: 'ana' },
+      { text: '’' }
     ])
   })
 

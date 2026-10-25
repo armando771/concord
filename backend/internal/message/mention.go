@@ -75,24 +75,40 @@ func opensToken(before string) bool {
 // Pontuação que pode vir logo antes de uma menção (igual em lib/mentions.ts).
 const mentionOpeners = "([{\"'<*~“‘«"
 
-// tokenEndsAt: o nick acaba em end? Ponto final conta como pontuação ("@all."),
-// mas ponto seguido de letra continua o nick ("@all.bot").
+// tokenEndsAt: o nick acaba em end? Só se vier fim, espaço ou pontuação de
+// fechamento. Letra, número, "-", "_", "@", "/" ou apóstrofo seguido de letra
+// ("@all's") continuam a palavra; ponto seguido de nick também ("@all.bot"),
+// mas ponto final conta ("@all."). Mesma regra de lib/mentions.ts.
 func tokenEndsAt(s string, end int) bool {
 	if end >= len(s) {
 		return true
 	}
-	if isNickByte(s[end]) {
-		return false
-	}
-	if s[end] == '.' {
+	r, size := utf8.DecodeRuneInString(s[end:])
+	switch {
+	case unicode.IsSpace(r):
+		return true
+	case r == '.':
 		j := end
 		for j < len(s) && s[j] == '.' {
 			j++
 		}
-		return j >= len(s) || !isNickByte(s[j])
+		if j >= len(s) {
+			return true
+		}
+		if isNickByte(s[j]) {
+			return false
+		}
+		return tokenEndsAt(s, j)
+	case r == '\'' || r == '’':
+		next, _ := utf8.DecodeRuneInString(s[end+size:])
+		return !unicode.IsLetter(next)
 	}
-	return true
+	return strings.ContainsRune(mentionClosers, r)
 }
+
+// Pontuação que pode vir logo depois de uma menção (igual em lib/mentions.ts).
+// Apóstrofo e ponto têm regra própria em tokenEndsAt.
+const mentionClosers = ",!?:;)]}\"”»>*~"
 
 // mentionLimiter guarda, em memória, o último @all/@here que pingou por autor
 // e canal. Uma instância do backend só; reiniciar zera as janelas.

@@ -159,6 +159,21 @@ describe('mentionNotification', () => {
       )?.title
     ).toBe('Ana mencionou você')
   })
+
+  it('resposta a mim com @all continua "respondeu você"', () => {
+    expect(
+      mentionNotification(
+        inChannel({
+          content: '@all fechado!',
+          mention_everyone: 'all',
+          reply_to_id: 'm0',
+          reply_to: { id: 'm0', author_id: 'eu', content: 'alguém aí?' }
+        }),
+        me,
+        'srv1'
+      )?.title
+    ).toBe('Ana respondeu você')
+  })
 })
 
 describe('notificationSound', () => {

@@ -76,9 +76,9 @@ export function mentionNotification(
         ? '🎂 Feliz aniversário!'
         : isMention
           ? `${author} mencionou você`
-          : everyone
-            ? `${author} mencionou @${everyone}`
-            : `${author} respondeu você`,
+          : isReplyToMe
+            ? `${author} respondeu você`
+            : `${author} mencionou @${everyone}`,
     body: truncate(messagePreview(message)),
     route: `/servers/${serverId}/channels/${message.channel_id}`
   }
