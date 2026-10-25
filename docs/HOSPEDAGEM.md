@@ -377,6 +377,30 @@ não mexe nos arquivos. Restaure o banco antes de 7 dias para não perder mídia
    É seguro: o que for órfão de verdade volta para a lixeira na próxima limpeza.
 4. Suba o backend: `systemctl start concord-server`.
 
+## Nomes de usuário sem diferenciar caixa
+
+O login aceita e-mail ou nome de usuário sem diferenciar maiúsculas de
+minúsculas, e o cadastro recusa (409) um nome ou e-mail que já exista com
+outra caixa. A migration 000019 cria um índice **único** em `lower(username)`
+quando o banco não tem usernames que só diferem na caixa; se tiver, cria um
+índice comum e não falha. Nesse caso o backend avisa no boot com uma linha
+`WARNING: N grupo(s) de usernames ...` (só contagens, sem nomes).
+
+**Antes do deploy**, rode no Postgres de produção:
+```sql
+SELECT lower(username), count(*) FROM users GROUP BY 1 HAVING count(*) > 1;
+SELECT lower(email), count(*) FROM users GROUP BY 1 HAVING count(*) > 1;
+```
+Sem linhas na primeira query, a migration cria o índice único. Com linhas,
+combine com os donos qual conta muda de nome (`UPDATE users SET username = ...
+WHERE id = ...`) e depois crie o índice à mão:
+```sql
+CREATE UNIQUE INDEX users_username_lower_key ON users (lower(username));
+DROP INDEX IF EXISTS idx_users_username_lower;
+```
+Enquanto isso, essas contas só entram digitando o nome com a caixa exata (ou
+pelo e-mail).
+
 ## Segurança
 
 Com o playit, login e mensagens trafegam **sem criptografia** (HTTP). Na VPS

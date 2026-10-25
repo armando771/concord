@@ -32,19 +32,25 @@ type loginUsers interface {
 	FindLoginByUsername(ctx context.Context, username string) (*user.User, error)
 }
 
+// accountCreator é a parte do user.Service que o cadastro usa.
+type accountCreator interface {
+	Create(ctx context.Context, u *user.User) error
+	SetBirthday(ctx context.Context, userID string, b user.Birthday) error
+}
+
 type Handler struct {
-	service     *Service
-	userService *user.Service
-	logins      loginUsers
-	guard       *loginGuard
+	service  *Service
+	accounts accountCreator
+	logins   loginUsers
+	guard    *loginGuard
 }
 
 func AuthHandler(service *Service, userService *user.Service) *Handler {
 	return &Handler{
-		service:     service,
-		userService: userService,
-		logins:      userService,
-		guard:       newLoginGuard(),
+		service:  service,
+		accounts: userService,
+		logins:   userService,
+		guard:    newLoginGuard(),
 	}
 }
 
@@ -77,6 +83,17 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
+	reg := user.NormalizeRegistration(user.Registration{
+		Username:    input.Username,
+		DisplayName: input.DisplayName,
+		Email:       input.Email,
+		Password:    input.Password,
+	})
+	if err := user.ValidateRegistration(reg); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	if err := user.ValidateBirthday(input.BirthdayDay, input.BirthdayMonth, input.BirthdayYear, time.Now()); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -89,21 +106,30 @@ func (h *Handler) Register(c *gin.Context) {
 	}
 
 	newUser := &user.User{
-		Username:     input.Username,
-		DisplayName:  input.DisplayName,
-		Email:        input.Email,
+		Username:     reg.Username,
+		DisplayName:  reg.DisplayName,
+		Email:        reg.Email,
 		PasswordHash: string(hashedPassword),
 		Active:       true,
 	}
 
-	if err := h.userService.Create(c.Request.Context(), newUser); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := h.accounts.Create(c.Request.Context(), newUser); err != nil {
+		switch {
+		case errors.Is(err, user.ErrIdentityTaken):
+			// Mesma mensagem para usuário e e-mail; nada do Postgres na resposta.
+			c.JSON(http.StatusConflict, gin.H{"error": user.ErrIdentityTaken.Error()})
+		case errors.Is(err, user.ErrUsernameRequired), errors.Is(err, user.ErrEmailRequired):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		default:
+			log.Printf("[auth] create user: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+		}
 		return
 	}
 
 	if input.BirthdayDay != nil {
 		birthday := user.Birthday{Day: input.BirthdayDay, Month: input.BirthdayMonth, Year: input.BirthdayYear, Announce: true}
-		if err := h.userService.SetBirthday(c.Request.Context(), newUser.ID, birthday); err != nil {
+		if err := h.accounts.SetBirthday(c.Request.Context(), newUser.ID, birthday); err != nil {
 			log.Printf("[auth] save birthday for %s: %v", newUser.ID, err)
 		}
 	}
