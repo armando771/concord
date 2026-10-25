@@ -8,6 +8,7 @@
 # release-win.sh) para /opt/concord e reinicia o backend. Reiniciar não derruba chamadas: o
 # backend recarrega as chamadas ativas e a mídia segue no LiveKit.
 # O .env da VPS (/opt/concord/.env) não é tocado.
+# A mídia do chat (/opt/concord/uploads) nunca é enviada nem apagada pelo deploy.
 set -euo pipefail
 
 HOST="${1:-}"
@@ -20,7 +21,7 @@ BIN="$(mktemp)"
 trap 'rm -f "$BIN"' EXIT
 
 (cd "$ROOT/backend" && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "$BIN" ./cmd)
-ssh "$HOST" 'mkdir -p /opt/concord/updates'
+ssh "$HOST" 'mkdir -p /opt/concord/updates /opt/concord/uploads'
 rsync -az "$BIN" "$HOST:/opt/concord/concord-server.new"
 rsync -az --delete "$ROOT/backend/migrations/" "$HOST:/opt/concord/migrations/"
 rsync -az "$ROOT/backend/docker-compose.yml" "$HOST:/opt/concord/"

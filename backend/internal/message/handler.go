@@ -1,6 +1,7 @@
 package message
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -18,6 +19,7 @@ type Handler struct {
 	conversationService *conversation.Service
 	friendService       *friendship.Service
 	serverService       *server.Service
+	access              RoomAccess
 }
 
 func MessageHandler(service *Service, channelService *channel.Service, conversationService *conversation.Service, friendService *friendship.Service, serverService *server.Service) *Handler {
@@ -27,6 +29,7 @@ func MessageHandler(service *Service, channelService *channel.Service, conversat
 		conversationService: conversationService,
 		friendService:       friendService,
 		serverService:       serverService,
+		access:              NewServiceRoomAccess(channelService, serverService, conversationService, friendService),
 	}
 }
 
@@ -171,33 +174,20 @@ func (h *Handler) CreateConversationMessage(c *gin.Context) {
 // canSendToConversation confere se userID pode escrever na DM; se não puder,
 // já responde o erro.
 func (h *Handler) canSendToConversation(c *gin.Context, conversationID string, userID string) bool {
-	conv, err := h.conversationService.FindByID(c.Request.Context(), conversationID)
-	if err != nil {
+	err := h.access.CanWrite(c.Request.Context(), Room{ConversationID: conversationID}, userID)
+	switch {
+	case err == nil:
+		return true
+	case errors.Is(err, ErrRoomNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": "conversation not found"})
-		return false
-	}
-
-	if conv.UserAID != userID && conv.UserBID != userID {
+	case errors.Is(err, ErrNoRoomAccess):
 		c.JSON(http.StatusForbidden, gin.H{"error": "you are not a participant of this conversation"})
-		return false
+	case errors.Is(err, ErrCannotMessage):
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only message friends or people from your servers"})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check access"})
 	}
-
-	otherUserID := conv.UserAID
-	if otherUserID == userID {
-		otherUserID = conv.UserBID
-	}
-
-	// DM liberada entre amigos ou entre quem divide um servidor.
-	areFriends, _ := h.friendService.AreFriends(c.Request.Context(), userID, otherUserID)
-	if !areFriends {
-		shares, err := h.serverService.SharesServer(c.Request.Context(), userID, otherUserID)
-		if err != nil || !shares {
-			c.JSON(http.StatusForbidden, gin.H{"error": "you can only message friends or people from your servers"})
-			return false
-		}
-	}
-
-	return true
+	return false
 }
 
 func (h *Handler) ListConversationMessages(c *gin.Context) {

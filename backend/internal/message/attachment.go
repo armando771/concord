@@ -2,7 +2,11 @@ package message
 
 import (
 	"errors"
+	"path"
+	"strconv"
+	"strings"
 	"time"
+	"unicode"
 )
 
 // MaxAttachmentsPerMessage é quantos arquivos cabem numa mensagem (como no Discord).
@@ -52,4 +56,35 @@ func validateNewMessage(content string, attachmentIDs []string) error {
 		seen[id] = true
 	}
 	return nil
+}
+
+// sanitizeFilename guarda só o nome (sem pastas nem caracteres de controle),
+// com até 200 caracteres. Ele só aparece na tela e no Content-Disposition;
+// no disco o arquivo se chama pelo id.
+func sanitizeFilename(name string) string {
+	name = path.Base(strings.ReplaceAll(name, `\`, "/"))
+	name = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, name)
+	name = strings.TrimSpace(name)
+	if runes := []rune(name); len(runes) > 200 {
+		name = string(runes[:200])
+	}
+	if name == "" || name == "." || name == ".." || name == "/" {
+		return "arquivo"
+	}
+	return name
+}
+
+// parseOptionalPositive lê um campo numérico opcional do upload (largura,
+// altura, duração); vazio, inválido ou fora de 1..max → nil.
+func parseOptionalPositive(raw string, max int) *int {
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n <= 0 || n > max {
+		return nil
+	}
+	return &n
 }

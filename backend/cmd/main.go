@@ -123,6 +123,9 @@ func main() {
 	messageRepository := message.MessageRepository(db)
 	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository, uploads)
 	messageHandler := message.MessageHandler(messageService, channelService, conversationService, friendshipService, serverService)
+	uploadSpace := media.NewSpace(uploadsDir, media.ReserveFromEnv(os.Getenv("UPLOADS_MIN_FREE_GB")))
+	roomAccess := message.NewServiceRoomAccess(channelService, serverService, conversationService, friendshipService)
+	attachmentHandler := message.NewAttachmentHandler(messageRepository, uploads, uploadSpace, roomAccess, nil)
 
 	// LiveKit (mídia das chamadas)
 	liveKitKey, liveKitSecret := os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET")
@@ -173,6 +176,7 @@ func main() {
 	channel.ChannelRoutes(api, channelHandler, authMiddleware)
 	conversation.ConversationRoutes(api, conversationHandler, authMiddleware)
 	message.MessageRoutes(api, messageHandler, authMiddleware)
+	message.AttachmentRoutes(api, attachmentHandler, authMiddleware)
 	call.CallRoutes(api, callHandler, authMiddleware)
 	level.LevelRoutes(api, levelHandler, authMiddleware)
 

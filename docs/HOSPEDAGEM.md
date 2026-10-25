@@ -172,7 +172,12 @@ Numa VPS com IP público não precisa de playit, e dá para ter HTTPS de graça.
      são as mesmas);
    - `PUBLIC_URL=https://<seu-endereço>`;
    - os segredos (`JWT_SECRET` e as chaves do LiveKit). Usando os mesmos de
-     antes, ninguém perde o login.
+     antes, ninguém perde o login;
+   - `UPLOADS_DIR` (opcional; padrão `uploads`, que vira `/opt/concord/uploads`
+     porque o serviço roda com `WorkingDirectory=/opt/concord`): fotos, vídeos
+     e áudios do chat;
+   - `UPLOADS_MIN_FREE_GB` (opcional; padrão 5): abaixo desse espaço livre no
+     disco o servidor recusa uploads novos.
 4. **Endereço com HTTPS sem comprar domínio:** use `<ip-com-hífens>.sslip.io`
    (ex.: `1-2-3-4.sslip.io` aponta para `1.2.3.4`). `/etc/caddy/Caddyfile`:
    ```
@@ -248,7 +253,8 @@ Para ligar, em **Settings → Secrets and variables → Actions**:
 Sem `DEPLOY_ENABLED`, o workflow só roda os testes.
 
 **Backup:** um timer do systemd roda `pg_dump` todo dia e guarda 14 dias em
-`/opt/concord/backups`.
+`/opt/concord/backups`. O backup diário é só do banco; a mídia do chat fica em
+`/opt/concord/uploads` e não entra nele.
 
 ## Segurança
 
