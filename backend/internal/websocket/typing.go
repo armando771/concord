@@ -11,13 +11,21 @@ import (
 )
 
 const (
-	// typingMinInterval: o app manda no máximo um "digitando" a cada 3 s; o
-	// que passar de 1 por segundo é descartado.
-	typingMinInterval = time.Second
-	typingLookupWait  = 3 * time.Second
-	// Acima disso o limitador limpa quem já saiu da janela.
+	// O app manda no máximo um "digitando" a cada 3 s (mais o stop). Por
+	// pessoa vale cerca de 1 evento por segundo, com uma folga de 3 para a
+	// sequência typing → stop → typing de quem envia e já volta a digitar.
+	typingRefill     = time.Second
+	typingBurst      = 3
+	typingLookupWait = 3 * time.Second
+	// Acima disso o limitador esquece quem já está com a folga cheia.
 	typingLimiterSweepAt = 1024
 )
+
+// typingBucket: fichas de quem digita (typing e stop gastam uma cada).
+type typingBucket struct {
+	tokens float64
+	at     time.Time
+}
 
 // UserLookup busca o nome de quem está digitando (user.Service.FindByID).
 type UserLookup func(ctx context.Context, userID string) (*user.User, error)
@@ -31,8 +39,8 @@ type Typing struct {
 	users        UserLookup
 	now          func() time.Time
 
-	mu   sync.Mutex
-	last map[string]time.Time // "<user>|<tipo>" → último aceito
+	mu      sync.Mutex
+	buckets map[string]*typingBucket
 }
 
 func NewTyping(hub *Hub, access message.RoomAccess, participants message.ConversationResolver, users UserLookup) *Typing {
@@ -42,7 +50,7 @@ func NewTyping(hub *Hub, access message.RoomAccess, participants message.Convers
 		participants: participants,
 		users:        users,
 		now:          time.Now,
-		last:         make(map[string]time.Time),
+		buckets:      make(map[string]*typingBucket),
 	}
 }
 
@@ -62,7 +70,7 @@ func (t *Typing) Handle(ctx context.Context, userID string, evType string, paylo
 		return
 	}
 	// O limite vem antes do acesso: evento descartado não consulta o banco.
-	if !t.allow(userID + "|" + evType) {
+	if !t.allow(userID) {
 		return
 	}
 
@@ -109,20 +117,35 @@ func (t *Typing) rooms(ctx context.Context, channelID string, conversationID str
 	return messageRooms(nil, "", &conversationID, userIDs)
 }
 
-func (t *Typing) allow(key string) bool {
+func (t *Typing) allow(userID string) bool {
 	now := t.now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if last, ok := t.last[key]; ok && now.Sub(last) < typingMinInterval {
-		return false
-	}
-	if len(t.last) >= typingLimiterSweepAt {
-		for k, at := range t.last {
-			if now.Sub(at) >= typingMinInterval {
-				delete(t.last, k)
+	if len(t.buckets) >= typingLimiterSweepAt {
+		for id, b := range t.buckets {
+			if b.fill(now) >= typingBurst {
+				delete(t.buckets, id)
 			}
 		}
 	}
-	t.last[key] = now
+	b, ok := t.buckets[userID]
+	if !ok {
+		b = &typingBucket{tokens: typingBurst, at: now}
+		t.buckets[userID] = b
+	}
+	b.tokens, b.at = b.fill(now), now
+	if b.tokens < 1 {
+		return false
+	}
+	b.tokens--
 	return true
+}
+
+// fill: fichas de agora (uma a cada typingRefill, até typingBurst).
+func (b *typingBucket) fill(now time.Time) float64 {
+	tokens := b.tokens + float64(now.Sub(b.at))/float64(typingRefill)
+	if tokens > typingBurst {
+		return typingBurst
+	}
+	return tokens
 }

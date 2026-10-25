@@ -216,14 +216,15 @@ func TestTypingIsRateLimitedPerUser(t *testing.T) {
 	f := newTypingFixture()
 	bia := f.join("bia", "channel:c1", "conversation:d1")
 
-	f.send("ana", "typing", "channel:c1")
-	f.now = f.now.Add(300 * time.Millisecond)
-	f.send("ana", "typing", "channel:c1")
-	f.send("ana", "typing", "conversation:d1")
-	if got := typingEvents(t, bia); len(got) != 1 {
-		t.Fatalf("mais de 1 por segundo é descartado: recebeu %d", len(got))
+	// Rajada curta passa (typing, stop e typing de novo ao mandar e voltar a
+	// digitar); o resto da rajada é descartado.
+	for i := 0; i < 5; i++ {
+		f.send("ana", "typing", "channel:c1")
 	}
-	if f.access.calls != 1 {
+	if got := typingEvents(t, bia); len(got) != typingBurst {
+		t.Fatalf("rajada: recebeu %d, want %d", len(got), typingBurst)
+	}
+	if f.access.calls != typingBurst {
 		t.Fatalf("descartado nem consulta o banco (%d consultas)", f.access.calls)
 	}
 
@@ -232,10 +233,22 @@ func TestTypingIsRateLimitedPerUser(t *testing.T) {
 		t.Fatalf("o limite é por pessoa: %+v", got)
 	}
 
-	f.now = f.now.Add(time.Second)
+	// Depois da rajada, cerca de 1 por segundo (canal e DM contam juntos).
+	f.now = f.now.Add(1100 * time.Millisecond)
+	f.send("ana", "typing", "conversation:d1")
+	f.send("ana", "typing:stop", "channel:c1")
+	if got := typingEvents(t, bia); len(got) != 1 {
+		t.Fatalf("1 por segundo depois da rajada: %+v", got)
+	}
+	f.now = f.now.Add(500 * time.Millisecond)
+	f.send("ana", "typing", "channel:c1")
+	if got := typingEvents(t, bia); len(got) != 0 {
+		t.Fatalf("meio segundo depois ainda não: %+v", got)
+	}
+	f.now = f.now.Add(500 * time.Millisecond)
 	f.send("ana", "typing", "channel:c1")
 	if got := typingEvents(t, bia); len(got) != 1 {
-		t.Fatalf("passado o intervalo volta a valer: %+v", got)
+		t.Fatalf("passado o segundo volta a valer: %+v", got)
 	}
 }
 
@@ -244,13 +257,16 @@ func TestTypingStop(t *testing.T) {
 	bia := f.join("bia", "channel:c1")
 	ana := f.join("ana", "channel:c1")
 
+	// Digita, apaga tudo e volta a digitar logo em seguida.
 	f.send("ana", "typing", "channel:c1")
 	f.now = f.now.Add(100 * time.Millisecond)
 	f.send("ana", "typing:stop", "channel:c1")
+	f.now = f.now.Add(100 * time.Millisecond)
+	f.send("ana", "typing", "channel:c1")
 
 	got := typingEvents(t, bia)
-	if len(got) != 2 {
-		t.Fatalf("o stop logo depois do typing tem limite próprio: %+v", got)
+	if len(got) != 3 {
+		t.Fatalf("typing/stop/typing em sequência chegam todos: %+v", got)
 	}
 	stop := got[1]
 	if stop.Type != "typing:stop" || stop.Payload.Room != "channel:c1" || stop.Payload.UserID != "ana" {
@@ -258,11 +274,6 @@ func TestTypingStop(t *testing.T) {
 	}
 	if got := typingEvents(t, ana); len(got) != 0 {
 		t.Fatalf("quem parou não recebe o stop: %+v", got)
-	}
-
-	f.send("ana", "typing:stop", "channel:c1")
-	if got := typingEvents(t, bia); len(got) != 0 {
-		t.Fatalf("stop também é limitado: %+v", got)
 	}
 }
 
