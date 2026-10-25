@@ -6,19 +6,25 @@ import (
 	"errors"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // Atividades: jogos web de terceiros abertos junto com a chamada. O servidor
 // só guarda (em memória) qual atividade está aberta e o link da sala para quem
 // está na chamada — o jogo roda inteiro no site de quem o hospeda.
 
+// activityCooldown: intervalo mínimo entre abrir/trocar link/encerrar de cada
+// participante (cada mudança avisa a chamada inteira), como a mesa de áudio.
+const activityCooldown = 2 * time.Second
+
 // maxActivityURL limita o link guardado e repassado a todos da chamada.
 const maxActivityURL = 512
 
 var (
-	ErrUnknownActivity = errors.New("atividade desconhecida")
-	ErrActivityURL     = errors.New("link inválido para esta atividade")
-	ErrActivityOwner   = errors.New("só quem abriu a atividade pode encerrá-la")
+	ErrUnknownActivity  = errors.New("atividade desconhecida")
+	ErrActivityURL      = errors.New("link inválido para esta atividade")
+	ErrActivityOwner    = errors.New("só quem abriu a atividade pode encerrá-la")
+	ErrActivityCooldown = errors.New("aguarde um instante antes de mudar a atividade de novo")
 )
 
 // activityCatalog: id da atividade -> origens aceitas no link da sala. Igual ao
@@ -101,10 +107,17 @@ func (s *Service) StartActivity(ctx context.Context, callID, userID, activityID,
 		s.mu.Unlock()
 		return ErrNotFound
 	}
-	if _, ok := ac.participants[userID]; !ok {
+	p, ok := ac.participants[userID]
+	if !ok {
 		s.mu.Unlock()
 		return ErrNotAllowed
 	}
+	now := time.Now()
+	if s.activityOnCooldownLocked(p, now) {
+		s.mu.Unlock()
+		return ErrActivityCooldown
+	}
+	p.lastActivityAt = now
 	s.activities[callID] = &callActivity{activityID: activityID, url: link, startedBy: userInfo}
 	targets := participantIDsLocked(ac)
 	s.mu.Unlock()
@@ -126,7 +139,8 @@ func (s *Service) StopActivity(callID, userID string) error {
 		s.mu.Unlock()
 		return ErrNotFound
 	}
-	if _, ok := ac.participants[userID]; !ok {
+	p, ok := ac.participants[userID]
+	if !ok {
 		s.mu.Unlock()
 		return ErrNotAllowed
 	}
@@ -139,12 +153,22 @@ func (s *Service) StopActivity(callID, userID string) error {
 		s.mu.Unlock()
 		return ErrActivityOwner
 	}
+	now := time.Now()
+	if s.activityOnCooldownLocked(p, now) {
+		s.mu.Unlock()
+		return ErrActivityCooldown
+	}
+	p.lastActivityAt = now
 	delete(s.activities, callID)
 	targets := participantIDsLocked(ac)
 	s.mu.Unlock()
 
 	s.sendToAll(targets, activityStopEvent(callID, act))
 	return nil
+}
+
+func (s *Service) activityOnCooldownLocked(p *participantState, now time.Time) bool {
+	return !p.lastActivityAt.IsZero() && now.Sub(p.lastActivityAt) < s.activityCooldown
 }
 
 // ActivityFor devolve a atividade aberta na chamada, só para quem está nela.
@@ -235,7 +259,8 @@ func (s *Service) handleActivityStopMessage(userID string, payload json.RawMessa
 
 func activityErrorMessage(err error) string {
 	switch {
-	case errors.Is(err, ErrUnknownActivity), errors.Is(err, ErrActivityURL), errors.Is(err, ErrActivityOwner):
+	case errors.Is(err, ErrUnknownActivity), errors.Is(err, ErrActivityURL), errors.Is(err, ErrActivityOwner),
+		errors.Is(err, ErrActivityCooldown):
 		return err.Error()
 	case errors.Is(err, ErrNotAllowed):
 		return "só quem está na chamada pode usar atividades"

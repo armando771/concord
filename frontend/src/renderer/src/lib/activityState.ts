@@ -37,19 +37,30 @@ export interface ActivityState {
   callId: string | null
   shared: CallActivity | null
   local: LocalActivity | null
+  /** Pedi para abrir e espero o servidor aceitar (o jogo só abre depois). */
+  pending: LocalActivity | null
 }
 
-export const INITIAL_ACTIVITY_STATE: ActivityState = { callId: null, shared: null, local: null }
+export const INITIAL_ACTIVITY_STATE: ActivityState = {
+  callId: null,
+  shared: null,
+  local: null,
+  pending: null
+}
 
 export type ActivityAction =
   /** Entrei, saí ou troquei de chamada. */
   | { type: 'call'; callId: string | null }
   /** Estado da chamada lido do backend (quem entra depois). */
   | { type: 'hydrate'; callId: string; activity: RawCallActivity | null }
-  /** call:activity */
-  | { type: 'started'; activity: RawCallActivity }
+  /** call:activity (meId: o eco do meu pedido abre o jogo pendente). */
+  | { type: 'started'; activity: RawCallActivity; meId?: string | null }
   /** call:activity:stop */
   | { type: 'stopped'; callId: string; startedBy?: string }
+  /** Pedi para abrir (url = o que abrir quando o servidor aceitar). */
+  | { type: 'requested'; activityId: string; url: string }
+  /** O servidor recusou (call:activity:error) ou não respondeu. */
+  | { type: 'rejected' }
   /** Abri o jogo aqui. */
   | { type: 'opened'; activityId: string; url: string }
   /** Fechei o jogo aqui. */
@@ -78,7 +89,7 @@ export function activityReducer(state: ActivityState, action: ActivityAction): A
   switch (action.type) {
     case 'call':
       if (action.callId === state.callId) return state
-      return { callId: action.callId, shared: null, local: null }
+      return { callId: action.callId, shared: null, local: null, pending: null }
 
     case 'hydrate': {
       if (!state.callId || action.callId !== state.callId) return state
@@ -90,8 +101,22 @@ export function activityReducer(state: ActivityState, action: ActivityAction): A
     case 'started': {
       const shared = parseActivity(action.activity)
       if (!shared || !state.callId || shared.callId !== state.callId) return state
-      return { ...state, shared }
+      const pending = state.pending
+      const accepted =
+        pending !== null &&
+        !!action.meId &&
+        shared.startedBy.id === action.meId &&
+        shared.activityId === pending.activityId
+      if (!accepted) return { ...state, shared }
+      return { ...state, shared, local: pending, pending: null }
     }
+
+    case 'requested':
+      if (!state.callId || !findActivity(action.activityId)) return state
+      return { ...state, pending: { activityId: action.activityId, url: action.url } }
+
+    case 'rejected':
+      return state.pending ? { ...state, pending: null } : state
 
     case 'stopped': {
       const current = state.shared

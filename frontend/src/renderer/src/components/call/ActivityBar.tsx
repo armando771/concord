@@ -23,7 +23,7 @@ function ActivityBar(): React.JSX.Element | null {
   const [link, setLink] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const banner = activityBanner({ callId, shared, local }, meId)
+  const banner = activityBanner({ callId, shared, local, pending: null }, meId)
   const activity = shared ? findActivity(shared.activityId) : undefined
   if (!banner || !activity || !shared) return null
 

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestValidateActivityURL(t *testing.T) {
@@ -73,6 +74,8 @@ func eventsOfType(pub *fakePublisher, typ string) map[string][]json.RawMessage {
 func activityCall(pub *fakePublisher, participants ...string) *Service {
 	s := channelCallWith(pub, participants...)
 	stubLookupUser(s)
+	// Os testes de fluxo abrem e encerram em seguida; o cooldown tem teste próprio.
+	s.activityCooldown = 0
 	return s
 }
 
@@ -302,5 +305,62 @@ func TestStateEndpointCarriesActivityOnlyForParticipants(t *testing.T) {
 	tokenRouter(s, "fora").ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/calls/call-1/state", nil))
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("quem está fora: status = %d, want 403", rec.Code)
+	}
+}
+
+func TestActivityCooldownPerParticipant(t *testing.T) {
+	pub := &fakePublisher{}
+	s := activityCall(pub, "user-1", "user-2")
+	s.activityCooldown = time.Hour
+	ctx := context.Background()
+
+	if err := s.StartActivity(ctx, "call-1", "user-1", "krunker", ""); err != nil {
+		t.Fatalf("StartActivity: %v", err)
+	}
+	// Abrir/encerrar em sequência (spam de toasts para a chamada) é barrado.
+	if err := s.StopActivity("call-1", "user-1"); !errors.Is(err, ErrActivityCooldown) {
+		t.Fatalf("StopActivity logo depois = %v, want ErrActivityCooldown", err)
+	}
+	if err := s.StartActivity(ctx, "call-1", "user-1", "krunker", "https://krunker.io/?game=NY:zz9"); !errors.Is(err, ErrActivityCooldown) {
+		t.Fatalf("StartActivity logo depois = %v, want ErrActivityCooldown", err)
+	}
+	if got := s.ActivityFor("call-1", "user-2"); got == nil || got.URL != "" {
+		t.Fatalf("atividade mudou durante o cooldown: %+v", got)
+	}
+	if n := len(eventsOfType(pub, "call:activity")["user:user-2"]); n != 1 {
+		t.Fatalf("user-2 recebeu %d call:activity, want 1", n)
+	}
+
+	// Pelo WS, o cooldown vira call:activity:error (nunca call:error).
+	raw, _ := json.Marshal(LeavePayload{CallID: "call-1"})
+	s.HandleCallMessage("user-1", "call:activity:stop", raw)
+	errs := eventsOfType(pub, "call:activity:error")["user:user-1"]
+	if len(errs) != 1 || !strings.Contains(string(errs[0]), ErrActivityCooldown.Error()) {
+		t.Fatalf("call:activity:error = %s", errs)
+	}
+
+	// O cooldown é de cada participante: outra pessoa pode agir.
+	if err := s.StartActivity(ctx, "call-1", "user-2", "krunker", ""); err != nil {
+		t.Fatalf("StartActivity(user-2): %v", err)
+	}
+
+	// Passado o cooldown, volta a valer.
+	s.calls["call-1"].participants["user-2"].lastActivityAt = time.Now().Add(-2 * time.Hour)
+	if err := s.StopActivity("call-1", "user-2"); err != nil {
+		t.Fatalf("StopActivity depois do cooldown: %v", err)
+	}
+}
+
+func TestActivityRejectedAttemptDoesNotStartCooldown(t *testing.T) {
+	pub := &fakePublisher{}
+	s := activityCall(pub, "user-1")
+	s.activityCooldown = time.Hour
+	ctx := context.Background()
+
+	if err := s.StartActivity(ctx, "call-1", "user-1", "krunker", "https://evil.com/"); !errors.Is(err, ErrActivityURL) {
+		t.Fatalf("link de fora = %v, want ErrActivityURL", err)
+	}
+	if err := s.StartActivity(ctx, "call-1", "user-1", "krunker", ""); err != nil {
+		t.Fatalf("link errado não pode gastar o cooldown: %v", err)
 	}
 }

@@ -24,20 +24,27 @@ const inCall: ActivityState = { ...INITIAL_ACTIVITY_STATE, callId: 'call-1' }
 
 describe('activityReducer', () => {
   it('começa vazio', () => {
-    expect(INITIAL_ACTIVITY_STATE).toEqual({ callId: null, shared: null, local: null })
+    expect(INITIAL_ACTIVITY_STATE).toEqual({
+      callId: null,
+      shared: null,
+      local: null,
+      pending: null
+    })
   })
 
   it('call: trocar de chamada zera tudo; a mesma chamada não mexe', () => {
     const busy: ActivityState = {
       callId: 'call-1',
       shared: activityReducer(inCall, { type: 'started', activity: raw() }).shared,
-      local: { activityId: 'krunker', url: 'https://krunker.io/' }
+      local: { activityId: 'krunker', url: 'https://krunker.io/' },
+      pending: { activityId: 'krunker', url: 'https://krunker.io/' }
     }
     expect(activityReducer(busy, { type: 'call', callId: 'call-1' })).toBe(busy)
     expect(activityReducer(busy, { type: 'call', callId: 'call-2' })).toEqual({
       callId: 'call-2',
       shared: null,
-      local: null
+      local: null,
+      pending: null
     })
     expect(activityReducer(busy, { type: 'call', callId: null })).toEqual(INITIAL_ACTIVITY_STATE)
   })
@@ -134,6 +141,61 @@ describe('activityReducer', () => {
     expect(
       activityReducer(inCall, { type: 'opened', activityId: 'doom', url: 'https://krunker.io/' })
     ).toBe(inCall)
+  })
+})
+
+describe('activityReducer: abrir só depois do servidor aceitar', () => {
+  const requested = activityReducer(inCall, {
+    type: 'requested',
+    activityId: 'krunker',
+    url: 'https://krunker.io/?game=FRA:abc12'
+  })
+
+  it('requested: fica pendente, o jogo ainda não abre', () => {
+    expect(requested.pending).toEqual({
+      activityId: 'krunker',
+      url: 'https://krunker.io/?game=FRA:abc12'
+    })
+    expect(requested.local).toBeNull()
+    expect(
+      activityReducer(INITIAL_ACTIVITY_STATE, {
+        type: 'requested',
+        activityId: 'krunker',
+        url: 'https://krunker.io/'
+      })
+    ).toBe(INITIAL_ACTIVITY_STATE)
+    expect(
+      activityReducer(inCall, { type: 'requested', activityId: 'doom', url: 'https://krunker.io/' })
+    ).toBe(inCall)
+  })
+
+  it('o eco do servidor (call:activity meu) abre o jogo pendente', () => {
+    const next = activityReducer(requested, { type: 'started', activity: raw(), meId: 'u-ana' })
+    expect(next.pending).toBeNull()
+    expect(next.local).toEqual({ activityId: 'krunker', url: 'https://krunker.io/?game=FRA:abc12' })
+    expect(next.shared?.startedBy.id).toBe('u-ana')
+  })
+
+  it('call:activity de outra pessoa não consome o meu pendente', () => {
+    const next = activityReducer(requested, {
+      type: 'started',
+      activity: raw({ started_by: bia }),
+      meId: 'u-ana'
+    })
+    expect(next.pending).toEqual(requested.pending)
+    expect(next.local).toBeNull()
+  })
+
+  it('eco sem pendente (ex.: troca de link) não abre nada', () => {
+    const next = activityReducer(inCall, { type: 'started', activity: raw(), meId: 'u-ana' })
+    expect(next.local).toBeNull()
+  })
+
+  it('rejected (call:activity:error ou sem resposta) descarta o pendente', () => {
+    const next = activityReducer(requested, { type: 'rejected' })
+    expect(next.pending).toBeNull()
+    expect(next.local).toBeNull()
+    expect(activityReducer(inCall, { type: 'rejected' })).toBe(inCall)
   })
 })
 

@@ -4,6 +4,8 @@ import {
   activityUserAgent,
   activityWindowOptions,
   canNavigateActivity,
+  createExternalOpenGate,
+  isUserGestureInput,
   opensExternally
 } from './activityPolicy'
 
@@ -59,5 +61,58 @@ describe('activityPolicy', () => {
     expect(activityUserAgent(ua)).toBe(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
     )
+  })
+
+  it('navegação same-origin com URL longa continua na janela (limite de 512 é só do link da sala)', () => {
+    const long = 'https://krunker.io/social.html?p=' + 'a'.repeat(2000)
+    expect(canNavigateActivity('krunker', long)).toBe(true)
+    expect(activityPermissionAllowed('krunker', 'pointerLock', long)).toBe(true)
+    expect(
+      canNavigateActivity('krunker', 'https://krunker.io.evil.com/?x=' + 'a'.repeat(600))
+    ).toBe(false)
+    expect(canNavigateActivity('krunker', 'https://krunker.io:8443/')).toBe(false)
+    expect(canNavigateActivity('krunker', 'não é url')).toBe(false)
+  })
+
+  it('só clique e tecla contam como gesto', () => {
+    expect(isUserGestureInput('mouseDown')).toBe(true)
+    expect(isUserGestureInput('keyDown')).toBe(true)
+    expect(isUserGestureInput('mouseMove')).toBe(false)
+    expect(isUserGestureInput('keyUp')).toBe(false)
+    expect(isUserGestureInput('mouseWheel')).toBe(false)
+  })
+
+  describe('createExternalOpenGate', () => {
+    it('sem gesto recente, nada abre no navegador', () => {
+      const gate = createExternalOpenGate()
+      expect(gate.allow(10_000)).toBe(false)
+      gate.recordInput(10_000)
+      expect(gate.allow(11_001)).toBe(false)
+    })
+
+    it('com gesto há menos de 1 s, abre', () => {
+      const gate = createExternalOpenGate()
+      gate.recordInput(10_000)
+      expect(gate.allow(10_900)).toBe(true)
+    })
+
+    it('no máximo 1 a cada 3 s, mesmo com gestos', () => {
+      const gate = createExternalOpenGate()
+      gate.recordInput(10_000)
+      expect(gate.allow(10_100)).toBe(true)
+      gate.recordInput(10_200)
+      expect(gate.allow(10_300)).toBe(false)
+      gate.recordInput(12_900)
+      expect(gate.allow(13_000)).toBe(false)
+      gate.recordInput(13_100)
+      expect(gate.allow(13_200)).toBe(true)
+    })
+
+    it('um gesto vale para uma abertura só', () => {
+      const gate = createExternalOpenGate()
+      gate.recordInput(10_000)
+      expect(gate.allow(10_100)).toBe(true)
+      expect(gate.allow(13_200)).toBe(false)
+    })
   })
 })

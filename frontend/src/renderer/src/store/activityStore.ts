@@ -38,6 +38,9 @@ interface ActivityStoreState extends ActivityState {
   handleWsEvent: (event: WsEvent) => void
 }
 
+/** Sem eco do servidor nesse prazo, o pedido de abrir é descartado. */
+const PENDING_TIMEOUT_MS = 8000
+
 function meId(): string | null {
   return useAuthStore.getState().user?.id ?? null
 }
@@ -60,16 +63,38 @@ function closeGame(): void {
 
 export const useActivityStore = create<ActivityStoreState>()((set, get) => {
   const snapshot = (): ActivityState => {
-    const { callId, shared, local } = get()
-    return { callId, shared, local }
+    const { callId, shared, local, pending } = get()
+    return { callId, shared, local, pending }
   }
 
-  /** Aplica a ação; se o jogo aberto aqui sumiu do estado, fecha a janela. */
+  let pendingTimer: ReturnType<typeof setTimeout> | null = null
+  const clearPendingTimer = (): void => {
+    if (pendingTimer) clearTimeout(pendingTimer)
+    pendingTimer = null
+  }
+
+  /**
+   * Aplica a ação. Se o jogo aberto aqui sumiu do estado, fecha a janela; se o
+   * servidor aceitou o meu pedido (eco do call:activity), abre o jogo agora.
+   */
   const dispatch = (action: ActivityAction): void => {
     const prev = snapshot()
     const next = activityReducer(prev, action)
     if (next === prev) return
     set({ ...next, ...(next.local ? {} : { panelMinimized: false }) })
+    if (!next.pending) clearPendingTimer()
+    const accepted = prev.pending !== null && next.pending === null && next.local === prev.pending
+    if (accepted && next.local) {
+      set({ panelMinimized: false })
+      const { activityId, url } = next.local
+      void openGame(activityId, url).then((ok) => {
+        if (ok) return
+        showToast.error('Não foi possível abrir a atividade.')
+        // O servidor já mostra para todos: encerra para não ficar "aberta" sem ninguém.
+        get().stop()
+      })
+      return
+    }
     if (prev.local && !next.local) closeGame()
   }
 
@@ -101,7 +126,16 @@ export const useActivityStore = create<ActivityStoreState>()((set, get) => {
       if (!checked.ok) return checked.error
       if (get().callId !== callId) return 'Entre em uma chamada para abrir uma atividade.'
       const launchUrl = activityLaunchUrl(activityId, checked.url) ?? activity.homeUrl
-      if (!(await openHere(activityId, launchUrl))) return 'Não foi possível abrir a atividade.'
+      // O jogo só abre quando o servidor aceitar (eco do call:activity); se ele
+      // recusar (call:activity:error) ou não responder, nada fica aberto.
+      dispatch({ type: 'requested', activityId, url: launchUrl })
+      clearPendingTimer()
+      pendingTimer = setTimeout(() => {
+        pendingTimer = null
+        if (!get().pending) return
+        dispatch({ type: 'rejected' })
+        showToast.error('O servidor não respondeu. Tente abrir a atividade de novo.')
+      }, PENDING_TIMEOUT_MS)
       useChatStore.getState().sendEvent('call:activity', {
         call_id: callId,
         activity_id: activityId,
@@ -162,7 +196,11 @@ export const useActivityStore = create<ActivityStoreState>()((set, get) => {
       switch (event.type) {
         case 'call:activity': {
           const before = get().shared
-          dispatch({ type: 'started', activity: payload as unknown as RawCallActivity })
+          dispatch({
+            type: 'started',
+            activity: payload as unknown as RawCallActivity,
+            meId: meId()
+          })
           const after = get().shared
           // Aviso para os outros só quando a atividade é nova (não troca de link).
           const isNew =
@@ -185,6 +223,7 @@ export const useActivityStore = create<ActivityStoreState>()((set, get) => {
           })
           return
         case 'call:activity:error':
+          dispatch({ type: 'rejected' })
           showToast.error(
             typeof payload.message === 'string' && payload.message
               ? payload.message

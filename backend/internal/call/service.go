@@ -66,6 +66,8 @@ type participantState struct {
 	serverMuted    bool
 	serverDeafened bool
 	lastSoundAt    time.Time
+	// lastActivityAt: última vez que abriu/trocou/encerrou uma atividade.
+	lastActivityAt time.Time
 }
 
 type activeCall struct {
@@ -92,7 +94,8 @@ type Service struct {
 	// screenSharers: callID -> set de userIDs compartilhando tela (transitório)
 	screenSharers map[string]map[string]struct{}
 	// activities: callID -> atividade aberta (transitório)
-	activities map[string]*callActivity
+	activities       map[string]*callActivity
+	activityCooldown time.Duration
 
 	// Queda do WS de chat só tira o usuário da chamada se ele não voltar dentro
 	// desse prazo — a mídia (LiveKit) aguenta quedas curtas sozinha.
@@ -135,6 +138,7 @@ func CallService(
 		busy:                make(map[string]string),
 		screenSharers:       make(map[string]map[string]struct{}),
 		activities:          make(map[string]*callActivity),
+		activityCooldown:    activityCooldown,
 		disconnectGrace:     defaultDisconnectGrace,
 	}
 	s.leaveAfterDisconnect = s.Leave

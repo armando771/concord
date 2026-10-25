@@ -5,6 +5,8 @@ import {
   activityUserAgent,
   activityWindowOptions,
   canNavigateActivity,
+  createExternalOpenGate,
+  isUserGestureInput,
   opensExternally
 } from './activityPolicy'
 
@@ -29,6 +31,8 @@ function prepareSession(activityId: string, partition: string): void {
   ses.setPermissionCheckHandler((_wc, permission, requestingOrigin) =>
     activityPermissionAllowed(activityId, permission, requestingOrigin)
   )
+  // O jogo não precisa baixar nada; sem Safe Browsing, download é risco.
+  ses.on('will-download', (event) => event.preventDefault())
 }
 
 function originOf(url: string | undefined): string {
@@ -37,10 +41,6 @@ function originOf(url: string | undefined): string {
   } catch {
     return ''
   }
-}
-
-function openExternal(url: string): void {
-  if (opensExternally(url)) void shell.openExternal(url)
 }
 
 function createActivityWindow(
@@ -62,20 +62,28 @@ function createActivityWindow(
   })
   created.once('ready-to-show', () => created.show())
 
-  // Novas janelas (links, login social) vão para o navegador, como no app.
+  // Novas janelas (links, login social) vão para o navegador, como no app —
+  // mas só logo depois de um clique/tecla da pessoa e no máximo uma a cada 3 s
+  // (anúncio não abre abas sozinho).
+  const gate = createExternalOpenGate()
+  created.webContents.on('before-input-event', (_event, input) => {
+    if (isUserGestureInput(input.type)) gate.recordInput(Date.now())
+  })
   created.webContents.setWindowOpenHandler((details) => {
-    openExternal(details.url)
+    if (opensExternally(details.url) && gate.allow(Date.now())) {
+      void shell.openExternal(details.url)
+    }
     return { action: 'deny' }
   })
-  // A própria janela não sai do site do jogo.
-  created.webContents.on('will-navigate', (event, url) => {
-    if (canNavigateActivity(activityId, url)) return
-    event.preventDefault()
-    openExternal(url)
+  // A própria janela não sai do site do jogo: navegação de fora é bloqueada.
+  created.webContents.on('will-navigate', (details) => {
+    if (!details.isMainFrame || canNavigateActivity(activityId, details.url)) return
+    details.preventDefault()
   })
-  created.webContents.on('will-redirect', (event, url) => {
-    if (canNavigateActivity(activityId, url)) return
-    event.preventDefault()
+  // Só o frame principal: iframes de anúncio/terceiros redirecionam à vontade.
+  created.webContents.on('will-redirect', (details) => {
+    if (!details.isMainFrame || canNavigateActivity(activityId, details.url)) return
+    details.preventDefault()
   })
 
   created.on('closed', () => {
