@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # Aplica um Caddyfile na VPS com segurança (ver o cabeçalho de deploy/Caddyfile).
 #
-#   scripts/apply-caddyfile.sh root@IP caminho/do/Caddyfile
-#   scripts/apply-caddyfile.sh --force root@IP caminho/do/Caddyfile   # mesmo com gente em chamada
+#   scripts/apply-caddyfile.sh root@IP deploy/Caddyfile
+#   scripts/apply-caddyfile.sh --also https://app-salinha.bhrx.com.br root@IP deploy/Caddyfile
+#   scripts/apply-caddyfile.sh --force root@IP deploy/Caddyfile   # mesmo com gente em chamada
+#
+# --also URL (pode repetir): outro endereço que serve o app; também tem que
+# responder /rtc/validate=401 (LiveKit) depois do reload.
 #
 # Na VPS, na ordem: valida o arquivo com o caddy; confere que o backend está no
 # ar (/healthz); confere que ninguém está em chamada (o primeiro reload com o
@@ -12,13 +16,16 @@
 set -euo pipefail
 
 FORCE=0
+ALSO=""
 ARGS=()
-for arg in "$@"; do
-  case "$arg" in
+while [[ $# -gt 0 ]]; do
+  case "$1" in
     --force) FORCE=1 ;;
-    -*) echo "opção desconhecida: $arg" >&2; exit 1 ;;
-    *) ARGS+=("$arg") ;;
+    --also) ALSO="$ALSO ${2:?--also precisa de uma URL}"; shift ;;
+    -*) echo "opção desconhecida: $1" >&2; exit 1 ;;
+    *) ARGS+=("$1") ;;
   esac
+  shift
 done
 if [[ ${#ARGS[@]} -ne 2 || ! -f "${ARGS[1]}" ]]; then
   echo "uso: $0 [--force] usuario@servidor Caddyfile" >&2
@@ -28,9 +35,10 @@ HOST="${ARGS[0]}"
 FILE="${ARGS[1]}"
 
 ssh "$HOST" 'cat > /etc/caddy/Caddyfile.new' < "$FILE"
-ssh "$HOST" bash -s -- "$FORCE" <<'REMOTE'
+ssh "$HOST" bash -s -- "$FORCE" "$ALSO" <<'REMOTE'
 set -euo pipefail
 FORCE="$1"
+ALSO="$2"
 CADDY_DIR="${CADDY_DIR:-/etc/caddy}"
 CONCORD_DIR="${CONCORD_DIR:-/opt/concord}"
 NEW="$CADDY_DIR/Caddyfile.new"
@@ -82,6 +90,10 @@ for _ in $(seq 1 20); do
   sleep 0.5
 done
 [[ "$ok" == 1 ]] || rollback "$public não respondeu /rtc/validate=401 e /healthz=ok"
+for url in $ALSO; do
+  rtc=$(curl -s -o /dev/null -w '%{http_code}' "${url%/}/rtc/validate" || true)
+  [[ "$rtc" == 401 ]] || rollback "${url%/}/rtc/validate respondeu $rtc (esperado 401, o LiveKit)"
+done
 if [[ -f "$CONCORD_DIR/updates/latest.yml" ]]; then
   curl -fs -o /dev/null "$public/updates/latest.yml" || rollback "$public/updates/latest.yml não abriu"
 fi
