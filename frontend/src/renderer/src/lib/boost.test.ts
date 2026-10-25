@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boostLabel, boostRank } from './boost'
+import { PREVIEW_BOOST_CALL_ID, boostLabel, boostRank, shouldPlayBoostBanner } from './boost'
 
 describe('boostRank', () => {
   it('sem buff abaixo de 125%', () => {
@@ -40,5 +40,19 @@ describe('boostLabel', () => {
     expect(boostLabel(150)).toBe('x1.5')
     expect(boostLabel(175)).toBe('x1.75')
     expect(boostLabel(200)).toBe('x2.0')
+  })
+})
+
+describe('shouldPlayBoostBanner', () => {
+  it('toca só na call do buff e sem mute/surdez', () => {
+    expect(shouldPlayBoostBanner(false, 'c1', 'c1')).toBe(true)
+    expect(shouldPlayBoostBanner(false, 'c1', 'c2')).toBe(false)
+    expect(shouldPlayBoostBanner(false, 'c1', null)).toBe(false)
+    expect(shouldPlayBoostBanner(true, 'c1', 'c1')).toBe(false)
+  })
+
+  it('a prévia de dev toca em qualquer lugar, menos pausado', () => {
+    expect(shouldPlayBoostBanner(false, PREVIEW_BOOST_CALL_ID, null)).toBe(true)
+    expect(shouldPlayBoostBanner(true, PREVIEW_BOOST_CALL_ID, null)).toBe(false)
   })
 })

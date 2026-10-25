@@ -78,4 +78,40 @@ describe('boostStore', () => {
     expect(useBoostStore.getState().byCall.c9?.percent).toBe(175)
     expect(useBoostStore.getState().celebration?.percent).toBe(175)
   })
+
+  it('a celebração guarda a call do buff', () => {
+    boost('c1', 125)
+    expect(useBoostStore.getState().celebration?.callId).toBe('c1')
+  })
+
+  it('clearCall zera o buff, o timer e o banner dessa call', () => {
+    boost('c1', 150, 6)
+    useBoostStore.getState().clearCall('c1')
+    expect(useBoostStore.getState().byCall.c1).toBeUndefined()
+    expect(useBoostStore.getState().celebration).toBeNull()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('clearCall não mexe na celebração nem no buff de outra call', () => {
+    boost('c1', 125)
+    boost('c2', 150, 6)
+    useBoostStore.getState().clearCall('c1')
+    expect(useBoostStore.getState().byCall.c2).toBeDefined()
+    expect(useBoostStore.getState().celebration).toMatchObject({ callId: 'c2', percent: 150 })
+  })
+
+  it('sair e voltar à mesma call em menos de 25 s celebra a ativação de novo', () => {
+    boost('c1', 125)
+    vi.advanceTimersByTime(boostRank(125)!.durationMs)
+    const first = useBoostStore.getState().celebration
+
+    useBoostStore.getState().clearCall('c1') // saiu da call
+    expect(useBoostStore.getState().byCall.c1).toBeUndefined()
+
+    vi.advanceTimersByTime(5_000)
+    boost('c1', 125) // voltou: o próximo heartbeat ainda traz o buff
+    const again = useBoostStore.getState().celebration
+    expect(first).toBeNull()
+    expect(again).toMatchObject({ callId: 'c1', percent: 125 })
+  })
 })

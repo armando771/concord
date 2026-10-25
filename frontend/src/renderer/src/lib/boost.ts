@@ -109,3 +109,19 @@ export function boostRank(percent: number): BoostRank | null {
   if (stage === 0) return null
   return { ...RANKS[stage], label: boostLabel(percent) }
 }
+
+/** Call fictícia da prévia de dev (`__salinhaBoost`) quando você não está em call. */
+export const PREVIEW_BOOST_CALL_ID = 'preview'
+
+/**
+ * O banner de ativação só toca para quem está na call do buff e não está
+ * mutado/surdo (quem está pausado não ganha o buff, então não comemora).
+ */
+export function shouldPlayBoostBanner(
+  paused: boolean,
+  celebrationCallId: string,
+  currentCallId: string | null
+): boolean {
+  if (paused) return false
+  return celebrationCallId === PREVIEW_BOOST_CALL_ID || celebrationCallId === currentCallId
+}

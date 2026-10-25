@@ -3,6 +3,7 @@ import './assets/main.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { PREVIEW_BOOST_CALL_ID } from './lib/boost'
 import { useBoostStore } from './store/boostStore'
 import { useCallStore } from './store/callStore'
 import { useLevelStore } from './store/levelStore'
@@ -21,7 +22,7 @@ if (import.meta.env.DEV) {
   }
   dev.__salinhaLevelUp = (level) => useLevelStore.getState().previewLevelUp(level)
   dev.__salinhaBoost = (percent) =>
-    useBoostStore.getState().previewBoost(useCallStore.getState().callId ?? 'preview', percent)
+    useBoostStore.getState().previewBoost(useCallStore.getState().callId ?? PREVIEW_BOOST_CALL_ID, percent)
 }
 
 createRoot(document.getElementById('root')!).render(

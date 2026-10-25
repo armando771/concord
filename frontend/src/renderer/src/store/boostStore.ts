@@ -8,6 +8,8 @@ export interface CallBoost {
 }
 
 export interface BoostCelebration {
+  /** Call do buff: o banner só toca para quem está nela. */
+  callId: string
   percent: number
   eligible: number
   /** Muda a cada ativação/subida, para reiniciar a animação. */
@@ -20,6 +22,8 @@ interface BoostState {
   /** Banner de ativação tocando agora (só aparece para quem está na call). */
   celebration: BoostCelebration | null
   handleWsEvent: (event: WsEvent) => void
+  /** Saí da call (ou ela mudou): zera o buff, o aviso de ativação e o banner dela. */
+  clearCall: (callId: string) => void
   /** Só em dev: liga um buff falso na call `callId`. */
   previewBoost: (callId: string, percent: number) => void
   reset: () => void
@@ -41,18 +45,18 @@ function stageOf(percent: number): number {
 }
 
 export const useBoostStore = create<BoostState>()((set, get) => {
-  const celebrate = (percent: number, eligible: number): void => {
+  const celebrate = (callId: string, percent: number, eligible: number): void => {
     const rank = boostRank(percent)
     if (!rank) return
     const key = ++celebrationSeq
     if (celebrationTimer) clearTimeout(celebrationTimer)
-    set({ celebration: { percent, eligible, key } })
+    set({ celebration: { callId, percent, eligible, key } })
     celebrationTimer = setTimeout(() => {
       if (get().celebration?.key === key) set({ celebration: null })
     }, rank.durationMs)
   }
 
-  const clearCall = (callId: string): void => {
+  const dropCall = (callId: string): void => {
     const timer = expireTimers.get(callId)
     if (timer) clearTimeout(timer)
     expireTimers.delete(callId)
@@ -67,7 +71,7 @@ export const useBoostStore = create<BoostState>()((set, get) => {
   const apply = (callId: string, percent: number, eligible: number): void => {
     const previous = get().byCall[callId]?.percent ?? 100
     if (percent <= 100) {
-      clearCall(callId)
+      dropCall(callId)
       return
     }
 
@@ -76,11 +80,11 @@ export const useBoostStore = create<BoostState>()((set, get) => {
     if (timer) clearTimeout(timer)
     expireTimers.set(
       callId,
-      setTimeout(() => clearCall(callId), BOOST_EXPIRE_MS)
+      setTimeout(() => dropCall(callId), BOOST_EXPIRE_MS)
     )
 
     // Banner só ao ativar ou subir de rank (heartbeat e descer não repetem).
-    if (stageOf(percent) > stageOf(previous)) celebrate(percent, eligible)
+    if (stageOf(percent) > stageOf(previous)) celebrate(callId, percent, eligible)
   }
 
   return {
@@ -92,6 +96,15 @@ export const useBoostStore = create<BoostState>()((set, get) => {
       const p = event.payload as { call_id?: string; percent?: number; eligible?: number }
       if (!p.call_id || typeof p.percent !== 'number') return
       apply(p.call_id, p.percent, p.eligible ?? 0)
+    },
+
+    clearCall: (callId) => {
+      dropCall(callId)
+      if (get().celebration?.callId === callId) {
+        if (celebrationTimer) clearTimeout(celebrationTimer)
+        celebrationTimer = null
+        set({ celebration: null })
+      }
     },
 
     previewBoost: (callId, percent) => {

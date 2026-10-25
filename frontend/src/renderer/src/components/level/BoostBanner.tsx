@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
-import { boostRank } from '../../lib/boost'
+import { boostRank, shouldPlayBoostBanner } from '../../lib/boost'
 import { useBoostStore } from '../../store/boostStore'
+import { useCallStore } from '../../store/callStore'
 
 /**
  * Banner de ativação do buff de XP (quando a call ganha buff ou sobe de rank).
@@ -9,7 +10,12 @@ import { useBoostStore } from '../../store/boostStore'
  * tela cheia, treme a janela e deixa a letra com glitch.
  */
 function BoostBanner(): React.JSX.Element | null {
-  const celebration = useBoostStore((s) => s.celebration)
+  const stored = useBoostStore((s) => s.celebration)
+  const callId = useCallStore((s) => s.callId)
+  const paused = useCallStore((s) => s.muted || s.deafened)
+  // Fora da call do buff, ou mutado/surdo (não ganha o buff), não toca.
+  const celebration =
+    stored && shouldPlayBoostBanner(paused, stored.callId, callId) ? stored : null
   const rank = celebration ? boostRank(celebration.percent) : null
 
   // SSS: a janela treme uma vez no slam.

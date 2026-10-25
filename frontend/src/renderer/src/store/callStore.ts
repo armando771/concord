@@ -40,6 +40,7 @@ import { showToast } from './toastStore'
 import type { CallResume } from '../../../shared/callResume'
 
 import { useSoundboardStore } from './soundboardStore'
+import { useBoostStore } from './boostStore'
 import { stopAllSoundboardAudio } from '../lib/soundboardPlayer'
 
 
@@ -552,6 +553,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       if (call.id !== callId) {
         // A chamada antiga acabou enquanto eu estava fora: segue na nova.
         useChatStore.getState().unsubscribeRoom(`call:${callId}`)
+        useBoostStore.getState().clearCall(callId)
         useChatStore.getState().subscribeRoom(`call:${call.id}`)
         media?.disconnect()
         media = null
@@ -607,7 +609,10 @@ export const useCallStore = create<CallState>()((set, get) => {
   const cleanup = (): void => {
     callGeneration++
     const callId = get().callId
-    if (callId) useChatStore.getState().unsubscribeRoom(`call:${callId}`)
+    if (callId) {
+      useChatStore.getState().unsubscribeRoom(`call:${callId}`)
+      useBoostStore.getState().clearCall(callId)
+    }
     media?.disconnect()
     media = null
     stopLocalSpeaking()
