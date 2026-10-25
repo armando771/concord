@@ -10,6 +10,7 @@ import Button from './Button'
 function UpdateNotice(): React.JSX.Element | null {
   const updates = window.api?.updates
   const inCall = useCallStore((s) => s.status !== 'idle')
+  const callType = useCallStore((s) => s.type)
   const [version, setVersion] = useState<string | null>(null)
   const [dismissed, setDismissed] = useState<string | null>(null)
   const [readyVersion, setReadyVersion] = useState<string | null>(null)
@@ -55,10 +56,16 @@ function UpdateNotice(): React.JSX.Element | null {
     setError(null)
     setConfirming(false)
     setRequested(true)
-    // Sai da chamada antes (avisa os outros) — o app reinicia para instalar.
-    const wasInCall = useCallStore.getState().status !== 'idle'
-    useCallStore.getState().endCall()
-    setTimeout(() => updates.install(), wasInCall ? 250 : 0)
+    const call = useCallStore.getState()
+    // Canal: mantém a chamada durante o download e preserva o snapshot até
+    // o main gravá-lo imediatamente antes de instalar. DM não é retomada.
+    if (call.type === 'channel' && call.status === 'active') {
+      updates.install()
+    } else {
+      const wasInCall = call.status !== 'idle'
+      call.endCall()
+      setTimeout(() => updates.install(), wasInCall ? 250 : 0)
+    }
   }
 
   return (
@@ -75,7 +82,9 @@ function UpdateNotice(): React.JSX.Element | null {
               ? `Reiniciando para instalar a versão ${version}…`
               : `Baixando a versão ${version}… ${progress}%`
             : confirming
-              ? 'Atualizar agora vai te tirar da chamada. A Salinha reinicia em seguida.'
+              ? callType === 'channel'
+                ? 'A chamada será interrompida ao reiniciar. Você voltará automaticamente ao canal.'
+                : 'Atualizar agora vai te tirar da chamada. A Salinha reinicia em seguida.'
               : `Versão ${version}.`}
       </p>
       {installing && (

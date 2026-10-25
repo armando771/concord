@@ -6,6 +6,8 @@ import { basename, join } from 'path'
 import { isInCall, markQuitting, onCallStateChange } from './background'
 import { canDownloadUpdate, installOnStartup } from './updatePolicy'
 import { verifyInstaller } from './updateSignature'
+import { clearCallResume, saveCallResume, takeCallResume } from './callResume'
+import { validCallResume, type CallResume } from '../shared/callResume'
 
 // Atualização automática servida pelo próprio servidor da Salinha
 // (`<servidor>/updates/`). O instalador só é aceito com a assinatura Ed25519
@@ -48,11 +50,34 @@ let downloading = false
 let pendingDownload = false
 /** A pessoa clicou em Atualizar: instala assim que terminar de baixar. */
 let installRequested = false
+let callSnapshot: CallResume | null = null
+let installing = false
 
-function install(): void {
+function install(onError: (message: string) => void): void {
+  if (installing) return
+  try {
+    saveCallResume(callSnapshot)
+  } catch (error) {
+    console.error('[update] não foi possível salvar a chamada:', error)
+    onError('Não foi possível salvar a chamada antes de atualizar. Tente novamente.')
+    return
+  }
+  installing = true
   markQuitting()
   // silencioso e abre o app de novo ao terminar
-  autoUpdater.quitAndInstall(true, true)
+  try {
+    autoUpdater.quitAndInstall(true, true)
+  } catch (error) {
+    installing = false
+    markQuitting(false)
+    try {
+      clearCallResume()
+    } catch (cleanupError) {
+      console.error('[update] erro ao limpar retomada:', cleanupError)
+    }
+    console.error('[update] instalação falhou:', error)
+    onError('Não foi possível instalar a atualização.')
+  }
 }
 
 async function fetchSignature(feedUrl: string, file: string): Promise<string> {
@@ -79,6 +104,19 @@ function startDownload(force = false): void {
 export function setupUpdater(getWindow: () => BrowserWindow | null, config: UpdaterConfig): void {
   const send = (channel: string, value: unknown): void =>
     getWindow()?.webContents.send(channel, value)
+  const installUpdate = (): void => install((message) => send('update:error', message))
+
+  let pendingResume = takeCallResume()
+  ipcMain.on('update:call-snapshot', (event, snapshot: unknown) => {
+    if (event.sender !== getWindow()?.webContents) return
+    callSnapshot = validCallResume(snapshot) ? snapshot : null
+  })
+  ipcMain.handle('update:take-call-resume', (event) => {
+    if (event.sender !== getWindow()?.webContents) return null
+    const pending = pendingResume
+    pendingResume = null
+    return pending
+  })
 
   ipcMain.handle('update:status', () =>
     availableVersion
@@ -89,7 +127,7 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
   // em chamada — a pessoa pediu) e instala quando terminar.
   ipcMain.on('update:install', () => {
     if (readyVersion) {
-      install()
+      installUpdate()
       return
     }
     installRequested = true
@@ -118,6 +156,13 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
     send('update:progress', Math.round(progress.percent))
   })
   autoUpdater.on('error', (err) => {
+    if (installing) markQuitting(false)
+    installing = false
+    try {
+      clearCallResume()
+    } catch (error) {
+      console.error('[update] erro ao limpar retomada:', error)
+    }
     downloading = false
     console.error('[update] erro:', err)
     if (installRequested) send('update:error', String(err))
@@ -150,7 +195,7 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
       inCall: isInCall()
     })
     if (installRequested || startup) {
-      install()
+      installUpdate()
       return
     }
     send('update:ready', event.version)

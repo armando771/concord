@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
+import type { CallResume, PendingCallResume } from '../shared/callResume'
 
 interface ScreenSourceInfo {
   id: string
@@ -42,6 +43,12 @@ const api = {
     }
   },
   updates: {
+    setCallSnapshot(snapshot: CallResume | null): void {
+      ipcRenderer.send('update:call-snapshot', snapshot)
+    },
+    takeCallResume(): Promise<PendingCallResume | null> {
+      return ipcRenderer.invoke('update:take-call-resume')
+    },
     /** Versão nova conhecida (e se já está pronta para instalar), ou null. */
     status(): Promise<{ version: string; ready: boolean } | null> {
       return ipcRenderer.invoke('update:status')

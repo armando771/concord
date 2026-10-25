@@ -41,8 +41,8 @@ export function onCallStateChange(listener: (state: CallState) => void): void {
 }
 
 /** Daqui em diante fechar a janela fecha o app (ex.: instalar atualização). */
-export function markQuitting(): void {
-  quitting = true
+export function markQuitting(value = true): void {
+  quitting = value
 }
 
 const prefsPath = (): string => join(app.getPath('userData'), 'background.json')
