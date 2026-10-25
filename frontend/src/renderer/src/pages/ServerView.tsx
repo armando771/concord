@@ -154,6 +154,10 @@ export function ServerView(): React.JSX.Element {
   }
 
   const memberUserIds = new Set(currentMembers.map((m) => m.user_id))
+  // Mesma regra de quem gerencia canais; o backend confere de novo ao gravar.
+  const canMentionEveryone =
+    currentServer.owner_id === me?.id ||
+    currentMembers.some((m) => m.user_id === me?.id && m.role === 'admin')
   const pendingInviteUserIds = new Set(serverInvites.map((i) => i.invitee_id))
 
   const inviteTerm = inviteFilter.trim().toLowerCase()
@@ -222,6 +226,7 @@ export function ServerView(): React.JSX.Element {
           <ChatPane
             room={`channel:${channelId}`}
             placeholder={`Mensagem para #${activeChannel?.name ?? 'canal'}`}
+            canMentionEveryone={canMentionEveryone}
             mentionable={currentMembers
               .filter((m) => m.username)
               .map((m) => ({

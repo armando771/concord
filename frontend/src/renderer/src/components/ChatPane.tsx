@@ -7,7 +7,13 @@ import SystemMessage from './SystemMessage'
 import Avatar from './Avatar'
 import { useUserLook } from '../store/profileStore'
 import { profileCardHandler } from '../store/profileCardStore'
-import { applyMention, mentionQuery, mentionsUser, splitMentions } from '../lib/mentions'
+import {
+  applyMention,
+  everyoneSuggestions,
+  mentionQuery,
+  messageMentionsMe,
+  splitMentions
+} from '../lib/mentions'
 import { filterEmoteCategories, QUICK_EMOTES } from '../lib/emotes'
 import { messagePreview } from '../lib/polls'
 import PollCard from './poll/PollCard'
@@ -37,7 +43,14 @@ interface ChatPaneProps {
   placeholder?: string
   /** Quem pode ser marcado com @ (membros do servidor, ou a pessoa da DM). */
   mentionable?: Mentionable[]
+  /** Sugere @all/@here (canal de servidor, só dono e moderadores). */
+  canMentionEveryone?: boolean
 }
+
+/** Item do autocompletar: alguém do canal ou @all/@here. */
+type Suggestion =
+  | { kind: 'user'; username: string; display_name: string }
+  | { kind: 'everyone'; username: string; description: string }
 
 const MAX_SUGGESTIONS = 6
 
@@ -149,8 +162,7 @@ function MessageItem({
   const [hover, setHover] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
 
-  const isReplyToMe = !isMine && message.reply_to?.author_id === me?.id
-  const mentionsMe = !isMine && (mentionsUser(message.content, me?.username ?? '') || isReplyToMe)
+  const mentionsMe = messageMentionsMe(message, me)
   const reactions = message.reactions ?? []
   const hasReplyReference = Boolean(message.reply_to_id || message.reply_to)
   const replyAuthorName =
@@ -213,9 +225,12 @@ function MessageItem({
           </div>
           {message.content && (
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">
-              {splitMentions(message.content).map((part, i) =>
+              {splitMentions(message.content, message.mention_everyone ?? null).map((part, i) =>
                 part.mention ? (
-                  <span key={i} className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]">
+                  <span
+                    key={i}
+                    className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]"
+                  >
                     {part.text}
                   </span>
                 ) : (
@@ -319,7 +334,8 @@ function MessageItem({
 function ChatPane({
   room,
   placeholder = 'Digite sua mensagem',
-  mentionable = []
+  mentionable = [],
+  canMentionEveryone = false
 }: ChatPaneProps): React.JSX.Element {
   const messagesByRoom = useChatStore((s) => s.messagesByRoom)
   const hasMoreByRoom = useChatStore((s) => s.hasMoreByRoom)
@@ -360,15 +376,22 @@ function ChatPane({
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
   const [highlight, setHighlight] = useState(0)
   const meUsername = useAuthStore((s) => s.user?.username)
-  const suggestions = mention
-    ? mentionable
-        .filter((m) => m.username !== meUsername)
-        .filter((m) =>
-          [m.username, m.display_name].some((v) =>
-            v.toLowerCase().startsWith(mention.query.toLowerCase())
+  const suggestions: Suggestion[] = mention
+    ? [
+        ...everyoneSuggestions(mention.query, canMentionEveryone).map((e): Suggestion => ({
+          kind: 'everyone',
+          ...e
+        })),
+        ...mentionable
+          .filter((m) => m.username !== meUsername)
+          .filter((m) =>
+            [m.username, m.display_name].some((v) =>
+              v.toLowerCase().startsWith(mention.query.toLowerCase())
+            )
           )
-        )
-        .slice(0, MAX_SUGGESTIONS)
+          .slice(0, MAX_SUGGESTIONS)
+          .map((m): Suggestion => ({ kind: 'user', ...m }))
+      ]
     : []
 
   const pickMention = (username: string): void => {
@@ -613,7 +636,7 @@ function ChatPane({
           >
             {suggestions.map((m, i) => (
               <li
-                key={m.username}
+                key={`${m.kind}:${m.username}`}
                 role="option"
                 aria-selected={i === highlight}
                 onMouseDown={(e) => {
@@ -625,8 +648,17 @@ function ChatPane({
                   i === highlight ? 'bg-[#5865f2]/30 text-white' : 'text-gray-300'
                 }`}
               >
-                <span className="font-semibold">{m.display_name}</span>
-                <span className="text-xs text-gray-400">@{m.username}</span>
+                {m.kind === 'everyone' ? (
+                  <>
+                    <span className="font-semibold">@{m.username}</span>
+                    <span className="text-xs text-gray-400">{m.description}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold">{m.display_name}</span>
+                    <span className="text-xs text-gray-400">@{m.username}</span>
+                  </>
+                )}
               </li>
             ))}
           </ul>
