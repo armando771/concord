@@ -1,17 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useAuthStore } from '../store/authStore'
 import { useUIStore, type FriendsTab } from '../store/uiStore'
 import { useFriendStore } from '../store/friendStore'
-import { useInviteStore } from '../store/inviteStore'
-import { useChatStore } from '../store/chatStore'
-import { logout } from '../api/auth'
-import Modal from './Modal'
-import Button from './Button'
+import { useChatStore, usePresenceStatus } from '../store/chatStore'
+import { useUserLook } from '../store/profileStore'
+import Avatar from './Avatar'
 import VoiceConnectedPanel from './call/VoiceConnectedPanel'
-import { FriendsIcon, ClockIcon, UserPlusIcon, GearIcon, ChatBubbleIcon } from './icons'
-import VoiceSettings from './VoiceSettings'
-import AppSettings from './AppSettings'
+import UserBar from './UserBar'
+import { FriendsIcon, ClockIcon, UserPlusIcon, ChatBubbleIcon } from './icons'
 
 interface NavItem {
   id: FriendsTab
@@ -30,46 +26,50 @@ function formatLastMessageTime(iso?: string): string | null {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
 
+function DmAvatar({
+  userId,
+  name,
+  avatarUrl
+}: {
+  userId: string
+  name: string
+  avatarUrl?: string | null
+}): React.JSX.Element {
+  const status = usePresenceStatus(userId)
+  return (
+    <Avatar
+      userId={userId}
+      name={name}
+      avatarUrl={avatarUrl}
+      size={32}
+      status={status}
+      cutoutColor="#0b0c10"
+    />
+  )
+}
+
+/** Nome da conversa, já com a troca mais nova (user:update). */
+function DmName({ userId, name }: { userId: string; name: string }): React.JSX.Element {
+  return <>{useUserLook(userId, { name }).name}</>
+}
+
 export function FriendsSidebar(): React.JSX.Element {
   const navigate = useNavigate()
   const { userId } = useParams<{ userId: string }>()
-  const user = useAuthStore((s) => s.user)
-  const clear = useAuthStore((s) => s.clear)
   const pending = useFriendStore((s) => s.pending)
   const loadAll = useFriendStore((s) => s.loadAll)
   const friendsTab = useUIStore((s) => s.friendsTab)
   const setFriendsTab = useUIStore((s) => s.setFriendsTab)
   const conversations = useChatStore((s) => s.conversations)
   const conversationsLoading = useChatStore((s) => s.conversationsLoading)
-  const presence = useChatStore((s) => s.presence)
   const unreadByRoom = useChatStore((s) => s.unreadByRoom)
   const fetchConversations = useChatStore((s) => s.fetchConversations)
 
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [loggingOut, setLoggingOut] = useState(false)
 
   useEffect(() => {
     loadAll()
     fetchConversations()
   }, [loadAll, fetchConversations])
-
-  const handleLogout = async (): Promise<void> => {
-    setLoggingOut(true)
-    try {
-      await logout()
-    } catch {
-      // Limpa sessão local em caso de erro
-    } finally {
-      useFriendStore.getState().reset()
-      useInviteStore.getState().reset()
-      useChatStore.getState().disconnect()
-      clear()
-      setSettingsOpen(false)
-      navigate('/login')
-    }
-  }
-
-  const initial = (user?.display_name ?? user?.username ?? '?').charAt(0).toUpperCase()
 
   return (
     <>
@@ -129,17 +129,9 @@ export function FriendsSidebar(): React.JSX.Element {
               )}
               {conversations.map((conv) => {
                 const active = conv.other_user.id === userId
-                const online = Boolean(presence[conv.other_user.id])
                 const unread = unreadByRoom[`conversation:${conv.id}`] ?? 0
                 const lastPreview = conv.last_message?.content ?? 'Inicie uma conversa!'
                 const lastTime = formatLastMessageTime(conv.last_message?.created_at)
-                const otherInitial = (
-                  conv.other_user.display_name ??
-                  conv.other_user.username ??
-                  '?'
-                )
-                  .charAt(0)
-                  .toUpperCase()
                 return (
                   <button
                     key={conv.id}
@@ -148,20 +140,18 @@ export function FriendsSidebar(): React.JSX.Element {
                       active ? 'bg-white/10 shadow-sm' : 'hover:bg-white/6'
                     }`}
                   >
-                    <div className="relative shrink-0">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white">
-                        {otherInitial}
-                      </div>
-                      <span
-                        className={`absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-[#0b0c10] ${
-                          online ? 'bg-[#23a55a]' : 'bg-gray-600'
-                        }`}
-                      />
-                    </div>
+                    <DmAvatar
+                      userId={conv.other_user.id}
+                      name={conv.other_user.display_name ?? conv.other_user.username}
+                      avatarUrl={conv.other_user.avatar_url}
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-2">
                         <p className="truncate text-sm font-semibold text-white">
-                          {conv.other_user.display_name ?? conv.other_user.username}
+                          <DmName
+                            userId={conv.other_user.id}
+                            name={conv.other_user.display_name ?? conv.other_user.username}
+                          />
                         </p>
                         {unread > 0 ? (
                           <span className="shrink-0 rounded-full bg-red-500 px-1.5 py-0.2 text-[10px] font-bold text-white">
@@ -191,59 +181,9 @@ export function FriendsSidebar(): React.JSX.Element {
         {/* Painel de voz conectada (estilo Discord) */}
         <VoiceConnectedPanel />
 
-        {/* User Control Card at Bottom Left */}
-        <div className="flex shrink-0 items-center justify-between border-t border-white/6 bg-[#07080b]/90 px-2 py-2">
-          <div
-            className="flex min-w-0 items-center gap-2 rounded-md p-1 hover:bg-white/5 transition-colors cursor-pointer"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <div className="relative shrink-0">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white shadow-md">
-                {initial}
-              </div>
-            </div>
-            <div className="min-w-0 leading-tight">
-              <p className="truncate text-sm font-semibold text-white">{user?.display_name}</p>
-              <p className="truncate text-[11px] text-gray-400">@{user?.username}</p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setSettingsOpen(true)}
-            aria-label="Configurações do usuário"
-            title="Configurações do usuário"
-            className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
-          >
-            <GearIcon className="h-4 w-4" />
-          </button>
-        </div>
+        <UserBar />
       </aside>
 
-      {/* User Settings Modal */}
-      <Modal
-        open={settingsOpen}
-        title="Configurações de Usuário"
-        onClose={() => setSettingsOpen(false)}
-      >
-        <div className="flex flex-col gap-4">
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-violet-600 text-lg font-bold text-white">
-                {initial}
-              </div>
-              <div>
-                <p className="font-semibold text-white text-base">{user?.display_name}</p>
-                <p className="text-sm text-gray-400">@{user?.username}</p>
-              </div>
-            </div>
-          </div>
-          {settingsOpen && <VoiceSettings />}
-          {settingsOpen && <AppSettings />}
-          <Button variant="danger" onClick={handleLogout} disabled={loggingOut}>
-            {loggingOut ? 'Saindo...' : 'Sair da conta'}
-          </Button>
-        </div>
-      </Modal>
     </>
   )
 }

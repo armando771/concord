@@ -8,9 +8,12 @@ import {
   MicIcon,
   MicOffIcon,
   NoiseSuppressionIcon,
-  PhoneOffIcon
+  PhoneOffIcon,
+  SoundboardIcon
 } from '../icons'
 import NoiseSuppressionPopover from './NoiseSuppressionPopover'
+import SoundboardPopover from './SoundboardPopover'
+import { useSoundboardHotkeys } from './useSoundboardHotkeys'
 import VoiceXPBar from '../level/VoiceXPBar'
 
 /**
@@ -35,6 +38,13 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   const noiseOpen = noiseAnchor !== null
   const closeNoise = useCallback(() => setNoiseAnchor(null), [])
 
+  /** Botão do popover da mesa de áudio (null = fechado). */
+  const [soundboardAnchor, setSoundboardAnchor] = useState<HTMLElement | null>(null)
+  const soundboardOpen = soundboardAnchor !== null
+  const closeSoundboard = useCallback(() => setSoundboardAnchor(null), [])
+
+  useSoundboardHotkeys()
+
   if (status === 'idle') return null
 
   const title =
@@ -53,6 +63,24 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {type === 'channel' && status === 'active' && (
+            <button
+              onClick={(e) => {
+                const button = e.currentTarget
+                setSoundboardAnchor((open) => (open ? null : button))
+              }}
+              aria-label="Mesa de Áudio"
+              aria-expanded={soundboardOpen}
+              title="Mesa de Áudio"
+              className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors ${
+                soundboardOpen
+                  ? 'bg-[#5865f2] text-white'
+                  : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <SoundboardIcon className="h-4 w-4" />
+            </button>
+          )}
           <button
             onClick={(e) => {
               const button = e.currentTarget
@@ -111,6 +139,7 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
       </div>
       <VoiceXPBar paused={muted || deafened} />
       {noiseAnchor && <NoiseSuppressionPopover anchor={noiseAnchor} onClose={closeNoise} />}
+      {soundboardAnchor && <SoundboardPopover anchor={soundboardAnchor} onClose={closeSoundboard} />}
     </div>
   )
 }

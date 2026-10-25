@@ -65,72 +65,30 @@ func connectWithRouter(t *testing.T, router CallRouter, userID string) *websocke
 	return conn
 }
 
-// O app avisa pelo WS quando a voz é captada ("call:speaking"); sem isso o XP
-// de voz nunca conta (o level só dá XP para quem está falando).
-func TestSpeakingEventReachesCallService(t *testing.T) {
+// Eventos de chamada que o app manda pelo WS chegam ao serviço de chamadas
+// com o usuário da conexão (não o do payload).
+func TestCallEventReachesCallService(t *testing.T) {
 	router := &recordingRouter{events: make(chan routedEvent, 4)}
 	conn := connectWithRouter(t, router, "ana")
 
-	msg := `{"type":"call:speaking","payload":{"call_id":"call-1","speaking":true}}`
+	msg := `{"type":"call:voice","payload":{"call_id":"call-1","muted":true}}`
 	if err := conn.Write(context.Background(), websocket.MessageText, []byte(msg)); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
 	select {
 	case ev := <-router.events:
-		if ev.userID != "ana" || ev.evType != "call:speaking" {
-			t.Fatalf("repassado = %s/%s, want ana/call:speaking", ev.userID, ev.evType)
+		if ev.userID != "ana" || ev.evType != "call:voice" {
+			t.Fatalf("repassado = %s/%s, want ana/call:voice", ev.userID, ev.evType)
 		}
 		var p struct {
-			CallID   string `json:"call_id"`
-			Speaking bool   `json:"speaking"`
+			CallID string `json:"call_id"`
+			Muted  bool   `json:"muted"`
 		}
-		if err := json.Unmarshal(ev.payload, &p); err != nil || p.CallID != "call-1" || !p.Speaking {
+		if err := json.Unmarshal(ev.payload, &p); err != nil || p.CallID != "call-1" || !p.Muted {
 			t.Fatalf("payload = %s (%v)", ev.payload, err)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("call:speaking não chegou ao serviço de chamadas")
-	}
-}
-
-// Um app modificado mandando call:speaking sem parar não pode pesar no
-// serviço de chamadas (cada evento trava o estado global).
-func TestSpeakingEventsAreRateLimited(t *testing.T) {
-	router := &recordingRouter{events: make(chan routedEvent, 64)}
-	conn := connectWithRouter(t, router, "ana")
-
-	for i := 0; i < 30; i++ {
-		msg := `{"type":"call:speaking","payload":{"call_id":"call-1","speaking":true}}`
-		if err := conn.Write(context.Background(), websocket.MessageText, []byte(msg)); err != nil {
-			t.Fatalf("write: %v", err)
-		}
-	}
-	// Outros eventos da chamada não entram no limite.
-	if err := conn.Write(context.Background(), websocket.MessageText,
-		[]byte(`{"type":"call:voice","payload":{"call_id":"call-1","muted":true}}`)); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
-	speaking, voice := 0, 0
-	deadline := time.After(500 * time.Millisecond)
-loop:
-	for {
-		select {
-		case ev := <-router.events:
-			switch ev.evType {
-			case "call:speaking":
-				speaking++
-			case "call:voice":
-				voice++
-			}
-		case <-deadline:
-			break loop
-		}
-	}
-	if speaking == 0 || speaking > maxSpeakingPerSecond {
-		t.Fatalf("call:speaking repassados = %d, want 1..%d", speaking, maxSpeakingPerSecond)
-	}
-	if voice != 1 {
-		t.Fatalf("call:voice repassados = %d, want 1", voice)
+		t.Fatal("call:voice não chegou ao serviço de chamadas")
 	}
 }

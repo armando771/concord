@@ -223,10 +223,10 @@ Numa VPS com IP público não precisa de playit, e dá para ter HTTPS de graça.
    [Reinício sem queda](#reinício-do-backend-sem-queda)). Depois
    `systemctl daemon-reload && systemctl enable --now concord-server`.
 6. **Do seu PC:** `scripts/deploy-vps.sh root@IP` envia o backend, as
-   migrations, o compose, a página de download (`site/`) e as atualizações
-   do app, e reinicia. Reiniciar não derruba quem está em chamada e, com o
-   Caddyfile do repositório, nem trava a voz/tela (a sinalização vai direto
-   para o LiveKit).
+   migrations, o compose, a página de download (`site/`), o app web
+   (`frontend/dist-web`, se existir) e as atualizações do app, e reinicia.
+   Reiniciar não derruba quem está em chamada e, com o Caddyfile do
+   repositório, nem trava a voz/tela (a sinalização vai direto para o LiveKit).
 7. **Publicar versão do app:** `scripts/release-win.sh`, `scripts/release-linux.sh` e depois
    `scripts/deploy-vps.sh root@IP`.
 
@@ -422,6 +422,78 @@ basta. O domínio precisa de um registro DNS `A` apontando para o IP da VPS (no
 Cloudflare, com o proxy desligado — nuvem cinza — por causa do tamanho do
 instalador).
 
+**App no navegador:** a mesma Salinha, sem instalar, em
+`https://app-salinha.bhrx.com.br`. Usa as mesmas contas e o mesmo backend; o
+navegador fala com o backend na mesma origem (API em `/api`, chat em `/ws`,
+chamadas em `/rtc`, tudo por HTTPS/WSS). O `yarn build:web` (em `frontend/`)
+gera `frontend/dist-web/` e o `scripts/deploy-vps.sh` envia para
+`/opt/concord/web/` (o `--delete` só mexe nessa pasta; uploads e atualizações
+ficam como estão).
+
+> **Antes de mesclar a `develop` na `main`:** o DNS, o bloco do Caddy (passos 1
+> e 2) e a variável `WEB_URL` do GitHub Actions (seção "Deploy automático")
+> precisam estar prontos. O merge publica sozinho a página de download, que tem
+> o botão "Usar no navegador" apontando para `https://app-salinha.bhrx.com.br`;
+> sem o domínio no ar, o botão leva a um erro. Confira com
+> `curl -sI https://app-salinha.bhrx.com.br/` antes do merge.
+
+1. **DNS:** no Cloudflare, registro `A` `app-salinha` → IP da VPS, com o
+   proxy **desligado** (nuvem cinza). Com o proxy ligado o Caddy não consegue
+   tirar o certificado sozinho e os uploads grandes do chat esbarram no limite
+   do Cloudflare. Confira com `dig +short app-salinha.bhrx.com.br`.
+2. **Caddy:** acrescente o bloco abaixo ao `/etc/caddy/Caddyfile` e rode
+   `systemctl reload caddy`:
+   ```
+   app-salinha.bhrx.com.br {
+   	encode zstd gzip
+   	header {
+   		Strict-Transport-Security "max-age=31536000"
+   		X-Content-Type-Options nosniff
+   		X-Frame-Options DENY
+   		Referrer-Policy strict-origin-when-cross-origin
+   	}
+
+   	# Backend: API (inclui os arquivos do chat em /api/media), WebSocket do
+   	# chat e sinalização do LiveKit. O reverse_proxy repassa o upgrade de WS.
+   	@backend path /api /api/* /ws /rtc /rtc/*
+   	handle @backend {
+   		reverse_proxy 127.0.0.1:8090
+   	}
+
+   	# Arquivos com hash no nome: cache longo. Arquivo que não existe é 404
+   	# (não cai no index.html).
+   	handle /assets/* {
+   		root * /opt/concord/web
+   		@exists file
+   		header @exists Cache-Control "public, max-age=31536000, immutable"
+   		file_server
+   	}
+
+   	# O resto é o app: qualquer rota (/servers/…, /dm/…) devolve o index.html,
+   	# sempre revalidado para pegar a versão nova logo depois do deploy.
+   	handle {
+   		root * /opt/concord/web
+   		header Cache-Control "no-cache"
+   		try_files {path} /index.html
+   		file_server
+   	}
+   }
+   ```
+   O `/updates/` não entra: só o app desktop se atualiza por ele.
+3. **Publicar:** `cd frontend && yarn build:web`, depois
+   `scripts/deploy-vps.sh root@IP` (o deploy automático já faz os dois).
+4. **Conferir:** `curl -sI https://app-salinha.bhrx.com.br/friends` responde
+   `200` com o index.html, e `curl -s -o /dev/null -w '%{http_code}'
+   https://app-salinha.bhrx.com.br/api/users/me` responde `401`.
+
+As chamadas no navegador usam as mesmas portas de mídia do LiveKit (UDP 7882 e
+TCP 7881) que o app desktop. No navegador não há bandeja, iniciar com o
+sistema, overlay de jogo nem atualização automática (a página nova chega ao
+recarregar); o seletor de tela é o do navegador, e o som da tela depende dele
+(no Chrome/Edge, marque "Compartilhar áudio"; o Firefox compartilha sem som).
+As notificações precisam ser liberadas em **Configurações → Notificações →
+Permitir notificações**.
+
 **Migrar sem perder nada e sem mandar `.exe` novo:**
 1. Pare o backend antigo.
 2. Copie o banco: `pg_dump` no antigo → `psql` na VPS, e confira as contagens.
@@ -439,8 +511,8 @@ roda a cada push/merge na `main`:
 1. Roda os testes do backend, do app e do helper. Se algum falhar, para aqui.
 2. Gera o instalador assinado com a próxima versão (uma acima da que já está
    publicada na VPS).
-3. Publica o backend, a página de download e a atualização com
-   `scripts/deploy-vps.sh`.
+3. Gera o app web (`yarn build:web`) e publica o backend, a página de
+   download, o app web e a atualização com `scripts/deploy-vps.sh`.
 4. Confere que tudo subiu.
 
 Para ligar, em **Settings → Secrets and variables → Actions**:
@@ -452,7 +524,9 @@ Para ligar, em **Settings → Secrets and variables → Actions**:
   - `DEPLOY_ENABLED=true`;
   - `VPS_HOST=root@<ip>`;
   - `PUBLIC_URL=https://<endereço>`;
-  - `SITE_URL=https://<página de download>` (opcional; padrão `https://salinha.bhrx.com.br`).
+  - `SITE_URL=https://<página de download>` (opcional; padrão `https://salinha.bhrx.com.br`);
+  - `WEB_URL=https://app-salinha.bhrx.com.br` (opcional): confere o app web
+    depois do deploy. Ligue só depois do DNS e do bloco do Caddy prontos.
 
 Sem `DEPLOY_ENABLED`, o workflow só roda os testes.
 

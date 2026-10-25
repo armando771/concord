@@ -5,7 +5,8 @@
 #   scripts/deploy-vps.sh --infra root@IP   # aplica mudanças do Postgres/LiveKit
 #
 # Envia o backend (binário Linux), migrations, docker-compose.yml, a página
-# de download (site/) e as atualizações do app (backend/updates, geradas por
+# de download (site/), o app web (frontend/dist-web, gerado por
+# `yarn build:web`) e as atualizações do app (backend/updates, geradas por
 # release-win.sh/release-linux.sh) para /opt/concord e reinicia o backend. Reiniciar não derruba chamadas: o
 # backend recarrega as chamadas ativas, e a mídia e a sinalização (/rtc, que o
 # Caddy manda direto para o LiveKit — deploy/Caddyfile) seguem no LiveKit.
@@ -38,7 +39,7 @@ BIN="$(mktemp)"
 trap 'rm -f "$BIN"' EXIT
 
 (cd "$ROOT/backend" && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "$BIN" ./cmd)
-ssh "$HOST" 'mkdir -p /opt/concord/updates /opt/concord/uploads'
+ssh "$HOST" 'mkdir -p /opt/concord/updates /opt/concord/uploads /opt/concord/web'
 rsync -az "$BIN" "$HOST:/opt/concord/concord-server.new"
 rsync -az --delete "$ROOT/backend/migrations/" "$HOST:/opt/concord/migrations/"
 # O compose novo só substitui o atual se não recriar nada (ver abaixo).
@@ -148,7 +149,18 @@ fi
 exit 1
 REMOTE
 
-# Backend novo no ar: só agora os apps passam a ver a versão nova.
+# Backend novo no ar: só agora o app web e os apps desktop passam a ver a
+# versão nova (o app web novo pode depender da API nova).
+# App web: os assets (nomes com hash) antes, o index.html por último — quem
+# abrir no meio do envio não pega um index apontando para arquivo que falta.
+# O --delete só limpa /opt/concord/web.
+WEB="$ROOT/frontend/dist-web"
+if [[ -f "$WEB/index.html" ]]; then
+  rsync -az --chmod=D755,F644 --exclude index.html "$WEB/" "$HOST:/opt/concord/web/"
+  rsync -az --delete --chmod=D755,F644 "$WEB/" "$HOST:/opt/concord/web/"
+else
+  echo "aviso: $WEB não existe (rode 'yarn build:web' em frontend/) — app web não atualizado" >&2
+fi
 for manifest in latest.yml latest-linux.yml; do
   if [[ -f "$ROOT/backend/updates/$manifest" ]]; then
     rsync -az --chmod=F644 "$ROOT/backend/updates/$manifest" "$HOST:/opt/concord/updates/"

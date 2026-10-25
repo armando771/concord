@@ -155,6 +155,14 @@ VITE_SERVER_URL=http://localhost:8080 yarn dev
 # sem VITE_SERVER_URL o app aponta para http://localhost:8080
 ```
 
+**No navegador** (mesmo renderer, sem Electron; o backend fica na mesma origem):
+```bash
+cd frontend
+yarn dev:web                         # http://localhost:5175, repassa /api /ws /rtc ao backend
+yarn build:web && yarn preview:web   # dist-web/ em http://localhost:4173
+# WEB_BACKEND_URL=http://localhost:8090 troca o backend do repasse
+```
+
 ### 3. Testes
 ```bash
 cd backend && go test ./...
@@ -164,6 +172,8 @@ node scripts/e2e-voice.mjs
 # E2E do deploy sem queda: reinicia o backend no meio da chamada (Caddy + LiveKit
 # locais) e confere voz, tela, LIVE, mudo e chat — ver cabeçalho do script:
 node scripts/e2e-restart-call.mjs
+# E2E do app web (login, DM com imagem, notificação, chamada + tela, reload, logout):
+APP=http://localhost:4173/ node scripts/e2e-web.mjs
 # E2E da supressão de ruído (RNNoise) e o RNNoise offline sobre um WAV:
 node scripts/e2e-noise.mjs
 node scripts/rnnoise-offline.mjs entrada.wav saida.wav

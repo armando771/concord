@@ -18,6 +18,7 @@ export interface ServerMember {
   joined_at?: string
   username?: string
   display_name?: string
+  avatar_url?: string | null
 }
 
 export interface GetServerResponse {

@@ -1,5 +1,11 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { AUTH_STORAGE_KEY } from '../lib/authRefresh'
+import type { ChosenStatus } from '../lib/presenceStatus'
+
+export interface ProfileLink {
+  url: string
+}
 
 export interface User {
   id: string
@@ -7,6 +13,15 @@ export interface User {
   display_name: string
   email: string
   avatar_url?: string | null
+  // Perfil (Configurações → Perfis). Opcionais: listas de amigos e sessões
+  // salvas antes do perfil existir não trazem.
+  banner_url?: string | null
+  banner_color?: string | null
+  pronouns?: string
+  bio?: string
+  status_text?: string
+  links?: ProfileLink[]
+  status?: ChosenStatus
   created_at: string
   updated_at: string
 }
@@ -30,6 +45,17 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) => set({ user }),
       clear: () => set({ accessToken: null, refreshToken: null, user: null })
     }),
-    { name: 'concord-auth' }
+    { name: AUTH_STORAGE_KEY }
   )
 )
+
+// Login, logout ou renovação em outra aba (app web): esta aba passa a usar a
+// mesma sessão. O evento não dispara na própria aba (nem no Electron, que tem
+// uma janela só).
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === AUTH_STORAGE_KEY || event.key === null) {
+      void useAuthStore.persist.rehydrate()
+    }
+  })
+}

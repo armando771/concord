@@ -30,7 +30,7 @@ export async function uploadAttachment(
   try {
     return await sendUpload(room, file, meta, opts, token)
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401 && token && (await refreshTokens())) {
+    if (err instanceof ApiError && err.status === 401 && token && (await refreshTokens(token))) {
       return sendUpload(room, file, meta, opts, useAuthStore.getState().accessToken)
     }
     throw err

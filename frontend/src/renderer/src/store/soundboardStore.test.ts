@@ -1,0 +1,146 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const sentEvents = vi.hoisted(() => [] as Array<{ type: string; payload: unknown }>)
+
+vi.mock('../lib/rtc', () => ({
+  getAudioStream: vi.fn(),
+  getCameraStream: vi.fn(),
+  getDisplayStream: vi.fn()
+}))
+
+vi.mock('./chatStore', () => ({
+  useChatStore: {
+    getState: () => ({
+      sendEvent: (type: string, payload: unknown) => sentEvents.push({ type, payload }),
+      subscribeRoom: vi.fn(),
+      unsubscribeRoom: vi.fn(),
+      isWsConnected: () => true
+    })
+  }
+}))
+
+function memoryStorage(): Storage {
+  const data = new Map<string, string>()
+  return {
+    getItem: (k) => data.get(k) ?? null,
+    setItem: (k, v) => void data.set(k, v),
+    removeItem: (k) => void data.delete(k),
+    clear: () => data.clear(),
+    key: (i) => [...data.keys()][i] ?? null,
+    get length() {
+      return data.size
+    }
+  }
+}
+
+beforeEach(() => {
+  globalThis.localStorage = memoryStorage()
+  sentEvents.length = 0
+  vi.resetModules()
+})
+
+describe('soundboardStore', () => {
+  it('persiste volume, favoritos e atalhos no localStorage', async () => {
+    const first = await import('./soundboardStore')
+    const store = first.useSoundboardStore.getState()
+    expect(store.volume).toBe(0.8)
+
+    store.setVolume(0.45)
+    store.toggleFavorite('snd-1')
+    store.setKeybind('snd-1', 'Alt+1')
+    store.setKeybind('snd-2', 'Alt+1') // substitui o conflito em snd-1
+
+    vi.resetModules()
+    const second = await import('./soundboardStore')
+    const state = second.useSoundboardStore.getState()
+    expect(state.volume).toBe(0.45)
+    expect(state.favorites).toEqual(['snd-1'])
+    expect(state.keybinds['snd-1']).toBeUndefined()
+    expect(state.keybinds['snd-2']).toBe('Alt+1')
+  })
+
+  it('atualiza lista ao receber soundboard:created e soundboard:deleted', async () => {
+    const { useSoundboardStore } = await import('./soundboardStore')
+    useSoundboardStore.getState().handleWsEvent({
+      type: 'soundboard:created',
+      payload: {
+        server_id: 'srv-1',
+        sound: {
+          id: 'snd-10',
+          server_id: 'srv-1',
+          uploader_id: 'u1',
+          uploader_name: 'Alice',
+          name: 'Corneta',
+          emoji: '🎺',
+          content_type: 'audio/wav',
+          size_bytes: 4096,
+          duration_ms: 1500,
+          created_at: new Date().toISOString()
+        }
+      }
+    })
+
+    expect(useSoundboardStore.getState().soundsByServer['srv-1']).toHaveLength(1)
+
+    useSoundboardStore.getState().handleWsEvent({
+      type: 'soundboard:deleted',
+      payload: {
+        server_id: 'srv-1',
+        sound_id: 'snd-10'
+      }
+    })
+
+    expect(useSoundboardStore.getState().soundsByServer['srv-1']).toHaveLength(0)
+  })
+
+  it('registra activePlays ao receber call:soundboard e envia evento em triggerSound', async () => {
+    const { useCallStore } = await import('./callStore')
+    const { useSoundboardStore } = await import('./soundboardStore')
+
+    useCallStore.setState({
+      status: 'active',
+      type: 'channel',
+      callId: 'call-123',
+      serverId: 'srv-1',
+      muted: false,
+      deafened: true // surdo: não tenta criar HTMLAudioElement, mas exibe indicador visual
+    })
+
+    useSoundboardStore.getState().handleWsEvent({
+      type: 'call:soundboard',
+      payload: {
+        call_id: 'call-123',
+        sound: {
+          id: 'snd-1',
+          server_id: 'srv-1',
+          name: 'Risada',
+          emoji: '😂',
+          duration_ms: 1200
+        },
+        user: {
+          id: 'user-99',
+          username: 'bob',
+          display_name: 'Bob'
+        }
+      }
+    })
+
+    const play = useSoundboardStore.getState().activePlays['user-99']
+    expect(play).toBeDefined()
+    expect(play.soundName).toBe('Risada')
+    expect(play.emoji).toBe('😂')
+
+    // Desensurdece e dispara um som
+    useCallStore.setState({ deafened: false, muted: false })
+    useSoundboardStore.getState().triggerSound('snd-1')
+    expect(sentEvents).toEqual([
+      {
+        type: 'call:soundboard',
+        payload: { call_id: 'call-123', sound_id: 'snd-1' }
+      }
+    ])
+
+    useSoundboardStore.getState().clearActivePlays()
+    expect(useSoundboardStore.getState().activePlays['user-99']).toBeUndefined()
+  })
+})

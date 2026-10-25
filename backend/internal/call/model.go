@@ -129,13 +129,6 @@ type VoicePayload struct {
 	Deafened bool   `json:"deafened"`
 }
 
-// SpeakingPayload: o cliente avisa quando começa ("speaking": true) e para de
-// falar, segundo o detector de voz do LiveKit. Não é repassado a ninguém.
-type SpeakingPayload struct {
-	CallID   string `json:"call_id"`
-	Speaking bool   `json:"speaking"`
-}
-
 type ScreenPayload struct {
 	CallID string `json:"call_id"`
 	Active bool   `json:"active"`

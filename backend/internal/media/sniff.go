@@ -50,6 +50,11 @@ func isMP4(head []byte) bool {
 
 // Sniff descobre o tipo pelos primeiros bytes. declared (o Content-Type da
 // parte do multipart) só desempata mp4/webm entre vídeo e áudio.
+//
+// Segurança: a mídia é servida na mesma origem do app web. Aceitar aqui um
+// tipo que o navegador renderiza como documento (SVG, HTML, PDF…) abre
+// caminho para script na origem do app — não adicione tipos assim sem rever
+// os cabeçalhos de /api/media (CSP sandbox, nosniff).
 func Sniff(head []byte, declared string) (kind Kind, contentType string, ok bool) {
 	declaredAudio := strings.HasPrefix(strings.ToLower(strings.TrimSpace(declared)), "audio/")
 

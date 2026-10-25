@@ -2,7 +2,9 @@ package websocket
 
 import (
 	"context"
+	"log"
 	"sync"
+	"time"
 
 	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/message"
@@ -24,18 +26,30 @@ type Hub struct {
 	clients      map[*Client]struct{}
 	rooms        map[string]map[*Client]struct{}
 	presence     map[string]int
+	statuses     map[string]string // status escolhido (online, idle, dnd, invisible)
+	statusLookup StatusLookup
 	onDisconnect func(userID string)
 	// Desligando (deploy): quem cai não "saiu", então nem presença offline
 	// nem saída da chamada — o processo novo recarrega tudo.
 	shuttingDown bool
 }
 
+// StatusLookup lê do banco o status escolhido por quem acabou de conectar.
+type StatusLookup func(ctx context.Context, userID string) (string, error)
+
 func NewHub() *Hub {
 	return &Hub{
 		clients:  make(map[*Client]struct{}),
 		rooms:    make(map[string]map[*Client]struct{}),
 		presence: make(map[string]int),
+		statuses: make(map[string]string),
 	}
+}
+
+func (h *Hub) SetStatusLookup(fn StatusLookup) {
+	h.mu.Lock()
+	h.statusLookup = fn
+	h.mu.Unlock()
 }
 
 // SetDisconnectHandler registers a callback invoked when the last WS
@@ -58,13 +72,29 @@ func (h *Hub) Register(client *Client) bool {
 	h.clients[client] = struct{}{}
 	h.presence[client.userID]++
 	wasOffline := h.presence[client.userID] == 1
+	lookup := h.statusLookup
 	h.mu.Unlock()
 
-	if wasOffline {
-		h.BroadcastAll(writeEvent("presence:update", map[string]interface{}{
-			"user_id": client.userID,
-			"online":  true,
-		}))
+	if !wasOffline {
+		return true
+	}
+	status := user.StatusOnline
+	if lookup != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		if stored, err := lookup(ctx, client.userID); err == nil {
+			status = stored
+		} else {
+			log.Printf("[ws] status lookup for %s: %v", client.userID, err)
+		}
+		cancel()
+	}
+	h.mu.Lock()
+	h.statuses[client.userID] = status
+	h.mu.Unlock()
+
+	// Invisível conecta sem ninguém ficar sabendo.
+	if status != user.StatusInvisible {
+		h.broadcastPresence(client.userID, user.EffectiveStatus(status, true))
 	}
 	return true
 }
@@ -81,6 +111,7 @@ func (h *Hub) Unregister(client *Client) {
 	h.presence[client.userID]--
 	if h.presence[client.userID] <= 0 {
 		delete(h.presence, client.userID)
+		delete(h.statuses, client.userID)
 		wasOnline = !h.shuttingDown
 	}
 	h.mu.Unlock()
@@ -90,10 +121,7 @@ func (h *Hub) Unregister(client *Client) {
 	}
 
 	if wasOnline {
-		h.BroadcastAll(writeEvent("presence:update", map[string]interface{}{
-			"user_id": client.userID,
-			"online":  false,
-		}))
+		h.broadcastPresence(client.userID, user.StatusOffline)
 	}
 }
 
@@ -143,6 +171,56 @@ func (h *Hub) ShuttingDown() bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.shuttingDown
+}
+
+// broadcastPresence avisa todo mundo do status efetivo. "online" continua no
+// evento para quem só quer saber se está conectado.
+func (h *Hub) broadcastPresence(userID, status string) {
+	h.BroadcastAll(writeEvent("presence:update", map[string]interface{}{
+		"user_id": userID,
+		"online":  status != user.StatusOffline,
+		"status":  status,
+	}))
+}
+
+// effectiveStatusLocked: precisa de h.mu (leitura).
+func (h *Hub) effectiveStatusLocked(userID string) string {
+	connected := h.presence[userID] > 0
+	status, ok := h.statuses[userID]
+	if !ok {
+		status = user.StatusOnline
+	}
+	return user.EffectiveStatus(status, connected)
+}
+
+// EffectiveStatus é o status que os outros veem (offline se desconectado ou
+// invisível).
+func (h *Hub) EffectiveStatus(userID string) string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.effectiveStatusLocked(userID)
+}
+
+// SetUserStatus guarda o status escolhido e avisa a presença se mudou o que
+// os outros veem.
+func (h *Hub) SetUserStatus(userID, status string) {
+	h.mu.Lock()
+	before := h.effectiveStatusLocked(userID)
+	h.statuses[userID] = status
+	after := h.effectiveStatusLocked(userID)
+	h.mu.Unlock()
+
+	if before != after {
+		h.broadcastPresence(userID, after)
+	}
+}
+
+// PublishUserUpdate manda o perfil novo (nome, avatar, banner, bio...) para
+// todo mundo, como a presença.
+func (h *Hub) PublishUserUpdate(profile user.PublicProfile) {
+	h.BroadcastAll(writeEvent("user:update", map[string]interface{}{
+		"user": profile,
+	}))
 }
 
 func (h *Hub) Subscribe(client *Client, room string) {
@@ -201,15 +279,17 @@ func (h *Hub) IsOnline(userID string) bool {
 	return h.presence[userID] > 0
 }
 
-func (h *Hub) PresenceMap(userIDs []string) map[string]bool {
+// PresenceMap devolve o status efetivo de cada id ("offline" se desconectado
+// ou invisível).
+func (h *Hub) PresenceMap(userIDs []string) map[string]string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	result := make(map[string]bool, len(userIDs))
+	result := make(map[string]string, len(userIDs))
 	for _, id := range userIDs {
 		if id == "" {
 			continue
 		}
-		result[id] = h.presence[id] > 0
+		result[id] = h.effectiveStatusLocked(id)
 	}
 	return result
 }

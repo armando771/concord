@@ -295,6 +295,21 @@ func TestServeFileStreamsStoredType(t *testing.T) {
 	}
 }
 
+// O app web serve a mídia na mesma origem dos tokens: o arquivo aberto
+// direto não pode rodar script nem carregar nada.
+func TestServeFileSandboxesContent(t *testing.T) {
+	env := newAttachmentEnv(t, fakeAccess{}, fakeSpace{ok: true})
+	messageID := "m1"
+	id, _ := env.storedImage(t, &messageID)
+	rec := env.get("/api/media/"+id+"?token=bom", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Security-Policy"); got != "default-src 'none'; sandbox" {
+		t.Fatalf("Content-Security-Policy = %q", got)
+	}
+}
+
 func TestServeFileSupportsRange(t *testing.T) {
 	env := newAttachmentEnv(t, fakeAccess{}, fakeSpace{ok: true})
 	messageID := "m1"

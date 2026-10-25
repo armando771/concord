@@ -13,7 +13,6 @@ import type { MicHandle } from '../lib/noiseSuppression'
 import { CallMedia, type RemoteMedia } from '../lib/livekit'
 import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
-import { createSpeakingReporter } from '../lib/speakingReporter'
 import { addWatched, miniPlayerOnly, pruneWatched, resolveFocus } from '../lib/screenWatch'
 import {
   applyLiveEvent,
@@ -34,7 +33,12 @@ import { loadAudioPrefs, resolveDeviceId, saveAudioPrefs } from '../lib/audioDev
 import { useChatStore } from './chatStore'
 import { useAuthStore } from './authStore'
 import { showToast } from './toastStore'
+
 import type { CallResume } from '../../../shared/callResume'
+
+import { useSoundboardStore } from './soundboardStore'
+import { stopAllSoundboardAudio } from '../lib/soundboardPlayer'
+
 
 export type CallStatus = 'idle' | 'ringing' | 'outgoing' | 'active'
 export type CallKind = 'dm' | 'channel'
@@ -230,13 +234,6 @@ const EMPTY_MEDIA: RemoteMedia = {
 }
 
 export const useCallStore = create<CallState>()((set, get) => {
-  // Avisa o servidor quando a minha voz é captada (o XP de voz só conta assim).
-  const speakingReporter = createSpeakingReporter((speaking) => {
-    const { callId, status } = get()
-    if (!callId || status !== 'active') return
-    useChatStore.getState().sendEvent('call:speaking', { call_id: callId, speaking })
-  })
-
   const bumpList = (): void => {
     set((s) => ({ listVersion: s.listVersion + 1 }))
   }
@@ -292,10 +289,7 @@ export const useCallStore = create<CallState>()((set, get) => {
         if (media === connection) showToast.info('Chamada reconectada.')
       },
       onActiveSpeakers: (userIds) => {
-        if (media !== connection) return
-        set({ speakingIds: userIds })
-        const meId = useAuthStore.getState().user?.id
-        if (meId) speakingReporter.update(userIds.includes(meId))
+        if (media === connection) set({ speakingIds: userIds })
       }
     })
     media = connection
@@ -515,7 +509,6 @@ export const useCallStore = create<CallState>()((set, get) => {
   }
 
   const cleanup = (): void => {
-    speakingReporter.reset()
     callGeneration++
     const callId = get().callId
     if (callId) useChatStore.getState().unsubscribeRoom(`call:${callId}`)
@@ -528,6 +521,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     windowAudio = null
     localCameraStream?.getTracks().forEach((t) => t.stop())
     localCameraStream = null
+    useSoundboardStore.getState().clearActivePlays()
     set({
       status: 'idle',
       callId: null,
@@ -785,6 +779,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       if (next) {
         set({ mutedBeforeDeafen: get().muted, deafened: true, muted: true })
         applyMute(true)
+        stopAllSoundboardAudio()
       } else {
         set({ deafened: false, muted: get().mutedBeforeDeafen })
         applyMute(get().mutedBeforeDeafen)

@@ -7,8 +7,14 @@ import { showToast } from '../store/toastStore'
 import BirthdayFields from './BirthdayFields'
 import { useNotificationPrefsStore } from '../store/notificationPrefsStore'
 import { useOverlayPrefsStore } from '../store/overlayPrefsStore'
+import { IS_WEB } from '../lib/config'
+import { permissionView, type WebPermission } from '../lib/webNotifications'
+import { browserPermission, requestBrowserPermission } from '../lib/browserNotifications'
+import LevelUpPreview from './level/LevelUpPreview'
+import Switch from './Switch'
 
-function Toggle({
+/** Linha com título, descrição e o interruptor, como nas configurações do Discord. */
+export function Toggle({
   title,
   description,
   checked,
@@ -20,42 +26,89 @@ function Toggle({
   onChange: () => void
 }): React.JSX.Element {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3">
-      <span>
+    <div className="flex items-center justify-between gap-4">
+      <span className="min-w-0">
         <span className="block text-sm font-semibold text-white">{title}</span>
-        <span className="block text-xs text-gray-400">{description}</span>
+        <span className="block text-xs leading-snug text-gray-400">{description}</span>
       </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={onChange}
-        className="h-4 w-4 accent-[#23a55a]"
-      />
-    </label>
+      <Switch checked={checked} onChange={onChange} label={title} />
+    </div>
   )
 }
 
-const NOTIFICATION_OPTIONS: { key: keyof NotificationPrefs; title: string; description: string }[] =
-  [
-    {
-      key: 'taskbar',
-      title: 'Mostrar na barra de tarefas',
-      description: 'Pisca a Salinha e mostra quantas mensagens chegaram enquanto você não olhava.'
-    },
-    {
-      key: 'desktop',
-      title: 'Notificações na área de trabalho',
-      description: 'Mostra um aviso do Windows com a mensagem recebida.'
-    },
-    {
-      key: 'sound',
-      title: 'Som de notificação',
-      description: 'Toca um som ao receber uma DM ou ser mencionado.'
-    }
-  ]
+type NotificationOption = { key: keyof NotificationPrefs; title: string; description: string }
 
-/** Perfil: aniversário (opcional) e se os servidores podem anunciar. */
-function ProfileSettings(): React.JSX.Element {
+const SOUND_OPTION: NotificationOption = {
+  key: 'sound',
+  title: 'Som de notificação',
+  description: 'Toca um som ao receber uma DM ou ser mencionado.'
+}
+
+const NOTIFICATION_OPTIONS: NotificationOption[] = IS_WEB
+  ? [
+      {
+        key: 'taskbar',
+        title: 'Mostrar no título da aba',
+        description: 'Mostra quantas mensagens chegaram enquanto você não olhava, ex.: (3) Salinha.'
+      },
+      {
+        key: 'desktop',
+        title: 'Notificações do navegador',
+        description: 'Mostra um aviso do navegador com a mensagem recebida.'
+      },
+      SOUND_OPTION
+    ]
+  : [
+      {
+        key: 'taskbar',
+        title: 'Mostrar na barra de tarefas',
+        description: 'Pisca a Salinha e mostra quantas mensagens chegaram enquanto você não olhava.'
+      },
+      {
+        key: 'desktop',
+        title: 'Notificações na área de trabalho',
+        description: 'Mostra um aviso do Windows com a mensagem recebida.'
+      },
+      SOUND_OPTION
+    ]
+
+/** Permissão do navegador para os avisos (só no build web). */
+function BrowserPermission(): React.JSX.Element {
+  const [permission, setPermission] = useState<WebPermission>(browserPermission)
+  const view = permissionView(permission)
+
+  // Mudou nas permissões do site (cadeado da barra de endereço): acompanha.
+  useEffect(() => {
+    let status: PermissionStatus | undefined
+    const update = (): void => setPermission(browserPermission())
+    navigator.permissions
+      ?.query({ name: 'notifications' })
+      .then((result) => {
+        status = result
+        status.addEventListener('change', update)
+      })
+      .catch(() => {})
+    return () => status?.removeEventListener('change', update)
+  }, [])
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg bg-black/20 px-3 py-2">
+      <span className="text-xs text-gray-400">{view.status}</span>
+      {view.canRequest && (
+        <button
+          type="button"
+          onClick={() => void requestBrowserPermission().then(setPermission)}
+          className="shrink-0 cursor-pointer rounded-md bg-[#23a55a] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#1f9450]"
+        >
+          Permitir notificações
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Aniversário (opcional) e se os servidores podem anunciar. Salva na hora. */
+export function BirthdaySettings(): React.JSX.Element {
   const [birthday, setLocal] = useState<Birthday | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -85,7 +138,9 @@ function ProfileSettings(): React.JSX.Element {
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-      <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-400">Perfil</h3>
+      <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-400">
+        Aniversário
+      </h3>
       <div className="flex flex-col gap-3">
         <BirthdayFields
           value={birthday}
@@ -107,12 +162,35 @@ function ProfileSettings(): React.JSX.Element {
   )
 }
 
-/** Preferências do app desktop (só aparece onde há suporte, ex.: Windows). */
-function AppSettings(): React.JSX.Element | null {
+/** Configurações → Notificações. */
+export function NotificationSettings(): React.JSX.Element {
+  const prefs = useNotificationPrefsStore()
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <div className="flex flex-col gap-4">
+        {IS_WEB && <BrowserPermission />}
+        {NOTIFICATION_OPTIONS.map((option) => (
+          <Toggle
+            key={option.key}
+            title={option.title}
+            description={option.description}
+            checked={prefs[option.key]}
+            onChange={() => prefs.setPref(option.key, !prefs[option.key])}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Configurações → Aplicativo: iniciar com o sistema e overlay (só onde há
+ * suporte, ex.: Windows).
+ */
+export function DesktopSettings(): React.JSX.Element {
   const background = window.api?.background
   // undefined = ainda carregando; null = não suportado nesta plataforma
   const [autostart, setAutostart] = useState<boolean | null | undefined>(undefined)
-  const prefs = useNotificationPrefsStore()
   const overlayEnabled = useOverlayPrefsStore((s) => s.enabled)
   const setOverlayEnabled = useOverlayPrefsStore((s) => s.setEnabled)
   const overlayOpacity = useOverlayPrefsStore((s) => s.opacity)
@@ -122,34 +200,28 @@ function AppSettings(): React.JSX.Element | null {
     void background?.getAutostart().then(setAutostart)
   }, [background])
 
-  if (!background) {
-    return (
-      <div className="flex flex-col gap-4">
-        <ProfileSettings />
-      </div>
-    )
-  }
-
   const toggleAutostart = (): void => {
-    void background.setAutostart(!autostart).then((value) => {
+    void background?.setAutostart(!autostart).then((value) => {
       if (value !== null) setAutostart(value)
     })
   }
 
+  const hasAutostart = Boolean(background) && typeof autostart === 'boolean'
+  const hasOverlay = Boolean(background && window.api?.overlay?.supported)
+
   return (
     <div className="flex flex-col gap-4">
-      <ProfileSettings />
-      {typeof autostart === 'boolean' && (
+      {hasAutostart && (
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <Toggle
             title="Iniciar com o Windows"
             description="Abre escondido na bandeja, pronto para receber chamadas."
-            checked={autostart}
+            checked={Boolean(autostart)}
             onChange={toggleAutostart}
           />
         </div>
       )}
-      {window.api?.overlay?.supported && (
+      {hasOverlay && (
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <Toggle
             title="Overlay nos jogos"
@@ -171,29 +243,18 @@ function AppSettings(): React.JSX.Element | null {
               disabled={!overlayEnabled}
               onChange={(e) => setOverlayOpacity(Number(e.target.value))}
               aria-label="Opacidade do overlay"
-              className="accent-[#23a55a] disabled:opacity-40"
+              className="accent-[#5865f2] disabled:opacity-40"
             />
           </label>
         </div>
       )}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-        <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-400">
-          Notificações
-        </h3>
-        <div className="flex flex-col gap-3">
-          {NOTIFICATION_OPTIONS.map((option) => (
-            <Toggle
-              key={option.key}
-              title={option.title}
-              description={option.description}
-              checked={prefs[option.key]}
-              onChange={() => prefs.setPref(option.key, !prefs[option.key])}
-            />
-          ))}
-        </div>
-      </div>
+      {!hasAutostart && !hasOverlay && (
+        <p className="text-sm text-gray-400">
+          Nada para configurar aqui nesta plataforma.
+        </p>
+      )}
+      {/* Prévia da animação de nível: só no build de dev (some do build final). */}
+      {import.meta.env.DEV && <LevelUpPreview />}
     </div>
   )
 }
-
-export default AppSettings
