@@ -110,7 +110,7 @@ mv concord-server.new concord-server
 systemctl restart concord-server
 port=$(sed -n 's/^PORT=//p' .env | tail -n 1 | tr -d "\"' \r")
 for _ in $(seq 1 60); do
-  if curl -fsS -o /dev/null "http://127.0.0.1:${port:-8080}/healthz"; then
+  if curl -fs -o /dev/null "http://127.0.0.1:${port:-8080}/healthz"; then
     echo "backend no ar (/healthz ok)"
     exit 0
   fi
