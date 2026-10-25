@@ -21,7 +21,7 @@ function Row({
   return (
     <div className="flex items-center justify-between gap-4 py-3">
       <div className="min-w-0">
-        <p className="text-ds-xs font-bold uppercase tracking-[0.02em] text-gray-400">{label}</p>
+        <p className="text-ds-sm font-medium text-gray-400">{label}</p>
         <div className="truncate text-ds-md text-white">{value}</div>
       </div>
       {action}

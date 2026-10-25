@@ -124,7 +124,7 @@ function SettingsContent(): React.JSX.Element {
             if (items.length === 0) return null
             return (
               <div key={group.id} className="mb-4">
-                <p className="mb-1 px-2 text-ds-xs font-bold uppercase tracking-[0.02em] text-gray-500">
+                <p className="mb-1 px-2 text-ds-sm font-medium text-gray-500">
                   {group.label}
                 </p>
                 {items.map((item) => (

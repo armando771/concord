@@ -29,7 +29,7 @@ function Input({
       {label && (
         <label
           htmlFor={inputId}
-          className={`text-ds-xs font-bold uppercase tracking-[0.02em] ${error ? 'text-red-300' : 'text-gray-300'}`}
+          className={`text-ds-sm font-medium ${error ? 'text-red-300' : 'text-gray-300'}`}
         >
           {label}
           {error && <span className="font-normal normal-case"> — {error}</span>}

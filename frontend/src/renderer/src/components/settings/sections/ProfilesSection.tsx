@@ -52,7 +52,7 @@ function Field({
   return (
     <div className="border-b border-white/10 pb-6">
       <div className="mb-2 flex items-baseline justify-between gap-2">
-        <p className="text-ds-xs font-bold uppercase tracking-[0.02em] text-gray-300">{label}</p>
+        <p className="text-ds-sm font-medium text-gray-300">{label}</p>
         {counter && (
           <span
             className={`text-[11px] ${counter.used > counter.max ? 'text-[#f23f43]' : 'text-gray-500'}`}
@@ -414,7 +414,7 @@ function ProfilesSection(): React.JSX.Element | null {
 
         {/* Prévia */}
         <div className="w-full shrink-0 lg:sticky lg:top-0 lg:w-[300px]">
-          <p className="mb-2 text-ds-xs font-bold uppercase tracking-[0.02em] text-gray-300">
+          <p className="mb-2 text-ds-sm font-medium text-gray-300">
             Prévia
           </p>
           <div

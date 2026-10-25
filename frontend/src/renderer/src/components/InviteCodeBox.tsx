@@ -27,7 +27,7 @@ function InviteCodeBox({ serverId }: { serverId: string }): React.JSX.Element {
 
   return (
     <div className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-4">
-      <p className="text-xs font-bold uppercase tracking-wide text-gray-400">Código do servidor</p>
+      <p className="text-ds-sm font-medium text-gray-400">Código do servidor</p>
       <div className="flex items-center gap-2">
         <code
           aria-label="Código de convite"

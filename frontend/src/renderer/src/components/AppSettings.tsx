@@ -139,7 +139,7 @@ export function BirthdaySettings(): React.JSX.Element {
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-      <h3 className="mb-3 text-ds-xs font-bold uppercase tracking-[0.02em] text-gray-400">
+      <h3 className="mb-3 text-ds-sm font-medium text-gray-400">
         Aniversário
       </h3>
       <div className="flex flex-col gap-3">
@@ -229,7 +229,7 @@ export function DesktopSettings(): React.JSX.Element {
       {/* Overlay de jogo: só Windows (preload: process.platform, sandbox desligado). */}
       {hasOverlay && (
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-          <h3 className="mb-3 text-ds-xs font-bold uppercase tracking-[0.02em] text-gray-400">
+          <h3 className="mb-3 text-ds-sm font-medium text-gray-400">
             Overlay
           </h3>
           <Toggle

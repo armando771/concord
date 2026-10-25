@@ -45,7 +45,7 @@ function DeviceSelect({
 }): React.JSX.Element {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-ds-xs font-bold uppercase tracking-[0.02em] text-gray-400">
+      <span className="text-ds-sm font-medium text-gray-400">
         {label}
       </span>
       <select

@@ -21,7 +21,7 @@ function PermissionSwitches({
     <div className="space-y-6">
       {groups.map((group) => (
         <section key={group.title}>
-          <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">
+          <h3 className="mb-2 text-ds-sm font-medium text-gray-400">
             {group.title}
           </h3>
           <ul className="divide-y divide-white/6 rounded-lg border border-white/8 bg-white/3">
