@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { CallKind } from '../../store/callStore'
 
+/** "05:09" e, a partir de 1 hora, "1:05:09". */
 export function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / 60)
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
   const s = seconds % 60
-  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+  const mmss = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+  return h > 0 ? `${h}:${mmss}` : mmss
 }
 
 export function useElapsed(startedAt: number | null): number {

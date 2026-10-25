@@ -8,6 +8,7 @@ import { useUIStore } from '../store/uiStore'
 import { useChatStore } from '../store/chatStore'
 import { useCallStore } from '../store/callStore'
 import VoiceStateIcons from './call/VoiceStateIcons'
+import VoiceChannelTimer from './call/VoiceChannelTimer'
 import LiveBadge from './call/LiveBadge'
 import { liveUserIds } from '../lib/liveBadge'
 import LevelBadge from './level/LevelBadge'
@@ -471,12 +472,15 @@ export function ServerSidebar(): React.JSX.Element {
                         voiceDropTarget === ch.id
                           ? 'bg-[#5865f2]/25 text-white ring-2 ring-[#5865f2]'
                           : connectedHere
-                            ? 'bg-[#23a55a]/15 text-white shadow-sm'
+                            ? 'text-white hover:bg-white/6'
                             : 'text-gray-400 hover:bg-white/6 hover:text-gray-200'
                       }`}
                     >
-                      <VolumeIcon className="h-4 w-4 shrink-0 text-gray-500" />
+                      <VolumeIcon className="h-4 w-4 shrink-0 text-[#23a55a]" />
                       <span className="truncate">{ch.name}</span>
+                      {participants.length > 0 && callState?.call?.started_at && (
+                        <VoiceChannelTimer startedAt={callState.call.started_at} />
+                      )}
                       {participants.length > 0 && (
                         <span className="ml-auto shrink-0 rounded-full bg-white/10 px-1.5 py-0.2 text-[10px] font-bold text-gray-300">
                           {participants.length}
