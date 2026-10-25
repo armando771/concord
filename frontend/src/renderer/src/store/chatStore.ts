@@ -29,6 +29,7 @@ import {
 } from '../api/messages'
 import { applyReactionAdd, applyReactionRemove } from '../lib/emotes'
 import { applyPollUpdate, messagePreview, type PollUpdate } from '../lib/polls'
+import { mergeMessages } from '../lib/messageOrder'
 import type { ConversationSummary } from '../api/conversations'
 import { listConversations } from '../api/conversations'
 import type { PresenceMap } from '../api/presence'
@@ -101,17 +102,13 @@ const getRoomFetch = (room: RoomKey): ((before?: string) => Promise<Message[]>) 
   return (before?: string) => listConversationMessages(id, before)
 }
 
-const appendUnique = (messages: Message[], incoming: Message[]): Message[] => {
-  const seen = new Set(messages.map((m) => m.id))
-  const merged = [...messages]
-  for (const msg of incoming) {
-    if (!seen.has(msg.id)) {
-      merged.push(msg)
-      seen.add(msg.id)
-    }
-  }
-  return merged
-}
+/**
+ * Salas com um ChatPane aberto. Só elas guardam lista de mensagens: o
+ * message:create de uma sala fechada (DM pela sala user:<eu>, canal pela sala
+ * do servidor) não pode criar uma lista solta que depois seria juntada à
+ * página carregada ao abrir.
+ */
+const openRooms = new Set<RoomKey>()
 
 const clearDeletedReplyTarget = (messages: Message[], deletedId: string): Message[] =>
   messages
@@ -169,6 +166,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   isWsConnected: () => client.isConnected(),
 
   openRoom: async (room) => {
+    openRooms.add(room)
     client.subscribe(room)
     const fetch = getRoomFetch(room)
     const token = useAuthStore.getState().accessToken
@@ -193,10 +191,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     try {
       const fetched = await fetch()
       if (useAuthStore.getState().accessToken !== token) return
+      if (!openRooms.has(room)) return
       set((state) => ({
         messagesByRoom: {
           ...state.messagesByRoom,
-          [room]: appendUnique(state.messagesByRoom[room] ?? [], [...fetched].reverse())
+          // Pode já ter mensagem ao vivo que chegou durante o carregamento.
+          [room]: mergeMessages(state.messagesByRoom[room] ?? [], fetched)
         },
         hasMoreByRoom: { ...state.hasMoreByRoom, [room]: fetched.length >= MESSAGE_LIMIT }
       }))
@@ -210,6 +210,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   closeRoom: (room) => {
+    openRooms.delete(room)
     client.unsubscribe(room)
     set((state) => {
       const next = { ...state.messagesByRoom }
@@ -233,16 +234,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const fetch = getRoomFetch(room)
     const current = get().messagesByRoom[room] ?? []
     if (current.length === 0) return
+    // A lista está em ordem (created_at, id): a primeira é a mais antiga.
     const before = current[0].id
     const token = useAuthStore.getState().accessToken
     try {
       const fetched = await fetch(before)
       if (useAuthStore.getState().accessToken !== token) return
-      if (fetched.length === 0) return
+      if (fetched.length === 0 || !openRooms.has(room)) return
       set((state) => ({
         messagesByRoom: {
           ...state.messagesByRoom,
-          [room]: [...[...fetched].reverse(), ...(state.messagesByRoom[room] ?? [])]
+          [room]: mergeMessages(state.messagesByRoom[room] ?? [], fetched)
         },
         hasMoreByRoom: { ...state.hasMoreByRoom, [room]: fetched.length >= MESSAGE_LIMIT }
       }))
@@ -464,10 +466,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const serverId = (payload.server_id as string) || null
       if (!room.endsWith(':')) {
         set((state) => {
-          const nextMessages = {
-            ...state.messagesByRoom,
-            [room]: appendUnique(state.messagesByRoom[room] ?? [], [msg])
-          }
+          const nextMessages = openRooms.has(room)
+            ? {
+                ...state.messagesByRoom,
+                [room]: mergeMessages(state.messagesByRoom[room] ?? [], [msg])
+              }
+            : state.messagesByRoom
           const isActive = room === state.activeRoom
           const nextUnread = isActive
             ? state.unreadByRoom
@@ -882,7 +886,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
-  reset: () =>
+  reset: () => {
+    openRooms.clear()
     set({
       messagesByRoom: {},
       hasMoreByRoom: {},
@@ -896,6 +901,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       conversations: [],
       conversationsLoading: false
     })
+  }
 }))
 
 /**

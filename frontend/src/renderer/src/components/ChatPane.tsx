@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import type { Message } from '../api/messages'
@@ -420,8 +420,12 @@ function ChatPane({
   }
   const [loadingOlder, setLoadingOlder] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
   const firstRender = useRef(true)
+  // Rolagem antes do loadOlder: as mensagens antigas entram em cima e a que
+  // estava sendo lida tem de ficar no mesmo lugar da tela.
+  const olderAnchor = useRef<{ height: number; top: number; firstId?: string } | null>(null)
 
   useEffect(() => {
     stickToBottom.current = true
@@ -442,6 +446,15 @@ function ChatPane({
     }
   }, [messages.length])
 
+  const firstId = messages[0]?.id
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    const anchor = olderAnchor.current
+    if (!el || !anchor || firstId === anchor.firstId) return
+    olderAnchor.current = null
+    el.scrollTop = anchor.top + (el.scrollHeight - anchor.height)
+  }, [firstId])
+
   const handleScroll = (e: React.UIEvent<HTMLDivElement>): void => {
     const el = e.currentTarget
     stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60
@@ -450,8 +463,17 @@ function ChatPane({
   const handleLoadOlder = async (): Promise<void> => {
     if (loadingOlder) return
     setLoadingOlder(true)
+    const el = scrollRef.current
+    if (el) {
+      olderAnchor.current = { height: el.scrollHeight, top: el.scrollTop, firstId }
+      stickToBottom.current = false
+    }
     await loadOlder(room)
     setLoadingOlder(false)
+    // Nada novo (ou já aplicado no layout effect): não vale para a próxima mudança.
+    requestAnimationFrame(() => {
+      olderAnchor.current = null
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
@@ -580,7 +602,7 @@ function ChatPane({
           Solte os arquivos para enviar
         </div>
       )}
-      <div className="flex-1 overflow-y-auto" onScroll={handleScroll}>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto" onScroll={handleScroll}>
         {loading ? (
           <div className="flex h-full items-center justify-center text-sm text-gray-400">
             Carregando mensagens...
