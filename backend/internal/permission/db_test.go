@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -507,14 +508,20 @@ func TestDBMigrationBackfillsExistingServers(t *testing.T) {
 	db := testDB(t)
 	ctx := context.Background()
 
-	// Banco só com as migrations anteriores à 029, como produção hoje.
+	// Banco só com as migrations anteriores à 029, como produção antes dela.
+	// As posteriores (030, 031, ...) também ficam de fora: se entrassem, o
+	// banco iria para a versão mais alta e o Migrate pularia a 029 depois.
 	dir := t.TempDir()
 	entries, err := os.ReadDir("../../migrations")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), "000029_") {
+		version, err := strconv.Atoi(strings.SplitN(entry.Name(), "_", 2)[0])
+		if err != nil {
+			t.Fatalf("migration sem número: %s", entry.Name())
+		}
+		if version >= 29 {
 			continue
 		}
 		raw, err := os.ReadFile(filepath.Join("../../migrations", entry.Name()))
