@@ -43,6 +43,7 @@ import { useServerStore } from './serverStore'
 import { handleServerRoleEvent, removedMessage } from './serverEvents'
 import { useFriendStore } from './friendStore'
 import { useCallStore } from './callStore'
+import { useBoostStore } from './boostStore'
 import { useLevelStore } from './levelStore'
 import { useSoundboardStore } from './soundboardStore'
 import { useTypingStore } from './typingStore'
@@ -226,6 +227,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     listsResyncTimer = null
     get().reset()
     useLevelStore.getState().reset()
+    useBoostStore.getState().reset()
   },
   isWsConnected: () => client.isConnected(),
 
@@ -644,6 +646,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     if (event.type.startsWith('level:')) {
       useLevelStore.getState().handleWsEvent(event)
+      return
+    }
+
+    if (event.type === 'voice:boost') {
+      useBoostStore.getState().handleWsEvent(event)
       return
     }
 
