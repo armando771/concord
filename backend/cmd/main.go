@@ -10,6 +10,7 @@ import (
 	"gin-quickstart/backend/internal/birthday"
 	"gin-quickstart/backend/internal/call"
 	"gin-quickstart/backend/internal/channel"
+	"gin-quickstart/backend/internal/clientip"
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/database"
 	"gin-quickstart/backend/internal/friendship"
@@ -68,6 +69,12 @@ func main() {
 
 	// Como o gin.Default(), mas o log não grava tokens que vão na URL.
 	router := gin.New()
+	// Em quem confiar para o IP do cliente (log e limite de login).
+	trustedProxies := clientip.TrustedProxies(os.Getenv("HOST"), os.Getenv("TRUSTED_PROXIES"))
+	if err := clientip.Configure(router, trustedProxies); err != nil {
+		log.Fatalf("invalid TRUSTED_PROXIES: %v", err)
+	}
+	log.Printf("trusted proxies: %v", trustedProxies)
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{Formatter: httplog.Formatter}), gin.Recovery())
 
 	router.Use(cors.New(cors.Config{

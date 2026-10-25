@@ -1,33 +1,63 @@
 package auth
 
 import (
+	"context"
+	"errors"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
+	"gin-quickstart/backend/internal/ratelimit"
 	"gin-quickstart/backend/internal/user"
 )
 
-// dummyPasswordHash é um hash qualquer, com o mesmo custo dos reais.
-var dummyPasswordHash = sync.OnceValue(func() []byte {
-	hash, _ := bcrypt.GenerateFromPassword([]byte("salinha-login-sem-conta"), bcrypt.DefaultCost)
+// dummyPasswordHash é um hash qualquer, com o mesmo custo dos reais. Gerado
+// no boot para o primeiro login sem conta não custar dois bcrypts.
+var dummyPasswordHash = mustHash("salinha-login-sem-conta")
+
+func mustHash(password string) []byte {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		panic(err)
+	}
 	return hash
-})
+}
+
+// loginUsers é a parte do user.Service que o login usa (trocável nos testes).
+type loginUsers interface {
+	FindLoginByEmail(ctx context.Context, email string) (*user.User, error)
+	FindLoginByUsername(ctx context.Context, username string) (*user.User, error)
+}
 
 type Handler struct {
 	service     *Service
 	userService *user.Service
+	logins      loginUsers
+	guard       *loginGuard
 }
 
 func AuthHandler(service *Service, userService *user.Service) *Handler {
 	return &Handler{
 		service:     service,
 		userService: userService,
+		logins:      userService,
+		guard:       newLoginGuard(),
 	}
+}
+
+// invalidCredentials é a única resposta de falha do login: não dá para saber
+// se a conta existe.
+func invalidCredentials(c *gin.Context) {
+	c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+}
+
+// tooManyAttempts: mesma mensagem genérica, com 429 e Retry-After.
+func tooManyAttempts(c *gin.Context, retry time.Duration) {
+	c.Header("Retry-After", ratelimit.RetryAfterSeconds(retry))
+	c.JSON(http.StatusTooManyRequests, gin.H{"error": "invalid credentials"})
 }
 
 func (h *Handler) Register(c *gin.Context) {
@@ -110,32 +140,50 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	// Toda falha responde igual: não dá para saber se a conta existe.
 	identifier, ok := ParseLoginIdentifier(input.Login, input.Email)
+	var limited *LoginIdentifier
+	if ok {
+		limited = &identifier
+	}
+	// Antes de qualquer busca ou bcrypt: por IP (todas as tentativas) e por
+	// identificador (falhas). c.ClientIP() só confia nos proxies configurados
+	// (internal/clientip).
+	if retry, allowed := h.guard.allow(c.ClientIP(), limited); !allowed {
+		tooManyAttempts(c, retry)
+		return
+	}
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		invalidCredentials(c)
 		return
 	}
 
 	var foundUser *user.User
 	var err error
 	if identifier.Kind == IdentifierEmail {
-		foundUser, err = h.userService.FindLoginByEmail(c.Request.Context(), identifier.Value)
+		foundUser, err = h.logins.FindLoginByEmail(c.Request.Context(), identifier.Value)
 	} else {
-		foundUser, err = h.userService.FindLoginByUsername(c.Request.Context(), identifier.Value)
+		foundUser, err = h.logins.FindLoginByUsername(c.Request.Context(), identifier.Value)
 	}
 	if err != nil {
 		// Gasta o mesmo bcrypt de uma senha errada, para o tempo de resposta
 		// também não denunciar que a conta não existe.
-		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash(), []byte(input.Password))
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(input.Password))
+		if errors.Is(err, user.ErrLoginNotFound) {
+			h.guard.failed(identifier)
+		} else {
+			// Banco fora do ar: responde igual, mas fica no log.
+			log.Printf("[auth] login lookup: %v", err)
+		}
+		invalidCredentials(c)
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(foundUser.PasswordHash), []byte(input.Password)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		h.guard.failed(identifier)
+		invalidCredentials(c)
 		return
 	}
+	h.guard.succeeded(identifier)
 
 	accessToken, err := h.service.GenerateAccessToken(foundUser.ID)
 	if err != nil {

@@ -194,6 +194,9 @@ Numa VPS com IP público não precisa de playit, e dá para ter HTTPS de graça.
 2. **Instale** Docker (repositório oficial), `caddy` e `rsync`.
 3. **`/opt/concord/.env`** (a partir do `backend/.env.example`):
    - `HOST=127.0.0.1`, para o backend escutar só local, atrás do Caddy;
+     com isso o backend confia no `X-Forwarded-For` só quando a conexão vem
+     do loopback (o Caddy), e o limite de tentativas de login usa o IP real.
+     `TRUSTED_PROXIES` troca essa escolha (veja o `.env.example`);
    - `LIVEKIT_NODE_IP` com o IP público da VPS;
    - `LIVEKIT_UDP_PORT=7882` e `LIVEKIT_TCP_PORT=7881` (sem túnel, as portas
      são as mesmas);
@@ -327,6 +330,9 @@ Permitir notificações**.
    `docker run -d --restart unless-stopped --name concord-relay --network host alpine/socat TCP-LISTEN:<PORT>,fork,reuseaddr TCP:<IP-da-VPS>:8080`.
    Na VPS, um bloco `:8080 { reverse_proxy 127.0.0.1:8090 }` no Caddy recebe
    esse tráfego. Assim o endereço antigo (playit) continua funcionando.
+   Enquanto o repasse existir, todo mundo que chega por ele aparece com o IP
+   do PC antigo e divide o limite de 30 tentativas de login a cada 5 minutos
+   por IP.
 4. Publique uma versão nova com o `PUBLIC_URL` da VPS. Os apps antigos se
    atualizam pelo endereço antigo e passam a falar direto com a VPS.
 5. Quando todos estiverem na versão nova, desligue o repasse, o playit e o
