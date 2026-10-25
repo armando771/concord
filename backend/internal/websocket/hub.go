@@ -198,16 +198,22 @@ func (h *Hub) BroadcastToRoom(room string, event []byte) {
 func (h *Hub) BroadcastToRoomsExcept(rooms []string, exceptUserID string, event []byte) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	sent := make(map[*Client]struct{})
+	// Uma sala só (canal) não tem como repetir conexão.
+	var sent map[*Client]struct{}
+	if len(rooms) > 1 {
+		sent = make(map[*Client]struct{})
+	}
 	for _, room := range rooms {
 		for client := range h.rooms[room] {
 			if client.userID == exceptUserID {
 				continue
 			}
-			if _, ok := sent[client]; ok {
-				continue
+			if sent != nil {
+				if _, ok := sent[client]; ok {
+					continue
+				}
+				sent[client] = struct{}{}
 			}
-			sent[client] = struct{}{}
 			select {
 			case client.send <- event:
 			default:

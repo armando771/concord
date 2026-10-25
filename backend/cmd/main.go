@@ -214,7 +214,7 @@ func main() {
 
 	// WebSocket handler
 	// "Fulano está digitando…": mesma regra de escrita das mensagens.
-	typing := websocket.NewTyping(hub, roomAccess, conversationRepository, userService.FindByID)
+	typing := websocket.NewTyping(hub, roomAccess, userService.FindByID)
 	wsHandler := websocket.WsHandler(hub, authService, channelService, serverService, conversationService, callService, typing)
 	hub.SetDisconnectHandler(callService.HandleDisconnect)
 

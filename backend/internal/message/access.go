@@ -56,12 +56,19 @@ func (a *ServiceRoomAccess) CanRead(ctx context.Context, room Room, userID strin
 }
 
 func (a *ServiceRoomAccess) CanWrite(ctx context.Context, room Room, userID string) error {
+	_, err := a.WriteParticipants(ctx, room, userID)
+	return err
+}
+
+// WriteParticipants aplica a regra de CanWrite e, numa DM, devolve os dois
+// participantes lidos na mesma consulta (canal: nil). Usado pelo "digitando".
+func (a *ServiceRoomAccess) WriteParticipants(ctx context.Context, room Room, userID string) ([]string, error) {
 	if room.ChannelID != "" {
-		return a.channelMember(ctx, room.ChannelID, userID)
+		return nil, a.channelMember(ctx, room.ChannelID, userID)
 	}
 	otherUserID, err := a.conversationOther(ctx, room.ConversationID, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// DM liberada entre amigos ou entre quem divide um servidor.
@@ -69,10 +76,10 @@ func (a *ServiceRoomAccess) CanWrite(ctx context.Context, room Room, userID stri
 	if !areFriends {
 		shares, err := a.servers.SharesServer(ctx, userID, otherUserID)
 		if err != nil || !shares {
-			return ErrCannotMessage
+			return nil, ErrCannotMessage
 		}
 	}
-	return nil
+	return []string{userID, otherUserID}, nil
 }
 
 func (a *ServiceRoomAccess) channelMember(ctx context.Context, channelID string, userID string) error {
