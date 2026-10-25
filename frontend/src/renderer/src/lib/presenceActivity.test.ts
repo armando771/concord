@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activityElapsed, activityLine, sanitizeActivity } from './presenceActivity'
+import { activityElapsed, activityLine, playingFriends, sanitizeActivity } from './presenceActivity'
 
 const game = { name: 'VALORANT', kind: 'game' as const, started_at: 0 }
 
@@ -60,5 +60,16 @@ describe('activityLine', () => {
       kind: 'status',
       text: 'Online'
     })
+  })
+})
+
+describe('playingFriends', () => {
+  it('só quem joga, o mais recente primeiro', () => {
+    const friends = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+    const byUser = {
+      a: { name: 'X', kind: 'game' as const, started_at: 10 },
+      c: { name: 'Y', kind: 'game' as const, started_at: 20 }
+    }
+    expect(playingFriends(friends, byUser).map((p) => p.friend.id)).toEqual(['c', 'a'])
   })
 })

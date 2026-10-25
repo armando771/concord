@@ -50,3 +50,16 @@ export function activityLine(user: {
   if (note) return { kind: 'note', text: note }
   return { kind: 'status', text: user.statusLabel }
 }
+
+/** Amigos jogando agora, do que começou há menos tempo para o mais antigo. */
+export function playingFriends<T extends { id: string }>(
+  friends: readonly T[],
+  byUser: Readonly<Record<string, PresenceActivity>>
+): { friend: T; activity: PresenceActivity }[] {
+  const list: { friend: T; activity: PresenceActivity }[] = []
+  for (const friend of friends) {
+    const activity = byUser[friend.id]
+    if (activity) list.push({ friend, activity })
+  }
+  return list.sort((a, b) => b.activity.started_at - a.activity.started_at)
+}

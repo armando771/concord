@@ -7,6 +7,7 @@ import {
 } from '../../../api/users'
 import { Toggle } from '../../AppSettings'
 import { useFriendStore } from '../../../store/friendStore'
+import { usePresenceActivityStore } from '../../../store/presenceActivityStore'
 import { useSettingsStore } from '../../../store/settingsStore'
 import { useUIStore } from '../../../store/uiStore'
 import { showToast } from '../../../store/toastStore'
@@ -41,6 +42,8 @@ export function PrivacySection(): React.JSX.Element {
   const [saving, setSaving] = useState(false)
   const blockedCount = useFriendStore((s) => s.blocked.length)
   const loadFriends = useFriendStore((s) => s.loadAll)
+  const showActivity = usePresenceActivityStore((s) => s.enabled)
+  const setShowActivity = usePresenceActivityStore((s) => s.setEnabled)
 
   useEffect(() => {
     let cancelled = false
@@ -118,6 +121,18 @@ export function PrivacySection(): React.JSX.Element {
           onChange={() => void save({ ...privacy, allow_server_dms: !privacy.allow_server_dms })}
         />
       </section>
+
+      {window.api?.games && (
+        <section className="border-b border-white/10 pb-6">
+          <SectionTitle>Atividade</SectionTitle>
+          <Toggle
+            title="Mostrar o jogo que estou jogando"
+            description="Amigos e membros de servidores em comum veem o jogo em andamento embaixo do seu nome. Só jogos conhecidos são detectados; nada mais sai do seu computador."
+            checked={showActivity}
+            onChange={() => setShowActivity(!showActivity)}
+          />
+        </section>
+      )}
 
       <section>
         <SectionTitle>Usuários bloqueados</SectionTitle>

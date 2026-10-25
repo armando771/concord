@@ -22,6 +22,9 @@ import { STATUS_META } from '../lib/presenceStatus'
 import { friendRequestError } from '../lib/relationship'
 import { showToast } from '../store/toastStore'
 import { ActivityLine } from '../components/ActivityLine'
+import { ActivityCard } from '../components/ActivityCard'
+import { playingFriends } from '../lib/presenceActivity'
+import { usePresenceActivityStore } from '../store/presenceActivityStore'
 import type { PendingRequest } from '../api/friends'
 
 const MAIN_BG = '#07080b'
@@ -330,6 +333,9 @@ function AddFriend(): React.JSX.Element {
 
 /** Coluna "Ativo agora": amigos em canais de voz que o app conhece. */
 function ActiveNow({ friends }: { friends: PublicUser[] }): React.JSX.Element {
+  const navigate = useNavigate()
+  const byUser = usePresenceActivityStore((s) => s.byUser)
+  const playing = useMemo(() => playingFriends(friends, byUser), [friends, byUser])
   const serverCalls = useCallStore((s) => s.serverCalls)
   const inVoice = useMemo(() => {
     const ids = new Set<string>()
@@ -341,6 +347,21 @@ function ActiveNow({ friends }: { friends: PublicUser[] }): React.JSX.Element {
 
   return (
     <aside className="hidden w-[360px] shrink-0 border-l border-white/6 px-4 py-4 xl:block">
+      {playing.length > 0 && (
+        <>
+          <h2 className="text-ds-lg font-bold text-white">Atividade — {playing.length}</h2>
+          <div className="mt-3 mb-6 flex flex-col gap-2">
+            {playing.map(({ friend, activity }) => (
+              <ActivityCard
+                key={friend.id}
+                user={friend}
+                activity={activity}
+                onClick={() => navigate(`/dm/${friend.id}`)}
+              />
+            ))}
+          </div>
+        </>
+      )}
       <h2 className="text-ds-lg font-bold text-white">Ativo agora</h2>
       {inVoice.length === 0 ? (
         <div className="mt-4 text-center">
