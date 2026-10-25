@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuthStore } from '../../store/authStore'
 import { useLevelStore } from '../../store/levelStore'
 import { levelUpEffects, RAINBOW, type MilestoneKind } from '../../lib/levels'
+import { canvasScale } from '../../lib/canvasBudget'
+import { useCallStore } from '../../store/callStore'
 import { buildScene, DRAWS_NUMBER, IMPACT_MS } from './milestoneScenes'
 import Crown from './Crown'
 
@@ -70,33 +72,52 @@ function LevelUpMilestone(): React.JSX.Element | null {
     if (!canvas || !milestone || !fx || !layout || reduced) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
-    canvas.width = Math.round(layout.w * dpr)
-    canvas.height = Math.round(layout.h * dpr)
-    const scene = buildScene(milestone.kind, {
-      ...layout,
-      level: milestone.level,
-      color: milestone.tier.color,
-      accent: milestone.tier.accent,
-      colors: fx.colors,
-      budget: fx.milestoneParticles,
-      power: fx.power,
-      durationMs: milestone.durationMs
+    // Resolução por área (~2 MP no máximo) e 1× durante a call, que é quando
+    // os marcos tocam de verdade (o XP de voz só vem com a call ativa).
+    const scale = canvasScale({
+      dpr: window.devicePixelRatio,
+      w: layout.w,
+      h: layout.h,
+      inCall: useCallStore.getState().status === 'active'
     })
+    canvas.width = Math.round(layout.w * scale)
+    canvas.height = Math.round(layout.h * scale)
+    canvas.dataset.scale = String(scale)
+    const scene = buildScene(
+      milestone.kind,
+      {
+        ...layout,
+        level: milestone.level,
+        color: milestone.tier.color,
+        accent: milestone.tier.accent,
+        colors: fx.colors,
+        budget: fx.milestoneParticles,
+        power: fx.power,
+        durationMs: milestone.durationMs
+      },
+      ctx
+    )
     canvas.dataset.particles = String(scene.particles)
     let raf = 0
     let start: number | null = null
     const frame = (now: number): void => {
       if (start === null) start = now
       const t = now - start
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.setTransform(scale, 0, 0, scale, 0, 0)
+      ctx.globalAlpha = 1
+      ctx.globalCompositeOperation = 'source-over'
       ctx.clearRect(0, 0, layout.w, layout.h)
       if (t >= milestone.durationMs) return // acabou: não pede outro quadro
       scene.draw(ctx, t)
       raf = requestAnimationFrame(frame)
     }
     raf = requestAnimationFrame(frame)
-    return () => cancelAnimationFrame(raf)
+    return () => {
+      cancelAnimationFrame(raf)
+      // Libera a memória do canvas já na desmontagem (sem esperar o GC).
+      canvas.width = 0
+      canvas.height = 0
+    }
   }, [milestone, fx, layout, reduced])
 
   if (!celebration || !fx || !milestone || !layout || doneKey === celebration.key) return null

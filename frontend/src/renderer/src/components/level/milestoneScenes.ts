@@ -62,6 +62,7 @@ const easeOutBack = (x: number): number => {
 const window4 = (t: number, a: number, b: number, c: number, d: number): number =>
   Math.min(prog(t, a, b), 1 - prog(t, c, d))
 
+/** "#rrggbb" + alfa → "rgba(...)". Só na montagem da cena (paradas de gradiente), nunca por quadro. */
 function hexA(hex: string, alpha: number): string {
   const h = hex.replace('#', '')
   const n = parseInt(
@@ -207,8 +208,34 @@ function pathOrder(points: { x: number; y: number }[]): { x: number; y: number }
 const tailFade = (t: number, d: number): number => 1 - prog(t, d * 0.82, d)
 
 // ---------- cenas ----------
+//
+// Regra para não alocar nada por quadro: cores são strings fixas (a
+// transparência vai em ctx.globalAlpha), gradientes são criados uma vez na
+// montagem (os que se mexem, em coordenadas locais + translate) e pontos
+// temporários reaproveitam o mesmo objeto.
 
-type Builder = (s: SceneInput, r: () => number) => Scene
+type Builder = (s: SceneInput, r: () => number, ctx: CanvasRenderingContext2D) => Scene
+
+const WHITE = '#ffffff'
+const WHITE_SOFT = 'rgba(255,255,255,.85)'
+const WHITE_LINE = 'rgba(255,255,255,.7)'
+
+interface Pt {
+  x: number
+  y: number
+}
+
+/** Ponto da curva de Bézier cúbica em `u`, escrito em `out`. */
+function bezInto(c: readonly Pt[], u: number, out: Pt): Pt {
+  const m = 1 - u
+  const a = m * m * m
+  const b = 3 * m * m * u
+  const d = 3 * m * u * u
+  const e = u * u * u
+  out.x = a * c[0].x + b * c[1].x + d * c[2].x + e * c[3].x
+  out.y = a * c[0].y + b * c[1].y + d * c[2].y + e * c[3].y
+  return out
+}
 
 /** 10 · Prata: chuva de moedas girando, algumas estouram do centro. */
 const coins: Builder = (s, r) => {
@@ -220,7 +247,6 @@ const coins: Builder = (s, r) => {
     const a = -Math.PI / 2 + (r() - 0.5) * 2.2
     const v = (0.4 + r() * 0.4) * (0.9 + s.power * 0.3)
     return {
-      burst,
       x0: burst ? s.cx : r() * s.w,
       y0: burst ? s.cy : -30 - r() * s.h * 0.6,
       vx: burst ? Math.cos(a) * v : (r() - 0.5) * 0.08,
@@ -254,16 +280,17 @@ const coins: Builder = (s, r) => {
         ctx.fillStyle = flip > 0 ? c.color : s.accent
         ctx.fill()
         ctx.lineWidth = 2
-        ctx.strokeStyle = 'rgba(255,255,255,.85)'
+        ctx.strokeStyle = WHITE_SOFT
         ctx.stroke()
         ctx.beginPath()
         ctx.arc(0, 0, c.size * 0.55, 0, Math.PI * 2)
-        ctx.strokeStyle = hexA(s.accent, 0.8)
+        ctx.globalAlpha = fade * 0.8
+        ctx.strokeStyle = s.accent
         ctx.lineWidth = 1.5
         ctx.stroke()
         ctx.restore()
         // Brilho que passa na moeda quando ela fica de frente.
-        if (flip > 0.92) sparkle(ctx, x - c.size * 0.3, y - c.size * 0.3, c.size, '#fff', fade)
+        if (flip > 0.92) sparkle(ctx, x - c.size * 0.3, y - c.size * 0.3, c.size, WHITE, fade)
       }
     }
   }
@@ -275,12 +302,18 @@ const shockwave: Builder = (s, r) => {
   const maxR = Math.hypot(s.w, s.h) * 0.62
   const rings = [0, 160, 330, 520]
   const sparks = Array.from({ length: n }, (_, i) => ({
+    cos: 0,
+    sin: 0,
     a: (i / n) * Math.PI * 2 + r() * 0.2,
     k: 0.75 + r() * 0.35,
     ring: i % 2,
     color: s.colors[i % s.colors.length],
     size: 2 + r() * 2.5
   }))
+  for (const sp of sparks) {
+    sp.cos = Math.cos(sp.a)
+    sp.sin = Math.sin(sp.a)
+  }
   const ringR = (t: number, start: number): number =>
     maxR * easeOut(prog(t, start + 100, start + 1500))
   return {
@@ -295,7 +328,8 @@ const shockwave: Builder = (s, r) => {
         ctx.save()
         ctx.translate(s.cx, s.cy)
         ctx.rotate(t * 0.0004)
-        ctx.fillStyle = hexA(s.color, ra)
+        ctx.globalAlpha = ra
+        ctx.fillStyle = s.color
         for (let i = 0; i < 14; i++) {
           ctx.rotate((Math.PI * 2) / 14)
           ctx.beginPath()
@@ -306,91 +340,75 @@ const shockwave: Builder = (s, r) => {
         }
         ctx.restore()
       }
-      rings.forEach((start, i) => {
+      for (let i = 0; i < rings.length; i++) {
+        const start = rings[i]
         const p = prog(t, start + 100, start + 1500)
-        if (p <= 0 || p >= 1) return
+        if (p <= 0 || p >= 1) continue
         const radius = ringR(t, start)
         ctx.beginPath()
         ctx.arc(s.cx, s.cy, radius, 0, Math.PI * 2)
         ctx.lineWidth = (18 - i * 3) * (1 - p) + 1
-        ctx.strokeStyle = hexA(i % 2 ? '#ffffff' : s.color, (1 - p) * 0.9 * fade)
+        ctx.globalAlpha = (1 - p) * 0.9 * fade
+        ctx.strokeStyle = i % 2 ? WHITE : s.color
         ctx.stroke()
         ctx.beginPath()
         ctx.arc(s.cx, s.cy, radius * 0.96, 0, Math.PI * 2)
         ctx.lineWidth = 2
-        ctx.strokeStyle = hexA(s.accent, (1 - p) * 0.6 * fade)
+        ctx.globalAlpha = (1 - p) * 0.6 * fade
+        ctx.strokeStyle = s.accent
         ctx.stroke()
-      })
+      }
       for (const sp of sparks) {
         const start = rings[sp.ring]
         const p = prog(t, start + 100, start + 1500)
         if (p <= 0 || p >= 1) continue
         const d = ringR(t, start) * sp.k
         const d0 = ringR(t - 40, start) * sp.k
-        const x = s.cx + Math.cos(sp.a) * d
-        const y = s.cy + Math.sin(sp.a) * d
         ctx.beginPath()
-        ctx.moveTo(s.cx + Math.cos(sp.a) * d0, s.cy + Math.sin(sp.a) * d0)
-        ctx.lineTo(x, y)
+        ctx.moveTo(s.cx + sp.cos * d0, s.cy + sp.sin * d0)
+        ctx.lineTo(s.cx + sp.cos * d, s.cy + sp.sin * d)
         ctx.lineWidth = sp.size
-        ctx.strokeStyle = hexA(sp.color, (1 - p) * fade)
+        ctx.globalAlpha = (1 - p) * fade
+        ctx.strokeStyle = sp.color
         ctx.stroke()
       }
+      ctx.globalAlpha = 1
       ctx.globalCompositeOperation = 'source-over'
     }
   }
 }
 
 /** 30 · Esmeralda: vinhas crescem dos cantos, brotam folhas e o vento as varre. */
-const vines: Builder = (s, r) => {
+const vines: Builder = (s, r, c0) => {
   const { w, h } = s
-  type P = [number, number]
-  const curves: [P, P, P, P][] = [
-    [
-      [-20, h + 20],
-      [w * 0.15, h * 0.35],
-      [w * 0.35, h * 0.85],
-      [w * 0.48, h * 0.2]
-    ],
-    [
-      [w + 20, h + 20],
-      [w * 0.85, h * 0.4],
-      [w * 0.62, h * 0.9],
-      [w * 0.54, h * 0.18]
-    ],
-    [
-      [-20, h * 0.3],
-      [w * 0.2, h * 0.1],
-      [w * 0.25, h * 0.6],
-      [w * 0.4, h * 0.5]
-    ],
-    [
-      [w + 20, h * 0.35],
-      [w * 0.8, h * 0.12],
-      [w * 0.75, h * 0.62],
-      [w * 0.6, h * 0.52]
-    ]
+  const P = (x: number, y: number): Pt => ({ x, y })
+  const curves: Pt[][] = [
+    [P(-20, h + 20), P(w * 0.15, h * 0.35), P(w * 0.35, h * 0.85), P(w * 0.48, h * 0.2)],
+    [P(w + 20, h + 20), P(w * 0.85, h * 0.4), P(w * 0.62, h * 0.9), P(w * 0.54, h * 0.18)],
+    [P(-20, h * 0.3), P(w * 0.2, h * 0.1), P(w * 0.25, h * 0.6), P(w * 0.4, h * 0.5)],
+    [P(w + 20, h * 0.35), P(w * 0.8, h * 0.12), P(w * 0.75, h * 0.62), P(w * 0.6, h * 0.52)]
   ]
-  const bez = (c: [P, P, P, P], u: number): P => {
-    const m = 1 - u
-    return [
-      m * m * m * c[0][0] + 3 * m * m * u * c[1][0] + 3 * m * u * u * c[2][0] + u * u * u * c[3][0],
-      m * m * m * c[0][1] + 3 * m * m * u * c[1][1] + 3 * m * u * u * c[2][1] + u * u * u * c[3][1]
-    ]
-  }
+  // As curvas não mudam: os pontos do traço são calculados uma vez.
+  const STEPS = 40
+  const paths = curves.map((c) =>
+    Array.from({ length: STEPS + 1 }, (_, k) => bezInto(c, k / STEPS, { x: 0, y: 0 }))
+  )
+  const tip: Pt = { x: 0, y: 0 }
   const grow = (t: number, i: number): number => easeInOut(prog(t, i * 120, 1300 + i * 120))
   const n = s.budget
+  const a: Pt = { x: 0, y: 0 }
+  const b: Pt = { x: 0, y: 0 }
   const leaves = Array.from({ length: n }, (_, i) => {
     const vine = i % curves.length
     const u = 0.08 + r() * 0.9
-    const [x, y] = bez(curves[vine], u)
-    const [x2, y2] = bez(curves[vine], Math.min(1, u + 0.01))
+    bezInto(curves[vine], u, a)
+    bezInto(curves[vine], Math.min(1, u + 0.01), b)
     return {
       vine,
       u,
-      x,
-      y,
-      tangent: Math.atan2(y2 - y, x2 - x),
+      x: a.x,
+      y: a.y,
+      tangent: Math.atan2(b.y - a.y, b.x - a.x),
       side: i % 2 ? 1 : -1,
       size: 7 + r() * 7 + s.power * 4,
       vx: 0.35 + r() * 0.5,
@@ -401,46 +419,51 @@ const vines: Builder = (s, r) => {
       color: r() < 0.7 ? s.color : s.colors[i % s.colors.length]
     }
   })
+  // Rajada de vento: gradiente fixo em coordenadas locais, movido com translate.
+  const wind = c0.createLinearGradient(-200, 0, 200, 0)
+  wind.addColorStop(0, hexA(s.color, 0))
+  wind.addColorStop(0.5, hexA(s.color, 0.16))
+  wind.addColorStop(1, hexA(s.color, 0))
   return {
     particles: n,
     draw(ctx, t) {
       const fade = tailFade(t, s.durationMs)
       const vineAlpha = 1 - prog(t, 2100, 2900)
       ctx.lineCap = 'round'
-      curves.forEach((c, i) => {
+      for (let i = 0; i < curves.length; i++) {
         const g = grow(t, i)
-        if (g <= 0 || vineAlpha <= 0) return
-        const steps = 40
-        let prev = bez(c, 0)
-        for (let k = 1; k <= steps * g; k++) {
-          const p = bez(c, k / steps)
+        if (g <= 0 || vineAlpha <= 0) continue
+        const pts = paths[i]
+        ctx.globalAlpha = 0.9 * vineAlpha
+        for (let k = 1; k <= STEPS * g; k++) {
           ctx.beginPath()
-          ctx.moveTo(prev[0], prev[1])
-          ctx.lineTo(p[0], p[1])
-          ctx.lineWidth = 9 * (1 - k / steps) + 2
-          ctx.strokeStyle = hexA(k % 2 ? s.accent : s.color, 0.9 * vineAlpha)
+          ctx.moveTo(pts[k - 1].x, pts[k - 1].y)
+          ctx.lineTo(pts[k].x, pts[k].y)
+          ctx.lineWidth = 9 * (1 - k / STEPS) + 2
+          ctx.strokeStyle = k % 2 ? s.accent : s.color
           ctx.stroke()
-          prev = p
         }
         // Gavinha enrolando na ponta.
-        const tip = bez(c, g)
+        bezInto(curves[i], g, tip)
         ctx.beginPath()
         for (let k = 0; k < 16; k++) {
-          const a = k * 0.5
+          const ang = k * 0.5
           const rad = 14 * (1 - k / 16)
-          ctx.lineTo(tip[0] + Math.cos(a) * rad, tip[1] + Math.sin(a) * rad)
+          ctx.lineTo(tip.x + Math.cos(ang) * rad, tip.y + Math.sin(ang) * rad)
         }
         ctx.lineWidth = 2
-        ctx.strokeStyle = hexA(s.color, vineAlpha * 0.8)
+        ctx.globalAlpha = vineAlpha * 0.8
+        ctx.strokeStyle = s.color
         ctx.stroke()
-      })
+      }
       for (const l of leaves) {
         const g = grow(t, l.vine)
         if (g < l.u) continue
         const pop = easeOutBack(clamp01((g - l.u) * 12))
         const lt = Math.max(0, t - l.release)
-        const x = l.x + l.vx * lt + Math.sin(l.wob + lt * 0.004) * 18 * Math.min(1, lt / 400)
-        const y = l.y + l.vy * lt + Math.cos(l.wob + lt * 0.003) * 10 * Math.min(1, lt / 400)
+        const settle = Math.min(1, lt / 400)
+        const x = l.x + l.vx * lt + Math.sin(l.wob + lt * 0.004) * 18 * settle
+        const y = l.y + l.vy * lt + Math.cos(l.wob + lt * 0.003) * 10 * settle
         ctx.save()
         ctx.translate(x, y)
         ctx.rotate(l.tangent + l.side * 1.1 + l.spin * lt)
@@ -452,7 +475,8 @@ const vines: Builder = (s, r) => {
         ctx.quadraticCurveTo(l.size * 0.6, l.size * 0.45, 0, 0)
         ctx.fillStyle = l.color
         ctx.fill()
-        ctx.strokeStyle = hexA(s.accent, 0.9)
+        ctx.globalAlpha = fade * 0.9
+        ctx.strokeStyle = s.accent
         ctx.lineWidth = 1
         ctx.beginPath()
         ctx.moveTo(0, 0)
@@ -460,23 +484,22 @@ const vines: Builder = (s, r) => {
         ctx.stroke()
         ctx.restore()
       }
-      // Rajada de vento verde atravessando.
       const sweep = prog(t, 1900, 3000)
       if (sweep > 0 && sweep < 1) {
-        const x = -s.w * 0.3 + sweep * s.w * 1.6
-        const grad = ctx.createLinearGradient(x - 200, 0, x + 200, 0)
-        grad.addColorStop(0, hexA(s.color, 0))
-        grad.addColorStop(0.5, hexA(s.color, 0.16 * fade))
-        grad.addColorStop(1, hexA(s.color, 0))
-        ctx.fillStyle = grad
-        ctx.fillRect(x - 200, 0, 400, s.h)
+        ctx.save()
+        ctx.translate(-s.w * 0.3 + sweep * s.w * 1.6, 0)
+        ctx.globalAlpha = fade
+        ctx.fillStyle = wind
+        ctx.fillRect(-200, 0, 400, s.h)
+        ctx.restore()
       }
+      ctx.globalAlpha = 1
     }
   }
 }
 
 /** 40 · Safira: uma gota cai no meio, espirra e a água ondula com bolhas. */
-const ripple: Builder = (s, r) => {
+const ripple: Builder = (s, r, c0) => {
   const impact = 460
   const splashN = Math.floor(s.budget * 0.35)
   const bubbleN = s.budget - splashN
@@ -495,29 +518,36 @@ const ripple: Builder = (s, r) => {
     delay: impact + r() * 1400
   }))
   const waves = [0, 220, 440, 660, 880, 1500, 1700]
+  const layers = [
+    { k: 1, color: s.color, lw: 5 },
+    { k: 0.94, color: WHITE, lw: 2 },
+    { k: 0.86, color: s.accent, lw: 3 }
+  ]
+  // Tinta azul funda (força no globalAlpha).
+  const tintGrad = c0.createRadialGradient(s.cx, s.cy, 0, s.cx, s.cy, maxR)
+  tintGrad.addColorStop(0, hexA(s.color, 0.6))
+  tintGrad.addColorStop(1, hexA(s.accent, 1))
   return {
     particles: s.budget,
     draw(ctx, t) {
       const fade = tailFade(t, s.durationMs)
-      // Tinta azul funda na tela.
       const tint = window4(t, 0, 400, 2200, s.durationMs) * 0.32
       if (tint > 0) {
-        const grad = ctx.createRadialGradient(s.cx, s.cy, 0, s.cx, s.cy, maxR)
-        grad.addColorStop(0, hexA(s.color, tint * 0.6))
-        grad.addColorStop(1, hexA(s.accent, tint))
-        ctx.fillStyle = grad
+        ctx.globalAlpha = tint
+        ctx.fillStyle = tintGrad
         ctx.fillRect(0, 0, s.w, s.h)
+        ctx.globalAlpha = 1
       }
       // Gota caindo.
       if (t < impact) {
-        const p = easeIn(t / impact)
-        const y = -40 + (s.cy + 40) * p
+        const y = -40 + (s.cy + 40) * easeIn(t / impact)
         ctx.save()
         ctx.translate(s.cx, y)
         ctx.scale(1, 1.6)
         ctx.beginPath()
         ctx.arc(0, 0, 9, 0, Math.PI * 2)
-        ctx.fillStyle = hexA('#ffffff', 0.95)
+        ctx.globalAlpha = 0.95
+        ctx.fillStyle = WHITE
         ctx.fill()
         ctx.restore()
         drawGlow(ctx, s.color, s.cx, y, 40, 0.8)
@@ -525,10 +555,10 @@ const ripple: Builder = (s, r) => {
       // Gota menor que volta a cair (segunda ondulação).
       const bounce = prog(t, 900, 1500)
       if (bounce > 0 && bounce < 1) {
-        const y = s.cy - Math.sin(bounce * Math.PI) * 120
         ctx.beginPath()
-        ctx.arc(s.cx, y, 6, 0, Math.PI * 2)
-        ctx.fillStyle = hexA('#ffffff', 0.9 * fade)
+        ctx.arc(s.cx, s.cy - Math.sin(bounce * Math.PI) * 120, 6, 0, Math.PI * 2)
+        ctx.globalAlpha = 0.9 * fade
+        ctx.fillStyle = WHITE
         ctx.fill()
       }
       ctx.globalCompositeOperation = 'lighter'
@@ -540,57 +570,56 @@ const ripple: Builder = (s, r) => {
         180 + 100 * s.power,
         window4(t, impact, impact + 80, impact + 100, impact + 700)
       )
-      waves.forEach((d, i) => {
-        const start = impact + d
+      for (let i = 0; i < waves.length; i++) {
+        const start = impact + waves[i]
         const p = prog(t, start, start + 1800)
-        if (p <= 0 || p >= 1) return
+        if (p <= 0 || p >= 1) continue
         const rx = maxR * easeOut(p) * (i >= 5 ? 0.6 : 1)
-        const a = (1 - p) * fade
-        for (const [k, col, lw] of [
-          [1, s.color, 5],
-          [0.94, '#ffffff', 2],
-          [0.86, s.accent, 3]
-        ] as const) {
+        ctx.globalAlpha = (1 - p) * fade * 0.9
+        for (const layer of layers) {
           ctx.beginPath()
-          ctx.ellipse(s.cx, s.cy, rx * k, rx * k * 0.36, 0, 0, Math.PI * 2)
-          ctx.lineWidth = lw * (1 - p) + 0.5
-          ctx.strokeStyle = hexA(col, a * 0.9)
+          ctx.ellipse(s.cx, s.cy, rx * layer.k, rx * layer.k * 0.36, 0, 0, Math.PI * 2)
+          ctx.lineWidth = layer.lw * (1 - p) + 0.5
+          ctx.strokeStyle = layer.color
           ctx.stroke()
         }
-      })
-      ctx.globalCompositeOperation = 'source-over'
-      for (const d of splash) {
-        const lt = t - impact
-        if (lt < 0 || lt > 1100) continue
-        const x = s.cx + d.vx * lt
-        const y = s.cy + d.vy * lt + 0.0009 * lt * lt
-        ctx.beginPath()
-        ctx.arc(x, y, d.size, 0, Math.PI * 2)
-        ctx.fillStyle = hexA('#ffffff', (1 - lt / 1100) * 0.95)
-        ctx.fill()
       }
-      for (const b of bubbles) {
-        const lt = t - b.delay
-        if (lt < 0) continue
-        const y = b.y0 - b.v * lt
+      ctx.globalCompositeOperation = 'source-over'
+      const lt = t - impact
+      if (lt >= 0 && lt <= 1100) {
+        ctx.globalAlpha = (1 - lt / 1100) * 0.95
+        ctx.fillStyle = WHITE
+        for (const d of splash) {
+          ctx.beginPath()
+          ctx.arc(s.cx + d.vx * lt, s.cy + d.vy * lt + 0.0009 * lt * lt, d.size, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      }
+      for (const bb of bubbles) {
+        const bt = t - bb.delay
+        if (bt < 0) continue
+        const y = bb.y0 - bb.v * bt
         if (y < -20) continue
-        const x = b.x + Math.sin(b.wob + lt * 0.006) * 10
+        const x = bb.x + Math.sin(bb.wob + bt * 0.006) * 10
         ctx.beginPath()
-        ctx.arc(x, y, b.size, 0, Math.PI * 2)
+        ctx.arc(x, y, bb.size, 0, Math.PI * 2)
         ctx.lineWidth = 1.5
-        ctx.strokeStyle = hexA('#ffffff', 0.7 * fade)
+        ctx.globalAlpha = 0.7 * fade
+        ctx.strokeStyle = WHITE
         ctx.stroke()
         ctx.beginPath()
-        ctx.arc(x - b.size * 0.35, y - b.size * 0.35, b.size * 0.25, 0, Math.PI * 2)
-        ctx.fillStyle = hexA('#ffffff', 0.8 * fade)
+        ctx.arc(x - bb.size * 0.35, y - bb.size * 0.35, bb.size * 0.25, 0, Math.PI * 2)
+        ctx.globalAlpha = 0.8 * fade
+        ctx.fillStyle = WHITE
         ctx.fill()
       }
+      ctx.globalAlpha = 1
     }
   }
 }
 
 /** 50 · Ametista: cristais voam das bordas e montam o número, brilham e estilhaçam. */
-const crystals: Builder = (s, r) => {
+const crystals: Builder = (s, r, c0) => {
   const glintN = Math.min(10, Math.floor(s.budget * 0.15))
   const targets = textPoints(String(s.level), s.fontPx, s.budget - glintN, s.cx, s.cy, 'outline')
   const far = Math.hypot(s.w, s.h) * 0.6
@@ -618,6 +647,13 @@ const crystals: Builder = (s, r) => {
     size: 8 + r() * 10
   }))
   const shatter = s.durationMs * 0.7
+  const text = String(s.level)
+  const font = `900 ${s.fontPx}px system-ui, sans-serif`
+  // Vidro de ametista do número (força no globalAlpha).
+  const glassGrad = c0.createLinearGradient(0, s.cy - s.fontPx / 2, 0, s.cy + s.fontPx / 2)
+  glassGrad.addColorStop(0, hexA(WHITE, 0.55))
+  glassGrad.addColorStop(0.5, hexA(s.color, 0.5))
+  glassGrad.addColorStop(1, hexA(s.accent, 0.6))
   return {
     particles: shards.length + glints.length,
     draw(ctx, t) {
@@ -630,20 +666,15 @@ const crystals: Builder = (s, r) => {
         s.fontPx * 1.6,
         window4(t, 600, 1400, shatter, shatter + 300) * 0.55
       )
-      // Vidro de ametista preenchendo o número quando os cristais chegam.
       const glass = window4(t, 1000, 1700, shatter - 100, shatter + 150) * fade
       if (glass > 0) {
-        ctx.save()
-        ctx.font = `900 ${s.fontPx}px system-ui, sans-serif`
+        ctx.font = font
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
-        const grad = ctx.createLinearGradient(0, s.cy - s.fontPx / 2, 0, s.cy + s.fontPx / 2)
-        grad.addColorStop(0, hexA('#ffffff', 0.55 * glass))
-        grad.addColorStop(0.5, hexA(s.color, 0.5 * glass))
-        grad.addColorStop(1, hexA(s.accent, 0.6 * glass))
-        ctx.fillStyle = grad
-        ctx.fillText(String(s.level), s.cx, s.cy)
-        ctx.restore()
+        ctx.globalAlpha = glass
+        ctx.fillStyle = glassGrad
+        ctx.fillText(text, s.cx, s.cy)
+        ctx.globalAlpha = 1
       }
       const band = prog(t, 1500, 2300) // brilho que atravessa o número
       const bandX = s.cx - s.fontPx * 1.5 + band * s.fontPx * 3
@@ -660,49 +691,55 @@ const crystals: Builder = (s, r) => {
           rot += sh.spin * lt
         }
         const lit = band > 0 && band < 1 && Math.abs(x + (y - s.cy) * 0.5 - bandX) < s.fontPx * 0.25
+        const alpha = fade * Math.min(1, p * 2)
         ctx.save()
         ctx.translate(x, y)
         ctx.rotate(rot)
-        ctx.globalAlpha = fade * Math.min(1, p * 2)
+        ctx.globalAlpha = alpha
         ctx.beginPath()
         ctx.moveTo(0, -sh.size)
         ctx.lineTo(sh.size * 0.6, sh.size * 0.2)
         ctx.lineTo(0, sh.size * 0.9)
         ctx.lineTo(-sh.size * 0.6, sh.size * 0.1)
         ctx.closePath()
-        ctx.fillStyle = lit ? '#ffffff' : sh.color
+        ctx.fillStyle = lit ? WHITE : sh.color
         ctx.fill()
         ctx.lineWidth = 1
-        ctx.strokeStyle = 'rgba(255,255,255,.7)'
+        ctx.strokeStyle = WHITE_LINE
         ctx.stroke()
         ctx.beginPath()
         ctx.moveTo(0, -sh.size)
         ctx.lineTo(0, sh.size * 0.9)
-        ctx.strokeStyle = hexA(s.accent, 0.8)
+        ctx.globalAlpha = alpha * 0.8
+        ctx.strokeStyle = s.accent
         ctx.stroke()
         ctx.restore()
       }
       for (const g of glints) {
         const a = window4(t, g.t0, g.t0 + 150, g.t0 + 200, g.t0 + 600)
-        sparkle(ctx, g.x, g.y, g.size, '#ffffff', a * fade, t * 0.003)
+        sparkle(ctx, g.x, g.y, g.size, WHITE, a * fade, t * 0.003)
       }
     }
   }
 }
 
 /** 60 · Rubi: explosão de fogo no centro, labaredas subindo e brasas flutuando. */
-const fire: Builder = (s, r) => {
+const fire: Builder = (s, r, c0) => {
   const flameN = Math.floor(s.budget * 0.55)
   const emberN = s.budget - flameN
   const fireColors = ['#fff3b0', '#fbbf24', '#f97316', s.color, s.accent]
-  const flames = Array.from({ length: flameN }, () => ({
-    a: -Math.PI / 2 + (r() - 0.5) * 1.6,
-    v: 0.3 + r() * 0.45,
-    life: 700 + r() * 600,
-    offset: r() * 1100,
-    size: 30 + r() * 40 + s.power * 20,
-    wob: r() * Math.PI * 2
-  }))
+  const flames = Array.from({ length: flameN }, () => {
+    const a = -Math.PI / 2 + (r() - 0.5) * 1.6
+    return {
+      cos: Math.cos(a),
+      sin: Math.sin(a),
+      v: 0.3 + r() * 0.45,
+      life: 700 + r() * 600,
+      offset: r() * 1100,
+      size: 30 + r() * 40 + s.power * 20,
+      wob: r() * Math.PI * 2
+    }
+  })
   const embers = Array.from({ length: emberN }, () => {
     const a = r() * Math.PI * 2
     const v = 0.5 + r() * 0.8
@@ -720,19 +757,22 @@ const fire: Builder = (s, r) => {
   const baseY = s.cy + s.fontPx * 0.5
   const colorAt = (k: number): string =>
     fireColors[Math.min(fireColors.length - 1, Math.floor(k * fireColors.length))]
+  // Calor no fundo (força no globalAlpha).
+  const heatGrad = c0.createRadialGradient(s.cx, s.cy, 0, s.cx, s.cy, Math.max(s.w, s.h) * 0.7)
+  heatGrad.addColorStop(0, hexA(s.color, 1))
+  heatGrad.addColorStop(0.5, hexA(s.accent, 0.5))
+  heatGrad.addColorStop(1, hexA(s.accent, 0))
+  const ringMax = Math.max(s.w, s.h) * 0.5
   return {
     particles: s.budget,
     draw(ctx, t) {
       const fade = tailFade(t, s.durationMs)
-      // Calor no fundo.
       const heat = window4(t, 0, 200, 1400, 2600) * 0.35
       if (heat > 0) {
-        const grad = ctx.createRadialGradient(s.cx, s.cy, 0, s.cx, s.cy, Math.max(s.w, s.h) * 0.7)
-        grad.addColorStop(0, hexA(s.color, heat))
-        grad.addColorStop(0.5, hexA(s.accent, heat * 0.5))
-        grad.addColorStop(1, hexA(s.accent, 0))
-        ctx.fillStyle = grad
+        ctx.globalAlpha = heat
+        ctx.fillStyle = heatGrad
         ctx.fillRect(0, 0, s.w, s.h)
+        ctx.globalAlpha = 1
       }
       ctx.globalCompositeOperation = 'lighter'
       drawGlow(ctx, '#fbbf24', s.cx, s.cy, 260 + 140 * s.power, window4(t, 0, 80, 100, 600))
@@ -740,30 +780,36 @@ const fire: Builder = (s, r) => {
       const ring = prog(t, 60, 900)
       if (ring > 0 && ring < 1) {
         ctx.beginPath()
-        ctx.arc(s.cx, s.cy, easeOut(ring) * Math.max(s.w, s.h) * 0.5, 0, Math.PI * 2)
+        ctx.arc(s.cx, s.cy, easeOut(ring) * ringMax, 0, Math.PI * 2)
         ctx.lineWidth = 10 * (1 - ring) + 1
-        ctx.strokeStyle = hexA(s.color, 1 - ring)
+        ctx.globalAlpha = 1 - ring
+        ctx.strokeStyle = s.color
         ctx.stroke()
+        ctx.globalAlpha = 1
       }
-      // Labaredas: cada uma nasce de novo no centro enquanto o fogo dura.
+      // Labaredas: cada uma nasce de novo embaixo enquanto o fogo dura.
       const burning = 1 - prog(t, 1400, 2200)
-      for (const f of flames) {
-        if (t < f.offset * 0.15) continue
-        const lt = (t + f.offset) % f.life
-        const k = lt / f.life
-        const d = f.v * lt
-        const x = s.cx + Math.cos(f.a) * d * 1.3 + Math.sin(f.wob + t * 0.01) * 6
-        const y = baseY + Math.sin(f.a) * d - 0.00025 * lt * lt
-        drawGlow(ctx, colorAt(k), x, y, f.size * (1 - k * 0.7), (1 - k) * 0.85 * burning)
+      if (burning > 0) {
+        for (const f of flames) {
+          if (t < f.offset * 0.15) continue
+          const lt = (t + f.offset) % f.life
+          const k = lt / f.life
+          const d = f.v * lt
+          const x = s.cx + f.cos * d * 1.3 + Math.sin(f.wob + t * 0.01) * 6
+          const y = baseY + f.sin * d - 0.00025 * lt * lt
+          drawGlow(ctx, colorAt(k), x, y, f.size * (1 - k * 0.7), (1 - k) * 0.85 * burning)
+        }
       }
-      for (const e of embers) {
-        const lt = t - 80
-        if (lt < 0 || lt > e.life) continue
+      const lt = t - 80
+      if (lt >= 0) {
         const drag = 1 - Math.exp(-lt / 350)
-        const x = s.cx + e.vx * 350 * drag + Math.sin(e.wob + lt * 0.004) * 14
-        const y = s.cy + e.vy * 350 * drag - e.rise * lt
-        const a = (1 - lt / e.life) * fade * (0.6 + 0.4 * Math.sin(lt * 0.03 + e.wob))
-        drawGlow(ctx, e.color, x, y, e.size * 4, a)
+        for (const e of embers) {
+          if (lt > e.life) continue
+          const x = s.cx + e.vx * 350 * drag + Math.sin(e.wob + lt * 0.004) * 14
+          const y = s.cy + e.vy * 350 * drag - e.rise * lt
+          const a = (1 - lt / e.life) * fade * (0.6 + 0.4 * Math.sin(lt * 0.03 + e.wob))
+          drawGlow(ctx, e.color, x, y, e.size * 4, a)
+        }
       }
       ctx.globalCompositeOperation = 'source-over'
     }
@@ -771,62 +817,80 @@ const fire: Builder = (s, r) => {
 }
 
 /** 70 · Diamante: um feixe branco bate no diamante e se abre num leque de arco-íris. */
-const prism: Builder = (s, r) => {
+const prism: Builder = (s, r, c0) => {
   const n = s.budget
   const spectrum = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#60a5fa', '#818cf8', '#c084fc']
   const len = Math.hypot(s.w, s.h)
-  const glints = Array.from({ length: n }, () => ({
-    a: r() * Math.PI * 2,
-    d: 80 + r() * len * 0.5,
-    size: 4 + r() * 9,
-    color: r() < 0.5 ? '#ffffff' : s.color
-  }))
+  const glints = Array.from({ length: n }, () => {
+    const a = r() * Math.PI * 2
+    const d = 80 + r() * len * 0.5
+    return {
+      a,
+      d,
+      x: s.cx + Math.cos(a) * d,
+      y: s.cy + Math.sin(a) * d,
+      size: 4 + r() * 9,
+      color: r() < 0.5 ? WHITE : s.color
+    }
+  })
   const gem = 34 + 16 * s.power
+  const spread = 0.05 + 0.03 * s.power
   const beamAngle = (i: number, t: number): number =>
     -0.55 + (i / (spectrum.length - 1)) * 1.1 + Math.PI * 0.12 + prog(t, 1200, 3000) * Math.PI * 1.1
+  // Um gradiente radial por cor do leque, criados uma vez.
+  const beams = spectrum.map((color) => {
+    const g = c0.createRadialGradient(s.cx, s.cy, 0, s.cx, s.cy, len)
+    g.addColorStop(0, hexA(color, 0.75))
+    g.addColorStop(1, hexA(color, 0))
+    return g
+  })
+  const gemGrad = c0.createLinearGradient(-gem, -gem, gem, gem)
+  gemGrad.addColorStop(0, WHITE)
+  gemGrad.addColorStop(0.5, s.color)
+  gemGrad.addColorStop(1, s.accent)
+  const inLayers = [
+    { lw: 18, a: 0.12 },
+    { lw: 7, a: 0.4 },
+    { lw: 2.5, a: 1 }
+  ]
+  const sx = s.cx - len * 0.5
+  const sy = s.cy - len * 0.32
   return {
     particles: n,
     draw(ctx, t) {
       const fade = tailFade(t, s.durationMs)
       // Feixe de entrada (do canto de cima à esquerda).
       const inP = easeOut(prog(t, 150, 650))
-      const sx = s.cx - len * 0.5
-      const sy = s.cy - len * 0.32
       if (inP > 0) {
         ctx.globalCompositeOperation = 'lighter'
         ctx.beginPath()
         ctx.moveTo(sx, sy)
         ctx.lineTo(sx + (s.cx - sx) * inP, sy + (s.cy - sy) * inP)
         ctx.lineCap = 'round'
-        for (const [lw, a] of [
-          [18, 0.12],
-          [7, 0.4],
-          [2.5, 1]
-        ] as const) {
-          ctx.lineWidth = lw
-          ctx.strokeStyle = hexA('#ffffff', a * fade)
+        ctx.strokeStyle = WHITE
+        for (const layer of inLayers) {
+          ctx.lineWidth = layer.lw
+          ctx.globalAlpha = layer.a * fade
           ctx.stroke()
         }
       }
       // Leque de cores saindo do diamante e girando pela tela.
       const out = easeOut(prog(t, 600, 1200))
       if (out > 0) {
-        spectrum.forEach((color, i) => {
+        const l = len * out
+        ctx.globalAlpha = fade
+        for (let i = 0; i < beams.length; i++) {
           const a = beamAngle(i, t)
-          const spread = 0.05 + 0.03 * s.power
-          const l = len * out
           ctx.beginPath()
           ctx.moveTo(s.cx, s.cy)
           ctx.lineTo(s.cx + Math.cos(a - spread) * l, s.cy + Math.sin(a - spread) * l)
           ctx.lineTo(s.cx + Math.cos(a + spread) * l, s.cy + Math.sin(a + spread) * l)
           ctx.closePath()
-          const grad = ctx.createRadialGradient(s.cx, s.cy, 0, s.cx, s.cy, l)
-          grad.addColorStop(0, hexA(color, 0.75 * fade))
-          grad.addColorStop(1, hexA(color, 0))
-          ctx.fillStyle = grad
+          ctx.fillStyle = beams[i]
           ctx.fill()
-        })
+        }
       }
+      ctx.globalAlpha = 1
       ctx.globalCompositeOperation = 'source-over'
       // O diamante.
       const pop = easeOutBack(prog(t, 0, 450))
@@ -844,14 +908,10 @@ const prism: Builder = (s, r) => {
         ctx.lineTo(g, -g * 0.35)
         ctx.lineTo(0, g)
         ctx.closePath()
-        const grad = ctx.createLinearGradient(-g, -g, g, g)
-        grad.addColorStop(0, '#ffffff')
-        grad.addColorStop(0.5, s.color)
-        grad.addColorStop(1, s.accent)
-        ctx.fillStyle = grad
+        ctx.fillStyle = gemGrad
         ctx.fill()
         ctx.lineWidth = 2
-        ctx.strokeStyle = '#ffffff'
+        ctx.strokeStyle = WHITE
         ctx.stroke()
         ctx.beginPath()
         ctx.moveTo(-g, -g * 0.35)
@@ -862,14 +922,15 @@ const prism: Builder = (s, r) => {
         ctx.lineTo(g * 0.25, -g * 0.35)
         ctx.lineTo(g * 0.5, -g * 0.8)
         ctx.lineWidth = 1
-        ctx.strokeStyle = 'rgba(255,255,255,.7)'
+        ctx.strokeStyle = WHITE_LINE
         ctx.stroke()
         ctx.restore()
-        drawGlow(ctx, '#ffffff', s.cx, s.cy, gem * 3, 0.5 * fade * (0.7 + 0.3 * Math.sin(t * 0.01)))
+        drawGlow(ctx, WHITE, s.cx, s.cy, gem * 3, 0.5 * fade * (0.7 + 0.3 * Math.sin(t * 0.01)))
       }
       // Brilhos que acendem quando um feixe passa por eles.
       if (out > 0) {
         for (const gl of glints) {
+          if (gl.d > len * out) continue
           let near = 0
           for (let i = 0; i < spectrum.length; i += 3) {
             const diff = Math.abs(
@@ -877,11 +938,10 @@ const prism: Builder = (s, r) => {
             )
             near = Math.max(near, 1 - Math.min(1, diff / 0.12))
           }
-          if (gl.d > len * out) continue
           sparkle(
             ctx,
-            s.cx + Math.cos(gl.a) * gl.d,
-            s.cy + Math.sin(gl.a) * gl.d,
+            gl.x,
+            gl.y,
             gl.size * (0.5 + near),
             gl.color,
             (0.15 + near) * fade,
@@ -894,52 +954,63 @@ const prism: Builder = (s, r) => {
 }
 
 /** 80 · Obsidiana: buraco negro suga tudo em espiral, colapsa e explode. */
-const blackhole: Builder = (s, r) => {
+const blackhole: Builder = (s, r, c0) => {
   const n = s.budget
   const collapse = 1900
   const far = Math.hypot(s.w, s.h) * 0.55
-  const motes = Array.from({ length: n }, (_, i) => ({
-    r0: 120 + r() * far,
-    a0: r() * Math.PI * 2,
-    delay: r() * 500,
-    vOut: 0.4 + r() * 0.9,
-    aOut: r() * Math.PI * 2,
-    size: 1.5 + r() * 2.5,
-    color: i % 4 === 0 ? '#ffffff' : s.colors[i % s.colors.length]
-  }))
-  const posIn = (m: (typeof motes)[number], t: number): [number, number] => {
+  const motes = Array.from({ length: n }, (_, i) => {
+    const aOut = r() * Math.PI * 2
+    return {
+      r0: 120 + r() * far,
+      a0: r() * Math.PI * 2,
+      delay: r() * 500,
+      vOut: 0.4 + r() * 0.9,
+      cosOut: Math.cos(aOut),
+      sinOut: Math.sin(aOut),
+      size: 1.5 + r() * 2.5,
+      color: i % 4 === 0 ? WHITE : s.colors[i % s.colors.length]
+    }
+  })
+  const cur: Pt = { x: 0, y: 0 }
+  const prev: Pt = { x: 0, y: 0 }
+  const posIn = (m: (typeof motes)[number], t: number, out: Pt): void => {
     const u = prog(t, m.delay, collapse)
     const rad = m.r0 * (1 - u) ** 1.2
     const a = m.a0 + 7 * u * u
-    return [s.cx + Math.cos(a) * rad, s.cy + Math.sin(a) * rad * 0.8]
+    out.x = s.cx + Math.cos(a) * rad
+    out.y = s.cy + Math.sin(a) * rad * 0.8
   }
+  // Escuridão em volta do centro (força no globalAlpha).
+  const darkGrad = c0.createRadialGradient(s.cx, s.cy, 0, s.cx, s.cy, far)
+  darkGrad.addColorStop(0, 'rgba(0,0,0,1)')
+  darkGrad.addColorStop(0.35, 'rgba(5,3,15,.7)')
+  darkGrad.addColorStop(1, 'rgba(5,3,15,.25)')
   return {
     particles: n,
     draw(ctx, t) {
       const fade = tailFade(t, s.durationMs)
-      // Tudo escurece em volta do centro.
       const dark = window4(t, 0, 900, collapse + 50, collapse + 500) * 0.7
       if (dark > 0) {
-        const grad = ctx.createRadialGradient(s.cx, s.cy, 0, s.cx, s.cy, far)
-        grad.addColorStop(0, `rgba(0,0,0,${dark})`)
-        grad.addColorStop(0.35, `rgba(5,3,15,${dark * 0.7})`)
-        grad.addColorStop(1, `rgba(5,3,15,${dark * 0.25})`)
-        ctx.fillStyle = grad
+        ctx.globalAlpha = dark
+        ctx.fillStyle = darkGrad
         ctx.fillRect(0, 0, s.w, s.h)
+        ctx.globalAlpha = 1
       }
       // Poeira em espiral (antes do disco: some atrás do horizonte).
       if (t < collapse) {
         for (const m of motes) {
           if (t < m.delay) continue
-          const [x, y] = posIn(m, t)
-          const [px, py] = posIn(m, t - 50)
+          posIn(m, t, cur)
+          posIn(m, t - 50, prev)
           ctx.beginPath()
-          ctx.moveTo(px, py)
-          ctx.lineTo(x, y)
+          ctx.moveTo(prev.x, prev.y)
+          ctx.lineTo(cur.x, cur.y)
           ctx.lineWidth = m.size
-          ctx.strokeStyle = hexA(m.color, 0.9 * prog(t, m.delay, m.delay + 300))
+          ctx.globalAlpha = 0.9 * prog(t, m.delay, m.delay + 300)
+          ctx.strokeStyle = m.color
           ctx.stroke()
         }
+        ctx.globalAlpha = 1
       }
       const hole = t < collapse ? 14 + 44 * easeIn(prog(t, 0, collapse * 0.8)) : 0
       const shrink = 1 - prog(t, collapse - 250, collapse)
@@ -950,28 +1021,30 @@ const blackhole: Builder = (s, r) => {
         ctx.scale(1, 0.35)
         ctx.rotate(t * 0.004)
         ctx.globalCompositeOperation = 'lighter'
+        ctx.globalAlpha = 0.7 * prog(t, 0, 500)
         for (let k = 0; k < 3; k++) {
           ctx.beginPath()
           ctx.arc(0, 0, (hole * 1.6 + k * 16) * shrink, k, k + Math.PI * 1.4)
           ctx.lineWidth = 6 - k * 1.5
-          ctx.strokeStyle = hexA(k === 1 ? '#ffffff' : s.color, 0.7 * prog(t, 0, 500))
+          ctx.strokeStyle = k === 1 ? WHITE : s.color
           ctx.stroke()
         }
         ctx.restore()
-        ctx.globalCompositeOperation = 'source-over'
         ctx.beginPath()
         ctx.arc(s.cx, s.cy, hole * shrink, 0, Math.PI * 2)
         ctx.fillStyle = '#000'
         ctx.fill()
         ctx.lineWidth = 2
-        ctx.strokeStyle = hexA(s.color, 0.8)
+        ctx.globalAlpha = 0.8
+        ctx.strokeStyle = s.color
         ctx.stroke()
+        ctx.globalAlpha = 1
       }
       ctx.globalCompositeOperation = 'lighter'
       // Clarão do colapso e onda da explosão.
       drawGlow(
         ctx,
-        '#ffffff',
+        WHITE,
         s.cx,
         s.cy,
         300 + 200 * s.power,
@@ -982,19 +1055,18 @@ const blackhole: Builder = (s, r) => {
         ctx.beginPath()
         ctx.arc(s.cx, s.cy, easeOut(boom) * far * 1.4, 0, Math.PI * 2)
         ctx.lineWidth = 16 * (1 - boom) + 1
-        ctx.strokeStyle = hexA(s.color, (1 - boom) * 0.9)
+        ctx.globalAlpha = (1 - boom) * 0.9
+        ctx.strokeStyle = s.color
         ctx.stroke()
+        ctx.globalAlpha = 1
       }
-      for (const m of motes) {
-        if (t < m.delay) continue
-        if (t < collapse) {
-          continue // já desenhada antes do disco
-        } else {
-          const lt = t - collapse
-          const d = m.vOut * 600 * (1 - Math.exp(-lt / 500))
-          const x = s.cx + Math.cos(m.aOut) * d
-          const y = s.cy + Math.sin(m.aOut) * d
-          drawGlow(ctx, m.color, x, y, m.size * 5, fade * (1 - prog(lt, 900, 2000)))
+      if (t >= collapse) {
+        const lt = t - collapse
+        const spread = 600 * (1 - Math.exp(-lt / 500))
+        const a = fade * (1 - prog(lt, 900, 2000))
+        for (const m of motes) {
+          const d = m.vOut * spread
+          drawGlow(ctx, m.color, s.cx + m.cosOut * d, s.cy + m.sinOut * d, m.size * 5, a)
         }
       }
       ctx.globalCompositeOperation = 'source-over'
@@ -1003,7 +1075,7 @@ const blackhole: Builder = (s, r) => {
 }
 
 /** 90 · Celestial: o céu escurece e estrelas desenham o número, ligadas por linhas. */
-const constellation: Builder = (s, r) => {
+const constellation: Builder = (s, r, c0) => {
   const shootingN = 2
   const bgN = Math.floor(s.budget * 0.3)
   const starN = s.budget - bgN - shootingN
@@ -1015,6 +1087,10 @@ const constellation: Builder = (s, r) => {
     (_, i) => contour[Math.floor(i * stride)]
   )
   const gap = Math.max(s.fontPx * 0.12, (s.fontPx / 40) * stride * 2.2)
+  // Quais vizinhas se ligam (decidido uma vez, não a cada quadro).
+  const linked = stars.map(
+    (st, i) => i > 0 && Math.hypot(st.x - stars[i - 1].x, st.y - stars[i - 1].y) <= gap
+  )
   const bg = Array.from({ length: bgN }, () => ({
     x: r() * s.w,
     y: r() * s.h,
@@ -1029,43 +1105,53 @@ const constellation: Builder = (s, r) => {
   const drawStart = 350
   const drawSpan = 1700
   const at = (i: number): number => drawStart + (i / Math.max(1, stars.length)) * drawSpan
+  // Céu (força no globalAlpha) e rastro da estrela cadente (local, com translate).
+  const nightGrad = c0.createRadialGradient(s.cx, s.cy, 0, s.cx, s.cy, Math.max(s.w, s.h) * 0.8)
+  nightGrad.addColorStop(0, 'rgb(20,14,48)')
+  nightGrad.addColorStop(1, 'rgb(6,4,20)')
+  const trail = c0.createLinearGradient(-120, -60, 0, 0)
+  trail.addColorStop(0, hexA(WHITE, 0))
+  trail.addColorStop(1, hexA(WHITE, 0.95))
   return {
     particles: stars.length + bg.length + shooting.length,
     draw(ctx, t) {
       const fade = tailFade(t, s.durationMs)
       const night = window4(t, 0, 500, s.durationMs * 0.75, s.durationMs) * 0.55
       if (night > 0) {
-        const grad = ctx.createRadialGradient(s.cx, s.cy, 0, s.cx, s.cy, Math.max(s.w, s.h) * 0.8)
-        grad.addColorStop(0, `rgba(20,14,48,${night})`)
-        grad.addColorStop(1, `rgba(6,4,20,${night})`)
-        ctx.fillStyle = grad
+        ctx.globalAlpha = night
+        ctx.fillStyle = nightGrad
         ctx.fillRect(0, 0, s.w, s.h)
-      }
-      for (const b of bg) {
-        const a = (0.4 + 0.6 * Math.abs(Math.sin(b.tw + t * 0.004))) * night * 1.6
-        ctx.fillStyle = hexA('#ffffff', a)
-        ctx.fillRect(b.x, b.y, b.size, b.size)
+        ctx.fillStyle = WHITE
+        for (const b of bg) {
+          ctx.globalAlpha = clamp01(
+            (0.4 + 0.6 * Math.abs(Math.sin(b.tw + t * 0.004))) * night * 1.6
+          )
+          ctx.fillRect(b.x, b.y, b.size, b.size)
+        }
       }
       // Linhas ligando estrela com estrela (só as vizinhas, nada de pular dígito).
       ctx.lineWidth = 1.5
+      ctx.globalAlpha = 0.55 * fade
+      ctx.strokeStyle = s.color
       for (let i = 1; i < stars.length; i++) {
-        const a = stars[i - 1]
-        const b = stars[i]
-        if (Math.hypot(b.x - a.x, b.y - a.y) > gap) continue
+        if (!linked[i]) continue
         const p = prog(t, at(i - 1), at(i))
         if (p <= 0) continue
+        const a = stars[i - 1]
+        const b = stars[i]
         ctx.beginPath()
         ctx.moveTo(a.x, a.y)
         ctx.lineTo(a.x + (b.x - a.x) * p, a.y + (b.y - a.y) * p)
-        ctx.strokeStyle = hexA(s.color, 0.55 * fade)
         ctx.stroke()
       }
+      ctx.globalAlpha = 1
       ctx.globalCompositeOperation = 'lighter'
-      stars.forEach((st, i) => {
+      const lift = prog(t, s.durationMs * 0.78, s.durationMs) * 30
+      for (let i = 0; i < stars.length; i++) {
         const p = prog(t, at(i), at(i) + 250)
-        if (p <= 0) return
+        if (p <= 0) continue
+        const st = stars[i]
         const pulse = 0.75 + 0.25 * Math.sin(t * 0.006 + i)
-        const lift = prog(t, s.durationMs * 0.78, s.durationMs) * 30
         drawGlow(
           ctx,
           i % 3 ? s.color : s.accent,
@@ -1074,22 +1160,23 @@ const constellation: Builder = (s, r) => {
           9 * easeOutBack(p) * pulse,
           fade
         )
-        sparkle(ctx, st.x, st.y - lift, 5 * p * pulse, '#ffffff', fade)
-      })
+        sparkle(ctx, st.x, st.y - lift, 5 * p * pulse, WHITE, fade)
+      }
       for (const sh of shooting) {
         const p = prog(t, sh.t0, sh.t0 + 700)
         if (p <= 0 || p >= 1) continue
         const x = sh.x0 + p * s.w * 0.5
         const y = sh.y0 + p * s.h * 0.25
-        const grad = ctx.createLinearGradient(x - 120, y - 60, x, y)
-        grad.addColorStop(0, hexA('#ffffff', 0))
-        grad.addColorStop(1, hexA('#ffffff', (1 - p) * 0.95))
+        ctx.save()
+        ctx.translate(x, y)
         ctx.beginPath()
-        ctx.moveTo(x - 120, y - 60)
-        ctx.lineTo(x, y)
+        ctx.moveTo(-120, -60)
+        ctx.lineTo(0, 0)
         ctx.lineWidth = 2
-        ctx.strokeStyle = grad
+        ctx.globalAlpha = 1 - p
+        ctx.strokeStyle = trail
         ctx.stroke()
+        ctx.restore()
         drawGlow(ctx, s.color, x, y, 14, 1 - p)
       }
       ctx.globalCompositeOperation = 'source-over'
@@ -1098,51 +1185,62 @@ const constellation: Builder = (s, r) => {
 }
 
 /** 100 · Lendário: varrida de arco-íris, aurora, fogos de artifício e varrida final. */
-const legendary: Builder = (s, r) => {
-  const rockets = 5
-  const per = Math.max(1, Math.floor((s.budget - rockets) / rockets))
+const legendary: Builder = (s, r, c0) => {
+  const rockets = Math.max(1, Math.min(5, Math.floor(s.budget / 8)))
+  const per = Math.max(0, Math.floor((s.budget - rockets) / rockets))
   const shows = Array.from({ length: rockets }, (_, i) => ({
     t0: 1000 + i * 480,
     x0: s.w * (0.2 + r() * 0.6),
     tx: s.w * (0.12 + ((i * 0.37 + r() * 0.2) % 1) * 0.76),
     ty: s.h * (0.12 + r() * 0.25),
     color: RAINBOW[i % RAINBOW.length],
-    sparks: Array.from({ length: per }, (_, k) => ({
-      a: (k / per) * Math.PI * 2 + r() * 0.2,
-      v: 0.18 + r() * 0.12 + s.power * 0.05,
-      color: k % 3 === 0 ? '#ffffff' : RAINBOW[(i + k) % RAINBOW.length]
-    }))
+    sparks: Array.from({ length: per }, (_, k) => {
+      const a = (k / per) * Math.PI * 2 + r() * 0.2
+      return {
+        a,
+        cos: Math.cos(a),
+        sin: Math.sin(a),
+        v: 0.18 + r() * 0.12 + s.power * 0.05,
+        color: k % 3 === 0 ? WHITE : RAINBOW[(i + k) % RAINBOW.length]
+      }
+    })
   }))
-  const ribbon = (ctx: CanvasRenderingContext2D, t: number, k: number, alpha: number): void => {
+  // Aurora: um gradiente de arco-íris na largura da tela (força no globalAlpha).
+  const auroraGrad = c0.createLinearGradient(0, 0, s.w, 0)
+  RAINBOW.forEach((c, i) => auroraGrad.addColorStop(i / (RAINBOW.length - 1), c))
+  const ribbonY = (x: number, t: number, k: number): number => {
     const base = s.h * (0.18 + k * 0.1)
     const amp = s.h * 0.06
-    const height = s.h * (0.22 + k * 0.05)
-    const y = (x: number): number =>
+    return (
       base +
       Math.sin(x * 0.006 + t * 0.0012 * (k + 1) + k) * amp +
       Math.sin(x * 0.013 - t * 0.002) * amp * 0.4
+    )
+  }
+  const ribbon = (ctx: CanvasRenderingContext2D, t: number, k: number): void => {
+    const height = s.h * (0.22 + k * 0.05)
     ctx.beginPath()
-    ctx.moveTo(0, y(0))
-    for (let x = 0; x <= s.w; x += 24) ctx.lineTo(x, y(x))
-    for (let x = s.w; x >= 0; x -= 24) ctx.lineTo(x, y(x) + height)
+    ctx.moveTo(0, ribbonY(0, t, k))
+    for (let x = 0; x <= s.w; x += 24) ctx.lineTo(x, ribbonY(x, t, k))
+    for (let x = s.w; x >= 0; x -= 24) ctx.lineTo(x, ribbonY(x, t, k) + height)
     ctx.closePath()
-    const grad = ctx.createLinearGradient(0, 0, s.w, 0)
-    RAINBOW.forEach((c, i) => grad.addColorStop(i / (RAINBOW.length - 1), hexA(c, alpha)))
-    ctx.fillStyle = grad
     ctx.fill()
   }
+  // Varrida: gradiente local (−bw…bw), movido com translate.
+  const bw = s.w * 0.45
+  const sweepGrad = c0.createLinearGradient(-bw, 0, bw, 0)
+  sweepGrad.addColorStop(0, hexA(RAINBOW[0], 0))
+  RAINBOW.forEach((c, i) => sweepGrad.addColorStop(0.2 + (i / RAINBOW.length) * 0.6, c))
+  sweepGrad.addColorStop(1, hexA(RAINBOW[4], 0))
   const sweep = (ctx: CanvasRenderingContext2D, p: number, rtl: boolean, alpha: number): void => {
     if (p <= 0 || p >= 1) return
-    const bw = s.w * 0.45
     const x = rtl ? s.w + bw - p * (s.w + bw * 2) : -bw + p * (s.w + bw * 2)
-    const grad = ctx.createLinearGradient(x - bw, 0, x + bw, 0)
-    grad.addColorStop(0, hexA(RAINBOW[0], 0))
-    RAINBOW.forEach((c, i) => grad.addColorStop(0.2 + (i / RAINBOW.length) * 0.6, hexA(c, alpha)))
-    grad.addColorStop(1, hexA(RAINBOW[4], 0))
     ctx.save()
     ctx.transform(1, 0, -0.35, 1, s.h * 0.17, 0)
-    ctx.fillStyle = grad
-    ctx.fillRect(x - bw, 0, bw * 2, s.h)
+    ctx.translate(x, 0)
+    ctx.globalAlpha = alpha
+    ctx.fillStyle = sweepGrad
+    ctx.fillRect(-bw, 0, bw * 2, s.h)
     ctx.restore()
   }
   return {
@@ -1152,15 +1250,13 @@ const legendary: Builder = (s, r) => {
       ctx.globalCompositeOperation = 'lighter'
       sweep(ctx, easeInOut(prog(t, 0, 900)), false, 0.35)
       const aurora = window4(t, 300, 1200, 3400, 4300) * 0.13
-      if (aurora > 0) for (let k = 0; k < 3; k++) ribbon(ctx, t, k, aurora)
-      drawGlow(
-        ctx,
-        '#ffffff',
-        s.cx,
-        s.cy,
-        280 + 120 * s.power,
-        window4(t, 350, 650, 700, 1500) * 0.6
-      )
+      if (aurora > 0) {
+        ctx.globalAlpha = aurora
+        ctx.fillStyle = auroraGrad
+        for (let k = 0; k < 3; k++) ribbon(ctx, t, k)
+        ctx.globalAlpha = 1
+      }
+      drawGlow(ctx, WHITE, s.cx, s.cy, 280 + 120 * s.power, window4(t, 350, 650, 700, 1500) * 0.6)
       for (const f of shows) {
         const climb = prog(t, f.t0, f.t0 + 450)
         if (climb <= 0) continue
@@ -1173,24 +1269,33 @@ const legendary: Builder = (s, r) => {
           ctx.moveTo(x, y)
           ctx.lineTo(x - (f.tx - f.x0) * 0.05, y + 40)
           ctx.lineWidth = 2
-          ctx.strokeStyle = hexA(f.color, 0.6)
+          ctx.globalAlpha = 0.6
+          ctx.strokeStyle = f.color
           ctx.stroke()
+          ctx.globalAlpha = 1
           continue
         }
         const lt = t - f.t0 - 450
         if (lt > 1600) continue
         drawGlow(ctx, f.color, f.tx, f.ty, 90, window4(lt, 0, 40, 60, 400))
         const a = (1 - lt / 1600) * fade
+        const d = 1000 * (1 - Math.exp(-lt / 450))
+        const fall = 0.00004 * lt * lt
         for (const sp of f.sparks) {
-          const d = sp.v * 1000 * (1 - Math.exp(-lt / 450))
-          const x = f.tx + Math.cos(sp.a) * d
-          const y = f.ty + Math.sin(sp.a) * d + 0.00004 * lt * lt
           const flicker = lt > 900 ? 0.5 + 0.5 * Math.sin(lt * 0.05 + sp.a * 10) : 1
-          drawGlow(ctx, sp.color, x, y, 6, a * flicker)
+          drawGlow(
+            ctx,
+            sp.color,
+            f.tx + sp.cos * sp.v * d,
+            f.ty + sp.sin * sp.v * d + fall,
+            6,
+            a * flicker
+          )
         }
       }
       // Varrida final de luz, da direita para a esquerda.
       sweep(ctx, easeInOut(prog(t, 3300, 4300)), true, 0.28)
+      ctx.globalAlpha = 1
       ctx.globalCompositeOperation = 'source-over'
     }
   }
@@ -1226,7 +1331,18 @@ export const IMPACT_MS: Record<MilestoneKind, number> = {
 /** Cenas que desenham o próprio número (o título em DOM só deixa o espaço). */
 export const DRAWS_NUMBER: ReadonlySet<MilestoneKind> = new Set(['crystals', 'constellation'])
 
-export function buildScene(kind: MilestoneKind, input: SceneInput): Scene {
-  const scene = BUILDERS[kind](input, rng(input.level * 7919 + 17))
-  return { draw: scene.draw, particles: Math.min(scene.particles, input.budget) }
+/**
+ * Monta a cena (partículas, gradientes e cores, uma vez só) no contexto onde
+ * ela vai ser desenhada. `particles` é a contagem real, sem ajuste.
+ */
+export function buildScene(
+  kind: MilestoneKind,
+  input: SceneInput,
+  ctx: CanvasRenderingContext2D
+): Scene {
+  const scene = BUILDERS[kind](input, rng(input.level * 7919 + 17), ctx)
+  if (import.meta.env.DEV && scene.particles > input.budget) {
+    console.error(`[milestone] ${kind}: ${scene.particles} partículas > budget ${input.budget}`)
+  }
+  return scene
 }

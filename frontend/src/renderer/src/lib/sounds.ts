@@ -246,6 +246,26 @@ export function setSoundOutput(deviceId: string): void {
   void context?.setSinkId?.(deviceId).catch(() => {})
 }
 
+/** O som de nível tocando agora (para o próximo cortar este, sem sobrepor). */
+let levelVoice: { group: GainNode; oscs: OscillatorNode[] } | null = null
+
+/** Fade curto e para as notas do som de nível que ainda está tocando. */
+function stopLevelVoice(now: number): void {
+  if (!levelVoice) return
+  const { group, oscs } = levelVoice
+  levelVoice = null
+  group.gain.cancelScheduledValues(now)
+  group.gain.setValueAtTime(group.gain.value, now)
+  group.gain.linearRampToValueAtTime(0, now + 0.04)
+  for (const osc of oscs) {
+    try {
+      osc.stop(now + 0.05)
+    } catch {
+      // já parou
+    }
+  }
+}
+
 export function playSound(name: SoundName): void {
   if (typeof AudioContext === 'undefined') return
   if (!ctx) {
@@ -253,6 +273,19 @@ export function playSound(name: SoundName): void {
     if (outputId) setSoundOutput(outputId)
   }
   void ctx.resume()
+  // Sons de nível passam por um grupo próprio: um novo corta o anterior,
+  // então dois jingles nunca tocam juntos (e nunca somam acima do teto).
+  let out: AudioNode = ctx.destination
+  let voice: { group: GainNode; oscs: OscillatorNode[] } | null = null
+  if (LEVEL_SOUNDS.includes(name)) {
+    stopLevelVoice(ctx.currentTime)
+    const group = ctx.createGain()
+    group.gain.value = 1
+    group.connect(ctx.destination)
+    out = group
+    voice = { group, oscs: [] }
+    levelVoice = voice
+  }
   const start = ctx.currentTime + 0.01
   for (const note of SOUNDS[name]) {
     const osc = ctx.createOscillator()
@@ -266,9 +299,10 @@ export function playSound(name: SoundName): void {
     gain.gain.setValueAtTime(0, t0)
     gain.gain.linearRampToValueAtTime(noteVolume(note), t0 + 0.01)
     gain.gain.exponentialRampToValueAtTime(0.0001, t1)
-    osc.connect(gain).connect(ctx.destination)
+    osc.connect(gain).connect(out)
     osc.start(t0)
     osc.stop(t1 + 0.02)
+    voice?.oscs.push(osc)
   }
 }
 

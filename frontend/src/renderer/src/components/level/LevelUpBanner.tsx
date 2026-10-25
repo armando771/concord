@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { useAuthStore } from '../../store/authStore'
 import { useLevelStore } from '../../store/levelStore'
+import { useCallStore } from '../../store/callStore'
 import { levelUpEffects, type LevelTier } from '../../lib/levels'
 import { oncePerKey, playSound } from '../../lib/sounds'
 import LevelBadge from './LevelBadge'
@@ -53,10 +54,13 @@ function LevelUpBanner(): React.JSX.Element | null {
   )
 
   // O som toca mesmo com prefers-reduced-motion (só a animação some).
+  // Um som de nível novo corta o anterior (playSound), então não se sobrepõem.
   const sound = fx?.sound
   const key = celebration?.key
   useEffect(() => {
-    if (key !== undefined && sound && firstPlay(key)) playSound(sound)
+    if (key === undefined || !sound || !firstPlay(key)) return
+    // Ensurdecido (deafen): nada de som, como no soundboard.
+    if (!useCallStore.getState().deafened) playSound(sound)
   }, [key, sound])
 
   const confetti = useMemo(() => {

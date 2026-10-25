@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MILESTONE_KINDS, milestoneFor } from './levels'
 import {
   BASE_VOLUME,
@@ -7,6 +7,7 @@ import {
   noteVolume,
   oncePerKey,
   peakVolume,
+  playSound,
   SOUNDS,
   type Note,
   type SoundName
@@ -168,5 +169,99 @@ describe('oncePerKey', () => {
     expect(first(1)).toBe(false)
     expect(first(2)).toBe(true)
     expect(first(2)).toBe(false)
+  })
+})
+
+// AudioContext de mentira: só registra o que playSound agenda.
+class FakeParam {
+  value = 1
+  ramps: { to: number; at: number }[] = []
+  setValueAtTime(v: number): void {
+    this.value = v
+  }
+  linearRampToValueAtTime(to: number, at: number): void {
+    this.ramps.push({ to, at })
+  }
+  exponentialRampToValueAtTime(to: number, at: number): void {
+    this.ramps.push({ to, at })
+  }
+  cancelled = 0
+  cancelScheduledValues(): void {
+    this.cancelled++
+  }
+}
+class FakeNode {
+  to: unknown = null
+  connect<T>(node: T): T {
+    this.to = node
+    return node
+  }
+}
+class FakeGain extends FakeNode {
+  gain = new FakeParam()
+}
+class FakeOsc extends FakeNode {
+  type = 'sine'
+  frequency = new FakeParam()
+  stops: number[] = []
+  started = 0
+  start(): void {
+    this.started++
+  }
+  stop(at: number): void {
+    this.stops.push(at)
+  }
+}
+class FakeContext {
+  static last: FakeContext
+  currentTime = 0
+  destination = { name: 'destination' }
+  oscs: FakeOsc[] = []
+  gains: FakeGain[] = []
+  constructor() {
+    FakeContext.last = this
+  }
+  createOscillator(): FakeOsc {
+    const o = new FakeOsc()
+    this.oscs.push(o)
+    return o
+  }
+  createGain(): FakeGain {
+    const g = new FakeGain()
+    this.gains.push(g)
+    return g
+  }
+  resume(): Promise<void> {
+    return Promise.resolve()
+  }
+}
+
+describe('playSound: sons de nível nunca se sobrepõem', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('um som de nível novo corta o anterior (fade curto) e os de interface não', () => {
+    vi.stubGlobal('AudioContext', FakeContext)
+    playSound('milestone-coins')
+    const ctx = FakeContext.last
+    const coins = ctx.oscs.slice()
+    expect(coins).toHaveLength(SOUNDS['milestone-coins'].length)
+
+    ctx.currentTime = 0.3
+    playSound('mute')
+    // Som de interface não mexe no jingle.
+    for (const osc of coins) expect(osc.stops).toHaveLength(1)
+
+    ctx.currentTime = 0.5
+    playSound('levelChime')
+    for (const osc of coins) {
+      expect(osc.stops.length).toBe(2)
+      expect(osc.stops[1]).toBeLessThanOrEqual(0.5 + 0.06)
+    }
+    // O grupo do jingle antigo vai a zero logo.
+    const noteGain = coins[0].to as FakeGain
+    const levelGroup = noteGain.to as FakeGain
+    const fade = levelGroup.gain.ramps.at(-1)!
+    expect(fade.to).toBe(0)
+    expect(fade.at).toBeLessThanOrEqual(0.5 + 0.05)
   })
 })

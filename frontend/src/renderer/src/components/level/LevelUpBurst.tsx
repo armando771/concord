@@ -248,7 +248,7 @@ function LevelUpBurst({
       )}
 
       {sparks.map((spark, i) => {
-        const size = (mini ? mini.size : spark.big ? 5 : 3) * dot * (spark.big ? 1 : 0.75)
+        const pieceSize = (mini ? mini.size : spark.big ? 5 : 3) * dot * (spark.big ? 1 : 0.75)
         const beam = mini?.motion === 'level-mini-beam'
         return (
           <span
@@ -262,8 +262,8 @@ function LevelUpBurst({
                 '--dy': `${spark.dy}px`,
                 '--fall': `${spark.dist * 1.2}px`,
                 '--beam': SPECTRUM[i % SPECTRUM.length],
-                width: size,
-                height: beam ? spark.dist * 1.3 : size,
+                width: pieceSize,
+                height: beam ? spark.dist * 1.3 : pieceSize,
                 background: mini && OWN_BACKGROUND.has(mini.shape) ? undefined : spark.color,
                 boxShadow: beam ? undefined : `0 0 6px ${tier.color}`,
                 animation: `${mini ? mini.motion : 'level-spark'} ${mini ? mini.ms : 1000}ms cubic-bezier(.15,.8,.3,1) ${200 + spark.delay}ms both`
