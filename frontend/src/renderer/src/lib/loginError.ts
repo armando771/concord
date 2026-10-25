@@ -32,6 +32,14 @@ export function loginErrorMessage(err: unknown): string {
   return commonMessage(status) ?? 'Falha ao entrar.'
 }
 
+/** Falhas de "esqueci a senha", redefinição e confirmação de e-mail. */
+export function emailActionErrorMessage(err: unknown): string {
+  const status = statusOf(err)
+  // O backend não diz se o link expirou, já foi usado ou nunca existiu.
+  if (status === 400) return 'Este link é inválido ou expirou. Peça um novo.'
+  return commonMessage(status) ?? 'Algo deu errado. Tente de novo.'
+}
+
 export function registerErrorMessage(err: unknown): string {
   const status = statusOf(err)
   // O backend não diz qual dos dois, para não revelar e-mails cadastrados.

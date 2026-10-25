@@ -6,6 +6,7 @@ import ServerSidebar from './ServerSidebar'
 import IncomingCallModal from './call/IncomingCallModal'
 import CallOverlay from './call/CallOverlay'
 import BirthdayModal from './BirthdayModal'
+import EmailVerifyBanner from './EmailVerifyBanner'
 import ScreenMiniPlayer from './call/ScreenMiniPlayer'
 import ScreenSharePickerModal from './call/ScreenSharePickerModal'
 import LevelUpBanner from './level/LevelUpBanner'
@@ -32,9 +33,12 @@ function AppShell(): React.JSX.Element {
     <div className="flex h-full">
       <ServerRail />
       {isServerPage ? <ServerSidebar /> : <FriendsSidebar />}
-      <main className="min-w-0 flex-1 overflow-hidden">
-        <Outlet />
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <EmailVerifyBanner />
+        <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
+          <Outlet />
+        </main>
+      </div>
       <IncomingCallModal />
       <CallOverlay />
       <BirthdayModal />

@@ -132,7 +132,10 @@ scripts/release-linux.sh 0.7.0
 Defina `PUBLIC_URL` no ambiente ou em `backend/.env`. Os artefatos ficam em
 `frontend/dist/` e os arquivos para publicação em `backend/updates/`.
 No Linux, permita a execução do AppImage e mantenha-o numa pasta sua com
-permissão de escrita. Compartilhamento de tela com áudio e inicialização
+permissão de escrita. O AppImage (e a atualização automática) precisa do FUSE 2:
+`sudo pacman -S fuse2` no Arch, `libfuse2` no Debian/Ubuntu (`libfuse2t64` no
+Ubuntu 24.04+). Não extraia o AppImage: a cópia extraída não se atualiza
+(detalhes em [docs/HOSPEDAGEM.md](docs/HOSPEDAGEM.md)). Compartilhamento de tela com áudio e inicialização
 automática com o sistema continuam exclusivos do Windows.
 
 ### Pré-requisitos
@@ -174,6 +177,9 @@ cd frontend && yarn test
 node scripts/e2e-roles-ws.mjs
 # E2E de chamadas (dois navegadores com mídia fake) — ver cabeçalho do script:
 node scripts/e2e-voice.mjs
+# E2E do deploy sem queda: reinicia o backend no meio da chamada (Caddy + LiveKit
+# locais) e confere voz, tela, LIVE, mudo e chat — ver cabeçalho do script:
+node scripts/e2e-restart-call.mjs
 # E2E do app web (login, DM com imagem, notificação, chamada + tela, reload, logout):
 APP=http://localhost:4173/ node scripts/e2e-web.mjs
 # E2E da supressão de ruído (RNNoise) e o RNNoise offline sobre um WAV:

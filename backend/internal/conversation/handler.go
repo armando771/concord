@@ -75,6 +75,10 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
+	if c.Query("include_groups") != "1" && legacyDesktopWithoutGroups(c.Request.UserAgent()) {
+		summaries = onlyDirectMessages(summaries)
+	}
+
 	c.JSON(http.StatusOK, summaries)
 }
 

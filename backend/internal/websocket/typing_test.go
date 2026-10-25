@@ -14,16 +14,24 @@ import (
 )
 
 // fakeRoomAccess libera escrita para quem estiver em allowed[sala]. Com
-// block, cada consulta espera o canal fechar (banco lento).
+// block, cada consulta espera o canal fechar (banco lento). Se started não
+// for nil, avisa nele (sem bloquear) quando uma consulta começa.
 type fakeRoomAccess struct {
 	mu           sync.Mutex
 	allowed      map[string]map[string]bool
 	participants map[string][]string
 	calls        int
 	block        chan struct{}
+	started      chan struct{}
 }
 
 func (f *fakeRoomAccess) WriteParticipants(_ context.Context, room message.Room, userID string) ([]string, error) {
+	if f.started != nil {
+		select {
+		case f.started <- struct{}{}:
+		default:
+		}
+	}
 	if f.block != nil {
 		<-f.block
 	}
@@ -370,21 +378,37 @@ func TestTypingCachesDenialBriefly(t *testing.T) {
 func TestTypingDoesNotBlockTheReadLoop(t *testing.T) {
 	block := make(chan struct{})
 	f := newTypingFixtureWith(block, 1, 2)
+	f.access.started = make(chan struct{}, 1)
 	bia := f.join("bia", "channel:c1")
 
-	done := make(chan struct{})
-	go func() {
-		// 1 no worker + 2 na fila; o resto descarta sem esperar o banco.
-		for i := 0; i < 10; i++ {
-			f.post(fmt.Sprintf("u%d", i), "typing", "channel:c1")
+	// post manda os eventos de from até to-1 e falha se o Handle travar.
+	post := func(from, to int) {
+		t.Helper()
+		done := make(chan struct{})
+		go func() {
+			for i := from; i < to; i++ {
+				f.post(fmt.Sprintf("u%d", i), "typing", "channel:c1")
+			}
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("Handle travou esperando o banco")
 		}
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("Handle travou esperando o banco")
 	}
+
+	// O primeiro só conta como "em andamento" depois que o worker o tirou da
+	// fila e está preso no banco; antes disso ele ainda ocupa a fila.
+	post(0, 1)
+	select {
+	case <-f.access.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("o worker não pegou o primeiro evento")
+	}
+
+	// 1 no worker + 2 na fila; o resto descarta sem esperar o banco.
+	post(1, 10)
 
 	f.access.mu.Lock()
 	for i := 0; i < 10; i++ {

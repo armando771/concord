@@ -17,6 +17,7 @@ type fakeStore struct {
 	convs   map[string]*Conversation
 	members map[string][]string   // conversa → ids na ordem de entrada
 	state   map[[2]string]*member // conversa, usuário
+	list    []Summary             // o que ListByUserID devolve
 }
 
 func newFakeStore() *fakeStore {
@@ -110,7 +111,7 @@ func (f *fakeStore) Delete(_ context.Context, id string) error {
 	delete(f.convs, id)
 	return nil
 }
-func (f *fakeStore) ListByUserID(context.Context, string) ([]Summary, error) { return nil, nil }
+func (f *fakeStore) ListByUserID(context.Context, string) ([]Summary, error) { return f.list, nil }
 
 // fakeFriends: amizades e bloqueios por par (ordem não importa).
 type fakeFriends struct {
