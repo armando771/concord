@@ -7,6 +7,7 @@ import { PendingDisplayRequest } from './displayPicker'
 import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './background'
 import { setupUpdater } from './updater'
 import { setupOverlay } from './overlay'
+import { closeActivity, setupActivities } from './activityWindow'
 import { APP_USER_MODEL_ID } from './toastPolicy'
 import { setupToasts } from './toasts'
 import { TITLE_BAR_COLOR, titleBarOptions } from './windowPolicy'
@@ -29,7 +30,38 @@ const pendingDisplay = new PendingDisplayRequest((err) =>
 )
 let pendingAudioRequested = false
 
+const WINDOW_WATCH_MS = 2000
+let windowWatch: NodeJS.Timeout | null = null
+
+function stopWindowWatch(): void {
+  if (windowWatch) clearInterval(windowWatch)
+  windowWatch = null
+}
+
+// Janela minimizada some da lista de janelas e o Windows para de gerar imagem
+// dela: quem assiste vê a live congelar. Avisa quem compartilha, uma vez por
+// minimização.
+function watchSharedWindow(sourceId: string): void {
+  stopWindowWatch()
+  let hidden = false
+  windowWatch = setInterval(async () => {
+    try {
+      const sources = await desktopCapturer.getSources({
+        types: ['window'],
+        thumbnailSize: { width: 0, height: 0 }
+      })
+      const missing = !sources.some((s) => s.id === sourceId)
+      if (missing && !hidden) mainWindow?.webContents.send('screen-share:window-hidden')
+      hidden = missing
+    } catch {
+      /* próxima volta tenta de novo */
+    }
+  }, WINDOW_WATCH_MS)
+}
+
 function registerScreenShareHandlers(): void {
+  ipcMain.on('screen-share:ended', stopWindowWatch)
+
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     pendingDisplay.hold(callback)
     pendingAudioRequested = request.audioRequested
@@ -79,6 +111,8 @@ function registerScreenShareHandlers(): void {
       if (mode === 'none' && source.id.startsWith('window:') && pendingAudioRequested) {
         mainWindow?.webContents.send('screen-audio:fallback', audioLogPath())
       }
+      if (source.id.startsWith('window:')) watchSharedWindow(source.id)
+      else stopWindowWatch()
       callback(mode === 'system' ? { video: source, audio: 'loopback' } : { video: source })
     } catch (err) {
       logAudio(`falha ao compartilhar ${sourceId}: ${String(err)}`)
@@ -91,6 +125,15 @@ function registerScreenShareHandlers(): void {
     pendingDisplay.deny()
   })
 }
+
+// Janela coberta/minimizada não pode ser tratada como oculta: o Windows marca
+// como "ocluída" e o Chromium para de renderizar (a captura congela).
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
+// Captura de janela/tela via Windows Graphics Capture: continua entregando
+// quadros de uma janela coberta por outra (o capturador GDI antigo congela).
+app.commandLine.appendSwitch('enable-features', 'AllowWgcWindowCapturer,AllowWgcScreenCapturer')
 
 function createWindow(): void {
   // Create the browser window.
@@ -107,7 +150,10 @@ function createWindow(): void {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      // Sem isso o Chromium reduz timers/render da janela em segundo plano e a
+      // live (captura de tela/WebRTC) trava para quem assiste.
+      backgroundThrottling: false
     }
   })
 
@@ -119,6 +165,7 @@ function createWindow(): void {
 
   mainWindow.on('closed', () => {
     pendingDisplay.deny()
+    closeActivity()
     mainWindow = null
   })
 
@@ -159,6 +206,7 @@ app.whenReady().then(() => {
   registerScreenAudio()
   setupBackground(() => mainWindow, icon)
   setupOverlay(() => mainWindow)
+  setupActivities(() => mainWindow)
   setupUpdater(() => mainWindow, {
     feedUrl: __CONCORD_UPDATE_URL__,
     publicKeyPem: __CONCORD_UPDATE_PUBKEY__

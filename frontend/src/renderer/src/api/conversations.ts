@@ -47,8 +47,10 @@ export interface ConversationDetail extends Conversation {
   members: ConversationOtherUser[]
 }
 
+// include_groups=1: este app sabe mostrar DM em grupo. Sem isso, o servidor
+// esconde os grupos de apps desktop antigos (< 0.6.15), que quebravam com eles.
 export function listConversations(): Promise<ConversationSummary[]> {
-  return request<ConversationSummary[]>('/conversations')
+  return request<ConversationSummary[]>('/conversations?include_groups=1')
 }
 
 export function getOrCreateConversationWith(userId: string): Promise<Conversation> {

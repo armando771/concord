@@ -124,9 +124,9 @@ describe('fillCsp', () => {
     )
   })
 
-  it('web: acrescenta as diretivas extras (base-uri)', () => {
+  it('web: acrescenta as diretivas extras (base-uri e frame-src só do Krunker)', () => {
     expect(
       fillCsp(html, { connectSrc: "'self'", mediaSrc: "'self' blob:", extra: WEB_EXTRA_CSP })
-    ).toContain("connect-src 'self'; base-uri 'self'\"")
+    ).toContain("connect-src 'self'; base-uri 'self'; frame-src https://krunker.io\"")
   })
 })
