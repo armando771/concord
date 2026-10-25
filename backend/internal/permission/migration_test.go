@@ -17,7 +17,7 @@ func readMigration(t *testing.T, name string) string {
 	return string(raw)
 }
 
-// A migration 000029 grava os padrões da época como números e a 000036 liga
+// A migration 000029 grava os padrões da época como números e a 000039 liga
 // os bits de apelido por cima. Somadas, têm que dar os padrões de hoje: se os
 // bits mudarem aqui, elas têm que mudar junto.
 func TestMigrationDefaultsMatchConstants(t *testing.T) {
@@ -40,10 +40,10 @@ func TestMigrationDefaultsMatchConstants(t *testing.T) {
 	}
 }
 
-// nicknameMigrationBits: o que a 000036 liga em cada cargo padrão.
+// nicknameMigrationBits: o que a 000039 liga em cada cargo padrão.
 func nicknameMigrationBits(t *testing.T) map[string]int64 {
 	t.Helper()
-	sql := readMigration(t, "000036_add_member_nicknames.up.sql")
+	sql := readMigration(t, "000039_add_member_nicknames.up.sql")
 	re := regexp.MustCompile(`UPDATE roles SET permissions = permissions \| (\d+) WHERE (.+);`)
 	targets := map[string]string{
 		"is_default":                            "@everyone",
@@ -53,7 +53,7 @@ func nicknameMigrationBits(t *testing.T) map[string]int64 {
 	for _, m := range re.FindAllStringSubmatch(sql, -1) {
 		name, ok := targets[m[2]]
 		if !ok {
-			t.Fatalf("UPDATE inesperado na 000036: %q", m[0])
+			t.Fatalf("UPDATE inesperado na 000039: %q", m[0])
 		}
 		bits, err := strconv.ParseInt(m[1], 10, 64)
 		if err != nil {
@@ -62,17 +62,17 @@ func nicknameMigrationBits(t *testing.T) map[string]int64 {
 		added[name] |= bits
 	}
 	if added["@everyone"] != ChangeNickname {
-		t.Errorf("@everyone ganha %d na 000036, want CHANGE_NICKNAME (%d)", added["@everyone"], ChangeNickname)
+		t.Errorf("@everyone ganha %d na 000039, want CHANGE_NICKNAME (%d)", added["@everyone"], ChangeNickname)
 	}
 	if added["Moderador"] != ChangeNickname|ManageNicknames {
-		t.Errorf("Moderador ganha %d na 000036, want os dois bits de apelido", added["Moderador"])
+		t.Errorf("Moderador ganha %d na 000039, want os dois bits de apelido", added["Moderador"])
 	}
 	return added
 }
 
-// O down da 000036 desliga exatamente os bits que o up ligou.
+// O down da 000039 desliga exatamente os bits que o up ligou.
 func TestNicknameMigrationDownClearsBits(t *testing.T) {
-	sql := readMigration(t, "000036_add_member_nicknames.down.sql")
+	sql := readMigration(t, "000039_add_member_nicknames.down.sql")
 	want := "permissions & ~" + strconv.FormatInt(ChangeNickname|ManageNicknames, 10)
 	if !strings.Contains(sql, want) {
 		t.Errorf("down devia ter %q", want)

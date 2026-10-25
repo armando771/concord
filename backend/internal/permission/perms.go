@@ -75,7 +75,7 @@ const All = ViewChannel | ManageChannels | ManageRoles | ManageServer | CreateIn
 	ChangeNickname | ManageNicknames
 
 // DefaultEveryone: o que qualquer membro faz num servidor novo. Nos servidores
-// que já existiam, a migration 000036 ligou o CHANGE_NICKNAME no @everyone.
+// que já existiam, a migration 000039 ligou o CHANGE_NICKNAME no @everyone.
 const DefaultEveryone = ViewChannel | SendMessages | AttachFiles | AddReactions | ReadHistory |
 	CreateInvite | Connect | Speak | Stream | UseSoundboard | ChangeNickname
 

@@ -511,7 +511,7 @@ func TestDBMigrationBackfillsExistingServers(t *testing.T) {
 	// Banco só com as migrations anteriores à 029, como produção antes dela.
 	// As posteriores (030, 031, ...) também ficam de fora: se entrassem, o
 	// banco iria para a versão mais alta e o Migrate pularia a 029 depois. A
-	// 036 (apelidos) mexe nos cargos: roda depois, junto com a 029.
+	// 039 (apelidos) mexe nos cargos: roda depois, junto com a 029.
 	dir := t.TempDir()
 	entries, err := os.ReadDir("../../migrations")
 	if err != nil {
@@ -559,7 +559,7 @@ func TestDBMigrationBackfillsExistingServers(t *testing.T) {
 		}
 	}
 
-	// Agora aplica a 029 (e a 036) em cima dos dados.
+	// Agora aplica a 029 (e a 039) em cima dos dados.
 	if err := database.Migrate(db, "../../migrations"); err != nil {
 		t.Fatal(err)
 	}
@@ -590,7 +590,7 @@ func TestDBMigrationBackfillsExistingServers(t *testing.T) {
 	if snap.Server(owner) != permission.All {
 		t.Error("o dono continua com tudo")
 	}
-	// 000036: todo mundo pode mudar o próprio apelido; o Moderador, o dos outros.
+	// 000039: todo mundo pode mudar o próprio apelido; o Moderador, o dos outros.
 	if !permission.Has(snap.Server(plain), permission.ChangeNickname) || permission.Has(snap.Server(plain), permission.ManageNicknames) {
 		t.Error("membro comum muda só o próprio apelido")
 	}
