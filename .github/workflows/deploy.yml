@@ -171,6 +171,8 @@ jobs:
             curl -fsS "${WEB_URL%/}/" | grep -q '<div id="root">'
             # Rota funda: o Caddy devolve o index.html (fallback de SPA).
             curl -fsS "${WEB_URL%/}/friends" | grep -q '<div id="root">'
+            # Link de convite (/convite/<código>) também é rota do app.
+            curl -fsS "${WEB_URL%/}/convite/ABCD2345" | grep -q '<div id="root">'
             test "$(curl -s -o /dev/null -w '%{http_code}' "${WEB_URL%/}/api/users/me")" = 401
             test "$(curl -s -o /dev/null -w '%{http_code}' "${WEB_URL%/}/rtc/validate")" = 401
             echo "App web no ar em ${WEB_URL%/}"

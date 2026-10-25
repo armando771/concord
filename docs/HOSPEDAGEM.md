@@ -298,7 +298,8 @@ ficam como estão).
    		file_server
    	}
 
-   	# O resto é o app: qualquer rota (/servers/…, /dm/…) devolve o index.html,
+   	# O resto é o app: qualquer rota (/servers/…, /dm/…, os links de convite
+   	# /convite/…) devolve o index.html,
    	# sempre revalidado para pegar a versão nova logo depois do deploy.
    	handle {
    		root * /opt/concord/web
