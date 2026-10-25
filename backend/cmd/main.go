@@ -79,6 +79,12 @@ func main() {
 	if err := database.Migrate(db, findMigrationsDir()); err != nil {
 		log.Fatalf("failed to run migrations: %v", err)
 	}
+	// `concord-server migrate`: só aplica as migrations e sai. O deploy roda
+	// assim com o binário antigo ainda no ar; se falhar, nada é reiniciado.
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		log.Println("migrations aplicadas")
+		return
+	}
 
 	// Como o gin.Default(), mas o log não grava tokens que vão na URL.
 	router := gin.New()

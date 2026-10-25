@@ -322,6 +322,39 @@ systemctl show concord-server -p KillSignal -p TimeoutStopUSec -p RestartUSec
 
 No PC de casa, `scripts/install-services.sh` já gera o serviço com isso.
 
+### Migrations: expandir e contrair
+
+As migrations (`backend/migrations`) rodam **antes** de o binário novo
+atender: o deploy roda `concord-server.new migrate` com o binário antigo
+ainda no ar e só reinicia se elas passarem (se falharem, o backend no ar não é
+tocado). Na subida, o binário confere de novo (sob um *advisory lock*) e só
+abre a porta depois. Isso significa que **o binário antigo roda com o schema
+novo**: durante o deploy e num rollback
+(`mv concord-server.prev concord-server && systemctl restart concord-server`,
+que não desfaz migration nenhuma). Por isso:
+
+1. **Só acrescentar** na release que precisa: tabela nova, coluna que aceita
+   `NULL` ou tem `DEFAULT`, índice novo. O `INSERT` do código antigo, que não
+   conhece a coluna, tem que continuar funcionando.
+2. **Nunca apagar nem renomear** na mesma release que para de usar. Release N:
+   o código para de ler e escrever a coluna. Release N+1 (ou depois): a
+   migration apaga.
+3. **Renomear é acrescentar + copiar + apagar**, em releases separadas:
+   coluna nova; código grava nas duas e lê da nova (com os dados copiados);
+   depois apaga a velha.
+4. **Restrições novas** (`NOT NULL`, `CHECK`, `UNIQUE`, tipo mais estreito) só
+   depois que nenhum binário no ar grava valores que as violem.
+5. **Curtas** (menos de ~100 ms): cada migration roda numa transação e trava a
+   tabela. Dados grandes se migram em lotes pelo código, não na migration.
+   `CREATE INDEX CONCURRENTLY` não roda dentro da transação do migrador.
+6. **Idempotentes** (`IF NOT EXISTS`, `IF EXISTS`): o migrador trata "já
+   existe" como aplicada.
+7. Escreva o `.down.sql`, mas não conte com ele num rollback: quem volta é o
+   binário, e ele tem que aguentar o schema novo (regra 1).
+8. Números de migration são únicos: com duas branches usando a mesma versão
+   (`000018_…`), uma das duas nunca roda (o migrador guarda só a última versão
+   aplicada). Renumere ao juntar.
+
 ### Postgres e LiveKit não são recriados no deploy
 
 O LiveKit roda sem Redis: as salas só existem na memória dele, então

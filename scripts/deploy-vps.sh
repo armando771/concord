@@ -91,12 +91,21 @@ fi
 docker compose up -d --no-recreate
 REMOTE
 
-# Reinicia e espera o /healthz (banco no ar e chamadas recarregadas). Durante
-# o reinício o Caddy segura as requisições (deploy/Caddyfile).
+# Aplica as migrations com o binário novo ANTES de reiniciar, com o antigo
+# ainda no ar (por isso as migrations precisam ser compatíveis com ele — veja
+# "Migrations" em docs/HOSPEDAGEM.md). Se falharem, nada é reiniciado. Depois
+# reinicia e espera o /healthz (banco no ar e chamadas recarregadas); durante o
+# reinício o Caddy segura as requisições (deploy/Caddyfile). O binário anterior
+# fica em concord-server.prev para voltar atrás.
 ssh "$HOST" bash -s <<'REMOTE'
 set -euo pipefail
 cd /opt/concord
 chmod +x concord-server.new
+if ! ./concord-server.new migrate; then
+  echo "migrations falharam: o backend no ar não foi tocado" >&2
+  exit 1
+fi
+if [[ -f concord-server ]]; then cp -f concord-server concord-server.prev; fi
 mv concord-server.new concord-server
 systemctl restart concord-server
 port=$(sed -n 's/^PORT=//p' .env | tail -n 1 | tr -d "\"' \r")
