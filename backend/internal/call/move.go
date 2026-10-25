@@ -23,6 +23,7 @@ type MovedEvent struct {
 	FromCallID    string   `json:"from_call_id"`
 	FromChannelID string   `json:"from_channel_id"`
 	ChannelID     string   `json:"channel_id"`
+	ChannelName   string   `json:"channel_name"`
 	ServerID      string   `json:"server_id"`
 	User          UserInfo `json:"user"`
 	MovedBy       UserInfo `json:"moved_by"`
@@ -117,6 +118,7 @@ func (s *Service) MoveToChannel(ctx context.Context, actorID, targetID, channelI
 		FromCallID:    from.callID,
 		FromChannelID: from.channelID,
 		ChannelID:     dest.ID,
+		ChannelName:   dest.Name,
 		ServerID:      dest.ServerID,
 		User:          targetInfo,
 		MovedBy:       actorInfo,
