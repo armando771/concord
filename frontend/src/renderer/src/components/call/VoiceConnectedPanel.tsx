@@ -21,6 +21,7 @@ import {
 import { GamepadIcon } from '../icons'
 import ActivityPickerPopover from './ActivityPickerPopover'
 import NoiseSuppressionPopover from './NoiseSuppressionPopover'
+import ConnectionStatsPopover from './ConnectionStatsPopover'
 import SoundboardPopover from './SoundboardPopover'
 import { useSoundboardHotkeys } from './useSoundboardHotkeys'
 import { useCallChannelName } from './useCallChannelName'
@@ -93,6 +94,7 @@ function RowButton({
 function VoiceConnectedPanel(): React.JSX.Element | null {
   const navigate = useNavigate()
   const status = useCallStore((s) => s.status)
+  const callId = useCallStore((s) => s.callId)
   const type = useCallStore((s) => s.type)
   const channelId = useCallStore((s) => s.channelId)
   const serverId = useCallStore((s) => s.serverId)
@@ -122,6 +124,11 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   /** Botão do popover de supressão de ruído (null = fechado). */
   const [noiseAnchor, setNoiseAnchor] = useState<HTMLElement | null>(null)
   const closeNoise = useCallback(() => setNoiseAnchor(null), [])
+  const [connectionAnchor, setConnectionAnchor] = useState<{
+    element: HTMLElement
+    callId: string | null
+  } | null>(null)
+  const closeConnection = useCallback(() => setConnectionAnchor(null), [])
   /** Botão do popover da mesa de áudio (null = fechado). */
   const [soundboardAnchor, setSoundboardAnchor] = useState<HTMLElement | null>(null)
   const closeSoundboard = useCallback(() => setSoundboardAnchor(null), [])
@@ -135,6 +142,8 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   if (!showVoicePanel(status)) return null
 
   const connected = status === 'active'
+  const connectionOpen =
+    connected && connectionAnchor?.callId === callId && connectionAnchor !== null
   const label = voicePanelLabel({
     type,
     channelName,
@@ -162,14 +171,23 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
       )}
       <div className="flex items-center gap-1">
         <div className="min-w-0 flex-1">
-          <p
-            className={`flex items-center gap-1.5 text-ds-md font-semibold ${
+          <button
+            type="button"
+            disabled={!connected}
+            aria-label="Detalhes da conexão de voz"
+            aria-haspopup="dialog"
+            aria-expanded={connectionOpen}
+            onClick={(event) => {
+              const element = event.currentTarget
+              setConnectionAnchor(connectionOpen ? null : { element, callId })
+            }}
+            className={`flex max-w-full items-center gap-1.5 rounded text-left text-ds-md font-semibold outline-none focus-visible:ring-2 focus-visible:ring-[#5865f2] ${connected ? 'cursor-pointer hover:underline' : ''} ${
               connected ? 'text-[#23a55a]' : 'text-[#f0b232]'
             }`}
           >
             <SignalIcon className="h-4 w-4 shrink-0" />
             <span className="truncate">{voicePanelHeading(status)}</span>
-          </p>
+          </button>
           {route ? (
             <button
               type="button"
@@ -198,7 +216,11 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
                 : 'text-gray-300 hover:bg-white/10 hover:text-white'
             }`}
           >
-            {locked ? <LockIcon className="h-5 w-5 text-amber-400" /> : <LockOpenIcon className="h-5 w-5" />}
+            {locked ? (
+              <LockIcon className="h-5 w-5 text-amber-400" />
+            ) : (
+              <LockOpenIcon className="h-5 w-5" />
+            )}
           </button>
         )}
         <button
@@ -293,6 +315,13 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
       </div>
 
       <VoiceXPBar paused={muted || deafened} />
+      {connectionOpen && connectionAnchor && (
+        <ConnectionStatsPopover
+          key={callId}
+          anchor={connectionAnchor.element}
+          onClose={closeConnection}
+        />
+      )}
       {noiseAnchor && <NoiseSuppressionPopover anchor={noiseAnchor} onClose={closeNoise} />}
       {soundboardAnchor && soundboardAvailable && (
         <SoundboardPopover anchor={soundboardAnchor} onClose={closeSoundboard} />
