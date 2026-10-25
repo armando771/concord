@@ -3,7 +3,7 @@ import { showToast } from '../../store/toastStore'
 import Button from '../Button'
 import { VolumeIcon } from '../icons'
 import ParticipantTile from './ParticipantTile'
-import VoiceControls from './VoiceControls'
+import CallControlsDock from './CallControlsDock'
 import CallStage from './CallStage'
 import { formatDuration, useElapsed } from './callUtils'
 import useSpeaking from './useSpeaking'
@@ -75,13 +75,7 @@ function VoiceChannelView({ channelId }: { channelId: string }): React.JSX.Eleme
         )}
       </div>
 
-      {connectedHere && (
-        <div className="pointer-events-none absolute bottom-5 left-0 right-0 z-10 flex justify-center">
-          <div className="pointer-events-auto">
-            <VoiceControls />
-          </div>
-        </div>
-      )}
+      {connectedHere && <CallControlsDock />}
     </div>
   )
 }
