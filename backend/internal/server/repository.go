@@ -592,6 +592,30 @@ func (r *Repository) FindIDByInviteCode(ctx context.Context, code string) (strin
 	return id, err
 }
 
+// InvitePreview: servidor do código e os ids dos membros (para contar e ver
+// quem está online). Sem servidor com esse código, pgx.ErrNoRows.
+func (r *Repository) InvitePreview(ctx context.Context, code string) (*InvitePreview, []string, error) {
+	p := &InvitePreview{}
+	var iconURL *string
+	var memberIDs []string
+	err := r.db.QueryRow(
+		ctx,
+		`SELECT
+			s.id,
+			s.name,
+			NULLIF(s.icon_url, ''),
+			COALESCE((SELECT array_agg(sm.user_id::text) FROM server_members sm WHERE sm.server_id = s.id), '{}')
+		FROM servers s
+		WHERE s.invite_code = $1`,
+		code,
+	).Scan(&p.ServerID, &p.Name, &iconURL, &memberIDs)
+	if err != nil {
+		return nil, nil, err
+	}
+	p.IconURL = iconURL
+	return p, memberIDs, nil
+}
+
 // SharesServer: os dois estão em pelo menos um servidor em comum.
 func (r *Repository) SharesServer(ctx context.Context, userA string, userB string) (bool, error) {
 	var shares bool

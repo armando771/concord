@@ -130,6 +130,8 @@ func main() {
 	// Server
 	serverRepository := server.ServerRepository(db)
 	serverService := server.ServerService(serverRepository, hub, roleRepository)
+	// Online na prévia do link de convite (invisível conta como offline).
+	serverService.SetPresence(hub.PresenceMap)
 	moderationService := server.ModerationService(serverRepository, permissionService, hub)
 
 	// Friendship

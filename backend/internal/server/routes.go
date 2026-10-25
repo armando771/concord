@@ -1,6 +1,10 @@
 package server
 
-import "github.com/gin-gonic/gin"
+import (
+	"gin-quickstart/backend/internal/ratelimit"
+
+	"github.com/gin-gonic/gin"
+)
 
 func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin.HandlerFunc) {
 	servers := router.Group("/servers")
@@ -33,4 +37,10 @@ func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin.
 		invites.POST("/:id/accept", handler.AcceptInvite)
 		invites.POST("/:id/decline", handler.DeclineInvite)
 	}
+
+	// Prévia do link de convite: pública (a página abre antes do login), com
+	// limite por IP contra quem tenta adivinhar códigos.
+	previewLimiter := ratelimit.New(invitePreviewPerIP, invitePreviewWindow, invitePreviewMaxKeys)
+	public := router.Group("/invites")
+	public.GET("/:id/preview", limitByIP(previewLimiter, "too many requests"), handler.InvitePreview)
 }

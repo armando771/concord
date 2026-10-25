@@ -34,6 +34,7 @@ type Service struct {
 	repository *Repository
 	publisher  EventPublisher
 	roles      RoleDefaults
+	presence   PresenceLookup
 }
 
 func ServerService(repository *Repository, publisher EventPublisher, roles RoleDefaults) *Service {

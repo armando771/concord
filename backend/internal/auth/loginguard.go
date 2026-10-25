@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"crypto/sha256"
-	"net/netip"
 	"runtime"
 	"strings"
 	"time"
@@ -55,7 +54,7 @@ func (g *loginGuard) setClock(now func() time.Time) {
 // rajada simultânea não passar inteira antes do primeiro bcrypt terminar.
 // id é nil quando o pedido nem trouxe identificador válido.
 func (g *loginGuard) begin(ip string, id *LoginIdentifier) (time.Duration, bool) {
-	if retry, ok := g.byIP.Allow(ipKey(ip)); !ok {
+	if retry, ok := g.byIP.Allow(ratelimit.IPKey(ip)); !ok {
 		return retry, false
 	}
 	if id != nil {
@@ -98,22 +97,4 @@ func loginKey(id LoginIdentifier) string {
 	}
 	sum := sha256.Sum256([]byte(prefix + strings.ToLower(id.Value)))
 	return string(sum[:])
-}
-
-// ipKey: IPv4 inteiro; IPv6 pelo /64 (um cliente costuma ter o /64 inteiro e
-// trocar de endereço à vontade dentro dele).
-func ipKey(ip string) string {
-	addr, err := netip.ParseAddr(ip)
-	if err != nil {
-		return ip
-	}
-	addr = addr.Unmap()
-	if addr.Is4() {
-		return addr.String()
-	}
-	prefix, err := addr.WithZone("").Prefix(64)
-	if err != nil {
-		return ip
-	}
-	return prefix.String()
 }
