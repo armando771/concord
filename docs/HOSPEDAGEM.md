@@ -399,7 +399,7 @@ Para uma VPS que já roda a versão anterior. Cada passo diz quando pode ser
 feito.
 
 1. **Deploy desta versão** (qualquer hora; CI ou `scripts/deploy-vps.sh`). A
-   migration `000022` entra antes do reinício. Esse deploy ainda trava a voz
+   migration `000023` entra antes do reinício. Esse deploy ainda trava a voz
    uma vez, como antes (o Caddy ainda manda `/rtc` pelo backend). O aviso
    `docker-compose.yml/.env mudou: postgres … --infra` é esperado (versão fixa
    do Postgres) e se repete até o passo 5.
@@ -474,8 +474,12 @@ que não desfaz migration nenhuma). Por isso:
 8. Números de migration são únicos e **crescem na ordem em que chegam à
    VPS**: o migrador guarda só a última versão aplicada, então com duas
    branches usando o mesmo número uma nunca roda, e uma migration com número
-   menor que a última aplicada (ex.: `000021` mesclada depois de um deploy da
-   `000022`) também nunca roda. Renumere ao juntar.
+   menor que a última aplicada (ex.: `000022` mesclada depois de um deploy da
+   `000023`) também nunca roda. Renumere ao juntar. Proteções: o backend não
+   sobe com dois arquivos de mesmo número e avisa alto no log quando uma
+   migration de número menor que a versão do banco nunca rodou; no CI,
+   `scripts/check-migrations.mjs` reprova o PR com número repetido ou com
+   migration nova que não fique acima da maior da branch de destino.
 
 ### Postgres e LiveKit não são recriados no deploy
 
