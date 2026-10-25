@@ -231,6 +231,8 @@ describe('callStore — mídia via LiveKit', () => {
     rtc.getDisplayStream.mockReturnValue(picked.promise)
 
     const sharing = useCallStore.getState().startScreenShare()
+    await useCallStore.getState().startScreenShare()
+    expect(rtc.getDisplayStream).toHaveBeenCalledTimes(1)
     useCallStore.getState().endCall()
     const stream = fakeStream('video', 'audio')
     picked.resolve(stream)

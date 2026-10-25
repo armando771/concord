@@ -278,6 +278,7 @@ interface CallState {
 /** Microfone da chamada (o stream processado + o que precisa ser fechado). */
 let localMic: MicHandle | null = null
 let transitioning = false
+let screenSharePending = false
 let callGeneration = 0
 /** Reentrada na chamada de canal em andamento (ver resyncChannelCall). */
 let resyncing = false
@@ -1094,68 +1095,73 @@ export const useCallStore = create<CallState>()((set, get) => {
 
     startScreenShare: async () => {
       const s = get()
-      if (s.status !== 'active' || s.isScreenSharing || transitioning) return
+      if (s.status !== 'active' || s.isScreenSharing || transitioning || screenSharePending) return
       const blocked = streamBlockReason(s.canStream)
       if (blocked) {
         showToast.error(blocked)
         return
       }
-      let stream: MediaStream
-      resetWindowAudio()
+      screenSharePending = true
       try {
-        stream = await getDisplayStream()
-      } catch (err) {
-        abortWindowAudio()
-        // NotAllowedError: usuário cancelou o picker — sem toast.
-        if ((err as DOMException)?.name !== 'NotAllowedError') {
-          showToast.error('Não foi possível compartilhar a tela.')
+        let stream: MediaStream
+        resetWindowAudio()
+        try {
+          stream = await getDisplayStream()
+        } catch (err) {
+          abortWindowAudio()
+          // NotAllowedError: usuário cancelou o picker — sem toast.
+          if ((err as DOMException)?.name !== 'NotAllowedError') {
+            showToast.error('Não foi possível compartilhar a tela.')
+          }
+          return
         }
-        return
-      }
-      // Janela no Windows: o som vem do helper (só o app da janela).
-      const captured = await takeWindowAudio()
-      // A chamada pode ter acabado (ou mudado) com o seletor aberto.
-      if (get().callId !== s.callId || get().status !== 'active') {
-        captured?.stop()
-        stream.getTracks().forEach((t) => t.stop())
-        return
-      }
-      if (captured) {
-        // O som da janela substitui qualquer som de sistema da captura.
-        stream.getAudioTracks().forEach((t) => {
-          stream.removeTrack(t)
-          t.stop()
+        // Janela no Windows: o som vem do helper (só o app da janela).
+        const captured = await takeWindowAudio()
+        // A chamada pode ter acabado (ou mudado) com o seletor aberto.
+        if (get().callId !== s.callId || get().status !== 'active') {
+          captured?.stop()
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
+        if (captured) {
+          // O som da janela substitui qualquer som de sistema da captura.
+          stream.getAudioTracks().forEach((t) => {
+            stream.removeTrack(t)
+            t.stop()
+          })
+          windowAudio = captured
+          stream.addTrack(captured.track)
+        }
+
+        localScreenStream = stream
+        const meId = useAuthStore.getState().user?.id
+        const callId = get().callId
+        set((prev) => ({
+          isScreenSharing: true,
+          localScreenStream: stream,
+          screenSharers: meId
+            ? Array.from(new Set([...prev.screenSharers, meId]))
+            : prev.screenSharers,
+          focusedScreenUserId: prev.focusedScreenUserId ?? meId ?? null
+        }))
+
+        // Parar pela barra nativa do Electron / fim da fonte encerra o share.
+        stream.getVideoTracks().forEach((track) => {
+          track.addEventListener('ended', () => {
+            if (get().isScreenSharing) get().stopScreenShare()
+          })
         })
-        windowAudio = captured
-        stream.addTrack(captured.track)
-      }
 
-      localScreenStream = stream
-      const meId = useAuthStore.getState().user?.id
-      const callId = get().callId
-      set((prev) => ({
-        isScreenSharing: true,
-        localScreenStream: stream,
-        screenSharers: meId
-          ? Array.from(new Set([...prev.screenSharers, meId]))
-          : prev.screenSharers,
-        focusedScreenUserId: prev.focusedScreenUserId ?? meId ?? null
-      }))
+        useChatStore.getState().sendEvent('call:screen', { call_id: callId, active: true })
 
-      // Parar pela barra nativa do Electron / fim da fonte encerra o share.
-      stream.getVideoTracks().forEach((track) => {
-        track.addEventListener('ended', () => {
-          if (get().isScreenSharing) get().stopScreenShare()
-        })
-      })
-
-      useChatStore.getState().sendEvent('call:screen', { call_id: callId, active: true })
-
-      try {
-        await media?.publishScreen(stream)
-      } catch {
-        showToast.error('Não foi possível transmitir a tela.')
-        get().stopScreenShare()
+        try {
+          await media?.publishScreen(stream)
+        } catch {
+          showToast.error('Não foi possível transmitir a tela.')
+          get().stopScreenShare()
+        }
+      } finally {
+        screenSharePending = false
       }
     },
 

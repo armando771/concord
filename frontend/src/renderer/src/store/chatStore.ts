@@ -53,6 +53,8 @@ import { useBoostStore } from './boostStore'
 import { useLevelStore } from './levelStore'
 import { useBadgeStore } from './badgeStore'
 import { useProposalStore } from './proposalStore'
+import { useNotifySettingsStore } from './notifySettingsStore'
+import { mentionKindOf, muteDecision } from '../lib/notificationMute'
 import { useSoundboardStore } from './soundboardStore'
 import { useActivityStore } from './activityStore'
 import { useTypingStore } from './typingStore'
@@ -74,6 +76,9 @@ interface ChatState {
   loadingByRoom: Record<RoomKey, boolean>
   unreadByRoom: Record<RoomKey, number>
   unreadByServer: Record<string, number>
+  /** Menções a mim ainda não vistas (selo vermelho), por sala e por servidor. */
+  mentionsByRoom: Record<RoomKey, number>
+  mentionsByServer: Record<string, number>
   channelsByServer: Record<string, string[]>
   activeRoom: RoomKey | null
   presence: Record<string, boolean>
@@ -259,6 +264,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   loadingByRoom: {},
   unreadByRoom: {},
   unreadByServer: {},
+  mentionsByRoom: {},
+  mentionsByServer: {},
   channelsByServer: {},
   activeRoom: null,
   presence: {},
@@ -270,6 +277,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     client.connect()
     get().fetchConversations()
     void useLevelStore.getState().loadMe()
+    void useNotifySettingsStore.getState().fetchSettings()
   },
   disconnect: () => {
     client.disconnect()
@@ -281,6 +289,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     useBoostStore.getState().reset()
     useBadgeStore.getState().reset()
     useProposalStore.getState().reset()
+    useNotifySettingsStore.getState().reset()
   },
   isWsConnected: () => client.isConnected(),
 
@@ -293,10 +302,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set((state) => {
       const channelId = room.startsWith('channel:') ? room.slice('channel:'.length) : null
       let unreadByServer = state.unreadByServer
+      let mentionsByServer = state.mentionsByServer
       if (channelId) {
         for (const [serverId, channels] of Object.entries(state.channelsByServer)) {
           if (channels.includes(channelId)) {
             unreadByServer = { ...state.unreadByServer, [serverId]: 0 }
+            mentionsByServer = { ...state.mentionsByServer, [serverId]: 0 }
             break
           }
         }
@@ -305,7 +316,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         loadingByRoom: { ...state.loadingByRoom, [room]: true },
         activeRoom: room,
         unreadByRoom: { ...state.unreadByRoom, [room]: 0 },
-        unreadByServer
+        unreadByServer,
+        mentionsByRoom: { ...state.mentionsByRoom, [room]: 0 },
+        mentionsByServer
       }
     })
     if (room.startsWith('conversation:')) markReadSoon(room.slice('conversation:'.length))
@@ -746,6 +759,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return
     }
 
+    if (event.type.startsWith('notification-settings:')) {
+      useNotifySettingsStore.getState().handleWsEvent(event)
+      return
+    }
+
     if (event.type.startsWith('proposal:')) {
       useProposalStore.getState().handleWsEvent(event)
       return
@@ -759,6 +777,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const serverId = (payload.server_id as string) || null
       if (!room.endsWith(':')) {
         useTypingStore.getState().messageArrived(room, msg.author_id)
+        // Mensagem de canal: silenciar/nível do servidor e do canal decidem o
+        // aviso, a contagem de não lidas e o selo de menção. DM não passa por aqui.
+        const meUser = useAuthStore.getState().user
+        const decision =
+          meUser && serverId && msg.channel_id
+            ? muteDecision(
+                useNotifySettingsStore.getState().resolve(serverId, msg.channel_id),
+                mentionKindOf(msg, meUser)
+              )
+            : null
         set((state) => {
           const nextMessages = openRooms.has(room)
             ? {
@@ -768,21 +796,35 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             : state.messagesByRoom
           const isActive = room === state.activeRoom
           const mine = msg.author_id === useAuthStore.getState().user?.id
+          const countUnread = decision?.unread ?? true
           const nextUnread =
-            isActive || mine
+            isActive || mine || !countUnread
               ? state.unreadByRoom
               : { ...state.unreadByRoom, [room]: (state.unreadByRoom[room] ?? 0) + 1 }
           const nextServerUnread =
-            !isActive && serverId && msg.channel_id
+            !isActive && !mine && countUnread && serverId && msg.channel_id
               ? {
                   ...state.unreadByServer,
                   [serverId]: (state.unreadByServer[serverId] ?? 0) + 1
                 }
               : state.unreadByServer
+          const countMention = !isActive && !mine && !!decision?.mention
+          const nextMentions = countMention
+            ? { ...state.mentionsByRoom, [room]: (state.mentionsByRoom[room] ?? 0) + 1 }
+            : state.mentionsByRoom
+          const nextServerMentions =
+            countMention && serverId
+              ? {
+                  ...state.mentionsByServer,
+                  [serverId]: (state.mentionsByServer[serverId] ?? 0) + 1
+                }
+              : state.mentionsByServer
           return {
             messagesByRoom: nextMessages,
             unreadByRoom: nextUnread,
-            unreadByServer: nextServerUnread
+            unreadByServer: nextServerUnread,
+            mentionsByRoom: nextMentions,
+            mentionsByServer: nextServerMentions
           }
         })
 
@@ -812,7 +854,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
               serverId,
               serverId ? useServerStore.getState().nicknames?.[serverId] : undefined
             )
-          if (notification) {
+          if (notification && (decision?.notify ?? true)) {
             // "Não perturbe" silencia o aviso, a barra de tarefas e o som.
             const prefs = prefsForStatus(notificationPrefs(), me.status)
             const alert = messageAlert(
@@ -1233,6 +1275,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       loadingByRoom: {},
       unreadByRoom: {},
       unreadByServer: {},
+      mentionsByRoom: {},
+      mentionsByServer: {},
       channelsByServer: {},
       activeRoom: null,
       presence: {},

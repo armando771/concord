@@ -30,6 +30,7 @@ import (
 	"gin-quickstart/backend/internal/livekit"
 	"gin-quickstart/backend/internal/media"
 	"gin-quickstart/backend/internal/message"
+	"gin-quickstart/backend/internal/notifysettings"
 	"gin-quickstart/backend/internal/permission"
 	"gin-quickstart/backend/internal/role"
 	"gin-quickstart/backend/internal/server"
@@ -420,6 +421,9 @@ func main() {
 	// desligamento grava o que estava na memória antes de fechar o banco.
 	badgeService := badge.BadgeService(badge.BadgeRepository(db), hub, callService, hub, nil)
 	badgeHandler := badge.BadgeHandler(badgeService)
+	notifySettingsHandler := notifysettings.NotifySettingsHandler(
+		notifysettings.NotifySettingsService(notifysettings.NotifySettingsRepository(db), permissionService, hub),
+	)
 	badgeDone := make(chan struct{})
 	go func() {
 		defer close(badgeDone)
@@ -468,6 +472,7 @@ func main() {
 	soundboard.Routes(api, soundboardHandler, authMiddleware)
 	level.LevelRoutes(api, levelHandler, authMiddleware)
 	badge.BadgeRoutes(api, badgeHandler, authMiddleware)
+	notifysettings.Routes(api, notifySettingsHandler, authMiddleware)
 	proposal.ProposalRoutes(api, proposalHandler, authMiddleware, requireVerified)
 	birthday.BirthdayRoutes(api, birthdayHandler, authMiddleware)
 
