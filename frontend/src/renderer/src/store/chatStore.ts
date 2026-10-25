@@ -33,7 +33,7 @@ import type { ConversationSummary } from '../api/conversations'
 import { listConversations } from '../api/conversations'
 import type { PresenceMap } from '../api/presence'
 import { fetchPresence } from '../api/presence'
-import { listChannels } from '../api/channels'
+import { listChannels, type Channel } from '../api/channels'
 import { useServerStore } from './serverStore'
 import { useFriendStore } from './friendStore'
 import { useCallStore } from './callStore'
@@ -648,6 +648,26 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       if (serverId) {
         useServerStore.getState().fetchChannels(serverId)
         get().fetchChannelsForServers([serverId])
+      }
+      return
+    }
+
+    if (event.type === 'channel:reorder') {
+      const serverId = payload.server_id as string
+      const channels = payload.channels as Channel[] | undefined
+      if (serverId) {
+        if (Array.isArray(channels)) {
+          useServerStore.getState().setChannels(serverId, channels)
+          set((state) => ({
+            channelsByServer: {
+              ...state.channelsByServer,
+              [serverId]: channels.map((c) => c.id)
+            }
+          }))
+        } else {
+          useServerStore.getState().fetchChannels(serverId)
+          get().fetchChannelsForServers([serverId])
+        }
       }
       return
     }

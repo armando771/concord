@@ -22,6 +22,7 @@ import {
   type CallStateResponse
 } from '../api/calls'
 import { canMoveVoiceUser, VOICE_USER_DRAG } from '../lib/voiceMove'
+import { CHANNEL_DRAG, reorderChannelList, type DropPlacement } from '../lib/channelOrder'
 import { showToast } from '../store/toastStore'
 import Modal from './Modal'
 import Button from './Button'
@@ -51,6 +52,7 @@ export function ServerSidebar(): React.JSX.Element {
   const channels = useServerStore((s) => s.channels)
   const createChannel = useServerStore((s) => s.createChannel)
   const updateChannel = useServerStore((s) => s.updateChannel)
+  const reorderChannels = useServerStore((s) => s.reorderChannels)
   const deleteChannel = useServerStore((s) => s.deleteChannel)
   const updateServer = useServerStore((s) => s.updateServer)
   const deleteServer = useServerStore((s) => s.deleteServer)
@@ -99,6 +101,75 @@ export function ServerSidebar(): React.JSX.Element {
   const isOwner = currentServer?.owner_id === user?.id
   /** Canal de voz sobre o qual alguém está sendo arrastado (moderadores). */
   const [voiceDropTarget, setVoiceDropTarget] = useState<string | null>(null)
+  const [draggingChannel, setDraggingChannel] = useState<{
+    id: string
+    type: ChannelType
+  } | null>(null)
+  const [channelDropTarget, setChannelDropTarget] = useState<{
+    id: string
+    placement: DropPlacement
+  } | null>(null)
+
+  const handleChannelDragStart = (e: React.DragEvent, ch: Channel): void => {
+    if (!isAdmin) return
+    e.dataTransfer.setData(CHANNEL_DRAG, ch.id)
+    e.dataTransfer.effectAllowed = 'move'
+    setDraggingChannel({ id: ch.id, type: (ch.type ?? 'text') as ChannelType })
+  }
+
+  const handleChannelDragEnd = (): void => {
+    setDraggingChannel(null)
+    setChannelDropTarget(null)
+  }
+
+  const handleChannelDragOver = (e: React.DragEvent, ch: Channel): void => {
+    if (!isAdmin || !e.dataTransfer.types.includes(CHANNEL_DRAG)) return
+    const targetType = (ch.type ?? 'text') as ChannelType
+    if (draggingChannel && (draggingChannel.type !== targetType || draggingChannel.id === ch.id)) {
+      setChannelDropTarget(null)
+      return
+    }
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    const rect = e.currentTarget.getBoundingClientRect()
+    const placement: DropPlacement = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+    setChannelDropTarget((cur) =>
+      cur?.id === ch.id && cur.placement === placement ? cur : { id: ch.id, placement }
+    )
+  }
+
+  const handleChannelDragLeave = (e: React.DragEvent, ch: Channel): void => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      setChannelDropTarget((cur) => (cur?.id === ch.id ? null : cur))
+    }
+  }
+
+  const handleChannelDrop = (e: React.DragEvent, ch: Channel): void => {
+    if (!isAdmin || !currentServer || !e.dataTransfer.types.includes(CHANNEL_DRAG)) return
+    const draggedId = e.dataTransfer.getData(CHANNEL_DRAG) || draggingChannel?.id
+    const rect = e.currentTarget.getBoundingClientRect()
+    const placement: DropPlacement =
+      channelDropTarget?.id === ch.id
+        ? channelDropTarget.placement
+        : e.clientY < rect.top + rect.height / 2
+          ? 'before'
+          : 'after'
+    setDraggingChannel(null)
+    setChannelDropTarget(null)
+    if (!draggedId) return
+    e.preventDefault()
+    const reordered = reorderChannelList(channels, draggedId, ch.id, placement)
+    if (!reordered) return
+    reorderChannels(currentServer.id, reordered.nextChannels, reordered.sectionIds)
+      .then(() => {
+        useChatStore.getState().fetchChannelsForServers([currentServer.id])
+      })
+      .catch((err) => {
+        showToast.error(
+          err instanceof Error ? err.message : 'Não foi possível reordenar os canais.'
+        )
+      })
+  }
   const canMove = (targetId: string): boolean =>
     canMoveVoiceUser({
       meId: user?.id,
@@ -411,11 +482,26 @@ export function ServerSidebar(): React.JSX.Element {
                 const active = ch.id === channelId
                 const unread = unreadByRoom[`channel:${ch.id}`] ?? 0
                 return (
-                  <div key={ch.id} className="relative">
+                  <div
+                    key={ch.id}
+                    className="relative"
+                    onDragOver={(e) => handleChannelDragOver(e, ch)}
+                    onDragLeave={(e) => handleChannelDragLeave(e, ch)}
+                    onDrop={(e) => handleChannelDrop(e, ch)}
+                  >
+                    {channelDropTarget?.id === ch.id && channelDropTarget.placement === 'before' && (
+                      <div className="pointer-events-none absolute -top-0.5 right-2 left-2 z-20 h-0.5 rounded-full bg-[#5865f2] shadow-[0_0_6px_#5865f2]" />
+                    )}
+                    {channelDropTarget?.id === ch.id && channelDropTarget.placement === 'after' && (
+                      <div className="pointer-events-none absolute right-2 -bottom-0.5 left-2 z-20 h-0.5 rounded-full bg-[#5865f2] shadow-[0_0_6px_#5865f2]" />
+                    )}
                     <button
+                      draggable={isAdmin}
+                      onDragStart={(e) => handleChannelDragStart(e, ch)}
+                      onDragEnd={handleChannelDragEnd}
                       onClick={() => navigate(`/servers/${currentServer?.id}/channels/${ch.id}`)}
                       onContextMenu={channelContextMenu(ch)}
-                      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all cursor-pointer ${
+                      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all cursor-pointer ${draggingChannel?.id === ch.id ? 'opacity-50 ' : ''}${isAdmin ? 'active:cursor-grabbing ' : ''}${
                         active
                           ? 'bg-white/10 text-white shadow-sm'
                           : 'text-gray-400 hover:bg-white/6 hover:text-gray-200'
@@ -491,17 +577,26 @@ export function ServerSidebar(): React.JSX.Element {
                     key={ch.id}
                     className="relative"
                     onDragOver={(e) => {
+                      if (e.dataTransfer.types.includes(CHANNEL_DRAG)) {
+                        handleChannelDragOver(e, ch)
+                        return
+                      }
                       if (!isAdmin || !e.dataTransfer.types.includes(VOICE_USER_DRAG)) return
                       e.preventDefault()
                       e.dataTransfer.dropEffect = 'move'
                       setVoiceDropTarget(ch.id)
                     }}
                     onDragLeave={(e) => {
+                      handleChannelDragLeave(e, ch)
                       if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
                         setVoiceDropTarget((cur) => (cur === ch.id ? null : cur))
                       }
                     }}
                     onDrop={(e) => {
+                      if (e.dataTransfer.types.includes(CHANNEL_DRAG)) {
+                        handleChannelDrop(e, ch)
+                        return
+                      }
                       const userId = e.dataTransfer.getData(VOICE_USER_DRAG)
                       setVoiceDropTarget(null)
                       if (!userId || participants.some((p) => p.user_id === userId)) return
@@ -511,12 +606,21 @@ export function ServerSidebar(): React.JSX.Element {
                   >
                     {/* O "•••" é absoluto e centrado na vertical: precisa ficar preso à
                         linha do canal, não ao bloco todo (que cresce com a lista). */}
+                    {channelDropTarget?.id === ch.id && channelDropTarget.placement === 'before' && (
+                      <div className="pointer-events-none absolute -top-0.5 right-2 left-2 z-20 h-0.5 rounded-full bg-[#5865f2] shadow-[0_0_6px_#5865f2]" />
+                    )}
+                    {channelDropTarget?.id === ch.id && channelDropTarget.placement === 'after' && (
+                      <div className="pointer-events-none absolute right-2 -bottom-0.5 left-2 z-20 h-0.5 rounded-full bg-[#5865f2] shadow-[0_0_6px_#5865f2]" />
+                    )}
                     <div className="group/voicech relative">
                       <button
+                        draggable={isAdmin}
+                        onDragStart={(e) => handleChannelDragStart(e, ch)}
+                        onDragEnd={handleChannelDragEnd}
                         onClick={() => handleVoiceClick(ch)}
                         onContextMenu={channelContextMenu(ch)}
                         title={connectedHere ? 'Desconectar' : 'Conectar ao canal de voz'}
-                        className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all cursor-pointer ${
+                        className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all cursor-pointer ${draggingChannel?.id === ch.id ? 'opacity-50 ' : ''}${isAdmin ? 'active:cursor-grabbing ' : ''}${
                           voiceDropTarget === ch.id
                             ? 'bg-[#5865f2]/25 text-white ring-2 ring-[#5865f2]'
                             : connectedHere
