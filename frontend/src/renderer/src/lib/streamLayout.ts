@@ -294,3 +294,13 @@ export function adaptToSize(node: LayoutNode, width: number, height: number): La
   })
   return { ...node, direction, children }
 }
+
+/**
+ * Quem está no bloco grande do formato "Destaque" (o primeiro filho da raiz,
+ * se for uma transmissão), ou null.
+ */
+export function featuredLeaf(node: LayoutNode | null): string | null {
+  if (!node || node.type === 'leaf') return node?.id ?? null
+  const first = node.children[0]
+  return first?.type === 'leaf' ? first.id : null
+}

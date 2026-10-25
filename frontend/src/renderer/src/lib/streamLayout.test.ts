@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   adaptToSize,
+  featuredLeaf,
   FOCUS_SHARE,
   GUTTER,
   leafIds,
@@ -186,5 +187,18 @@ describe('adaptToSize', () => {
 
   it('se nem em coluna cabe, mantém como está', () => {
     expect(shape(adaptToSize(four, 300, 200))).toBe('row(a,b,c,d)')
+  })
+})
+
+describe('featuredLeaf', () => {
+  it('no destaque é quem está no bloco grande; trocar põe outro lá', () => {
+    const node = presetLayout('focus', ['a', 'b', 'c'])
+    expect(featuredLeaf(node)).toBe('a')
+    expect(featuredLeaf(moveLeaf(node, 'c', 'a', 'center'))).toBe('c')
+  })
+
+  it('uma transmissão só, ou nenhuma', () => {
+    expect(featuredLeaf(presetLayout('focus', ['a']))).toBe('a')
+    expect(featuredLeaf(null)).toBeNull()
   })
 })
