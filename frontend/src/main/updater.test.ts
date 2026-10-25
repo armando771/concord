@@ -28,11 +28,39 @@ const h = vi.hoisted(() => {
     }
   }
   const fetch = vi.fn(async () => ({ ok: true, text: async () => 'assinatura' }))
-  return { state, autoUpdater, fetch }
+  // Updater próprio do Linux (linuxUpdater.ts): mesmo formato + stage.
+  const linuxListeners: Record<string, Array<(...a: unknown[]) => unknown>> = {}
+  const linux = {
+    kind: 'electron-updater' as 'electron-updater' | 'linux-managed',
+    options: null as null | Record<string, unknown>,
+    checkForUpdates: vi.fn(async () => null),
+    downloadUpdate: vi.fn(async () => ''),
+    quitAndInstall: vi.fn(),
+    stage: vi.fn(async () => {}),
+    confirmStartup: vi.fn(),
+    on: (event: string, fn: (...a: unknown[]) => unknown) => {
+      ;(linuxListeners[event] ??= []).push(fn)
+    },
+    emit: async (event: string, ...args: unknown[]) => {
+      for (const fn of linuxListeners[event] ?? []) await fn(...args)
+    },
+    reset: () => {
+      for (const k of Object.keys(linuxListeners)) delete linuxListeners[k]
+      linux.kind = 'electron-updater'
+      linux.options = null
+    }
+  }
+  return { state, autoUpdater, fetch, linux }
 })
 
 vi.mock('electron', () => ({
-  app: { isPackaged: true, getPath: () => '/tmp/concord-teste' },
+  app: {
+    isPackaged: true,
+    getPath: () => '/tmp/concord-teste',
+    getVersion: () => '0.6.0',
+    relaunch: vi.fn(),
+    quit: vi.fn()
+  },
   ipcMain: {
     handle: (ch: string, fn: (...a: unknown[]) => unknown) => (h.state.handlers[ch] = fn),
     on: (ch: string, fn: (...a: unknown[]) => unknown) => (h.state.handlers[ch] = fn)
@@ -40,6 +68,18 @@ vi.mock('electron', () => ({
   net: { fetch: h.fetch }
 }))
 vi.mock('electron-updater', () => ({ autoUpdater: h.autoUpdater }))
+vi.mock('./linuxInstall', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./linuxInstall')>()),
+  updateBackendKind: () => h.linux.kind
+}))
+vi.mock('./linuxUpdater', () => ({
+  LinuxUpdater: class {
+    constructor(options: Record<string, unknown>) {
+      h.linux.options = options
+      return h.linux
+    }
+  }
+}))
 vi.mock('fs/promises', () => ({
   readFile: async () => Buffer.from('instalador'),
   rm: async () => {},
@@ -75,6 +115,7 @@ beforeEach(() => {
   vi.resetModules()
   vi.useFakeTimers({ toFake: ['setInterval'] })
   h.autoUpdater.reset()
+  h.linux.reset()
   vi.clearAllMocks()
   h.state.inCall = false
   h.state.validSignature = true
@@ -389,6 +430,67 @@ describe('updater', () => {
       expect(h.autoUpdater.downloadUpdate).not.toHaveBeenCalled()
       vi.advanceTimersByTime(60_000)
       expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
+    })
+  })
+  describe('Linux sem AppImage (instalação por usuário)', () => {
+    beforeEach(() => {
+      h.linux.kind = 'linux-managed'
+    })
+
+    it('usa o updater próprio com o mesmo endereço, sem o electron-updater', async () => {
+      await startUpdater()
+      expect(h.autoUpdater.setFeedURL).not.toHaveBeenCalled()
+      expect(h.linux.checkForUpdates).toHaveBeenCalled()
+      expect(h.linux.options).toMatchObject({
+        feedUrl: 'http://srv/updates/',
+        currentVersion: '0.6.0'
+      })
+    })
+
+    it('assinatura do .tar.gz conferida antes de extrair; instala pelo updater próprio', async () => {
+      await startUpdater()
+      await h.linux.emit('update-available', { version: '0.7.0' })
+      expect(h.linux.downloadUpdate).toHaveBeenCalled()
+      const event = {
+        version: '0.7.0',
+        downloadedFile: '/home/u/.local/share/salinha/downloads/Salinha-0.7.0-x64.tar.gz'
+      }
+      await h.linux.emit('update-downloaded', event)
+      expect(h.fetch).toHaveBeenCalledWith('http://srv/updates/Salinha-0.7.0-x64.tar.gz.sig')
+      expect(h.linux.stage).toHaveBeenCalledWith(event)
+      expect(h.state.sent).toContainEqual(['update:ready', '0.7.0'])
+      h.state.handlers['update:install']()
+      expect(h.linux.quitAndInstall).toHaveBeenCalledWith(true, true)
+      expect(h.autoUpdater.quitAndInstall).not.toHaveBeenCalled()
+    })
+
+    it('assinatura inválida: nem extrai', async () => {
+      h.state.validSignature = false
+      await startUpdater()
+      await h.linux.emit('update-available', { version: '0.7.0' })
+      await h.linux.emit('update-downloaded', { version: '0.7.0', downloadedFile: '/d/x.tar.gz' })
+      expect(h.linux.stage).not.toHaveBeenCalled()
+      expect(h.state.sent.some(([channel]) => channel === 'update:error')).toBe(true)
+      expect(h.state.sent).not.toContainEqual(['update:ready', '0.7.0'])
+    })
+
+    it('pacote recusado na extração (versão interna errada) não fica pronto', async () => {
+      h.linux.stage.mockRejectedValueOnce(new Error('pacote não é a versão 0.7.0'))
+      await startUpdater()
+      await h.linux.emit('update-available', { version: '0.7.0' })
+      h.state.handlers['update:install']()
+      await h.linux.emit('update-downloaded', { version: '0.7.0', downloadedFile: '/d/x.tar.gz' })
+      expect(h.linux.quitAndInstall).not.toHaveBeenCalled()
+      expect(h.state.sent.some(([channel]) => channel === 'update:error')).toBe(true)
+    })
+
+    it('confirma a abertura da versão para o lançador depois de alguns segundos', async () => {
+      vi.useRealTimers()
+      vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout'] })
+      await startUpdater()
+      expect(h.linux.confirmStartup).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(10_000)
+      expect(h.linux.confirmStartup).toHaveBeenCalledOnce()
     })
   })
 })

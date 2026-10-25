@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, net } from 'electron'
-import { autoUpdater, type UpdateDownloadedEvent } from 'electron-updater'
+import { autoUpdater } from 'electron-updater'
+import { homedir } from 'os'
 import { readFile, rm, writeFile } from 'fs/promises'
 import { readFileSync } from 'fs'
 import { basename, join } from 'path'
@@ -9,15 +10,42 @@ import { createUpdateCheckGate } from './updateCheck'
 import { verifyInstaller } from './updateSignature'
 import { clearCallResume, saveCallResume, takeCallResume } from './callResume'
 import { validCallResume, type CallResume } from '../shared/callResume'
+import { updateBackendKind } from './linuxInstall'
+import { LinuxUpdater } from './linuxUpdater'
 
 // Atualização automática servida pelo próprio servidor da Salinha
 // (`<servidor>/updates/`). O instalador só é aceito com a assinatura Ed25519
 // do dono (chave pública embutida no build).
+//
+// Windows e AppImage montado: electron-updater. Linux sem AppImage (AppImage
+// extraído, sem libfuse2, ou a instalação por usuário em ~/.local/share/salinha):
+// linuxUpdater.ts, que baixa o .tar.gz assinado e não depende de nada do
+// sistema. Os dois passam pelas mesmas regras (chamada, Atualizar, assinatura).
 
 // latest.yml tem poucas centenas de bytes: checar seguido não pesa. O caminho
 // principal é o aviso do servidor (WS app:update → update:check-now); a
 // checagem periódica é a rede de segurança.
 const CHECK_INTERVAL_MS = 60_000
+/** Linux: depois disso aberto, a versão nova "pegou" e o lançador não volta. */
+const BOOT_CONFIRM_MS = 10_000
+
+interface DownloadedUpdate {
+  version: string
+  downloadedFile: string
+}
+
+/** O que o updater usa do autoUpdater (e o LinuxUpdater também oferece). */
+interface UpdateBackend {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  on(event: string, listener: (...args: any[]) => void): unknown
+  checkForUpdates(): Promise<unknown>
+  downloadUpdate(): Promise<unknown>
+  quitAndInstall(isSilent: boolean, isForceRunAfter: boolean): void
+  /** Linux: extrai e confere o pacote (já com a assinatura válida). */
+  stage?(event: DownloadedUpdate): Promise<void>
+}
+
+let backend: UpdateBackend = autoUpdater
 
 interface UpdaterConfig {
   /** ex.: http://abc.ply.gg:1234/updates/ */
@@ -71,7 +99,7 @@ function install(onError: (message: string) => void): void {
   markQuitting()
   // silencioso e abre o app de novo ao terminar
   try {
-    autoUpdater.quitAndInstall(true, true)
+    backend.quitAndInstall(true, true)
   } catch (error) {
     installing = false
     markQuitting(false)
@@ -128,7 +156,7 @@ function startDownloadNow(force: boolean): void {
   }
   pendingDownload = false
   downloading = true
-  autoUpdater.downloadUpdate().catch((err) => {
+  backend.downloadUpdate().catch((err) => {
     downloading = false
     console.error('[update] download falhou:', err)
   })
@@ -170,14 +198,31 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
   // Sem endereço ou sem chave (build de desenvolvimento): não atualiza.
   if (!app.isPackaged || !config.feedUrl || !config.publicKeyPem) return
 
-  autoUpdater.setFeedURL({ provider: 'generic', url: config.feedUrl })
-  autoUpdater.autoDownload = false
-  // A instalação passa pela verificação da assinatura — nunca automática.
-  autoUpdater.autoInstallOnAppQuit = false
+  if (updateBackendKind(process.platform, process.env) === 'linux-managed') {
+    const linux = new LinuxUpdater({
+      feedUrl: config.feedUrl,
+      currentVersion: app.getVersion(),
+      execPath: process.execPath,
+      home: homedir(),
+      env: process.env,
+      argv: process.argv.slice(1),
+      fetch: (url) => net.fetch(url),
+      relaunch: (options) => app.relaunch(options),
+      quit: () => app.quit()
+    })
+    setTimeout(() => linux.confirmStartup(), BOOT_CONFIRM_MS)
+    backend = linux
+  } else {
+    autoUpdater.setFeedURL({ provider: 'generic', url: config.feedUrl })
+    autoUpdater.autoDownload = false
+    // A instalação passa pela verificação da assinatura — nunca automática.
+    autoUpdater.autoInstallOnAppQuit = false
+    backend = autoUpdater
+  }
 
   // Aviso assim que existe versão nova (antes de baixar); versão mais nova
   // substitui a que já estava pronta.
-  autoUpdater.on('update-available', (info: { version: string }) => {
+  backend.on('update-available', (info: { version: string }) => {
     if (info.version !== availableVersion) {
       availableVersion = info.version
       readyVersion = null
@@ -185,10 +230,10 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
     send('update:available', info.version)
     startDownload(installRequested)
   })
-  autoUpdater.on('download-progress', (progress: { percent: number }) => {
+  backend.on('download-progress', (progress: { percent: number }) => {
     send('update:progress', Math.round(progress.percent))
   })
-  autoUpdater.on('error', (err) => {
+  backend.on('error', (err: unknown) => {
     if (installing) markQuitting(false)
     installing = false
     try {
@@ -200,7 +245,7 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
     console.error('[update] erro:', err)
     if (installRequested) send('update:error', String(err))
   })
-  autoUpdater.on('update-downloaded', async (event: UpdateDownloadedEvent) => {
+  backend.on('update-downloaded', async (event: DownloadedUpdate) => {
     downloading = false
     try {
       const [data, signature] = await Promise.all([
@@ -210,6 +255,8 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
       if (!verifyInstaller(data, signature, config.publicKeyPem)) {
         throw new Error('assinatura inválida')
       }
+      // Só depois da assinatura: extrai e confere a versão dentro do pacote.
+      if (backend.stage) await backend.stage(event)
     } catch (err) {
       console.error('[update] instalador recusado:', err)
       await rm(event.downloadedFile, { force: true }).catch(() => {})
@@ -240,7 +287,7 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
   })
 
   const gate = createUpdateCheckGate(() =>
-    autoUpdater.checkForUpdates().catch((err) => console.error('[update] checagem falhou:', err))
+    backend.checkForUpdates().catch((err) => console.error('[update] checagem falhou:', err))
   )
   // O renderer pede na hora: o servidor avisou de versão nova (WS app:update)
   // ou o WS reconectou (deploy reinicia o backend; o manifesto pode sair depois).

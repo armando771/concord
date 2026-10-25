@@ -1,0 +1,127 @@
+#!/bin/sh
+# Lançador da Salinha instalada por usuário (sem FUSE, sem root):
+#
+#   <raiz>/versions/<versão>/   app (um .tar.gz assinado por versão)
+#   <raiz>/current  -> versions/<versão>   (troca atômica a cada atualização)
+#   <raiz>/previous -> versions/<anterior> (volta automática, ver abaixo)
+#
+# A raiz (padrão ~/.local/share/salinha) é deduzida do próprio caminho deste
+# arquivo, que fica dentro de cada versão.
+#
+#   salinha-launcher [args...]   abre o app
+#   salinha-launcher --integrate cria ~/.local/bin/salinha, o atalho do menu
+#                                e o ícone (instalador e atualização chamam)
+#
+# Sandbox do Chromium: sem root não há o chrome-sandbox SUID, então o app usa
+# o sandbox de user namespaces do kernel. Onde eles estão desligados (sysctl)
+# ou restritos (AppArmor do Ubuntu 24.04+), abre com --no-sandbox como último
+# recurso e registra em <raiz>/launcher.log. SALINHA_SANDBOX=0/1 força.
+set -u
+
+HERE=$(cd "$(dirname "$0")" && pwd -P) || exit 1
+ROOT=$(dirname "$(dirname "$HERE")")
+PROC_SYS="${SALINHA_PROC_SYS:-/proc/sys}"
+# Partidas sem o app confirmar que abriu (ver boot-pending) antes de voltar.
+MAX_TRIES=3
+
+log() {
+  printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" "$*" >>"$ROOT/launcher.log" 2>/dev/null || true
+}
+
+# Aspas simples para shell: 'a'\''b'.
+shquote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+# Guarda um arquivo que não é nosso (ex.: lançador do AppImage extraído) em
+# <raiz>/legacy em vez de apagar.
+backup_foreign() {
+  [ -e "$1" ] || [ -L "$1" ] || return 0
+  grep -q 'X-Salinha-Managed' "$1" 2>/dev/null && return 0
+  mkdir -p "$ROOT/legacy" || return 1
+  mv -f "$1" "$ROOT/legacy/$(basename "$1").$(date +%s 2>/dev/null || echo old)" || return 1
+  log "guardado em $ROOT/legacy: $1"
+}
+
+integrate() {
+  data="${XDG_DATA_HOME:-$HOME/.local/share}"
+  bin="$HOME/.local/bin"
+  apps="$data/applications"
+  launcher="$ROOT/current/salinha-launcher"
+  mkdir -p "$bin" "$apps" || return 1
+  [ -f "$ROOT/current/salinha.png" ] && cp -f "$ROOT/current/salinha.png" "$ROOT/icon.png"
+
+  backup_foreign "$bin/salinha" || return 1
+  tmp="$bin/.salinha.$$"
+  {
+    echo '#!/bin/sh'
+    echo '# X-Salinha-Managed: gerado pela Salinha (salinha-launcher --integrate)'
+    echo "exec $(shquote "$launcher") \"\$@\""
+  } >"$tmp" && chmod 755 "$tmp" && mv -f "$tmp" "$bin/salinha" || return 1
+
+  backup_foreign "$apps/salinha.desktop" || return 1
+  tmp="$apps/.salinha.desktop.$$"
+  {
+    echo '[Desktop Entry]'
+    echo 'Type=Application'
+    echo 'Name=Salinha'
+    echo 'Comment=Servidores, canais de texto e voz'
+    echo "Exec=\"$launcher\" %U"
+    echo "Icon=$ROOT/icon.png"
+    echo 'Terminal=false'
+    echo 'StartupWMClass=Salinha'
+    echo 'Categories=Network;Chat;'
+    echo 'X-Salinha-Managed=true'
+  } >"$tmp" && mv -f "$tmp" "$apps/salinha.desktop" || return 1
+  command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$apps" >/dev/null 2>&1
+  log "integrado: $bin/salinha e $apps/salinha.desktop -> $(readlink "$ROOT/current")"
+  return 0
+}
+
+# A atualização grava boot-pending; o app novo apaga ao abrir. Se o app novo
+# não abriu em MAX_TRIES partidas, volta para a versão anterior.
+rollback_if_stuck() {
+  pending="$ROOT/boot-pending"
+  [ -f "$pending" ] || return 0
+  echo x >>"$pending" 2>/dev/null || return 0
+  tries=$(($(wc -l <"$pending") - 1))
+  [ "$tries" -ge "$MAX_TRIES" ] || return 0
+  prev=$(readlink "$ROOT/previous" 2>/dev/null) || prev=''
+  if [ -n "$prev" ] && [ -x "$ROOT/$prev/salinha" ]; then
+    log "versão $(head -n 1 "$pending") não abriu em $tries tentativas: voltando para $prev"
+    ln -sfn "$prev" "$ROOT/current"
+  fi
+  rm -f "$pending"
+}
+
+userns_available() {
+  case "${SALINHA_SANDBOX:-auto}" in
+  0 | no | off) return 1 ;;
+  1 | yes | on) return 0 ;;
+  esac
+  v=$(cat "$PROC_SYS/kernel/unprivileged_userns_clone" 2>/dev/null) && [ "$v" = 0 ] && return 1
+  v=$(cat "$PROC_SYS/user/max_user_namespaces" 2>/dev/null) && [ "$v" = 0 ] && return 1
+  v=$(cat "$PROC_SYS/kernel/apparmor_restrict_unprivileged_userns" 2>/dev/null) && [ "$v" = 1 ] && return 1
+  if command -v unshare >/dev/null 2>&1; then
+    unshare -Ur true >/dev/null 2>&1 || return 1
+  fi
+  return 0
+}
+
+if [ "${1:-}" = "--integrate" ]; then
+  integrate
+  exit $?
+fi
+
+rollback_if_stuck
+APP="$ROOT/current/salinha"
+if [ ! -x "$APP" ]; then
+  echo "Salinha: instalação incompleta em $ROOT — rode o instalador de novo." >&2
+  exit 1
+fi
+set -- --ozone-platform-hint=auto "$@"
+if ! userns_available; then
+  log "user namespaces indisponíveis: abrindo sem o sandbox do Chromium"
+  set -- --no-sandbox "$@"
+fi
+exec "$APP" "$@"
