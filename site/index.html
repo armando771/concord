@@ -129,6 +129,17 @@
       -webkit-background-clip: text; background-clip: text; color: transparent;
     }
     .lead { font-size: 18px; color: var(--muted); max-width: 620px; margin: 0 auto 34px; }
+    .btn[hidden] { display: none; }
+    .dl-group { display: contents; }
+    .dl-group .btn svg { width: 22px; height: 22px; flex: none; }
+    .dl-group.single { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .dl-more {
+      background: none; border: 0; padding: 4px 6px; font: inherit; font-size: 13px;
+      color: var(--muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; border-radius: 6px;
+    }
+    .dl-more:hover { color: var(--text); }
+    .dl-more:focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
+    .dl-more[hidden] { display: none; }
     .cta { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: center; }
     .meta { margin-top: 18px; font-size: 13px; color: var(--dim); display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; }
     .meta svg { width: 14px; height: 14px; }
@@ -308,13 +319,16 @@
           <h1>O lugar da <span class="grad">resenha</span> com os amigos.</h1>
           <p class="lead">Servidores, canais de texto e voz, chamadas de vídeo e compartilhamento de tela com som — num app leve, escuro e só nosso.</p>
           <div class="cta" id="downloads">
-            <a class="btn btn-primary" data-download="windows" aria-disabled="true" tabindex="-1">
-              <svg><use href="#i-windows"/></svg>
-              <span class="lbl">Baixar para Windows<small data-version-meta="windows">buscando versão…</small></span>
-            </a>
-            <a class="btn btn-ghost" data-download="linux" aria-disabled="true" tabindex="-1">
-              <span class="lbl">Baixar para Linux<small data-version-meta="linux">AppImage x64 · buscando versão…</small></span>
-            </a>
+            <div class="dl-group" data-dl-group>
+              <a class="btn btn-primary" data-download="windows" aria-disabled="true" tabindex="-1">
+                <svg><use href="#i-windows"/></svg>
+                <span class="lbl">Baixar para Windows<small data-version-meta="windows">buscando versão…</small></span>
+              </a>
+              <a class="btn btn-ghost" data-download="linux" aria-disabled="true" tabindex="-1">
+                <span class="lbl">Baixar para Linux<small data-version-meta="linux">AppImage x64 · buscando versão…</small></span>
+              </a>
+              <button type="button" class="dl-more" data-dl-more aria-expanded="false" hidden>Outras opções de download</button>
+            </div>
             <a class="btn btn-ghost" href="https://app-salinha.bhrx.com.br" data-web-app>Usar no navegador</a>
             <a class="btn btn-ghost" href="#instalar">Como instalar</a>
           </div>
@@ -434,13 +448,16 @@
           <h2>Bora pra call?</h2>
           <p>Baixe a Salinha e chama a galera.</p>
           <div class="cta">
-            <a class="btn btn-primary" data-download="windows" aria-disabled="true" tabindex="-1">
-              <svg><use href="#i-download"/></svg>
-              <span class="lbl">Baixar para Windows<small data-version-meta="windows">buscando versão…</small></span>
-            </a>
-            <a class="btn btn-ghost" data-download="linux" aria-disabled="true" tabindex="-1">
-              <span class="lbl">Baixar para Linux<small data-version-meta="linux">AppImage x64 · buscando versão…</small></span>
-            </a>
+            <div class="dl-group" data-dl-group>
+              <a class="btn btn-primary" data-download="windows" aria-disabled="true" tabindex="-1">
+                <svg><use href="#i-download"/></svg>
+                <span class="lbl">Baixar para Windows<small data-version-meta="windows">buscando versão…</small></span>
+              </a>
+              <a class="btn btn-ghost" data-download="linux" aria-disabled="true" tabindex="-1">
+                <span class="lbl">Baixar para Linux<small data-version-meta="linux">AppImage x64 · buscando versão…</small></span>
+              </a>
+              <button type="button" class="dl-more" data-dl-more aria-expanded="false" hidden>Outras opções de download</button>
+            </div>
             <a class="btn btn-ghost" href="https://app-salinha.bhrx.com.br" data-web-app>Usar no navegador</a>
           </div>
         </div>
@@ -456,6 +473,33 @@
   </footer>
 
   <script src="downloads.js" defer></script>
+  <script type="module">
+    import { detectOS } from './detect-os.js';
+
+    // Só o download do SO do visitante fica à mostra; o outro some atrás de "Outras opções".
+    const os = detectOS(navigator.userAgentData?.platform, navigator.userAgent);
+    if (os !== 'other') {
+      const other = os === 'windows' ? 'linux' : 'windows';
+      document.querySelectorAll('[data-dl-group]').forEach((group, i) => {
+        const main = group.querySelector(`[data-download="${os}"]`);
+        const alt = group.querySelector(`[data-download="${other}"]`);
+        const toggle = group.querySelector('[data-dl-more]');
+        main.classList.replace('btn-ghost', 'btn-primary');
+        alt.classList.replace('btn-primary', 'btn-ghost');
+        alt.id = 'dl-alt-' + i;
+        alt.hidden = true;
+        group.prepend(main);
+        group.classList.add('single');
+        toggle.hidden = false;
+        toggle.setAttribute('aria-controls', alt.id);
+        toggle.addEventListener('click', () => {
+          const open = toggle.getAttribute('aria-expanded') !== 'true';
+          toggle.setAttribute('aria-expanded', String(open));
+          alt.hidden = !open;
+        });
+      });
+    }
+  </script>
   <script>
     // Entrada suave das seções.
     const io = new IntersectionObserver((entries) => {

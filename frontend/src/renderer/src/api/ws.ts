@@ -1,4 +1,5 @@
 import { WS_URL } from '../lib/config'
+import { isPlannedRestart, reconnectDelay } from '../lib/wsReconnect'
 
 export type WsEventType =
   | 'message:create'
@@ -41,19 +42,26 @@ interface WsClientConfig {
   getToken: () => string | null
   getUserId: () => string | null
   onEvent: (event: WsEvent) => void
-  /** Conexão (re)aberta, depois de reassinar as salas. */
-  onOpen?: () => void
+  /**
+   * Conexão (re)aberta, depois de reassinar as salas. `reconnected`: já tinha
+   * aberto antes desde o connect() — eventos da queda podem ter se perdido.
+   */
+  onOpen?: (reconnected: boolean) => void
+  /** Conexão caiu (ou uma tentativa de reconectar falhou) sem ser por disconnect(). */
+  onLost?: () => void
 }
-
-const BACKOFF_BASE_MS = 1000
-const BACKOFF_MAX_MS = 30000
 
 export class WsClient {
   private config: WsClientConfig
   private ws: WebSocket | null = null
   private subscriptions = new Set<string>()
   private closedByUser = false
-  private retryDelay = BACKOFF_BASE_MS
+  /** Tentativas de reconectar desde a última conexão aberta. */
+  private attempt = 0
+  /** O servidor avisou que estava reiniciando (1012): reconecta logo. */
+  private serverRestarting = false
+  /** Já abriu alguma vez desde o connect(). */
+  private everOpened = false
   private retryTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(config: WsClientConfig) {
@@ -62,6 +70,7 @@ export class WsClient {
 
   connect(): void {
     this.closedByUser = false
+    this.everOpened = false
     this.open()
   }
 
@@ -106,13 +115,16 @@ export class WsClient {
     const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`)
 
     ws.onopen = () => {
-      this.retryDelay = BACKOFF_BASE_MS
+      this.attempt = 0
+      this.serverRestarting = false
       const userId = this.config.getUserId()
       if (userId) this.subscriptions.add(`user:${userId}`)
       for (const room of this.subscriptions) {
         this.send({ type: 'subscribe', payload: { room } })
       }
-      this.config.onOpen?.()
+      const reconnected = this.everOpened
+      this.everOpened = true
+      this.config.onOpen?.(reconnected)
     }
 
     ws.onmessage = (event: MessageEvent) => {
@@ -124,9 +136,12 @@ export class WsClient {
       }
     }
 
-    ws.onclose = () => {
-      this.ws = null
-      if (!this.closedByUser) this.scheduleReconnect()
+    ws.onclose = (event: CloseEvent) => {
+      if (this.ws === ws) this.ws = null
+      if (this.closedByUser) return
+      if (isPlannedRestart(event.code)) this.serverRestarting = true
+      this.config.onLost?.()
+      this.scheduleReconnect()
     }
 
     ws.onerror = () => {
@@ -149,10 +164,11 @@ export class WsClient {
 
   private scheduleReconnect(): void {
     this.clearRetry()
+    const delay = reconnectDelay(this.attempt, this.serverRestarting)
+    this.attempt++
     this.retryTimer = setTimeout(() => {
       this.open()
-    }, this.retryDelay)
-    this.retryDelay = Math.min(this.retryDelay * 2, BACKOFF_MAX_MS)
+    }, delay)
   }
 
   private clearRetry(): void {
