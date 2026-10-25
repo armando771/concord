@@ -6,6 +6,7 @@ import ServerSidebar from './ServerSidebar'
 import IncomingCallModal from './call/IncomingCallModal'
 import CallOverlay from './call/CallOverlay'
 import ScreenSharePickerModal from './call/ScreenSharePickerModal'
+import LevelUpBanner from './level/LevelUpBanner'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 
@@ -33,6 +34,7 @@ function AppShell(): React.JSX.Element {
       <IncomingCallModal />
       <CallOverlay />
       <ScreenSharePickerModal />
+      <LevelUpBanner />
     </div>
   )
 }
