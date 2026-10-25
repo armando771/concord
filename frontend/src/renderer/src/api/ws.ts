@@ -3,6 +3,7 @@ import { WS_URL } from '../lib/config'
 export type WsEventType =
   | 'message:create'
   | 'message:delete'
+  | 'message:poll:update'
   | 'presence:update'
   | 'channel:create'
   | 'channel:update'

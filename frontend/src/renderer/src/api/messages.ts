@@ -7,6 +7,24 @@ export interface MessageAuthor {
   avatar_url?: string | null
 }
 
+export interface PollAnswer {
+  answer_id: number
+  text: string
+  emoji?: string | null
+  image_url?: string | null
+  count: number
+  me_voted: boolean
+}
+
+export interface Poll {
+  question: string
+  answers: PollAnswer[]
+  allow_multiselect: boolean
+  expires_at: string
+  ended_at?: string | null
+  total_voters: number
+}
+
 export interface Message {
   id: string
   author_id: string
@@ -14,7 +32,21 @@ export interface Message {
   channel_id?: string | null
   conversation_id?: string | null
   content: string
+  poll?: Poll | null
   created_at: string
+}
+
+export interface PollAnswerInput {
+  text: string
+  emoji?: string
+  image_url?: string
+}
+
+export interface CreatePollInput {
+  question: string
+  answers: PollAnswerInput[]
+  duration_hours: number
+  allow_multiselect: boolean
 }
 
 export const MESSAGE_LIMIT = 50
@@ -59,4 +91,30 @@ export function deleteConversationMessage(
   return request<void>(`/conversations/${conversationId}/messages/${messageId}`, {
     method: 'DELETE'
   })
+}
+
+/** Base da rota da sala: `/channels/:id` ou `/conversations/:id`. */
+function roomPath(room: string): string {
+  return room.startsWith('channel:')
+    ? `/channels/${room.slice('channel:'.length)}`
+    : `/conversations/${room.slice('conversation:'.length)}`
+}
+
+export function createPoll(room: string, input: CreatePollInput): Promise<Message> {
+  return request<Message>(`${roomPath(room)}/polls`, {
+    method: 'POST',
+    body: JSON.stringify(input)
+  })
+}
+
+/** Troca o voto pelas respostas dadas; lista vazia remove o voto. */
+export function votePoll(room: string, messageId: string, answerIds: number[]): Promise<Poll> {
+  return request<Poll>(`${roomPath(room)}/messages/${messageId}/poll/votes`, {
+    method: 'PUT',
+    body: JSON.stringify({ answer_ids: answerIds })
+  })
+}
+
+export function endPoll(room: string, messageId: string): Promise<Poll> {
+  return request<Poll>(`${roomPath(room)}/messages/${messageId}/poll/end`, { method: 'POST' })
 }
