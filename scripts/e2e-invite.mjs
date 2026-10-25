@@ -63,7 +63,7 @@ async function login(user, initScript) {
   const page = await context.newPage()
   if (initScript) await page.addInitScript(initScript)
   await page.goto(APP + '#/login')
-  await page.fill('input[type=email]', user.email)
+  await page.fill('input[placeholder="E-mail ou nome de usuário"]', user.email)
   await page.fill('input[type=password]', user.password)
   await page.click('button[type=submit]')
   await page.getByText('Adicionar amigo').first().waitFor({ timeout: 30000 })

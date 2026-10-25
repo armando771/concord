@@ -137,7 +137,7 @@ async function openClient(user, initScript) {
   page.on('response', (r) => { if (r.status() === 404) console.log(`[${user.username}] 404:`, r.url()) })
   page.on('console', (m) => { if (m.type() === 'error') console.log(`[${user.username}] console:`, m.text()) })
   await page.goto(APP + '#/login')
-  await page.fill('input[type=email]', user.email)
+  await page.fill('input[placeholder="E-mail ou nome de usuário"]', user.email)
   await page.fill('input[type=password]', user.password)
   await page.click('button[type=submit]')
   await page.waitForURL((u) => !u.hash.includes('login'))

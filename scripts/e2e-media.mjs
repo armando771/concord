@@ -188,7 +188,7 @@ try {
     }
   })
   await page.goto(APP + '#/login')
-  await page.fill('input[type=email]', bia.email)
+  await page.fill('input[placeholder="E-mail ou nome de usuário"]', bia.email)
   await page.fill('input[type=password]', bia.password)
   await page.click('button[type=submit]')
   await page.getByText('Adicionar amigo').first().waitFor({ timeout: 30000 })
