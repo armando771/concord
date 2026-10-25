@@ -10,6 +10,9 @@ export interface RegisterInput {
   display_name: string
   email: string
   password: string
+  /** Aniversário opcional (só dia e mês). */
+  birthday_day?: number
+  birthday_month?: number
 }
 
 export interface LoginInput {
