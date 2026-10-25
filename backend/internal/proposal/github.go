@@ -18,22 +18,38 @@ type IssueCreator interface {
 
 // GitHubClient cria issues pela API REST (POST /repos/{owner}/{repo}/issues).
 type GitHubClient struct {
-	token string
-	repo  string // owner/repo
-	http  *http.Client
-	base  string
+	tokens tokenSource
+	repo   string // owner/repo
+	http   *http.Client
+	base   string
 }
 
+// NewGitHubClient usa um token fixo (pessoal ou de uma conta robô). Para criar
+// as issues como um GitHub App, veja NewGitHubAppClient.
 func NewGitHubClient(token, repo string) *GitHubClient {
 	return &GitHubClient{
-		token: token,
-		repo:  repo,
-		http:  &http.Client{Timeout: 15 * time.Second},
-		base:  "https://api.github.com",
+		tokens: staticToken(token),
+		repo:   repo,
+		http:   &http.Client{Timeout: 15 * time.Second},
+		base:   "https://api.github.com",
 	}
 }
 
+// WithBaseURL aponta o cliente para outra API (GitHub Enterprise ou um servidor
+// de teste), tanto para criar issues quanto para pedir o token do App.
+func (g *GitHubClient) WithBaseURL(url string) *GitHubClient {
+	g.base = strings.TrimRight(url, "/")
+	if app, ok := g.tokens.(*appTokens); ok {
+		app.base = g.base
+	}
+	return g
+}
+
 func (g *GitHubClient) CreateIssue(ctx context.Context, p Proposal) (int, string, error) {
+	token, err := g.tokens.Token(ctx)
+	if err != nil {
+		return 0, "", err
+	}
 	body, err := json.Marshal(map[string]any{
 		"title":  p.Title,
 		"body":   issueBody(p),
@@ -46,7 +62,7 @@ func (g *GitHubClient) CreateIssue(ctx context.Context, p Proposal) (int, string
 	if err != nil {
 		return 0, "", err
 	}
-	req.Header.Set("Authorization", "Bearer "+g.token)
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 	req.Header.Set("Content-Type", "application/json")
@@ -58,6 +74,10 @@ func (g *GitHubClient) CreateIssue(ctx context.Context, p Proposal) (int, string
 	defer res.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if res.StatusCode != http.StatusCreated {
+		if res.StatusCode == http.StatusUnauthorized {
+			// Token de instalação revogado/expirado: a próxima tentativa pede outro.
+			g.tokens.Invalidate()
+		}
 		return 0, "", fmt.Errorf("github: status %d: %s", res.StatusCode, strings.TrimSpace(string(raw)))
 	}
 	var out struct {

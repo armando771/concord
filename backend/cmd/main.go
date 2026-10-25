@@ -57,6 +57,51 @@ func loadEnv() {
 	log.Println("No .env file found")
 }
 
+// newIssueCreator escolhe como as propostas aprovadas viram issue: como um
+// GitHub App (GITHUB_APP_*, as issues saem como "<app>[bot]") ou com um token
+// fixo (GITHUB_TOKEN). Sem repositório ou sem credencial, devolve nil e as
+// propostas aprovadas ficam sem issue.
+func newIssueCreator() proposal.IssueCreator {
+	creator := buildIssueCreator()
+	// GITHUB_API_URL: GitHub Enterprise ou servidor de teste (padrão api.github.com).
+	if apiURL := os.Getenv("GITHUB_API_URL"); apiURL != "" {
+		if client, ok := creator.(*proposal.GitHubClient); ok {
+			log.Printf("[proposal] API do GitHub em %s", apiURL)
+			return client.WithBaseURL(apiURL)
+		}
+	}
+	return creator
+}
+
+func buildIssueCreator() proposal.IssueCreator {
+	repo := os.Getenv("GITHUB_REPO")
+	if repo == "" {
+		log.Println("[proposal] GITHUB_REPO vazio: propostas aprovadas ficam sem issue")
+		return nil
+	}
+	appID, installationID := os.Getenv("GITHUB_APP_ID"), os.Getenv("GITHUB_APP_INSTALLATION_ID")
+	if keyPath := os.Getenv("GITHUB_APP_PRIVATE_KEY_PATH"); appID != "" && installationID != "" && keyPath != "" {
+		pemKey, err := os.ReadFile(keyPath)
+		if err != nil {
+			log.Printf("[proposal] GitHub App: não consegui ler a chave %s: %v (propostas aprovadas ficam sem issue)", keyPath, err)
+			return nil
+		}
+		client, err := proposal.NewGitHubAppClient(appID, installationID, pemKey, repo)
+		if err != nil {
+			log.Printf("[proposal] %v (propostas aprovadas ficam sem issue)", err)
+			return nil
+		}
+		log.Printf("[proposal] issues em %s como GitHub App %s", repo, appID)
+		return client
+	}
+	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+		log.Printf("[proposal] issues em %s com GITHUB_TOKEN", repo)
+		return proposal.NewGitHubClient(token, repo)
+	}
+	log.Println("[proposal] sem GITHUB_APP_* nem GITHUB_TOKEN: propostas aprovadas ficam sem issue")
+	return nil
+}
+
 func findMigrationsDir() string {
 	// O deploy aplica as migrations novas de uma pasta à parte antes de
 	// trocá-las pelas do binário no ar (scripts/deploy-vps.sh).
@@ -346,12 +391,7 @@ func main() {
 	go levelService.Run(ctx)
 
 	// Propostas (kanban com votação de 7 dias; aprovadas viram issue no GitHub)
-	var issueCreator proposal.IssueCreator
-	if token, repo := os.Getenv("GITHUB_TOKEN"), os.Getenv("GITHUB_REPO"); token != "" && repo != "" {
-		issueCreator = proposal.NewGitHubClient(token, repo)
-	} else {
-		log.Println("[proposal] GITHUB_TOKEN/GITHUB_REPO vazios: propostas aprovadas ficam sem issue")
-	}
+	issueCreator := newIssueCreator()
 	var techIDs []string
 	for id := range strings.SplitSeq(os.Getenv("TECH_TEAM_USER_IDS"), ",") {
 		if id = strings.TrimSpace(id); id != "" {
