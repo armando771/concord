@@ -23,7 +23,7 @@ export function ToastContainer(): React.JSX.Element {
                   : 'border-violet-500/30 bg-[#0d0917]/90 text-violet-200'
             }`}
           >
-            <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex min-w-0 flex-1 items-center gap-2.5">
               <span className="shrink-0 text-base">{isSuccess ? '✅' : isError ? '❌' : 'ℹ️'}</span>
               <p className="truncate text-xs font-semibold leading-relaxed">{toast.message}</p>
             </div>
