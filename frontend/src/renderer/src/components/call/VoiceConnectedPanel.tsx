@@ -23,6 +23,7 @@ import ActivityPickerPopover from './ActivityPickerPopover'
 import NoiseSuppressionPopover from './NoiseSuppressionPopover'
 import ConnectionStatsPopover from './ConnectionStatsPopover'
 import SoundboardPopover from './SoundboardPopover'
+import ScreenQualityButton from './ScreenQualityButton'
 import { useSoundboardHotkeys } from './useSoundboardHotkeys'
 import { useCallChannelName } from './useCallChannelName'
 import { showVoicePanel, voicePanelHeading, voicePanelLabel, voicePanelRoute } from './voicePanel'
@@ -284,6 +285,7 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
         >
           <MonitorIcon className="h-5 w-5" />
         </RowButton>
+        <ScreenQualityButton />
         <RowButton
           label="Atividades"
           title="Atividades"
