@@ -34,8 +34,8 @@ type xpStore interface {
 type grant struct {
 	activity call.VoiceActivity
 	minutes  int64
-	// percent é o buff da call quando o minuto fechou (100 = sem buff).
-	percent int
+	// xp já inclui o buff e o resto fracionário carregado do minuto anterior.
+	xp int64
 }
 
 type Service struct {
@@ -46,8 +46,11 @@ type Service struct {
 
 	mu sync.Mutex
 	// pending: tempo elegível de cada usuário que ainda não fechou um minuto.
-	pending  map[string]time.Duration
-	lastTick time.Time
+	pending map[string]time.Duration
+	// remainder: centésimos de XP que o buff gerou e ainda não foram pagos
+	// (10 XP/min a 125% = 12,5), para a média paga bater com o multiplicador.
+	remainder map[string]int64
+	lastTick  time.Time
 	// lastBoost: calls com buff ativo (percentual enviado por último).
 	lastBoost map[string]int
 }
@@ -59,6 +62,7 @@ func LevelService(repository *Repository, publisher EventPublisher, voice VoiceS
 		publisher:  publisher,
 		voice:      voice,
 		pending:    make(map[string]time.Duration),
+		remainder:  make(map[string]int64),
 		lastBoost:  make(map[string]int),
 	}
 }
@@ -84,10 +88,12 @@ func (s *Service) Run(ctx context.Context) {
 func (s *Service) tick(ctx context.Context, now time.Time) {
 	active := s.voice.ActiveVoiceUsers()
 	boosts := callBoosts(active)
+	// O aviso do buff vai antes das gravações: ele é o batimento que mantém o
+	// buff vivo no cliente e não pode atrasar junto com o banco.
+	s.publishBoosts(boosts)
 	for _, g := range s.accrue(active, boosts, now) {
 		s.give(ctx, g)
 	}
-	s.publishBoosts(boosts)
 }
 
 // accrue soma o tempo desde o último tick para quem está elegível agora e
@@ -120,7 +126,10 @@ func (s *Service) accrue(active []call.VoiceActivity, boosts map[string]callBoos
 			if b, ok := boosts[a.CallID]; ok {
 				percent = b.percent
 			}
-			grants = append(grants, grant{activity: a, minutes: minutes, percent: percent})
+			// Em centésimos de XP; o resto (< 100) fica para o próximo minuto.
+			centi := minutes*XPPerMinute*int64(percent) + s.remainder[a.UserID]
+			s.remainder[a.UserID] = centi % 100
+			grants = append(grants, grant{activity: a, minutes: minutes, xp: centi / 100})
 		}
 	}
 	for userID := range s.pending {
@@ -128,13 +137,20 @@ func (s *Service) accrue(active []call.VoiceActivity, boosts map[string]callBoos
 			delete(s.pending, userID)
 		}
 	}
+	for userID := range s.remainder {
+		if !stillActive[userID] {
+			delete(s.remainder, userID)
+		}
+	}
 	return grants
 }
 
 func (s *Service) give(ctx context.Context, g grant) {
 	userID := g.activity.UserID
-	// Inteiros: 10 XP/min a 125% rende 12 (a fração é descartada).
-	xp := g.minutes * XPPerMinute * int64(g.percent) / 100
+	xp := g.xp
+	if xp == 0 {
+		return
+	}
 	totalXP, totalSeconds, err := s.store.AddVoiceXP(ctx, userID, xp, g.minutes*60)
 	if err != nil {
 		log.Printf("[level] add xp for %s: %v", userID, err)
