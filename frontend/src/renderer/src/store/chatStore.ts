@@ -34,7 +34,7 @@ import { mergeMessages } from '../lib/messageOrder'
 import { APP_UPDATE_EVENT, requestUpdateCheck } from '../lib/appUpdate'
 import type { ConversationSummary } from '../api/conversations'
 import { listConversations, markConversationRead } from '../api/conversations'
-import { conversationTitle } from '../lib/conversations'
+import { conversationTitle, sanitizeConversations } from '../lib/conversations'
 import type { PresenceMap } from '../api/presence'
 import { fetchPresence } from '../api/presence'
 import { listChannels } from '../api/channels'
@@ -409,7 +409,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     try {
       const conversations = await listConversations()
       if (useAuthStore.getState().accessToken !== token) return
-      const list = Array.isArray(conversations) ? conversations : []
+      // Linha fora do formato (null, sem id, sem membros) não derruba a lista.
+      const list = sanitizeConversations(conversations)
       // Não lidas vêm do servidor (sobrevivem ao reload); a aberta fica zerada.
       set((state) => {
         const unreadByRoom = { ...state.unreadByRoom }
