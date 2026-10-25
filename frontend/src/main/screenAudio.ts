@@ -1,7 +1,8 @@
 import { app, ipcMain, MessageChannelMain, type MessagePortMain, type WebContents } from 'electron'
 import { spawn, type ChildProcess } from 'child_process'
-import { appendFile, existsSync, mkdirSync } from 'fs'
+import { existsSync } from 'fs'
 import { join } from 'path'
+import { appendLog, logPath } from './appLog'
 
 // Som só da janela compartilhada (Windows 10 2004+): o helper nativo
 // concord-audio.exe captura o áudio do processo dono da janela e manda PCM
@@ -37,16 +38,11 @@ export class PcmChunker {
 
 /** Log do som da janela: %APPDATA%\\Concord\\logs\\audio.log no Windows. */
 export function audioLogPath(): string {
-  return join(app.getPath('logs'), 'audio.log')
+  return logPath('audio.log')
 }
 
 export function logAudio(message: string): void {
-  try {
-    mkdirSync(app.getPath('logs'), { recursive: true })
-  } catch {
-    // sem pasta de log: segue sem registrar
-  }
-  appendFile(audioLogPath(), `${new Date().toISOString()} ${message}\n`, () => {})
+  appendLog('audio.log', message)
 }
 
 let helper: ChildProcess | null = null

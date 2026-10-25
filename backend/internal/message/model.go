@@ -38,6 +38,8 @@ type Message struct {
 	ReplyTo        *ReplyPreview     `json:"reply_to,omitempty"`
 	Reactions      []ReactionSummary `json:"reactions,omitempty"`
 	Content        string            `json:"content"`
+	// Mensagem do próprio servidor (ex.: "birthday"); nil = mensagem comum.
+	SystemKind     *string           `json:"system_kind,omitempty"`
 	Poll           *Poll             `json:"poll,omitempty"`
 	Attachments    []Attachment      `json:"attachments,omitempty"`
 	CreatedAt      time.Time         `json:"created_at"`

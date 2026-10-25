@@ -5,27 +5,48 @@ export interface Note {
   /** início, em segundos */
   at: number
   duration: number
-  /** Fração do volume base (padrão 1). */
+  /** ganho no pico; sem valor, BASE_VOLUME */
   volume?: number
   /** Forma da onda (padrão 'sine'). */
   wave?: OscillatorType
 }
 
-const tone = (freq: number, at: number, duration = 0.09): Note => ({ freq, at, duration })
+/** Volume de todos os sons, menos os que pedem outro. */
+export const BASE_VOLUME = 0.12
 
-/** Nota dos sons de nível: mais baixa que os de interface, para não passar das vozes. */
+/** Alguém entrando na call que estou: ~3× mais alto, para não passar batido. */
+const USER_JOIN_VOLUME = 0.36
+
+const tone = (freq: number, at: number, duration = 0.09, volume?: number): Note => ({
+  freq,
+  at,
+  duration,
+  ...(volume === undefined ? {} : { volume })
+})
+
+export const noteVolume = (note: Note): number => note.volume ?? BASE_VOLUME
+
+/**
+ * Nota dos sons de nível: `share` é a fração do BASE_VOLUME, mais baixa que
+ * os sons de interface, para não passar das vozes.
+ */
 const soft = (
   freq: number,
   at: number,
   duration: number,
-  volume: number,
+  share: number,
   wave: OscillatorType = 'sine'
-): Note => ({ freq, at, duration, volume, wave })
+): Note => ({ freq, at, duration, volume: BASE_VOLUME * share, wave })
 
 export const SOUNDS = {
   join: [tone(587, 0), tone(880, 0.1, 0.14)],
   leave: [tone(880, 0), tone(587, 0.1, 0.14)],
-  userJoin: [tone(660, 0, 0.07), tone(880, 0.08, 0.1)],
+  // Três notas subindo (sem sobrepor, para a soma não passar de 0,36).
+  userJoin: [
+    tone(660, 0, 0.07, USER_JOIN_VOLUME),
+    tone(880, 0.08, 0.08, USER_JOIN_VOLUME),
+    tone(1109, 0.17, 0.12, USER_JOIN_VOLUME)
+  ],
   userLeave: [tone(880, 0, 0.07), tone(660, 0.08, 0.1)],
   mute: [tone(520, 0, 0.06), tone(390, 0.07, 0.08)],
   unmute: [tone(390, 0, 0.06), tone(520, 0.07, 0.08)],
@@ -62,19 +83,17 @@ export type SoundName = keyof typeof SOUNDS
 
 export const LEVEL_SOUNDS = ['levelChime', 'levelChimeRich', 'levelFanfare'] as const
 
-/** Maior soma de volume (fração do base) entre as notas que tocam ao mesmo tempo. */
+/** Maior soma de ganho entre as notas que tocam ao mesmo tempo. */
 export function peakVolume(notes: Note[]): number {
   let peak = 0
   for (const { at: t } of notes) {
     const sum = notes
       .filter((n) => n.at <= t && t < n.at + n.duration)
-      .reduce((acc, n) => acc + (n.volume ?? 1), 0)
+      .reduce((acc, n) => acc + noteVolume(n), 0)
     peak = Math.max(peak, sum)
   }
-  return Math.round(peak * 1000) / 1000
+  return Math.round(peak * 10000) / 10000
 }
-
-const VOLUME = 0.12
 
 let ctx: AudioContext | null = null
 let outputId = ''
@@ -103,7 +122,7 @@ export function playSound(name: SoundName): void {
     const t0 = start + note.at
     const t1 = t0 + note.duration
     gain.gain.setValueAtTime(0, t0)
-    gain.gain.linearRampToValueAtTime(VOLUME * (note.volume ?? 1), t0 + 0.01)
+    gain.gain.linearRampToValueAtTime(noteVolume(note), t0 + 0.01)
     gain.gain.exponentialRampToValueAtTime(0.0001, t1)
     osc.connect(gain).connect(ctx.destination)
     osc.start(t0)

@@ -1,8 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { LEVEL_SOUNDS, oncePerKey, peakVolume, SOUNDS } from './sounds'
+import {
+  BASE_VOLUME,
+  LEVEL_SOUNDS,
+  noteVolume,
+  oncePerKey,
+  peakVolume,
+  SOUNDS,
+  type SoundName
+} from './sounds'
 
 const first = (name: keyof typeof SOUNDS): number => SOUNDS[name][0].freq
 const last = (name: keyof typeof SOUNDS): number => SOUNDS[name][SOUNDS[name].length - 1].freq
+
+/** Maior soma de ganhos de notas tocando ao mesmo tempo. */
+const peakGain = (name: SoundName): number =>
+  Math.max(
+    ...SOUNDS[name].map((n) =>
+      SOUNDS[name]
+        .filter((o) => o.at <= n.at && n.at < o.at + o.duration)
+        .reduce((sum, o) => sum + noteVolume(o), 0)
+    )
+  )
+const names = Object.keys(SOUNDS) as SoundName[]
 
 describe('SOUNDS', () => {
   it('entrar sobe, sair desce (como no Discord)', () => {
@@ -33,6 +52,30 @@ describe('SOUNDS', () => {
       expect(end).toBeLessThan(0.5)
     }
   })
+
+  it('alguém entrando na call é bem mais alto que os outros sons, sem estourar', () => {
+    for (const name of names.filter((n) => n !== 'userJoin')) {
+      expect(peakGain('userJoin')).toBeGreaterThan(peakGain(name))
+    }
+    expect(peakGain('userJoin')).toBeGreaterThanOrEqual(BASE_VOLUME * 3)
+    for (const name of names) expect(peakGain(name)).toBeLessThanOrEqual(0.5)
+  })
+
+  it('alguém entrando: três notas subindo em no máximo 0,35 s', () => {
+    const notes = SOUNDS.userJoin
+    expect(notes).toHaveLength(3)
+    expect(notes[1].freq).toBeGreaterThan(notes[0].freq)
+    expect(notes[2].freq).toBeGreaterThan(notes[1].freq)
+    expect(Math.max(...notes.map((n) => n.at + n.duration))).toBeLessThanOrEqual(0.35)
+  })
+
+  it('os outros sons de interface continuam no volume de antes', () => {
+    // Os de subir de nível são novos e de propósito mais baixos (ver abaixo).
+    const levelSounds: readonly SoundName[] = LEVEL_SOUNDS
+    for (const name of names.filter((n) => n !== 'userJoin' && !levelSounds.includes(n))) {
+      for (const note of SOUNDS[name]) expect(noteVolume(note)).toBe(0.12)
+    }
+  })
 })
 
 describe('sons de subir de nível', () => {
@@ -54,13 +97,13 @@ describe('sons de subir de nível', () => {
 
   it('ficam abaixo das vozes: nem somando notas passam de 0,8 do volume base', () => {
     for (const name of LEVEL_SOUNDS) {
-      expect(peakVolume(SOUNDS[name])).toBeLessThanOrEqual(0.8)
+      expect(peakVolume(SOUNDS[name])).toBeLessThanOrEqual(0.8 * BASE_VOLUME)
       expect(peakVolume(SOUNDS[name])).toBeGreaterThan(0)
     }
   })
 
   it('peakVolume soma as notas que tocam juntas', () => {
-    expect(peakVolume(SOUNDS.join)).toBe(1)
+    expect(peakVolume(SOUNDS.join)).toBe(BASE_VOLUME)
     expect(
       peakVolume([
         { freq: 1, at: 0, duration: 1, volume: 0.3 },

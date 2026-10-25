@@ -28,6 +28,7 @@ const messageColumns = `
 	m.conversation_id,
 	m.reply_to_id,
 	m.content,
+	m.system_kind,
 	m.created_at,
 	rm.id,
 	rm.author_id,
@@ -48,8 +49,8 @@ func (r *Repository) Create(ctx context.Context, msg *Message) error {
 	return r.db.QueryRow(
 		ctx,
 		`
-		INSERT INTO messages (id, author_id, channel_id, conversation_id, reply_to_id, content)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO messages (id, author_id, channel_id, conversation_id, reply_to_id, content, system_kind)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING
 			id,
 			author_id,
@@ -65,6 +66,7 @@ func (r *Repository) Create(ctx context.Context, msg *Message) error {
 		msg.ConversationID,
 		msg.ReplyToID,
 		msg.Content,
+		msg.SystemKind,
 	).Scan(
 		&msg.ID,
 		&msg.AuthorID,
@@ -99,6 +101,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Message, error) 
 		&msg.ConversationID,
 		&msg.ReplyToID,
 		&msg.Content,
+		&msg.SystemKind,
 		&msg.CreatedAt,
 		&replyID,
 		&replyAuthorID,
@@ -377,6 +380,7 @@ func scanMessages(rows rowScanner) ([]Message, error) {
 			&msg.ConversationID,
 			&msg.ReplyToID,
 			&msg.Content,
+			&msg.SystemKind,
 			&msg.CreatedAt,
 			&replyID,
 			&replyAuthorID,
