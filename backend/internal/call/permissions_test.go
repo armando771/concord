@@ -425,3 +425,54 @@ func TestAuthorizeMove(t *testing.T) {
 		}
 	}
 }
+
+// Silenciar/ensurdecer de moderador vai para o banco como o mudo normal: um
+// deploy recarrega e não libera ninguém.
+func TestServerVoiceIsSavedAndSurvivesRestart(t *testing.T) {
+	svc, _, _ := newVoiceService(voiceSnapshot())
+	putInCall(svc, "c1", "geral", "ana", "mod")
+	store := &fakeStateStore{}
+	svc.stateStore = store
+	ctx := context.Background()
+
+	if err := svc.SetServerMute(ctx, "c1", "mod", "ana", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SetServerDeafen(ctx, "c1", "mod", "ana", true); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"c1/ana/sim/nao", "c1/ana/sim/sim"}
+	if !reflect.DeepEqual(store.server, want) {
+		t.Fatalf("gravado = %v, want %v", store.server, want)
+	}
+	// Ação recusada não grava nada.
+	if err := svc.SetServerMute(ctx, "c1", "ana", "mod", true); err == nil {
+		t.Fatal("membro silenciou moderador")
+	}
+	if len(store.server) != 2 {
+		t.Fatalf("gravou ação recusada: %v", store.server)
+	}
+
+	// Reinício: o processo novo lê o banco.
+	srv, ch := "srv-1", "geral"
+	restarted, _, _ := newVoiceService(voiceSnapshot())
+	restarted.restore(
+		[]*Call{{ID: "c1", Type: TypeChannel, Status: StatusActive, ServerID: &srv, ChannelID: &ch}},
+		map[string][]CallParticipant{"c1": {
+			{CallID: "c1", UserID: "ana", Role: RoleMember, ServerMuted: true, ServerDeafened: true},
+			{CallID: "c1", UserID: "mod", Role: RoleMember},
+		}},
+	)
+	for _, info := range restarted.participantInfos("c1") {
+		if info.UserID == "ana" && (!info.ServerMuted || !info.ServerDeafened) {
+			t.Fatalf("depois do reinício ana = %+v, want silenciada e ensurdecida", info)
+		}
+		if info.UserID == "mod" && (info.ServerMuted || info.ServerDeafened) {
+			t.Fatalf("depois do reinício mod = %+v, want livre", info)
+		}
+	}
+	// O token novo (o app pede ao reconectar) continua sem microfone e sem áudio.
+	if g := restarted.GrantFor(ctx, "c1", "ana"); !g.NoSpeak || !g.NoSubscribe {
+		t.Fatalf("grant depois do reinício = %+v, want NoSpeak e NoSubscribe", g)
+	}
+}

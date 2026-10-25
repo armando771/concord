@@ -410,11 +410,12 @@ SIGTERM, o backend:
 O processo novo só sobe depois que o antigo sai, então essa espera é o tempo
 sem backend: no E2E, ~0,55 s com um download travado e um WebSocket morto
 (antes: 10 s). O processo novo espera o banco por até 30 s, recarrega as
-chamadas do banco, com o mudo/ensurdecido e quem está transmitindo de cada
-participante (ficam salvos em `call_participants`), e só então atende: os
-ícones de mudo e o selo LIVE não piscam. Se não conseguir ler as chamadas, não
-fica pronto (nada é encerrado por causa de um erro de leitura): tenta de novo
-por até 30 s e então sai com erro.
+chamadas do banco, com o mudo/ensurdecido, o silenciar/ensurdecer de
+moderador e quem está transmitindo de cada participante (ficam salvos em
+`call_participants`), e só então atende: os ícones de mudo e o selo LIVE não
+piscam, e um deploy não libera quem um moderador silenciou. Se não conseguir
+ler as chamadas, não fica pronto (nada é encerrado por causa de um erro de
+leitura): tenta de novo por até 30 s e então sai com erro.
 
 O app, ao receber o 1012, reconecta em 100–300 ms e não mostra aviso;
 "Reconectando ao servidor…" só aparece se a conexão ficar fora por mais de

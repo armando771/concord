@@ -12,6 +12,7 @@ type fakeStateStore struct {
 	mu     sync.Mutex
 	voice  []string
 	screen []string
+	server []string
 	active []string
 	// Se não for nil, MarkCallActive também anota aqui (ordem das gravações).
 	order *[]string
@@ -28,6 +29,13 @@ func (f *fakeStateStore) SaveScreenSharing(_ context.Context, callID, userID str
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.screen = append(f.screen, callID+"/"+userID+"/"+boolStr(active))
+	return nil
+}
+
+func (f *fakeStateStore) SaveServerVoiceState(_ context.Context, callID, userID string, serverMuted, serverDeafened bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.server = append(f.server, callID+"/"+userID+"/"+boolStr(serverMuted)+"/"+boolStr(serverDeafened))
 	return nil
 }
 
