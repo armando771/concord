@@ -18,6 +18,7 @@ import LevelBadge from './level/LevelBadge'
 import { userMenuHandler } from '../store/userMenuStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import { logout } from '../api/auth'
+import { clearSession } from '../api/client'
 import type { Channel, ChannelType } from '../api/channels'
 import {
   listActiveServerCalls,
@@ -50,7 +51,6 @@ export function ServerSidebar(): React.JSX.Element {
   const { channelId } = useParams<{ channelId: string }>()
 
   const user = useAuthStore((s) => s.user)
-  const clear = useAuthStore((s) => s.clear)
   const currentServer = useServerStore((s) => s.currentServer)
   const currentMembers = useServerStore((s) => s.currentMembers)
   const channels = useServerStore((s) => s.channels)
@@ -182,7 +182,7 @@ export function ServerSidebar(): React.JSX.Element {
       useServerStore.getState().reset()
       useInviteStore.getState().reset()
       useChatStore.getState().disconnect()
-      clear()
+      await clearSession()
       setSettingsOpen(false)
       navigate('/login')
     }

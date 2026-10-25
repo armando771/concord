@@ -1,18 +1,14 @@
 import { resolve } from 'path'
 import { defineConfig } from 'electron-vite'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
 import { buildConnectSrc, buildMediaSrc } from './src/renderer/src/lib/serverUrl'
+import { cspPlugin, rendererShared } from './vite.renderer.shared'
 
 // A CSP do renderer precisa liberar o servidor embutido no build (API,
 // WebSocket e os arquivos de mídia do chat).
-const connectSrcPlugin = {
-  name: 'concord-connect-src',
-  transformIndexHtml: (html: string): string =>
-    html
-      .replace('%CONCORD_CONNECT_SRC%', buildConnectSrc(process.env.VITE_SERVER_URL))
-      .replaceAll('%CONCORD_MEDIA_SRC%', buildMediaSrc(process.env.VITE_SERVER_URL))
-}
+const connectSrcPlugin = cspPlugin(
+  buildConnectSrc(process.env.VITE_SERVER_URL),
+  buildMediaSrc(process.env.VITE_SERVER_URL)
+)
 
 // Atualizações: servidas pelo próprio servidor e assinadas pelo dono.
 const serverUrl = process.env.VITE_SERVER_URL?.trim()
@@ -27,12 +23,8 @@ export default defineConfig({
   },
   preload: {},
   renderer: {
-    resolve: {
-      alias: {
-        '@renderer': resolve('src/renderer/src')
-      }
-    },
-    plugins: [react(), tailwindcss(), connectSrcPlugin],
+    // Aliases, plugins e assets: iguais aos do build web (vite.renderer.shared.ts).
+    ...rendererShared(connectSrcPlugin),
     // Duas páginas: o app e o overlay de jogo (janela à parte, sem rede).
     build: {
       rollupOptions: {
@@ -41,8 +33,6 @@ export default defineConfig({
           overlay: resolve('src/renderer/overlay.html')
         }
       }
-    },
-    // O WASM do RNNoise entra inline (lib/noiseSuppression.ts).
-    assetsInclude: ['**/*.wasm']
+    }
   }
 })

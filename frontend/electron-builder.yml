@@ -8,6 +8,9 @@ files:
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
+  # Build web (yarn build:web) e a config dele: não vão no instalador.
+  - '!{vite.web.config.ts,vite.renderer.shared.ts}'
+  - '!{dist-web,web-public}/**'
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
