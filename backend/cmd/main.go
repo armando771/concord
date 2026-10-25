@@ -97,7 +97,7 @@ func main() {
 	// User
 	userRepository := user.UserRepository(db)
 	userService := user.UserService(userRepository)
-	// A migration 000019 não falha com usernames que só diferem na caixa:
+	// A migration 000021 não falha com usernames que só diferem na caixa:
 	// cai num índice comum. Aqui isso aparece no log (só contagens).
 	if usernameGroups, emailGroups, err := userService.CaseConflicts(context.Background()); err != nil {
 		log.Printf("[user] check case conflicts: %v", err)

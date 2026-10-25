@@ -99,7 +99,7 @@ func (r *Repository) FindLoginCandidates(ctx context.Context, column loginColumn
 }
 
 // IdentityTaken diz se já existe conta com esse username ou e-mail, sem
-// diferenciar caixa (usa os índices em lower() da migration 000019).
+// diferenciar caixa (usa os índices em lower() da migration 000021).
 func (r *Repository) IdentityTaken(ctx context.Context, username, email string) (bool, error) {
 	var taken bool
 	err := r.db.QueryRow(

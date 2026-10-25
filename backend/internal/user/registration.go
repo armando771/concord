@@ -84,7 +84,7 @@ func CaseConflictWarning(usernameGroups, emailGroups int) string {
 		usernameGroups, emailGroups,
 	)
 	if usernameGroups > 0 {
-		msg += " Por isso a migration 000019 não criou o índice único em lower(username) (caiu no índice comum)."
+		msg += " Por isso a migration 000021 não criou o índice único em lower(username) (caiu no índice comum)."
 	}
 	return msg + " Resolva os duplicados: veja docs/HOSPEDAGEM.md (\"Nomes de usuário sem diferenciar caixa\")."
 }

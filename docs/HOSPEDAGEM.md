@@ -381,7 +381,7 @@ não mexe nos arquivos. Restaure o banco antes de 7 dias para não perder mídia
 
 O login aceita e-mail ou nome de usuário sem diferenciar maiúsculas de
 minúsculas, e o cadastro recusa (409) um nome ou e-mail que já exista com
-outra caixa. A migration 000019 cria um índice **único** em `lower(username)`
+outra caixa. A migration 000021 cria um índice **único** em `lower(username)`
 quando o banco não tem usernames que só diferem na caixa; se tiver, cria um
 índice comum e não falha. Nesse caso o backend avisa no boot com uma linha
 `WARNING: N grupo(s) de usernames ...` (só contagens, sem nomes).

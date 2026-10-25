@@ -51,7 +51,7 @@ func (s *Service) Create(
 	}
 
 	// O UNIQUE do banco só pega a caixa exata (e o índice em lower(username)
-	// pode não existir; ver migration 000019): confere sem diferenciar caixa.
+	// pode não existir; ver migration 000021): confere sem diferenciar caixa.
 	taken, err := s.repository.IdentityTaken(ctx, user.Username, user.Email)
 	if err != nil {
 		return err
