@@ -698,3 +698,63 @@ export function LockIcon({ className = '' }: IconProps): React.JSX.Element {
     </svg>
   )
 }
+
+/** Sinal da conexão de voz (o "Voz conectada" do painel). */
+export function SignalIcon({ className = '' }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M5 19.5h.01" strokeWidth="3.5" />
+      <path d="M4.5 13a6.5 6.5 0 0 1 6.5 6.5" />
+      <path d="M4.5 7.5a12 12 0 0 1 12 12" />
+      <path d="M4.5 2.5a17 17 0 0 1 17 17" />
+    </svg>
+  )
+}
+
+/** Atividades (jogos e apps dentro da call). */
+export function ActivityIcon({ className = '' }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <circle cx="7" cy="7" r="4" />
+      <path d="M17 2.5l4.5 8h-9z" />
+      <rect x="3" y="13.5" width="8" height="8" rx="1.5" />
+      <path d="M17 13l1.3 2.7 2.7 1.3-2.7 1.3L17 21l-1.3-2.7L13 17l2.7-1.3z" />
+    </svg>
+  )
+}
+
+export function CheckIcon({ className = '' }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  )
+}
