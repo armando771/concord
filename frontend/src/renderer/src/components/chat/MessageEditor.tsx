@@ -55,7 +55,9 @@ function MessageEditor({
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={handleKeyDown}
         rows={1}
-        maxLength={2000}
+        // Mesmo limite do campo de envio, sem cortar mensagem mais longa
+        // que veio por outro caminho (o backend aceita até 4000).
+        maxLength={Math.max(2000, initial.length)}
         aria-label="Editar mensagem"
         disabled={saving}
         className="w-full resize-none rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm leading-relaxed text-white outline-none focus:border-violet-500/40 disabled:opacity-60"

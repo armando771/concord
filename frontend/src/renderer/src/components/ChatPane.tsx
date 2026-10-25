@@ -266,7 +266,12 @@ function MessageItem({
       }`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      onContextMenu={onAuthorMenu}
+      onContextMenu={(e) => {
+        // Sobre texto selecionado ou link fica o menu do navegador (copiar,
+        // copiar endereço do link); no resto da linha, o menu do autor.
+        if (window.getSelection()?.toString() || (e.target as Element).closest('a')) return
+        onAuthorMenu?.(e)
+      }}
     >
       {hasReplyReference && (
         <div className="flex items-center gap-1.5 pl-4 text-xs text-gray-400">
