@@ -17,7 +17,8 @@ export interface ToastMessage {
 
 interface ToastState {
   toasts: ToastMessage[]
-  addToast: (message: string, type?: ToastType, durationMs?: number, action?: ToastAction) => void
+  /** Devolve o id (para removeToast). durationMs 0 = fica até ser removido. */
+  addToast: (message: string, type?: ToastType, durationMs?: number, action?: ToastAction) => string
   removeToast: (id: string) => void
 }
 
@@ -34,6 +35,7 @@ export const useToastStore = create<ToastState>((set, get) => ({
         get().removeToast(id)
       }, durationMs)
     }
+    return id
   },
   removeToast: (id) => {
     set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }))

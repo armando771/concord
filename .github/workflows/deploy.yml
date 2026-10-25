@@ -19,12 +19,14 @@ name: Deploy
 on:
   push:
     branches: [main]
+  # PRs só rodam os testes (inclusive a conferência das migrations); nunca deployam.
+  pull_request:
   workflow_dispatch:
 
-# Um deploy por vez, na ordem dos commits.
+# Um deploy por vez, na ordem dos commits (PRs em grupo próprio).
 concurrency:
-  group: deploy
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.ref) || 'deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -47,6 +49,20 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # a conferência das migrations compara com a branch de destino
+
+      # Número de migration repetido, ou migration nova que não fica acima da
+      # maior do destino, seria pulada em silêncio no banco (docs/HOSPEDAGEM.md).
+      - name: Migrations (números)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [[ -n "$BASE_REF" ]]; then
+            node scripts/check-migrations.mjs "origin/$BASE_REF"
+          else
+            node scripts/check-migrations.mjs
+          fi
 
       - uses: actions/setup-go@v7
         with:
@@ -81,7 +97,9 @@ jobs:
 
   deploy:
     needs: test
-    if: vars.DEPLOY_ENABLED == 'true'
+    # Só a main vai para a VPS (workflow_dispatch numa branch ou tag antiga não:
+    # um binário antigo não sobe com o socket do systemd ativo).
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     env:
       PUBLIC_URL: ${{ vars.PUBLIC_URL }}
@@ -161,6 +179,7 @@ jobs:
             curl -fsS "${PUBLIC_URL%/}/updates/$path.sig" | grep -q .
           done
           test "$(curl -s -o /dev/null -w '%{http_code}' "${PUBLIC_URL%/}/rtc/validate")" = 401
+          curl -fsS "${PUBLIC_URL%/}/healthz" | grep -q '"ok"'
           if [[ -n "$SITE_URL" ]]; then
             curl -fsS "${SITE_URL%/}/" | grep -q 'data-download'
             curl -fsS "${SITE_URL%/}/updates/latest.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
