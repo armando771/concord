@@ -7,12 +7,18 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
+
+// MaxMessageLength é o tamanho máximo do texto, em caracteres (o mesmo CHECK
+// do banco, char_length(content) <= 4000).
+const MaxMessageLength = 4000
 
 // MaxAttachmentsPerMessage é quantos arquivos cabem numa mensagem (como no Discord).
 const MaxAttachmentsPerMessage = 10
 
 var (
+	ErrContentTooLong     = errors.New("content is too long")
 	ErrTooManyAttachments = errors.New("a message can have at most 10 attachments")
 	ErrInvalidAttachment  = errors.New("invalid attachment")
 	ErrAttachmentNotFound = errors.New("attachment not found")
@@ -39,11 +45,23 @@ type storedAttachment struct {
 	CreatedAt      time.Time
 }
 
+// validateContent: texto de até MaxMessageLength caracteres; só mensagem com
+// anexo pode ficar sem texto (só espaços conta como sem texto).
+func validateContent(content string, hasAttachments bool) error {
+	if strings.TrimSpace(content) == "" && !hasAttachments {
+		return ErrContentRequired
+	}
+	if utf8.RuneCountInString(content) > MaxMessageLength {
+		return ErrContentTooLong
+	}
+	return nil
+}
+
 // validateNewMessage confere texto e anexos antes de ir ao banco. A posse e a
 // sala de cada anexo são conferidas na transação (CreateWithAttachments).
 func validateNewMessage(content string, attachmentIDs []string) error {
-	if content == "" && len(attachmentIDs) == 0 {
-		return ErrContentRequired
+	if err := validateContent(content, len(attachmentIDs) > 0); err != nil {
+		return err
 	}
 	if len(attachmentIDs) > MaxAttachmentsPerMessage {
 		return ErrTooManyAttachments

@@ -9,13 +9,15 @@ import { useUserLook } from '../store/profileStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import { userMenuHandler } from '../store/userMenuStore'
 import { useFriendStore } from '../store/friendStore'
+import { applyMention, mentionQuery, mentionSuggestions, messageMentionsMe } from '../lib/mentions'
 import {
-  applyMention,
-  mentionQuery,
-  mentionSuggestions,
-  messageMentionsMe,
-  splitMentions
-} from '../lib/mentions'
+  canEditMessage,
+  editErrorMessage,
+  editOutcome,
+  lastEditableMessage
+} from '../lib/messageEdit'
+import MessageText from './chat/MessageText'
+import MessageEditor from './chat/MessageEditor'
 import { filterEmoteCategories, QUICK_EMOTES } from '../lib/emotes'
 import { messagePreview } from '../lib/polls'
 import PollCard from './poll/PollCard'
@@ -82,6 +84,23 @@ const ANCHOR_CANDIDATES = 20
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+}
+
+/** Tem texto selecionado que pega (ao menos em parte) este elemento? */
+function selectionTouches(el: Element): boolean {
+  const selection = window.getSelection()
+  return Boolean(selection && !selection.isCollapsed && selection.containsNode(el, true))
+}
+
+function formatEditedAt(iso: string): string {
+  const when = new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+  return `Editada em ${when}`
 }
 
 function EmotePickerPopover({
@@ -166,6 +185,12 @@ function MessageItem({
   onDelete,
   onVote,
   onEndPoll,
+  onCopy,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  isEditing,
+  savingEdit,
   canReact,
   canModerate
 }: {
@@ -177,6 +202,13 @@ function MessageItem({
   onDelete: () => void
   onVote: (answerIds: number[]) => Promise<void>
   onEndPoll: () => Promise<void>
+  onCopy: () => void
+  onStartEdit: () => void
+  onSaveEdit: (draft: string) => void
+  onCancelEdit: () => void
+  /** Esta mensagem está aberta na edição. */
+  isEditing: boolean
+  savingEdit: boolean
   /** ADD_REACTIONS no canal. */
   canReact: boolean
   /** MANAGE_MESSAGES no canal: apaga mensagem de outros e encerra enquete. */
@@ -204,6 +236,7 @@ function MessageItem({
   const onAuthorMenu = userMenuHandler(message.author_id, name, me?.id, author?.username)
 
   const mentionsMe = messageMentionsMe(message, me)
+  const editable = canEditMessage(message, me?.id)
   const reactions = message.reactions ?? []
   const hasReplyReference = Boolean(message.reply_to_id || message.reply_to)
   const replyAuthorName =
@@ -239,7 +272,12 @@ function MessageItem({
       }`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      onContextMenu={onAuthorMenu}
+      onContextMenu={(e) => {
+        // Sobre texto selecionado desta linha ou link fica o menu do
+        // navegador/app (copiar, copiar link); no resto da linha, o do autor.
+        if (selectionTouches(e.currentTarget) || (e.target as Element).closest('a')) return
+        onAuthorMenu?.(e)
+      }}
     >
       {hasReplyReference && (
         <div className="flex items-center gap-1.5 pl-4 text-xs text-gray-400">
@@ -280,22 +318,23 @@ function MessageItem({
               {name}
             </button>
             <span className="text-[10px] text-gray-500">{formatTime(message.created_at)}</span>
+            {message.edited_at && (
+              <span className="text-[10px] text-gray-500" title={formatEditedAt(message.edited_at)}>
+                (editada)
+              </span>
+            )}
           </div>
-          {message.content && (
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">
-              {splitMentions(message.content, message.mention_everyone ?? null).map((part, i) =>
-                part.mention ? (
-                  <span
-                    key={i}
-                    className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]"
-                  >
-                    {part.text}
-                  </span>
-                ) : (
-                  part.text
-                )
-              )}
-            </p>
+          {isEditing ? (
+            <MessageEditor
+              initial={message.content}
+              saving={savingEdit}
+              onSave={onSaveEdit}
+              onCancel={onCancelEdit}
+            />
+          ) : (
+            message.content && (
+              <MessageText content={message.content} everyone={message.mention_everyone ?? null} />
+            )
           )}
           {message.attachments?.length ? (
             <MessageAttachments attachments={message.attachments} />
@@ -377,6 +416,26 @@ function MessageItem({
             >
               Responder
             </button>
+            {message.content && (
+              <button
+                type="button"
+                onClick={onCopy}
+                title="Copiar texto"
+                className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                Copiar texto
+              </button>
+            )}
+            {editable && !isEditing && (
+              <button
+                type="button"
+                onClick={onStartEdit}
+                title="Editar mensagem"
+                className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                Editar
+              </button>
+            )}
             {(isMine || canModerate) && (
               <button
                 type="button"
@@ -425,7 +484,13 @@ function ChatPane({
   const createPollInRoom = useChatStore((s) => s.createPollInRoom)
   const votePollInRoom = useChatStore((s) => s.votePollInRoom)
   const endPollInRoom = useChatStore((s) => s.endPollInRoom)
+  const editInRoom = useChatStore((s) => s.editInRoom)
   const [pollOpen, setPollOpen] = useState(false)
+  // Mensagem aberta na edição, por sala (o ServerView reaproveita o ChatPane).
+  const [editState, setEditState] = useState<{ room: string; id: string } | null>(null)
+  const editingId = editState?.room === room ? editState.id : null
+  const [savingEdit, setSavingEdit] = useState(false)
+  const meId = useAuthStore((s) => s.user?.id)
 
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -512,9 +577,63 @@ function ChatPane({
       // Sem item escolhido, Enter/Tab seguem normais (nada de @all sem querer).
       if (e.key === 'Enter' || e.key === 'Tab') return
     }
+    // ↑ no campo vazio edita a sua última mensagem (como no Discord).
+    if (e.key === 'ArrowUp' && draft === '' && !e.shiftKey && !e.altKey && !e.ctrlKey) {
+      const last = lastEditableMessage(messages, meId)
+      if (last) {
+        e.preventDefault()
+        startEdit(last.id)
+        return
+      }
+    }
     if (e.key === 'Escape' && replyingTo) {
       setReplyState(null)
     }
+  }
+
+  const startEdit = (messageId: string): void => {
+    setEditState({ room, id: messageId })
+    requestAnimationFrame(() =>
+      document.getElementById(`msg-${messageId}`)?.scrollIntoView({ block: 'nearest' })
+    )
+  }
+
+  const closeEdit = (): void => {
+    setEditState(null)
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  const handleSaveEdit = async (message: Message, draft: string): Promise<void> => {
+    const outcome = editOutcome(message.content, draft, Boolean(message.attachments?.length))
+    if (outcome.kind === 'unchanged') {
+      closeEdit()
+      return
+    }
+    if (outcome.kind === 'empty') {
+      showToast.error('A mensagem não pode ficar vazia.')
+      return
+    }
+    const editedRoom = room
+    setSavingEdit(true)
+    try {
+      await editInRoom(editedRoom, message.id, outcome.content)
+      if (roomRef.current === editedRoom) closeEdit()
+    } catch (err) {
+      showToast.error(editErrorMessage(err) ?? actionErrorMessage(err, 'Falha ao editar mensagem.'))
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  const handleCopy = (text: string): void => {
+    if (!navigator.clipboard) {
+      showToast.error('Não deu para copiar.')
+      return
+    }
+    navigator.clipboard.writeText(text).then(
+      () => showToast.success('Copiado'),
+      () => showToast.error('Não deu para copiar.')
+    )
   }
   // Por sala: o ServerView reaproveita o ChatPane entre canais, e o
   // carregamento de um canal não pode travar (nem destravar) o botão do outro.
@@ -827,6 +946,12 @@ function ChatPane({
                 onDelete={() => handleDelete(m.id)}
                 onVote={(answerIds) => votePollInRoom(room, m.id, answerIds)}
                 onEndPoll={() => endPollInRoom(room, m.id)}
+                onCopy={() => handleCopy(m.content)}
+                onStartEdit={() => startEdit(m.id)}
+                onSaveEdit={(text) => void handleSaveEdit(m, text)}
+                onCancelEdit={closeEdit}
+                isEditing={editingId === m.id}
+                savingEdit={savingEdit && editingId === m.id}
                 canReact={permissions.canReact}
                 canModerate={permissions.canModerate}
               />
