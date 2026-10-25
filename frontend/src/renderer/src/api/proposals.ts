@@ -1,6 +1,8 @@
 import { API_BASE_URL } from '../lib/config'
 import { useAuthStore } from '../store/authStore'
+import { uploadTo, type UploadMeta, type UploadOptions as MediaUploadOptions } from './attachments'
 import { ApiError, refreshTokens, request } from './client'
+import type { Attachment } from './messages'
 
 export type ProposalStatus = 'voting' | 'proposed' | 'in_progress' | 'done' | 'rejected'
 
@@ -51,6 +53,23 @@ export interface ProposalMention {
   display_name: string
 }
 
+/** Anexo de comentário: o mesmo formato do chat, mais a URL pública do arquivo. */
+export type ProposalAttachment = Attachment & { url: string }
+
+export interface ProposalReaction {
+  emoji: string
+  count: number
+  user_ids: string[]
+}
+
+/** Prévia do comentário respondido. */
+export interface ProposalCommentReply {
+  id: string
+  author_id: string
+  author_name: string
+  body: string
+}
+
 export interface ProposalComment {
   id: string
   proposal_id: string
@@ -61,6 +80,11 @@ export interface ProposalComment {
   created_at: string
   edited_at?: string | null
   mentions: ProposalMention[]
+  /** Comentário respondido; `reply_to` some se o original foi apagado. */
+  reply_to_id?: string | null
+  reply_to?: ProposalCommentReply | null
+  reactions: ProposalReaction[]
+  attachments: ProposalAttachment[]
 }
 
 /** Menção ainda não vista (GET /proposals/mentions e o evento proposal:mention). */
@@ -130,12 +154,51 @@ export async function listProposalComments(id: string): Promise<ProposalComment[
 export function createProposalComment(
   id: string,
   body: string,
-  mentions: string[]
+  mentions: string[],
+  replyToId: string | null = null,
+  attachmentIds: string[] = []
 ): Promise<ProposalComment> {
   return request<ProposalComment>(`/proposals/${id}/comments`, {
     method: 'POST',
-    body: JSON.stringify({ body, mentions })
+    body: JSON.stringify({
+      body,
+      mentions,
+      reply_to_id: replyToId,
+      attachment_ids: attachmentIds
+    })
   })
+}
+
+export function reactToProposalComment(
+  id: string,
+  commentId: string,
+  emoji: string
+): Promise<ProposalComment> {
+  return request<ProposalComment>(`/proposals/${id}/comments/${commentId}/reactions`, {
+    method: 'POST',
+    body: JSON.stringify({ emoji })
+  })
+}
+
+export function unreactProposalComment(
+  id: string,
+  commentId: string,
+  emoji: string
+): Promise<ProposalComment> {
+  const query = new URLSearchParams({ emoji })
+  return request<ProposalComment>(
+    `/proposals/${id}/comments/${commentId}/reactions?${query.toString()}`,
+    { method: 'DELETE' }
+  )
+}
+
+/** Sobe um anexo de comentário (fica pendente até o comentário ser criado com a id dele). */
+export function uploadCommentAttachment(
+  file: Blob,
+  meta: UploadMeta,
+  opts: MediaUploadOptions = {}
+): Promise<ProposalAttachment> {
+  return uploadTo<ProposalAttachment>('/proposal-comment-media', file, meta, opts)
 }
 
 export function updateProposalComment(

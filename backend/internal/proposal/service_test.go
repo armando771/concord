@@ -21,6 +21,8 @@ type fakeStore struct {
 	images map[string]fakeImage
 
 	comments []*Comment
+	reacts   []fakeReact
+	catt     map[string]*fakeCAtt
 	// menções: comment -> user -> visto
 	mentions  map[string]map[string]bool
 	blocked   map[string]bool // usuários que não podem ser marcados
@@ -34,6 +36,7 @@ func newFakeStore() *fakeStore {
 		items:     map[string]*Proposal{},
 		votes:     map[string]map[string]bool{},
 		images:    map[string]fakeImage{},
+		catt:      map[string]*fakeCAtt{},
 		mentions:  map[string]map[string]bool{},
 		blocked:   map[string]bool{},
 		mentionOK: map[string]bool{"u1": true, "u2": true, "u3": true, "tech": true},
@@ -261,7 +264,7 @@ func (f *fakeStore) ListComments(_ context.Context, proposalID string) ([]Commen
 	out := []Comment{}
 	for _, c := range f.comments {
 		if c.ProposalID == proposalID {
-			out = append(out, *c)
+			out = append(out, f.decorate(c))
 		}
 	}
 	return out, nil
@@ -270,24 +273,11 @@ func (f *fakeStore) ListComments(_ context.Context, proposalID string) ([]Commen
 func (f *fakeStore) GetComment(_ context.Context, id string) (*Comment, error) {
 	for _, c := range f.comments {
 		if c.ID == id {
-			cp := *c
+			cp := f.decorate(c)
 			return &cp, nil
 		}
 	}
 	return nil, ErrCommentNotFound
-}
-
-func (f *fakeStore) CreateComment(_ context.Context, proposalID, authorID, body string, mentionIDs []string) (string, error) {
-	id := "c" + strconv.Itoa(len(f.comments)+1)
-	c := &Comment{ID: id, ProposalID: proposalID, AuthorID: authorID, AuthorName: authorID, Body: body,
-		CreatedAt: t0, Mentions: []Mention{}}
-	f.comments = append(f.comments, c)
-	f.mentions[id] = map[string]bool{}
-	for _, uid := range mentionIDs {
-		f.mentions[id][uid] = false
-		c.Mentions = append(c.Mentions, Mention{ID: uid})
-	}
-	return id, nil
 }
 
 func (f *fakeStore) UpdateComment(_ context.Context, id, body string) error {
@@ -305,6 +295,12 @@ func (f *fakeStore) UpdateComment(_ context.Context, id, body string) error {
 func (f *fakeStore) DeleteComment(_ context.Context, id string) error {
 	f.comments = slices.DeleteFunc(f.comments, func(c *Comment) bool { return c.ID == id })
 	delete(f.mentions, id)
+	f.reacts = slices.DeleteFunc(f.reacts, func(r fakeReact) bool { return r.comment == id })
+	for aid, a := range f.catt {
+		if a.comment == id {
+			delete(f.catt, aid)
+		}
+	}
 	return nil
 }
 
@@ -352,10 +348,14 @@ func (f *fakeStore) MarkMentionsSeen(_ context.Context, userID string, proposalI
 
 type fakePublisher struct {
 	events int
+	last   []byte
 	users  map[string][][]byte
 }
 
-func (f *fakePublisher) BroadcastAll([]byte) { f.events++ }
+func (f *fakePublisher) BroadcastAll(event []byte) {
+	f.events++
+	f.last = event
+}
 
 func (f *fakePublisher) SendToUser(userID string, event []byte) {
 	if f.users == nil {
@@ -697,14 +697,14 @@ func TestCommentsAndMentions(t *testing.T) {
 	p, _ := s.Create(ctx, "u1", "Card com conversa", "", nil)
 	st.blocked["u3"] = true
 
-	if _, err := s.AddComment(ctx, p.ID, "u2", "   ", nil); !errors.Is(err, ErrInvalidComment) {
+	if _, err := s.AddComment(ctx, p.ID, "u2", "   ", nil, nil, nil); !errors.Is(err, ErrInvalidComment) {
 		t.Fatalf("comentário vazio: got %v", err)
 	}
-	if _, err := s.AddComment(ctx, "nope", "u2", "oi", nil); !errors.Is(err, ErrNotFound) {
+	if _, err := s.AddComment(ctx, "nope", "u2", "oi", nil, nil, nil); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("proposta inexistente: got %v", err)
 	}
 	// u2 marca o autor do card, ele mesmo, um bloqueado e alguém que não existe.
-	c, err := s.AddComment(ctx, p.ID, "u2", "olha isso @u1 @u2 @u3", []string{"u1", "u2", "u3", "fantasma"})
+	c, err := s.AddComment(ctx, p.ID, "u2", "olha isso @u1 @u2 @u3", []string{"u1", "u2", "u3", "fantasma"}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -728,7 +728,7 @@ func TestCommentsAndMentions(t *testing.T) {
 	}
 
 	tooMany := make([]string, MaxMentionsPerComment+1)
-	if _, err := s.AddComment(ctx, p.ID, "u2", "muita gente", tooMany); !errors.Is(err, ErrInvalidComment) {
+	if _, err := s.AddComment(ctx, p.ID, "u2", "muita gente", tooMany, nil, nil); !errors.Is(err, ErrInvalidComment) {
 		t.Fatalf("muitas menções: got %v", err)
 	}
 }
@@ -738,7 +738,7 @@ func TestCommentPermissions(t *testing.T) {
 	ctx := context.Background()
 	p, _ := s.Create(ctx, "u1", "Card com conversa", "", nil)
 	other, _ := s.Create(ctx, "u1", "Outro card", "", nil)
-	c, _ := s.AddComment(ctx, p.ID, "u2", "meu comentário", nil)
+	c, _ := s.AddComment(ctx, p.ID, "u2", "meu comentário", nil, nil, nil)
 
 	if _, err := s.EditComment(ctx, p.ID, c.ID, "u1", "invadi"); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("editar comentário alheio (até o dono do card): got %v", err)
@@ -766,11 +766,11 @@ func TestCommentRateLimit(t *testing.T) {
 	ctx := context.Background()
 	p, _ := s.Create(ctx, "u1", "Card movimentado", "", nil)
 	for i := range CommentsPerMinute {
-		if _, err := s.AddComment(ctx, p.ID, "u2", "comentário "+strconv.Itoa(i), nil); err != nil {
+		if _, err := s.AddComment(ctx, p.ID, "u2", "comentário "+strconv.Itoa(i), nil, nil, nil); err != nil {
 			t.Fatalf("comentário %d: %v", i, err)
 		}
 	}
-	if _, err := s.AddComment(ctx, p.ID, "u2", "um a mais", nil); !errors.Is(err, ErrRateLimited) {
+	if _, err := s.AddComment(ctx, p.ID, "u2", "um a mais", nil, nil, nil); !errors.Is(err, ErrRateLimited) {
 		t.Fatalf("limite por minuto: got %v", err)
 	}
 }

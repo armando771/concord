@@ -10,6 +10,11 @@ func ProposalRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware, r
 
 	router.POST("/proposal-media", authMiddleware, requireVerified, handler.UploadImage)
 
+	// Anexos dos comentários (imagem, vídeo e áudio): enviados por quem está
+	// logado e servidos sem token, como as imagens das propostas.
+	router.GET("/proposal-comment-media/:id", handler.ServeCommentMedia)
+	router.POST("/proposal-comment-media", authMiddleware, requireVerified, handler.UploadCommentMedia)
+
 	proposals := router.Group("/proposals")
 	proposals.Use(authMiddleware)
 	{
@@ -27,5 +32,7 @@ func ProposalRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware, r
 		proposals.POST("/:id/comments", requireVerified, handler.AddComment)
 		proposals.PATCH("/:id/comments/:commentId", requireVerified, handler.EditComment)
 		proposals.DELETE("/:id/comments/:commentId", handler.DeleteComment)
+		proposals.POST("/:id/comments/:commentId/reactions", requireVerified, handler.React)
+		proposals.DELETE("/:id/comments/:commentId/reactions", handler.Unreact)
 	}
 }

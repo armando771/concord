@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PendingProposalMention, Proposal } from '../api/proposals'
+import type { PendingProposalMention, Proposal, ProposalComment } from '../api/proposals'
 import {
   badgeCount,
   canDeleteComment,
@@ -9,6 +9,8 @@ import {
   canEditProposal,
   canVote,
   closeLabel,
+  commentPreview,
+  hasReacted,
   MAX_IMAGE_BYTES,
   MAX_IMAGES,
   MAX_MENTIONS,
@@ -289,5 +291,56 @@ describe('closeLabel', () => {
     )
     expect(closeLabel({ ...closed, close_reason: 'manual' })).toContain('pelo time tech')
     expect(closeLabel({ ...closed, close_reason: 'deadline' })).toContain('pelo prazo')
+  })
+})
+
+const comment = (over: Partial<ProposalComment> = {}): ProposalComment => ({
+  id: 'c1',
+  proposal_id: 'p1',
+  author_id: 'u1',
+  author_name: 'Ana',
+  body: 'oi',
+  created_at: at(0),
+  mentions: [],
+  reactions: [],
+  attachments: [],
+  ...over
+})
+
+describe('hasReacted', () => {
+  const reactions = [
+    { emoji: '👍', count: 2, user_ids: ['u1', 'u2'] },
+    { emoji: '🔥', count: 1, user_ids: ['u3'] }
+  ]
+  it('diz se a pessoa está entre quem usou o emoji', () => {
+    expect(hasReacted({ reactions }, 'u1', '👍')).toBe(true)
+    expect(hasReacted({ reactions }, 'u3', '👍')).toBe(false)
+    expect(hasReacted({ reactions }, 'u1', '🔥')).toBe(false)
+  })
+  it('sem usuário logado ou sem reações é falso', () => {
+    expect(hasReacted({ reactions }, null, '👍')).toBe(false)
+    expect(hasReacted({ reactions: [] }, 'u1', '👍')).toBe(false)
+  })
+})
+
+describe('commentPreview', () => {
+  it('usa o texto, sem quebras de linha', () => {
+    expect(commentPreview(comment({ body: 'olha\n  isso' }))).toBe('olha isso')
+  })
+  it('só anexo: mostra o rótulo do arquivo', () => {
+    const att = {
+      id: 'a',
+      kind: 'image' as const,
+      content_type: 'image/png',
+      filename: 'a.png',
+      size_bytes: 1,
+      url: '/x'
+    }
+    expect(commentPreview(comment({ body: '', attachments: [att] }))).toBe('🖼️ Imagem')
+    expect(commentPreview(comment({ body: '', attachments: [att, att] }))).toBe('📎 2 anexos')
+  })
+  it('sem nada devolve vazio e corta o texto longo', () => {
+    expect(commentPreview(comment({ body: '' }))).toBe('')
+    expect(commentPreview(comment({ body: 'a'.repeat(300) }), 10)).toBe('aaaaaaaaaa…')
   })
 })

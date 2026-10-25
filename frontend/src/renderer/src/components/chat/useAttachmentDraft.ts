@@ -1,16 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { uploadAttachment } from '../../api/attachments'
+import { uploadAttachment, type UploadMeta, type UploadOptions } from '../../api/attachments'
+import type { Attachment } from '../../api/messages'
 import { ApiError } from '../../api/client'
 import { acceptFiles, uploadErrorMessage, type DraftAttachment } from '../../lib/attachments'
 import { showToast } from '../../store/toastStore'
 import { readMediaMeta } from './readMediaMeta'
+
+/** Como um arquivo sobe: `key` é a sala (ou o que identifica o destino). */
+export type DraftUploader = (
+  key: string,
+  file: Blob,
+  meta: UploadMeta,
+  opts?: UploadOptions
+) => Promise<Attachment>
 
 /**
  * Anexos do campo de envio: cada arquivo começa a subir assim que entra.
  * Remover, limpar, trocar de sala ou sair cancelam o que ainda está subindo
  * (nada vai parar na sala nova) e liberam as prévias blob:.
  */
-export function useAttachmentDraft(room: string): {
+export function useAttachmentDraft(
+  room: string,
+  upload: DraftUploader = uploadAttachment
+): {
   drafts: DraftAttachment[]
   addFiles: (files: File[]) => void
   remove: (localId: string) => void
@@ -70,7 +82,7 @@ export function useAttachmentDraft(room: string): {
           try {
             const meta = await readMediaMeta(draft.file, draft.kind)
             if (controller.signal.aborted) return
-            const attachment = await uploadAttachment(
+            const attachment = await upload(
               room,
               draft.file,
               { filename: draft.file.name || 'arquivo', ...meta },
@@ -94,7 +106,7 @@ export function useAttachmentDraft(room: string): {
         })()
       }
     },
-    [room, update]
+    [room, update, upload]
   )
 
   const remove = useCallback(

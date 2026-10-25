@@ -10,7 +10,7 @@ export interface UploadMeta {
   duration_ms?: number
 }
 
-interface UploadOptions {
+export interface UploadOptions {
   onProgress?: (fraction: number) => void
   signal?: AbortSignal
 }
@@ -20,30 +20,40 @@ interface UploadOptions {
  * id dele). Usa XMLHttpRequest porque o fetch não dá progresso de envio, e sem
  * o limite de 15 s do rawRequest (25 MB numa conexão lenta demora).
  */
-export async function uploadAttachment(
+export function uploadAttachment(
   room: string,
   file: Blob,
   meta: UploadMeta,
   opts: UploadOptions = {}
 ): Promise<Attachment> {
+  return uploadTo<Attachment>(`${roomPath(room)}/attachments`, file, meta, opts)
+}
+
+/** O mesmo envio (com progresso, cancelamento e renovação do token) para qualquer rota de upload. */
+export async function uploadTo<T>(
+  path: string,
+  file: Blob,
+  meta: UploadMeta,
+  opts: UploadOptions = {}
+): Promise<T> {
   const token = useAuthStore.getState().accessToken
   try {
-    return await sendUpload(room, file, meta, opts, token)
+    return await sendUpload<T>(path, file, meta, opts, token)
   } catch (err) {
     if (err instanceof ApiError && err.status === 401 && token && (await refreshTokens(token))) {
-      return sendUpload(room, file, meta, opts, useAuthStore.getState().accessToken)
+      return sendUpload<T>(path, file, meta, opts, useAuthStore.getState().accessToken)
     }
     throw err
   }
 }
 
-function sendUpload(
-  room: string,
+function sendUpload<T>(
+  path: string,
   file: Blob,
   meta: UploadMeta,
   { onProgress, signal }: UploadOptions,
   token: string | null
-): Promise<Attachment> {
+): Promise<T> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(new ApiError(0, 'aborted'))
@@ -58,7 +68,7 @@ function sendUpload(
     form.append('file', file, meta.filename)
 
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', `${API_BASE_URL}${roomPath(room)}/attachments`)
+    xhr.open('POST', `${API_BASE_URL}${path}`)
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
 
     const onAbort = (): void => xhr.abort()
@@ -77,7 +87,7 @@ function sendUpload(
         // corpo vazio ou não-JSON
       }
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(body as Attachment)
+        resolve(body as T)
       } else {
         reject(new ApiError(xhr.status, (body as { error?: string }).error ?? 'Upload failed'))
       }
