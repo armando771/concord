@@ -104,7 +104,7 @@ async function openClient(user, initScript) {
   page.on('console', (m) => { if (m.type() === 'error') errors.push(`[${user.username}] ${m.text()}`) })
   page.on('pageerror', (e) => errors.push(`[${user.username}] pageerror ${e.message}`))
   await page.goto(APP + 'login')
-  await page.fill('input[placeholder="E-mail ou nome de usuário"]', user.email)
+  await page.fill('input[autocomplete=username]', user.email)
   await page.fill('input[type=password]', user.password)
   await page.click('button[type=submit]')
   await page.getByText('Adicionar amigo').first().waitFor({ timeout: 30000 })

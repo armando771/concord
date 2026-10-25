@@ -105,7 +105,7 @@ async function launch(name, downloadDelay = 100) {
 }
 
 async function login(page, user) {
-  await page.locator('input[placeholder="E-mail ou nome de usuário"]').fill(user.email)
+  await page.locator('input[autocomplete=username]').fill(user.email)
   await page.locator('input[type=password]').fill(password)
   await page.locator('button[type=submit]').click()
   await page.getByText('Adicionar amigo').first().waitFor()
