@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -54,10 +55,6 @@ type participantState struct {
 	joinedAt time.Time
 	muted    bool
 	deafened bool
-	// Voz captada agora (o cliente avisa pelo detector de fala do LiveKit) e
-	// a última vez que parou de falar — o XP de voz só conta com voz.
-	speaking    bool
-	lastSpokeAt time.Time
 }
 
 type activeCall struct {
@@ -591,9 +588,6 @@ func (s *Service) SetVoiceState(callID string, userID string, muted bool, deafen
 	}
 	p.muted = muted
 	p.deafened = deafened
-	if muted || deafened {
-		p.speaking = false
-	}
 	var serverID string
 	if ac.info.ServerID != nil {
 		serverID = *ac.info.ServerID
@@ -636,6 +630,15 @@ func participantInfosLocked(callID string, ac *activeCall) []ParticipantInfo {
 			Deafened: p.deafened,
 		})
 	}
+	// Ordem estável (quem entrou primeiro, depois id): o map muda de ordem a
+	// cada leitura e a lista do canal de voz pulava a cada polling.
+	sort.Slice(participants, func(i, j int) bool {
+		a, b := participants[i], participants[j]
+		if !a.JoinedAt.Equal(b.JoinedAt) {
+			return a.JoinedAt.Before(b.JoinedAt)
+		}
+		return a.UserID < b.UserID
+	})
 	return participants
 }
 
@@ -706,6 +709,7 @@ func (s *Service) GetState(ctx context.Context, callID string) (*StateResponse, 
 		for uid := range sharers {
 			screenSharing = append(screenSharing, uid)
 		}
+		sort.Strings(screenSharing)
 	}
 	s.mu.RUnlock()
 
@@ -813,14 +817,6 @@ func (s *Service) HandleCallMessage(userID string, evType string, payload json.R
 		if err := s.SetVoiceState(p.CallID, userID, p.Muted, p.Deafened); err != nil {
 			s.sendError(userID, p.CallID, err.Error())
 		}
-	case "call:speaking":
-		var p SpeakingPayload
-		if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" {
-			s.sendError(userID, "", "invalid call:speaking payload")
-			return
-		}
-		// Sem resposta de erro: é um aviso frequente e sem efeito visível.
-		_ = s.SetSpeaking(p.CallID, userID, p.Speaking, time.Now())
 	case "call:screen":
 		var p ScreenPayload
 		if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" {

@@ -7,9 +7,16 @@ export function shouldHideOnClose(platform: NodeJS.Platform, quitting: boolean):
   return platform === 'win32' && !quitting
 }
 
+/**
+ * Args do atalho de login do "Iniciar com o Windows" (abre escondido). No
+ * Windows o openAtLogin de getLoginItemSettings só bate se a leitura passar os
+ * mesmos args da gravação: toda leitura e escrita usa esta lista.
+ */
+export const LOGIN_ITEM_ARGS = ['--hidden']
+
 /** Aberto pelo "Iniciar com o Windows": começa escondido na bandeja. */
 export function launchedHidden(argv: string[]): boolean {
-  return argv.includes('--hidden')
+  return LOGIN_ITEM_ARGS.every((arg) => argv.includes(arg))
 }
 
 /** Notificação nativa só faz sentido se o usuário não está olhando a janela. */
