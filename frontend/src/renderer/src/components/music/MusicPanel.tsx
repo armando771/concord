@@ -96,7 +96,9 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
             </div>
           )}
           <div className="min-w-0">
-            <p className="truncate font-semibold text-white">{now.item.title}</p>
+            <p data-testid="music-now-title" className="truncate font-semibold text-white">
+              {now.item.title}
+            </p>
             <p className="truncate text-xs text-gray-400">
               {now.item.artist} · @{now.item.requested_by.username}
             </p>

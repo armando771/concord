@@ -35,6 +35,7 @@ if ! command -v yt-dlp >/dev/null; then
   chmod a+rx "$YTDLP_BIN"
 fi
 YTDLP_BIN="$(command -v yt-dlp || echo "$YTDLP_BIN")"
+FFMPEG_BIN="$(command -v ffmpeg)"
 
 mkdir -p "$UNITS" "$PLAYIT_DATA" "$(dirname "$PLAYIT_SECRET")"
 (cd "$ROOT/backend" && go build -o concord-server ./cmd)
@@ -46,6 +47,9 @@ After=network-online.target
 
 [Service]
 WorkingDirectory=$ROOT/backend
+# Units do usuário não enxergam ~/.local/bin: caminhos absolutos para o Maestro.
+Environment=MUSIC_YTDLP=$YTDLP_BIN
+Environment=MUSIC_FFMPEG=$FFMPEG_BIN
 ExecStart=$ROOT/backend/concord-server
 Restart=always
 RestartSec=3

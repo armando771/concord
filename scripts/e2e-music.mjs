@@ -200,8 +200,8 @@ try {
   await waitFor('mensagem pública "foi pulada por @ana"', recentMessages,
     (msgs) => msgs.some((m) => m.includes(`foi pulada por @${ana.username}`)), 10000)
   await waitFor('painel da bia mostra a segunda música (sala1tom002)',
-    () => pageB.evaluate(() => document.body.innerText.includes('Tom de teste sala1tom002')),
-    (ok) => ok === true, 3000)
+    () => pageB.evaluate(() => document.querySelector('[data-testid="music-now-title"]')?.textContent ?? null),
+    (t) => t !== null && t.includes('sala1tom002') && !t.includes('sala1tom001'), 3000)
 
   // --- Fim das faixas + timeout ocioso: a presença da Sala 1 some ---
   await waitFor('a presença da Sala 1 some depois do fim da fila e do timeout',
