@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { buildConnectSrc, buildMediaSrc, deriveServerUrls } from './serverUrl'
+import {
+  buildConnectSrc,
+  buildMediaSrc,
+  buildWebConnectSrc,
+  buildWebMediaSrc,
+  deriveServerUrls,
+  resolveServerUrls
+} from './serverUrl'
 
 describe('deriveServerUrls', () => {
   it('deriva API, WebSocket e LiveKit de um endereço http', () => {
@@ -49,5 +56,58 @@ describe('buildMediaSrc', () => {
   })
   it('usa o localhost:8080 sem endereço', () => {
     expect(buildMediaSrc(undefined)).toBe("'self' blob: http://localhost:8080")
+  })
+})
+
+describe('resolveServerUrls', () => {
+  it('no desktop usa o endereço embutido no build, como antes', () => {
+    expect(
+      resolveServerUrls({
+        web: false,
+        serverUrl: 'https://concord.exemplo.com.br',
+        pageOrigin: 'file://'
+      })
+    ).toEqual(deriveServerUrls('https://concord.exemplo.com.br'))
+  })
+
+  it('no navegador fala com a própria origem: API relativa e wss', () => {
+    expect(
+      resolveServerUrls({
+        web: true,
+        serverUrl: 'http://ignorado.exemplo:1234',
+        pageOrigin: 'https://app-salinha.bhrx.com.br'
+      })
+    ).toEqual({
+      apiBaseUrl: '/api',
+      wsUrl: 'wss://app-salinha.bhrx.com.br/ws',
+      liveKitUrl: 'wss://app-salinha.bhrx.com.br'
+    })
+  })
+
+  it('no navegador em http (dev local) usa ws com a porta da página', () => {
+    expect(resolveServerUrls({ web: true, pageOrigin: 'http://localhost:4173' })).toEqual({
+      apiBaseUrl: '/api',
+      wsUrl: 'ws://localhost:4173/ws',
+      liveKitUrl: 'ws://localhost:4173'
+    })
+  })
+})
+
+describe('buildWebConnectSrc', () => {
+  it('libera a própria origem e o wss do endereço público', () => {
+    expect(buildWebConnectSrc('https://app-salinha.bhrx.com.br/')).toBe(
+      "'self' wss://app-salinha.bhrx.com.br"
+    )
+  })
+
+  it("sem endereço público fica só no 'self' (que já cobre o ws da mesma origem)", () => {
+    expect(buildWebConnectSrc(undefined)).toBe("'self'")
+    expect(buildWebConnectSrc('  ')).toBe("'self'")
+  })
+})
+
+describe('buildWebMediaSrc', () => {
+  it('mídia do chat vem da própria origem; prévias locais são blob:', () => {
+    expect(buildWebMediaSrc()).toBe("'self' blob:")
   })
 })
