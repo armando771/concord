@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { AUTH_STORAGE_KEY } from '../lib/authRefresh'
 
 export interface User {
   id: string
@@ -30,6 +31,17 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) => set({ user }),
       clear: () => set({ accessToken: null, refreshToken: null, user: null })
     }),
-    { name: 'concord-auth' }
+    { name: AUTH_STORAGE_KEY }
   )
 )
+
+// Login, logout ou renovação em outra aba (app web): esta aba passa a usar a
+// mesma sessão. O evento não dispara na própria aba (nem no Electron, que tem
+// uma janela só).
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === AUTH_STORAGE_KEY || event.key === null) {
+      void useAuthStore.persist.rehydrate()
+    }
+  })
+}

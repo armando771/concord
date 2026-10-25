@@ -5,7 +5,9 @@ import {
   buildWebConnectSrc,
   buildWebMediaSrc,
   deriveServerUrls,
-  resolveServerUrls
+  fillCsp,
+  resolveServerUrls,
+  WEB_EXTRA_CSP
 } from './serverUrl'
 
 describe('deriveServerUrls', () => {
@@ -109,5 +111,22 @@ describe('buildWebConnectSrc', () => {
 describe('buildWebMediaSrc', () => {
   it('mídia do chat vem da própria origem; prévias locais são blob:', () => {
     expect(buildWebMediaSrc()).toBe("'self' blob:")
+  })
+})
+
+describe('fillCsp', () => {
+  const html =
+    "<meta content=\"default-src 'self'; img-src 'self' %CONCORD_MEDIA_SRC%; media-src %CONCORD_MEDIA_SRC%; connect-src %CONCORD_CONNECT_SRC%\" />"
+
+  it('preenche connect-src e media-src (desktop: sem diretivas extras)', () => {
+    expect(fillCsp(html, { connectSrc: "'self' x", mediaSrc: "'self' blob:" })).toBe(
+      "<meta content=\"default-src 'self'; img-src 'self' 'self' blob:; media-src 'self' blob:; connect-src 'self' x\" />"
+    )
+  })
+
+  it('web: acrescenta as diretivas extras (base-uri)', () => {
+    expect(
+      fillCsp(html, { connectSrc: "'self'", mediaSrc: "'self' blob:", extra: WEB_EXTRA_CSP })
+    ).toContain("connect-src 'self'; base-uri 'self'\"")
   })
 })

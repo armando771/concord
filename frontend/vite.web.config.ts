@@ -1,6 +1,10 @@
 import { resolve } from 'path'
 import { defineConfig, type Plugin, type ProxyOptions } from 'vite'
-import { buildWebConnectSrc, buildWebMediaSrc } from './src/renderer/src/lib/serverUrl'
+import {
+  buildWebConnectSrc,
+  buildWebMediaSrc,
+  WEB_EXTRA_CSP
+} from './src/renderer/src/lib/serverUrl'
 import { cspPlugin, rendererShared } from './vite.renderer.shared'
 
 // Salinha no navegador (yarn build:web → dist-web/). O mesmo renderer do app
@@ -43,7 +47,10 @@ const webHeadPlugin: Plugin = {
 }
 
 export default defineConfig({
-  ...rendererShared(cspPlugin(buildWebConnectSrc(publicUrl), buildWebMediaSrc()), webHeadPlugin),
+  ...rendererShared(
+    cspPlugin(buildWebConnectSrc(publicUrl), buildWebMediaSrc(), WEB_EXTRA_CSP),
+    webHeadPlugin
+  ),
   root: resolve('src/renderer'),
   // Caminhos absolutos: o index.html é servido em qualquer rota (/servers/…).
   base: '/',

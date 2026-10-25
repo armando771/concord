@@ -2,17 +2,17 @@ import { resolve } from 'path'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import type { Plugin, UserConfig } from 'vite'
+import { fillCsp } from './src/renderer/src/lib/serverUrl'
 
 // O que o renderer tem igual no app desktop (electron.vite.config.ts) e no
 // navegador (vite.web.config.ts): aliases, plugins e assets. Mexeu aqui, os
 // dois builds acompanham.
 
 /** Preenche a CSP do index.html com o que o build libera de rede e mídia. */
-export function cspPlugin(connectSrc: string, mediaSrc: string): Plugin {
+export function cspPlugin(connectSrc: string, mediaSrc: string, extra?: string): Plugin {
   return {
     name: 'concord-connect-src',
-    transformIndexHtml: (html: string): string =>
-      html.replace('%CONCORD_CONNECT_SRC%', connectSrc).replaceAll('%CONCORD_MEDIA_SRC%', mediaSrc)
+    transformIndexHtml: (html: string): string => fillCsp(html, { connectSrc, mediaSrc, extra })
   }
 }
 

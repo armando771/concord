@@ -196,9 +196,39 @@ try {
   const renewed = await pageB.evaluate(() => JSON.parse(localStorage.getItem('concord-auth')).state.accessToken)
   check('token inválido é renovado pelo refresh', renewed && renewed !== 'vencido')
 
-  // Logout limpa a sessão e sobrevive ao reload.
+  // Duas abas com o mesmo login vencido renovam juntas: o refresh token é de
+  // uso único, então uma renova e a outra usa os tokens novos (ninguém desloga).
+  const pageB2 = await pageB.context().newPage()
+  pageB2.on('pageerror', (e) => errors.push(`[bia-2] pageerror ${e.message}`))
+  await pageB2.goto(APP + 'friends')
+  await pageB2.getByText('Adicionar amigo').first().waitFor({ timeout: 15000 })
+  for (let round = 1; round <= 3; round++) {
+    // A outra aba sai da página antes: o evento storage a faria renovar já, e o
+    // reload logo abaixo cortaria esse refresh no meio (token gasto, resposta perdida).
+    await pageB2.goto('about:blank')
+    await pageB.evaluate((n) => {
+      const saved = JSON.parse(localStorage.getItem('concord-auth'))
+      saved.state.accessToken = `vencido-${n}`
+      saved.state.user = null
+      localStorage.setItem('concord-auth', JSON.stringify(saved))
+    }, round)
+    await Promise.all([pageB.goto(APP + 'friends'), pageB2.goto(APP + 'friends')])
+    await Promise.all([
+      pageB.getByText('Adicionar amigo').first().waitFor({ timeout: 15000 }),
+      pageB2.getByText('Adicionar amigo').first().waitFor({ timeout: 15000 })
+    ])
+    const access = await pageB.evaluate(() => JSON.parse(localStorage.getItem('concord-auth')).state.accessToken)
+    const me = await fetch(API + '/users/me', { headers: { Authorization: `Bearer ${access}` } })
+    check(`duas abas renovam juntas sem deslogar (rodada ${round})`,
+      me.status === 200 && new URL(pageB.url()).pathname === '/friends' && new URL(pageB2.url()).pathname === '/friends',
+      { status: me.status, a: pageB.url(), b: pageB2.url() })
+  }
+
+  // Logout limpa a sessão, vale para a outra aba e sobrevive ao reload.
   await pageB.getByRole('button', { name: 'Configurações do usuário' }).click()
   await pageB.getByRole('button', { name: 'Sair da conta' }).click()
+  await pageB2.waitForURL((u) => u.pathname === '/login', { timeout: 15000 })
+  check('sair numa aba leva a outra ao login', new URL(pageB2.url()).pathname === '/login')
   await pageB.waitForURL((u) => u.pathname === '/login', { timeout: 15000 })
   await pageB.reload()
   check('depois do logout o reload fica no login', new URL(pageB.url()).pathname === '/login', pageB.url())

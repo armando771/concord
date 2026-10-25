@@ -80,3 +80,16 @@ export function buildWebConnectSrc(publicUrl: string | undefined): string {
 export function buildWebMediaSrc(): string {
   return "'self' blob:"
 }
+
+/** Diretivas que só o build web acrescenta à CSP (o desktop fica como está). */
+export const WEB_EXTRA_CSP = "base-uri 'self'"
+
+/** Preenche os marcadores da CSP do index.html; `extra` vem depois do connect-src. */
+export function fillCsp(
+  html: string,
+  { connectSrc, mediaSrc, extra }: { connectSrc: string; mediaSrc: string; extra?: string }
+): string {
+  return html
+    .replace('%CONCORD_CONNECT_SRC%', extra ? `${connectSrc}; ${extra}` : connectSrc)
+    .replaceAll('%CONCORD_MEDIA_SRC%', mediaSrc)
+}

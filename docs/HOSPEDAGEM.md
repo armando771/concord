@@ -226,6 +226,13 @@ gera `frontend/dist-web/` e o `scripts/deploy-vps.sh` envia para
 `/opt/concord/web/` (o `--delete` só mexe nessa pasta; uploads e atualizações
 ficam como estão).
 
+> **Antes de mesclar a `develop` na `main`:** o DNS, o bloco do Caddy (passos 1
+> e 2) e a variável `WEB_URL` do GitHub Actions (seção "Deploy automático")
+> precisam estar prontos. O merge publica sozinho a página de download, que tem
+> o botão "Usar no navegador" apontando para `https://app-salinha.bhrx.com.br`;
+> sem o domínio no ar, o botão leva a um erro. Confira com
+> `curl -sI https://app-salinha.bhrx.com.br/` antes do merge.
+
 1. **DNS:** no Cloudflare, registro `A` `app-salinha` → IP da VPS, com o
    proxy **desligado** (nuvem cinza). Com o proxy ligado o Caddy não consegue
    tirar o certificado sozinho e os uploads grandes do chat esbarram no limite
@@ -236,6 +243,7 @@ ficam como estão).
    app-salinha.bhrx.com.br {
    	encode zstd gzip
    	header {
+   		Strict-Transport-Security "max-age=31536000"
    		X-Content-Type-Options nosniff
    		X-Frame-Options DENY
    		Referrer-Policy strict-origin-when-cross-origin
