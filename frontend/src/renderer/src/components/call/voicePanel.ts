@@ -54,3 +54,17 @@ export function userBarSubtitle(user: {
   if (user.inCall) return 'Em call'
   return user.note?.trim() || user.statusLabel
 }
+
+/**
+ * Anel verde na foto da barra do usuário: só na chamada, falando (detecção
+ * local em speakingIds) e nunca mudo.
+ */
+export function userBarSpeaking(me: {
+  inCall: boolean
+  muted: boolean
+  userId: string | null | undefined
+  speakingIds: readonly string[]
+}): boolean {
+  if (!me.inCall || me.muted || !me.userId) return false
+  return me.speakingIds.includes(me.userId)
+}

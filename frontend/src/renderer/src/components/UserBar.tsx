@@ -6,7 +6,7 @@ import { useSettingsStore } from '../store/settingsStore'
 import { STATUS_META } from '../lib/presenceStatus'
 import Avatar from './Avatar'
 import AudioDeviceMenu, { type AudioDeviceKind } from './call/AudioDeviceMenu'
-import { showVoicePanel, userBarSubtitle } from './call/voicePanel'
+import { showVoicePanel, userBarSpeaking, userBarSubtitle } from './call/voicePanel'
 import {
   ChevronDownIcon,
   GearIcon,
@@ -93,6 +93,15 @@ function UserBar(): React.JSX.Element {
   const canSpeak = useCallStore((s) => s.canSpeak)
   const toggleMute = useCallStore((s) => s.toggleMute)
   const toggleDeafen = useCallStore((s) => s.toggleDeafen)
+  // Mesmo anel verde da lista de voz e dos tiles da chamada enquanto eu falo.
+  const speaking = useCallStore((s) =>
+    userBarSpeaking({
+      inCall: showVoicePanel(s.status),
+      muted: s.muted,
+      userId: user?.id,
+      speakingIds: s.speakingIds
+    })
+  )
 
   /** Menu de dispositivo aberto e a setinha em que ele fica (null = fechado). */
   const [menu, setMenu] = useState<{ kind: AudioDeviceKind; anchor: HTMLElement } | null>(null)
@@ -130,6 +139,7 @@ function UserBar(): React.JSX.Element {
           animate="always"
           status={status}
           cutoutColor={BAR_BG}
+          className={`rounded-full transition-shadow ${speaking ? 'ring-2 ring-[#23a55a]' : ''}`}
         />
         <div className="min-w-0 leading-tight">
           <p className="truncate text-sm font-semibold text-white">{name}</p>

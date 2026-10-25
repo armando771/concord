@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   showVoicePanel,
+  userBarSpeaking,
   userBarSubtitle,
   voicePanelHeading,
   voicePanelLabel,
@@ -123,5 +124,23 @@ describe('userBarSubtitle', () => {
     )
     expect(userBarSubtitle({ inCall: false, note: '', statusLabel: 'Ausente' })).toBe('Ausente')
     expect(userBarSubtitle({ inCall: false, note: null, statusLabel: 'Online' })).toBe('Online')
+  })
+})
+
+describe('userBarSpeaking', () => {
+  const base = { inCall: true, muted: false, userId: 'me', speakingIds: ['me', 'outro'] }
+
+  it('falando na chamada: anel', () => {
+    expect(userBarSpeaking(base)).toBe(true)
+  })
+
+  it('mudo nunca mostra o anel', () => {
+    expect(userBarSpeaking({ ...base, muted: true })).toBe(false)
+  })
+
+  it('fora da chamada, calado ou sem usuário: sem anel', () => {
+    expect(userBarSpeaking({ ...base, inCall: false })).toBe(false)
+    expect(userBarSpeaking({ ...base, speakingIds: ['outro'] })).toBe(false)
+    expect(userBarSpeaking({ ...base, userId: null })).toBe(false)
   })
 })
