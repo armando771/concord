@@ -12,16 +12,18 @@ import { liveUserIds } from '../lib/liveBadge'
 import { useUserAudioStore } from '../store/userAudioStore'
 import { useLevelStore } from '../store/levelStore'
 import { sortVoiceMembers } from '../lib/voiceOrder'
-import LevelBadge from './level/LevelBadge'
 import { userMenuHandler } from '../store/userMenuStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import type { Channel, ChannelType } from '../api/channels'
-import {
-  listActiveServerCalls,
-  moveToVoiceChannel,
-  type CallStateResponse
-} from '../api/calls'
+import { listActiveServerCalls, moveToVoiceChannel, type CallStateResponse } from '../api/calls'
 import { canMoveVoiceUser, VOICE_USER_DRAG } from '../lib/voiceMove'
+import {
+  channelDragType,
+  dropInsertionIndex,
+  insertionToTarget,
+  isNoopDrop,
+  moveItem
+} from '../lib/channelOrder'
 import { showToast } from '../store/toastStore'
 import Modal from './Modal'
 import Button from './Button'
@@ -30,6 +32,8 @@ import VoiceConnectedPanel from './call/VoiceConnectedPanel'
 import UserBar from './UserBar'
 import Avatar from './Avatar'
 import {
+  ChevronDownIcon,
+  ChevronUpIcon,
   UserPlusIcon,
   PlusIcon,
   PencilIcon,
@@ -40,6 +44,14 @@ import {
 } from './icons'
 import { setPrimaryChannel } from '../api/servers'
 import { primaryChannelId } from '../lib/primaryChannel'
+import ResizeHandle from './ResizeHandle'
+import { useResizableWidth } from './useResizableWidth'
+
+/**
+ * Nomes longos quebram linha em vez de cortar com "…" (o canal "predador-🐺-vs…"
+ * aparecia pela metade). `anywhere` também quebra palavra gigante sem hífen.
+ */
+const WRAP_NAME = 'break-words [overflow-wrap:anywhere]'
 
 export function ServerSidebar(): React.JSX.Element {
   const navigate = useNavigate()
@@ -74,6 +86,8 @@ export function ServerSidebar(): React.JSX.Element {
   const levels = useLevelStore((s) => s.levels)
   const ensureLevels = useLevelStore((s) => s.ensureLevels)
 
+  // Mesma preferência de largura na barra de canais e na de DMs/amigos.
+  const sidebar = useResizableWidth('channels')
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [channelName, setChannelName] = useState('')
   const [channelType, setChannelType] = useState<ChannelType>('text')
@@ -112,6 +126,112 @@ export function ServerSidebar(): React.JSX.Element {
     } catch (err) {
       showToast.error(err instanceof Error ? err.message : 'Não foi possível mover.')
     }
+  }
+
+  // Reordenar canais arrastando (dono/moderadores), cada um na sua seção.
+  /** Canal sendo arrastado. */
+  const [channelDrag, setChannelDrag] = useState<{ id: string; type: ChannelType } | null>(null)
+  /** Onde aparece a linha de soltar: índice de inserção (0..n) na seção. */
+  const [channelDropAt, setChannelDropAt] = useState<{
+    type: ChannelType
+    index: number
+  } | null>(null)
+  const sectionOf = (type: ChannelType): Channel[] =>
+    type === 'text' ? textChannels : voiceChannels
+
+  /** Muda a ordem na hora; se o servidor recusar, volta e avisa. */
+  const reorderSection = async (type: ChannelType, from: number, to: number): Promise<void> => {
+    if (!currentServer || from === to) return
+    const ids = moveItem(
+      sectionOf(type).map((c) => c.id),
+      from,
+      to
+    )
+    try {
+      await useServerStore.getState().reorderChannels(currentServer.id, type, ids)
+    } catch {
+      showToast.error('Não foi possível mudar a ordem dos canais.')
+    }
+  }
+
+  /** Props da linha do canal que pode ser arrastada (nada para quem não pode). */
+  const channelDragSource = (
+    ch: Channel,
+    type: ChannelType
+  ): React.HTMLAttributes<HTMLDivElement> & { draggable?: boolean } =>
+    isAdmin
+      ? {
+          draggable: true,
+          onDragStart: (e) => {
+            e.dataTransfer.setData(channelDragType(type), ch.id)
+            e.dataTransfer.effectAllowed = 'move'
+            setChannelMenuFor(null)
+            setChannelDrag({ id: ch.id, type })
+          },
+          onDragEnd: () => {
+            setChannelDrag(null)
+            setChannelDropAt(null)
+          }
+        }
+      : {}
+
+  /** Insere antes (metade de cima do bloco do canal) ou depois (de baixo). */
+  const insertionAt = (e: React.DragEvent<HTMLElement>, index: number): number => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    return dropInsertionIndex(index, e.clientY - rect.top, rect.height)
+  }
+
+  /** Bloco do canal como alvo de soltar outro canal da mesma seção. */
+  const channelDropTarget = (
+    type: ChannelType,
+    index: number
+  ): {
+    onDragOver: (e: React.DragEvent<HTMLElement>) => void
+    onDrop: (e: React.DragEvent<HTMLElement>) => void
+  } => ({
+    onDragOver: (e) => {
+      if (!isAdmin || !e.dataTransfer.types.includes(channelDragType(type))) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      const insertion = insertionAt(e, index)
+      const from = channelDrag ? sectionOf(type).findIndex((c) => c.id === channelDrag.id) : -1
+      const next = from >= 0 && isNoopDrop(from, insertion) ? null : { type, index: insertion }
+      setChannelDropAt((cur) =>
+        cur?.type === next?.type && cur?.index === next?.index ? cur : next
+      )
+    },
+    onDrop: (e) => {
+      const id = e.dataTransfer.getData(channelDragType(type))
+      if (!isAdmin || !id) return
+      e.preventDefault()
+      const insertion = insertionAt(e, index)
+      const from = sectionOf(type).findIndex((c) => c.id === id)
+      setChannelDrag(null)
+      setChannelDropAt(null)
+      if (from < 0 || isNoopDrop(from, insertion)) return
+      void reorderSection(type, from, insertionToTarget(from, insertion))
+    }
+  })
+
+  /** Linha de soltar acima (ou, no último canal, abaixo) do bloco. */
+  const dropLine = (type: ChannelType, index: number, last: boolean): React.JSX.Element | null => {
+    if (channelDropAt?.type !== type) return null
+    const before = channelDropAt.index === index
+    const after = last && channelDropAt.index === index + 1
+    if (!before && !after) return null
+    return (
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-x-1 z-20 h-0.5 rounded-full bg-violet-500 shadow-[0_0_6px_rgba(139,92,246,0.8)] ${
+          before ? '-top-0.5' : '-bottom-0.5'
+        }`}
+      />
+    )
+  }
+
+  /** Saiu da seção arrastando: some a linha. */
+  const clearDropOnLeave = (e: React.DragEvent<HTMLElement>): void => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setChannelDropAt(null)
   }
 
   // A sala do servidor (eventos, menções, não lidas) é assinada pela
@@ -263,7 +383,7 @@ export function ServerSidebar(): React.JSX.Element {
       onClick={() => setChannelMenuFor(channelMenuFor === ch.id ? null : ch.id)}
       aria-label="Opções do canal"
       title="Opções do canal"
-      className={`absolute right-1.5 top-1/2 z-10 -translate-y-1/2 rounded-md p-0.5 text-gray-500 transition-[color,background-color,opacity] hover:bg-white/10 hover:text-white cursor-pointer ${
+      className={`absolute right-1.5 top-1.5 z-10 flex h-5 items-center rounded-md px-0.5 text-gray-500 transition-[color,background-color,opacity] hover:bg-white/10 hover:text-white cursor-pointer ${
         onHover && channelMenuFor !== ch.id
           ? 'opacity-0 group-hover/voicech:opacity-100 focus-visible:opacity-100'
           : ''
@@ -281,60 +401,97 @@ export function ServerSidebar(): React.JSX.Element {
       useServerStore.getState().updateLocalServer(updated)
       showToast.success(`#${ch.name} agora é o canal principal.`)
     } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Não foi possível mudar o canal principal.')
+      showToast.error(
+        err instanceof Error ? err.message : 'Não foi possível mudar o canal principal.'
+      )
     }
   }
 
-  const channelMenu = (ch: Channel): React.JSX.Element => (
-    <>
-      <div className="fixed inset-0 z-20" onClick={() => setChannelMenuFor(null)} />
-      <div className="absolute right-1.5 top-9 z-30 flex w-48 flex-col rounded-xl border border-white/10 bg-[#0d0e15]/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in">
-        {(ch.type ?? 'text') === 'text' && ch.id !== primaryId && (
+  const channelMenu = (ch: Channel): React.JSX.Element => {
+    const type: ChannelType = (ch.type ?? 'text') === 'voice' ? 'voice' : 'text'
+    const section = sectionOf(type)
+    const index = section.findIndex((c) => c.id === ch.id)
+    const move = (to: number) => () => {
+      setChannelMenuFor(null)
+      void reorderSection(type, index, to)
+    }
+    return (
+      <>
+        <div className="fixed inset-0 z-20" onClick={() => setChannelMenuFor(null)} />
+        <div className="absolute right-1.5 top-full z-30 mt-1 flex w-48 flex-col rounded-xl border border-white/10 bg-[#0d0e15]/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in">
+          {/* Alternativa ao arrastar (teclado/leitor de tela). */}
+          {index > 0 && (
+            <button
+              onClick={move(index - 1)}
+              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+            >
+              <span>Mover para cima</span>
+              <ChevronUpIcon className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {index >= 0 && index < section.length - 1 && (
+            <button
+              onClick={move(index + 1)}
+              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+            >
+              <span>Mover para baixo</span>
+              <ChevronDownIcon className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {(ch.type ?? 'text') === 'text' && ch.id !== primaryId && (
+            <button
+              onClick={() => void makePrimary(ch)}
+              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+            >
+              <span>Definir como principal</span>
+              <StarIcon className="h-3.5 w-3.5 text-amber-400" />
+            </button>
+          )}
           <button
-            onClick={() => void makePrimary(ch)}
+            onClick={() => {
+              setChannelMenuFor(null)
+              setChannelName(ch.name)
+              setEditingChannel(ch)
+              openCreateChannelModal()
+            }}
             className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
           >
-            <span>Definir como principal</span>
-            <StarIcon className="h-3.5 w-3.5 text-amber-400" />
+            <span>Editar canal</span>
+            <PencilIcon className="h-3.5 w-3.5" />
           </button>
-        )}
-        <button
-          onClick={() => {
-            setChannelMenuFor(null)
-            setChannelName(ch.name)
-            setEditingChannel(ch)
-            openCreateChannelModal()
-          }}
-          className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
-        >
-          <span>Editar canal</span>
-          <PencilIcon className="h-3.5 w-3.5" />
-        </button>
-        <button
-          onClick={() => {
-            setChannelMenuFor(null)
-            setDeletingChannel(ch)
-          }}
-          className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/15 cursor-pointer"
-        >
-          <span>Deletar canal</span>
-          <TrashIcon className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </>
-  )
+          <button
+            onClick={() => {
+              setChannelMenuFor(null)
+              setDeletingChannel(ch)
+            }}
+            className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/15 cursor-pointer"
+          >
+            <span>Deletar canal</span>
+            <TrashIcon className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </>
+    )
+  }
 
   return (
     <>
-      <aside className="flex h-full w-60 shrink-0 flex-col border-r border-white/6 bg-[#0b0c10]/80 backdrop-blur-2xl">
+      {/* z-10: a alça de redimensionar passa um pouco da borda, sobre o conteúdo. */}
+      <aside
+        style={sidebar.panelStyle}
+        className="relative z-10 flex h-full shrink-0 flex-col border-r border-white/6 bg-[#0b0c10]/80 backdrop-blur-2xl"
+      >
+        <ResizeHandle {...sidebar.handleProps} />
         {/* Top Server Header with Dropdown */}
         <div className="relative flex h-14 shrink-0 items-center justify-between px-4 border-b border-white/6 shadow-xs">
           <button
             onClick={() => setDropdownOpen((d) => !d)}
-            className="flex w-full items-center justify-between text-left font-bold text-white text-base truncate hover:text-gray-200 cursor-pointer"
+            title={serverName}
+            className="flex w-full min-w-0 items-center justify-between gap-1 text-left font-bold text-white text-base hover:text-gray-200 cursor-pointer"
           >
-            <span className="truncate">{serverName}</span>
-            <span className="text-xs text-gray-400 ml-1">▼</span>
+            {/* Até duas linhas (o cabeçalho tem altura fixa); o resto no title. */}
+            <span className={`line-clamp-2 min-w-0 leading-5 ${WRAP_NAME}`}>{serverName}</span>
+            <span className="shrink-0 text-xs text-gray-400">▼</span>
           </button>
 
           {/* Dropdown Menu */}
@@ -403,38 +560,56 @@ export function ServerSidebar(): React.JSX.Element {
                 </button>
               )}
             </div>
-            <div className="mt-1 flex flex-col gap-0.5">
+            <div className="mt-1 flex flex-col gap-0.5" onDragLeave={clearDropOnLeave}>
               {textChannels.length === 0 && (
                 <p className="px-2 text-xs text-gray-500 italic">Nenhum canal ainda.</p>
               )}
-              {textChannels.map((ch) => {
+              {textChannels.map((ch, index) => {
                 const active = ch.id === channelId
                 const unread = unreadByRoom[`channel:${ch.id}`] ?? 0
                 return (
-                  <div key={ch.id} className="relative">
+                  <div
+                    key={ch.id}
+                    className={`relative transition-opacity ${
+                      channelDrag?.id === ch.id ? 'opacity-40' : ''
+                    }`}
+                    {...channelDragSource(ch, 'text')}
+                    {...channelDropTarget('text', index)}
+                  >
+                    {dropLine('text', index, index === textChannels.length - 1)}
                     <button
                       onClick={() => navigate(`/servers/${currentServer?.id}/channels/${ch.id}`)}
                       onContextMenu={channelContextMenu(ch)}
-                      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all cursor-pointer ${
+                      title={ch.name}
+                      className={`flex w-full items-start gap-2 rounded-lg py-1.5 pl-2.5 text-left text-sm font-medium transition-all cursor-pointer ${
+                        isAdmin ? 'pr-7' : 'pr-2.5'
+                      } ${
                         active
                           ? 'bg-white/10 text-white shadow-sm'
                           : 'text-gray-400 hover:bg-white/6 hover:text-gray-200'
                       }`}
                     >
-                      <span className="text-base leading-none text-gray-500">#</span>
-                      <span className="truncate">{ch.name}</span>
-                      {ch.id === primaryId && (
-                        <span
-                          title="Canal principal: avisos do servidor são enviados aqui"
-                          className="shrink-0 text-amber-400/90"
-                        >
-                          <StarIcon className="h-3 w-3" />
-                          <span className="sr-only">(canal principal)</span>
-                        </span>
-                      )}
+                      <span className="flex h-5 shrink-0 items-center text-base leading-none text-gray-500">
+                        #
+                      </span>
+                      {/* Nome inteiro, quebrando linha; a estrela segue o texto. */}
+                      <span className={`min-w-0 flex-1 leading-5 ${WRAP_NAME}`}>
+                        {ch.name}
+                        {ch.id === primaryId && (
+                          <span
+                            title="Canal principal: avisos do servidor são enviados aqui"
+                            className="ml-1.5 inline-flex align-[-1px] text-amber-400/90"
+                          >
+                            <StarIcon className="h-3 w-3" />
+                            <span className="sr-only">(canal principal)</span>
+                          </span>
+                        )}
+                      </span>
                       {unread > 0 && (
-                        <span className="ml-auto shrink-0 rounded-full bg-red-500 px-1.5 py-0.2 text-[10px] font-bold text-white">
-                          {unread > 99 ? '99+' : unread}
+                        <span className="flex h-5 shrink-0 items-center">
+                          <span className="rounded-full bg-red-500 px-1.5 py-0.2 text-[10px] font-bold text-white">
+                            {unread > 99 ? '99+' : unread}
+                          </span>
                         </span>
                       )}
                     </button>
@@ -468,11 +643,11 @@ export function ServerSidebar(): React.JSX.Element {
                 </button>
               )}
             </div>
-            <div className="mt-1 flex flex-col gap-0.5">
+            <div className="mt-1 flex flex-col gap-0.5" onDragLeave={clearDropOnLeave}>
               {voiceChannels.length === 0 && (
                 <p className="px-2 text-xs text-gray-500 italic">Nenhum canal de voz ainda.</p>
               )}
-              {voiceChannels.map((ch) => {
+              {voiceChannels.map((ch, index) => {
                 const callState = serverCalls[ch.id]
                 // O backend manda em ordem de entrada; aqui vale nível (ver voiceOrder).
                 const participants = sortVoiceMembers(callState?.participants ?? [], (p) => ({
@@ -489,8 +664,12 @@ export function ServerSidebar(): React.JSX.Element {
                 return (
                   <div
                     key={ch.id}
-                    className="relative"
+                    className={`relative transition-opacity ${
+                      channelDrag?.id === ch.id ? 'opacity-40' : ''
+                    }`}
                     onDragOver={(e) => {
+                      // Arrastando um canal de voz (reordenar) ou uma pessoa (mover).
+                      channelDropTarget('voice', index).onDragOver(e)
                       if (!isAdmin || !e.dataTransfer.types.includes(VOICE_USER_DRAG)) return
                       e.preventDefault()
                       e.dataTransfer.dropEffect = 'move'
@@ -502,6 +681,7 @@ export function ServerSidebar(): React.JSX.Element {
                       }
                     }}
                     onDrop={(e) => {
+                      channelDropTarget('voice', index).onDrop(e)
                       const userId = e.dataTransfer.getData(VOICE_USER_DRAG)
                       setVoiceDropTarget(null)
                       if (!userId || participants.some((p) => p.user_id === userId)) return
@@ -509,14 +689,18 @@ export function ServerSidebar(): React.JSX.Element {
                       void moveUser(userId, ch.id)
                     }}
                   >
-                    {/* O "•••" é absoluto e centrado na vertical: precisa ficar preso à
-                        linha do canal, não ao bloco todo (que cresce com a lista). */}
-                    <div className="group/voicech relative">
+                    {/* O "•••" é absoluto, alinhado à primeira linha do nome: precisa ficar
+                        preso à linha do canal, não ao bloco todo (que cresce com a lista). */}
+                    {dropLine('voice', index, index === voiceChannels.length - 1)}
+                    <div className="group/voicech relative" {...channelDragSource(ch, 'voice')}>
                       <button
                         onClick={() => handleVoiceClick(ch)}
                         onContextMenu={channelContextMenu(ch)}
                         title={connectedHere ? 'Desconectar' : 'Conectar ao canal de voz'}
-                        className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all cursor-pointer ${
+                        className={`flex w-full items-start gap-2 rounded-lg py-1.5 pl-2.5 text-left text-sm font-medium transition-all cursor-pointer ${
+                          // Sem gente, o "•••" fica sempre à direita: guarda o espaço dele.
+                          isAdmin && participants.length === 0 ? 'pr-7' : 'pr-2.5'
+                        } ${
                           voiceDropTarget === ch.id
                             ? 'bg-[#5865f2]/25 text-white ring-2 ring-[#5865f2]'
                             : connectedHere
@@ -525,22 +709,32 @@ export function ServerSidebar(): React.JSX.Element {
                         }`}
                       >
                         {/* Verde só nos canais com gente (pode ser em vários ao mesmo tempo). */}
-                        <VolumeIcon
-                          className={`h-4 w-4 shrink-0 transition-colors ${
-                            participants.length > 0 ? 'text-[#23a55a]' : 'text-gray-500'
-                          }`}
-                        />
-                        <span className="truncate">{ch.name}</span>
+                        <span className="flex h-5 shrink-0 items-center">
+                          <VolumeIcon
+                            className={`h-4 w-4 transition-colors ${
+                              participants.length > 0 ? 'text-[#23a55a]' : 'text-gray-500'
+                            }`}
+                          />
+                        </span>
+                        {/* Nome inteiro, quebrando linha; tempo e contagem ficam na
+                            altura da primeira linha. */}
+                        <span title={ch.name} className={`min-w-0 flex-1 leading-5 ${WRAP_NAME}`}>
+                          {ch.name}
+                        </span>
                         {participants.length > 0 && callState?.call?.started_at && (
-                          <VoiceChannelTimer startedAt={callState.call.started_at} />
+                          <span className="flex h-5 shrink-0 items-center">
+                            <VoiceChannelTimer startedAt={callState.call.started_at} />
+                          </span>
                         )}
                         {participants.length > 0 && (
                           <span
-                            className={`ml-auto shrink-0 rounded-full bg-white/10 px-1.5 py-0.2 text-[10px] font-bold text-gray-300 transition-opacity ${
+                            className={`flex h-5 shrink-0 items-center transition-opacity ${
                               isAdmin ? 'group-hover/voicech:opacity-0' : ''
                             }`}
                           >
-                            {participants.length}
+                            <span className="rounded-full bg-white/10 px-1.5 py-0.2 text-[10px] font-bold text-gray-300">
+                              {participants.length}
+                            </span>
                           </span>
                         )}
                       </button>
@@ -583,13 +777,15 @@ export function ServerSidebar(): React.JSX.Element {
                                 }`}
                               />
                               <span
-                                className={`truncate text-xs transition-colors group-hover/voiceuser:text-white ${
+                                title={name}
+                                className={`min-w-0 truncate text-xs transition-colors group-hover/voiceuser:text-white ${
                                   isMe ? 'font-bold text-white' : 'font-medium text-gray-300'
                                 }`}
                               >
                                 {name}
                               </span>
-                              <LevelBadge userId={p.user_id} />
+                              {/* Selo de nível só na lista de membros da direita; aqui o
+                                  nível só ordena a lista (ver voiceOrder). */}
                               <span className="ml-auto flex items-center gap-0.5 pr-1">
                                 {live.has(p.user_id) && <LiveBadge />}
                                 {!isMe && locallyMuted[p.user_id]?.muted && (
@@ -793,7 +989,6 @@ export function ServerSidebar(): React.JSX.Element {
           </Button>
         </div>
       </Modal>
-
     </>
   )
 }

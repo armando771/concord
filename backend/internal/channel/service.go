@@ -16,14 +16,31 @@ type EventPublisher interface {
 	PublishChannelCreate(event CreateEvent)
 	PublishChannelUpdate(event CreateEvent)
 	PublishChannelDelete(event DeleteEvent)
+	PublishChannelReorder(event ReorderEvent)
+}
+
+// store é o que o Service usa do Repository (nos testes, um fake em memória).
+type store interface {
+	Create(ctx context.Context, ch *Channel) error
+	FindByID(ctx context.Context, id string) (*Channel, error)
+	Update(ctx context.Context, id string, name string) error
+	Delete(ctx context.Context, id string) error
+	ListByServerID(ctx context.Context, serverID string) ([]Channel, error)
+	IsMember(ctx context.Context, serverID string, userID string) (bool, error)
+	IsAdminOrOwner(ctx context.Context, serverID string, userID string) (bool, error)
+	Reorder(ctx context.Context, serverID string, chType string, ids []string) error
 }
 
 type Service struct {
-	repository *Repository
+	repository store
 	publisher  EventPublisher
 }
 
 func ChannelService(repository *Repository, publisher EventPublisher) *Service {
+	return newService(repository, publisher)
+}
+
+func newService(repository store, publisher EventPublisher) *Service {
 	return &Service{
 		repository: repository,
 		publisher:  publisher,
@@ -102,6 +119,35 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 		s.publisher.PublishChannelDelete(DeleteEvent{
 			ServerID:  ch.ServerID,
 			ChannelID: id,
+		})
+	}
+
+	return nil
+}
+
+// Reorder muda a ordem dos canais de um tipo (texto ou voz) do servidor; ids
+// tem que ser exatamente os canais daquela seção. Avisa a sala do servidor.
+func (s *Service) Reorder(ctx context.Context, serverID string, chType string, ids []string, requestID string) error {
+	if chType != TypeText && chType != TypeVoice {
+		return ErrInvalidType
+	}
+	if len(requestID) > MaxRequestIDLength {
+		return ErrInvalidRequestID
+	}
+	if ids == nil {
+		ids = []string{}
+	}
+
+	if err := s.repository.Reorder(ctx, serverID, chType, ids); err != nil {
+		return err
+	}
+
+	if s.publisher != nil {
+		s.publisher.PublishChannelReorder(ReorderEvent{
+			ServerID:   serverID,
+			Type:       chType,
+			ChannelIDs: ids,
+			RequestID:  requestID,
 		})
 	}
 
