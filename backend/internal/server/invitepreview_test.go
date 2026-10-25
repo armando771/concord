@@ -240,7 +240,7 @@ func TestInvitePreviewRouteSkipsAuth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	denyAll := func(c *gin.Context) { c.AbortWithStatus(http.StatusUnauthorized) }
-	ServerRoutes(router.Group("/api"), &Handler{previews: &fakePreviewer{err: ErrInvalidCode}}, denyAll)
+	ServerRoutes(router.Group("/api"), &Handler{previews: &fakePreviewer{err: ErrInvalidCode}}, denyAll, denyAll)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/invites/ABCD2345/preview", nil))

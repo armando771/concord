@@ -50,6 +50,9 @@ type Handler struct {
 	registerByIP *ratelimit.Limiter
 	// hashPassword é o bcrypt do cadastro (trocável nos testes).
 	hashPassword func(password []byte) ([]byte, error)
+	// emails e limits ficam nulos até WithEmail (testes antigos não os usam).
+	emails *EmailService
+	limits *emailLimits
 }
 
 // Cadastros por IP por hora: cada um custa um bcrypt, e o 409 conjunto
@@ -192,6 +195,11 @@ func (h *Handler) Register(c *gin.Context) {
 	if err := h.accounts.Create(c.Request.Context(), newUser); err != nil {
 		h.respondCreateError(c, ipSlot, err)
 		return
+	}
+
+	// Link de confirmação de e-mail, em segundo plano.
+	if h.emails != nil {
+		h.emails.SendVerification(newUser)
 	}
 
 	if input.BirthdayDay != nil {

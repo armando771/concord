@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin.HandlerFunc) {
+func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware, requireVerified gin.HandlerFunc) {
 	servers := router.Group("/servers")
 	servers.Use(authMiddleware)
 	{
@@ -17,7 +17,7 @@ func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin.
 		servers.GET("/:id", handler.GetByID)
 		servers.PUT("/:id", handler.Update)
 		servers.DELETE("/:id", handler.Delete)
-		servers.POST("/:id/invite", handler.InviteMember)
+		servers.POST("/:id/invite", requireVerified, handler.InviteMember)
 		servers.GET("/:id/invites", handler.ListServerInvites)
 		servers.GET("/:id/invite-code", handler.InviteCode)
 		servers.DELETE("/:id/members/:userId", handler.Kick)
@@ -33,8 +33,8 @@ func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin.
 	{
 		invites.GET("", handler.ListInvites)
 		invites.GET("/", handler.ListInvites)
-		invites.POST("/join", handler.JoinByCode)
-		invites.POST("/:id/accept", handler.AcceptInvite)
+		invites.POST("/join", requireVerified, handler.JoinByCode)
+		invites.POST("/:id/accept", requireVerified, handler.AcceptInvite)
 		invites.POST("/:id/decline", handler.DeclineInvite)
 	}
 
