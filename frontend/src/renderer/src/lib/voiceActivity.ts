@@ -24,6 +24,9 @@ export const VOICE_ACTIVITY_DEFAULTS: VoiceActivityConfig = {
   hangoverMs: 300
 }
 
+/** Nome do processador registrado pelo voiceActivityWorklet. */
+export const VOICE_ACTIVITY_PROCESSOR = 'concord-voice-activity'
+
 /** Janela de análise: ~31 avaliações por segundo. */
 export const VOICE_ACTIVITY_WINDOW_MS = 32
 

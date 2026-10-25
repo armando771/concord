@@ -247,10 +247,14 @@ export const useCallStore = create<CallState>()((set, get) => {
     set((s) => ({ listVersion: s.listVersion + 1 }))
   }
 
-  /** Junta servidor (os outros) e detecção local (eu); mudo nunca está falando. */
+  /**
+   * Junta servidor (os outros) e detecção local (eu). Mudo nunca está
+   * falando — nem quando a detecção local caiu e o servidor ainda me lista
+   * (ele demora a perceber o mute).
+   */
   const publishSpeaking = (): void => {
     const meId = useAuthStore.getState().user?.id ?? null
-    const local = localSpeaking === null ? null : localSpeaking && !get().muted
+    const local = get().muted ? false : localSpeaking
     const next = mergeLocalSpeaking(serverSpeakers, meId, local)
     if (!sameIds(get().speakingIds, next)) set({ speakingIds: next })
   }
@@ -264,12 +268,13 @@ export const useCallStore = create<CallState>()((set, get) => {
   /** (Re)inicia a detecção local na track do microfone da chamada. */
   const startLocalSpeaking = (): void => {
     stopLocalSpeaking()
-    const track = localMic?.stream.getAudioTracks()[0]
-    if (!track) return
+    const mic = localMic
+    const track = mic?.stream.getAudioTracks()[0]
+    if (!mic || !track) return
     const watch = { track, stop: () => {} }
     speakingWatch = watch
     localSpeaking = false
-    watch.stop = watchLocalSpeaking(track, {
+    watch.stop = watchLocalSpeaking(mic, {
       onChange: (speaking) => {
         if (speakingWatch !== watch) return
         localSpeaking = speaking
@@ -1196,6 +1201,7 @@ export const useCallStore = create<CallState>()((set, get) => {
               if (get().channelId !== p.channel_id) return
               set({ muted: muted || deafened, deafened })
               applyMute(muted || deafened)
+              publishSpeaking()
               sendVoiceState()
               showToast.info(
                 `${p.moved_by.display_name || 'Um moderador'} moveu você para ${p.channel_name || 'outro canal'}.`

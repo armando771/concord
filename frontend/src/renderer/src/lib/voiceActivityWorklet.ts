@@ -5,6 +5,7 @@ import {
   createVoiceActivityState,
   rmsDb,
   stepVoiceActivity,
+  VOICE_ACTIVITY_PROCESSOR,
   VOICE_ACTIVITY_WINDOW_MS
 } from './voiceActivity'
 
@@ -50,4 +51,4 @@ class ConcordVoiceActivityProcessor extends AudioWorkletProcessor {
   }
 }
 
-registerProcessor('concord-voice-activity', ConcordVoiceActivityProcessor)
+registerProcessor(VOICE_ACTIVITY_PROCESSOR, ConcordVoiceActivityProcessor)
