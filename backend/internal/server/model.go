@@ -20,6 +20,7 @@ type ServerMember struct {
 	Username    string    `json:"username"`
 	DisplayName string    `json:"display_name"`
 	AvatarURL   *string   `json:"avatar_url,omitempty"`
+	IsBot       bool      `json:"is_bot"`
 	Role        string    `json:"role"`
 	JoinedAt    time.Time `json:"joined_at"`
 	UpdatedAt   time.Time `json:"updated_at"`

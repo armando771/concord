@@ -227,6 +227,7 @@ func (r *Repository) ListMembers(ctx context.Context, serverID string) ([]Server
 			u.username,
 			u.display_name,
 			u.avatar_url,
+			u.is_bot,
 			sm.role,
 			sm.joined_at,
 			sm.updated_at
@@ -251,6 +252,7 @@ func (r *Repository) ListMembers(ctx context.Context, serverID string) ([]Server
 			&m.Username,
 			&m.DisplayName,
 			&m.AvatarURL,
+			&m.IsBot,
 			&m.Role,
 			&m.JoinedAt,
 			&m.UpdatedAt,
@@ -289,6 +291,7 @@ func (r *Repository) FindMemberByUserID(ctx context.Context, serverID string, us
 			u.username,
 			u.display_name,
 			u.avatar_url,
+			u.is_bot,
 			sm.role,
 			sm.joined_at,
 			sm.updated_at
@@ -304,6 +307,7 @@ func (r *Repository) FindMemberByUserID(ctx context.Context, serverID string, us
 		&m.Username,
 		&m.DisplayName,
 		&m.AvatarURL,
+		&m.IsBot,
 		&m.Role,
 		&m.JoinedAt,
 		&m.UpdatedAt,
@@ -625,4 +629,17 @@ func (r *Repository) MutualServers(ctx context.Context, userA string, userB stri
 		servers = append(servers, s)
 	}
 	return servers, rows.Err()
+}
+
+// AddMemberIfMissing põe alguém no servidor sem falhar se já estiver lá.
+func (r *Repository) AddMemberIfMissing(ctx context.Context, serverID string, userID string, role string) error {
+	_, err := r.db.Exec(ctx,
+		`INSERT INTO server_members (server_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+		serverID, userID, role)
+	return err
+}
+
+func (r *Repository) RemoveMember(ctx context.Context, serverID string, userID string) error {
+	_, err := r.db.Exec(ctx, `DELETE FROM server_members WHERE server_id = $1 AND user_id = $2`, serverID, userID)
+	return err
 }

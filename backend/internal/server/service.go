@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 
+	"gin-quickstart/backend/internal/bot"
+
 	"github.com/google/uuid"
 )
 
 var (
+	ErrOnlyOwnerBot     = errors.New("só o dono do servidor pode remover ou adicionar o Maestro")
 	ErrInviteNotFound   = errors.New("invite not found")
 	ErrNotInvitee       = errors.New("you are not the invitee")
 	ErrInviteNotPending = errors.New("invite is not pending")
@@ -67,6 +70,41 @@ func (s *Service) Create(
 		})
 	}
 
+	// Todo servidor nasce com o Maestro (o dono pode remover depois).
+	if err := s.repository.AddMemberIfMissing(ctx, server.ID, bot.UserID, RoleMember); err != nil {
+		return err
+	}
+	if botMember, err := s.repository.FindMemberByUserID(ctx, server.ID, bot.UserID); err == nil && s.publisher != nil {
+		s.publisher.PublishMemberJoin(MemberJoinEvent{ServerID: server.ID, Member: *botMember})
+	}
+
+	return nil
+}
+
+// SetMusicBot remove (enabled=false) ou readiciona o Maestro. Só o dono.
+func (s *Service) SetMusicBot(ctx context.Context, serverID, actorID string, enabled bool) error {
+	srv, err := s.repository.FindByID(ctx, serverID)
+	if err != nil {
+		return err
+	}
+	if srv.OwnerID != actorID {
+		return ErrOnlyOwnerBot
+	}
+	if !enabled {
+		if err := s.repository.RemoveMember(ctx, serverID, bot.UserID); err != nil {
+			return err
+		}
+		if s.publisher != nil {
+			s.publisher.PublishMemberLeave(MemberLeaveEvent{ServerID: serverID, UserID: bot.UserID})
+		}
+		return nil
+	}
+	if err := s.repository.AddMemberIfMissing(ctx, serverID, bot.UserID, RoleMember); err != nil {
+		return err
+	}
+	if m, err := s.repository.FindMemberByUserID(ctx, serverID, bot.UserID); err == nil && s.publisher != nil {
+		s.publisher.PublishMemberJoin(MemberJoinEvent{ServerID: serverID, Member: *m})
+	}
 	return nil
 }
 

@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 
+	"gin-quickstart/backend/internal/bot"
 	"gin-quickstart/backend/internal/user"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var (
+	ErrBotUser = errors.New("o Maestro é um bot e não aceita amizade nem mensagens")
 	ErrUserNotFound       = errors.New("user not found")
 	ErrCannotAddSelf      = errors.New("cannot send friend request to yourself")
 	ErrAlreadyFriends     = errors.New("you are already friends with this user")
@@ -101,6 +103,10 @@ func (s *Service) SendRequest(ctx context.Context, requesterID string, addressee
 	addressee, err := s.userService.FindByUsernameFold(ctx, addresseeUsername)
 	if err != nil {
 		return "", ErrUserNotFound
+	}
+
+	if addressee.ID == bot.UserID {
+		return "", ErrBotUser
 	}
 
 	if requesterID == addressee.ID {
@@ -446,6 +452,9 @@ func (s *Service) IsBlockedEither(ctx context.Context, a string, b string) (bool
 // sem amizade, só quem divide um servidor e se o destinatário permite DM de
 // membros de servidores.
 func (s *Service) CanDirectMessage(ctx context.Context, fromID string, toID string) error {
+	if toID == bot.UserID || fromID == bot.UserID {
+		return ErrBotUser
+	}
 	blocked, err := s.IsBlockedEither(ctx, fromID, toID)
 	if err != nil {
 		return err

@@ -48,7 +48,7 @@ func respondError(c *gin.Context, err error) {
 		status = http.StatusNotFound
 	case errors.Is(err, ErrNotParticipant), errors.Is(err, ErrNotOwner),
 		errors.Is(err, ErrOnlyFriends), errors.Is(err, friendship.ErrBlocked),
-		errors.Is(err, friendship.ErrCannotMessage):
+		errors.Is(err, friendship.ErrCannotMessage), errors.Is(err, friendship.ErrBotUser):
 		status = http.StatusForbidden
 	case errors.Is(err, ErrNotGroup), errors.Is(err, ErrIsGroup), errors.Is(err, ErrGroupFull),
 		errors.Is(err, ErrGroupEmpty), errors.Is(err, ErrInvalidName):

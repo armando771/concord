@@ -18,6 +18,8 @@ func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin.
 		servers.GET("/:id/invite-code", handler.InviteCode)
 		servers.PUT("/:id/members/:userId/role", handler.SetMemberRole)
 		servers.PUT("/:id/primary-channel", handler.SetPrimaryChannel)
+		servers.POST("/:id/music-bot", handler.EnableMusicBot)
+		servers.DELETE("/:id/music-bot", handler.DisableMusicBot)
 	}
 
 	invites := router.Group("/invites")
