@@ -74,7 +74,8 @@ const media = vi.hoisted(() => ({
   events: [] as string[],
   connect: vi.fn(),
   publishScreen: vi.fn(),
-  publishCamera: vi.fn()
+  publishCamera: vi.fn(),
+  setWatchedScreens: vi.fn()
 }))
 vi.mock('../lib/livekit', () => ({
   CallMedia: class {
@@ -82,6 +83,7 @@ vi.mock('../lib/livekit', () => ({
     connect = media.connect
     publishScreen = media.publishScreen
     publishCamera = media.publishCamera
+    setWatchedScreens = media.setWatchedScreens
     setMicMuted = vi.fn(async (muted: boolean) => {
       media.events.push(`mic(${muted})`)
     })
@@ -122,6 +124,20 @@ vi.mock('../lib/sounds', () => sounds)
 import { useCallStore } from './callStore'
 
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0))
+
+const empty = {
+  streams: {},
+  screenStreams: {},
+  screenAudioStreams: {},
+  videoStreams: {},
+  mediaPeers: {},
+  availableScreens: [] as string[]
+}
+
+function onRemoteMedia(m: unknown): void {
+  const handlers = media.instances[0].handlers as { onRemoteMedia: (m: unknown) => void }
+  handlers.onRemoteMedia(m)
+}
 
 async function joinChannel(): Promise<void> {
   await useCallStore.getState().startChannelCall('canal-1')
@@ -171,39 +187,6 @@ describe('callStore — mídia via LiveKit', () => {
 
     expect(useCallStore.getState().localCameraStream).toBeNull()
     expect(allStopped(stream)).toBe(true)
-  })
-
-  it('respeita quem saiu do modo foco mesmo com novos eventos de mídia', async () => {
-    await joinChannel()
-    const connection = media.instances[0]
-    const onRemoteMedia = (connection.handlers as { onRemoteMedia: (m: unknown) => void })
-      .onRemoteMedia
-    const remote = {
-      streams: {},
-      screenStreams: { ana: fakeStream('video') },
-      screenAudioStreams: {},
-      videoStreams: {}
-    }
-
-    onRemoteMedia(remote)
-    expect(useCallStore.getState().focusedScreenUserId).toBe('ana')
-
-    useCallStore.getState().setFocusedScreenUser(null)
-    onRemoteMedia({ ...remote, streams: { bia: fakeStream('audio') } })
-
-    expect(useCallStore.getState().focusedScreenUserId).toBeNull()
-  })
-
-  it('foca uma tela nova quando ninguém estava compartilhando', async () => {
-    await joinChannel()
-    const onRemoteMedia = (media.instances[0].handlers as { onRemoteMedia: (m: unknown) => void })
-      .onRemoteMedia
-    const empty = { streams: {}, screenStreams: {}, screenAudioStreams: {}, videoStreams: {} }
-
-    onRemoteMedia(empty)
-    onRemoteMedia({ ...empty, screenStreams: { ana: fakeStream('video') } })
-
-    expect(useCallStore.getState().focusedScreenUserId).toBe('ana')
   })
 
   it('falha ao publicar a tela depois de conectar não derruba a chamada', async () => {
@@ -566,5 +549,138 @@ describe('callStore — reentrada após queda do WS', () => {
       mediaPeers: { caio: 'Caio' }
     })
     expect(useCallStore.getState().mediaPeers).toEqual({ caio: 'Caio' })
+  })
+})
+
+describe('callStore — transmissões sob demanda', () => {
+  /** ana transmitindo e eu assistindo, com o vídeo dela já chegando. */
+  async function watchingAna(): Promise<void> {
+    await joinChannel()
+    onRemoteMedia({ ...empty, availableScreens: ['ana'] })
+    useCallStore.getState().watchScreen('ana')
+    onRemoteMedia({
+      ...empty,
+      availableScreens: ['ana'],
+      screenStreams: { ana: fakeStream('video') }
+    })
+  }
+
+  it('transmissão nova começa pausada: sem foco e sem pedir a mídia', async () => {
+    await joinChannel()
+
+    onRemoteMedia({ ...empty, availableScreens: ['ana'] })
+
+    const s = useCallStore.getState()
+    expect(s.focusedScreenUserId).toBeNull()
+    expect(s.watchedScreenIds).toEqual([])
+    expect(s.availableScreens).toEqual(['ana'])
+    expect(media.setWatchedScreens).not.toHaveBeenCalledWith(['ana'])
+  })
+
+  it('assistir foca a transmissão e pede a mídia dela', async () => {
+    await joinChannel()
+    onRemoteMedia({ ...empty, availableScreens: ['ana'] })
+
+    useCallStore.getState().watchScreen('ana')
+
+    expect(useCallStore.getState().watchedScreenIds).toEqual(['ana'])
+    expect(useCallStore.getState().focusedScreenUserId).toBe('ana')
+    expect(media.setWatchedScreens).toHaveBeenLastCalledWith(['ana'])
+  })
+
+  it('não assiste quem não está transmitindo', async () => {
+    await joinChannel()
+
+    useCallStore.getState().watchScreen('ana')
+
+    expect(useCallStore.getState().watchedScreenIds).toEqual([])
+    expect(media.setWatchedScreens).not.toHaveBeenCalled()
+  })
+
+  it('mantém o foco enquanto a transmissão assistida ainda não chegou', async () => {
+    await joinChannel()
+    onRemoteMedia({ ...empty, availableScreens: ['ana'] })
+    useCallStore.getState().watchScreen('ana')
+
+    onRemoteMedia({ ...empty, availableScreens: ['ana'], streams: { bia: fakeStream('audio') } })
+
+    expect(useCallStore.getState().focusedScreenUserId).toBe('ana')
+  })
+
+  it('respeita quem saiu do modo foco mesmo com novos eventos de mídia', async () => {
+    await watchingAna()
+
+    useCallStore.getState().setFocusedScreenUser(null)
+    onRemoteMedia({
+      ...empty,
+      availableScreens: ['ana'],
+      screenStreams: { ana: fakeStream('video') },
+      streams: { bia: fakeStream('audio') }
+    })
+
+    expect(useCallStore.getState().focusedScreenUserId).toBeNull()
+    expect(useCallStore.getState().watchedScreenIds).toEqual(['ana'])
+  })
+
+  it('fechar a transmissão para de baixar e volta ao card', async () => {
+    await watchingAna()
+
+    useCallStore.getState().stopWatchingScreen('ana')
+
+    expect(useCallStore.getState().watchedScreenIds).toEqual([])
+    expect(useCallStore.getState().focusedScreenUserId).toBeNull()
+    expect(media.setWatchedScreens).toHaveBeenLastCalledWith([])
+  })
+
+  it('quem para de transmitir e volta começa pausado de novo', async () => {
+    await watchingAna()
+
+    onRemoteMedia(empty)
+    expect(useCallStore.getState().watchedScreenIds).toEqual([])
+    expect(useCallStore.getState().focusedScreenUserId).toBeNull()
+
+    onRemoteMedia({ ...empty, availableScreens: ['ana'] })
+    expect(useCallStore.getState().watchedScreenIds).toEqual([])
+    expect(useCallStore.getState().focusedScreenUserId).toBeNull()
+  })
+
+  it('sair da chamada fecha a transmissão', async () => {
+    await watchingAna()
+
+    useCallStore.getState().endCall()
+
+    const s = useCallStore.getState()
+    expect(s.watchedScreenIds).toEqual([])
+    expect(s.availableScreens).toEqual([])
+    expect(s.focusedScreenUserId).toBeNull()
+  })
+
+  it('call:screen de outra pessoa não abre foco', async () => {
+    await joinChannel()
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:screen',
+      payload: {
+        call_id: 'call-1',
+        user: { id: 'ana', username: 'ana', display_name: 'Ana' },
+        active: true
+      }
+    })
+
+    expect(useCallStore.getState().focusedScreenUserId).toBeNull()
+    expect(useCallStore.getState().screenSharers).toContain('ana')
+  })
+
+  it('entrar numa call com alguém transmitindo não abre foco', async () => {
+    api.getCallState.mockResolvedValueOnce({
+      call: null,
+      participants: [],
+      screen_sharing: ['ana']
+    } as never)
+
+    await joinChannel()
+
+    expect(useCallStore.getState().focusedScreenUserId).toBeNull()
+    expect(useCallStore.getState().screenSharers).toEqual(['ana'])
   })
 })

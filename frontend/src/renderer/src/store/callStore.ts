@@ -13,6 +13,7 @@ import type { MicHandle } from '../lib/noiseSuppression'
 import { CallMedia, type RemoteMedia } from '../lib/livekit'
 import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
+import { addWatched, pruneWatched, resolveFocus } from '../lib/screenWatch'
 import { callNotification, notifyDesktop } from '../lib/notifications'
 import { playSound, setSoundOutput } from '../lib/sounds'
 import {
@@ -105,6 +106,10 @@ interface CallState {
   videoStreams: Record<string, MediaStream>
   /** userId -> nome de quem está na sala de mídia (LiveKit), mesmo fora da lista do backend */
   mediaPeers: Record<string, string>
+  /** userIds remotos com tela publicada na sala de mídia (assistida ou não) */
+  availableScreens: string[]
+  /** telas remotas que estou assistindo (só essas são baixadas); zera ao sair da call */
+  watchedScreenIds: string[]
   /** stream da câmera local enquanto ligada (reativo p/ preview espelhado) */
   localCameraStream: MediaStream | null
   /** quem está compartilhando tela segundo o backend (registry) */
@@ -139,6 +144,10 @@ interface CallState {
   stopScreenShare: () => void
   toggleCamera: () => Promise<void>
   setFocusedScreenUser: (userId: string | null) => void
+  /** Começa a baixar e assistir a transmissão de alguém (e foca nela). */
+  watchScreen: (userId: string) => void
+  /** Fecha a transmissão: para de baixar e volta ao card "Assistir transmissão". */
+  stopWatchingScreen: (userId: string) => void
   setServerCalls: (map: Record<string, CallStateResponse>) => void
   joinVoiceChannel: (channelId: string) => Promise<void>
   /** WS de chat reconectou: volta a se registrar na chamada de canal, se houver. */
@@ -190,7 +199,8 @@ const EMPTY_MEDIA: RemoteMedia = {
   screenStreams: {},
   screenAudioStreams: {},
   videoStreams: {},
-  mediaPeers: {}
+  mediaPeers: {},
+  availableScreens: []
 }
 
 export const useCallStore = create<CallState>()((set, get) => {
@@ -201,20 +211,23 @@ export const useCallStore = create<CallState>()((set, get) => {
   const applyRemoteMedia = (remote: RemoteMedia): void => {
     set((s) => {
       const meId = useAuthStore.getState().user?.id ?? null
-      const isSharing = (id: string): boolean =>
-        Boolean(remote.screenStreams[id]) || (id === meId && s.isScreenSharing)
-      let focusedScreenUserId = s.focusedScreenUserId
-      if (focusedScreenUserId !== null && !isSharing(focusedScreenUserId)) {
-        // A tela em foco acabou: passa para a próxima (ou nenhuma).
-        focusedScreenUserId =
-          Object.keys(remote.screenStreams)[0] ?? (s.isScreenSharing ? meId : null)
-      } else if (focusedScreenUserId === null) {
-        // Sem foco: só uma tela que acabou de chegar ganha foco — quem saiu do
-        // modo foco não é puxado de volta a cada evento de mídia.
-        focusedScreenUserId =
-          Object.keys(remote.screenStreams).find((id) => !s.screenStreams[id]) ?? null
+      const availableScreens = remote.availableScreens ?? []
+      // Parou de transmitir: deixa de ser assistida (se voltar, começa pausada).
+      const watchedScreenIds = pruneWatched(s.watchedScreenIds, availableScreens)
+      // Nada ganha foco sozinho; o foco só muda se a tela em foco acabou. Uma
+      // assistida cujo vídeo ainda não chegou continua em foco.
+      const focusedScreenUserId = resolveFocus(
+        s.focusedScreenUserId,
+        watchedScreenIds,
+        s.isScreenSharing ? meId : null
+      )
+      return {
+        ...remote,
+        mediaPeers: remote.mediaPeers ?? {},
+        availableScreens,
+        watchedScreenIds,
+        focusedScreenUserId
       }
-      return { ...remote, mediaPeers: remote.mediaPeers ?? {}, focusedScreenUserId }
     })
   }
 
@@ -325,7 +338,7 @@ export const useCallStore = create<CallState>()((set, get) => {
           ),
           ...(replace ? {} : s.voiceStates)
         },
-        focusedScreenUserId: s.focusedScreenUserId ?? sharing[0] ?? null,
+        focusedScreenUserId: s.focusedScreenUserId,
         participants: replace
           ? others
           : [...s.participants, ...others.filter((p) => !s.participants.some((q) => q.id === p.id))]
@@ -355,7 +368,7 @@ export const useCallStore = create<CallState>()((set, get) => {
         useChatStore.getState().subscribeRoom(`call:${call.id}`)
         media?.disconnect()
         media = null
-        set({ callId: call.id, participants: [], ...EMPTY_MEDIA })
+        set({ callId: call.id, participants: [], ...EMPTY_MEDIA, watchedScreenIds: [] })
         void connectMedia(call.id)
       }
       await loadCallState(call.id, true)
@@ -399,6 +412,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       screenSharers: [],
       speakingIds: [],
       voiceStates: {},
+      watchedScreenIds: [],
       focusedScreenUserId: null,
       muted: false,
       deafened: false,
@@ -458,6 +472,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     screenSharers: [],
     speakingIds: [],
     voiceStates: {},
+    watchedScreenIds: [],
     inputDeviceId: loadAudioPrefs().inputId,
     outputDeviceId: loadAudioPrefs().outputId,
     focusedScreenUserId: null,
@@ -743,6 +758,24 @@ export const useCallStore = create<CallState>()((set, get) => {
       set({ focusedScreenUserId: userId })
     },
 
+    watchScreen: (userId) => {
+      const s = get()
+      if (s.status !== 'active' || !s.availableScreens.includes(userId)) return
+      const next = addWatched(s.watchedScreenIds, userId)
+      set({ watchedScreenIds: next, focusedScreenUserId: userId })
+      media?.setWatchedScreens(next)
+    },
+
+    stopWatchingScreen: (userId) => {
+      const s = get()
+      const next = s.watchedScreenIds.filter((id) => id !== userId)
+      set({
+        watchedScreenIds: next,
+        focusedScreenUserId: s.focusedScreenUserId === userId ? null : s.focusedScreenUserId
+      })
+      media?.setWatchedScreens(next)
+    },
+
     toggleCamera: async () => {
       const s = get()
       if (s.type === null || s.status !== 'active' || transitioning) return
@@ -904,11 +937,9 @@ export const useCallStore = create<CallState>()((set, get) => {
             screenSharers: p.active
               ? Array.from(new Set([...s.screenSharers, p.user.id]))
               : s.screenSharers.filter((id) => id !== p.user.id),
-            focusedScreenUserId: p.active
-              ? (s.focusedScreenUserId ?? p.user.id)
-              : s.focusedScreenUserId === p.user.id
-                ? null
-                : s.focusedScreenUserId,
+            // Transmissão nova começa pausada: só a que acabou perde o foco.
+            focusedScreenUserId:
+              !p.active && s.focusedScreenUserId === p.user.id ? null : s.focusedScreenUserId,
             participants: upsertParticipant(s.participants, p.user)
           }))
           return
