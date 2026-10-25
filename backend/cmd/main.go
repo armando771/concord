@@ -31,6 +31,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"gin-quickstart/backend/internal/mailer"
 )
 
 func loadEnv() {
@@ -251,7 +252,12 @@ func main() {
 	api := router.Group("/api")
 
 	// Auth routes (public)
-	authHandler := auth.AuthHandler(authService, userService)
+	appURL := os.Getenv("APP_URL")
+	if appURL == "" {
+		appURL = "http://localhost:5173"
+	}
+	emailService := auth.NewEmailService(authRepository, userService, authService, mailer.FromEnv(), appURL)
+	authHandler := auth.AuthHandler(authService, userService).WithEmail(emailService)
 	auth.AuthRoutes(api, authHandler, authMiddleware)
 
 	// Protected routes
@@ -259,7 +265,14 @@ func main() {
 	user.UserRoutes(api, userHandler, authMiddleware)
 	user.ProfileRoutes(api, profileHandler, authMiddleware)
 	friendship.FriendRoutes(api, friendshipHandler, authMiddleware)
-	server.ServerRoutes(api, serverHandler, authMiddleware)
+	requireVerified := auth.RequireVerified(func(ctx context.Context, id string) (bool, error) {
+		u, err := userService.FindByID(ctx, id)
+		if err != nil {
+			return false, err
+		}
+		return u.EmailVerifiedAt != nil, nil
+	})
+	server.ServerRoutes(api, serverHandler, authMiddleware, requireVerified)
 	channel.ChannelRoutes(api, channelHandler, authMiddleware)
 	role.RoleRoutes(api, roleHandler, authMiddleware)
 	conversation.ConversationRoutes(api, conversationHandler, authMiddleware)
