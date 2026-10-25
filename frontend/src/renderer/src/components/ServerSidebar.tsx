@@ -501,9 +501,9 @@ export function ServerSidebar(): React.JSX.Element {
                               }}
                               onDragEnd={() => setVoiceDropTarget(null)}
                               title={canMove(p.user_id) ? 'Arraste para outro canal de voz' : undefined}
-                              className={`relative flex items-center gap-2 overflow-hidden rounded-md px-2 py-1 ${
-                                isMe ? 'bg-white/5' : ''
-                              }`}
+                              className={`group/voiceuser relative flex items-center gap-2 overflow-hidden rounded-md px-2 py-1 transition-colors ${
+                                isMe ? 'bg-white/5 hover:bg-white/10' : 'hover:bg-white/[0.06]'
+                              } ${canMove(p.user_id) ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
                             >
                               <VoiceRowShimmer userId={p.user_id} />
                               <div
@@ -513,7 +513,7 @@ export function ServerSidebar(): React.JSX.Element {
                               >
                                 {name.charAt(0).toUpperCase()}
                               </div>
-                              <span className="truncate text-xs font-medium text-gray-300">
+                              <span className="truncate text-xs font-medium text-gray-300 transition-colors group-hover/voiceuser:text-white">
                                 {name}
                                 {isMe ? ' (você)' : ''}
                               </span>
