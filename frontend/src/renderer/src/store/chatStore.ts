@@ -42,6 +42,7 @@ import { useFriendStore } from './friendStore'
 import { useCallStore } from './callStore'
 import { useLevelStore } from './levelStore'
 import { useSoundboardStore } from './soundboardStore'
+import { useMusicStore } from './musicStore'
 import { showToast } from './toastStore'
 import { router } from '../router'
 import { MESSAGE_LIMIT } from '../api/messages'
@@ -487,6 +488,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     if (event.type === 'call:soundboard' || event.type.startsWith('soundboard:')) {
       useSoundboardStore.getState().handleWsEvent(event)
+      return
+    }
+
+    if (event.type.startsWith('music:')) {
+      useMusicStore.getState().handleWsEvent(event)
       return
     }
 
