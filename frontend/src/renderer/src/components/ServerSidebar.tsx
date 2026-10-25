@@ -20,11 +20,7 @@ import { profileCardHandler } from '../store/profileCardStore'
 import { logout } from '../api/auth'
 import { clearSession } from '../api/client'
 import type { Channel, ChannelType } from '../api/channels'
-import {
-  listActiveServerCalls,
-  moveToVoiceChannel,
-  type CallStateResponse
-} from '../api/calls'
+import { listActiveServerCalls, moveToVoiceChannel, type CallStateResponse } from '../api/calls'
 import { canMoveVoiceUser, VOICE_USER_DRAG } from '../lib/voiceMove'
 import { showToast } from '../store/toastStore'
 import Modal from './Modal'
@@ -44,6 +40,8 @@ import {
 import { setPrimaryChannel } from '../api/servers'
 import { primaryChannelId } from '../lib/primaryChannel'
 import VoiceSettings from './VoiceSettings'
+import ResizeHandle from './ResizeHandle'
+import { useResizableWidth } from './useResizableWidth'
 import AppSettings from './AppSettings'
 
 export function ServerSidebar(): React.JSX.Element {
@@ -79,6 +77,8 @@ export function ServerSidebar(): React.JSX.Element {
   const levels = useLevelStore((s) => s.levels)
   const ensureLevels = useLevelStore((s) => s.ensureLevels)
 
+  // Mesma preferência de largura na barra de canais e na de DMs/amigos.
+  const sidebar = useResizableWidth('channels')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
@@ -306,7 +306,9 @@ export function ServerSidebar(): React.JSX.Element {
       useServerStore.getState().updateLocalServer(updated)
       showToast.success(`#${ch.name} agora é o canal principal.`)
     } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Não foi possível mudar o canal principal.')
+      showToast.error(
+        err instanceof Error ? err.message : 'Não foi possível mudar o canal principal.'
+      )
     }
   }
 
@@ -351,7 +353,12 @@ export function ServerSidebar(): React.JSX.Element {
 
   return (
     <>
-      <aside className="flex h-full w-60 shrink-0 flex-col border-r border-white/6 bg-[#0b0c10]/80 backdrop-blur-2xl">
+      {/* z-10: a alça de redimensionar passa um pouco da borda, sobre o conteúdo. */}
+      <aside
+        style={sidebar.panelStyle}
+        className="relative z-10 flex h-full shrink-0 flex-col border-r border-white/6 bg-[#0b0c10]/80 backdrop-blur-2xl"
+      >
+        <ResizeHandle {...sidebar.handleProps} />
         {/* Top Server Header with Dropdown */}
         <div className="relative flex h-14 shrink-0 items-center justify-between px-4 border-b border-white/6 shadow-xs">
           <button

@@ -18,6 +18,8 @@ import { UserPlusIcon, SearchIcon, VolumeIcon } from '../components/icons'
 import LevelBadge from '../components/level/LevelBadge'
 import LevelRowShimmer from '../components/level/LevelRowShimmer'
 import LevelUpBurst from '../components/level/LevelUpBurst'
+import ResizeHandle from '../components/ResizeHandle'
+import { useResizableWidth } from '../components/useResizableWidth'
 
 interface MemberRowProps {
   userId: string
@@ -68,6 +70,20 @@ function MemberRow({
         <p className="truncate text-[11px] text-gray-400">@{handle}</p>
       </div>
     </div>
+  )
+}
+
+/** Lista de membros à direita, com a borda de dentro arrastável. */
+function MembersAside({ children }: { children: React.ReactNode }): React.JSX.Element {
+  const panel = useResizableWidth('members')
+  return (
+    <aside
+      style={panel.panelStyle}
+      className="relative hidden shrink-0 flex-col border-l border-white/6 bg-[#07080b]/60 lg:flex"
+    >
+      <ResizeHandle {...panel.handleProps} />
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">{children}</div>
+    </aside>
   )
 }
 
@@ -242,7 +258,7 @@ export function ServerView(): React.JSX.Element {
       </div>
 
       {/* Right Column: Server Members List */}
-      <aside className="hidden lg:flex w-64 shrink-0 flex-col overflow-y-auto border-l border-white/6 bg-[#07080b]/60 p-4 space-y-6">
+      <MembersAside>
         {/* Owner Group */}
         {ownerMembers.length > 0 && (
           <div>
@@ -252,9 +268,7 @@ export function ServerView(): React.JSX.Element {
             <div className="flex flex-col gap-1">
               {ownerMembers.map((m) => {
                 const displayName =
-                  m.display_name ??
-                  m.username ??
-                  (m.user_id === me?.id ? me?.display_name : 'Dono')
+                  m.display_name ?? m.username ?? (m.user_id === me?.id ? me?.display_name : 'Dono')
                 const handle = m.username ?? (m.user_id === me?.id ? me?.username : 'dono')
                 return (
                   <MemberRow
@@ -355,7 +369,7 @@ export function ServerView(): React.JSX.Element {
             </div>
           </div>
         )}
-      </aside>
+      </MembersAside>
 
       {/* Modal Convidar Amigos */}
       <Modal
