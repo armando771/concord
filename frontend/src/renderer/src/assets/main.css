@@ -618,23 +618,31 @@
   }
 }
 
-/* SSS: glitch curto de tempos em tempos (usa `translate` para não brigar com o slam). */
+/* SSS: glitch curto de tempos em tempos. Só mexe em `translate` (não briga com o slam, que usa
+   `transform`) e em `text-shadow` (não toca em `filter`, para não anular o boost-pulse). */
 @keyframes boost-glitch {
   0%,
   90%,
   100% {
     translate: 0 0;
-    filter: none;
   }
   92% {
     translate: -3px 1px;
-    filter: hue-rotate(40deg) brightness(1.5);
+    text-shadow:
+      -3px 0 0 rgba(255, 40, 60, 0.9),
+      3px 0 0 rgba(0, 230, 255, 0.9);
   }
   95% {
     translate: 3px -1px;
+    text-shadow:
+      3px 0 0 rgba(255, 40, 60, 0.9),
+      -3px 0 0 rgba(0, 230, 255, 0.9);
   }
   97% {
     translate: -1px 0;
+    text-shadow:
+      -2px 0 0 rgba(255, 40, 60, 0.7),
+      2px 0 0 rgba(0, 230, 255, 0.7);
   }
 }
 
