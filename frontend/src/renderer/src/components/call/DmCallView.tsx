@@ -11,7 +11,7 @@ import {
   MicOffIcon,
   PhoneOffIcon
 } from '../icons'
-import VoiceControls from './VoiceControls'
+import CallControlsDock from './CallControlsDock'
 import CallStage from './CallStage'
 import { formatDuration, useElapsed } from './callUtils'
 import useSpeaking from './useSpeaking'
@@ -158,11 +158,7 @@ function DmCallView({ children }: { children?: React.ReactNode }): React.JSX.Ele
         <CallStage speaking={speaking} />
       </div>
 
-      <div className="pointer-events-none absolute bottom-6 left-0 right-0 flex justify-center">
-        <div className="pointer-events-auto">
-          <VoiceControls />
-        </div>
-      </div>
+      <CallControlsDock />
     </div>
   )
 }
