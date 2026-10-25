@@ -166,6 +166,8 @@ func (h *Handler) State(c *gin.Context) {
 		return
 	}
 
+	// Só aqui (participante conferido): quem entra depois já vê a atividade.
+	state.Activity = h.service.ActivityFor(callID, userID.(string))
 	c.JSON(http.StatusOK, state)
 }
 

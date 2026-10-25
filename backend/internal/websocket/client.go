@@ -92,7 +92,8 @@ func (c *Client) readPump(ctx context.Context) {
 			if c.typing != nil {
 				c.typing.Handle(ctx, c.userID, ev.Type, ev.Payload)
 			}
-		case "call:invite", "call:accept", "call:decline", "call:leave", "call:screen", "call:voice", "call:soundboard":
+		case "call:invite", "call:accept", "call:decline", "call:leave", "call:screen", "call:voice", "call:soundboard",
+			"call:activity", "call:activity:stop":
 			if c.callRouter != nil {
 				c.callRouter.HandleCallMessage(c.userID, ev.Type, ev.Payload)
 			}

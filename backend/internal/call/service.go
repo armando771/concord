@@ -51,6 +51,8 @@ type StateResponse struct {
 	Call          *Call             `json:"call"`
 	Participants  []ParticipantInfo `json:"participants"`
 	ScreenSharing []string          `json:"screen_sharing,omitempty"`
+	// Atividade aberta na chamada. Só vai para quem está nela (ver Handler.State).
+	Activity *ActivityEvent `json:"activity,omitempty"`
 }
 
 type participantState struct {
@@ -89,6 +91,8 @@ type Service struct {
 	busy  map[string]string
 	// screenSharers: callID -> set de userIDs compartilhando tela (transitório)
 	screenSharers map[string]map[string]struct{}
+	// activities: callID -> atividade aberta (transitório)
+	activities map[string]*callActivity
 
 	// Queda do WS de chat só tira o usuário da chamada se ele não voltar dentro
 	// desse prazo — a mídia (LiveKit) aguenta quedas curtas sozinha.
@@ -130,6 +134,7 @@ func CallService(
 		calls:               make(map[string]*activeCall),
 		busy:                make(map[string]string),
 		screenSharers:       make(map[string]map[string]struct{}),
+		activities:          make(map[string]*callActivity),
 		disconnectGrace:     defaultDisconnectGrace,
 	}
 	s.leaveAfterDisconnect = s.Leave
@@ -464,8 +469,14 @@ func (s *Service) detachParticipant(callID, userID string) (remaining int, remov
 		serverID = *ac.info.ServerID
 	}
 	channelID := ac.info.ChannelID
+	// Quem abriu a atividade saiu: ela acaba para os que ficaram.
+	activityStop := s.dropActivityOfLocked(callID, userID)
+	targets := participantIDsLocked(ac)
 	s.mu.Unlock()
 
+	if activityStop != nil {
+		s.sendToAll(targets, activityStop)
+	}
 	if wasSharing {
 		s.publishLive(serverID, LiveEvent{CallID: callID, ChannelID: channelID, UserID: userID, Active: false})
 	}
@@ -517,6 +528,7 @@ func (s *Service) closeCall(callID string) error {
 	channelID := ac.info.ChannelID
 	delete(s.calls, callID)
 	delete(s.screenSharers, callID)
+	delete(s.activities, callID)
 	s.mu.Unlock()
 
 	for userID := range sharers {
@@ -746,7 +758,7 @@ func (s *Service) GetState(ctx context.Context, callID string) (*StateResponse, 
 	s.mu.RUnlock()
 
 	for i := range participants {
-		info, err := s.userInfo(ctx, participants[i].UserID)
+		info, err := s.lookupUser(ctx, participants[i].UserID)
 		if err != nil {
 			continue
 		}
@@ -860,6 +872,10 @@ func (s *Service) HandleCallMessage(userID string, evType string, payload json.R
 		}
 	case "call:soundboard":
 		s.handleSoundboardMessage(ctx, userID, payload)
+	case "call:activity":
+		s.handleActivityMessage(ctx, userID, payload)
+	case "call:activity:stop":
+		s.handleActivityStopMessage(userID, payload)
 	default:
 		log.Printf("[call] unhandled ws event %q from user %s", evType, userID)
 	}
