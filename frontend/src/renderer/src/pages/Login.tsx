@@ -5,6 +5,7 @@ import Button from '../components/Button'
 import Input from '../components/Input'
 import { login } from '../api/auth'
 import { buildLoginInput, loginIdentifierError } from '../lib/loginIdentifier'
+import { loginErrorMessage } from '../lib/loginError'
 import { getMe } from '../api/users'
 import { useAuthStore } from '../store/authStore'
 
@@ -40,7 +41,7 @@ function Login(): React.JSX.Element {
       setUser(me)
       navigate('/')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao entrar.')
+      setError(loginErrorMessage(err))
     } finally {
       setLoading(false)
     }
