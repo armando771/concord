@@ -2,6 +2,7 @@ import { ElectronAPI } from '@electron-toolkit/preload'
 import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
 import type { OverlayFrame, OverlayLayout } from '../renderer/src/lib/overlayLayout'
 import type { CallResume, PendingCallResume } from '../shared/callResume'
+import type { AppMetrics } from '../shared/appMetrics'
 
 export interface ScreenSourceInfo {
   id: string
@@ -149,6 +150,7 @@ declare global {
   interface Window {
     electron: ElectronAPI
     api?: {
+      appMetrics?: { sample(reset?: boolean): Promise<AppMetrics | null> }
       screenPicker: ScreenPickerApi
       background?: BackgroundApi
       updates?: UpdatesApi

@@ -7,7 +7,7 @@ interface FakePublication {
   isDesired: boolean
   isSubscribed: boolean
   isMuted: boolean
-  track: undefined
+  track: { getRTCStatsReport: () => Promise<RTCStatsReport | undefined> } | undefined
   setSubscribed: (v: boolean) => void
 }
 
@@ -23,10 +23,12 @@ const lk = vi.hoisted(() => {
     remoteParticipants = new Map<string, unknown>()
     listeners = new Map<string, Array<(...args: unknown[]) => void>>()
     localParticipant: {
+      trackPublications: Map<string, FakePublication>
       publishTrack: ReturnType<typeof vi.fn>
       getTrackPublication: ReturnType<typeof vi.fn>
       permissions?: { canPublish?: boolean; canPublishSources?: number[] }
     } = {
+      trackPublications: new Map(),
       publishTrack: vi.fn(async () => ({ mute: vi.fn(async () => {}) })),
       getTrackPublication: vi.fn()
     }
@@ -117,6 +119,46 @@ function createMedia(): CallMedia {
 beforeEach(() => {
   lk.rooms.length = 0
   emitted = []
+})
+
+describe('CallMedia — latência sob demanda', () => {
+  it('não consulta tracks fora de uma conexão ativa', async () => {
+    expect(await createMedia().getLatency()).toBeNull()
+  })
+
+  it('lê estatísticas públicas de uma track remota quando não publica microfone', async () => {
+    const media = createMedia()
+    room().state = 'connected'
+    const participant = addParticipant('ana', 'microphone')
+    const getRTCStatsReport = vi.fn(
+      async () =>
+        new Map([
+          ['rtt', { type: 'remote-inbound-rtp', roundTripTime: 0.042 }]
+        ]) as unknown as RTCStatsReport
+    )
+    pubOf(participant, 'microphone').track = { getRTCStatsReport }
+    expect(await media.getLatency()).toBe(42)
+    expect(getRTCStatsReport).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignora track removida e resultado atrasado durante reconexão', async () => {
+    const media = createMedia()
+    room().state = 'connected'
+    const participant = addParticipant('ana', 'microphone')
+    pubOf(participant, 'microphone').track = {
+      getRTCStatsReport: vi.fn().mockRejectedValue(new Error('removed'))
+    }
+    expect(await media.getLatency()).toBeNull()
+    pubOf(participant, 'microphone').track = {
+      getRTCStatsReport: async () => {
+        room().state = 'reconnecting'
+        return new Map([
+          ['rtt', { type: 'remote-inbound-rtp', roundTripTime: 0.1 }]
+        ]) as unknown as RTCStatsReport
+      }
+    }
+    expect(await media.getLatency()).toBeNull()
+  })
 })
 
 describe('CallMedia — assinatura seletiva', () => {

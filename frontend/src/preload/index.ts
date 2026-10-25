@@ -3,6 +3,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
 import type { OverlayFrame, OverlayLayout } from '../renderer/src/lib/overlayLayout'
 import type { CallResume, PendingCallResume } from '../shared/callResume'
+import type { AppMetrics } from '../shared/appMetrics'
 
 interface ScreenSourceInfo {
   id: string
@@ -14,6 +15,11 @@ interface ScreenSourceInfo {
 
 // Custom APIs for renderer
 const api = {
+  appMetrics: {
+    sample(reset = false): Promise<AppMetrics | null> {
+      return ipcRenderer.invoke('app-metrics:sample', reset)
+    }
+  },
   screenPicker: {
     /** Main avisa que um pedido de getDisplayMedia está aguardando seleção. */
     onShow(cb: () => void): () => void {
