@@ -60,7 +60,9 @@ vi.mock('./authStore', () => ({
   }
 }))
 vi.mock('./serverStore', () => ({ useServerStore: { getState: () => ({}) } }))
-vi.mock('./friendStore', () => ({ useFriendStore: { getState: () => ({}) } }))
+// O chatStore consulta quem está bloqueado e se a janela tem foco.
+vi.mock('./friendStore', () => ({ useFriendStore: { getState: () => ({ blocked: [] }) } }))
+vi.stubGlobal('document', { hasFocus: () => false })
 vi.mock('./callStore', () => ({ useCallStore: { getState: () => ({}) } }))
 vi.mock('./levelStore', () => ({ useLevelStore: { getState: () => ({}) } }))
 vi.mock('./soundboardStore', () => ({ useSoundboardStore: { getState: () => ({}) } }))
