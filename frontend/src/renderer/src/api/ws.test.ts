@@ -18,7 +18,9 @@ class FakeSocket {
   send(raw: string): void {
     this.sent.push(raw)
   }
-  close(): void {}
+  close(): void {
+    this.readyState = 3
+  }
   open(): void {
     this.readyState = FakeSocket.OPEN
     this.onopen?.()
