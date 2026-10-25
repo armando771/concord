@@ -139,7 +139,7 @@ VITE_SERVER_URL=http://localhost:8080 yarn dev
 **No navegador** (mesmo renderer, sem Electron; o backend fica na mesma origem):
 ```bash
 cd frontend
-yarn dev:web                         # http://localhost:5175, repassa /api /ws /rtc /updates ao backend
+yarn dev:web                         # http://localhost:5175, repassa /api /ws /rtc ao backend
 yarn build:web && yarn preview:web   # dist-web/ em http://localhost:4173
 # WEB_BACKEND_URL=http://localhost:8090 troca o backend do repasse
 ```

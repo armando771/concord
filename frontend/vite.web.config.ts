@@ -5,7 +5,7 @@ import { cspPlugin, rendererShared } from './vite.renderer.shared'
 
 // Salinha no navegador (yarn build:web → dist-web/). O mesmo renderer do app
 // desktop, sem o overlay de jogo, falando com o backend na mesma origem (o
-// Caddy serve os arquivos e repassa /api, /ws, /rtc e /updates).
+// Caddy serve os arquivos e repassa /api, /ws e /rtc ao backend).
 
 /** Endereço público do app web, para a CSP liberar o wss dele. */
 const publicUrl = process.env.WEB_PUBLIC_URL ?? 'https://app-salinha.bhrx.com.br'
@@ -15,7 +15,6 @@ const backend = process.env.WEB_BACKEND_URL ?? 'http://localhost:8080'
 const backendWs = backend.replace(/^http/, 'ws')
 const proxy: Record<string, ProxyOptions> = {
   '/api': { target: backend, changeOrigin: true },
-  '/updates': { target: backend, changeOrigin: true },
   '/ws': { target: backendWs, ws: true, changeOrigin: true },
   '/rtc': { target: backend, ws: true, changeOrigin: true }
 }
