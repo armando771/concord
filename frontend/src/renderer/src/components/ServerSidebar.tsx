@@ -566,9 +566,12 @@ export function ServerSidebar(): React.JSX.Element {
                               >
                                 {name.charAt(0).toUpperCase()}
                               </div>
-                              <span className="truncate text-xs font-medium text-gray-300 transition-colors group-hover/voiceuser:text-white">
+                              <span
+                                className={`truncate text-xs transition-colors group-hover/voiceuser:text-white ${
+                                  isMe ? 'font-bold text-white' : 'font-medium text-gray-300'
+                                }`}
+                              >
                                 {name}
-                                {isMe ? ' (você)' : ''}
                               </span>
                               <span className="ml-auto flex items-center gap-0.5 pr-1">
                                 {live.has(p.user_id) && <LiveBadge />}
