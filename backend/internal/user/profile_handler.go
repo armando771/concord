@@ -94,7 +94,7 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 		respondProfileError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, u)
+	c.JSON(http.StatusOK, u.Self())
 }
 
 func (h *ProfileHandler) SetStatus(c *gin.Context) {
@@ -114,7 +114,7 @@ func (h *ProfileHandler) SetStatus(c *gin.Context) {
 		respondProfileError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, u)
+	c.JSON(http.StatusOK, u.Self())
 }
 
 func (h *ProfileHandler) UploadAvatar(c *gin.Context) { h.upload(c, h.service.SetAvatar) }
@@ -255,7 +255,7 @@ func (h *ProfileHandler) upload(c *gin.Context, set mediaSetter) {
 	keepStatic = animated // imagem parada não precisa de quadro estático
 	h.removeMedia(old)
 
-	c.JSON(http.StatusOK, u)
+	c.JSON(http.StatusOK, u.Self())
 }
 
 func (h *ProfileHandler) remove(c *gin.Context, set mediaSetter) {
@@ -269,7 +269,7 @@ func (h *ProfileHandler) remove(c *gin.Context, set mediaSetter) {
 		return
 	}
 	h.removeMedia(old)
-	c.JSON(http.StatusOK, u)
+	c.JSON(http.StatusOK, u.Self())
 }
 
 // removeMedia apaga o arquivo (e o quadro parado) de uma URL antiga.
