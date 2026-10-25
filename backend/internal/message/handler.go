@@ -184,6 +184,8 @@ func (h *Handler) canSendToConversation(c *gin.Context, conversationID string, u
 		c.JSON(http.StatusNotFound, gin.H{"error": "conversation not found"})
 	case errors.Is(err, ErrNoRoomAccess):
 		c.JSON(http.StatusForbidden, gin.H{"error": "you are not a participant of this conversation"})
+	case errors.Is(err, ErrBlocked):
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "blocked"})
 	case errors.Is(err, ErrCannotMessage):
 		c.JSON(http.StatusForbidden, gin.H{"error": "you can only message friends or people from your servers"})
 	default:

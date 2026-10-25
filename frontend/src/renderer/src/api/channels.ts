@@ -7,6 +7,7 @@ export interface Channel {
   server_id: string
   name: string
   type: ChannelType
+  /** Ordem dentro da seção (texto ou voz); a lista já vem ordenada. */
   position?: number
   created_by: string
   created_at: string
@@ -35,15 +36,24 @@ export function updateChannel(serverId: string, channelId: string, name: string)
   })
 }
 
-export function reorderChannels(serverId: string, channelIds: string[]): Promise<Channel[]> {
-  return request<Channel[]>(`/servers/${serverId}/channels`, {
-    method: 'PUT',
-    body: JSON.stringify({ channel_ids: channelIds })
-  })
-}
-
 export function deleteChannel(serverId: string, channelId: string): Promise<void> {
   return request<void>(`/servers/${serverId}/channels/${channelId}`, {
     method: 'DELETE'
+  })
+}
+
+/**
+ * Nova ordem dos canais de um tipo (dono/moderadores). `requestId` volta no
+ * evento channel:reorder do WS, para quem pediu reconhecer o próprio eco.
+ */
+export function reorderChannels(
+  serverId: string,
+  type: ChannelType,
+  channelIds: string[],
+  requestId?: string
+): Promise<{ type: ChannelType; channel_ids: string[] }> {
+  return request(`/servers/${serverId}/channels/order`, {
+    method: 'PUT',
+    body: JSON.stringify({ type, channel_ids: channelIds, request_id: requestId })
   })
 }

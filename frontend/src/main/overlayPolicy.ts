@@ -1,4 +1,12 @@
 import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
+import {
+  placeOverlayBox,
+  type OverlayFrame,
+  type OverlayLayout,
+  type OverlaySize
+} from '../renderer/src/lib/overlayLayout'
+
+export type { OverlayFrame }
 
 // Regras do overlay de jogo. Puras para poder testar.
 
@@ -11,8 +19,6 @@ export interface Rect {
 
 /** Outra janela cobrindo um monitor (pid dono + monitor em pixels físicos), ou null. Rect tem o formato do Rectangle do Electron. */
 export type Foreground = { pid: number; monitor: Rect } | null
-
-export const OVERLAY_WIDTH = 280
 
 type CallFlags = Pick<OverlaySnapshot, 'enabled' | 'inCall'> | null
 
@@ -44,7 +50,62 @@ export function shouldShowOverlay(
   )
 }
 
-/** Janela do overlay: faixa de OVERLAY_WIDTH na borda esquerda, altura toda do monitor (o CSS centraliza a lista na vertical). */
-export function overlayBounds(display: Rect): Rect {
-  return { x: display.x, y: display.y, width: OVERLAY_WIDTH, height: display.height }
+/** Folga em volta da caixa da lista na janela do overlay (anel de quem fala, sombra). */
+export const OVERLAY_WINDOW_MARGIN = 8
+
+/**
+ * Janela do overlay, em DIP. Fora da edição, só a caixa da lista (no mesmo
+ * lugar que o CSS da página calcula, a partir das mesmas frações) com uma
+ * margem, cortada na área de trabalho: uma janela transparente pequena por cima
+ * do jogo custa menos para o compositor. Editando (ou com a caixa ainda sem
+ * medida), a área de trabalho inteira, para arrastar a qualquer lugar.
+ */
+export function overlayWindowRect(
+  workArea: Rect,
+  layout: OverlayLayout,
+  box: OverlaySize | null,
+  editing: boolean
+): Rect {
+  if (editing || !box || box.width <= 0 || box.height <= 0) {
+    return { x: workArea.x, y: workArea.y, width: workArea.width, height: workArea.height }
+  }
+  const area = { width: workArea.width, height: workArea.height }
+  const pos = placeOverlayBox(layout.position, area, box)
+  const m = OVERLAY_WINDOW_MARGIN
+  const left = Math.max(0, Math.round(pos.left - m))
+  const top = Math.max(0, Math.round(pos.top - m))
+  const right = Math.min(area.width, Math.round(pos.left + box.width + m))
+  const bottom = Math.min(area.height, Math.round(pos.top + box.height + m))
+  return { x: workArea.x + left, y: workArea.y + top, width: right - left, height: bottom - top }
+}
+
+export function overlayFrame(workArea: Rect, rect: Rect): OverlayFrame {
+  return {
+    area: { width: workArea.width, height: workArea.height },
+    origin: { x: rect.x - workArea.x, y: rect.y - workArea.y }
+  }
+}
+
+/** Sai do modo de edição (o de entrar é configurável: lib/overlayShortcut). */
+export const OVERLAY_EXIT_SHORTCUT = 'Escape'
+
+export interface OverlayShortcutState {
+  /** Janela do overlay à vista (em call, jogo em tela cheia na frente). */
+  visible: boolean
+  /** Modo de edição (mover/redimensionar) ligado. */
+  editing: boolean
+  quitting: boolean
+}
+
+/**
+ * Atalhos globais que o overlay segura agora. Só com ele à vista: o atalho de
+ * edição (padrão Shift+Tab) nunca é roubado de outros apps nem da área de trabalho. Esc só no modo de
+ * edição.
+ */
+export function overlayShortcuts(state: OverlayShortcutState): {
+  toggleEdit: boolean
+  exitEdit: boolean
+} {
+  const toggleEdit = state.visible && !state.quitting
+  return { toggleEdit, exitEdit: toggleEdit && state.editing }
 }

@@ -26,6 +26,14 @@ type target struct {
 	Usernames  []string
 }
 
+// primaryChannelFallback: canal principal escolhido ou, sem escolha, o canal
+// de texto mais antigo (a mesma regra de server.primaryChannelColumn). Não
+// segue a ordem da barra lateral: reordenar canais não move os avisos.
+const primaryChannelFallback = `COALESCE(
+				s.primary_channel_id,
+				(SELECT c.id FROM channels c WHERE c.server_id = s.id AND c.type = 'text' ORDER BY c.created_at, c.id LIMIT 1)
+			)`
+
 // Targets agrupa por servidor quem faz aniversário (e deixou anunciar), com
 // o canal principal de cada servidor.
 func (r *Repository) Targets(ctx context.Context, month int, days []int) ([]target, error) {
@@ -36,10 +44,7 @@ func (r *Repository) Targets(ctx context.Context, month int, days []int) ([]targ
 			s.id,
 			s.name,
 			s.owner_id,
-			COALESCE(
-				s.primary_channel_id,
-				(SELECT c.id FROM channels c WHERE c.server_id = s.id AND c.type = 'text' ORDER BY c.position, c.created_at, c.id LIMIT 1)
-			),
+			`+primaryChannelFallback+`,
 			array_agg(u.username ORDER BY u.username)
 		FROM users u
 		JOIN server_members sm ON sm.user_id = u.id

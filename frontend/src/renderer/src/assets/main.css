@@ -34,7 +34,10 @@
   }
 
   body {
-    font-family: 'gg sans', 'Noto Sans', 'Helvetica Neue', 'Segoe UI', 'Inter', sans-serif;
+    /* Emoji por último: nomes de canal/servidor com emoji (🐺) em qualquer SO. */
+    font-family:
+      'gg sans', 'Noto Sans', 'Helvetica Neue', 'Segoe UI', 'Inter', sans-serif,
+      'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
     color: #f2f3f5;
     background: #050508;
   }

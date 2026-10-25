@@ -11,6 +11,7 @@ import (
 	"gin-quickstart/backend/internal/birthday"
 	"gin-quickstart/backend/internal/call"
 	"gin-quickstart/backend/internal/channel"
+	"gin-quickstart/backend/internal/clientip"
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/database"
 	"gin-quickstart/backend/internal/friendship"
@@ -70,6 +71,12 @@ func main() {
 
 	// Como o gin.Default(), mas o log não grava tokens que vão na URL.
 	router := gin.New()
+	// Em quem confiar para o IP do cliente (log e limite de login).
+	trustedProxies := clientip.TrustedProxies(os.Getenv("HOST"), os.Getenv("TRUSTED_PROXIES"))
+	if err := clientip.Configure(router, trustedProxies); err != nil {
+		log.Fatalf("invalid TRUSTED_PROXIES: %v", err)
+	}
+	log.Printf("trusted proxies: %v", trustedProxies)
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{Formatter: httplog.Formatter}), gin.Recovery())
 
 	router.Use(cors.New(cors.Config{
@@ -90,6 +97,19 @@ func main() {
 	// User
 	userRepository := user.UserRepository(db)
 	userService := user.UserService(userRepository)
+	// A migration 000025 não falha com usernames que só diferem na caixa:
+	// cai num índice comum. Aqui isso aparece no log (só contagens).
+	// E se a 000025 nem rodou (pulada por ordem de aplicação), ERROR no log.
+	if hasUsername, hasEmail, err := userService.LoginIndexes(context.Background()); err != nil {
+		log.Printf("[user] check login indexes: %v", err)
+	} else if msg := user.MissingLoginIndexesError(hasUsername, hasEmail); msg != "" {
+		log.Print(msg)
+	}
+	if usernameGroups, emailGroups, err := userService.CaseConflicts(context.Background()); err != nil {
+		log.Printf("[user] check case conflicts: %v", err)
+	} else if warning := user.CaseConflictWarning(usernameGroups, emailGroups); warning != "" {
+		log.Print(warning)
+	}
 
 	// WebSocket hub (created before services that publish events)
 	hub := websocket.NewHub()
@@ -114,7 +134,10 @@ func main() {
 	// Conversation (DM)
 	conversationRepository := conversation.ConversationRepository(db)
 	conversationService := conversation.ConversationService(conversationRepository)
-	conversationHandler := conversation.ConversationHandler(conversationService, friendshipService, serverService, userService)
+	conversationService.SetDependencies(friendshipService, hub)
+	friendshipService.SetServers(serverService, func(ctx context.Context, a, b string) (any, error) {
+		return serverService.MutualServers(ctx, a, b)
+	})
 
 	// Mídia do chat (arquivos no disco, fora do binário e do deploy)
 	uploadsDir := os.Getenv("UPLOADS_DIR")
@@ -128,7 +151,7 @@ func main() {
 
 	// Message
 	messageRepository := message.MessageRepository(db)
-	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository, uploads)
+	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository, uploads, channelRepository)
 	// Limpeza horária de arquivos sem dono (cascatas e uploads abandonados).
 	go message.NewJanitor(messageRepository, uploads).Run(context.Background(), time.Hour)
 	messageHandler := message.MessageHandler(messageService, channelService, conversationService, friendshipService, serverService)
@@ -156,6 +179,7 @@ func main() {
 	}
 	profileService := user.NewProfileService(userRepository, hub)
 	profileHandler := user.NewProfileHandler(profileService, profileMedia, profileStatic, uploadSpace)
+	conversationHandler := conversation.ConversationHandler(conversationService, userService, profileHandler)
 
 	// LiveKit (mídia das chamadas)
 	liveKitKey, liveKitSecret := os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET")
@@ -176,6 +200,7 @@ func main() {
 	callRepository := call.CallRepository(db)
 	callService := call.CallService(callRepository, hub, conversationService, serverService, channelService, userService, hub.IsOnline)
 	callService.SetSoundLookup(soundboard.NewCallLookup(soundboardRepository))
+	callService.SetBlockedCheck(friendshipService.IsBlockedEither)
 	callHandler := call.CallHandler(callService, liveKitTokens)
 	// Reinício do servidor não derruba quem está em chamada.
 	callService.RestoreActive(context.Background())
@@ -237,6 +262,11 @@ func main() {
 		updatesDir = "updates"
 	}
 	updates.Routes(router, updatesDir)
+	// Versão nova publicada: avisa os apps na hora (sem esperar a checagem periódica).
+	go updates.NewWatcher(updatesDir, func(r updates.Release) {
+		log.Printf("[updates] nova versão em %s: %s", r.File, r.Version)
+		hub.PublishAppUpdate(r.File, r.Version)
+	}).Run(context.Background(), updates.PollInterval)
 
 	// Sinalização do LiveKit (auth pelo token do LiveKit em ?access_token=)
 	router.Any("/rtc", rtcProxy)

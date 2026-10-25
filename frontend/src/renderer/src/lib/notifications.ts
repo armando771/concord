@@ -1,10 +1,11 @@
 import type { Message } from '../api/messages'
-import { mentionsUser } from './mentions'
+import { everyonePingsMe, mentionsUser } from './mentions'
 import { messagePreview } from './polls'
+import type { ChosenStatus } from './presenceStatus'
 import type { SoundName } from './sounds'
 
 /** De onde veio o aviso: decide o som e o que as preferências controlam. */
-export type NotificationKind = 'message' | 'mention' | 'call'
+export type NotificationKind = 'message' | 'mention' | 'call' | 'friend_request'
 
 /** Preferências de notificação do usuário (Configurações → Notificações). */
 export interface NotificationPrefs {
@@ -38,27 +39,55 @@ function truncate(text: string): string {
   return text.length > MAX_BODY ? `${text.slice(0, MAX_BODY - 1)}…` : text
 }
 
-/** Notificação para uma DM recebida (mensagens de canal não notificam). */
-export function messageNotification(message: Message, meId: string): AppNotification | null {
+/**
+ * Notificação para uma DM recebida (mensagens de canal não notificam). Em DM
+ * em grupo, o título leva o nome do grupo e o clique abre o grupo.
+ */
+export function messageNotification(
+  message: Message,
+  meId: string,
+  group?: { name: string }
+): AppNotification | null {
   if (!message.conversation_id || message.author_id === meId) return null
+  const author = message.author?.display_name || message.author?.username || 'Nova mensagem'
   return {
     kind: 'message',
-    title: message.author?.display_name || message.author?.username || 'Nova mensagem',
+    title: group ? `${author} em ${group.name}` : author,
     body: truncate(messagePreview(message)),
-    route: `/dm/${message.author_id}`
+    route: group ? `/dm/c/${message.conversation_id}` : `/dm/${message.author_id}`
   }
 }
 
-/** Notificação para uma mensagem de canal que menciona você (@nick) ou responde sua mensagem. */
+/** Pedido de amizade recebido: abre a aba Pendentes. */
+export function friendRequestNotification(requester: {
+  display_name: string
+  username: string
+}): AppNotification {
+  return {
+    kind: 'friend_request',
+    title: 'Pedido de amizade',
+    body: `${requester.display_name || requester.username} quer ser seu amigo`,
+    route: '/friends?tab=pending'
+  }
+}
+
+/**
+ * Notificação para uma mensagem de canal que menciona você (@nick), responde
+ * sua mensagem ou pinga o canal (@all/@here, pelo mention_everyone que o
+ * backend liberou). `status` é o escolhido por você: @here não pinga ausente.
+ */
 export function mentionNotification(
   message: Message,
-  me: { id: string; username: string },
+  me: { id: string; username: string; status?: ChosenStatus },
   serverId: string | null
 ): AppNotification | null {
   if (!message.channel_id || !serverId || message.author_id === me.id) return null
   const isReplyToMe = message.reply_to?.author_id === me.id
   const isMention = mentionsUser(message.content, me.username)
-  if (!isMention && !isReplyToMe) return null
+  const everyone = everyonePingsMe(message.mention_everyone, me.status)
+    ? message.mention_everyone
+    : null
+  if (!isMention && !isReplyToMe && !everyone) return null
   const author = message.author?.display_name || message.author?.username || 'Alguém'
   return {
     kind: 'mention',
@@ -66,9 +95,11 @@ export function mentionNotification(
     title:
       message.system_kind === 'birthday'
         ? '🎂 Feliz aniversário!'
-        : isReplyToMe && !isMention
-          ? `${author} respondeu você`
-          : `${author} mencionou você`,
+        : isMention
+          ? `${author} mencionou você`
+          : isReplyToMe
+            ? `${author} respondeu você`
+            : `${author} mencionou @${everyone}`,
     body: truncate(messagePreview(message)),
     route: `/servers/${serverId}/channels/${message.channel_id}`
   }
@@ -94,7 +125,7 @@ export function notificationSound(
   prefs: Pick<NotificationPrefs, 'sound'>
 ): SoundName | null {
   if (!prefs.sound || kind === 'call') return null
-  return kind === 'message' ? 'message' : 'mention'
+  return kind === 'mention' ? 'mention' : 'message'
 }
 
 export interface DesktopPayload {

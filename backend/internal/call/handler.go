@@ -267,6 +267,7 @@ func mapStartError(err error) int {
 	case errors.Is(err, ErrBusy),
 		errors.Is(err, ErrCalleeOffline),
 		errors.Is(err, ErrNotParticipant),
+		errors.Is(err, ErrBlocked),
 		errors.Is(err, ErrNotMember),
 		errors.Is(err, ErrInvalidType):
 		return http.StatusBadRequest

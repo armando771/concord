@@ -4,6 +4,7 @@ import {
   callNotification,
   DEFAULT_NOTIFICATION_PREFS,
   desktopPayload,
+  friendRequestNotification,
   mentionNotification,
   messageNotification,
   notificationSound,
@@ -105,6 +106,75 @@ describe('mentionNotification', () => {
   it('DM já tem a própria notificação', () => {
     expect(mentionNotification(dm({ content: '@fulano oi' }), me, null)).toBeNull()
   })
+
+  it('@all pinga todo mundo do canal, pelo campo mention_everyone', () => {
+    expect(
+      mentionNotification(inChannel({ content: '@all bora', mention_everyone: 'all' }), me, 'srv1')
+    ).toEqual({
+      kind: 'mention',
+      title: 'Ana mencionou @all',
+      body: '@all bora',
+      route: '/servers/srv1/channels/ch1'
+    })
+    expect(
+      mentionNotification(
+        inChannel({ content: '@all bora', mention_everyone: 'all' }),
+        { ...me, status: 'idle' },
+        'srv1'
+      )?.title
+    ).toBe('Ana mencionou @all')
+  })
+
+  it('@here só pinga quem está online', () => {
+    const msg = inChannel({ content: '@here alguém?', mention_everyone: 'here' })
+    expect(mentionNotification(msg, { ...me, status: 'online' }, 'srv1')?.title).toBe(
+      'Ana mencionou @here'
+    )
+    expect(mentionNotification(msg, { ...me, status: 'idle' }, 'srv1')).toBeNull()
+    expect(mentionNotification(msg, { ...me, status: 'invisible' }, 'srv1')).toBeNull()
+  })
+
+  it('"@all" no texto sem mention_everyone (autor sem permissão) não pinga', () => {
+    expect(mentionNotification(inChannel({ content: '@all bora' }), me, 'srv1')).toBeNull()
+    expect(
+      mentionNotification(inChannel({ content: '@all bora', mention_everyone: null }), me, 'srv1')
+    ).toBeNull()
+  })
+
+  it('quem mandou o @all não pinga a si mesmo', () => {
+    expect(
+      mentionNotification(
+        inChannel({ author_id: 'eu', content: '@all', mention_everyone: 'all' }),
+        me,
+        'srv1'
+      )
+    ).toBeNull()
+  })
+
+  it('menção pessoal junto com @all continua "mencionou você"', () => {
+    expect(
+      mentionNotification(
+        inChannel({ content: '@all e @fulano', mention_everyone: 'all' }),
+        me,
+        'srv1'
+      )?.title
+    ).toBe('Ana mencionou você')
+  })
+
+  it('resposta a mim com @all continua "respondeu você"', () => {
+    expect(
+      mentionNotification(
+        inChannel({
+          content: '@all fechado!',
+          mention_everyone: 'all',
+          reply_to_id: 'm0',
+          reply_to: { id: 'm0', author_id: 'eu', content: 'alguém aí?' }
+        }),
+        me,
+        'srv1'
+      )?.title
+    ).toBe('Ana respondeu você')
+  })
 })
 
 describe('notificationSound', () => {
@@ -178,5 +248,29 @@ describe('notifyDesktop', () => {
   it('sem Electron e sem aviso ligado, não faz nada', () => {
     vi.stubGlobal('window', {})
     expect(() => notifyDesktop(dm, prefs)).not.toThrow()
+  })
+})
+
+describe('DM em grupo e pedido de amizade', () => {
+  it('mensagem de grupo leva o nome do grupo e abre o grupo', () => {
+    const n = messageNotification(
+      {
+        id: 'm',
+        author_id: 'ana',
+        conversation_id: 'g1',
+        content: 'oi',
+        created_at: '',
+        author: { id: 'ana', username: 'ana', display_name: 'Ana' }
+      } as Message,
+      'eu',
+      { name: 'Galera' }
+    )
+    expect(n).toMatchObject({ title: 'Ana em Galera', route: '/dm/c/g1' })
+  })
+
+  it('pedido de amizade abre Pendente e toca o som de mensagem', () => {
+    const n = friendRequestNotification({ username: 'bia', display_name: 'Bia' })
+    expect(n).toMatchObject({ kind: 'friend_request', route: '/friends?tab=pending' })
+    expect(notificationSound(n.kind, { sound: true })).toBe('message')
   })
 })

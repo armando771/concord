@@ -1,5 +1,6 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
+import type { OverlayFrame, OverlayLayout } from '../renderer/src/lib/overlayLayout'
 import type { CallResume, PendingCallResume } from '../shared/callResume'
 
 export interface ScreenSourceInfo {
@@ -31,6 +32,7 @@ export interface UpdatesApi {
   onProgress(cb: (percent: number) => void): () => void
   onError(cb: (message: string) => void): () => void
   install(): void
+  checkNow(): void
 }
 
 export interface BackgroundApi {
@@ -54,15 +56,42 @@ export interface BackgroundApi {
   onNavigate(cb: (route: string) => void): () => void
 }
 
+/** Atalho do modo de edição e se outro programa já tem ele. */
+export interface OverlayShortcutStatus {
+  accelerator: string
+  taken: boolean
+}
+
 export interface OverlayApi {
   /** Overlay de jogo existe nesta plataforma (só Windows). */
   supported: boolean
   /** Renderer principal → main: estado atual da call para o overlay. */
   setState(snapshot: OverlaySnapshot): void
-  /** Página do overlay: último estado conhecido ao abrir. */
-  current(): Promise<OverlaySnapshot | null>
+  /**
+   * Página do overlay: avisa que carregou (chamar depois de assinar onUpdate e
+   * onEditing) e recebe o último estado e se está no modo de edição.
+   */
+  ready(): Promise<{
+    snapshot: OverlaySnapshot | null
+    editing: boolean
+    frame: OverlayFrame | null
+  }>
+  /** Página do overlay: onde a janela está na área de trabalho. Retorna unsubscribe. */
+  onFrame(cb: (frame: OverlayFrame) => void): () => void
+  /** Página do overlay: tamanho medido da lista, para a janela ficar só em volta dela. */
+  reportBox(size: { width: number; height: number }): void
   /** Página do overlay: novos estados. Retorna unsubscribe. */
   onUpdate(cb: (snapshot: OverlaySnapshot) => void): () => void
+  /** Página do overlay: modo de edição (Shift+Tab) ligado/desligado. Retorna unsubscribe. */
+  onEditing(cb: (editing: boolean) => void): () => void
+  /** Página do overlay: posição/tamanho novos, ao soltar o mouse. */
+  saveLayout(layout: OverlayLayout): void
+  /** Configurações: o atalho está livre? null = atalho inválido. */
+  checkShortcut(accelerator: string): Promise<OverlayShortcutStatus | null>
+  /** Configurações: resultado de segurar o atalho no jogo. Retorna unsubscribe. */
+  onShortcutStatus(cb: (status: OverlayShortcutStatus) => void): () => void
+  /** Renderer principal: posição/tamanho editados no jogo, para salvar. Retorna unsubscribe. */
+  onLayout(cb: (layout: OverlayLayout) => void): () => void
 }
 
 declare global {

@@ -8,9 +8,8 @@ import (
 )
 
 var (
-	ErrNameRequired        = errors.New("name is required")
-	ErrChannelNotFound     = errors.New("channel not found")
-	ErrInvalidChannelOrder = errors.New("invalid channel order")
+	ErrNameRequired    = errors.New("name is required")
+	ErrChannelNotFound = errors.New("channel not found")
 )
 
 type EventPublisher interface {
@@ -20,23 +19,28 @@ type EventPublisher interface {
 	PublishChannelReorder(event ReorderEvent)
 }
 
-type Store interface {
+// store é o que o Service usa do Repository (nos testes, um fake em memória).
+type store interface {
 	Create(ctx context.Context, ch *Channel) error
 	FindByID(ctx context.Context, id string) (*Channel, error)
 	Update(ctx context.Context, id string, name string) error
-	Reorder(ctx context.Context, serverID string, channelIDs []string) error
 	Delete(ctx context.Context, id string) error
 	ListByServerID(ctx context.Context, serverID string) ([]Channel, error)
 	IsMember(ctx context.Context, serverID string, userID string) (bool, error)
 	IsAdminOrOwner(ctx context.Context, serverID string, userID string) (bool, error)
+	Reorder(ctx context.Context, serverID string, chType string, ids []string) error
 }
 
 type Service struct {
-	repository Store
+	repository store
 	publisher  EventPublisher
 }
 
-func ChannelService(repository Store, publisher EventPublisher) *Service {
+func ChannelService(repository *Repository, publisher EventPublisher) *Service {
+	return newService(repository, publisher)
+}
+
+func newService(repository store, publisher EventPublisher) *Service {
 	return &Service{
 		repository: repository,
 		publisher:  publisher,
@@ -101,40 +105,6 @@ func (s *Service) Update(ctx context.Context, id string, name string) (*Channel,
 	return updated, nil
 }
 
-func (s *Service) Reorder(ctx context.Context, serverID string, channelIDs []string) ([]Channel, error) {
-	if len(channelIDs) == 0 {
-		return nil, ErrInvalidChannelOrder
-	}
-	seen := make(map[string]struct{}, len(channelIDs))
-	for _, id := range channelIDs {
-		if id == "" {
-			return nil, ErrInvalidChannelOrder
-		}
-		if _, dup := seen[id]; dup {
-			return nil, ErrInvalidChannelOrder
-		}
-		seen[id] = struct{}{}
-	}
-
-	if err := s.repository.Reorder(ctx, serverID, channelIDs); err != nil {
-		return nil, err
-	}
-
-	channels, err := s.repository.ListByServerID(ctx, serverID)
-	if err != nil {
-		return nil, err
-	}
-
-	if s.publisher != nil {
-		s.publisher.PublishChannelReorder(ReorderEvent{
-			ServerID: serverID,
-			Channels: channels,
-		})
-	}
-
-	return channels, nil
-}
-
 func (s *Service) Delete(ctx context.Context, id string) error {
 	ch, err := s.repository.FindByID(ctx, id)
 	if err != nil {
@@ -149,6 +119,35 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 		s.publisher.PublishChannelDelete(DeleteEvent{
 			ServerID:  ch.ServerID,
 			ChannelID: id,
+		})
+	}
+
+	return nil
+}
+
+// Reorder muda a ordem dos canais de um tipo (texto ou voz) do servidor; ids
+// tem que ser exatamente os canais daquela seção. Avisa a sala do servidor.
+func (s *Service) Reorder(ctx context.Context, serverID string, chType string, ids []string, requestID string) error {
+	if chType != TypeText && chType != TypeVoice {
+		return ErrInvalidType
+	}
+	if len(requestID) > MaxRequestIDLength {
+		return ErrInvalidRequestID
+	}
+	if ids == nil {
+		ids = []string{}
+	}
+
+	if err := s.repository.Reorder(ctx, serverID, chType, ids); err != nil {
+		return err
+	}
+
+	if s.publisher != nil {
+		s.publisher.PublishChannelReorder(ReorderEvent{
+			ServerID:   serverID,
+			Type:       chType,
+			ChannelIDs: ids,
+			RequestID:  requestID,
 		})
 	}
 

@@ -27,8 +27,11 @@ type DeleteEvent struct {
 	ServerID  string `json:"server_id"`
 	ChannelID string `json:"channel_id"`
 }
-
+// ReorderEvent: nova ordem dos canais de um tipo (texto ou voz) do servidor.
+// RequestID é o que o cliente mandou no pedido: ele reconhece o próprio eco.
 type ReorderEvent struct {
-	ServerID string    `json:"server_id"`
-	Channels []Channel `json:"channels"`
+	ServerID   string   `json:"server_id"`
+	Type       string   `json:"type"`
+	ChannelIDs []string `json:"channel_ids"`
+	RequestID  string   `json:"request_id,omitempty"`
 }

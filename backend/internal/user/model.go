@@ -3,10 +3,12 @@ package user
 import "time"
 
 type User struct {
-	ID           string        `json:"id"`
-	Username     string        `json:"username"`
-	DisplayName  string        `json:"display_name"`
-	Email        string        `json:"email"`
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	// Email nunca vai no JSON de User: User aparece para outras pessoas
+	// (busca, amigos, eventos). A própria pessoa recebe Self().
+	Email        string        `json:"-"`
 	PasswordHash string        `json:"-"`
 	AvatarURL    *string       `json:"avatar_url,omitempty"`
 	BannerURL    *string       `json:"banner_url,omitempty"`
@@ -16,9 +18,52 @@ type User struct {
 	StatusText   string        `json:"status_text"`
 	Links        []ProfileLink `json:"links"`
 	Status       string        `json:"status"`
-	Active       bool          `json:"-"`
+	// Privacidade: só a própria pessoa vê (vai no SelfUser).
+	FriendRequestPolicy string `json:"-"`
+	AllowServerDMs      bool   `json:"-"`
+	Active              bool   `json:"-"`
 	CreatedAt    time.Time     `json:"created_at"`
 	UpdatedAt    time.Time     `json:"updated_at"`
+}
+
+// SelfUser é a conta vista pela própria pessoa (/users/me e /users/me/*):
+// tudo de User mais o e-mail.
+type SelfUser struct {
+	User
+	Email string `json:"email"`
+}
+
+// Privacy: quem pode mandar pedido de amizade e se membros de servidores em
+// comum (que não são amigos) podem mandar DM.
+type Privacy struct {
+	FriendRequestPolicy string `json:"friend_request_policy"`
+	AllowServerDMs      bool   `json:"allow_server_dms"`
+}
+
+const (
+	FriendPolicyEveryone      = "everyone"
+	FriendPolicyMutualFriends = "mutual_friends"
+	FriendPolicyMutualServers = "mutual_servers"
+	FriendPolicyNobody        = "nobody"
+)
+
+// ValidFriendPolicy diz se a política existe.
+func ValidFriendPolicy(p string) bool {
+	switch p {
+	case FriendPolicyEveryone, FriendPolicyMutualFriends, FriendPolicyMutualServers, FriendPolicyNobody:
+		return true
+	}
+	return false
+}
+
+// Privacy devolve as opções de privacidade da pessoa.
+func (u *User) Privacy() Privacy {
+	return Privacy{FriendRequestPolicy: u.FriendRequestPolicy, AllowServerDMs: u.AllowServerDMs}
+}
+
+// Self monta a resposta das rotas da própria conta, com o e-mail.
+func (u *User) Self() SelfUser {
+	return SelfUser{User: *u, Email: u.Email}
 }
 
 // ProfileLink é um link do perfil (Steam, Twitch, site...). O app descobre o

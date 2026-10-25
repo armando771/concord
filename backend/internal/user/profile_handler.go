@@ -94,7 +94,7 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 		respondProfileError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, u)
+	c.JSON(http.StatusOK, u.Self())
 }
 
 func (h *ProfileHandler) SetStatus(c *gin.Context) {
@@ -114,7 +114,7 @@ func (h *ProfileHandler) SetStatus(c *gin.Context) {
 		respondProfileError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, u)
+	c.JSON(http.StatusOK, u.Self())
 }
 
 func (h *ProfileHandler) UploadAvatar(c *gin.Context) { h.upload(c, h.service.SetAvatar) }
@@ -150,10 +150,26 @@ func saveStatus(err error) (int, string) {
 	}
 }
 
-// upload recebe "file" (png/jpeg/gif/webp) e, para GIF, "static" (o primeiro
-// quadro, gerado pelo app) e troca a imagem. Qualquer erro apaga o que já foi
-// para o disco.
 func (h *ProfileHandler) upload(c *gin.Context, set mediaSetter) {
+	h.UploadImage(c, func(ctx context.Context, userID string, url *string) (*string, bool) {
+		u, old, err := set(ctx, userID, url)
+		if err != nil {
+			respondProfileError(c, err)
+			return nil, false
+		}
+		c.JSON(http.StatusOK, u.Self())
+		return old, true
+	})
+}
+
+// ImageApply grava a URL nova onde ela vai (perfil, ícone do grupo...) e
+// responde ao app. Devolve a URL antiga (para apagar) e se deu certo.
+type ImageApply func(ctx context.Context, userID string, url *string) (old *string, ok bool)
+
+// UploadImage recebe "file" (png/jpeg/gif/webp) e, para GIF, "static" (o
+// primeiro quadro, gerado pelo app) e passa a URL para apply. Qualquer erro
+// apaga o que já foi para o disco.
+func (h *ProfileHandler) UploadImage(c *gin.Context, apply ImageApply) {
 	userID, ok := currentUser(c)
 	if !ok {
 		return
@@ -246,16 +262,18 @@ func (h *ProfileHandler) upload(c *gin.Context, set mediaSetter) {
 	}
 
 	url := profileMediaURL(id, animated)
-	u, old, err := set(c.Request.Context(), userID, &url)
-	if err != nil {
-		respondProfileError(c, err)
+	old, ok := apply(c.Request.Context(), userID, &url)
+	if !ok {
 		return
 	}
 	keep = true
 	keepStatic = animated // imagem parada não precisa de quadro estático
 	h.removeMedia(old)
+}
 
-	c.JSON(http.StatusOK, u)
+// RemoveMediaURL apaga o arquivo de uma URL que deixou de ser usada.
+func (h *ProfileHandler) RemoveMediaURL(url *string) {
+	h.removeMedia(url)
 }
 
 func (h *ProfileHandler) remove(c *gin.Context, set mediaSetter) {
@@ -269,7 +287,7 @@ func (h *ProfileHandler) remove(c *gin.Context, set mediaSetter) {
 		return
 	}
 	h.removeMedia(old)
-	c.JSON(http.StatusOK, u)
+	c.JSON(http.StatusOK, u.Self())
 }
 
 // removeMedia apaga o arquivo (e o quadro parado) de uma URL antiga.

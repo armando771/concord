@@ -7,7 +7,15 @@ import SystemMessage from './SystemMessage'
 import Avatar from './Avatar'
 import { useUserLook } from '../store/profileStore'
 import { profileCardHandler } from '../store/profileCardStore'
-import { applyMention, mentionQuery, mentionsUser, splitMentions } from '../lib/mentions'
+import { userMenuHandler } from '../store/userMenuStore'
+import { useFriendStore } from '../store/friendStore'
+import {
+  applyMention,
+  mentionQuery,
+  mentionSuggestions,
+  messageMentionsMe,
+  splitMentions
+} from '../lib/mentions'
 import { filterEmoteCategories, QUICK_EMOTES } from '../lib/emotes'
 import { messagePreview } from '../lib/polls'
 import PollCard from './poll/PollCard'
@@ -37,6 +45,10 @@ interface ChatPaneProps {
   placeholder?: string
   /** Quem pode ser marcado com @ (membros do servidor, ou a pessoa da DM). */
   mentionable?: Mentionable[]
+  /** Sugere @all/@here (canal de servidor, só dono e moderadores). */
+  canMentionEveryone?: boolean
+  /** Troca o campo de mensagem por este aviso (ex.: DM com alguém bloqueado). */
+  disabledReason?: string
 }
 
 const MAX_SUGGESTIONS = 6
@@ -141,22 +153,46 @@ function MessageItem({
   const isMine = message.author_id === me?.id
   const author = message.author
   const look = useUserLook(message.author_id, {
-    name: author?.display_name ?? author?.username ?? (isMine ? me?.display_name : null) ?? 'Desconhecido',
+    name:
+      author?.display_name ??
+      author?.username ??
+      (isMine ? me?.display_name : null) ??
+      'Desconhecido',
     avatarUrl: author?.avatar_url
   })
   const name = look.name
   const openProfile = profileCardHandler(message.author_id, name, author?.username, 'right')
   const [hover, setHover] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const authorBlocked = useFriendStore(
+    (s) => !isMine && s.blocked.some((u) => u.id === message.author_id)
+  )
+  const [revealBlocked, setRevealBlocked] = useState(false)
+  const onAuthorMenu = userMenuHandler(message.author_id, name, me?.id, author?.username)
 
-  const isReplyToMe = !isMine && message.reply_to?.author_id === me?.id
-  const mentionsMe = !isMine && (mentionsUser(message.content, me?.username ?? '') || isReplyToMe)
+  const mentionsMe = messageMentionsMe(message, me)
   const reactions = message.reactions ?? []
   const hasReplyReference = Boolean(message.reply_to_id || message.reply_to)
   const replyAuthorName =
     message.reply_to?.author?.display_name ?? message.reply_to?.author?.username ?? 'Usuário'
 
   if (message.system_kind) return <SystemMessage message={message} />
+
+  // Mensagem de quem você bloqueou: escondida, como no Discord.
+  if (authorBlocked && !revealBlocked) {
+    return (
+      <div id={`msg-${message.id}`} className="px-4 py-1 text-xs text-gray-500">
+        1 mensagem bloqueada —{' '}
+        <button
+          type="button"
+          onClick={() => setRevealBlocked(true)}
+          className="cursor-pointer text-[#00a8fc] hover:underline"
+        >
+          Mostrar
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -170,6 +206,7 @@ function MessageItem({
       }`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      onContextMenu={onAuthorMenu}
     >
       {hasReplyReference && (
         <div className="flex items-center gap-1.5 pl-4 text-xs text-gray-400">
@@ -213,9 +250,12 @@ function MessageItem({
           </div>
           {message.content && (
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">
-              {splitMentions(message.content).map((part, i) =>
+              {splitMentions(message.content, message.mention_everyone ?? null).map((part, i) =>
                 part.mention ? (
-                  <span key={i} className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]">
+                  <span
+                    key={i}
+                    className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]"
+                  >
                     {part.text}
                   </span>
                 ) : (
@@ -319,7 +359,9 @@ function MessageItem({
 function ChatPane({
   room,
   placeholder = 'Digite sua mensagem',
-  mentionable = []
+  mentionable = [],
+  canMentionEveryone = false,
+  disabledReason
 }: ChatPaneProps): React.JSX.Element {
   const messagesByRoom = useChatStore((s) => s.messagesByRoom)
   const hasMoreByRoom = useChatStore((s) => s.hasMoreByRoom)
@@ -358,18 +400,17 @@ function ChatPane({
     roomRef.current = room
   }, [room])
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
-  const [highlight, setHighlight] = useState(0)
+  const [highlightChoice, setHighlight] = useState<number | null>(null)
   const meUsername = useAuthStore((s) => s.user?.username)
-  const suggestions = mention
-    ? mentionable
-        .filter((m) => m.username !== meUsername)
-        .filter((m) =>
-          [m.username, m.display_name].some((v) =>
-            v.toLowerCase().startsWith(mention.query.toLowerCase())
-          )
-        )
-        .slice(0, MAX_SUGGESTIONS)
-    : []
+  // Tab/Enter pegam o item padrão (sempre uma pessoa, se houver) até a
+  // pessoa navegar com as setas.
+  const { items: suggestions, defaultIndex } = mention
+    ? mentionSuggestions(mention.query, mentionable, canMentionEveryone, {
+        exclude: meUsername,
+        max: MAX_SUGGESTIONS
+      })
+    : { items: [], defaultIndex: -1 }
+  const highlight = highlightChoice ?? defaultIndex
 
   const pickMention = (username: string): void => {
     const el = inputRef.current
@@ -388,14 +429,21 @@ function ChatPane({
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault()
         const step = e.key === 'ArrowDown' ? 1 : -1
-        setHighlight((h) => (h + step + suggestions.length) % suggestions.length)
-      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        const from = highlight < 0 ? (step > 0 ? -1 : 0) : highlight
+        setHighlight((from + step + suggestions.length) % suggestions.length)
+        return
+      }
+      if ((e.key === 'Enter' || e.key === 'Tab') && highlight >= 0) {
         e.preventDefault()
         pickMention(suggestions[highlight].username)
-      } else if (e.key === 'Escape') {
-        setMention(null)
+        return
       }
-      return
+      if (e.key === 'Escape') {
+        setMention(null)
+        return
+      }
+      // Sem item escolhido, Enter/Tab seguem normais (nada de @all sem querer).
+      if (e.key === 'Enter' || e.key === 'Tab') return
     }
     if (e.key === 'Escape' && replyingTo) {
       setReplyState(null)
@@ -613,7 +661,7 @@ function ChatPane({
           >
             {suggestions.map((m, i) => (
               <li
-                key={m.username}
+                key={`${m.kind}:${m.username}`}
                 role="option"
                 aria-selected={i === highlight}
                 onMouseDown={(e) => {
@@ -625,8 +673,17 @@ function ChatPane({
                   i === highlight ? 'bg-[#5865f2]/30 text-white' : 'text-gray-300'
                 }`}
               >
-                <span className="font-semibold">{m.display_name}</span>
-                <span className="text-xs text-gray-400">@{m.username}</span>
+                {m.kind === 'everyone' ? (
+                  <>
+                    <span className="font-semibold">@{m.username}</span>
+                    <span className="text-xs text-gray-400">{m.description}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold">{m.display_name}</span>
+                    <span className="text-xs text-gray-400">@{m.username}</span>
+                  </>
+                )}
               </li>
             ))}
           </ul>
@@ -648,67 +705,73 @@ function ChatPane({
             </button>
           </div>
         )}
-        <form
-          onSubmit={handleSubmit}
-          className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
-        >
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            title="Anexar arquivo"
-            aria-label="Anexar arquivo"
-            className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+        {disabledReason ? (
+          <div className="rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-center text-sm text-gray-400">
+            {disabledReason}
+          </div>
+        ) : (
+          <form
+            onSubmit={handleSubmit}
+            className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
           >
-            <PaperclipIcon className="h-5 w-5" />
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept={ACCEPT_ATTRIBUTE}
-            hidden
-            onChange={(e) => {
-              addFiles(Array.from(e.target.files ?? []))
-              e.target.value = ''
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => setPollOpen(true)}
-            title="Criar enquete"
-            aria-label="Criar enquete"
-            className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
-          >
-            <PollIcon className="h-5 w-5" />
-          </button>
-          <input
-            ref={inputRef}
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value)
-              setMention(mentionQuery(e.target.value, e.target.selectionStart ?? 0))
-              setHighlight(0)
-            }}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            onBlur={() => setMention(null)}
-            placeholder={replyingTo ? `Responder a @${replyTargetAuthor}...` : placeholder}
-            maxLength={2000}
-            className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 outline-none"
-          />
-          <VoiceRecordButton key={room} disabled={sendingVoice} onRecorded={handleRecorded} />
-          <button
-            type="submit"
-            disabled={sending || !submittable}
-            className="cursor-pointer rounded-lg bg-[#5865f2] px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {attachmentState.uploading
-              ? 'Enviando arquivos...'
-              : sending
-                ? 'Enviando...'
-                : 'Enviar'}
-          </button>
-        </form>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              title="Anexar arquivo"
+              aria-label="Anexar arquivo"
+              className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <PaperclipIcon className="h-5 w-5" />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept={ACCEPT_ATTRIBUTE}
+              hidden
+              onChange={(e) => {
+                addFiles(Array.from(e.target.files ?? []))
+                e.target.value = ''
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setPollOpen(true)}
+              title="Criar enquete"
+              aria-label="Criar enquete"
+              className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <PollIcon className="h-5 w-5" />
+            </button>
+            <input
+              ref={inputRef}
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value)
+                setMention(mentionQuery(e.target.value, e.target.selectionStart ?? 0))
+                setHighlight(null)
+              }}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              onBlur={() => setMention(null)}
+              placeholder={replyingTo ? `Responder a @${replyTargetAuthor}...` : placeholder}
+              maxLength={2000}
+              className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 outline-none"
+            />
+            <VoiceRecordButton key={room} disabled={sendingVoice} onRecorded={handleRecorded} />
+            <button
+              type="submit"
+              disabled={sending || !submittable}
+              className="cursor-pointer rounded-lg bg-[#5865f2] px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {attachmentState.uploading
+                ? 'Enviando arquivos...'
+                : sending
+                  ? 'Enviando...'
+                  : 'Enviar'}
+            </button>
+          </form>
+        )}
       </div>
       <CreatePollModal
         open={pollOpen}

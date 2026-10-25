@@ -4,6 +4,7 @@ import { PlusIcon, InboxIcon, SalinhaMarkIcon } from './icons'
 import { useServerStore } from '../store/serverStore'
 import { useInviteStore } from '../store/inviteStore'
 import { useChatStore } from '../store/chatStore'
+import { useFriendStore } from '../store/friendStore'
 import { showToast } from '../store/toastStore'
 import Modal from './Modal'
 import Button from './Button'
@@ -25,6 +26,9 @@ function ServerRail(): React.JSX.Element {
   const unreadByRoom = useChatStore((s) => s.unreadByRoom)
   const unreadByServer = useChatStore((s) => s.unreadByServer)
   const conversations = useChatStore((s) => s.conversations)
+  const incomingRequests = useFriendStore(
+    (s) => s.pending.filter((p) => p.direction === 'incoming').length
+  )
   const fetchChannelsForServers = useChatStore((s) => s.fetchChannelsForServers)
 
   const [createModalOpen, setCreateModalOpen] = useState(false)
@@ -59,12 +63,15 @@ function ServerRail(): React.JSX.Element {
 
   const unreadByServerId = (serverId: string): number => unreadByServer[serverId] ?? 0
 
-  const dmUnread = conversations.reduce(
-    (sum, conv) => sum + (unreadByRoom[`conversation:${conv.id}`] ?? 0),
-    0
-  )
+  // Selo da home: DMs não lidas + pedidos de amizade recebidos.
+  const dmUnread =
+    conversations.reduce((sum, conv) => sum + (unreadByRoom[`conversation:${conv.id}`] ?? 0), 0) +
+    incomingRequests
 
-  const isHome = location.pathname === '/' || location.pathname === '/friends'
+  const isHome =
+    location.pathname === '/' ||
+    location.pathname === '/friends' ||
+    location.pathname.startsWith('/dm/')
 
   const handleCreateServer = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()

@@ -205,6 +205,15 @@ func (h *Hub) BroadcastAll(event []byte) {
 	}
 }
 
+// PublishAppUpdate avisa todos os apps conectados que saiu versão nova
+// (manifesto do electron-updater mudou): eles checam na hora.
+func (h *Hub) PublishAppUpdate(file, version string) {
+	h.BroadcastAll(writeEvent("app:update", map[string]string{
+		"file":    file,
+		"version": version,
+	}))
+}
+
 func (h *Hub) IsOnline(userID string) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -359,6 +368,25 @@ func (h *Hub) PublishFriendCancelled(recipientID string, requester *user.User) {
 
 func (h *Hub) PublishFriendRemoved(recipientID string, removed *user.User) {
 	h.publishFriendEvent("friend:removed", recipientID, removed)
+}
+
+func (h *Hub) PublishUserBlocked(blockerID string, blocked *user.User) {
+	h.publishFriendEvent("relationship:blocked", blockerID, blocked)
+}
+
+func (h *Hub) PublishUserUnblocked(blockerID string, unblocked *user.User) {
+	h.publishFriendEvent("relationship:unblocked", blockerID, unblocked)
+}
+
+// PublishConversationEvent avisa cada participante (sala user:<id>) que a
+// conversa foi criada/alterada/removida/lida; o app recarrega o que precisa.
+func (h *Hub) PublishConversationEvent(eventType string, conversationID string, userIDs []string) {
+	event := writeEvent(eventType, map[string]string{"conversation_id": conversationID})
+	for _, userID := range userIDs {
+		if userID != "" {
+			h.BroadcastToRoom("user:"+userID, event)
+		}
+	}
 }
 
 func (h *Hub) publishFriendEvent(eventType string, recipientID string, target *user.User) {

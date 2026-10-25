@@ -135,42 +135,6 @@ func (h *Handler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, updated)
 }
 
-func (h *Handler) Reorder(c *gin.Context) {
-	serverID := c.Param("id")
-
-	var input struct {
-		ChannelIDs []string `json:"channel_ids"`
-	}
-
-	if err := c.ShouldBindJSON(&input); err != nil || len(input.ChannelIDs) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
-		return
-	}
-
-	userID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	if err := h.requireAdmin(c.Request.Context(), serverID, userID.(string)); err != nil {
-		c.JSON(err.Status, gin.H{"error": err.Message})
-		return
-	}
-
-	channels, err := h.service.Reorder(c.Request.Context(), serverID, input.ChannelIDs)
-	if err != nil {
-		status := http.StatusInternalServerError
-		if errors.Is(err, ErrChannelNotFound) || errors.Is(err, ErrInvalidChannelOrder) {
-			status = http.StatusBadRequest
-		}
-		c.JSON(status, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, channels)
-}
-
 func (h *Handler) Delete(c *gin.Context) {
 	serverID := c.Param("id")
 	channelID := c.Param("channelId")
@@ -198,6 +162,46 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "channel deleted"})
+}
+
+// Reorder: PUT /servers/:id/channels/order {type, channel_ids}. Mesma
+// permissão de criar/editar/apagar canais (dono ou moderador).
+func (h *Handler) Reorder(c *gin.Context) {
+	serverID := c.Param("id")
+
+	var input struct {
+		Type       string   `json:"type"`
+		ChannelIDs []string `json:"channel_ids"`
+		RequestID  string   `json:"request_id"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.requireAdmin(c.Request.Context(), serverID, userID.(string)); err != nil {
+		c.JSON(err.Status, gin.H{"error": err.Message})
+		return
+	}
+
+	err := h.service.Reorder(c.Request.Context(), serverID, input.Type, input.ChannelIDs, input.RequestID)
+	switch {
+	case errors.Is(err, ErrInvalidType), errors.Is(err, ErrInvalidOrder), errors.Is(err, ErrInvalidRequestID):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	case err != nil:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reorder channels"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"type": input.Type, "channel_ids": input.ChannelIDs})
 }
 
 type handlerError struct {

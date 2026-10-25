@@ -120,10 +120,12 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Server, error) {
 }
 
 // primaryChannelColumn: o canal principal escolhido ou, sem escolha (ou se ele
-// foi apagado), o primeiro canal de texto do servidor. Precisa do alias "s".
+// foi apagado), o canal de texto mais antigo do servidor. De propósito não
+// segue a ordem da barra lateral (channels.position): reordenar canais não muda
+// para onde vão os avisos. Precisa do alias "s".
 const primaryChannelColumn = `COALESCE(
 			s.primary_channel_id,
-			(SELECT c.id FROM channels c WHERE c.server_id = s.id AND c.type = 'text' ORDER BY c.position, c.created_at, c.id LIMIT 1)
+			(SELECT c.id FROM channels c WHERE c.server_id = s.id AND c.type = 'text' ORDER BY c.created_at, c.id LIMIT 1)
 		)`
 
 // SetPrimaryChannel escolhe o canal principal; o canal tem que ser de texto e
@@ -595,4 +597,32 @@ func (r *Repository) SharesServer(ctx context.Context, userA string, userB strin
 		userB,
 	).Scan(&shares)
 	return shares, err
+}
+
+// MutualServers: servidores em que os dois estão (cartão de perfil).
+func (r *Repository) MutualServers(ctx context.Context, userA string, userB string) ([]MutualServer, error) {
+	rows, err := r.db.Query(
+		ctx,
+		`SELECT s.id, s.name, s.icon_url
+		FROM servers s
+		JOIN server_members a ON a.server_id = s.id AND a.user_id = $1
+		JOIN server_members b ON b.server_id = s.id AND b.user_id = $2
+		ORDER BY s.name`,
+		userA,
+		userB,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	servers := []MutualServer{}
+	for rows.Next() {
+		var s MutualServer
+		if err := rows.Scan(&s.ID, &s.Name, &s.IconURL); err != nil {
+			return nil, err
+		}
+		servers = append(servers, s)
+	}
+	return servers, rows.Err()
 }

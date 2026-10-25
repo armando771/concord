@@ -3,6 +3,7 @@ package channel
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -20,14 +21,11 @@ func (r *Repository) Create(ctx context.Context, ch *Channel) error {
 	return r.db.QueryRow(
 		ctx,
 		`
-		INSERT INTO channels (id, server_id, name, type, position, created_by)
+		INSERT INTO channels (id, server_id, name, type, created_by, position)
 		VALUES (
-			$1,
-			$2,
-			$3,
-			$4,
-			COALESCE((SELECT MAX(position) + 1 FROM channels WHERE server_id = $2 AND type = $4), 0),
-			$5
+			$1, $2, $3, $4::varchar, $5,
+			-- Canal novo vai para o fim da seção dele.
+			(SELECT COALESCE(MAX(position) + 1, 0) FROM channels WHERE server_id = $2 AND type = $4::varchar)
 		)
 		RETURNING
 			id,
@@ -113,32 +111,6 @@ func (r *Repository) Update(ctx context.Context, id string, name string) error {
 		return ErrChannelNotFound
 	}
 	return nil
-}
-
-func (r *Repository) Reorder(ctx context.Context, serverID string, channelIDs []string) error {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	for i, channelID := range channelIDs {
-		tag, err := tx.Exec(
-			ctx,
-			`UPDATE channels SET position = $1, updated_at = NOW() WHERE id = $2 AND server_id = $3`,
-			i,
-			channelID,
-			serverID,
-		)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return ErrChannelNotFound
-		}
-	}
-
-	return tx.Commit(ctx)
 }
 
 func (r *Repository) Delete(ctx context.Context, id string) error {
@@ -227,4 +199,47 @@ func (r *Repository) IsAdminOrOwner(ctx context.Context, serverID string, userID
 		userID,
 	).Scan(&allowed)
 	return allowed, err
+}
+// Reorder grava a nova ordem dos canais de um tipo do servidor numa transação:
+// trava os canais da seção, confere que ids é exatamente eles (ValidateOrder)
+// e grava position = índice em ids.
+func (r *Repository) Reorder(ctx context.Context, serverID string, chType string, ids []string) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	rows, err := tx.Query(
+		ctx,
+		`SELECT id FROM channels WHERE server_id = $1 AND type = $2 FOR UPDATE`,
+		serverID,
+		chType,
+	)
+	if err != nil {
+		return err
+	}
+	current, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return err
+	}
+
+	if err := ValidateOrder(current, ids); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(
+		ctx,
+		`
+		UPDATE channels AS c
+		SET position = o.ord - 1
+		FROM unnest($1::text[]) WITH ORDINALITY AS o(id, ord)
+		WHERE c.id = o.id::uuid
+		`,
+		ids,
+	); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }

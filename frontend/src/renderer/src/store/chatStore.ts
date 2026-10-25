@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ServerMember } from '../api/servers'
 import {
+  friendRequestNotification,
   mentionNotification,
   messageNotification,
   notificationSound,
@@ -29,11 +30,13 @@ import {
 } from '../api/messages'
 import { applyReactionAdd, applyReactionRemove } from '../lib/emotes'
 import { applyPollUpdate, messagePreview, type PollUpdate } from '../lib/polls'
+import { APP_UPDATE_EVENT, requestUpdateCheck } from '../lib/appUpdate'
 import type { ConversationSummary } from '../api/conversations'
-import { listConversations } from '../api/conversations'
+import { listConversations, markConversationRead } from '../api/conversations'
+import { conversationTitle } from '../lib/conversations'
 import type { PresenceMap } from '../api/presence'
 import { fetchPresence } from '../api/presence'
-import { listChannels, type Channel } from '../api/channels'
+import { listChannels } from '../api/channels'
 import { useServerStore } from './serverStore'
 import { useFriendStore } from './friendStore'
 import { useCallStore } from './callStore'
@@ -87,7 +90,6 @@ interface ChatState {
   subscribeRoom: (room: RoomKey) => void
   unsubscribeRoom: (room: RoomKey) => void
   handleWsEvent: (event: WsEvent) => void
-  handleFriendRemoved: (userId: string) => void
   handleServerDeleted: (serverId: string) => void
   reset: () => void
 }
@@ -133,11 +135,35 @@ const replacePoll = (
   }
 }
 
+// Marca a DM como lida no servidor, juntando rajadas de mensagens.
+const readTimers = new Map<string, ReturnType<typeof setTimeout>>()
+function markReadSoon(conversationId: string, messageId?: string): void {
+  const pending = readTimers.get(conversationId)
+  if (pending) clearTimeout(pending)
+  readTimers.set(
+    conversationId,
+    setTimeout(() => {
+      readTimers.delete(conversationId)
+      markConversationRead(conversationId, messageId).catch((err) =>
+        console.error('[chatStore] markRead failed:', err)
+      )
+    }, 400)
+  )
+}
+
+const isBlocked = (userId: string): boolean =>
+  useFriendStore.getState().blocked.some((u) => u.id === userId)
+
 const client = new WsClient({
   getToken: () => useAuthStore.getState().accessToken,
   getUserId: () => useAuthStore.getState().user?.id ?? null,
   onEvent: (event) => useChatStore.getState().handleWsEvent(event),
-  onOpen: () => useCallStore.getState().handleWsReconnect()
+  onOpen: () => {
+    useCallStore.getState().handleWsReconnect()
+    // Reconexão costuma ser deploy: checa atualização (o aviso app:update é o
+    // caminho principal; isto cobre o manifesto publicado antes do reinício).
+    requestUpdateCheck()
+  }
 })
 
 /** Mensagens que já geraram notificação (chegam por mais de uma sala). */
@@ -190,6 +216,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         unreadByServer
       }
     })
+    if (room.startsWith('conversation:')) markReadSoon(room.slice('conversation:'.length))
     try {
       const fetched = await fetch()
       if (useAuthStore.getState().accessToken !== token) return
@@ -376,8 +403,20 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     try {
       const conversations = await listConversations()
       if (useAuthStore.getState().accessToken !== token) return
-      set({ conversations: Array.isArray(conversations) ? conversations : [] })
-      const ids = conversations.map((c) => c.other_user.id)
+      const list = Array.isArray(conversations) ? conversations : []
+      // Não lidas vêm do servidor (sobrevivem ao reload); a aberta fica zerada.
+      set((state) => {
+        const unreadByRoom = { ...state.unreadByRoom }
+        for (const c of list) {
+          const room = `conversation:${c.id}`
+          unreadByRoom[room] = room === state.activeRoom ? 0 : (c.unread_count ?? 0)
+        }
+        return { conversations: list, unreadByRoom }
+      })
+      const meId = useAuthStore.getState().user?.id
+      const ids = list
+        .flatMap((c) => (c.members ?? []).map((m) => m.id))
+        .filter((id) => id !== meId)
       if (ids.length > 0) await get().fetchPresenceFor(ids)
     } catch (err) {
       console.error('[chatStore] fetchConversations error:', err)
@@ -441,6 +480,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   handleWsEvent: (event) => {
     const payload = event.payload as Record<string, unknown>
 
+    if (event.type === APP_UPDATE_EVENT) {
+      requestUpdateCheck()
+      return
+    }
+
     if (event.type === 'call:soundboard' || event.type.startsWith('soundboard:')) {
       useSoundboardStore.getState().handleWsEvent(event)
       return
@@ -469,9 +513,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             [room]: appendUnique(state.messagesByRoom[room] ?? [], [msg])
           }
           const isActive = room === state.activeRoom
-          const nextUnread = isActive
-            ? state.unreadByRoom
-            : { ...state.unreadByRoom, [room]: (state.unreadByRoom[room] ?? 0) + 1 }
+          const mine = msg.author_id === useAuthStore.getState().user?.id
+          const nextUnread =
+            isActive || mine
+              ? state.unreadByRoom
+              : { ...state.unreadByRoom, [room]: (state.unreadByRoom[room] ?? 0) + 1 }
           const nextServerUnread =
             !isActive && serverId && msg.channel_id
               ? {
@@ -486,15 +532,28 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           }
         })
 
-        // DM recebida ou menção a você num canal: notificação do Windows, aviso
+        // DM recebida ou menção a você num canal (inclusive @all/@here liberados
+        // pelo backend no mention_everyone): notificação do Windows, aviso
         // na barra de tarefas e som — conforme Configurações → Notificações.
         // A mesma mensagem chega pela sala do canal e do servidor: avisa uma vez.
         const me = useAuthStore.getState().user
-        if (me && !notifiedMessages.has(msg.id)) {
+        if (msg.conversation_id && room === get().activeRoom && document.hasFocus()) {
+          markReadSoon(msg.conversation_id, msg.id)
+        }
+        if (me && !notifiedMessages.has(msg.id) && !isBlocked(msg.author_id)) {
           notifiedMessages.add(msg.id)
+          const conv = msg.conversation_id
+            ? get().conversations.find((c) => c.id === msg.conversation_id)
+            : undefined
+          const group =
+            conv?.type === 'group' ? { name: conversationTitle(conv, me.id) } : undefined
           const notification =
-            messageNotification(msg, me.id) ??
-            mentionNotification(msg, { id: me.id, username: me.username }, serverId)
+            messageNotification(msg, me.id, group) ??
+            mentionNotification(
+              msg,
+              { id: me.id, username: me.username, status: me.status },
+              serverId
+            )
           if (notification) {
             // "Não perturbe" silencia o aviso, a barra de tarefas e o som.
             const prefs = prefsForStatus(notificationPrefs(), me.status)
@@ -506,7 +565,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         }
 
         if (msg.conversation_id) {
-          const meId = useAuthStore.getState().user?.id
           const existing = get().conversations.find((c) => c.id === msg.conversation_id)
           if (existing) {
             set((state) => {
@@ -526,31 +584,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
               updated.unshift(conv)
               return { conversations: updated }
             })
-          } else if (msg.author_id !== meId && msg.author) {
-            const author = msg.author
-            set((state) => ({
-              conversations: [
-                {
-                  id: msg.conversation_id as string,
-                  user_a_id: msg.author_id,
-                  user_b_id: meId ?? '',
-                  created_at: msg.created_at,
-                  updated_at: msg.created_at,
-                  other_user: {
-                    id: author.id,
-                    username: author.username,
-                    display_name: author.display_name
-                  },
-                  last_message: {
-                    id: msg.id,
-                    author_id: msg.author_id,
-                    content: messagePreview(msg),
-                    created_at: msg.created_at
-                  }
-                },
-                ...state.conversations
-              ]
-            }))
           } else {
             void get().fetchConversations()
           }
@@ -653,21 +686,25 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
 
     if (event.type === 'channel:reorder') {
-      const serverId = payload.server_id as string
-      const channels = payload.channels as Channel[] | undefined
-      if (serverId) {
-        if (Array.isArray(channels)) {
-          useServerStore.getState().setChannels(serverId, channels)
-          set((state) => ({
-            channelsByServer: {
-              ...state.channelsByServer,
-              [serverId]: channels.map((c) => c.id)
-            }
-          }))
-        } else {
-          useServerStore.getState().fetchChannels(serverId)
-          get().fetchChannelsForServers([serverId])
-        }
+      const reorder = payload as {
+        server_id?: string
+        type?: string
+        channel_ids?: string[]
+        request_id?: string
+      }
+      if (
+        reorder.server_id &&
+        (reorder.type === 'text' || reorder.type === 'voice') &&
+        Array.isArray(reorder.channel_ids)
+      ) {
+        useServerStore
+          .getState()
+          .receiveChannelOrder(
+            reorder.server_id,
+            reorder.type,
+            reorder.channel_ids,
+            reorder.request_id
+          )
       }
       return
     }
@@ -774,12 +811,18 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
 
     const friendUser = payload.user as
-      | { id: string; username: string; display_name: string }
-      | undefined
+      { id: string; username: string; display_name: string } | undefined
 
     if (event.type === 'friend:request') {
       useFriendStore.getState().loadAll()
       if (friendUser) {
+        // Pedido de amizade: som + notificação (Não perturbe silencia).
+        const me = useAuthStore.getState().user
+        const prefs = prefsForStatus(notificationPrefs(), me?.status)
+        const notification = friendRequestNotification(friendUser)
+        notifyDesktop(notification, prefs)
+        const sound = notificationSound(notification.kind, prefs)
+        if (sound) playSound(sound)
         showToast.info(
           `${friendUser.display_name} (@${friendUser.username}) te enviou um pedido de amizade`
         )
@@ -795,54 +838,50 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return
     }
 
-    if (event.type === 'friend:request:declined') {
+    // Recusa, cancelamento, remoção e bloqueio só atualizam as listas (o
+    // Discord também não avisa).
+    if (
+      event.type === 'friend:request:declined' ||
+      event.type === 'friend:request:cancelled' ||
+      event.type === 'friend:removed' ||
+      event.type === 'relationship:blocked' ||
+      event.type === 'relationship:unblocked'
+    ) {
       useFriendStore.getState().loadAll()
-      if (friendUser) {
-        showToast.info(`${friendUser.display_name} recusou seu pedido de amizade`)
-      }
       return
     }
 
-    if (event.type === 'friend:request:cancelled') {
-      useFriendStore.getState().loadAll()
-      if (friendUser) {
-        showToast.info(`${friendUser.display_name} cancelou o pedido de amizade`)
-      }
+    const conversationId = payload.conversation_id as string | undefined
+    if (!conversationId) return
+
+    if (event.type === 'conversation:create' || event.type === 'conversation:update') {
+      void get().fetchConversations()
       return
     }
 
-    if (event.type === 'friend:removed') {
-      useFriendStore.getState().loadAll()
-      if (friendUser) {
-        get().handleFriendRemoved(friendUser.id)
-        showToast.info(`${friendUser.display_name} não é mais seu amigo`)
+    if (event.type === 'conversation:read') {
+      set((state) => ({
+        unreadByRoom: { ...state.unreadByRoom, [`conversation:${conversationId}`]: 0 }
+      }))
+      return
+    }
+
+    if (event.type === 'conversation:remove') {
+      const room = `conversation:${conversationId}`
+      const wasGroup = get().conversations.some(
+        (c) => c.id === conversationId && c.type === 'group'
+      )
+      set((state) => ({
+        conversations: state.conversations.filter((c) => c.id !== conversationId),
+        unreadByRoom: { ...state.unreadByRoom, [room]: 0 }
+      }))
+      // Saiu do grupo (ou foi removido) com ele aberto: volta para Amigos.
+      if (wasGroup && get().activeRoom === room) {
+        get().closeRoom(room)
+        void router.navigate('/friends')
       }
       return
     }
-  },
-
-  handleFriendRemoved: (userId) => {
-    const removedIds = new Set(
-      get()
-        .conversations.filter((c) => c.other_user.id === userId)
-        .map((c) => c.id)
-    )
-    if (removedIds.size === 0) return
-    set((state) => {
-      const isRemovedRoom = (room: string): boolean =>
-        room.startsWith('conversation:') && removedIds.has(room.slice('conversation:'.length))
-      return {
-        conversations: state.conversations.filter((c) => !removedIds.has(c.id)),
-        messagesByRoom: Object.fromEntries(
-          Object.entries(state.messagesByRoom).filter(([room]) => !isRemovedRoom(room))
-        ),
-        unreadByRoom: Object.fromEntries(
-          Object.entries(state.unreadByRoom).filter(([room]) => !isRemovedRoom(room))
-        ),
-        activeRoom: state.activeRoom && isRemovedRoom(state.activeRoom) ? null : state.activeRoom
-      }
-    })
-    removedIds.forEach((convId) => client.unsubscribe(`conversation:${convId}`))
   },
 
   handleServerDeleted: (serverId) => {
