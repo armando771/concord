@@ -476,11 +476,7 @@ export function ServerSidebar(): React.JSX.Element {
                             : 'text-gray-400 hover:bg-white/6 hover:text-gray-200'
                       }`}
                     >
-                      <VolumeIcon
-                        className={`h-4 w-4 shrink-0 transition-colors ${
-                          connectedHere ? 'text-[#23a55a]' : 'text-violet-400'
-                        }`}
-                      />
+                      <VolumeIcon className="h-4 w-4 shrink-0 text-[#23a55a]" />
                       <span className="truncate">{ch.name}</span>
                       {participants.length > 0 && callState?.call?.started_at && (
                         <VoiceChannelTimer startedAt={callState.call.started_at} />
