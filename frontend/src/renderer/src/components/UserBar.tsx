@@ -26,9 +26,7 @@ function UserBar(): React.JSX.Element {
     >
       <button
         type="button"
-        onClick={
-          user ? profileCardHandler(user.id, name, user.username, 'top') : undefined
-        }
+        onClick={user ? profileCardHandler(user.id, name, user.username, 'top') : undefined}
         aria-label="Abrir meu perfil"
         className="group flex min-w-0 cursor-pointer items-center gap-2 rounded-md p-1 text-left transition-colors hover:bg-white/5"
       >
@@ -41,13 +39,13 @@ function UserBar(): React.JSX.Element {
           status={status}
           cutoutColor={BAR_BG}
         />
-        <div className="min-w-0 leading-tight">
-          <p className="truncate text-sm font-semibold text-white">{name}</p>
+        <div className="min-w-0">
+          <p className="truncate text-ds-md leading-[18px] font-medium text-white">{name}</p>
           {/* Como no Discord: a nota (ou o status) e, com o mouse, o @. */}
-          <p className="truncate text-[11px] text-gray-400 group-hover:hidden">
+          <p className="truncate text-ds-xs leading-[13px] font-medium text-gray-400 group-hover:hidden">
             {note || STATUS_META[status].label}
           </p>
-          <p className="hidden truncate text-[11px] text-gray-400 group-hover:block">
+          <p className="hidden truncate text-ds-xs leading-[13px] font-medium text-gray-400 group-hover:block">
             @{user?.username}
           </p>
         </div>

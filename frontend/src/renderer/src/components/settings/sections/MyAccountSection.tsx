@@ -21,8 +21,8 @@ function Row({
   return (
     <div className="flex items-center justify-between gap-4 py-3">
       <div className="min-w-0">
-        <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">{label}</p>
-        <div className="truncate text-sm text-white">{value}</div>
+        <p className="text-ds-xs font-bold uppercase tracking-[0.02em] text-gray-400">{label}</p>
+        <div className="truncate text-ds-md text-white">{value}</div>
       </div>
       {action}
     </div>
@@ -48,14 +48,17 @@ function MyAccountSection(): React.JSX.Element | null {
     <button
       type="button"
       onClick={() => goTo('profiles')}
-      className="shrink-0 cursor-pointer rounded-md bg-white/10 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/15"
+      className="shrink-0 cursor-pointer rounded-md bg-white/10 px-4 py-1.5 text-ds-sm font-medium text-white transition-colors hover:bg-white/15"
     >
       Editar
     </button>
   )
 
   return (
-    <div className="overflow-hidden rounded-xl border border-white/10" style={{ background: CARD_BG }}>
+    <div
+      className="overflow-hidden rounded-xl border border-white/10"
+      style={{ background: CARD_BG }}
+    >
       <div
         className="h-[100px]"
         style={
@@ -86,7 +89,7 @@ function MyAccountSection(): React.JSX.Element | null {
           <button
             type="button"
             onClick={() => goTo('profiles')}
-            className="mb-2 shrink-0 cursor-pointer rounded-md bg-[#5865f2] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#4752c4]"
+            className="mb-2 shrink-0 cursor-pointer rounded-md bg-[#5865f2] px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-[#4752c4]"
           >
             Editar perfil de usuário
           </button>

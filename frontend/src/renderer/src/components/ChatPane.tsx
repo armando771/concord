@@ -214,7 +214,7 @@ function MessageItem({
   // Mensagem de quem você bloqueou: escondida, como no Discord.
   if (authorBlocked && !revealBlocked) {
     return (
-      <div id={`msg-${message.id}`} className="px-4 py-1 text-xs text-gray-500">
+      <div id={`msg-${message.id}`} className="px-4 py-1 text-ds-sm text-gray-500">
         1 mensagem bloqueada —{' '}
         <button
           type="button"
@@ -242,7 +242,7 @@ function MessageItem({
       onContextMenu={onAuthorMenu}
     >
       {hasReplyReference && (
-        <div className="flex items-center gap-1.5 pl-4 text-xs text-gray-400">
+        <div className="flex items-center gap-1.5 pl-4 text-ds-sm text-gray-400">
           <span className="h-2.5 w-5 shrink-0 rounded-tl-md border-l-2 border-t-2 border-gray-600" />
           {message.reply_to ? (
             <button
@@ -266,23 +266,25 @@ function MessageItem({
           type="button"
           onClick={openProfile}
           aria-label={`Perfil de ${name}`}
-          className="h-9 shrink-0 cursor-pointer self-start rounded-full"
+          className="h-10 shrink-0 cursor-pointer self-start rounded-full"
         >
-          <Avatar userId={message.author_id} name={name} avatarUrl={look.avatarUrl} size={36} />
+          <Avatar userId={message.author_id} name={name} avatarUrl={look.avatarUrl} size={40} />
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <button
               type="button"
               onClick={openProfile}
-              className="cursor-pointer text-sm font-semibold text-white hover:underline"
+              className="cursor-pointer text-ds-chat font-medium text-white hover:underline"
             >
               {name}
             </button>
-            <span className="text-[10px] text-gray-500">{formatTime(message.created_at)}</span>
+            <span className="text-ds-xs font-medium text-gray-500">
+              {formatTime(message.created_at)}
+            </span>
           </div>
           {message.content && (
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">
+            <p className="whitespace-pre-wrap break-words text-ds-chat text-gray-200">
               {splitMentions(message.content, message.mention_everyone ?? null).map((part, i) =>
                 part.mention ? (
                   <span
@@ -874,7 +876,7 @@ function ChatPane({
         )}
         <ComposerAttachments drafts={drafts} onRemove={removeAttachment} />
         {replyingTo && (
-          <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#18191c] px-3 py-1.5 text-xs text-gray-300">
+          <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#18191c] px-3 py-1.5 text-ds-sm text-gray-300">
             <div className="min-w-0 truncate">
               Respondendo a <span className="font-semibold text-white">@{replyTargetAuthor}</span>
               <span className="ml-2 text-gray-400">{messagePreview(replyingTo)}</span>
@@ -943,7 +945,7 @@ function ChatPane({
               onBlur={() => setMention(null)}
               placeholder={replyingTo ? `Responder a @${replyTargetAuthor}...` : placeholder}
               maxLength={2000}
-              className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 outline-none"
+              className="min-w-0 flex-1 bg-transparent text-ds-chat text-white placeholder:text-gray-500 outline-none"
             />
             {permissions.canAttach && (
               <VoiceRecordButton key={room} disabled={sendingVoice} onRecorded={handleRecorded} />
@@ -951,7 +953,7 @@ function ChatPane({
             <button
               type="submit"
               disabled={sending || !submittable}
-              className="cursor-pointer rounded-lg bg-[#5865f2] px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-40"
+              className="cursor-pointer rounded-lg bg-[#5865f2] px-3 py-1.5 text-ds-sm font-medium text-white transition-all hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {attachmentState.uploading
                 ? 'Enviando arquivos...'

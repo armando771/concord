@@ -29,7 +29,7 @@ function Input({
       {label && (
         <label
           htmlFor={inputId}
-          className={`text-xs font-semibold uppercase tracking-wide ${error ? 'text-red-300' : 'text-gray-300'}`}
+          className={`text-ds-xs font-bold uppercase tracking-[0.02em] ${error ? 'text-red-300' : 'text-gray-300'}`}
         >
           {label}
           {error && <span className="font-normal normal-case"> — {error}</span>}
@@ -49,7 +49,7 @@ function Input({
             type="button"
             tabIndex={-1}
             onClick={() => setShown((v) => !v)}
-            className="absolute inset-y-0 right-3 cursor-pointer text-xs font-medium text-gray-400 hover:text-gray-200"
+            className="absolute inset-y-0 right-3 cursor-pointer text-ds-sm font-medium text-gray-400 hover:text-gray-200"
           >
             {shown ? 'Ocultar' : 'Mostrar'}
           </button>

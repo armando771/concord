@@ -25,7 +25,7 @@ function Button({
 }: ButtonProps): React.JSX.Element {
   return (
     <button
-      className={`cursor-pointer rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${variantClasses[variant]} ${className}`}
+      className={`cursor-pointer rounded-lg px-4 py-2 text-ds-sm font-medium text-white transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${variantClasses[variant]} ${className}`}
       {...props}
     >
       {children}
