@@ -89,6 +89,11 @@ function BirthdayModal(): React.JSX.Element | null {
             🎂
           </div>
           <h2 className="text-xl font-bold text-white">🎂 Feliz aniversário, {today.name}!</h2>
+          {today.age !== undefined && today.age > 0 && (
+            <p className="mt-1 text-base font-semibold text-amber-200">
+              Hoje você completa {today.age} {today.age === 1 ? 'ano' : 'anos'}! 🎈
+            </p>
+          )}
           <p className="mt-2 text-sm text-gray-300">
             Hoje o dia é seu! Todo mundo dos seus servidores deseja muitas felicidades. 🎉
           </p>

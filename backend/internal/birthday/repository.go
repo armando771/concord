@@ -117,6 +117,7 @@ type person struct {
 	DisplayName string
 	Day         *int
 	Month       *int
+	Year        *int
 	Announce    bool
 }
 
@@ -124,9 +125,9 @@ func (r *Repository) person(ctx context.Context, userID string) (*person, error)
 	p := &person{}
 	err := r.db.QueryRow(
 		ctx,
-		`SELECT display_name, birthday_day, birthday_month, announce_birthday FROM users WHERE id = $1`,
+		`SELECT display_name, birthday_day, birthday_month, birthday_year, announce_birthday FROM users WHERE id = $1`,
 		userID,
-	).Scan(&p.DisplayName, &p.Day, &p.Month, &p.Announce)
+	).Scan(&p.DisplayName, &p.Day, &p.Month, &p.Year, &p.Announce)
 	if err != nil {
 		return nil, err
 	}

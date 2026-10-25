@@ -3,6 +3,7 @@ import { request } from './client'
 export interface Birthday {
   day: number | null
   month: number | null
+  year: number | null
   /** Os servidores podem anunciar (e mostrar o modal). */
   announce: boolean
 }
@@ -16,6 +17,8 @@ export interface BirthdayGreeting {
 export interface BirthdayToday {
   is_birthday: boolean
   name?: string
+  /** Quantos anos está fazendo (só a própria pessoa vê). */
+  age?: number
   /** Dia em Brasília (AAAA-MM-DD). */
   date: string
   servers: BirthdayGreeting[]

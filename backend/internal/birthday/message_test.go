@@ -45,3 +45,13 @@ func TestIsBirthday(t *testing.T) {
 		t.Fatal("29/02 in leap and non-leap years")
 	}
 }
+
+func TestAge(t *testing.T) {
+	if got := Age(2000, date(2026, 10, 25)); got != 26 {
+		t.Fatalf("Age = %d, want 26", got)
+	}
+	// Nascido em 29/02/2004, comemorando em 28/02/2026: faz 22.
+	if got := Age(2004, date(2026, 2, 28)); got != 22 {
+		t.Fatalf("Age (29/02) = %d, want 22", got)
+	}
+}

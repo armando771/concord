@@ -60,3 +60,8 @@ func IsBirthday(birthDay, birthMonth int, day time.Time) bool {
 	}
 	return false
 }
+
+// Age: quantos anos faz quem nasceu em `year`, no dia do aniversário `day`.
+func Age(year int, day time.Time) int {
+	return day.Year() - year
+}

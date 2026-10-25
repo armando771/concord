@@ -1,8 +1,8 @@
-import { daysInMonth, MONTHS, type BirthdayValue } from '../lib/birthday'
+import { birthYears, daysInMonth, MONTHS, type BirthdayValue } from '../lib/birthday'
 
 const selectClass = 'glass-input !py-2 text-sm'
 
-/** Dia e mês do aniversário (opcional; ninguém fica sabendo a idade). */
+/** Dia, mês e ano do aniversário (opcional; a idade só a própria pessoa vê). */
 function BirthdayFields({
   value,
   onChange,
@@ -12,7 +12,15 @@ function BirthdayFields({
   onChange: (value: BirthdayValue) => void
   label?: string
 }): React.JSX.Element {
-  const maxDay = daysInMonth(value.month)
+  const maxDay = daysInMonth(value.month, value.year)
+
+  // Ex.: dia 31 e troca para abril, ou 29/02 e troca para um ano não
+  // bissexto → o dia vira o último que existe.
+  const fit = (next: BirthdayValue): BirthdayValue => {
+    const last = daysInMonth(next.month, next.year)
+    return next.day && next.day > last ? { ...next, day: last } : next
+  }
+  const num = (v: string): number | null => (v ? Number(v) : null)
 
   return (
     <div className="flex w-full flex-col gap-1.5">
@@ -21,10 +29,8 @@ function BirthdayFields({
         <select
           aria-label="Dia do aniversário"
           value={value.day ?? ''}
-          onChange={(e) =>
-            onChange({ ...value, day: e.target.value ? Number(e.target.value) : null })
-          }
-          className={`${selectClass} w-24`}
+          onChange={(e) => onChange({ ...value, day: num(e.target.value) })}
+          className={`${selectClass} w-20`}
         >
           <option value="" className="bg-[#111214]">
             Dia
@@ -38,12 +44,7 @@ function BirthdayFields({
         <select
           aria-label="Mês do aniversário"
           value={value.month ?? ''}
-          onChange={(e) => {
-            const month = e.target.value ? Number(e.target.value) : null
-            // Ex.: 31 e troca para abril → o dia vira 30.
-            const day = value.day && value.day > daysInMonth(month) ? daysInMonth(month) : value.day
-            onChange({ day, month })
-          }}
+          onChange={(e) => onChange(fit({ ...value, month: num(e.target.value) }))}
           className={`${selectClass} min-w-0 flex-1`}
         >
           <option value="" className="bg-[#111214]">
@@ -52,6 +53,21 @@ function BirthdayFields({
           {MONTHS.map((name, i) => (
             <option key={name} value={i + 1} className="bg-[#111214]">
               {name}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Ano do aniversário"
+          value={value.year ?? ''}
+          onChange={(e) => onChange(fit({ ...value, year: num(e.target.value) }))}
+          className={`${selectClass} w-24`}
+        >
+          <option value="" className="bg-[#111214]">
+            Ano
+          </option>
+          {birthYears().map((y) => (
+            <option key={y} value={y} className="bg-[#111214]">
+              {y}
             </option>
           ))}
         </select>

@@ -61,7 +61,7 @@ function ProfileSettings(): React.JSX.Element {
   useEffect(() => {
     getBirthday()
       .then(setLocal)
-      .catch(() => setLocal({ day: null, month: null, announce: true }))
+      .catch(() => setLocal({ day: null, month: null, year: null, announce: true }))
   }, [])
 
   const save = async (next: Birthday): Promise<void> => {
@@ -91,6 +91,9 @@ function ProfileSettings(): React.JSX.Element {
           onChange={(value) => void save({ ...birthday, ...value })}
         />
         {error && <p className="text-xs text-amber-300">{error}</p>}
+        <p className="text-[11px] text-gray-500">
+          Sua idade aparece só para você, no recado de feliz aniversário.
+        </p>
         <Toggle
           title="Anunciar meu aniversário nos servidores"
           description="No seu dia, os servidores mandam uma mensagem de parabéns no canal principal e você vê um recado ao abrir o app."

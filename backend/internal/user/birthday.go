@@ -8,26 +8,35 @@ import (
 
 var ErrInvalidBirthday = errors.New("data de aniversário inválida")
 
-// Birthday: aniversário opcional (só dia e mês, para não revelar a idade) e
-// se os servidores podem anunciar.
+// Birthday: aniversário opcional (dia, mês e ano; a idade só aparece para a
+// própria pessoa) e se os servidores podem anunciar.
 type Birthday struct {
 	Day      *int `json:"day"`
 	Month    *int `json:"month"`
+	Year     *int `json:"year"`
 	Announce bool `json:"announce"`
 }
 
-// ValidateBirthday: os dois vazios (sem aniversário) ou uma data que existe
-// em algum ano (29/02 vale).
-func ValidateBirthday(day, month *int) error {
-	if day == nil && month == nil {
+const minBirthYear = 1900
+
+// ValidateBirthday: tudo vazio (sem aniversário) ou uma data que existe
+// (29/02 só em ano bissexto), a partir de 1900 e que não está no futuro.
+func ValidateBirthday(day, month, year *int, now time.Time) error {
+	if day == nil && month == nil && year == nil {
 		return nil
 	}
-	if day == nil || month == nil || *month < 1 || *month > 12 || *day < 1 {
+	if day == nil || month == nil || year == nil || *month < 1 || *month > 12 || *day < 1 {
 		return ErrInvalidBirthday
 	}
-	// 2024 é bissexto: aceita 29 de fevereiro.
-	last := time.Date(2024, time.Month(*month)+1, 0, 0, 0, 0, 0, time.UTC).Day()
-	if *day > last {
+	if *year < minBirthYear || *year > now.Year() {
+		return ErrInvalidBirthday
+	}
+	date := time.Date(*year, time.Month(*month), *day, 0, 0, 0, 0, time.UTC)
+	if date.Day() != *day || date.Month() != time.Month(*month) {
+		return ErrInvalidBirthday // ex.: 31/04 ou 29/02 em ano não bissexto
+	}
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	if date.After(today) {
 		return ErrInvalidBirthday
 	}
 	return nil
@@ -37,9 +46,9 @@ func (r *Repository) GetBirthday(ctx context.Context, userID string) (*Birthday,
 	b := &Birthday{}
 	err := r.db.QueryRow(
 		ctx,
-		`SELECT birthday_day, birthday_month, announce_birthday FROM users WHERE id = $1`,
+		`SELECT birthday_day, birthday_month, birthday_year, announce_birthday FROM users WHERE id = $1`,
 		userID,
-	).Scan(&b.Day, &b.Month, &b.Announce)
+	).Scan(&b.Day, &b.Month, &b.Year, &b.Announce)
 	if err != nil {
 		return nil, err
 	}
@@ -51,12 +60,13 @@ func (r *Repository) SetBirthday(ctx context.Context, userID string, b Birthday)
 		ctx,
 		`
 		UPDATE users
-		SET birthday_day = $2, birthday_month = $3, announce_birthday = $4, updated_at = NOW()
+		SET birthday_day = $2, birthday_month = $3, birthday_year = $4, announce_birthday = $5, updated_at = NOW()
 		WHERE id = $1
 		`,
 		userID,
 		b.Day,
 		b.Month,
+		b.Year,
 		b.Announce,
 	)
 	return err
@@ -67,7 +77,7 @@ func (s *Service) GetBirthday(ctx context.Context, userID string) (*Birthday, er
 }
 
 func (s *Service) SetBirthday(ctx context.Context, userID string, b Birthday) error {
-	if err := ValidateBirthday(b.Day, b.Month); err != nil {
+	if err := ValidateBirthday(b.Day, b.Month, b.Year, time.Now()); err != nil {
 		return err
 	}
 	return s.repository.SetBirthday(ctx, userID, b)

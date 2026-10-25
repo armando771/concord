@@ -1,10 +1,14 @@
--- Aniversário (só dia e mês, opcional) e se a pessoa quer que os servidores
--- anunciem.
+-- Aniversário (opcional; dia, mês e ano — a idade só aparece para a própria
+-- pessoa) e se ela quer que os servidores anunciem.
 ALTER TABLE users
   ADD COLUMN birthday_day SMALLINT NULL CHECK (birthday_day BETWEEN 1 AND 31),
   ADD COLUMN birthday_month SMALLINT NULL CHECK (birthday_month BETWEEN 1 AND 12),
+  ADD COLUMN birthday_year SMALLINT NULL CHECK (birthday_year BETWEEN 1900 AND 2100),
   ADD COLUMN announce_birthday BOOLEAN NOT NULL DEFAULT TRUE,
-  ADD CONSTRAINT users_birthday_complete CHECK ((birthday_day IS NULL) = (birthday_month IS NULL));
+  ADD CONSTRAINT users_birthday_complete CHECK (
+    (birthday_day IS NULL) = (birthday_month IS NULL)
+    AND (birthday_day IS NULL) = (birthday_year IS NULL)
+  );
 
 CREATE INDEX idx_users_birthday ON users (birthday_month, birthday_day) WHERE announce_birthday;
 

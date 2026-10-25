@@ -33,6 +33,8 @@ type Greeting struct {
 type Today struct {
 	IsBirthday bool       `json:"is_birthday"`
 	Name       string     `json:"name,omitempty"`
+	// Quantos anos está fazendo (só a própria pessoa vê, no modal).
+	Age *int `json:"age,omitempty"`
 	Date       string     `json:"date"`
 	Servers    []Greeting `json:"servers"`
 }
@@ -165,6 +167,10 @@ func (s *Service) TodayFor(ctx context.Context, userID string, now time.Time) (*
 
 	today.IsBirthday = true
 	today.Name = p.DisplayName
+	if p.Year != nil {
+		age := Age(*p.Year, day)
+		today.Age = &age
+	}
 	greetings, err := s.repository.Greetings(ctx, userID, day)
 	if err != nil {
 		return nil, err

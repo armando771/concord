@@ -21,7 +21,7 @@ function Register(): React.JSX.Element {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
-  const [birthday, setBirthday] = useState<BirthdayValue>({ day: null, month: null })
+  const [birthday, setBirthday] = useState<BirthdayValue>({ day: null, month: null, year: null })
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -61,8 +61,12 @@ function Register(): React.JSX.Element {
         display_name: displayName.trim(),
         email: email.trim(),
         password,
-        ...(birthday.day && birthday.month
-          ? { birthday_day: birthday.day, birthday_month: birthday.month }
+        ...(birthday.day && birthday.month && birthday.year
+          ? {
+              birthday_day: birthday.day,
+              birthday_month: birthday.month,
+              birthday_year: birthday.year
+            }
           : {})
       })
       setTokens(tokens.access_token, tokens.refresh_token)

@@ -3,6 +3,7 @@ package auth
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -28,9 +29,10 @@ func (h *Handler) Register(c *gin.Context) {
 		DisplayName string `json:"display_name"`
 		Email       string `json:"email"`
 		Password    string `json:"password"`
-		// Aniversário opcional (só dia e mês).
+		// Aniversário opcional (dia, mês e ano).
 		BirthdayDay   *int `json:"birthday_day"`
 		BirthdayMonth *int `json:"birthday_month"`
+		BirthdayYear  *int `json:"birthday_year"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -38,7 +40,7 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	if err := user.ValidateBirthday(input.BirthdayDay, input.BirthdayMonth); err != nil {
+	if err := user.ValidateBirthday(input.BirthdayDay, input.BirthdayMonth, input.BirthdayYear, time.Now()); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -63,7 +65,7 @@ func (h *Handler) Register(c *gin.Context) {
 	}
 
 	if input.BirthdayDay != nil {
-		birthday := user.Birthday{Day: input.BirthdayDay, Month: input.BirthdayMonth, Announce: true}
+		birthday := user.Birthday{Day: input.BirthdayDay, Month: input.BirthdayMonth, Year: input.BirthdayYear, Announce: true}
 		if err := h.userService.SetBirthday(c.Request.Context(), newUser.ID, birthday); err != nil {
 			log.Printf("[auth] save birthday for %s: %v", newUser.ID, err)
 		}
