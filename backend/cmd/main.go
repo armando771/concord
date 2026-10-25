@@ -134,7 +134,10 @@ func main() {
 	// Conversation (DM)
 	conversationRepository := conversation.ConversationRepository(db)
 	conversationService := conversation.ConversationService(conversationRepository)
-	conversationHandler := conversation.ConversationHandler(conversationService, friendshipService, serverService, userService)
+	conversationService.SetDependencies(friendshipService, hub)
+	friendshipService.SetServers(serverService, func(ctx context.Context, a, b string) (any, error) {
+		return serverService.MutualServers(ctx, a, b)
+	})
 
 	// Mídia do chat (arquivos no disco, fora do binário e do deploy)
 	uploadsDir := os.Getenv("UPLOADS_DIR")
@@ -176,6 +179,7 @@ func main() {
 	}
 	profileService := user.NewProfileService(userRepository, hub)
 	profileHandler := user.NewProfileHandler(profileService, profileMedia, profileStatic, uploadSpace)
+	conversationHandler := conversation.ConversationHandler(conversationService, userService, profileHandler)
 
 	// LiveKit (mídia das chamadas)
 	liveKitKey, liveKitSecret := os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET")
@@ -196,6 +200,7 @@ func main() {
 	callRepository := call.CallRepository(db)
 	callService := call.CallService(callRepository, hub, conversationService, serverService, channelService, userService, hub.IsOnline)
 	callService.SetSoundLookup(soundboard.NewCallLookup(soundboardRepository))
+	callService.SetBlockedCheck(friendshipService.IsBlockedEither)
 	callHandler := call.CallHandler(callService, liveKitTokens)
 	// Reinício do servidor não derruba quem está em chamada.
 	callService.RestoreActive(context.Background())
@@ -257,6 +262,11 @@ func main() {
 		updatesDir = "updates"
 	}
 	updates.Routes(router, updatesDir)
+	// Versão nova publicada: avisa os apps na hora (sem esperar a checagem periódica).
+	go updates.NewWatcher(updatesDir, func(r updates.Release) {
+		log.Printf("[updates] nova versão em %s: %s", r.File, r.Version)
+		hub.PublishAppUpdate(r.File, r.Version)
+	}).Run(context.Background(), updates.PollInterval)
 
 	// Sinalização do LiveKit (auth pelo token do LiveKit em ?access_token=)
 	router.Any("/rtc", rtcProxy)

@@ -54,18 +54,36 @@ export function deleteProfileImage(kind: ProfileImageKind): Promise<User> {
  * mostra parado nas listas). XMLHttpRequest pelo progresso e sem o limite de
  * 15 s do request (10 MB numa conexão lenta demora).
  */
-export async function uploadProfileImage(
+export function uploadProfileImage(
   kind: ProfileImageKind,
   file: Blob,
   staticFrame?: Blob,
   onProgress?: (fraction: number) => void
 ): Promise<User> {
+  return uploadImage<User>(`/users/me/${kind}`, kind, file, staticFrame, onProgress)
+}
+
+/** Mesmo upload do avatar, para o caminho dado (ícone do grupo também usa). */
+export async function uploadImage<T>(
+  path: string,
+  name: string,
+  file: Blob,
+  staticFrame?: Blob,
+  onProgress?: (fraction: number) => void
+): Promise<T> {
   const token = useAuthStore.getState().accessToken
   try {
-    return await sendImage(kind, file, staticFrame, onProgress, token)
+    return await sendImage<T>(path, name, file, staticFrame, onProgress, token)
   } catch (err) {
     if (err instanceof ApiError && err.status === 401 && token && (await refreshTokens(token))) {
-      return sendImage(kind, file, staticFrame, onProgress, useAuthStore.getState().accessToken)
+      return sendImage<T>(
+        path,
+        name,
+        file,
+        staticFrame,
+        onProgress,
+        useAuthStore.getState().accessToken
+      )
     }
     throw err
   }
@@ -77,20 +95,21 @@ const UPLOAD_ERRORS: Record<number, string> = {
   507: 'O servidor está sem espaço agora. Tente mais tarde.'
 }
 
-function sendImage(
-  kind: ProfileImageKind,
+function sendImage<T>(
+  path: string,
+  name: string,
   file: Blob,
   staticFrame: Blob | undefined,
   onProgress: ((fraction: number) => void) | undefined,
   token: string | null
-): Promise<User> {
+): Promise<T> {
   return new Promise((resolve, reject) => {
     const form = new FormData()
-    form.append('file', file, kind)
-    if (staticFrame) form.append('static', staticFrame, `${kind}-static`)
+    form.append('file', file, name)
+    if (staticFrame) form.append('static', staticFrame, `${name}-static`)
 
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', `${API_BASE_URL}/users/me/${kind}`)
+    xhr.open('POST', `${API_BASE_URL}${path}`)
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     xhr.upload.addEventListener('progress', (e) => {
       if (e.lengthComputable && e.total > 0) onProgress?.(e.loaded / e.total)
@@ -103,7 +122,7 @@ function sendImage(
         // corpo vazio ou não-JSON
       }
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(body as User)
+        resolve(body as T)
       } else {
         const message =
           UPLOAD_ERRORS[xhr.status] ?? (body as { error?: string }).error ?? 'Falha no envio'
@@ -113,4 +132,21 @@ function sendImage(
     xhr.onerror = () => reject(new ApiError(0, 'Sem conexão com o servidor.'))
     xhr.send(form)
   })
+}
+
+/** Quem pode mandar pedido de amizade (Privacidade e segurança). */
+export type FriendRequestPolicy = 'everyone' | 'mutual_friends' | 'mutual_servers' | 'nobody'
+
+export interface Privacy {
+  friend_request_policy: FriendRequestPolicy
+  /** Membros de servidores em comum (sem amizade) podem mandar DM. */
+  allow_server_dms: boolean
+}
+
+export function getPrivacy(): Promise<Privacy> {
+  return request<Privacy>('/users/me/privacy')
+}
+
+export function updatePrivacy(privacy: Privacy): Promise<Privacy> {
+  return request<Privacy>('/users/me/privacy', { method: 'PUT', body: JSON.stringify(privacy) })
 }

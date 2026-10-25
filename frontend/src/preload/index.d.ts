@@ -32,6 +32,7 @@ export interface UpdatesApi {
   onProgress(cb: (percent: number) => void): () => void
   onError(cb: (message: string) => void): () => void
   install(): void
+  checkNow(): void
 }
 
 export interface BackgroundApi {

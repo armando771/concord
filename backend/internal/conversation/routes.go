@@ -9,6 +9,14 @@ func ConversationRoutes(router *gin.RouterGroup, handler *Handler, authMiddlewar
 		conversations.GET("", handler.List)
 		conversations.GET("/", handler.List)
 		conversations.GET("/with/:userId", handler.GetOrCreateWith)
+		conversations.POST("/group", handler.CreateGroup)
 		conversations.GET("/:id", handler.Get)
+		conversations.PUT("/:id", handler.Update)
+		conversations.POST("/:id/icon", handler.UploadIcon)
+		conversations.DELETE("/:id/icon", handler.DeleteIcon)
+		conversations.POST("/:id/members", handler.AddMembers)
+		conversations.DELETE("/:id/members/:userId", handler.RemoveMember)
+		conversations.POST("/:id/hide", handler.Hide)
+		conversations.POST("/:id/read", handler.MarkRead)
 	}
 }

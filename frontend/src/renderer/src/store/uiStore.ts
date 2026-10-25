@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type FriendsTab = 'all' | 'pending' | 'add'
+export type FriendsTab = 'online' | 'all' | 'pending' | 'blocked' | 'add'
 
 const CALL_CONTROLS_KEY = 'concord:call-controls-hidden'
 
@@ -28,7 +28,7 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>()((set) => ({
-  friendsTab: 'all',
+  friendsTab: 'online',
   setFriendsTab: (friendsTab) => set({ friendsTab }),
   serverInviteModalOpen: false,
   openServerInviteModal: () => set({ serverInviteModalOpen: true }),

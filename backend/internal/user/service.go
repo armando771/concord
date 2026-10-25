@@ -30,6 +30,19 @@ func (s *Service) FindByUsername(ctx context.Context, username string) (*User, e
 	return s.repository.FindByUsername(ctx, username)
 }
 
+func (s *Service) FindByUsernameFold(ctx context.Context, username string) (*User, error) {
+	return s.repository.FindByUsernameFold(ctx, username)
+}
+
+var ErrInvalidPrivacy = errors.New("invalid privacy settings")
+
+func (s *Service) UpdatePrivacy(ctx context.Context, id string, p Privacy) (*User, error) {
+	if !ValidFriendPolicy(p.FriendRequestPolicy) {
+		return nil, ErrInvalidPrivacy
+	}
+	return s.repository.UpdatePrivacy(ctx, id, p)
+}
+
 func (s *Service) SearchByUsername(ctx context.Context, query string, excludeUserID string) ([]User, error) {
 	return s.repository.SearchByUsername(ctx, query, excludeUserID)
 }

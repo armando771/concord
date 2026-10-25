@@ -1,7 +1,8 @@
 // Seções da tela de Configurações (navegação da esquerda, como no Discord) e a
 // busca do topo.
 
-export type SettingsSectionId = 'account' | 'profiles' | 'voice' | 'notifications' | 'app'
+export type SettingsSectionId =
+  'account' | 'profiles' | 'privacy' | 'voice' | 'notifications' | 'app'
 
 export interface SettingsSection {
   id: SettingsSectionId
@@ -45,6 +46,21 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     ]
   },
   {
+    id: 'privacy',
+    label: 'Privacidade e segurança',
+    group: 'user',
+    keywords: [
+      'privacidade',
+      'segurança',
+      'bloquear',
+      'bloqueados',
+      'pedido de amizade',
+      'amigos',
+      'mensagem direta',
+      'dm'
+    ]
+  },
+  {
     id: 'voice',
     label: 'Voz e áudio',
     group: 'app',
@@ -66,11 +82,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
 
 /** "Notificação" acha "notificacao" e vice-versa. */
 const normalize = (text: string): string =>
-  text
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .trim()
+  text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
 export function filterSections(
   query: string,
@@ -78,5 +90,7 @@ export function filterSections(
 ): SettingsSection[] {
   const q = normalize(query)
   if (!q) return sections
-  return sections.filter((s) => [s.label, ...s.keywords].some((text) => normalize(text).includes(q)))
+  return sections.filter((s) =>
+    [s.label, ...s.keywords].some((text) => normalize(text).includes(q))
+  )
 }

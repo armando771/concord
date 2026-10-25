@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -74,6 +75,19 @@ func (f *fakeUserStore) GetBirthday(context.Context, string) (*Birthday, error) 
 	return &Birthday{}, nil
 }
 func (f *fakeUserStore) SetBirthday(context.Context, string, Birthday) error { return nil }
+func (f *fakeUserStore) UpdatePrivacy(_ context.Context, id string, p Privacy) (*User, error) {
+	if !ValidFriendPolicy(p.FriendRequestPolicy) {
+		return nil, ErrInvalidPrivacy
+	}
+	for i := range f.users {
+		if f.users[i].ID == id {
+			f.users[i].FriendRequestPolicy, f.users[i].AllowServerDMs = p.FriendRequestPolicy, p.AllowServerDMs
+			u := f.users[i]
+			return &u, nil
+		}
+	}
+	return nil, errors.New("not found")
+}
 
 func userRouter(store userStore) *gin.Engine {
 	gin.SetMode(gin.TestMode)
@@ -82,6 +96,8 @@ func userRouter(store userStore) *gin.Engine {
 	router.Use(func(c *gin.Context) { c.Set("userID", meID); c.Next() })
 	router.GET("/users/me", h.GetMe)
 	router.GET("/users/search", h.SearchUsers)
+	router.GET("/users/me/privacy", h.GetPrivacy)
+	router.PUT("/users/me/privacy", h.UpdatePrivacy)
 	return router
 }
 
@@ -127,5 +143,42 @@ func TestEscapeLike(t *testing.T) {
 		if got := escapeLike(in); got != want {
 			t.Errorf("escapeLike(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestPrivacyRoundTrip(t *testing.T) {
+	store := &fakeUserStore{users: []User{{ID: meID, Username: "eu", FriendRequestPolicy: FriendPolicyEveryone, AllowServerDMs: true}}}
+	router := userRouter(store)
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/users/me/privacy",
+		strings.NewReader(`{"friend_request_policy":"mutual_servers","allow_server_dms":false}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT status = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/users/me/privacy", nil))
+	var got Privacy
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.FriendRequestPolicy != FriendPolicyMutualServers || got.AllowServerDMs {
+		t.Errorf("privacidade não gravou: %+v", got)
+	}
+
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/users/me/privacy",
+		strings.NewReader(`{"friend_request_policy":"qualquer"}`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("política inválida: status = %d, want 400", rec.Code)
+	}
+}
+
+func TestPrivacyNotInPublicJSON(t *testing.T) {
+	u := User{ID: "x", FriendRequestPolicy: FriendPolicyNobody, AllowServerDMs: true}
+	raw, _ := json.Marshal(u)
+	if strings.Contains(string(raw), "friend_request_policy") || strings.Contains(string(raw), "allow_server_dms") {
+		t.Errorf("privacidade vazou no JSON público: %s", raw)
 	}
 }

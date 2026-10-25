@@ -9,6 +9,8 @@ export interface UserMenuTarget {
   username?: string
   /** menu da live (tela compartilhada) dessa pessoa, em vez do menu dela */
   stream?: boolean
+  /** Aberto numa DM 1:1: mostra "Fechar DM". */
+  conversationId?: string
   x: number
   y: number
 }
