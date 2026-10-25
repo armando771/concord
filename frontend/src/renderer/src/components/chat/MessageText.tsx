@@ -29,7 +29,7 @@ function MessageText({
   // Quebra o texto só quando ele muda (hover e reações re-renderizam a linha).
   const parts = useMemo(() => messageParts(content, everyone), [content, everyone])
   return (
-    <p className="cursor-text select-text whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">
+    <p className="cursor-text select-text whitespace-pre-wrap break-words text-ds-chat text-gray-200">
       {parts.map((part, i) =>
         part.href ? (
           <a

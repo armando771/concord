@@ -423,7 +423,7 @@ export function ServerSidebar(): React.JSX.Element {
           {canManageChannels && index > 0 && (
             <button
               onClick={move(index - 1)}
-              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-white/10 cursor-pointer"
             >
               <span>Mover para cima</span>
               <ChevronUpIcon className="h-3.5 w-3.5" />
@@ -432,7 +432,7 @@ export function ServerSidebar(): React.JSX.Element {
           {canManageChannels && index >= 0 && index < section.length - 1 && (
             <button
               onClick={move(index + 1)}
-              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-white/10 cursor-pointer"
             >
               <span>Mover para baixo</span>
               <ChevronDownIcon className="h-3.5 w-3.5" />
@@ -443,7 +443,7 @@ export function ServerSidebar(): React.JSX.Element {
             ch.id !== primaryId && (
               <button
                 onClick={() => void makePrimary(ch)}
-                className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+                className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-white/10 cursor-pointer"
               >
                 <span>Definir como principal</span>
                 <StarIcon className="h-3.5 w-3.5 text-amber-400" />
@@ -457,7 +457,7 @@ export function ServerSidebar(): React.JSX.Element {
                 setEditingChannel(ch)
                 openCreateChannelModal()
               }}
-              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-white/10 cursor-pointer"
             >
               <span>Editar canal</span>
               <PencilIcon className="h-3.5 w-3.5" />
@@ -469,7 +469,7 @@ export function ServerSidebar(): React.JSX.Element {
                 setChannelMenuFor(null)
                 setPermissionsFor(ch)
               }}
-              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-white/10 cursor-pointer"
             >
               <span>Permissões</span>
               <LockIcon className="h-3.5 w-3.5" />
@@ -481,7 +481,7 @@ export function ServerSidebar(): React.JSX.Element {
                 setChannelMenuFor(null)
                 setDeletingChannel(ch)
               }}
-              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/15 cursor-pointer"
+              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-red-400 hover:bg-red-500/15 cursor-pointer"
             >
               <span>Deletar canal</span>
               <TrashIcon className="h-3.5 w-3.5" />
@@ -505,7 +505,7 @@ export function ServerSidebar(): React.JSX.Element {
           <button
             onClick={() => setDropdownOpen((d) => !d)}
             title={serverName}
-            className="flex w-full min-w-0 items-center justify-between gap-1 text-left font-bold text-white text-base hover:text-gray-200 cursor-pointer"
+            className="flex w-full min-w-0 items-center justify-between gap-1 text-left text-ds-md font-semibold text-white hover:text-gray-200 cursor-pointer"
           >
             {/* Até duas linhas (o cabeçalho tem altura fixa); o resto no title. */}
             <span className={`line-clamp-2 min-w-0 leading-5 ${WRAP_NAME}`}>{serverName}</span>
@@ -522,7 +522,7 @@ export function ServerSidebar(): React.JSX.Element {
                     setDropdownOpen(false)
                     openInviteModal()
                   }}
-                  className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-violet-300 hover:bg-violet-600/20 hover:text-violet-200 cursor-pointer"
+                  className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-violet-300 hover:bg-violet-600/20 hover:text-violet-200 cursor-pointer"
                 >
                   <span>Convidar pessoas</span>
                   <UserPlusIcon className="h-4 w-4" />
@@ -534,7 +534,7 @@ export function ServerSidebar(): React.JSX.Element {
                     setDropdownOpen(false)
                     useServerSettingsStore.getState().openSettings()
                   }}
-                  className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+                  className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-white/10 cursor-pointer"
                 >
                   <span>Configurações do servidor</span>
                   <GearIcon className="h-3.5 w-3.5" />
@@ -546,7 +546,7 @@ export function ServerSidebar(): React.JSX.Element {
                     setDropdownOpen(false)
                     setLeaveServerOpen(true)
                   }}
-                  className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/15 cursor-pointer"
+                  className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-red-400 hover:bg-red-500/15 cursor-pointer"
                 >
                   <span>Sair do servidor</span>
                   <TrashIcon className="h-3.5 w-3.5" />
@@ -558,7 +558,7 @@ export function ServerSidebar(): React.JSX.Element {
                     setDropdownOpen(false)
                     setDeleteServerOpen(true)
                   }}
-                  className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/15 cursor-pointer"
+                  className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-red-400 hover:bg-red-500/15 cursor-pointer"
                 >
                   <span>Deletar servidor</span>
                   <TrashIcon className="h-3.5 w-3.5" />
@@ -573,9 +573,7 @@ export function ServerSidebar(): React.JSX.Element {
           {/* Canais de texto */}
           <div>
             <div className="flex items-center justify-between px-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                Canais de texto
-              </p>
+              <p className="text-ds-sm font-medium text-gray-400">Canais de texto</p>
               {canManageChannels && (
                 <button
                   onClick={() => {
@@ -596,7 +594,7 @@ export function ServerSidebar(): React.JSX.Element {
             </div>
             <div className="mt-1 flex flex-col gap-0.5" onDragLeave={clearDropOnLeave}>
               {textChannels.length === 0 && (
-                <p className="px-2 text-xs text-gray-500 italic">Nenhum canal ainda.</p>
+                <p className="px-2 text-ds-sm text-gray-500 italic">Nenhum canal ainda.</p>
               )}
               {textChannels.map((ch, index) => {
                 const active = ch.id === channelId
@@ -615,7 +613,7 @@ export function ServerSidebar(): React.JSX.Element {
                       onClick={() => navigate(`/servers/${currentServer?.id}/channels/${ch.id}`)}
                       onContextMenu={channelContextMenu(ch)}
                       title={ch.name}
-                      className={`flex w-full items-start gap-2 rounded-lg py-1.5 pl-2.5 text-left text-sm font-medium transition-all cursor-pointer ${
+                      className={`flex w-full items-start gap-2 rounded-lg py-1 pl-2.5 text-left text-ds-md font-medium transition-all cursor-pointer ${
                         canOpenChannelMenu(ch) ? 'pr-7' : 'pr-2.5'
                       } ${
                         active
@@ -623,11 +621,11 @@ export function ServerSidebar(): React.JSX.Element {
                           : 'text-gray-400 hover:bg-white/6 hover:text-gray-200'
                       }`}
                     >
-                      <span className="flex h-5 shrink-0 items-center text-base leading-none text-gray-500">
+                      <span className="flex h-6 shrink-0 items-center text-xl leading-none text-gray-500">
                         #
                       </span>
                       {/* Nome inteiro, quebrando linha; a estrela segue o texto. */}
-                      <span className={`min-w-0 flex-1 leading-5 ${WRAP_NAME}`}>
+                      <span className={`min-w-0 flex-1 leading-6 ${WRAP_NAME}`}>
                         {ch.name}
                         {access.isPrivate(ch.id) && (
                           <span
@@ -649,7 +647,7 @@ export function ServerSidebar(): React.JSX.Element {
                         )}
                       </span>
                       {unread > 0 && (
-                        <span className="flex h-5 shrink-0 items-center">
+                        <span className="flex h-6 shrink-0 items-center">
                           <span className="rounded-full bg-red-500 px-1.5 py-0.2 text-[10px] font-bold text-white">
                             {unread > 99 ? '99+' : unread}
                           </span>
@@ -667,9 +665,7 @@ export function ServerSidebar(): React.JSX.Element {
           {/* Canais de voz */}
           <div>
             <div className="flex items-center justify-between px-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                Canais de voz
-              </p>
+              <p className="text-ds-sm font-medium text-gray-400">Canais de voz</p>
               {canManageChannels && (
                 <button
                   onClick={() => {
@@ -690,7 +686,7 @@ export function ServerSidebar(): React.JSX.Element {
             </div>
             <div className="mt-1 flex flex-col gap-0.5" onDragLeave={clearDropOnLeave}>
               {voiceChannels.length === 0 && (
-                <p className="px-2 text-xs text-gray-500 italic">Nenhum canal de voz ainda.</p>
+                <p className="px-2 text-ds-sm text-gray-500 italic">Nenhum canal de voz ainda.</p>
               )}
               {voiceChannels.map((ch, index) => {
                 const callState = serverCalls[ch.id]
@@ -748,7 +744,7 @@ export function ServerSidebar(): React.JSX.Element {
                               ? 'Conectar ao canal de voz'
                               : 'Você não tem permissão para entrar neste canal'
                         }
-                        className={`flex w-full items-start gap-2 rounded-lg py-1.5 pl-2.5 text-left text-sm font-medium transition-all cursor-pointer ${
+                        className={`flex w-full items-start gap-2 rounded-lg py-1 pl-2.5 text-left text-ds-md font-medium transition-all cursor-pointer ${
                           access.canInChannel(ch.id, Perm.CONNECT) ? '' : 'opacity-60'
                         } ${
                           // Sem gente, o "•••" fica sempre à direita: guarda o espaço dele.
@@ -762,16 +758,16 @@ export function ServerSidebar(): React.JSX.Element {
                         }`}
                       >
                         {/* Verde só nos canais com gente (pode ser em vários ao mesmo tempo). */}
-                        <span className="flex h-5 shrink-0 items-center">
+                        <span className="flex h-6 shrink-0 items-center">
                           <VolumeIcon
-                            className={`h-4 w-4 transition-colors ${
+                            className={`h-5 w-5 transition-colors ${
                               participants.length > 0 ? 'text-[#23a55a]' : 'text-gray-500'
                             }`}
                           />
                         </span>
                         {/* Nome inteiro, quebrando linha; tempo e contagem ficam na
                             altura da primeira linha. */}
-                        <span title={ch.name} className={`min-w-0 flex-1 leading-5 ${WRAP_NAME}`}>
+                        <span title={ch.name} className={`min-w-0 flex-1 leading-6 ${WRAP_NAME}`}>
                           {ch.name}
                           {(access.isPrivate(ch.id) ||
                             !access.canInChannel(ch.id, Perm.CONNECT)) && (
@@ -789,13 +785,13 @@ export function ServerSidebar(): React.JSX.Element {
                           )}
                         </span>
                         {participants.length > 0 && callState?.call?.started_at && (
-                          <span className="flex h-5 shrink-0 items-center">
+                          <span className="flex h-6 shrink-0 items-center">
                             <VoiceChannelTimer startedAt={callState.call.started_at} />
                           </span>
                         )}
                         {participants.length > 0 && (
                           <span
-                            className={`flex h-5 shrink-0 items-center transition-opacity ${
+                            className={`flex h-6 shrink-0 items-center transition-opacity ${
                               canOpenChannelMenu(ch) ? 'group-hover/voicech:opacity-0' : ''
                             }`}
                           >
@@ -840,14 +836,14 @@ export function ServerSidebar(): React.JSX.Element {
                                 userId={p.user_id}
                                 name={name}
                                 avatarUrl={p.avatar_url}
-                                size={20}
+                                size={24}
                                 className={`rounded-full transition-shadow ${
                                   talking ? 'ring-2 ring-[#23a55a]' : ''
                                 }`}
                               />
                               <span
                                 title={name}
-                                className={`min-w-0 truncate text-xs transition-colors group-hover/voiceuser:text-white ${
+                                className={`min-w-0 truncate text-ds-sm transition-colors group-hover/voiceuser:text-white ${
                                   isMe ? 'font-bold text-white' : 'font-medium text-gray-300'
                                 }`}
                               >
@@ -898,7 +894,7 @@ export function ServerSidebar(): React.JSX.Element {
         <form onSubmit={handleSaveChannel} className="space-y-4">
           <div>
             <label
-              className="mb-1 block text-xs font-semibold text-gray-400"
+              className="mb-1 block text-ds-sm font-medium text-gray-400"
               htmlFor="channel-name"
             >
               Nome do canal
@@ -914,12 +910,12 @@ export function ServerSidebar(): React.JSX.Element {
           </div>
           {!editingChannel && (
             <div>
-              <p className="mb-1 block text-xs font-semibold text-gray-400">Tipo do canal</p>
+              <p className="mb-1 block text-ds-sm font-medium text-gray-400">Tipo do canal</p>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setChannelType('text')}
-                  className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
+                  className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 py-2 text-ds-md font-medium transition-colors ${
                     channelType === 'text'
                       ? 'border-violet-500 bg-violet-600/20 text-white'
                       : 'border-white/10 text-gray-400 hover:bg-white/5'
@@ -931,7 +927,7 @@ export function ServerSidebar(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => setChannelType('voice')}
-                  className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
+                  className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 py-2 text-ds-md font-medium transition-colors ${
                     channelType === 'voice'
                       ? 'border-[#23a55a] bg-[#23a55a]/15 text-white'
                       : 'border-white/10 text-gray-400 hover:bg-white/5'
@@ -947,8 +943,8 @@ export function ServerSidebar(): React.JSX.Element {
             <div className="rounded-lg border border-white/8 bg-white/3 p-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-white">Canal privado</p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-ds-md font-medium text-white">Canal privado</p>
+                  <p className="text-ds-sm text-gray-400">
                     {channelType === 'voice'
                       ? 'Só os cargos escolhidos (e você) veem e entram neste canal.'
                       : 'Só os cargos escolhidos (e você) veem este canal.'}
@@ -962,9 +958,9 @@ export function ServerSidebar(): React.JSX.Element {
               </div>
               {channelPrivate && (
                 <div className="mt-3 border-t border-white/8 pt-3">
-                  <p className="mb-2 text-xs font-semibold text-gray-400">Quem pode ver</p>
+                  <p className="mb-2 text-ds-sm font-medium text-gray-400">Quem pode ver</p>
                   {roles.filter((r) => !r.is_default).length === 0 ? (
-                    <p className="text-xs text-gray-500">
+                    <p className="text-ds-sm text-gray-500">
                       Nenhum cargo ainda: só você e o dono vão ver. Crie cargos em Configurações do
                       servidor.
                     </p>
@@ -974,7 +970,7 @@ export function ServerSidebar(): React.JSX.Element {
                         .filter((r) => !r.is_default)
                         .map((r) => (
                           <li key={r.id}>
-                            <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm text-gray-200 hover:bg-white/5">
+                            <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-ds-md text-gray-200 hover:bg-white/5">
                               <input
                                 type="checkbox"
                                 checked={channelRoleIds.includes(r.id)}
@@ -1025,7 +1021,7 @@ export function ServerSidebar(): React.JSX.Element {
         title="Deletar canal"
         onClose={() => setDeletingChannel(null)}
       >
-        <p className="text-sm text-gray-300">
+        <p className="text-ds-md text-gray-300">
           Tem certeza que deseja deletar o canal{' '}
           <b className="text-white">#{deletingChannel?.name}</b>? Esta ação não pode ser desfeita e
           apagará todas as mensagens do canal.
@@ -1050,7 +1046,7 @@ export function ServerSidebar(): React.JSX.Element {
         title="Deletar servidor"
         onClose={() => setDeleteServerOpen(false)}
       >
-        <p className="text-sm text-gray-300">
+        <p className="text-ds-md text-gray-300">
           Tem certeza que deseja deletar o servidor <b className="text-white">{serverName}</b>?
           Todos os canais e mensagens serão apagados e todos os membros serão removidos. Esta ação
           não pode ser desfeita.

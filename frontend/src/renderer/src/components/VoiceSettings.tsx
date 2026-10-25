@@ -16,7 +16,7 @@ function DeviceSelect({
 }): React.JSX.Element {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-bold uppercase tracking-wide text-gray-400">{label}</span>
+      <span className="text-ds-sm font-medium text-gray-400">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -42,7 +42,7 @@ function VoiceSettings(): React.JSX.Element {
 
   return (
     <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
-      <p className="text-sm font-semibold text-white">Voz</p>
+      <p className="text-ds-md font-medium text-white">Voz</p>
       <DeviceSelect
         label="Microfone"
         value={inputDeviceId}
