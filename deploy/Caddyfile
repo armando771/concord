@@ -1,11 +1,22 @@
 # /etc/caddy/Caddyfile da VPS — cópia versionada. O deploy (scripts/deploy-vps.sh)
-# NÃO envia este arquivo: aplicar uma mudança aqui é um passo manual, e a
-# primeira aplicação derruba a sinalização das chamadas uma vez (veja
-# docs/HOSPEDAGEM.md, seção "Caddyfile"). Requer Caddy 2.7 ou mais novo.
+# NÃO envia este arquivo.
 #
-# Troque 1-2-3-4.sslip.io pelo endereço do PUBLIC_URL e salinha.exemplo.com
-# pelo da página de download. As portas são as do /opt/concord/.env: 8090 é o
-# PORT do backend e 7880 o LIVEKIT_PORT.
+# ┌─ COMO APLICAR (leia antes) ───────────────────────────────────────────────┐
+# │ 1. Troque 1-2-3-4.sslip.io pelo host do PUBLIC_URL e salinha.exemplo.com  │
+# │    pelo da página de download (ou apague esse bloco). As portas são as do │
+# │    /opt/concord/.env: 8090 = PORT do backend, 7880 = LIVEKIT_PORT.        │
+# │ 2. Aplique com ninguém em chamada: o PRIMEIRO reload com este arquivo     │
+# │    fecha todos os WebSockets uma vez (chat reconecta; chamadas caem).     │
+# │ 3. Use scripts/apply-caddyfile.sh root@IP <arquivo>: valida, confere que  │
+# │    ninguém está em chamada, guarda backup, recarrega, testa /rtc e a API  │
+# │    e volta o backup se algo falhar.                                       │
+# │ Caddy testado: 2.10.x (use 2.10 ou mais novo; 2.7 é o mínimo do           │
+# │ stream_close_delay, mas a repetição de POST só foi testada no 2.10).      │
+# └───────────────────────────────────────────────────────────────────────────┘
+#
+# Sem health check ativo de propósito: o backend só abre a porta quando está
+# pronto e fecha antes de desligar, então "conectou" já quer dizer "pronto" e
+# o lb_try abaixo segura as requisições durante o reinício.
 
 # Sinalização do LiveKit (/rtc, /rtc/v1, /rtc/validate…) direto para o
 # LiveKit, sem passar pelo backend: reiniciar o backend não corta a
@@ -23,7 +34,18 @@
 	}
 }
 
-# Backend (API, WebSocket do chat, /updates).
+# Atualizações do app (instaladores de ~120 MB, .sig, latest*.yml) direto do
+# disco: um download em andamento não segura o reinício do backend e não cai
+# no deploy. Mesmo conteúdo que o backend serviria (sem listagem de pasta).
+(salinha_updates) {
+	handle /updates/* {
+		uri strip_prefix /updates
+		root * /opt/concord/updates
+		file_server
+	}
+}
+
+# Backend (API, WebSocket do chat).
 (salinha_backend) {
 	reverse_proxy 127.0.0.1:8090 {
 		# Deploy: enquanto o backend reinicia (porta fechada por um instante)
@@ -31,12 +53,6 @@
 		# POST e uploads também (só repete o que nem chegou a conectar).
 		lb_try_duration 15s
 		lb_try_interval 100ms
-		# Só manda tráfego com o backend pronto (banco no ar e chamadas
-		# recarregadas). Duas falhas seguidas para não oscilar.
-		health_uri /healthz
-		health_interval 500ms
-		health_timeout 2s
-		health_fails 2
 		stream_close_delay 12h
 		# Para repetir um POST o Caddy precisa ter o corpo guardado: 1 MB
 		# cobre toda a API (JSON). Upload de arquivo maior que isso que comece
@@ -55,6 +71,7 @@
 # Endereço do app (PUBLIC_URL).
 1-2-3-4.sslip.io {
 	import salinha_rtc
+	import salinha_updates
 	handle {
 		import salinha_backend
 	}
@@ -63,9 +80,7 @@
 # Página de download (site/), opcional.
 salinha.exemplo.com {
 	encode zstd gzip
-	handle /updates/* {
-		import salinha_backend
-	}
+	import salinha_updates
 	handle {
 		root * /opt/concord/site
 		file_server

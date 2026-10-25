@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Aplica um Caddyfile na VPS com segurança (ver o cabeçalho de deploy/Caddyfile).
+#
+#   scripts/apply-caddyfile.sh root@IP caminho/do/Caddyfile
+#   scripts/apply-caddyfile.sh --force root@IP caminho/do/Caddyfile   # mesmo com gente em chamada
+#
+# Na VPS, na ordem: valida o arquivo com o caddy; confere que o backend está no
+# ar (/healthz); confere que ninguém está em chamada (o primeiro reload com o
+# Caddyfile novo fecha todos os WebSockets); guarda backup do atual; instala e
+# recarrega; testa /rtc/validate (401 = LiveKit), /healthz e /updates pelo
+# endereço público. Se o reload ou um teste falhar, volta o backup.
+set -euo pipefail
+
+FORCE=0
+ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    --force) FORCE=1 ;;
+    -*) echo "opção desconhecida: $arg" >&2; exit 1 ;;
+    *) ARGS+=("$arg") ;;
+  esac
+done
+if [[ ${#ARGS[@]} -ne 2 || ! -f "${ARGS[1]}" ]]; then
+  echo "uso: $0 [--force] usuario@servidor Caddyfile" >&2
+  exit 1
+fi
+HOST="${ARGS[0]}"
+FILE="${ARGS[1]}"
+
+ssh "$HOST" 'cat > /etc/caddy/Caddyfile.new' < "$FILE"
+ssh "$HOST" bash -s -- "$FORCE" <<'REMOTE'
+set -euo pipefail
+FORCE="$1"
+CADDY_DIR="${CADDY_DIR:-/etc/caddy}"
+CONCORD_DIR="${CONCORD_DIR:-/opt/concord}"
+NEW="$CADDY_DIR/Caddyfile.new"
+CUR="$CADDY_DIR/Caddyfile"
+
+env_value() {
+  sed -n -E "s/^(export[[:space:]]+)?$1=//p" "$CONCORD_DIR/.env" | tail -n 1 |
+    sed -E 's/[[:space:]]+#.*$//' | tr -d "\"' \r"
+}
+fail() { echo "ERRO: $*" >&2; exit 1; }
+
+if ! out=$(caddy validate --config "$NEW" --adapter caddyfile 2>&1); then
+  echo "$out" | tail -n 5 >&2
+  rm -f "$NEW"
+  fail "Caddyfile inválido (nada mudou)"
+fi
+
+port=$(env_value PORT)
+curl -fs -o /dev/null "http://127.0.0.1:${port:-8080}/healthz" ||
+  { rm -f "$NEW"; fail "backend sem /healthz em 127.0.0.1:${port:-8080} — faça o deploy do backend antes"; }
+
+in_call=$(docker exec concord-postgres psql -U concord-user -d concord -tAc \
+  "SELECT count(*) FROM call_participants p JOIN calls c ON c.id = p.call_id WHERE p.left_at IS NULL AND c.status = 'active'" | tr -d '[:space:]')
+if [[ "$in_call" != 0 && "$FORCE" != 1 ]]; then
+  rm -f "$NEW"
+  fail "$in_call pessoa(s) em chamada agora — o reload derrubaria a chamada delas. Tente depois (ou --force)."
+fi
+
+backup="$CUR.bak-$(date +%Y%m%d-%H%M%S)"
+cp -p "$CUR" "$backup"
+install -m 644 "$NEW" "$CUR"
+rm -f "$NEW"
+
+rollback() {
+  echo "ERRO: $* — voltando $backup" >&2
+  cp -p "$backup" "$CUR"
+  systemctl reload caddy || systemctl restart caddy
+  exit 1
+}
+systemctl reload caddy || rollback "reload do caddy falhou"
+
+public=$(env_value PUBLIC_URL)
+public="${public%/}"
+[[ -n "$public" ]] || rollback "PUBLIC_URL vazio no $CONCORD_DIR/.env"
+ok=0
+for _ in $(seq 1 20); do
+  rtc=$(curl -s -o /dev/null -w '%{http_code}' "$public/rtc/validate" || true)
+  if [[ "$rtc" == 401 ]] && curl -fs "$public/healthz" | grep -q '"ok"'; then ok=1; break; fi
+  sleep 0.5
+done
+[[ "$ok" == 1 ]] || rollback "$public não respondeu /rtc/validate=401 e /healthz=ok"
+if [[ -f "$CONCORD_DIR/updates/latest.yml" ]]; then
+  curl -fs -o /dev/null "$public/updates/latest.yml" || rollback "$public/updates/latest.yml não abriu"
+fi
+echo "Caddyfile aplicado (backup em $backup)."
+REMOTE
