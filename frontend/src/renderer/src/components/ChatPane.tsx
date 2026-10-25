@@ -4,6 +4,9 @@ import { useChatStore } from '../store/chatStore'
 import type { Message } from '../api/messages'
 import { showToast } from '../store/toastStore'
 import SystemMessage from './SystemMessage'
+import Avatar from './Avatar'
+import { useUserLook } from '../store/profileStore'
+import { profileCardHandler } from '../store/profileCardStore'
 import { applyMention, mentionQuery, mentionsUser, splitMentions } from '../lib/mentions'
 import { filterEmoteCategories, QUICK_EMOTES } from '../lib/emotes'
 import { messagePreview } from '../lib/polls'
@@ -137,9 +140,12 @@ function MessageItem({
   const me = useAuthStore((s) => s.user)
   const isMine = message.author_id === me?.id
   const author = message.author
-  const name =
-    author?.display_name ?? author?.username ?? (isMine ? me?.display_name : 'Desconhecido')
-  const initial = (name ?? '?').charAt(0).toUpperCase()
+  const look = useUserLook(message.author_id, {
+    name: author?.display_name ?? author?.username ?? (isMine ? me?.display_name : null) ?? 'Desconhecido',
+    avatarUrl: author?.avatar_url
+  })
+  const name = look.name
+  const openProfile = profileCardHandler(message.author_id, name, author?.username, 'right')
   const [hover, setHover] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
 
@@ -186,12 +192,23 @@ function MessageItem({
       )}
 
       <div className="flex gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-600 text-sm font-bold text-white shadow-md">
-          {initial}
-        </div>
+        <button
+          type="button"
+          onClick={openProfile}
+          aria-label={`Perfil de ${name}`}
+          className="h-9 shrink-0 cursor-pointer self-start rounded-full"
+        >
+          <Avatar userId={message.author_id} name={name} avatarUrl={look.avatarUrl} size={36} />
+        </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
-            <span className="text-sm font-semibold text-white">{name}</span>
+            <button
+              type="button"
+              onClick={openProfile}
+              className="cursor-pointer text-sm font-semibold text-white hover:underline"
+            >
+              {name}
+            </button>
             <span className="text-[10px] text-gray-500">{formatTime(message.created_at)}</span>
           </div>
           {message.content && (
