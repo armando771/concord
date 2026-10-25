@@ -833,6 +833,38 @@ e o Maestro responde "fora do ar".
   com frequência e quebra versões antigas). O script também recusa seguir sem
   `ffmpeg`.
 
+**Na VPS**, o `scripts/deploy-vps.sh` já cuida disso a cada deploy, antes de
+reiniciar o `concord-server`: instala o `ffmpeg` (apt) se faltar, baixa o binário
+oficial do yt-dlp para `/usr/local/bin/yt-dlp` se faltar (com `python3`) e
+instala o timer de sistema `concord-ytdlp-update.timer`, que roda `yt-dlp -U` todo
+dia. Sem ffmpeg o deploy falha; o timer, se der erro, só avisa. Para fazer na mão
+(como root):
+
+```bash
+apt-get update && apt-get install -y ffmpeg python3
+curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+chmod a+rx /usr/local/bin/yt-dlp
+cat >/etc/systemd/system/concord-ytdlp-update.service <<'EOF'
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/yt-dlp -U
+EOF
+cat >/etc/systemd/system/concord-ytdlp-update.timer <<'EOF'
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+systemctl daemon-reload && systemctl enable --now concord-ytdlp-update.timer
+systemctl restart concord-server
+```
+
+O backend só procura `ffmpeg` e `yt-dlp` ao subir: depois de instalar na mão,
+**reinicie o `concord-server`** (último comando acima) para o Maestro sair do
+"fora do ar".
+
 ### Variáveis (`backend/.env`)
 
 Todas opcionais; os padrões e comentários estão no `backend/.env.example`.
