@@ -149,7 +149,7 @@ function ParticipantTile({
           aria-hidden="true"
           className="level-anim pointer-events-none absolute inset-0 z-[1] rounded-2xl"
           style={{
-            boxShadow: `inset 0 0 40px 8px ${levelFx.tier.color}, inset 0 0 0 2px ${levelFx.tier.color}`,
+            boxShadow: `inset 0 0 ${Math.round(24 + 32 * levelFx.glow)}px ${Math.round(4 + 8 * levelFx.glow)}px ${levelFx.tier.color}, inset 0 0 0 2px ${levelFx.tier.color}`,
             animation: 'level-tile-glow 1.6s ease-in-out 2 both'
           }}
         />

@@ -85,6 +85,32 @@ func TestMessageInPrivateChannelOnlyReachesViewers(t *testing.T) {
 	}
 }
 
+// message:update (edição) segue as salas do message:create: canal privado só
+// para quem vê, DM para a sala de cada participante.
+func TestMessageUpdateFollowsCreateRooms(t *testing.T) {
+	h, clients := hubWithServerMembers(visibilitySnapshot(), "dono", "vip", "ana")
+	for id, c := range clients {
+		h.Subscribe(c, "user:"+id)
+		events(c)
+	}
+
+	secret, general, dm := "segredo", "geral", "dm1"
+	h.PublishMessageUpdate(message.UpdateEvent{ServerID: "s1", ChannelID: &secret})
+	h.PublishMessageUpdate(message.UpdateEvent{ServerID: "s1", ChannelID: &general})
+	h.PublishMessageUpdate(message.UpdateEvent{ConversationID: &dm, UserIDs: []string{"ana", "vip"}})
+
+	want := map[string][]string{
+		"dono": {"message:update", "message:update"},
+		"vip":  {"message:update", "message:update", "message:update"},
+		"ana":  {"message:update", "message:update"}, // geral e a DM
+	}
+	for user, c := range clients {
+		if got := events(c); !reflect.DeepEqual(got, want[user]) {
+			t.Errorf("%s recebeu %v, want %v", user, got, want[user])
+		}
+	}
+}
+
 func TestChannelEventsOnlyReachViewers(t *testing.T) {
 	h, clients := hubWithServerMembers(visibilitySnapshot(), "dono", "vip", "ana")
 	for _, c := range clients {
