@@ -207,7 +207,7 @@ function OverlayApp(): React.JSX.Element | null {
         ref={boxRef}
         // w-max: a largura não depende da janela (que é do tamanho da caixa).
         className={`absolute w-max rounded-xl border-2 p-2 ${
-          editing ? 'cursor-move border-dashed border-[#23a55a] bg-black/20' : 'border-transparent'
+          editing ? 'cursor-move border-dashed border-[#5865f2] bg-black/20' : 'border-transparent'
         }`}
         // Escondida até medir: sem o tamanho, não dá para centralizar nem encaixar.
         style={{
@@ -237,7 +237,7 @@ function OverlayApp(): React.JSX.Element | null {
           <>
             <div
               aria-label="Redimensionar"
-              className="absolute -bottom-2 -right-2 h-4 w-4 cursor-nwse-resize rounded-sm border-2 border-[#23a55a] bg-black/70"
+              className="absolute -bottom-2 -right-2 h-4 w-4 cursor-nwse-resize rounded-sm border-2 border-[#5865f2] bg-black/70"
               onPointerDown={(e) => begin('resize', e)}
             />
             <div

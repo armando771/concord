@@ -74,7 +74,7 @@ function OverlayShortcutField({ disabled }: { disabled: boolean }): React.JSX.El
           onBlur={() => setRecording(false)}
           className={`min-w-[9rem] shrink-0 cursor-pointer select-none rounded-lg border px-3 py-2 text-center text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-violet-400 ${
             recording
-              ? 'border-[#23a55a] bg-[#23a55a]/15 text-white'
+              ? 'border-[#5865f2] bg-[#5865f2]/15 text-white'
               : 'border-white/10 bg-white/10 text-white hover:bg-white/15'
           } ${disabled ? 'pointer-events-none opacity-50' : ''}`}
         >
