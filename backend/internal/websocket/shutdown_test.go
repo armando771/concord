@@ -30,10 +30,11 @@ func connectClient(t *testing.T, hub *Hub, userID string) *websocket.Conn {
 			send:   make(chan []byte, 32),
 			rooms:  make(map[string]struct{}),
 		}
-		hub.Register(client)
-		close(registered)
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
+		client.cancel = cancel
+		hub.Register(client)
+		close(registered)
 		go client.writePump(ctx)
 		client.readPump(ctx)
 	}))
@@ -124,5 +125,32 @@ func TestShutdownDoesNotTreatUsersAsGone(t *testing.T) {
 	case data := <-offline:
 		t.Fatalf("presença offline publicada no desligamento: %s", data)
 	default:
+	}
+}
+
+// Um cliente que não responde ao fechamento (notebook que dormiu) não pode
+// segurar o reinício: o prazo do ctx manda.
+func TestShutdownDoesNotWaitForDeadClient(t *testing.T) {
+	hub := NewHub()
+	_ = connectClient(t, hub, "ana") // nunca lê: não confirma o fechamento
+
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	begin := time.Now()
+	hub.Shutdown(ctx)
+	if waited := time.Since(begin); waited > 600*time.Millisecond {
+		t.Fatalf("Shutdown esperou %v pelo cliente morto", waited)
+	}
+}
+
+// Conexão que chega depois do Shutdown não entra no hub (ficaria sem o 1012).
+func TestRegisterRefusedWhileShuttingDown(t *testing.T) {
+	hub := NewHub()
+	hub.Shutdown(context.Background())
+	if hub.Register(&Client{hub: hub, userID: "ana", rooms: map[string]struct{}{}}) {
+		t.Fatal("Register aceitou cliente durante o desligamento")
+	}
+	if hub.IsOnline("ana") {
+		t.Fatal("cliente recusado ficou online")
 	}
 }

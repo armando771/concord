@@ -46,9 +46,10 @@ func connectWithRouter(t *testing.T, router CallRouter, userID string) *websocke
 			rooms:      make(map[string]struct{}),
 			callRouter: router,
 		}
-		hub.Register(client)
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
+		client.cancel = cancel
+		hub.Register(client)
 		go client.writePump(ctx)
 		client.readPump(ctx)
 	}))

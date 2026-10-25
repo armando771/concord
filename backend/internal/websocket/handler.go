@@ -93,13 +93,11 @@ func (h *Handler) ServeWS(c *gin.Context) {
 	if err != nil {
 		return
 	}
-	// Conexão que chegou enquanto o servidor desligava: manda para o processo novo.
-	if h.hub.ShuttingDown() {
-		_ = conn.Close(CloseServiceRestart, closeRestartReason)
-		return
-	}
+	ctx, cancel := context.WithCancel(c.Request.Context())
+	defer cancel()
 
 	client := &Client{
+		cancel:     cancel,
 		hub:        h.hub,
 		conn:       conn,
 		userID:     claims.UserID,
@@ -109,10 +107,12 @@ func (h *Handler) ServeWS(c *gin.Context) {
 		callRouter: h.callRouter,
 	}
 
-	h.hub.Register(client)
-
-	ctx, cancel := context.WithCancel(c.Request.Context())
-	defer cancel()
+	// Conexão que chegou enquanto o servidor desligava: manda para o processo
+	// novo (a checagem e o registro são atômicos no hub).
+	if !h.hub.Register(client) {
+		_ = conn.Close(CloseServiceRestart, closeRestartReason)
+		return
+	}
 
 	go client.writePump(ctx)
 	client.readPump(ctx)

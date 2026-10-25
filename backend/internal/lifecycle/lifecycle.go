@@ -14,7 +14,9 @@ import (
 // Run serve srv em ln até ctx acabar (SIGTERM). Depois, na ordem:
 //  1. o listener fecha: conexões novas esperam no Caddy pelo processo novo;
 //  2. closeStreams fecha as conexões sequestradas (WebSockets do chat);
-//  3. espera as requisições em andamento (uploads inclusive) até timeout.
+//  3. espera as requisições em andamento (uploads inclusive) até timeout e
+//     então fecha à força o que sobrou — o processo novo só sobe depois que
+//     este sai, então o prazo é o tempo máximo sem servidor.
 //
 // Devolve o erro do Serve (ex.: porta ocupada) ou o do desligamento
 // (context.DeadlineExceeded se algo não terminou a tempo).
@@ -46,6 +48,10 @@ func Run(ctx context.Context, srv *http.Server, ln net.Listener, timeout time.Du
 	}
 
 	err := <-shutdown
+	if err != nil {
+		// Prazo esgotado: corta as conexões que ainda estavam ativas.
+		_ = srv.Close()
+	}
 	if serveErr := <-served; serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) && err == nil {
 		err = serveErr
 	}

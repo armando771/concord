@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -58,9 +59,28 @@ func findMigrationsDir() string {
 	return "migrations"
 }
 
-// Tempo para terminar requisições em andamento (uploads inclusive) ao receber
-// SIGTERM. O TimeoutStopSec do systemd precisa ser maior (docs/HOSPEDAGEM.md).
-const shutdownTimeout = 10 * time.Second
+// Desligamento (SIGTERM): o processo novo só sobe depois que este sai, então
+// cada espera aqui é tempo sem servidor.
+const (
+	// Requisições comuns em andamento (API, uploads) têm até isso para acabar;
+	// o que sobrar é cortado. O TimeoutStopSec do systemd é bem maior.
+	shutdownTimeout = 3 * time.Second
+	// O 1012 sai na hora; isso é só o quanto se espera o "ok" de cada app
+	// (um notebook que dormiu nunca responde).
+	wsCloseTimeout = 500 * time.Millisecond
+)
+
+// isLongDownload: respostas que o desligamento corta na hora em vez de
+// esperar (download de atualização, vídeo/áudio do chat). Quem baixa retoma
+// com Range.
+func isLongDownload(r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	p := r.URL.Path
+	return strings.HasPrefix(p, "/updates/") ||
+		(strings.HasPrefix(p, "/api/media/") && p != "/api/media/token")
+}
 
 func main() {
 	loadEnv()
@@ -91,6 +111,17 @@ func main() {
 	router := gin.New()
 	// O Caddy consulta /healthz a cada segundo: fora do log.
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{Formatter: httplog.Formatter, SkipPaths: []string{"/healthz"}}), gin.Recovery())
+
+	// Downloads longos não seguram o desligamento (ver isLongDownload).
+	streams := lifecycle.NewStreams()
+	streamsMiddleware := streams.Gin()
+	router.Use(func(c *gin.Context) {
+		if isLongDownload(c.Request) {
+			streamsMiddleware(c)
+			return
+		}
+		c.Next()
+	})
 
 	// Pronto só depois de recarregar as chamadas (ver SetReady abaixo).
 	readiness := health.New(db.Ping)
@@ -259,15 +290,18 @@ func main() {
 	err = lifecycle.Run(ctx, srv, ln, shutdownTimeout, func(ctx context.Context) {
 		stop() // um segundo SIGTERM/Ctrl+C mata na hora
 		readiness.SetStopping()
+		streams.Interrupt()
 		// Não tira ninguém das chamadas: o processo novo as recarrega do banco
 		// e os clientes reconectam com o código 1012.
-		hub.Shutdown(ctx)
+		wsCtx, cancel := context.WithTimeout(ctx, wsCloseTimeout)
+		defer cancel()
+		hub.Shutdown(wsCtx)
 	})
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		log.Fatal(err)
 	}
 	if err != nil {
-		log.Printf("desligamento: requisições ainda em andamento após %s", shutdownTimeout)
+		log.Printf("desligamento: requisições ainda em andamento após %s foram cortadas", shutdownTimeout)
 	}
 	log.Println("servidor desligado")
 }

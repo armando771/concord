@@ -46,8 +46,15 @@ func (h *Hub) SetDisconnectHandler(fn func(userID string)) {
 	h.mu.Unlock()
 }
 
-func (h *Hub) Register(client *Client) {
+// Register põe a conexão no hub. Devolve false (e não registra) se o
+// servidor já está desligando: a conexão chegou depois do Shutdown fechar as
+// outras, e quem a abriu deve ir para o processo novo.
+func (h *Hub) Register(client *Client) bool {
 	h.mu.Lock()
+	if h.shuttingDown {
+		h.mu.Unlock()
+		return false
+	}
 	h.clients[client] = struct{}{}
 	h.presence[client.userID]++
 	wasOffline := h.presence[client.userID] == 1
@@ -59,6 +66,7 @@ func (h *Hub) Register(client *Client) {
 			"online":  true,
 		}))
 	}
+	return true
 }
 
 func (h *Hub) Unregister(client *Client) {
@@ -96,8 +104,12 @@ func (h *Hub) Shutdown(ctx context.Context) {
 	h.mu.Lock()
 	h.shuttingDown = true
 	conns := make([]*websocket.Conn, 0, len(h.clients))
+	cancels := make([]context.CancelFunc, 0, len(h.clients))
 	for client := range h.clients {
 		conns = append(conns, client.conn)
+		if client.cancel != nil {
+			cancels = append(cancels, client.cancel)
+		}
 	}
 	h.mu.Unlock()
 
@@ -106,7 +118,7 @@ func (h *Hub) Shutdown(ctx context.Context) {
 		wg.Add(1)
 		go func(conn *websocket.Conn) {
 			defer wg.Done()
-			// Close espera o "ok" do cliente (até 5 s); quem não responde cai.
+			// Close espera o "ok" do cliente (até 5 s, ou até o prazo do ctx).
 			_ = conn.Close(CloseServiceRestart, closeRestartReason)
 		}(conn)
 	}
@@ -118,8 +130,10 @@ func (h *Hub) Shutdown(ctx context.Context) {
 	select {
 	case <-done:
 	case <-ctx.Done():
-		for _, conn := range conns {
-			_ = conn.CloseNow()
+		// O 1012 já foi escrito; quem não confirmou (cliente parado) é
+		// derrubado: cancelar a leitura fecha a conexão e solta o Close.
+		for _, cancel := range cancels {
+			cancel()
 		}
 	}
 }
