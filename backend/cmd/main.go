@@ -240,7 +240,9 @@ func main() {
 	go levelService.Run(context.Background())
 
 	// WebSocket handler
-	wsHandler := websocket.WsHandler(hub, authService, permissionService, serverService, conversationService, callService)
+	// "Fulano está digitando…": mesma regra de escrita das mensagens.
+	typing := websocket.NewTyping(hub, roomAccess, userService.FindByID)
+	wsHandler := websocket.WsHandler(hub, authService, permissionService, serverService, conversationService, callService, typing)
 	hub.SetDisconnectHandler(callService.HandleDisconnect)
 
 	// Auth middleware

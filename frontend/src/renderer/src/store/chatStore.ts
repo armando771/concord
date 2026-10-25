@@ -44,6 +44,7 @@ import { useFriendStore } from './friendStore'
 import { useCallStore } from './callStore'
 import { useLevelStore } from './levelStore'
 import { useSoundboardStore } from './soundboardStore'
+import { useTypingStore } from './typingStore'
 import { showToast } from './toastStore'
 import { router } from '../router'
 import { MESSAGE_LIMIT } from '../api/messages'
@@ -157,6 +158,8 @@ const client = new WsClient({
   getUserId: () => useAuthStore.getState().user?.id ?? null,
   onEvent: (event) => useChatStore.getState().handleWsEvent(event),
   onOpen: () => {
+    // Avisos de digitando de antes da queda podem nunca receber o stop.
+    useTypingStore.getState().reset()
     useCallStore.getState().handleWsReconnect()
     // Reconexão costuma ser deploy: checa atualização (o aviso app:update é o
     // caminho principal; isto cobre o manifesto publicado antes do reinício).
@@ -515,6 +518,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return
     }
 
+    if (event.type === 'typing' || event.type === 'typing:stop') {
+      useTypingStore.getState().handleWsEvent(event)
+      return
+    }
+
     if (event.type.startsWith('level:')) {
       useLevelStore.getState().handleWsEvent(event)
       return
@@ -527,6 +535,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         : `conversation:${msg.conversation_id}`
       const serverId = (payload.server_id as string) || null
       if (!room.endsWith(':')) {
+        useTypingStore.getState().messageArrived(room, msg.author_id)
         set((state) => {
           const nextMessages = openRooms.has(room)
             ? {
@@ -954,6 +963,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   reset: () => {
+    useTypingStore.getState().reset()
     openRooms.clear()
     set({
       messagesByRoom: {},

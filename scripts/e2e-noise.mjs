@@ -82,7 +82,7 @@ async function openClient(browser, user) {
     }
   })
   await page.goto(APP + '#/login')
-  await page.fill('input[type=email]', user.email)
+  await page.fill('input[autocomplete=username]', user.email)
   await page.fill('input[type=password]', user.password)
   await page.click('button[type=submit]')
   await page.waitForURL((u) => !u.hash.includes('login'))

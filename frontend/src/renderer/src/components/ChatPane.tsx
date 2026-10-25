@@ -34,6 +34,14 @@ import { ApiError } from '../api/client'
 import VoiceRecordButton from './chat/VoiceRecordButton'
 import ComposerAttachments from './chat/ComposerAttachments'
 import { useAttachmentDraft } from './chat/useAttachmentDraft'
+import { useTypingSender } from './chat/useTypingSender'
+import TypingIndicator from './chat/TypingIndicator'
+import {
+  afterSendFailure,
+  canRestoreHere,
+  replyAfterRestore,
+  restoreFailedText
+} from '../lib/composerDraft'
 import {
   ATTACH_DENIED,
   DIRECT_CHAT_PERMISSIONS,
@@ -436,6 +444,7 @@ function ChatPane({
     }
     addDraftFiles(files)
   }
+  const typing = useTypingSender(room)
   const attachmentState = draftStatus(drafts)
   const submittable = canSubmit(draft, drafts)
   // dragenter/dragleave disparam a cada filho; o contador evita piscar.
@@ -448,6 +457,14 @@ function ChatPane({
   useEffect(() => {
     roomRef.current = room
   }, [room])
+  // Envio que falha depois de sair do chat não mexe no campo (só oferece copiar).
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
   const [highlightChoice, setHighlight] = useState<number | null>(null)
   const meUsername = useAuthStore((s) => s.user?.username)
@@ -466,6 +483,7 @@ function ChatPane({
     if (!mention || !el) return
     const next = applyMention(draft, mention.start, el.selectionStart ?? draft.length, username)
     setDraft(next.text)
+    typing.onDraftChange(next.text)
     setMention(null)
     requestAnimationFrame(() => {
       el.focus()
@@ -591,24 +609,82 @@ function ChatPane({
     if (!submittable || sending) return
     setSending(true)
     const sentRoom = room
+    const sentText = draft
+    const sentReply = replyingTo
     // Só sai do rascunho o que foi enviado: arquivo adicionado durante o envio fica.
     const sentDrafts = drafts.filter((d) => d.status === 'done').map((d) => d.localId)
+    // O texto sai do campo na hora: dá para começar a próxima mensagem sem
+    // esperar o servidor. Os anexos só saem quando o envio dá certo.
+    typing.onSent()
+    setDraft('')
+    setReplyState(null)
+    setMention(null)
+    setHighlight(null)
     try {
-      await sendToRoom(room, draft.trim(), attachmentState.readyIds, replyingTo?.id ?? null)
+      await sendToRoom(room, sentText.trim(), attachmentState.readyIds, sentReply?.id ?? null)
       if (roomRef.current === sentRoom) {
-        setDraft('')
-        setReplyState(null)
         sentDrafts.forEach(removeAttachment)
       }
     } catch (err) {
-      showToast.error(
+      const message =
         err instanceof ApiError
           ? permissionError(err.code, '') || sendErrorMessage(err.status, err.message)
           : 'Falha ao enviar mensagem.'
-      )
+      handleSendFailure(message, sentRoom, sentText, sentReply)
     } finally {
       setSending(false)
     }
+  }
+
+  // O texto que falhou nunca se perde: volta sozinho se o campo continua
+  // vazio; senão o aviso oferece "Restaurar" (vem antes do texto novo, com a
+  // resposta). Em outra sala o campo é de lá: o aviso oferece copiar.
+  const handleSendFailure = (
+    message: string,
+    sentRoom: string,
+    sentText: string,
+    sentReply: Message | null
+  ): void => {
+    const sentReplyState = sentReply ? { room: sentRoom, message: sentReply } : null
+    const here = (): boolean => canRestoreHere(mountedRef.current, roomRef.current, sentRoom)
+    const copyAction = {
+      label: 'Copiar',
+      run: () => void navigator.clipboard?.writeText(sentText)
+    }
+    if (!here()) {
+      showToast.error(message, 10000, sentText.trim() ? copyAction : undefined)
+      return
+    }
+    const current = inputRef.current?.value ?? ''
+    const action = afterSendFailure(sentText, sentReply !== null, current)
+    if (action === 'restore') {
+      setDraft(sentText)
+      setReplyState((now) => replyAfterRestore(now, sentReplyState))
+      showToast.error(message)
+      return
+    }
+    if (action === 'nothing') {
+      showToast.error(message)
+      return
+    }
+    showToast.error(message, 10000, {
+      label: 'Restaurar',
+      run: () => {
+        if (!here()) {
+          if (sentText.trim()) {
+            showToast.error(
+              'Você saiu da conversa: copie a mensagem que falhou.',
+              10000,
+              copyAction
+            )
+          }
+          return
+        }
+        setDraft((now) => restoreFailedText(sentText, now))
+        setReplyState((now) => replyAfterRestore(now, sentReplyState))
+        requestAnimationFrame(() => inputRef.current?.focus())
+      }
+    })
   }
 
   // Áudio gravado vai sozinho; o texto digitado continua no campo.
@@ -760,7 +836,7 @@ function ChatPane({
         )}
       </div>
 
-      <div className="relative shrink-0 px-4 pb-4">
+      <div className="relative shrink-0 px-4">
         {suggestions.length > 0 && (
           <ul
             role="listbox"
@@ -858,6 +934,7 @@ function ChatPane({
               value={draft}
               onChange={(e) => {
                 setDraft(e.target.value)
+                typing.onDraftChange(e.target.value)
                 setMention(mentionQuery(e.target.value, e.target.selectionStart ?? 0))
                 setHighlight(null)
               }}
@@ -884,6 +961,7 @@ function ChatPane({
             </button>
           </form>
         )}
+        <TypingIndicator room={room} />
       </div>
       <CreatePollModal
         open={pollOpen}

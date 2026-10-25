@@ -63,15 +63,26 @@ func (a *ServiceRoomAccess) CanRead(ctx context.Context, room Room, userID strin
 }
 
 func (a *ServiceRoomAccess) CanWrite(ctx context.Context, room Room, userID string) error {
+	_, err := a.WriteParticipants(ctx, room, userID)
+	return err
+}
+
+// WriteParticipants aplica a regra de CanWrite e, numa DM ou grupo, devolve os
+// participantes lidos na mesma consulta (canal: nil). Usado pelo "digitando".
+func (a *ServiceRoomAccess) WriteParticipants(ctx context.Context, room Room, userID string) ([]string, error) {
 	if room.ChannelID != "" {
-		return channelAccess(ctx, a.perms, room.ChannelID, userID, permission.ViewChannel|permission.SendMessages|permission.AttachFiles)
+		return nil, channelAccess(ctx, a.perms, room.ChannelID, userID, permission.ViewChannel|permission.SendMessages|permission.AttachFiles)
 	}
 	conv, err := a.conversationMember(ctx, room.ConversationID, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if conv.IsGroup() {
-		return nil
+		ids, err := a.conversations.ParticipantIDs(ctx, room.ConversationID)
+		if err != nil {
+			return nil, ErrNoRoomAccess
+		}
+		return ids, nil
 	}
 
 	otherUserID := conv.UserAID
@@ -82,11 +93,11 @@ func (a *ServiceRoomAccess) CanWrite(ctx context.Context, room Room, userID stri
 	// aceita DM de membros de servidores).
 	if err := a.friends.CanDirectMessage(ctx, userID, otherUserID); err != nil {
 		if errors.Is(err, friendship.ErrBlocked) {
-			return ErrBlocked
+			return nil, ErrBlocked
 		}
-		return ErrCannotMessage
+		return nil, ErrCannotMessage
 	}
-	return nil
+	return []string{userID, otherUserID}, nil
 }
 
 // channelAccess: o membro tem want no canal. Canal que não existe ou que a

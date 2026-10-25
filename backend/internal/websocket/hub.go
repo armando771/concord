@@ -294,6 +294,36 @@ func (h *Hub) RevalidateServer(serverID string) {
 	}
 }
 
+// BroadcastToRoomsExcept entrega o evento uma vez por conexão presente em
+// qualquer das salas, pulando as conexões de exceptUserID.
+func (h *Hub) BroadcastToRoomsExcept(rooms []string, exceptUserID string, event []byte) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	// Uma sala só (canal) não tem como repetir conexão.
+	var sent map[*Client]struct{}
+	if len(rooms) > 1 {
+		sent = make(map[*Client]struct{})
+	}
+	for _, room := range rooms {
+		for client := range h.rooms[room] {
+			if client.userID == exceptUserID {
+				continue
+			}
+			if sent != nil {
+				if _, ok := sent[client]; ok {
+					continue
+				}
+				sent[client] = struct{}{}
+			}
+			select {
+			case client.send <- event:
+			default:
+				// client is slow; drop event for it
+			}
+		}
+	}
+}
+
 func (h *Hub) BroadcastAll(event []byte) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -336,40 +366,46 @@ func (h *Hub) PresenceMap(userIDs []string) map[string]string {
 	return result
 }
 
-func (h *Hub) PublishMessageCreate(event message.CreateEvent) {
-	if event.ChannelID != nil {
-		h.BroadcastToRoom("channel:"+*event.ChannelID, writeEvent("message:create", event))
-		if event.ServerID != "" {
-			h.BroadcastToServerChannel(event.ServerID, *event.ChannelID, writeEvent("message:create", event))
+// messageRooms são as salas por onde chegam message:create e message:delete:
+// o canal e o servidor dele, ou a DM e a sala pessoal de cada participante.
+func messageRooms(channelID *string, serverID string, conversationID *string, userIDs []string) []string {
+	var rooms []string
+	if channelID != nil {
+		rooms = append(rooms, "channel:"+*channelID)
+		if serverID != "" {
+			rooms = append(rooms, "server:"+serverID)
 		}
-		return
+		return rooms
 	}
-	if event.ConversationID != nil {
-		h.BroadcastToRoom("conversation:"+*event.ConversationID, writeEvent("message:create", event))
-		for _, userID := range event.UserIDs {
+	if conversationID != nil {
+		rooms = append(rooms, "conversation:"+*conversationID)
+		for _, userID := range userIDs {
 			if userID != "" {
-				h.BroadcastToRoom("user:"+userID, writeEvent("message:create", event))
+				rooms = append(rooms, "user:"+userID)
 			}
 		}
+	}
+	return rooms
+}
+
+// publishMessage entrega a mensagem nas salas do canal ou da DM. A sala do
+// servidor (usada para não lidas) só recebe quem vê o canal: canal privado não
+// vaza para o resto do servidor.
+func (h *Hub) publishMessage(data []byte, channelID *string, serverID string, conversationID *string, userIDs []string) {
+	for _, room := range messageRooms(channelID, "", conversationID, userIDs) {
+		h.BroadcastToRoom(room, data)
+	}
+	if channelID != nil && serverID != "" {
+		h.BroadcastToServerChannel(serverID, *channelID, data)
 	}
 }
 
+func (h *Hub) PublishMessageCreate(event message.CreateEvent) {
+	h.publishMessage(writeEvent("message:create", event), event.ChannelID, event.ServerID, event.ConversationID, event.UserIDs)
+}
+
 func (h *Hub) PublishMessageDelete(event message.DeleteEvent) {
-	if event.ChannelID != nil {
-		h.BroadcastToRoom("channel:"+*event.ChannelID, writeEvent("message:delete", event))
-		if event.ServerID != "" {
-			h.BroadcastToServerChannel(event.ServerID, *event.ChannelID, writeEvent("message:delete", event))
-		}
-		return
-	}
-	if event.ConversationID != nil {
-		h.BroadcastToRoom("conversation:"+*event.ConversationID, writeEvent("message:delete", event))
-		for _, userID := range event.UserIDs {
-			if userID != "" {
-				h.BroadcastToRoom("user:"+userID, writeEvent("message:delete", event))
-			}
-		}
-	}
+	h.publishMessage(writeEvent("message:delete", event), event.ChannelID, event.ServerID, event.ConversationID, event.UserIDs)
 }
 
 // PublishPollUpdate vai só para a sala da conversa/canal: quem não está com a

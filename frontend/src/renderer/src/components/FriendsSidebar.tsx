@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useUIStore } from '../store/uiStore'
 import { useFriendStore } from '../store/friendStore'
 import { useAuthStore } from '../store/authStore'
+import { useTypingStore } from '../store/typingStore'
+import { typersIn } from '../lib/typing'
 import { useChatStore, usePresenceStatus } from '../store/chatStore'
 import { useUserLook } from '../store/profileStore'
 import { useUserMenuStore } from '../store/userMenuStore'
@@ -53,12 +56,15 @@ function ConversationRow({
   conv,
   active,
   unread,
+  typing,
   meId,
   onClose
 }: {
   conv: ConversationSummary
   active: boolean
   unread: number
+  /** Alguém digitando nesta conversa (DM ou grupo). */
+  typing: boolean
   meId: string | undefined
   onClose: (conv: ConversationSummary) => void
 }): React.JSX.Element {
@@ -116,7 +122,11 @@ function ConversationRow({
             title
           )}
         </p>
-        {isGroup && <p className="truncate text-xs text-gray-500">{conv.members.length} membros</p>}
+        {typing ? (
+          <p className="truncate text-xs italic text-violet-300">digitando…</p>
+        ) : (
+          isGroup && <p className="truncate text-xs text-gray-500">{conv.members.length} membros</p>
+        )}
       </div>
       {unread > 0 && (
         <span className="shrink-0 rounded-full bg-[#f23f43] px-1.5 text-[11px] font-bold text-white group-hover:hidden">
@@ -144,6 +154,14 @@ export function FriendsSidebar(): React.JSX.Element {
   const location = useLocation()
   const { userId, conversationId } = useParams<{ userId: string; conversationId: string }>()
   const meId = useAuthStore((s) => s.user?.id)
+  // Só as conversas com alguém digitando: aviso de canal não redesenha a lista.
+  const typingDms = useTypingStore(
+    useShallow((s) =>
+      Object.keys(s.byRoom).filter(
+        (room) => room.startsWith('conversation:') && typersIn(s.byRoom, room, meId).length > 0
+      )
+    )
+  )
   const incomingCount = useFriendStore(
     (s) => s.pending.filter((p) => p.direction === 'incoming').length
   )
@@ -258,6 +276,7 @@ export function FriendsSidebar(): React.JSX.Element {
                   conv={conv}
                   active={isActive(conv)}
                   unread={unreadByRoom[`conversation:${conv.id}`] ?? 0}
+                  typing={typingDms.includes(`conversation:${conv.id}`)}
                   meId={meId}
                   onClose={closeConversation}
                 />
