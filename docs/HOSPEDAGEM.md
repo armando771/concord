@@ -315,10 +315,17 @@ processo novo atende quando fica pronto. O backend ignora `HOST`/`PORT` do
 que o Caddy usa. Sem o socket (PC de casa, `go run`), ele escuta sozinho como
 antes.
 
-Ativar numa VPS que já roda (uma vez, com ninguém em chamada: a porta fica
-fechada por ~1 s):
+Ativar numa VPS que já roda (uma vez, depois de um deploy desta versão, com
+ninguém em chamada: a porta fica fechada por ~1 s):
 
 ```bash
+cd /opt/concord
+# O binário no ar e o .good têm que saber usar o socket (deploy desta versão):
+grep -aq concord-capability:socket-activation-v1 concord-server && \
+  grep -aq concord-capability:socket-activation-v1 concord-server.good && echo ok   # ok
+# O .prev ainda é o binário de antes desta versão, que não sobe com o socket:
+cp concord-server.good concord-server.prev
+mkdir -p /etc/systemd/system/concord-server.service.d
 cp concord-server.socket /etc/systemd/system/                                   # deploy/concord-server.socket
 cp zero-downtime.conf /etc/systemd/system/concord-server.service.d/             # deploy/concord-server.service.d/
 systemctl daemon-reload
@@ -331,8 +338,24 @@ curl -s http://127.0.0.1:8090/healthz                                           
 
 O backend precisa ser desta versão ou mais nova: um binário antigo não sabe
 usar o socket e não sobe (porta ocupada). Por isso o socket entra **depois** de
-um deploy desta versão, e o `concord-server.prev`/`.good` do rollback já são
-binários novos.
+um deploy desta versão, e o `cp` acima troca o `.prev`, que até o próximo
+deploy ainda seria o binário antigo. Com o socket ativo, o deploy recusa (sem
+trocar nada) um binário que não sabe usá-lo e não volta para um assim; veja
+[Voltar a uma versão antiga](#voltar-a-uma-versão-antiga).
+
+**Manutenção com o socket:**
+
+- **Parar o backend de vez:** `systemctl stop concord-server.socket
+  concord-server`. Parar só o serviço não basta: a próxima conexão (o Caddy, um
+  app) o sobe de novo. Para voltar: `systemctl start concord-server.socket
+  concord-server`.
+- **Não reinicie só o socket** com o serviço no ar: o processo ainda segura a
+  porta e o socket não consegue reabri-la. Para mudar o
+  `concord-server.socket`: pare os dois, `systemctl daemon-reload` e suba os
+  dois (com ninguém em chamada).
+- **Porta:** com o socket, o backend ignora `HOST`/`PORT` do `.env`; vale o
+  `ListenStream`. O deploy e o `apply-caddyfile.sh` leem a porta do socket
+  quando ele está ativo.
 
 ### Reinício do backend sem queda
 
@@ -371,25 +394,34 @@ outros apps também voltaram), a lista dos canais de voz e o estado da chamada
 ~4 s e não houver mais ninguém na sala de mídia.
 
 `GET /healthz` responde `200` só com o servidor pronto (banco respondendo e
-chamadas recarregadas) e `503` enquanto desliga. Não aparece no log.
+chamadas recarregadas) e `503` enquanto desliga. Não aparece no log. É público
+de propósito (o `apply-caddyfile.sh` confere pelo endereço de fora) e
+inofensivo: só diz `ok`/`starting`/`stopping`/`database unavailable`, e o banco
+é consultado no máximo uma vez por segundo, por mais que batam nele.
 
 **O deploy** (`scripts/deploy-vps.sh`), depois de enviar os arquivos:
 
-1. aplica as migrations com o binário novo (`concord-server.new migrate`, até
-   120 s) com o antigo ainda no ar; se falharem, para sem tocar em nada;
-2. guarda o último binário que passou no `/healthz` em `concord-server.prev`,
+1. com o socket ativo, recusa um binário que não sabe usá-lo (uma versão de
+   antes desta), sem trocar nada;
+2. aplica as migrations com o binário novo (`concord-server.new migrate`, até
+   120 s, da pasta `migrations.new`) com o antigo ainda no ar; se falharem, para
+   sem tocar em nada;
+3. guarda o último binário que passou no `/healthz` em `concord-server.prev`,
    troca, roda `systemctl reset-failed` e reinicia;
-3. espera o `/healthz` (até 30 s). Passou: o binário vira `concord-server.good`.
-   Não passou: guarda o novo em `concord-server.failed`, **volta sozinho para o
-   `.prev`**, reinicia e sai com erro;
-4. só com o backend novo no ar publica o app web e os manifestos
-   (`latest*.yml`): nenhum app baixa uma versão cujo backend falhou.
+4. espera o `/healthz` por até 30 s no relógio (com o socket as requisições
+   ficam na fila esse tempo todo, então o prazo é total, não por tentativa).
+   Passou: o binário vira `concord-server.good`. Não passou: guarda o novo em
+   `concord-server.failed`, **volta sozinho para o `.prev`**, reinicia, espera
+   até mais 30 s e sai com erro;
+5. só com o backend novo no ar publica a página de download, o app web e os
+   manifestos (`latest*.yml`): nenhum app baixa uma versão cujo backend falhou.
 
 **systemd** ([`zero-downtime.conf`](../deploy/concord-server.service.d/zero-downtime.conf)):
 `KillSignal=SIGTERM`, `TimeoutStopSec=10` (o backend leva ~3,5 s no pior caso),
 `RestartSec=1` com `StartLimitIntervalSec=0` (sem isso, cinco falhas em 10 s
 fariam o systemd desistir de vez), `After=`/`Wants=docker.service` e
-`Requires=`/`After=concord-server.socket`. No PC de casa,
+`Wants=`/`After=concord-server.socket` (`Wants` e não `Requires`: sem o arquivo
+do socket o serviço ainda sobe, escutando sozinho). No PC de casa,
 `scripts/install-services.sh` gera o serviço com o mesmo desligamento e sem
 limite de reinícios (sem socket).
 
@@ -398,7 +430,8 @@ limite de reinícios (sem socket).
 Para uma VPS que já roda a versão anterior. Cada passo diz quando pode ser
 feito.
 
-1. **Deploy desta versão** (qualquer hora; CI ou `scripts/deploy-vps.sh`). A
+1. **Deploy desta versão** (qualquer hora; o CI ao chegar na `main` — ele só
+   faz deploy da `main` — ou `scripts/deploy-vps.sh root@IP` do PC). A
    migration `000026` entra antes do reinício. Esse deploy ainda trava a voz
    uma vez, como antes (o Caddy ainda manda `/rtc` pelo backend). O aviso
    `docker-compose.yml/.env mudou: postgres … --infra` é esperado (versão fixa
@@ -406,6 +439,9 @@ feito.
 2. **Conferir:** `curl -s http://127.0.0.1:8090/healthz` → `{"status":"ok"}`.
 3. **Socket e complemento do systemd** (com ninguém em chamada; a porta fecha
    por ~1 s): [Porta do backend com o systemd](#porta-do-backend-com-o-systemd).
+   Inclui conferir que o binário no ar sabe usar o socket e
+   `cp concord-server.good concord-server.prev` (senão o `.prev` continua o
+   binário antigo, que não sobe com o socket).
 4. **Caddyfile** (com ninguém em chamada; o script confere):
    `scripts/apply-caddyfile.sh --also https://app-salinha.bhrx.com.br root@IP deploy/Caddyfile`.
    Antes, confira que `/opt/concord` e `/opt/concord/updates` são legíveis pelo
@@ -418,9 +454,45 @@ feito.
 6. **Opcional:** Caddy ≥ 2.7 pelo repositório oficial e `stream_close_delay`
    (seção do Caddyfile acima).
 
-Para voltar atrás: `cp concord-server.prev concord-server && systemctl
-restart concord-server` (o deploy já faz isso sozinho quando o novo não sobe);
-o Caddyfile anterior fica em `/etc/caddy/Caddyfile.bak-<data>`.
+**Voltar atrás um deploy** (o deploy já faz isso sozinho quando o novo não
+sobe). Com o socket ativo, só volte para um binário que sabe usá-lo:
+
+```bash
+cd /opt/concord
+if ! systemctl is-active -q concord-server.socket || grep -aq concord-capability:socket-activation-v1 concord-server.prev; then
+  cp concord-server concord-server.failed && cp concord-server.prev concord-server
+  systemctl reset-failed concord-server; systemctl restart concord-server
+  sleep 2; curl -s http://127.0.0.1:8090/healthz                                # {"status":"ok"}
+else
+  echo "NÃO: o .prev não sabe usar o socket ativo (veja Voltar a uma versão antiga)"
+fi
+```
+
+As migrations não voltam (são só de expandir; o binário anterior funciona com
+elas). O Caddyfile anterior fica em `/etc/caddy/Caddyfile.bak-<data>`.
+
+### Voltar a uma versão antiga
+
+Uma versão de antes do socket (um revert deste PR, um hotfix de uma branch
+antiga) não sobe com o `concord-server.socket` ativo: o deploy recusa e diz
+isso, sem trocar nada. O CI só faz deploy da `main`, então um
+`workflow_dispatch` numa branch ou tag antiga não chega à VPS. Para instalar
+uma assim, primeiro tire o socket (com ninguém em chamada; a porta fecha por
+~1 s):
+
+```bash
+systemctl stop concord-server.socket concord-server
+systemctl disable concord-server.socket
+rm /etc/systemd/system/concord-server.socket                                    # o Wants= do complemento ignora um socket que não existe
+systemctl daemon-reload
+systemctl start concord-server                                                  # o binário atual escuta sozinho na PORT do .env
+curl -s http://127.0.0.1:8090/healthz                                           # {"status":"ok"}
+```
+
+O `PORT` do `.env` tem que ser `8090` (o endereço do Caddy). Depois faça o
+deploy da versão antiga: ela não traz a volta automática nem a checagem do
+socket. Para voltar ao socket, siga
+[Porta do backend com o systemd](#porta-do-backend-com-o-systemd) de novo.
 
 ### Conferir que o deploy não foi percebido
 
