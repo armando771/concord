@@ -99,6 +99,12 @@ func main() {
 	userService := user.UserService(userRepository)
 	// A migration 000021 não falha com usernames que só diferem na caixa:
 	// cai num índice comum. Aqui isso aparece no log (só contagens).
+	// E se a 000021 nem rodou (pulada por ordem de aplicação), ERROR no log.
+	if hasUsername, hasEmail, err := userService.LoginIndexes(context.Background()); err != nil {
+		log.Printf("[user] check login indexes: %v", err)
+	} else if msg := user.MissingLoginIndexesError(hasUsername, hasEmail); msg != "" {
+		log.Print(msg)
+	}
 	if usernameGroups, emailGroups, err := userService.CaseConflicts(context.Background()); err != nil {
 		log.Printf("[user] check case conflicts: %v", err)
 	} else if warning := user.CaseConflictWarning(usernameGroups, emailGroups); warning != "" {

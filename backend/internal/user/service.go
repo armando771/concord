@@ -77,6 +77,11 @@ func (s *Service) Create(
 	return nil
 }
 
+// LoginIndexes diz se os índices da migration 000021 existem.
+func (s *Service) LoginIndexes(ctx context.Context) (hasUsername, hasEmail bool, err error) {
+	return s.repository.LoginIndexes(ctx)
+}
+
 // CaseConflicts conta os grupos de usernames e de e-mails que só diferem na
 // caixa (para o aviso do boot).
 func (s *Service) CaseConflicts(ctx context.Context) (usernameGroups, emailGroups int, err error) {

@@ -107,3 +107,24 @@ func TestReservedUsernamesAreTaken(t *testing.T) {
 		}
 	}
 }
+
+func TestMissingLoginIndexesError(t *testing.T) {
+	if got := MissingLoginIndexesError(true, true); got != "" {
+		t.Errorf("com os dois índices: %q, want vazio", got)
+	}
+	for _, c := range []struct {
+		username, email bool
+		mentions        string
+	}{
+		{false, true, "lower(username)"},
+		{true, false, "lower(email)"},
+		{false, false, "lower(username)"},
+	} {
+		got := MissingLoginIndexesError(c.username, c.email)
+		for _, want := range []string{"ERROR", "000021", c.mentions, "000021_add_login_lower_indexes.up.sql", "psql"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("MissingLoginIndexesError(%v, %v) = %q, falta %q", c.username, c.email, got, want)
+			}
+		}
+	}
+}

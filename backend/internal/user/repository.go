@@ -114,6 +114,20 @@ func (r *Repository) IdentityTaken(ctx context.Context, username, email string) 
 	return taken, err
 }
 
+// LoginIndexes diz se os índices da migration 000021 existem: o de
+// lower(username) (único ou, com conflitos, comum) e o de lower(email).
+func (r *Repository) LoginIndexes(ctx context.Context) (hasUsername, hasEmail bool, err error) {
+	err = r.db.QueryRow(
+		ctx,
+		`SELECT
+			EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND tablename = 'users'
+				AND indexname IN ('users_username_lower_key', 'idx_users_username_lower')),
+			EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND tablename = 'users'
+				AND indexname = 'idx_users_email_lower')`,
+	).Scan(&hasUsername, &hasEmail)
+	return hasUsername, hasEmail, err
+}
+
 // CountCaseConflicts conta grupos de usernames e de e-mails iguais sem
 // diferenciar caixa (só os números, sem nomes).
 func (r *Repository) CountCaseConflicts(ctx context.Context) (usernameGroups, emailGroups int, err error) {

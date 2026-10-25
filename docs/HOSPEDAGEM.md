@@ -401,6 +401,12 @@ DROP INDEX IF EXISTS idx_users_username_lower;
 Enquanto isso, essas contas só entram digitando o nome com a caixa exata (ou
 pelo e-mail).
 
+Se o boot logar `ERROR: faltam os índices do login ...`, a 000021 foi pulada
+(o runner guarda só a maior versão aplicada, então uma migration de número
+maior aplicada antes dela faz a 000021 nunca rodar). Ela é idempotente: rode
+`psql "$DATABASE_URL" -f /opt/concord/migrations/000021_add_login_lower_indexes.up.sql`
+e reinicie o backend.
+
 ## Segurança
 
 Com o playit, login e mensagens trafegam **sem criptografia** (HTTP). Na VPS

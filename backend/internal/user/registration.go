@@ -103,3 +103,24 @@ func CaseConflictWarning(usernameGroups, emailGroups int) string {
 	}
 	return msg + " Resolva os duplicados: veja docs/HOSPEDAGEM.md (\"Nomes de usuário sem diferenciar caixa\")."
 }
+
+// MissingLoginIndexesError é o ERROR do boot quando faltam os índices da
+// migration 000021. O runner guarda só a maior versão aplicada e pula as
+// menores: se 000022+ rodou antes, a 000021 nunca roda. Vazio quando está ok.
+func MissingLoginIndexesError(hasUsernameIndex, hasEmailIndex bool) string {
+	if hasUsernameIndex && hasEmailIndex {
+		return ""
+	}
+	var missing []string
+	if !hasUsernameIndex {
+		missing = append(missing, "lower(username)")
+	}
+	if !hasEmailIndex {
+		missing = append(missing, "lower(email)")
+	}
+	return "ERROR: faltam os índices do login em " + strings.Join(missing, " e ") +
+		": a migration 000021 foi pulada (uma migration de número maior rodou antes e o runner pula versões" +
+		" menores que a atual). O login funciona, mas sem índice e sem UNIQUE(lower(username))." +
+		" Aplique à mão (é idempotente): psql \"$DATABASE_URL\" -f migrations/000021_add_login_lower_indexes.up.sql" +
+		" e reinicie o backend; veja docs/HOSPEDAGEM.md (\"Nomes de usuário sem diferenciar caixa\")."
+}
