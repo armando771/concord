@@ -38,7 +38,9 @@ vi.mock('../lib/notifications', () => ({
   messageNotification: () => null,
   mentionNotification: () => null,
   notificationSound: () => null,
-  notifyDesktop: vi.fn()
+  notifyDesktop: vi.fn(),
+  deliverDesktop: vi.fn(),
+  messageAlert: () => null
 }))
 vi.mock('./authStore', () => ({
   useAuthStore: {

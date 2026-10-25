@@ -52,6 +52,8 @@ export interface BackgroundApi {
     toast?: boolean
     /** Piscar + selo de não lidas na barra de tarefas (padrão: ligado). */
     taskbar?: boolean
+    /** A conversa não está na tela: o toast aparece mesmo com a janela em foco. */
+    elsewhere?: boolean
   }): void
   quit(): void
   /** null = não suportado nesta plataforma */

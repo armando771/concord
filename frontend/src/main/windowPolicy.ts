@@ -19,9 +19,19 @@ export function launchedHidden(argv: string[]): boolean {
   return LOGIN_ITEM_ARGS.every((arg) => argv.includes(arg))
 }
 
-/** Notificação nativa só faz sentido se o usuário não está olhando a janela. */
-export function shouldNotify(window: { visible: boolean; focused: boolean }): boolean {
-  return !window.visible || !window.focused
+/**
+ * Um aviso pedido pelo renderer: o que mostrar dada a janela. Com a janela
+ * fora de vista (escondida, minimizada ou sem foco), tudo. Com ela em foco,
+ * só o toast e só se o renderer disse que a conversa não está na tela
+ * (`elsewhere`: a pessoa está em outro chat); piscar e selo ficam de fora,
+ * porque o selo só é limpo quando a janela ganha foco.
+ */
+export function notifyPlan(
+  window: { visible: boolean; focused: boolean },
+  request: { elsewhere?: boolean } = {}
+): { toast: boolean; taskbar: boolean } {
+  const away = !window.visible || !window.focused
+  return { toast: away || request.elsewhere === true, taskbar: away }
 }
 
 /**
