@@ -6,6 +6,7 @@ import {
   draggedOffset,
   isDrag,
   loadMiniPlayerOffset,
+  MiniPlayerGesture,
   parseMiniPlayerOffset,
   saveMiniPlayerOffset
 } from './miniPlayerPosition'
@@ -113,5 +114,70 @@ describe('posição salva', () => {
     })
     expect(() => saveMiniPlayerOffset({ right: 1, bottom: 1 })).not.toThrow()
     expect(loadMiniPlayerOffset()).toEqual(DEFAULT_MINI_PLAYER_OFFSET)
+  })
+})
+
+describe('MiniPlayerGesture (arrastar sem perder o clique)', () => {
+  const start = { right: 16, bottom: 96 }
+  const identity = (o: { right: number; bottom: number }): typeof o => o
+
+  it('clique sem mover: o click ativa (volta para a chamada)', () => {
+    const g = new MiniPlayerGesture()
+    g.down(1, 100, 100, start)
+    g.move(1, 102, 101, identity)
+    expect(g.end(1)).toBeNull()
+    expect(g.dragging).toBe(false)
+    expect(g.takeClick()).toBe(true)
+  })
+
+  it('arrasto de verdade: devolve a posição para salvar e engole o click seguinte', () => {
+    const g = new MiniPlayerGesture()
+    g.down(1, 100, 100, start)
+    expect(g.move(1, 50, 60, identity)).toEqual({ right: 66, bottom: 136 })
+    expect(g.dragging).toBe(true)
+    expect(g.end(1)).toEqual({ right: 66, bottom: 136 })
+    expect(g.dragging).toBe(false)
+    expect(g.takeClick()).toBe(false)
+    // só o click logo depois do arrasto é engolido
+    expect(g.takeClick()).toBe(true)
+  })
+
+  it('click sem pointerdown (leitor de tela, teclado) sempre ativa', () => {
+    expect(new MiniPlayerGesture().takeClick()).toBe(true)
+  })
+
+  it('o próximo pointerdown limpa um click engolido que não chegou', () => {
+    const g = new MiniPlayerGesture()
+    g.down(1, 0, 0, start)
+    g.move(1, 30, 0, identity)
+    g.end(1)
+    g.down(2, 0, 0, start)
+    g.end(2)
+    expect(g.takeClick()).toBe(true)
+  })
+
+  it('aplica o reencaixe a cada movimento', () => {
+    const g = new MiniPlayerGesture()
+    g.down(1, 0, 0, start)
+    expect(g.move(1, 500, 500, () => ({ right: 0, bottom: 0 }))).toEqual({ right: 0, bottom: 0 })
+  })
+
+  it('outro ponteiro não interfere', () => {
+    const g = new MiniPlayerGesture()
+    g.down(1, 0, 0, start)
+    expect(g.move(2, 50, 50, identity)).toBeNull()
+    expect(g.end(2)).toBeNull()
+    expect(g.dragging).toBe(false)
+  })
+
+  it('captura perdida / player escondido no meio: solta o arrasto e guarda a última posição', () => {
+    const g = new MiniPlayerGesture()
+    g.down(1, 0, 0, start)
+    g.move(1, -10, 0, identity)
+    expect(g.end()).toEqual({ right: 26, bottom: 96 })
+    expect(g.dragging).toBe(false)
+    // nada mais pendente
+    expect(g.end()).toBeNull()
+    expect(g.move(1, -20, 0, identity)).toBeNull()
   })
 })

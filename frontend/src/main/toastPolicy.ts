@@ -42,21 +42,27 @@ const sameClsid = (a = '', b = ''): boolean =>
   a.replace(/[{}]/g, '').toLowerCase() === b.replace(/[{}]/g, '').toLowerCase()
 
 /**
- * O que fazer com um atalho do Menu Iniciar (`current` = null se não existe).
- * 'primary' é o Salinha.lnk: criado se faltar. 'legacy' é o Concord.lnk
- * antigo: nunca criado e só mexido se for nosso (mesmo AUMID), para não
- * deixar um segundo atalho com o nosso id e sem o CLSID certo.
+ * O que fazer com o Salinha.lnk do Menu Iniciar (`current` = null se não
+ * existe): criado se faltar, atualizado se o exe, o AUMID ou o CLSID não batem.
  */
 export function shortcutFix(
   current: ShortcutInfo | null,
-  wanted: ShortcutInfo,
-  kind: 'primary' | 'legacy'
+  wanted: ShortcutInfo
 ): 'create' | 'update' | null {
-  if (!current) return kind === 'primary' ? 'create' : null
-  if (kind === 'legacy' && current.appUserModelId !== wanted.appUserModelId) return null
+  if (!current) return 'create'
   const ok =
     samePath(current.target, wanted.target) &&
     current.appUserModelId === wanted.appUserModelId &&
     sameClsid(current.toastActivatorClsid, wanted.toastActivatorClsid)
   return ok ? null : 'update'
+}
+
+/**
+ * Concord.lnk que sobrou de antes da renomeação é nosso (e vai ser apagado,
+ * para só ficar "Salinha" no Menu Iniciar) se tem o nosso AUMID ou aponta
+ * para a pasta de instalação atual. Atalho de outro programa fica.
+ */
+export function isOurLegacyShortcut(current: ShortcutInfo, execPath: string): boolean {
+  if (current.appUserModelId === APP_USER_MODEL_ID) return true
+  return samePath(win32.dirname(current.target), win32.dirname(execPath))
 }

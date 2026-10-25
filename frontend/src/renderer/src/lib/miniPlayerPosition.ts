@@ -47,6 +47,70 @@ export function draggedOffset(start: MiniPlayerOffset, dx: number, dy: number): 
   return { right: start.right - dx, bottom: start.bottom - dy }
 }
 
+/**
+ * Um arrasto do mini-player, do pointerdown ao fim (pointerup, cancel, captura
+ * perdida ou player escondido). Quem ativa "voltar para a chamada" é o click
+ * (funciona também com leitor de tela e teclado); depois de um arrasto de
+ * verdade o click seguinte é engolido.
+ */
+export class MiniPlayerGesture {
+  private active: {
+    pointerId: number
+    x: number
+    y: number
+    start: MiniPlayerOffset
+    last: MiniPlayerOffset
+    moved: boolean
+  } | null = null
+  private swallowClick = false
+
+  /** Arrastando agora (já passou do limite de clique). */
+  get dragging(): boolean {
+    return this.active?.moved ?? false
+  }
+
+  down(pointerId: number, x: number, y: number, start: MiniPlayerOffset): void {
+    this.active = { pointerId, x, y, start, last: start, moved: false }
+    this.swallowClick = false
+  }
+
+  /** Nova posição (já reencaixada) se é arrasto; null se ainda é clique. */
+  move(
+    pointerId: number,
+    x: number,
+    y: number,
+    fit: (offset: MiniPlayerOffset) => MiniPlayerOffset
+  ): MiniPlayerOffset | null {
+    const a = this.active
+    if (!a || a.pointerId !== pointerId) return null
+    const dx = x - a.x
+    const dy = y - a.y
+    if (!a.moved && !isDrag(dx, dy)) return null
+    a.moved = true
+    a.last = fit(draggedOffset(a.start, dx, dy))
+    return a.last
+  }
+
+  /**
+   * Fim do gesto (sem `pointerId`: qualquer um, ex.: player escondido).
+   * Devolve a posição para salvar se houve arrasto.
+   */
+  end(pointerId?: number): MiniPlayerOffset | null {
+    const a = this.active
+    if (!a || (pointerId !== undefined && a.pointerId !== pointerId)) return null
+    this.active = null
+    this.swallowClick = a.moved
+    return a.moved ? a.last : null
+  }
+
+  /** No click: true = ativar; false = era o fim de um arrasto. */
+  takeClick(): boolean {
+    const swallow = this.swallowClick
+    this.swallowClick = false
+    return !swallow
+  }
+}
+
 export function parseMiniPlayerOffset(raw: string | null): MiniPlayerOffset {
   try {
     const parsed = JSON.parse(raw ?? 'null') as Partial<MiniPlayerOffset> | null

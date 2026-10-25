@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useCallStore } from '../../store/callStore'
 import {
   clampMiniPlayer,
-  draggedOffset,
-  isDrag,
   loadMiniPlayerOffset,
+  MiniPlayerGesture,
   saveMiniPlayerOffset,
   type MiniPlayerOffset,
   type MiniPlayerViewport
@@ -30,25 +29,16 @@ function sizeOf(el: HTMLElement | null): { width: number; height: number } {
     : MINI_PLAYER_SIZE
 }
 
-interface DragState {
-  pointerId: number
-  x: number
-  y: number
-  start: MiniPlayerOffset
-  last: MiniPlayerOffset
-  moved: boolean
-}
-
 /**
  * Transmissão assistida fora da tela da call (outro canal, servidor, DM ou
  * DM minimizada): miniatura que continua passando, no canto ou onde o usuário
  * arrastar (lembrado entre aberturas). O som segue no CallOverlay. Clicar sem
- * arrastar volta à call com a transmissão em destaque.
+ * arrastar (ou Enter/Espaço) volta à call com a transmissão em destaque.
  */
 function ScreenMiniPlayer(): React.JSX.Element | null {
   const navigate = useNavigate()
   const ref = useRef<HTMLDivElement>(null)
-  const drag = useRef<DragState | null>(null)
+  const [gesture] = useState(() => new MiniPlayerGesture())
   const [offset, setOffset] = useState(loadMiniPlayerOffset)
   const [viewport, setViewport] = useState(readViewport)
   const [dragging, setDragging] = useState(false)
@@ -65,6 +55,9 @@ function ScreenMiniPlayer(): React.JSX.Element | null {
   const focusWatchedScreen = useCallStore((s) => s.focusWatchedScreen)
   const stopWatchingScreen = useCallStore((s) => s.stopWatchingScreen)
 
+  const id = miniPlayerTarget(watchedScreenIds, focusedScreenUserId, screenStreams)
+  const visible = status === 'active' && !stageVisible && !!id
+
   // Janela redimensionada: a posição salva é reencaixada para continuar à vista.
   // Lê de novo ao montar: a altura da barra de título só existe depois do
   // layout effect do TitleBar.
@@ -75,8 +68,25 @@ function ScreenMiniPlayer(): React.JSX.Element | null {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  const id = miniPlayerTarget(watchedScreenIds, focusedScreenUserId, screenStreams)
-  if (status !== 'active' || stageVisible || !id) return null
+  // Sumiu no meio do arrasto (transmissão acabou, voltou à call): o cursor
+  // não pode ficar preso em "grabbing" (ajuste no render, como pede o React).
+  const [wasVisible, setWasVisible] = useState(visible)
+  if (wasVisible !== visible) {
+    setWasVisible(visible)
+    if (!visible) setDragging(false)
+  }
+
+  // ...e o arrasto em andamento é solto, guardando onde parou (também ao desmontar).
+  useEffect(() => {
+    const finish = (): void => {
+      const last = gesture.end()
+      if (last) saveMiniPlayerOffset(last)
+    }
+    if (!visible) finish()
+    return finish
+  }, [gesture, visible])
+
+  if (!visible || !id) return null
 
   const shown = clampMiniPlayer(offset, MINI_PLAYER_SIZE, viewport)
 
@@ -88,62 +98,60 @@ function ScreenMiniPlayer(): React.JSX.Element | null {
     if (route) navigate(route)
   }
 
-  const moveTo = (e: React.PointerEvent, d: DragState): MiniPlayerOffset => {
-    const next = draggedOffset(d.start, e.clientX - d.x, e.clientY - d.y)
-    return clampMiniPlayer(next, sizeOf(ref.current), readViewport())
-  }
+  const fit = (next: MiniPlayerOffset): MiniPlayerOffset =>
+    clampMiniPlayer(next, sizeOf(ref.current), readViewport())
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>): void => {
     if (e.button !== 0) return
-    drag.current = {
-      pointerId: e.pointerId,
-      x: e.clientX,
-      y: e.clientY,
-      start: shown,
-      last: shown,
-      moved: false
-    }
+    gesture.down(e.pointerId, e.clientX, e.clientY, shown)
     e.currentTarget.setPointerCapture(e.pointerId)
   }
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>): void => {
-    const d = drag.current
-    if (!d || d.pointerId !== e.pointerId) return
-    if (!d.moved && !isDrag(e.clientX - d.x, e.clientY - d.y)) return
-    if (!d.moved) setDragging(true)
-    d.moved = true
-    d.last = moveTo(e, d)
-    setOffset(d.last)
+    const next = gesture.move(e.pointerId, e.clientX, e.clientY, fit)
+    if (!next) return
+    setDragging(true)
+    setOffset(next)
   }
 
-  const endDrag = (e: React.PointerEvent<HTMLDivElement>, cancelled: boolean): void => {
-    const d = drag.current
-    if (!d || d.pointerId !== e.pointerId) return
-    drag.current = null
+  // pointerup, pointercancel ou captura perdida: o "voltar à call" fica no click.
+  const handlePointerEnd = (e: React.PointerEvent<HTMLDivElement>): void => {
+    const final = gesture.end(e.pointerId)
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId)
     }
-    if (d.moved) {
-      const final = cancelled ? d.last : moveTo(e, d)
-      setOffset(final)
-      setDragging(false)
-      saveMiniPlayerOffset(final)
-    } else if (!cancelled) {
-      handleOpen()
-    }
+    setDragging(false)
+    if (!final) return
+    setOffset(final)
+    saveMiniPlayerOffset(final)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
+    // Enter no X (que está dentro) é do X.
+    if (e.target !== e.currentTarget) return
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    e.preventDefault()
+    handleOpen()
   }
 
   return (
     <div
       ref={ref}
+      onClick={() => {
+        if (gesture.takeClick()) handleOpen()
+      }}
+      onKeyDown={handleKeyDown}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
-      onPointerUp={(e) => endDrag(e, false)}
-      onPointerCancel={(e) => endDrag(e, true)}
+      onPointerUp={handlePointerEnd}
+      onPointerCancel={handlePointerEnd}
+      onLostPointerCapture={handlePointerEnd}
       role="button"
+      tabIndex={0}
+      aria-label={`Voltar para a chamada: transmissão de ${name}`}
       title="Voltar para a chamada (arraste para mover)"
       style={{ right: shown.right, bottom: shown.bottom }}
-      className={`fixed z-40 aspect-video w-72 touch-none select-none overflow-hidden rounded-2xl bg-black shadow-xl ring-2 ring-[#23a55a] ${
+      className={`fixed z-40 aspect-video w-72 touch-none select-none overflow-hidden rounded-2xl bg-black shadow-xl ring-2 ring-[#23a55a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
         dragging ? 'cursor-grabbing' : 'cursor-pointer'
       }`}
     >

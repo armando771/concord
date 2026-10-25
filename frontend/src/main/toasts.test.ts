@@ -5,7 +5,8 @@ const h = vi.hoisted(() => ({
     packaged: true,
     clsid: null as string | null,
     links: {} as Record<string, Record<string, unknown>>,
-    writes: [] as Array<[string, string, Record<string, unknown>]>
+    writes: [] as Array<[string, string, Record<string, unknown>]>,
+    deleted: [] as string[]
   }
 }))
 
@@ -27,7 +28,13 @@ vi.mock('electron', () => ({
     }
   }
 }))
-vi.mock('fs', () => ({ existsSync: (path: string) => path in h.state.links }))
+vi.mock('fs', () => ({
+  existsSync: (path: string) => path in h.state.links,
+  unlinkSync: (path: string) => {
+    h.state.deleted.push(path)
+    delete h.state.links[path]
+  }
+}))
 vi.mock('./appLog', () => ({ appendLog: vi.fn() }))
 
 const programs = '/appdata/Microsoft/Windows/Start Menu/Programs'
@@ -48,6 +55,7 @@ beforeEach(() => {
   h.state.clsid = null
   h.state.links = {}
   h.state.writes = []
+  h.state.deleted = []
 })
 
 afterEach(() => {
@@ -82,16 +90,22 @@ describe('setupToasts', () => {
     expect(h.state.writes).toEqual([])
   })
 
-  it('Concord.lnk antigo com o nosso AUMID é atualizado, não recriado', async () => {
+  it('Concord.lnk antigo com o nosso AUMID é apagado: só sobra o Salinha', async () => {
     h.state.links[`${programs}/Concord.lnk`] = {
       target: '/apps/concord/Concord.exe',
       appUserModelId: 'com.concord.app'
     }
     await setup()
+    expect(h.state.deleted).toEqual([`${programs}/Concord.lnk`])
     expect(h.state.writes.map(([p, op]) => [p, op])).toEqual([
-      [`${programs}/Salinha.lnk`, 'create'],
-      [`${programs}/Concord.lnk`, 'update']
+      [`${programs}/Salinha.lnk`, 'create']
     ])
+  })
+
+  it('Concord.lnk de outro programa fica onde está', async () => {
+    h.state.links[`${programs}/Concord.lnk`] = { target: '/outro/Concord.exe', appUserModelId: 'x' }
+    await setup()
+    expect(h.state.deleted).toEqual([])
   })
 
   it('portable e dev não mexem em nada', async () => {
@@ -102,5 +116,6 @@ describe('setupToasts', () => {
     await setup()
     expect(h.state.clsid).toBeNull()
     expect(h.state.writes).toEqual([])
+    expect(h.state.deleted).toEqual([])
   })
 })
