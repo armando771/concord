@@ -9,6 +9,7 @@ import BirthdayModal from './BirthdayModal'
 import ScreenMiniPlayer from './call/ScreenMiniPlayer'
 import ScreenSharePickerModal from './call/ScreenSharePickerModal'
 import LevelUpBanner from './level/LevelUpBanner'
+import LevelUpScreen from './level/LevelUpScreen'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 
@@ -38,6 +39,7 @@ function AppShell(): React.JSX.Element {
       <BirthdayModal />
       <ScreenMiniPlayer />
       <ScreenSharePickerModal />
+      <LevelUpScreen />
       <LevelUpBanner />
     </div>
   )

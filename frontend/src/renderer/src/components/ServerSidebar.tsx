@@ -12,6 +12,9 @@ import VoiceChannelTimer from './call/VoiceChannelTimer'
 import LiveBadge from './call/LiveBadge'
 import { liveUserIds } from '../lib/liveBadge'
 import { useUserAudioStore } from '../store/userAudioStore'
+import { useLevelStore } from '../store/levelStore'
+import { sortVoiceMembers } from '../lib/voiceOrder'
+import LevelBadge from './level/LevelBadge'
 import { userMenuHandler } from '../store/userMenuStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import { logout } from '../api/auth'
@@ -73,6 +76,8 @@ export function ServerSidebar(): React.JSX.Element {
   const serverCalls = useCallStore((s) => s.serverCalls)
   const screenSharers = useCallStore((s) => s.screenSharers)
   const joinVoiceChannel = useCallStore((s) => s.joinVoiceChannel)
+  const levels = useLevelStore((s) => s.levels)
+  const ensureLevels = useLevelStore((s) => s.ensureLevels)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -144,6 +149,16 @@ export function ServerSidebar(): React.JSX.Element {
       clearInterval(timer)
     }
   }, [currentServer?.id, callListVersion])
+
+  // Níveis de todo mundo nos canais de voz num pedido só: a lista é ordenada
+  // por nível e assim reordena uma vez quando chegam, não a cada badge.
+  const voiceUserIdsKey = Object.values(serverCalls)
+    .flatMap((entry) => entry.participants.map((p) => p.user_id))
+    .sort()
+    .join(',')
+  useEffect(() => {
+    if (voiceUserIdsKey) ensureLevels(voiceUserIdsKey.split(','))
+  }, [voiceUserIdsKey, ensureLevels])
 
   const handleVoiceClick = (ch: Channel): void => {
     // Estilo Discord: conectar ao canal e exibir a view de voz na área principal.
@@ -267,12 +282,17 @@ export function ServerSidebar(): React.JSX.Element {
         }
       : undefined
 
-  const channelMenuButton = (ch: Channel): React.JSX.Element => (
+  /** `onHover`: só aparece com o mouse em cima (fica no lugar da contagem). */
+  const channelMenuButton = (ch: Channel, onHover = false): React.JSX.Element => (
     <button
       onClick={() => setChannelMenuFor(channelMenuFor === ch.id ? null : ch.id)}
       aria-label="Opções do canal"
       title="Opções do canal"
-      className="absolute right-1.5 top-1/2 z-10 -translate-y-1/2 rounded-md p-0.5 text-gray-500 transition-colors hover:bg-white/10 hover:text-white cursor-pointer"
+      className={`absolute right-1.5 top-1/2 z-10 -translate-y-1/2 rounded-md p-0.5 text-gray-500 transition-[color,background-color,opacity] hover:bg-white/10 hover:text-white cursor-pointer ${
+        onHover && channelMenuFor !== ch.id
+          ? 'opacity-0 group-hover/voicech:opacity-100 focus-visible:opacity-100'
+          : ''
+      }`}
     >
       <span className="text-[10px] leading-none">•••</span>
     </button>
@@ -479,7 +499,13 @@ export function ServerSidebar(): React.JSX.Element {
               )}
               {voiceChannels.map((ch) => {
                 const callState = serverCalls[ch.id]
-                const participants = callState?.participants ?? []
+                // O backend manda em ordem de entrada; aqui vale nível (ver voiceOrder).
+                const participants = sortVoiceMembers(callState?.participants ?? [], (p) => ({
+                  id: p.user_id,
+                  name: p.display_name ?? p.username ?? 'Usuário',
+                  level: levels[p.user_id],
+                  joinedAt: p.joined_at
+                }))
                 const connectedHere =
                   callStatus !== 'idle' &&
                   activeCallType === 'channel' &&
@@ -508,34 +534,45 @@ export function ServerSidebar(): React.JSX.Element {
                       void moveUser(userId, ch.id)
                     }}
                   >
-                    <button
-                      onClick={() => handleVoiceClick(ch)}
-                      onContextMenu={channelContextMenu(ch)}
-                      title={connectedHere ? 'Desconectar' : 'Conectar ao canal de voz'}
-                      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all cursor-pointer ${
-                        voiceDropTarget === ch.id
-                          ? 'bg-[#5865f2]/25 text-white ring-2 ring-[#5865f2]'
-                          : connectedHere
-                            ? 'text-white hover:bg-white/6'
-                            : 'text-gray-400 hover:bg-white/6 hover:text-gray-200'
-                      }`}
-                    >
-                      {/* Verde só nos canais com gente (pode ser em vários ao mesmo tempo). */}
-                      <VolumeIcon
-                        className={`h-4 w-4 shrink-0 transition-colors ${
-                          participants.length > 0 ? 'text-[#23a55a]' : 'text-gray-500'
+                    {/* O "•••" é absoluto e centrado na vertical: precisa ficar preso à
+                        linha do canal, não ao bloco todo (que cresce com a lista). */}
+                    <div className="group/voicech relative">
+                      <button
+                        onClick={() => handleVoiceClick(ch)}
+                        onContextMenu={channelContextMenu(ch)}
+                        title={connectedHere ? 'Desconectar' : 'Conectar ao canal de voz'}
+                        className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all cursor-pointer ${
+                          voiceDropTarget === ch.id
+                            ? 'bg-[#5865f2]/25 text-white ring-2 ring-[#5865f2]'
+                            : connectedHere
+                              ? 'text-white hover:bg-white/6'
+                              : 'text-gray-400 hover:bg-white/6 hover:text-gray-200'
                         }`}
-                      />
-                      <span className="truncate">{ch.name}</span>
-                      {participants.length > 0 && callState?.call?.started_at && (
-                        <VoiceChannelTimer startedAt={callState.call.started_at} />
-                      )}
-                      {participants.length > 0 && (
-                        <span className="ml-auto shrink-0 rounded-full bg-white/10 px-1.5 py-0.2 text-[10px] font-bold text-gray-300">
-                          {participants.length}
-                        </span>
-                      )}
-                    </button>
+                      >
+                        {/* Verde só nos canais com gente (pode ser em vários ao mesmo tempo). */}
+                        <VolumeIcon
+                          className={`h-4 w-4 shrink-0 transition-colors ${
+                            participants.length > 0 ? 'text-[#23a55a]' : 'text-gray-500'
+                          }`}
+                        />
+                        <span className="truncate">{ch.name}</span>
+                        {participants.length > 0 && callState?.call?.started_at && (
+                          <VoiceChannelTimer startedAt={callState.call.started_at} />
+                        )}
+                        {participants.length > 0 && (
+                          <span
+                            className={`ml-auto shrink-0 rounded-full bg-white/10 px-1.5 py-0.2 text-[10px] font-bold text-gray-300 transition-opacity ${
+                              isAdmin ? 'group-hover/voicech:opacity-0' : ''
+                            }`}
+                          >
+                            {participants.length}
+                          </span>
+                        )}
+                      </button>
+                      {/* Com gente no canal, o "•••" troca de lugar com a contagem no hover. */}
+                      {isAdmin && channelMenuButton(ch, participants.length > 0)}
+                      {channelMenuFor === ch.id && channelMenu(ch)}
+                    </div>
                     {participants.length > 0 && (
                       <div className="mb-1 ml-4 flex flex-col gap-0.5">
                         {participants.map((p) => {
@@ -554,7 +591,9 @@ export function ServerSidebar(): React.JSX.Element {
                                 e.dataTransfer.effectAllowed = 'move'
                               }}
                               onDragEnd={() => setVoiceDropTarget(null)}
-                              title={canMove(p.user_id) ? 'Arraste para outro canal de voz' : undefined}
+                              title={
+                                canMove(p.user_id) ? 'Arraste para outro canal de voz' : undefined
+                              }
                               className={`group/voiceuser relative flex items-center gap-2 overflow-hidden rounded-md px-2 py-1 transition-colors ${
                                 isMe ? 'bg-white/5 hover:bg-white/10' : 'hover:bg-white/[0.06]'
                               } ${canMove(p.user_id) ? 'cursor-pointer active:cursor-grabbing' : 'cursor-pointer'}`}
@@ -573,6 +612,7 @@ export function ServerSidebar(): React.JSX.Element {
                               >
                                 {name}
                               </span>
+                              <LevelBadge userId={p.user_id} />
                               <span className="ml-auto flex items-center gap-0.5 pr-1">
                                 {live.has(p.user_id) && <LiveBadge />}
                                 {!isMe && locallyMuted[p.user_id]?.muted && (
@@ -590,8 +630,6 @@ export function ServerSidebar(): React.JSX.Element {
                         })}
                       </div>
                     )}
-                    {isAdmin && channelMenuButton(ch)}
-                    {channelMenuFor === ch.id && channelMenu(ch)}
                   </div>
                 )
               })}

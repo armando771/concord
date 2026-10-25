@@ -7,6 +7,7 @@ import { showToast } from '../store/toastStore'
 import BirthdayFields from './BirthdayFields'
 import { useNotificationPrefsStore } from '../store/notificationPrefsStore'
 import { useOverlayPrefsStore } from '../store/overlayPrefsStore'
+import LevelUpPreview from './level/LevelUpPreview'
 
 function Toggle({
   title,
@@ -122,10 +123,14 @@ function AppSettings(): React.JSX.Element | null {
     void background?.getAutostart().then(setAutostart)
   }, [background])
 
+  // Prévia da animação de nível: só no build de dev (some do build final).
+  const devPreview = import.meta.env.DEV ? <LevelUpPreview /> : null
+
   if (!background) {
     return (
       <div className="flex flex-col gap-4">
         <ProfileSettings />
+        {devPreview}
       </div>
     )
   }
@@ -192,6 +197,7 @@ function AppSettings(): React.JSX.Element | null {
           ))}
         </div>
       </div>
+      {devPreview}
     </div>
   )
 }
