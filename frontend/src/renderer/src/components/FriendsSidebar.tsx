@@ -4,6 +4,9 @@ import { useUIStore, type FriendsTab } from '../store/uiStore'
 import { useFriendStore } from '../store/friendStore'
 import { useChatStore, usePresenceStatus } from '../store/chatStore'
 import { useUserLook } from '../store/profileStore'
+import { useAuthStore } from '../store/authStore'
+import { useTypingStore } from '../store/typingStore'
+import { typersIn } from '../lib/typing'
 import Avatar from './Avatar'
 import VoiceConnectedPanel from './call/VoiceConnectedPanel'
 import UserBar from './UserBar'
@@ -66,6 +69,8 @@ export function FriendsSidebar(): React.JSX.Element {
   const conversationsLoading = useChatStore((s) => s.conversationsLoading)
   const unreadByRoom = useChatStore((s) => s.unreadByRoom)
   const fetchConversations = useChatStore((s) => s.fetchConversations)
+  const typingByRoom = useTypingStore((s) => s.byRoom)
+  const meId = useAuthStore((s) => s.user?.id)
 
   // Mesma preferência de largura na barra de canais e na de DMs/amigos.
   const sidebar = useResizableWidth('channels')
@@ -139,6 +144,7 @@ export function FriendsSidebar(): React.JSX.Element {
               {conversations.map((conv) => {
                 const active = conv.other_user.id === userId
                 const unread = unreadByRoom[`conversation:${conv.id}`] ?? 0
+                const typing = typersIn(typingByRoom, `conversation:${conv.id}`, meId).length > 0
                 const lastPreview = conv.last_message?.content ?? 'Inicie uma conversa!'
                 const lastTime = formatLastMessageTime(conv.last_message?.created_at)
                 return (
@@ -174,10 +180,14 @@ export function FriendsSidebar(): React.JSX.Element {
                       </div>
                       <p
                         className={`truncate text-xs ${
-                          unread > 0 ? 'font-medium text-gray-200' : 'text-gray-400'
+                          typing
+                            ? 'italic text-violet-300'
+                            : unread > 0
+                              ? 'font-medium text-gray-200'
+                              : 'text-gray-400'
                         }`}
                       >
-                        {lastPreview}
+                        {typing ? 'digitando…' : lastPreview}
                       </p>
                     </div>
                   </button>

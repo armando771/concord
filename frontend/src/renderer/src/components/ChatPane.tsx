@@ -32,6 +32,8 @@ import { ApiError } from '../api/client'
 import VoiceRecordButton from './chat/VoiceRecordButton'
 import ComposerAttachments from './chat/ComposerAttachments'
 import { useAttachmentDraft } from './chat/useAttachmentDraft'
+import { useTypingSender } from './chat/useTypingSender'
+import TypingIndicator from './chat/TypingIndicator'
 
 export interface Mentionable {
   username: string
@@ -356,6 +358,7 @@ function ChatPane({
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { drafts, addFiles, remove: removeAttachment } = useAttachmentDraft(room)
+  const typing = useTypingSender(room)
   const attachmentState = draftStatus(drafts)
   const submittable = canSubmit(draft, drafts)
   // dragenter/dragleave disparam a cada filho; o contador evita piscar.
@@ -386,6 +389,7 @@ function ChatPane({
     if (!mention || !el) return
     const next = applyMention(draft, mention.start, el.selectionStart ?? draft.length, username)
     setDraft(next.text)
+    typing.onDraftChange(next.text)
     setMention(null)
     requestAnimationFrame(() => {
       el.focus()
@@ -464,6 +468,7 @@ function ChatPane({
     try {
       await sendToRoom(room, draft.trim(), attachmentState.readyIds, replyingTo?.id ?? null)
       if (roomRef.current === sentRoom) {
+        typing.onSent()
         setDraft('')
         setReplyState(null)
         sentDrafts.forEach(removeAttachment)
@@ -621,7 +626,7 @@ function ChatPane({
         )}
       </div>
 
-      <div className="relative shrink-0 px-4 pb-4">
+      <div className="relative shrink-0 px-4">
         {suggestions.length > 0 && (
           <ul
             role="listbox"
@@ -712,6 +717,7 @@ function ChatPane({
             value={draft}
             onChange={(e) => {
               setDraft(e.target.value)
+              typing.onDraftChange(e.target.value)
               setMention(mentionQuery(e.target.value, e.target.selectionStart ?? 0))
               setHighlight(null)
             }}
@@ -735,6 +741,7 @@ function ChatPane({
                 : 'Enviar'}
           </button>
         </form>
+        <TypingIndicator room={room} />
       </div>
       <CreatePollModal
         open={pollOpen}
