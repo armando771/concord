@@ -7,6 +7,7 @@ import { PendingDisplayRequest } from './displayPicker'
 import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './background'
 import { setupUpdater } from './updater'
 import { setupOverlay } from './overlay'
+import { TITLE_BAR_COLOR, titleBarOptions } from './windowPolicy'
 import {
   audioLogPath,
   hwndFromSourceId,
@@ -99,7 +100,8 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     title: 'Salinha',
-    backgroundColor: '#0f1120',
+    backgroundColor: TITLE_BAR_COLOR,
+    ...titleBarOptions(process.platform),
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

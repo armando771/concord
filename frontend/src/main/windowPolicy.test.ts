@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { launchedHidden, shouldHideOnClose, shouldNotify, staleLoginItem } from './windowPolicy'
+import {
+  launchedHidden,
+  shouldHideOnClose,
+  shouldNotify,
+  staleLoginItem,
+  TITLE_BAR_COLOR,
+  titleBarOptions
+} from './windowPolicy'
 
 describe('windowPolicy', () => {
   it('no Windows, fechar a janela esconde na bandeja', () => {
@@ -50,5 +57,19 @@ describe('windowPolicy', () => {
         staleLoginItem([{ path: 'C:\\Program Files\\Steam\\steam.exe', enabled: true }], exe)
       ).toBeUndefined()
     })
+  })
+})
+
+describe('titleBarOptions', () => {
+  it('no Windows esconde a moldura clara e pinta os botões com o preto do app', () => {
+    expect(titleBarOptions('win32')).toEqual({
+      titleBarStyle: 'hidden',
+      titleBarOverlay: { color: TITLE_BAR_COLOR, symbolColor: '#e5e7eb', height: 32 }
+    })
+    expect(titleBarOptions('linux').titleBarStyle).toBe('hidden')
+  })
+
+  it('no macOS mantém a barra nativa', () => {
+    expect(titleBarOptions('darwin')).toEqual({})
   })
 })
