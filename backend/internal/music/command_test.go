@@ -55,6 +55,15 @@ func TestClassifyArg(t *testing.T) {
 		{"https://www.youtube.com/watch?v=curto", ArgOtherURL, "", "", ""},
 		{"https://www.youtube.com/@canal", ArgOtherURL, "", "", ""},
 		{"bohemian rhapsody", ArgSearch, "", "", ""},
+		{"youtubers famosos", ArgSearch, "", "", ""},
+		{"youtube rewind 2019", ArgSearch, "", "", ""},
+		{"youtubers", ArgSearch, "", "", ""},
+		{"www.foo bar", ArgSearch, "", "", ""},
+		{"https://www.youtube.com/live/dQw4w9WgXcQ", ArgVideo, "dQw4w9WgXcQ", "", "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
+		{"https://www.youtube.com/embed/dQw4w9WgXcQ", ArgVideo, "dQw4w9WgXcQ", "", "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
+		{"https://www.youtube.com/v/dQw4w9WgXcQ", ArgVideo, "dQw4w9WgXcQ", "", "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
+		{"https://youtube.com/watch?v=dQw4w9WgXcQ&feature=share", ArgVideo, "dQw4w9WgXcQ", "", "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
+		{"https://YOUTU.BE/dQw4w9WgXcQ?t=10", ArgVideo, "dQw4w9WgXcQ", "", "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
 	}
 	for _, c := range cases {
 		got := ClassifyArg(c.in)
@@ -63,6 +72,9 @@ func TestClassifyArg(t *testing.T) {
 		}
 	}
 	if q := ClassifyArg("  lofi  ").Query; q != "lofi" {
+		t.Errorf("query = %q", q)
+	}
+	if q := ClassifyArg("youtubers famosos").Query; q != "youtubers famosos" {
 		t.Errorf("query = %q", q)
 	}
 }

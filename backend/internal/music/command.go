@@ -66,6 +66,16 @@ type PlayArg struct {
 
 var videoIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
 
+var youtubeHostPattern = regexp.MustCompile(`^(www\.|m\.|music\.)?(youtube\.com|youtu\.be)$`)
+
+// hostPart devolve o trecho até o primeiro "/", "?" ou "#".
+func hostPart(s string) string {
+	if i := strings.IndexAny(s, "/?#"); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
 func videoURL(id string) string    { return "https://www.youtube.com/watch?v=" + id }
 func playlistURL(id string) string { return "https://www.youtube.com/playlist?list=" + id }
 
@@ -74,13 +84,14 @@ func playlistURL(id string) string { return "https://www.youtube.com/playlist?li
 func ClassifyArg(arg string) PlayArg {
 	a := strings.TrimSpace(arg)
 	lower := strings.ToLower(a)
-	looksURL := strings.Contains(lower, "://") || strings.HasPrefix(lower, "www.") ||
-		strings.HasPrefix(lower, "youtu") || strings.HasPrefix(lower, "music.youtube") ||
-		strings.HasPrefix(lower, "m.youtube")
+	// Com espaço nunca é link; sem esquema, só vale se o host for do YouTube.
+	hasScheme := strings.Contains(lower, "://")
+	looksURL := !strings.ContainsFunc(a, unicode.IsSpace) &&
+		(hasScheme || youtubeHostPattern.MatchString(hostPart(lower)))
 	if !looksURL {
 		return PlayArg{Kind: ArgSearch, Query: a}
 	}
-	if !strings.Contains(lower, "://") {
+	if !hasScheme {
 		a = "https://" + a
 	}
 	u, err := url.Parse(a)
@@ -98,8 +109,8 @@ func ClassifyArg(arg string) PlayArg {
 		videoID = strings.Trim(u.Path, "/")
 	case host == "youtube.com" && u.Path == "/watch":
 		videoID = u.Query().Get("v")
-	case host == "youtube.com" && strings.HasPrefix(u.Path, "/shorts/"):
-		videoID = strings.Trim(strings.TrimPrefix(u.Path, "/shorts/"), "/")
+	case host == "youtube.com" && hasVideoPrefix(u.Path):
+		videoID = strings.Trim(u.Path[strings.Index(u.Path[1:], "/")+2:], "/")
 	case host == "youtube.com" && u.Path == "/playlist":
 		if list := u.Query().Get("list"); list != "" {
 			return PlayArg{Kind: ArgPlaylist, ListID: list, URL: playlistURL(list)}
@@ -117,4 +128,14 @@ func ClassifyArg(arg string) PlayArg {
 		return PlayArg{Kind: ArgPlaylist, VideoID: videoID, ListID: list, URL: playlistURL(list)}
 	}
 	return PlayArg{Kind: ArgVideo, VideoID: videoID, URL: videoURL(videoID)}
+}
+
+// hasVideoPrefix cobre /shorts/ID, /live/ID, /embed/ID e /v/ID.
+func hasVideoPrefix(path string) bool {
+	for _, p := range []string{"/shorts/", "/live/", "/embed/", "/v/"} {
+		if strings.HasPrefix(path, p) {
+			return true
+		}
+	}
+	return false
 }
