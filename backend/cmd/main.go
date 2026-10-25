@@ -226,6 +226,8 @@ func main() {
 	// Server
 	serverRepository := server.ServerRepository(db)
 	serverService := server.ServerService(serverRepository, hub, roleRepository)
+	// Online na prévia do link de convite (invisível conta como offline).
+	serverService.SetPresence(hub.PresenceMap)
 	moderationService := server.ModerationService(serverRepository, permissionService, hub)
 
 	// Friendship
@@ -384,7 +386,7 @@ func main() {
 		}
 		return u.EmailVerifiedAt != nil, nil
 	})
-	server.ServerRoutes(api, serverHandler, authMiddleware, requireVerified)
+	server.ServerRoutes(api, serverHandler, authMiddleware, requireVerified, auth.OptionalAuthMiddleware(authService))
 	channel.ChannelRoutes(api, channelHandler, authMiddleware)
 	role.RoleRoutes(api, roleHandler, authMiddleware)
 	conversation.ConversationRoutes(api, conversationHandler, authMiddleware)

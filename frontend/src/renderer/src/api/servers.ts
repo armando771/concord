@@ -77,6 +77,11 @@ export async function getInviteCode(serverId: string): Promise<{ code: string }>
   return request<{ code: string }>(`/servers/${serverId}/invite-code`)
 }
 
+/** "Gerar novo link": troca o código (o link antigo para de funcionar). */
+export async function rotateInviteCode(serverId: string): Promise<{ code: string }> {
+  return request<{ code: string }>(`/servers/${serverId}/invite-code/reset`, { method: 'POST' })
+}
+
 /** Entra no servidor do código. Já sendo membro, só devolve o servidor. */
 export async function joinServerByCode(code: string): Promise<Server> {
   return request<Server>('/invites/join', { method: 'POST', body: JSON.stringify({ code }) })

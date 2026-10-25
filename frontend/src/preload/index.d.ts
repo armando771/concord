@@ -62,6 +62,14 @@ export interface BackgroundApi {
   onNavigate(cb: (route: string) => void): () => void
 }
 
+/** Links salinha://convite/<código> que abriram o app. */
+export interface InviteLinksApi {
+  /** Convite que chegou e ainda não foi aberto (busca uma vez só), ou null. */
+  takePending(): Promise<string | null>
+  /** Chegou um convite (busque com takePending). Retorna unsubscribe. */
+  onPending(cb: () => void): () => void
+}
+
 export interface ActivitiesApi {
   /** Abre o jogo numa janela própria; false = link recusado pelo main. */
   open(activityId: string, url: string): Promise<boolean>
@@ -118,6 +126,7 @@ declare global {
       screenAudio?: ScreenAudioApi
       screenShare?: ScreenShareApi
       overlay?: OverlayApi
+      inviteLinks?: InviteLinksApi
       activities?: ActivitiesApi
     }
   }

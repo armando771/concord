@@ -612,6 +612,24 @@ func (h *Hub) PublishPermissionsChanged(serverID string) {
 	}
 }
 
+// O server.Service avisa do link novo por aqui (type assertion no publisher).
+var _ server.InviteCodePublisher = (*Hub)(nil)
+
+// PublishInviteCode: o link de convite do servidor mudou ("Gerar novo link").
+// Só quem pode convidar (CREATE_INVITE) recebe o código novo.
+func (h *Hub) PublishInviteCode(serverID, code string) {
+	snap := h.snapshot(serverID)
+	if snap == nil {
+		return
+	}
+	h.BroadcastToRoomFiltered("server:"+serverID, writeEvent("server:invite_code", map[string]string{
+		"server_id": serverID,
+		"code":      code,
+	}), func(userID string) bool {
+		return permission.Has(snap.Server(userID), permission.CreateInvite)
+	})
+}
+
 // SendToUser delivers an event directly to every connection of a user
 // (room "user:<id>"). No-op if the user is offline.
 func (h *Hub) SendToUser(userID string, event []byte) {

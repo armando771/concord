@@ -1,8 +1,13 @@
 package server
 
-import "github.com/gin-gonic/gin"
+import (
+	"gin-quickstart/backend/internal/ratelimit"
 
-func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware, requireVerified gin.HandlerFunc) {
+	"github.com/gin-gonic/gin"
+)
+
+// optionalAuth: põe o userID de quem está logado sem recusar anônimos (prévia do convite).
+func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware, requireVerified, optionalAuth gin.HandlerFunc) {
 	servers := router.Group("/servers")
 	servers.Use(authMiddleware)
 	{
@@ -16,6 +21,7 @@ func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware, req
 		servers.POST("/:id/invite", requireVerified, handler.InviteMember)
 		servers.GET("/:id/invites", handler.ListServerInvites)
 		servers.GET("/:id/invite-code", handler.InviteCode)
+		servers.POST("/:id/invite-code/reset", handler.RotateInviteCode)
 		servers.DELETE("/:id/members/:userId", handler.Kick)
 		servers.POST("/:id/leave", handler.Leave)
 		servers.GET("/:id/bans", handler.ListBans)
@@ -33,4 +39,10 @@ func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware, req
 		invites.POST("/:id/accept", requireVerified, handler.AcceptInvite)
 		invites.POST("/:id/decline", handler.DeclineInvite)
 	}
+
+	// Prévia do link de convite: pública (a página abre antes do login), com
+	// limite por IP contra quem tenta adivinhar códigos.
+	previewLimiter := ratelimit.New(invitePreviewPerIP, invitePreviewWindow, invitePreviewMaxKeys)
+	public := router.Group("/invites")
+	public.GET("/:id/preview", limitByIP(previewLimiter, "too many requests"), optionalAuth, handler.InvitePreview)
 }

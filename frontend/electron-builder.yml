@@ -36,9 +36,19 @@ portable:
   artifactName: Salinha-${version}-portable.${ext}
 nsis:
   artifactName: Salinha-${version}-setup.${ext}
+  # Registra o protocolo salinha:// (links de convite) na instalação. O
+  # "protocols" abaixo não vale para o NSIS no electron-builder 26.
+  include: build/installer.nsh
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+# Links de convite (salinha://convite/<código>): macOS (Info.plist) e Linux
+# (.desktop). No Windows quem registra é o build/installer.nsh e o próprio app
+# (app.setAsDefaultProtocolClient).
+protocols:
+  - name: Salinha
+    schemes:
+      - salinha
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:

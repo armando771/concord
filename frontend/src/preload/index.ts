@@ -144,6 +144,18 @@ const api = {
       return () => ipcRenderer.removeListener('navigate', listener)
     }
   },
+  inviteLinks: {
+    /** Convite do salinha://convite/<código> ainda não aberto (uma vez só), ou null. */
+    takePending(): Promise<string | null> {
+      return ipcRenderer.invoke('invite:take-pending')
+    },
+    /** Chegou um convite (o app já estava aberto): busque com takePending. */
+    onPending(cb: () => void): () => void {
+      const listener = (): void => cb()
+      ipcRenderer.on('invite:open', listener)
+      return () => ipcRenderer.removeListener('invite:open', listener)
+    }
+  },
   activities: {
     /** Abre o jogo numa janela própria; false = link recusado pelo main. */
     open(activityId: string, url: string): Promise<boolean> {
