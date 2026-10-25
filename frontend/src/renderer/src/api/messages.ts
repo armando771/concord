@@ -25,6 +25,19 @@ export interface Poll {
   total_voters: number
 }
 
+export type AttachmentKind = 'image' | 'video' | 'audio'
+
+export interface Attachment {
+  id: string
+  kind: AttachmentKind
+  content_type: string
+  filename: string
+  size_bytes: number
+  width?: number | null
+  height?: number | null
+  duration_ms?: number | null
+}
+
 export interface Message {
   id: string
   author_id: string
@@ -33,6 +46,7 @@ export interface Message {
   conversation_id?: string | null
   content: string
   poll?: Poll | null
+  attachments?: Attachment[] | null
   created_at: string
 }
 
@@ -57,10 +71,14 @@ export function listChannelMessages(channelId: string, before?: string): Promise
   return request<Message[]>(`/channels/${channelId}/messages?${query.toString()}`)
 }
 
-export function sendChannelMessage(channelId: string, content: string): Promise<Message> {
+export function sendChannelMessage(
+  channelId: string,
+  content: string,
+  attachmentIds: string[] = []
+): Promise<Message> {
   return request<Message>(`/channels/${channelId}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ content })
+    body: JSON.stringify({ content, attachment_ids: attachmentIds })
   })
 }
 
@@ -77,10 +95,14 @@ export function listConversationMessages(
   return request<Message[]>(`/conversations/${conversationId}/messages?${query.toString()}`)
 }
 
-export function sendConversationMessage(conversationId: string, content: string): Promise<Message> {
+export function sendConversationMessage(
+  conversationId: string,
+  content: string,
+  attachmentIds: string[] = []
+): Promise<Message> {
   return request<Message>(`/conversations/${conversationId}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ content })
+    body: JSON.stringify({ content, attachment_ids: attachmentIds })
   })
 }
 
@@ -94,7 +116,7 @@ export function deleteConversationMessage(
 }
 
 /** Base da rota da sala: `/channels/:id` ou `/conversations/:id`. */
-function roomPath(room: string): string {
+export function roomPath(room: string): string {
   return room.startsWith('channel:')
     ? `/channels/${room.slice('channel:'.length)}`
     : `/conversations/${room.slice('conversation:'.length)}`

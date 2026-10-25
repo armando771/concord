@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Poll } from '../api/messages'
+import type { Attachment, Poll } from '../api/messages'
 import {
   applyPollUpdate,
   isPollClosed,
@@ -103,6 +103,13 @@ describe('messagePreview', () => {
   it('mensagem de enquete mostra a pergunta', () => {
     expect(messagePreview({ content: '', poll: poll() })).toBe('📊 Jantar?')
     expect(messagePreview({ content: 'oi' })).toBe('oi')
+  })
+
+  it('mensagem só com anexo mostra o rótulo', () => {
+    const audio = [{ kind: 'audio' }] as Attachment[]
+    expect(messagePreview({ content: '', poll: null, attachments: audio })).toBe('🎤 Áudio')
+    expect(messagePreview({ content: 'olha', poll: null, attachments: audio })).toBe('olha')
+    expect(messagePreview({ content: '', poll: poll(), attachments: audio })).toBe('📊 Jantar?')
   })
 })
 
