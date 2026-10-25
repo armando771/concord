@@ -13,7 +13,7 @@ func TestRestoreRebuildsActiveCallsAfterRestart(t *testing.T) {
 	left := time.Now()
 	channelID, serverID := "canal-1", "server-1"
 
-	toEnd := s.restore(
+	toEnd, _ := s.restore(
 		[]*Call{
 			{ID: "ativa", Type: TypeChannel, Status: StatusActive, ChannelID: &channelID, ServerID: &serverID},
 			{ID: "tocando", Type: TypeDM, Status: StatusRinging},
@@ -131,7 +131,7 @@ func TestRestoreKeepsAnsweredDMStillMarkedRinging(t *testing.T) {
 	conv := "conversa-1"
 	left := time.Now()
 
-	toEnd := s.restore(
+	toEnd, healed := s.restore(
 		[]*Call{
 			{ID: "dm-atendida", Type: TypeDM, Status: StatusRinging, ConversationID: &conv},
 			{ID: "dm-tocando", Type: TypeDM, Status: StatusRinging},
@@ -153,5 +153,33 @@ func TestRestoreKeepsAnsweredDMStillMarkedRinging(t *testing.T) {
 	sort.Strings(toEnd)
 	if len(toEnd) != 2 || toEnd[0] != "dm-tocando" || toEnd[1] != "dm-um-saiu" {
 		t.Fatalf("toEnd = %v, want [dm-tocando dm-um-saiu]", toEnd)
+	}
+	if len(healed) != 1 || healed[0] != "dm-atendida" {
+		t.Fatalf("healed = %v, want [dm-atendida]", healed)
+	}
+}
+
+// A DM curada na subida vai para o banco como ativa: senão continua
+// "ringing" e, se alguém sair e o backend reiniciar de novo, é encerrada.
+func TestRestoreActiveWritesHealedDMBackAsActive(t *testing.T) {
+	s := CallService(nil, nil, nil, nil, nil, nil, nil)
+	state := &fakeStateStore{}
+	s.stateStore = state
+	s.restoreStore = &fakeRestoreStore{
+		calls: []*Call{
+			{ID: "dm-atendida", Type: TypeDM, Status: StatusRinging},
+			{ID: "canal", Type: TypeChannel, Status: StatusActive},
+		},
+		participants: map[string][]CallParticipant{
+			"dm-atendida": {{CallID: "dm-atendida", UserID: "ana"}, {CallID: "dm-atendida", UserID: "bia"}},
+			"canal":       {{CallID: "canal", UserID: "caio"}},
+		},
+	}
+
+	if err := s.RestoreActive(context.Background()); err != nil {
+		t.Fatalf("RestoreActive: %v", err)
+	}
+	if len(state.active) != 1 || state.active[0] != "dm-atendida" {
+		t.Fatalf("gravadas como ativas = %v, want [dm-atendida]", state.active)
 	}
 }

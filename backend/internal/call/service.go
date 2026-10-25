@@ -374,16 +374,19 @@ func (s *Service) Accept(ctx context.Context, callID string, userID string) erro
 	callIDCopy := ac.info.ID
 	s.mu.Unlock()
 
-	if wasRinging {
-		s.markCallActive(callID)
-	}
-
+	// Primeiro quem entrou, depois o status: se o backend cair entre os dois,
+	// a DM fica "ringing" com os dois dentro e a subida a cura (restore). Na
+	// ordem inversa ficaria "active" só com quem ligou.
 	if err := s.addParticipant(ctx, &CallParticipant{
 		CallID: callID,
 		UserID: userID,
 		Role:   RoleMember,
 	}); err != nil {
 		log.Printf("[call] persist participant %s failed: %v", userID, err)
+	}
+
+	if wasRinging {
+		s.markCallActive(callID)
 	}
 
 	s.publisher.BroadcastToCall(callIDCopy, marshalEvent("call:accept", ResponseEvent{

@@ -36,12 +36,18 @@ func (s *Service) RestoreActive(ctx context.Context) error {
 		participants[c.ID] = list
 	}
 
-	for _, id := range s.restore(calls, participants) {
+	toEnd, healed := s.restore(calls, participants)
+	for _, id := range toEnd {
 		// Só tocava ou estava vazia: encerrar é o certo; se falhar, ela fica
 		// para a próxima subida.
 		if err := s.restoreStore.EndCall(ctx, id); err != nil {
 			log.Printf("[call] restore end %s: %v", id, err)
 		}
+	}
+	// DM que voltou como ativa por ter os dois dentro: grava, senão continua
+	// "ringing" no banco e um reinício depois de alguém sair a encerraria.
+	for _, id := range healed {
+		s.markCallActive(id)
 	}
 
 	// Quem estava na chamada tem o prazo normal para reconectar.
@@ -58,18 +64,19 @@ func (s *Service) RestoreActive(ctx context.Context) error {
 	return nil
 }
 
-// restore monta o estado em memória e devolve as chamadas a encerrar: as que
-// só estavam tocando (ninguém atendeu antes de reiniciar) e as sem ninguém.
-func (s *Service) restore(calls []*Call, participants map[string][]CallParticipant) []string {
+// restore monta o estado em memória e devolve as chamadas a encerrar (as que
+// só estavam tocando, ninguém atendeu antes de reiniciar, e as sem ninguém) e
+// as DMs "ringing" que voltaram como ativas (healed), para gravar no banco.
+func (s *Service) restore(calls []*Call, participants map[string][]CallParticipant) (toEnd, healed []string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	var toEnd []string
 	for _, c := range calls {
 		// DM atendida antes de o status ir para o banco ficou "ringing": com
 		// os dois ainda dentro, estava em andamento.
 		if c.Type == TypeDM && c.Status == StatusRinging && stillInside(participants[c.ID]) >= 2 {
 			c.Status = StatusActive
+			healed = append(healed, c.ID)
 		}
 		if c.Status != StatusActive {
 			toEnd = append(toEnd, c.ID)
@@ -108,7 +115,7 @@ func (s *Service) restore(calls []*Call, participants map[string][]CallParticipa
 			s.busy[userID] = c.ID
 		}
 	}
-	return toEnd
+	return toEnd, healed
 }
 
 // stillInside conta quem não saiu da chamada.

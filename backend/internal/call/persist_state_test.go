@@ -13,6 +13,8 @@ type fakeStateStore struct {
 	voice  []string
 	screen []string
 	active []string
+	// Se não for nil, MarkCallActive também anota aqui (ordem das gravações).
+	order *[]string
 }
 
 func (f *fakeStateStore) SaveVoiceState(_ context.Context, callID, userID string, muted, deafened bool) error {
@@ -154,6 +156,9 @@ func (f *fakeStateStore) MarkCallActive(_ context.Context, callID string) error 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.active = append(f.active, callID)
+	if f.order != nil {
+		*f.order = append(*f.order, "ativa "+callID)
+	}
 	return nil
 }
 
@@ -166,15 +171,23 @@ func TestAcceptPersistsCallAsActive(t *testing.T) {
 	s.calls["dm-1"].inviteeID = "bia"
 	s.publisher = &fakePublisher{}
 	s.lookupUser = func(_ context.Context, id string) (UserInfo, error) { return UserInfo{ID: id}, nil }
-	s.addParticipant = func(context.Context, *CallParticipant) error { return nil }
-	store := &fakeStateStore{}
+	// Ordem das gravações: quem entrou antes do status ativo (se o backend
+	// cair entre os dois, a subida cura a DM com os dois dentro).
+	var order []string
+	store := &fakeStateStore{order: &order}
 	s.stateStore = store
+	s.addParticipant = func(_ context.Context, p *CallParticipant) error {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		order = append(order, "participante "+p.UserID)
+		return nil
+	}
 
 	if err := s.Accept(context.Background(), "dm-1", "bia"); err != nil {
 		t.Fatalf("Accept: %v", err)
 	}
 
-	if len(store.active) != 1 || store.active[0] != "dm-1" {
-		t.Fatalf("status ativo gravado = %v, want [dm-1]", store.active)
+	if len(order) != 2 || order[0] != "participante bia" || order[1] != "ativa dm-1" {
+		t.Fatalf("gravações = %v, want [participante bia, ativa dm-1]", order)
 	}
 }
