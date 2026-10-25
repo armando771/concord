@@ -38,6 +38,7 @@ import type { PresenceMap } from '../api/presence'
 import { fetchPresence } from '../api/presence'
 import { listChannels } from '../api/channels'
 import { useServerStore } from './serverStore'
+import { handleServerRoleEvent, removedMessage } from './serverEvents'
 import { useFriendStore } from './friendStore'
 import { useCallStore } from './callStore'
 import { useLevelStore } from './levelStore'
@@ -478,6 +479,23 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   handleWsEvent: (event) => {
+    // Relê o que a pessoa vê do servidor (cargos/canais mudaram) e, se o canal
+    // aberto sumiu para ela, sai dele.
+    const reconcileAfterPermissionChange = async (serverId: string): Promise<void> => {
+      const before = get().channelsByServer[serverId] ?? []
+      const servers = useServerStore.getState()
+      if (servers.currentServer?.id === serverId) await servers.refreshServer(serverId)
+      await get().fetchChannelsForServers([serverId])
+      const room = get().activeRoom
+      if (!room || !room.startsWith('channel:')) return
+      const open = room.slice('channel:'.length)
+      const after = get().channelsByServer[serverId] ?? []
+      if (before.includes(open) && !after.includes(open)) {
+        get().closeRoom(room)
+        void router.navigate(`/servers/${serverId}`)
+      }
+    }
+
     const payload = event.payload as Record<string, unknown>
 
     if (event.type === APP_UPDATE_EVENT) {
@@ -735,6 +753,24 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           router.navigate(`/servers/${serverId}`)
         }
       }
+      return
+    }
+
+    // Cargos, permissões e saída do servidor (sair, expulsão, banimento).
+    if (
+      handleServerRoleEvent(event, {
+        onServerRemoved: (serverId, reason) => {
+          const name = useServerStore.getState().servers.find((s) => s.id === serverId)?.name
+          get().handleServerDeleted(serverId)
+          useServerStore.getState().removeLocalServer(serverId)
+          const message = removedMessage(reason, name)
+          if (message) showToast.error(message)
+        },
+        onPermissionsChanged: (serverId) => {
+          void reconcileAfterPermissionChange(serverId)
+        }
+      })
+    ) {
       return
     }
 

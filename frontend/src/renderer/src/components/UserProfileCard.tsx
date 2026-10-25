@@ -17,6 +17,8 @@ import { showToast } from '../store/toastStore'
 import { formatMemberSince, placeProfileCard } from '../lib/profileCard'
 import { levelTier } from '../lib/levels'
 import { voiceChannelOf } from '../lib/voiceMove'
+import { memberColor } from '../lib/memberGroups'
+import { roleColorCss, rolesOfMember } from '../lib/permissions'
 import { CHOSEN_STATUSES, STATUS_META, type PresenceStatus } from '../lib/presenceStatus'
 import LevelBadge from './level/LevelBadge'
 import ProfileCardBody, { CARD_BG, type CardProfile } from './profile/ProfileCardBody'
@@ -28,11 +30,9 @@ const CARD_WIDTH = 300
 /** Altura aproximada do submenu de status (4 opções, duas com descrição). */
 const STATUS_MENU_HEIGHT = 230
 
-const ROLE_STYLE = {
-  owner: { label: 'Dono do servidor', color: '#f59e0b', avatar: 'bg-amber-600' },
-  admin: { label: 'Moderador', color: '#8b5cf6', avatar: 'bg-violet-600' },
-  member: { label: 'Membro', color: '#6366f1', avatar: 'bg-indigo-600' }
-} as const
+const OWNER_STYLE = { label: 'Dono do servidor', color: '#f59e0b', avatar: 'bg-amber-600' } as const
+/** Cor de quem não tem cargo colorido. */
+const NO_ROLE_COLOR = '#6366f1'
 
 function SectionTitle({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
@@ -137,6 +137,7 @@ function UserProfileCard(): React.JSX.Element | null {
   const me = useAuthStore((s) => s.user)
   const server = useServerStore((s) => s.currentServer)
   const member = useServerStore((s) => s.currentMembers.find((m) => m.user_id === target?.userId))
+  const serverRoles = useServerStore((s) => s.roles)
   const channels = useServerStore((s) => s.channels)
   const online = useChatStore((s) => (target ? Boolean(s.presence[target.userId]) : false))
   const knownStatus = useChatStore((s) => (target ? s.statuses[target.userId] : undefined))
@@ -219,9 +220,15 @@ function UserProfileCard(): React.JSX.Element | null {
   if (!target) return null
 
   const inServer = Boolean(server && member)
-  const roleKey =
-    server?.owner_id === target.userId ? 'owner' : member?.role === 'admin' ? 'admin' : 'member'
-  const role = ROLE_STYLE[roleKey]
+  const isServerOwner = server?.owner_id === target.userId
+  const memberRoles = inServer ? rolesOfMember(serverRoles, member?.role_ids) : []
+  // O banner e o avatar sem foto usam a cor do cargo mais alto que tem cor.
+  const role = {
+    color: isServerOwner
+      ? OWNER_STYLE.color
+      : (roleColorCss(memberColor(serverRoles, member?.role_ids)) ?? NO_ROLE_COLOR),
+    avatar: isServerOwner ? OWNER_STYLE.avatar : 'bg-indigo-600'
+  }
   const tier = level !== undefined ? levelTier(level) : null
 
   const source = isMe ? me : profile
@@ -334,16 +341,36 @@ function UserProfileCard(): React.JSX.Element | null {
       >
         {hasInfo && (
           <div className="mt-3 flex flex-col gap-3 rounded-lg bg-black/30 p-3">
-            {inServer && (
+            {inServer && (isServerOwner || memberRoles.length > 0) && (
               <div>
-                <SectionTitle>Cargo</SectionTitle>
-                <span
-                  className="inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2 py-0.5 text-xs font-semibold"
-                  style={{ color: role.color }}
-                >
-                  <span className="h-2 w-2 rounded-full" style={{ background: role.color }} />
-                  {role.label}
-                </span>
+                <SectionTitle>{memberRoles.length > 1 ? 'Cargos' : 'Cargo'}</SectionTitle>
+                <div className="flex flex-wrap gap-1.5">
+                  {isServerOwner && (
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2 py-0.5 text-xs font-semibold"
+                      style={{ color: OWNER_STYLE.color }}
+                    >
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ background: OWNER_STYLE.color }}
+                      />
+                      {OWNER_STYLE.label}
+                    </span>
+                  )}
+                  {memberRoles.map((r) => {
+                    const color = roleColorCss(r.color) ?? '#99aab5'
+                    return (
+                      <span
+                        key={r.id}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2 py-0.5 text-xs font-semibold"
+                        style={{ color }}
+                      >
+                        <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+                        {r.name}
+                      </span>
+                    )
+                  })}
+                </div>
               </div>
             )}
 

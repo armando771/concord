@@ -15,6 +15,7 @@ import { watchLocalSpeaking } from '../lib/localSpeaking'
 import { mergeLocalSpeaking, sameIds } from '../lib/voiceActivity'
 import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
+import { micBlockReason, streamBlockReason } from '../lib/voicePermissions'
 import { addWatched, miniPlayerOnly, pruneWatched, resolveFocus } from '../lib/screenWatch'
 import {
   applyLiveEvent,
@@ -85,11 +86,16 @@ interface VoicePayload {
   user_id: string
   muted: boolean
   deafened: boolean
+  /** Impostos por um moderador (silenciar/ensurdecer no servidor). */
+  server_muted?: boolean
+  server_deafened?: boolean
 }
 
 export interface VoiceState {
   muted: boolean
   deafened: boolean
+  serverMuted?: boolean
+  serverDeafened?: boolean
 }
 
 interface EndedPayload {
@@ -150,6 +156,10 @@ interface CallState {
   focusedScreenUserId: string | null
   muted: boolean
   deafened: boolean
+  /** Pode falar neste canal (SPEAK e não silenciado no servidor). */
+  canSpeak: boolean
+  /** Pode transmitir tela e câmera neste canal (STREAM). */
+  canStream: boolean
   startedAt: number | null
   /** Mute de antes de ensurdecer — volta a ele ao desensurdecer. */
   mutedBeforeDeafen: boolean
@@ -343,6 +353,25 @@ export const useCallStore = create<CallState>()((set, get) => {
         if (media !== connection) return
         serverSpeakers = userIds
         publishSpeaking()
+      },
+      onRemovedByModerator: () => {
+        if (media !== connection) return
+        showToast.info('Um moderador desconectou você da chamada.')
+        get().endCall()
+      },
+      onPublishPermissions: (allowed) => {
+        if (media !== connection) return
+        set({ canSpeak: allowed.microphone, canStream: allowed.stream })
+        if (allowed.microphone) {
+          // Ganhou a fala (cargo novo, moderador liberou): publica o microfone.
+          void connection.ensureMic(get().muted).catch(() => {})
+        } else if (!get().muted) {
+          // Perdeu a fala: o microfone fecha no servidor, então mostra como mudo.
+          set({ muted: true })
+          applyMute(true)
+          publishSpeaking()
+          sendVoiceState()
+        }
       }
     })
     media = connection
@@ -422,7 +451,12 @@ export const useCallStore = create<CallState>()((set, get) => {
           ...Object.fromEntries(
             state.participants.map((p) => [
               p.user_id,
-              { muted: p.muted ?? false, deafened: p.deafened ?? false }
+              {
+                muted: p.muted ?? false,
+                deafened: p.deafened ?? false,
+                serverMuted: p.server_muted ?? false,
+                serverDeafened: p.server_deafened ?? false
+              }
             ])
           ),
           ...(replace ? {} : s.voiceStates)
@@ -513,6 +547,8 @@ export const useCallStore = create<CallState>()((set, get) => {
       focusedScreenUserId: null,
       muted: false,
       deafened: false,
+      canSpeak: true,
+      canStream: true,
       mutedBeforeDeafen: false,
       startedAt: null
     })
@@ -579,6 +615,8 @@ export const useCallStore = create<CallState>()((set, get) => {
     focusedScreenUserId: null,
     muted: false,
     deafened: false,
+    canSpeak: true,
+    canStream: true,
     mutedBeforeDeafen: false,
     startedAt: null,
     listVersion: 0,
@@ -737,6 +775,18 @@ export const useCallStore = create<CallState>()((set, get) => {
 
     toggleMute: () => {
       const next = !get().muted
+      // Sem permissão de falar (ou silenciado por um moderador) não dá para desmutar.
+      if (!next) {
+        const meId = useAuthStore.getState().user?.id
+        const blocked = micBlockReason({
+          canSpeak: get().canSpeak,
+          serverMuted: Boolean(meId && get().voiceStates[meId]?.serverMuted)
+        })
+        if (blocked) {
+          showToast.error(blocked)
+          return
+        }
+      }
       // Desmutar enquanto ensurdecido também tira o ensurdecer.
       set(next ? { muted: true } : { muted: false, deafened: false })
       applyMute(next)
@@ -801,6 +851,11 @@ export const useCallStore = create<CallState>()((set, get) => {
     startScreenShare: async () => {
       const s = get()
       if (s.status !== 'active' || s.isScreenSharing || transitioning) return
+      const blocked = streamBlockReason(s.canStream)
+      if (blocked) {
+        showToast.error(blocked)
+        return
+      }
       let stream: MediaStream
       resetWindowAudio()
       try {
@@ -954,6 +1009,12 @@ export const useCallStore = create<CallState>()((set, get) => {
         return
       }
 
+      const blocked = streamBlockReason(s.canStream)
+      if (blocked) {
+        showToast.error(blocked)
+        return
+      }
+
       let stream: MediaStream
       try {
         stream = await getCameraStream()
@@ -1072,7 +1133,19 @@ export const useCallStore = create<CallState>()((set, get) => {
 
         case 'call:voice': {
           const p = payload as unknown as VoicePayload
-          const state = { muted: p.muted, deafened: p.deafened }
+          const state = {
+            muted: p.muted,
+            deafened: p.deafened,
+            serverMuted: Boolean(p.server_muted),
+            serverDeafened: Boolean(p.server_deafened)
+          }
+          // Mesmo estado no formato da API (lista dos canais de voz do servidor).
+          const apiState = {
+            muted: p.muted,
+            deafened: p.deafened,
+            server_muted: Boolean(p.server_muted),
+            server_deafened: Boolean(p.server_deafened)
+          }
           set((s) => {
             // Lista dos canais de voz do servidor (inclusive de chamadas em que não estou).
             const serverCalls = { ...s.serverCalls }
@@ -1081,7 +1154,7 @@ export const useCallStore = create<CallState>()((set, get) => {
               serverCalls[channelId] = {
                 ...entry,
                 participants: entry.participants.map((q) =>
-                  q.user_id === p.user_id ? { ...q, ...state } : q
+                  q.user_id === p.user_id ? { ...q, ...apiState } : q
                 )
               }
             }
