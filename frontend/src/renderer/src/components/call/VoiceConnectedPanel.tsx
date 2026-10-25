@@ -23,7 +23,7 @@ import ActivityPickerPopover from './ActivityPickerPopover'
 import NoiseSuppressionPopover from './NoiseSuppressionPopover'
 import ConnectionStatsPopover from './ConnectionStatsPopover'
 import SoundboardPopover from './SoundboardPopover'
-import ScreenQualityButton from './ScreenQualityButton'
+import ScreenQualityPopover from './ScreenQualityPopover'
 import { useSoundboardHotkeys } from './useSoundboardHotkeys'
 import { useCallChannelName } from './useCallChannelName'
 import { showVoicePanel, voicePanelHeading, voicePanelLabel, voicePanelRoute } from './voicePanel'
@@ -61,7 +61,7 @@ function RowButton({
   children
 }: {
   label: string
-  title: string
+  title?: string
   tone?: RowTone
   disabled?: boolean
   expanded?: boolean
@@ -270,22 +270,23 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
         >
           {cameraOn ? <CameraIcon className="h-5 w-5" /> : <CameraOffIcon className="h-5 w-5" />}
         </RowButton>
-        <RowButton
-          label={sharing ? 'Parar de compartilhar tela' : 'Compartilhar tela'}
-          title={
-            screenBlocked
-              ? 'Você não pode transmitir neste canal'
-              : sharing
-                ? 'Parar de compartilhar'
-                : 'Compartilhar tela'
-          }
-          tone={sharing ? 'on' : 'idle'}
-          disabled={!connected || screenBlocked}
-          onClick={() => (sharing ? stopScreenShare() : void startScreenShare())}
-        >
-          <MonitorIcon className="h-5 w-5" />
-        </RowButton>
-        <ScreenQualityButton />
+        <ScreenQualityPopover className="min-w-0 flex-1" align="start" disabled={!connected}>
+          <RowButton
+            label={sharing ? 'Parar de compartilhar tela' : 'Compartilhar tela'}
+            title={
+              screenBlocked
+                ? 'Você não pode transmitir neste canal'
+                : sharing
+                  ? undefined
+                  : 'Compartilhar tela'
+            }
+            tone={sharing ? 'on' : 'idle'}
+            disabled={!connected || screenBlocked}
+            onClick={() => (sharing ? stopScreenShare() : void startScreenShare())}
+          >
+            <MonitorIcon className="h-5 w-5" />
+          </RowButton>
+        </ScreenQualityPopover>
         <RowButton
           label="Atividades"
           title="Atividades"

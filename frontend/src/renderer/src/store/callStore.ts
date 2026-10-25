@@ -197,7 +197,8 @@ interface CallState {
   localScreenStream: MediaStream | null
   isScreenSharing: boolean
   screenShareQuality: ScreenShareQuality | null
-  screenQualityUpdating: boolean
+  /** Última troca pedida e ainda não concluída (null = nada pendente). */
+  pendingScreenQuality: ScreenShareQuality | null
   /** userId -> stream de câmera remota (Fase 4, DM) */
   videoStreams: Record<string, MediaStream>
   /** userId -> nome de quem está na sala de mídia (LiveKit), mesmo fora da lista do backend */
@@ -267,7 +268,7 @@ interface CallState {
   setOutputDevice: (deviceId: string) => void
   startScreenShare: () => Promise<void>
   stopScreenShare: () => void
-  updateScreenQuality: (quality: ScreenShareQuality) => Promise<boolean>
+  updateScreenQuality: (quality: ScreenShareQuality) => void
   toggleCamera: () => Promise<void>
   setFocusedScreenUser: (userId: string | null) => void
   /** Começa a baixar e assistir a transmissão de alguém (e foca nela). */
@@ -311,6 +312,58 @@ let speakingWatch: { track: MediaStreamTrack; stop: () => void } | null = null
 
 // Compartilhamento de tela (não-reativo; o estado reativo é localScreenStream)
 let localScreenStream: MediaStream | null = null
+/** Troca de qualidade esperando a vez: só a mais recente fica na fila. */
+let screenQualityQueue: ScreenQualityRequest | null = null
+let screenQualityRunning = false
+
+interface ScreenQualityRequest {
+  stream: MediaStream
+  connection: CallMedia
+  callId: string | null
+  quality: ScreenShareQuality
+}
+
+const sameScreenQuality = (a: ScreenShareQuality | null, b: ScreenShareQuality): boolean =>
+  a?.resolution === b.resolution && a?.frameRate === b.frameRate
+
+/** A troca ainda vale: mesma transmissão, mesma conexão e mesma chamada. */
+function isCurrentScreen(request: ScreenQualityRequest): boolean {
+  return (
+    localScreenStream === request.stream &&
+    media === request.connection &&
+    useCallStore.getState().callId === request.callId
+  )
+}
+
+/**
+ * Aplica as trocas uma de cada vez. Enquanto uma está em andamento, cliques
+ * novos substituem a fila: só a escolha final chega ao servidor.
+ */
+async function runScreenQualityQueue(): Promise<void> {
+  screenQualityRunning = true
+  try {
+    while (screenQualityQueue) {
+      const request = screenQualityQueue
+      screenQualityQueue = null
+      if (!isCurrentScreen(request)) continue
+      try {
+        await request.connection.updateScreenQuality(request.stream, request.quality)
+        if (!isCurrentScreen(request)) continue
+        rememberStreamQuality(request.stream, request.quality)
+        saveScreenQuality(request.quality)
+        useCallStore.setState({ screenShareQuality: { ...request.quality } })
+      } catch {
+        if (isCurrentScreen(request)) {
+          showToast.error('Não foi possível alterar a qualidade da transmissão.')
+        }
+      }
+    }
+  } finally {
+    screenQualityRunning = false
+    useCallStore.setState({ pendingScreenQuality: null })
+  }
+}
+
 // Som só da janela compartilhada (Windows), quando o helper nativo captura
 let windowAudio: WindowAudio | null = null
 // Câmera local (não-reativa; o estado reativo é localCameraStream)
@@ -563,7 +616,12 @@ export const useCallStore = create<CallState>()((set, get) => {
       }))
       set((s) => ({
         locked: state.call?.locked ?? s.locked,
-        joinRequests: replace ? joinReqs : [...s.joinRequests, ...joinReqs.filter((r) => !s.joinRequests.some((q) => q.id === r.id))],
+        joinRequests: replace
+          ? joinReqs
+          : [
+              ...s.joinRequests,
+              ...joinReqs.filter((r) => !s.joinRequests.some((q) => q.id === r.id))
+            ],
         screenSharers: sharing,
         voiceStates: {
           ...Object.fromEntries(
@@ -727,6 +785,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     stopLocalStream()
     localScreenStream?.getTracks().forEach((t) => t.stop())
     localScreenStream = null
+    screenQualityQueue = null
     windowAudio?.stop()
     windowAudio = null
     localCameraStream?.getTracks().forEach((t) => t.stop())
@@ -745,7 +804,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       localScreenStream: null,
       isScreenSharing: false,
       screenShareQuality: null,
-      screenQualityUpdating: false,
+      pendingScreenQuality: null,
       localCameraStream: null,
       screenSharers: [],
       speakingIds: [],
@@ -814,7 +873,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     localScreenStream: null,
     isScreenSharing: false,
     screenShareQuality: null,
-    screenQualityUpdating: false,
+    pendingScreenQuality: null,
     localCameraStream: null,
     screenSharers: [],
     speakingIds: [],
@@ -1180,7 +1239,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       }
     },
 
-    updateScreenQuality: async (quality) => {
+    updateScreenQuality: (quality) => {
       const s = get()
       const stream = localScreenStream
       const connection = media
@@ -1189,27 +1248,14 @@ export const useCallStore = create<CallState>()((set, get) => {
         !s.isScreenSharing ||
         !stream ||
         !connection ||
-        s.screenQualityUpdating ||
         screenSharePending ||
         transitioning
       )
-        return false
-      set({ screenQualityUpdating: true })
-      const current = (): boolean =>
-        localScreenStream === stream && media === connection && get().callId === s.callId
-      try {
-        await connection.updateScreenQuality(stream, quality)
-        if (!current()) return false
-        rememberStreamQuality(stream, quality)
-        saveScreenQuality(quality)
-        set({ screenShareQuality: { ...quality } })
-        return true
-      } catch {
-        if (current()) showToast.error('Não foi possível alterar a qualidade da transmissão.')
-        return false
-      } finally {
-        if (current()) set({ screenQualityUpdating: false })
-      }
+        return
+      if (sameScreenQuality(s.pendingScreenQuality ?? s.screenShareQuality, quality)) return
+      screenQualityQueue = { stream, connection, callId: s.callId, quality: { ...quality } }
+      set({ pendingScreenQuality: { ...quality } })
+      if (!screenQualityRunning) void runScreenQualityQueue()
     },
 
     stopScreenShare: () => {
@@ -1219,6 +1265,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       const callId = s.callId
       const stream = localScreenStream
       localScreenStream = null
+      screenQualityQueue = null
       windowAudio?.stop()
       windowAudio = null
 
@@ -1227,7 +1274,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       set((prev) => ({
         isScreenSharing: false,
         screenShareQuality: null,
-        screenQualityUpdating: false,
+        pendingScreenQuality: null,
         localScreenStream: null,
         screenSharers: prev.screenSharers.filter((id) => id !== meId),
         focusedScreenUserId: prev.focusedScreenUserId === meId ? null : prev.focusedScreenUserId
@@ -1674,7 +1721,11 @@ export const useCallStore = create<CallState>()((set, get) => {
           const chId = p.channel_id ?? knock.channelId
           set({ knock: null, admittedChannelId: chId })
           const byName = p.by?.display_name || p.by?.username
-          showToast.success(byName ? `${byName} permitiu sua entrada na sala!` : 'Sua entrada na sala foi permitida!')
+          showToast.success(
+            byName
+              ? `${byName} permitiu sua entrada na sala!`
+              : 'Sua entrada na sala foi permitida!'
+          )
           void get().joinVoiceChannel(chId)
           return
         }
@@ -1687,7 +1738,11 @@ export const useCallStore = create<CallState>()((set, get) => {
             // A sala acabou ou destrancou: pode entrar livremente
             if (knockDeclinedTimer) clearTimeout(knockDeclinedTimer)
             set({ knock: null })
-            showToast.info(p.reason === 'ended' ? 'A chamada terminou. A sala agora está livre.' : 'A sala foi destrancada!')
+            showToast.info(
+              p.reason === 'ended'
+                ? 'A chamada terminou. A sala agora está livre.'
+                : 'A sala foi destrancada!'
+            )
             return
           }
           set({ knock: { ...knock, status: 'declined' } })
