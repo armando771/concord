@@ -12,6 +12,7 @@ import ActivityPanel from './call/ActivityPanel'
 import ScreenSharePickerModal from './call/ScreenSharePickerModal'
 import JoinRequestsStack from './call/JoinRequestsStack'
 import LevelUpBanner from './level/LevelUpBanner'
+import BoostBanner from './level/BoostBanner'
 import LevelUpScreen from './level/LevelUpScreen'
 import InviteConfirmModal from './invite/InviteConfirmModal'
 import LevelUpMilestone from './level/LevelUpMilestone'
@@ -65,6 +66,7 @@ function AppShell(): React.JSX.Element {
       <LevelUpMilestone />
 
       <LevelUpBanner />
+      <BoostBanner />
       <BadgeUnlockToast />
       <BadgesModal />
       {quickSwitcherOpen && <QuickSwitcherModal open onClose={() => setQuickSwitcherOpen(false)} />}

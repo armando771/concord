@@ -31,3 +31,12 @@ type LevelUpEvent struct {
 	CallID        string  `json:"call_id"`
 	ServerID      *string `json:"server_id,omitempty"`
 }
+
+// BoostEvent diz à chamada qual o buff de XP dela agora. Vai a cada tick
+// enquanto há buff (quem entra depois recebe no tick seguinte) e uma última
+// vez com Percent 100 quando o buff acaba.
+type BoostEvent struct {
+	CallID   string `json:"call_id"`
+	Percent  int    `json:"percent"`
+	Eligible int    `json:"eligible"`
+}

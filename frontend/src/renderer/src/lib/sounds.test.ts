@@ -49,6 +49,20 @@ describe('SOUNDS', () => {
     expect(SOUNDS.message).toHaveLength(2)
   })
 
+  it('atualização: três notas subindo, sem sobrepor, diferente dos outros sons', () => {
+    const notes = SOUNDS.update
+    expect(notes).toHaveLength(3)
+    expect(notes[1].freq).toBeGreaterThan(notes[0].freq)
+    expect(notes[2].freq).toBeGreaterThan(notes[1].freq)
+    for (let i = 1; i < notes.length; i++) {
+      expect(notes[i].at).toBeGreaterThanOrEqual(notes[i - 1].at + notes[i - 1].duration)
+    }
+    expect(peakGain('update')).toBe(BASE_VOLUME)
+    for (const other of names.filter((n) => n !== 'update')) {
+      expect(SOUNDS.update).not.toEqual(SOUNDS[other])
+    }
+  })
+
   it('os sons de interface são curtos (menos de meio segundo)', () => {
     for (const [name, notes] of Object.entries(SOUNDS)) {
       if (LEVEL_SOUNDS.includes(name as never)) continue
