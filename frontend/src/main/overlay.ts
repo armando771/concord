@@ -34,6 +34,10 @@ let win: BrowserWindow | null = null
 let quitting = false
 let visible = false
 let editing = false
+// A página do overlay desta janela já carregou e ouve 'overlay:editing'. Antes
+// disso o atalho não liga a edição: seria uma tela inteira pegando cliques sem
+// moldura nem dica.
+let pageReady = false
 // Atalhos globais pedidos agora → se o registro deu certo. Um que falhou
 // (outro app segurando) só é tentado de novo depois de soltar.
 const held = new Map<string, boolean>()
@@ -72,6 +76,14 @@ function createOverlayWindow(): BrowserWindow {
   overlay.on('closed', () => {
     if (win === overlay) win = null
   })
+  // Recarregou (ou navegou): a página nova não sabe da edição. Sai dela e volta o
+  // click-through até a página avisar que está pronta.
+  overlay.webContents.on('did-start-loading', () => {
+    if (win !== overlay) return
+    pageReady = false
+    setEditing(false)
+    applyShortcuts()
+  })
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     overlay.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/overlay.html`)
   } else {
@@ -106,7 +118,7 @@ function hold(accelerator: string, wanted: boolean, onPress: () => void): void {
 function applyShortcuts(): void {
   const want = overlayShortcuts({ visible, editing, quitting })
   hold(OVERLAY_EDIT_SHORTCUT, want.toggleEdit, () => {
-    if (quitting || !visible) return
+    if (quitting || !visible || !pageReady) return
     setEditing(!editing)
     applyShortcuts()
   })
@@ -140,6 +152,7 @@ function sync(): void {
   if (shouldShowOverlay(process.platform, snapshot, foreground, process.pid) && foreground) {
     if (!win) {
       editing = false
+      pageReady = false
       win = createOverlayWindow()
     }
     // O helper fala em pixels físicos; o Electron posiciona em DIP. A janela
@@ -171,7 +184,12 @@ export function setupOverlay(getMainWindow: () => BrowserWindow | null): void {
     snapshot = next
     sync()
   })
-  ipcMain.handle('overlay:current', () => snapshot)
+  // Página do overlay carregou (já ouvindo os eventos): último estado e se está
+  // editando. Só a partir daqui o atalho liga a edição.
+  ipcMain.handle('overlay:ready', (event) => {
+    if (win && !quitting && event.sender === win.webContents) pageReady = true
+    return { snapshot, editing }
+  })
   // Página do overlay → posição/tamanho novos (fim do arraste). Quem salva é o
   // renderer principal (preferências do overlay), que manda de volta no estado.
   ipcMain.on('overlay:layout', (event, raw: unknown) => {
@@ -185,6 +203,7 @@ export function setupOverlay(getMainWindow: () => BrowserWindow | null): void {
       sync()
     } else if (win && contents === win.webContents) {
       editing = false
+      pageReady = false
       win.destroy()
       win = null
       sync()
@@ -196,6 +215,7 @@ export function setupOverlay(getMainWindow: () => BrowserWindow | null): void {
     foreground = null
     visible = false
     editing = false
+    pageReady = false
     applyShortcuts()
     stopForegroundWatch()
     win?.destroy()

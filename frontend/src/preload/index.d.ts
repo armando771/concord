@@ -60,8 +60,11 @@ export interface OverlayApi {
   supported: boolean
   /** Renderer principal → main: estado atual da call para o overlay. */
   setState(snapshot: OverlaySnapshot): void
-  /** Página do overlay: último estado conhecido ao abrir. */
-  current(): Promise<OverlaySnapshot | null>
+  /**
+   * Página do overlay: avisa que carregou (chamar depois de assinar onUpdate e
+   * onEditing) e recebe o último estado e se está no modo de edição.
+   */
+  ready(): Promise<{ snapshot: OverlaySnapshot | null; editing: boolean }>
   /** Página do overlay: novos estados. Retorna unsubscribe. */
   onUpdate(cb: (snapshot: OverlaySnapshot) => void): () => void
   /** Página do overlay: modo de edição (Shift+Tab) ligado/desligado. Retorna unsubscribe. */

@@ -131,9 +131,12 @@ const api = {
     setState(snapshot: OverlaySnapshot): void {
       ipcRenderer.send('overlay:state', snapshot)
     },
-    /** Página do overlay: último estado conhecido ao abrir. */
-    current(): Promise<OverlaySnapshot | null> {
-      return ipcRenderer.invoke('overlay:current')
+    /**
+     * Página do overlay: avisa que carregou (chamar depois de assinar onUpdate e
+     * onEditing) e recebe o último estado e se está no modo de edição.
+     */
+    ready(): Promise<{ snapshot: OverlaySnapshot | null; editing: boolean }> {
+      return ipcRenderer.invoke('overlay:ready')
     },
     /** Página do overlay: novos estados. */
     onUpdate(cb: (snapshot: OverlaySnapshot) => void): () => void {

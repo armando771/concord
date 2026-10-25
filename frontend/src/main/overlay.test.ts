@@ -12,6 +12,7 @@ const h = vi.hoisted(() => ({
       bounds: unknown
       sent: [string, unknown][]
       webContents: unknown
+      contentsHandlers: Record<string, () => void>
     }[],
     shortcuts: {} as Record<string, () => void>,
     shortcutsTaken: [] as string[],
@@ -28,9 +29,13 @@ vi.mock('electron', () => {
     ignoreMouse: boolean | null = null
     bounds: unknown = null
     sent: [string, unknown][] = []
+    contentsHandlers: Record<string, () => void> = {}
     webContents = {
       send: (channel: string, payload: unknown): void => {
         this.sent.push([channel, payload])
+      },
+      on: (event: string, fn: () => void): void => {
+        this.contentsHandlers[event] = fn
       }
     }
     constructor() {
@@ -131,6 +136,14 @@ const lastEditing = (w: (typeof h.state.windows)[number]): unknown =>
   w.sent.filter(([ch]) => ch === 'overlay:editing').at(-1)?.[1]
 
 const sendState = (s: unknown): unknown => h.state.handlers['overlay:state']({}, s)
+/** Página do overlay avisa que carregou (e pergunta o estado atual). */
+const ready = (w = h.state.windows.at(-1)): unknown =>
+  h.state.handlers['overlay:ready']({ sender: w?.webContents })
+/** Jogo na frente e página do overlay pronta. */
+const showGame = (): void => {
+  h.state.onChange?.(game)
+  ready()
+}
 const quit = (): void => h.state.appHandlers['before-quit'].forEach((fn) => fn())
 
 beforeEach(() => {
@@ -155,7 +168,7 @@ describe('overlay', () => {
     await setup()
     sendState(inCall)
     expect(h.state.watching).toBe(true)
-    h.state.onChange?.(game)
+    showGame()
     expect(h.state.windows).toHaveLength(1)
     expect(h.state.windows[0]).toMatchObject({
       visible: true,
@@ -167,7 +180,7 @@ describe('overlay', () => {
   it('a janela cobre a área de trabalho do monitor do jogo', async () => {
     await setup()
     sendState(inCall)
-    h.state.onChange?.(game)
+    showGame()
     expect(h.state.windows[0].bounds).toEqual({ x: 0, y: 0, width: 1920, height: 1040 })
   })
 
@@ -175,7 +188,7 @@ describe('overlay', () => {
     await setup()
     sendState(inCall)
     expect(shortcuts()).toEqual([])
-    h.state.onChange?.(game)
+    showGame()
     expect(shortcuts()).toEqual(['Shift+Tab'])
     h.state.onChange?.(null)
     expect(h.state.windows[0].visible).toBe(false)
@@ -185,7 +198,7 @@ describe('overlay', () => {
   it('Shift+Tab liga a edição: aceita o mouse e segura o Esc; Shift+Tab de novo desliga', async () => {
     await setup()
     sendState(inCall)
-    h.state.onChange?.(game)
+    showGame()
     const w = h.state.windows[0]
     press('Shift+Tab')
     expect(w.ignoreMouse).toBe(false)
@@ -200,7 +213,7 @@ describe('overlay', () => {
   it('Esc sai da edição e solta o Esc', async () => {
     await setup()
     sendState(inCall)
-    h.state.onChange?.(game)
+    showGame()
     const w = h.state.windows[0]
     press('Shift+Tab')
     press('Escape')
@@ -212,14 +225,14 @@ describe('overlay', () => {
   it('overlay some no meio da edição: volta a ignorar o mouse e solta os atalhos', async () => {
     await setup()
     sendState(inCall)
-    h.state.onChange?.(game)
+    showGame()
     const w = h.state.windows[0]
     press('Shift+Tab')
     h.state.onChange?.(null)
     expect(w.ignoreMouse).toBe(true)
     expect(shortcuts()).toEqual([])
     // Volta o jogo: sem edição pendurada.
-    h.state.onChange?.(game)
+    showGame()
     expect(w.ignoreMouse).toBe(true)
     expect(lastEditing(w)).toBe(false)
     expect(shortcuts()).toEqual(['Shift+Tab'])
@@ -228,7 +241,7 @@ describe('overlay', () => {
   it('fim da call no meio da edição solta os atalhos', async () => {
     await setup()
     sendState(inCall)
-    h.state.onChange?.(game)
+    showGame()
     press('Shift+Tab')
     sendState({ ...inCall, inCall: false })
     expect(h.state.windows[0].destroyed).toBe(true)
@@ -239,7 +252,7 @@ describe('overlay', () => {
     h.state.shortcutsTaken = ['Shift+Tab']
     await setup()
     sendState(inCall)
-    h.state.onChange?.(game)
+    showGame()
     expect(h.state.windows[0].visible).toBe(true)
     expect(shortcuts()).toEqual([])
   })
@@ -247,7 +260,7 @@ describe('overlay', () => {
   it('posição nova vinda do overlay vai para o renderer principal salvar', async () => {
     await setup()
     sendState(inCall)
-    h.state.onChange?.(game)
+    showGame()
     const w = h.state.windows[0]
     h.state.handlers['overlay:layout'](
       { sender: w.webContents },
@@ -264,18 +277,82 @@ describe('overlay', () => {
   it('ao sair do app: fecha tudo e ignora estados atrasados do renderer', async () => {
     await setup()
     sendState(inCall)
-    h.state.onChange?.(game)
+    showGame()
     press('Shift+Tab')
     quit()
     expect(shortcuts()).toEqual([])
     expect(h.state.watching).toBe(false)
     expect(h.state.windows[0].destroyed).toBe(true)
-    expect(h.state.handlers['overlay:current']()).toBeNull()
+    expect(ready()).toEqual({ snapshot: null, editing: false })
 
     sendState(inCall)
-    h.state.onChange?.(game)
+    showGame()
     expect(h.state.watching).toBe(false)
     expect(h.state.windows).toHaveLength(1)
     expect(shortcuts()).toEqual([])
+  })
+
+  it('Shift+Tab antes da página carregar é ignorado (nada de clique preso sem moldura)', async () => {
+    await setup()
+    sendState(inCall)
+    h.state.onChange?.(game)
+    const w = h.state.windows[0]
+    press('Shift+Tab')
+    expect(w.ignoreMouse).toBe(true)
+    expect(lastEditing(w)).toBeUndefined()
+    expect(ready()).toEqual({ snapshot: inCall, editing: false })
+    press('Shift+Tab')
+    expect(w.ignoreMouse).toBe(false)
+    expect(lastEditing(w)).toBe(true)
+  })
+
+  it('a página pergunta o estado de edição ao carregar', async () => {
+    await setup()
+    sendState(inCall)
+    showGame()
+    press('Shift+Tab')
+    expect(ready()).toEqual({ snapshot: inCall, editing: true })
+  })
+
+  it('"pronto" de outra página não libera o atalho', async () => {
+    await setup()
+    sendState(inCall)
+    h.state.onChange?.(game)
+    h.state.handlers['overlay:ready']({ sender: {} })
+    press('Shift+Tab')
+    expect(h.state.windows[0].ignoreMouse).toBe(true)
+  })
+
+  it('recarregar a página no meio da edição sai da edição e volta o click-through', async () => {
+    await setup()
+    sendState(inCall)
+    showGame()
+    const w = h.state.windows[0]
+    press('Shift+Tab')
+    w.contentsHandlers['did-start-loading']()
+    expect(w.ignoreMouse).toBe(true)
+    expect(shortcuts()).toEqual(['Shift+Tab'])
+    // Até a página nova avisar que carregou, o atalho não faz nada.
+    press('Shift+Tab')
+    expect(w.ignoreMouse).toBe(true)
+    expect(ready()).toEqual({ snapshot: inCall, editing: false })
+  })
+
+  it('página do overlay caiu no meio da edição: janela nova, sem edição, até ficar pronta', async () => {
+    await setup()
+    sendState(inCall)
+    showGame()
+    press('Shift+Tab')
+    const old = h.state.windows[0]
+    h.state.appHandlers['render-process-gone'].forEach((fn) => fn({}, old.webContents))
+    expect(old.destroyed).toBe(true)
+    const w = h.state.windows[1]
+    expect(w).toMatchObject({ visible: true, ignoreMouse: true })
+    expect(shortcuts()).toEqual(['Shift+Tab'])
+    press('Shift+Tab')
+    expect(w.ignoreMouse).toBe(true)
+    ready(w)
+    press('Shift+Tab')
+    expect(w.ignoreMouse).toBe(false)
   })
 })

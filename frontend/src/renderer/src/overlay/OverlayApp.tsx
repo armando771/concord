@@ -99,11 +99,14 @@ function OverlayApp(): React.JSX.Element | null {
     const overlay = window.api?.overlay
     if (!overlay) return
     let alive = true
-    overlay.current().then((s) => {
-      if (alive && s) setSnapshot((prev) => prev ?? s)
-    })
     const offUpdate = overlay.onUpdate(setSnapshot)
     const offEditing = overlay.onEditing(setEditing)
+    // Depois de assinar: o main só liga a edição com a página ouvindo.
+    overlay.ready().then((state) => {
+      if (!alive) return
+      if (state.snapshot) setSnapshot((prev) => prev ?? state.snapshot)
+      setEditing(state.editing)
+    })
     return () => {
       alive = false
       offUpdate()
