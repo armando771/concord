@@ -34,7 +34,12 @@ import ComposerAttachments from './chat/ComposerAttachments'
 import { useAttachmentDraft } from './chat/useAttachmentDraft'
 import { useTypingSender } from './chat/useTypingSender'
 import TypingIndicator from './chat/TypingIndicator'
-import { afterSendFailure, restoreFailedText } from '../lib/composerDraft'
+import {
+  afterSendFailure,
+  canRestoreHere,
+  replyAfterRestore,
+  restoreFailedText
+} from '../lib/composerDraft'
 
 export interface Mentionable {
   username: string
@@ -372,6 +377,14 @@ function ChatPane({
   useEffect(() => {
     roomRef.current = room
   }, [room])
+  // Envio que falha depois de sair do chat não mexe no campo (só oferece copiar).
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
   const [highlightChoice, setHighlight] = useState<number | null>(null)
   const meUsername = useAuthStore((s) => s.user?.username)
@@ -501,11 +514,12 @@ function ChatPane({
     sentReply: Message | null
   ): void => {
     const sentReplyState = sentReply ? { room: sentRoom, message: sentReply } : null
+    const here = (): boolean => canRestoreHere(mountedRef.current, roomRef.current, sentRoom)
     const copyAction = {
       label: 'Copiar',
       run: () => void navigator.clipboard?.writeText(sentText)
     }
-    if (roomRef.current !== sentRoom) {
+    if (!here()) {
       showToast.error(message, 10000, sentText.trim() ? copyAction : undefined)
       return
     }
@@ -513,7 +527,7 @@ function ChatPane({
     const action = afterSendFailure(sentText, sentReply !== null, current)
     if (action === 'restore') {
       setDraft(sentText)
-      setReplyState((now) => now ?? sentReplyState)
+      setReplyState((now) => replyAfterRestore(now, sentReplyState))
       showToast.error(message)
       return
     }
@@ -524,12 +538,18 @@ function ChatPane({
     showToast.error(message, 10000, {
       label: 'Restaurar',
       run: () => {
-        if (roomRef.current !== sentRoom) {
-          copyAction.run()
+        if (!here()) {
+          if (sentText.trim()) {
+            showToast.error(
+              'Você saiu da conversa: copie a mensagem que falhou.',
+              10000,
+              copyAction
+            )
+          }
           return
         }
         setDraft((now) => restoreFailedText(sentText, now))
-        if (sentReplyState) setReplyState(sentReplyState)
+        setReplyState((now) => replyAfterRestore(now, sentReplyState))
         requestAnimationFrame(() => inputRef.current?.focus())
       }
     })

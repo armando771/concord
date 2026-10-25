@@ -4,10 +4,14 @@ export function ToastContainer(): React.JSX.Element {
   const toasts = useToastStore((s) => s.toasts)
   const removeToast = useToastStore((s) => s.removeToast)
 
-  if (toasts.length === 0) return <></>
-
+  // Sempre montado (vazio, sem cliques): leitor de tela só anuncia o que entra
+  // numa região aria-live que já existia.
   return (
-    <div className="pointer-events-none fixed top-[calc(var(--titlebar-height,0px)+1rem)] right-4 z-50 flex flex-col gap-2.5 max-w-sm w-full">
+    <div
+      role="status"
+      aria-live="polite"
+      className="pointer-events-none fixed top-[calc(var(--titlebar-height,0px)+1rem)] right-4 z-50 flex flex-col gap-2.5 max-w-sm w-full"
+    >
       {toasts.map((toast) => {
         const isSuccess = toast.type === 'success'
         const isError = toast.type === 'error'

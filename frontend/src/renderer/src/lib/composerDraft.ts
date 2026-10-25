@@ -25,3 +25,16 @@ export function restoreFailedText(sentText: string, currentText: string): string
   if (currentText.trim() === '') return sentText
   return `${sentText.trimEnd()} ${currentText.trimStart()}`
 }
+
+/**
+ * O campo de onde a mensagem saiu ainda está na tela? Se a pessoa saiu da
+ * sala (ou da tela de chat), o texto que falhou só pode ser copiado.
+ */
+export function canRestoreHere(mounted: boolean, currentRoom: string, sentRoom: string): boolean {
+  return mounted && currentRoom === sentRoom
+}
+
+/** A resposta que vale depois de restaurar: a escolhida depois tem prioridade. */
+export function replyAfterRestore<R>(now: R | null, sent: R | null): R | null {
+  return now ?? sent
+}
