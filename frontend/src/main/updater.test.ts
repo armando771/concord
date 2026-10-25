@@ -327,4 +327,68 @@ describe('updater', () => {
     expect(h.state.sent).toContainEqual(['update:available', '0.7.0'])
     expect(h.autoUpdater.downloadUpdate).not.toHaveBeenCalled()
   })
+
+  describe('download em segundo plano espalhado (aviso do servidor / checagem periódica)', () => {
+    beforeEach(() => {
+      vi.useRealTimers()
+      vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout', 'Date'] })
+      vi.spyOn(Math, 'random').mockReturnValue(0.5)
+    })
+
+    afterEach(() => {
+      vi.mocked(Math.random).mockRestore()
+    })
+
+    /** Abre o app e deixa passar a janela de início (download sem espera). */
+    async function startAndWait(): Promise<void> {
+      await startUpdater()
+      await vi.advanceTimersByTimeAsync(0)
+      vi.setSystemTime(Date.now() + 5 * 60_000)
+    }
+
+    it('o aviso aparece na hora e o download espera o sorteio', async () => {
+      await startAndWait()
+      await h.autoUpdater.emit('update-available', { version: '0.7.0' })
+
+      expect(h.state.sent).toContainEqual(['update:available', '0.7.0'])
+      expect(h.autoUpdater.downloadUpdate).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(59_999)
+      expect(h.autoUpdater.downloadUpdate).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+      expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
+    })
+
+    it('clicar em Atualizar durante a espera baixa na hora, uma vez só', async () => {
+      await startAndWait()
+      await h.autoUpdater.emit('update-available', { version: '0.7.0' })
+
+      h.state.handlers['update:install']()
+      expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(120_000)
+      expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
+    })
+
+    it('checagens repetidas durante a espera não reiniciam o sorteio', async () => {
+      await startAndWait()
+      await h.autoUpdater.emit('update-available', { version: '0.7.0' })
+      vi.advanceTimersByTime(40_000)
+      await h.autoUpdater.emit('update-available', { version: '0.7.0' })
+      vi.advanceTimersByTime(20_000)
+      expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
+    })
+
+    it('entrou em chamada durante a espera: só baixa quando a chamada acabar', async () => {
+      await startAndWait()
+      await h.autoUpdater.emit('update-available', { version: '0.7.0' })
+      h.state.inCall = true
+      vi.advanceTimersByTime(60_000)
+      expect(h.autoUpdater.downloadUpdate).not.toHaveBeenCalled()
+
+      h.state.inCall = false
+      h.state.callListeners.forEach((fn) => fn({ inCall: false }))
+      expect(h.autoUpdater.downloadUpdate).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(60_000)
+      expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
+    })
+  })
 })
