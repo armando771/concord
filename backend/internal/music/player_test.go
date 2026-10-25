@@ -62,6 +62,11 @@ func (n *fakeNotifier) Humans(string) []string {
 	return append([]string(nil), n.humans...)
 }
 func (n *fakeNotifier) Closed(*Player) { n.mu.Lock(); n.closed++; n.mu.Unlock() }
+func (n *fakeNotifier) setHumans(h []string) {
+	n.mu.Lock()
+	n.humans = h
+	n.mu.Unlock()
+}
 func (n *fakeNotifier) allPublics() []string {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -175,7 +180,7 @@ func TestPlayerSkipByRequester(t *testing.T) {
 
 func TestPlayerSkipVotes(t *testing.T) {
 	h := newHarness(t, 30, time.Minute)
-	h.n.humans = []string{"ana", "bia", "caio"}
+	h.n.setHumans([]string{"ana", "bia", "caio"})
 	h.p.Enqueue([]*Item{req("a", "ana")}, "txt")
 	eventually(t, "a tocando", func() bool { return nowID(h.p) == "a" })
 
@@ -195,13 +200,11 @@ func TestPlayerSkipVotes(t *testing.T) {
 
 func TestPlayerSkipWhenVotersReachHalfAfterLeave(t *testing.T) {
 	h := newHarness(t, 30, time.Minute)
-	h.n.humans = []string{"ana", "bia", "caio", "davi"}
+	h.n.setHumans([]string{"ana", "bia", "caio", "davi"})
 	h.p.Enqueue([]*Item{req("a", "ana")}, "txt")
 	eventually(t, "a tocando", func() bool { return nowID(h.p) == "a" })
 	h.p.Skip("bia") // 1/2
-	h.n.mu.Lock()
-	h.n.humans = []string{"ana", "bia"}
-	h.n.mu.Unlock()
+	h.n.setHumans([]string{"ana", "bia"})
 	h.p.ParticipantLeft("caio")
 	if !strings.Contains(h.n.lastPublic(), "foi pulada por votação (1/1)") {
 		t.Fatalf("public = %q", h.n.lastPublic())
@@ -292,4 +295,87 @@ func TestPlayerVideoDownloadOnlyWhenWatched(t *testing.T) {
 	}
 	h.p.SetWatching("ana", true)
 	eventually(t, "vídeo pronto", func() bool { _, ok := h.p.VideoPath("a"); return ok })
+}
+
+// Started tardio de um item que a fila já tinha trocado de lugar: assume como atual.
+func TestPlayerLateStartedAfterSwap(t *testing.T) {
+	h := newHarness(t, 30, time.Minute)
+	h.p.Enqueue([]*Item{req("a", "ana")}, "txt")
+	eventually(t, "a tocando", func() bool { return nowID(h.p) == "a" })
+	h.p.Enqueue([]*Item{req("b", "ana"), req("c", "ana")}, "txt")
+	if err := h.p.Swap("b", "c", "ana"); err != nil {
+		t.Fatal(err)
+	}
+	h.p.handleEvent(MixEvent{Kind: EventStarted, Tag: "b"})
+	if nowID(h.p) != "b" {
+		t.Fatalf("now = %q", nowID(h.p))
+	}
+	if q := h.p.Snapshot().Queue; len(q) != 1 || q[0].ID != "c" {
+		t.Fatalf("fila = %+v", q)
+	}
+}
+
+// Started tardio de um item removido: o mixer corta a faixa, now não muda.
+func TestPlayerLateStartedAfterRemove(t *testing.T) {
+	h := newHarness(t, 30, time.Minute)
+	h.p.Enqueue([]*Item{req("a", "ana")}, "txt")
+	eventually(t, "a tocando", func() bool { return nowID(h.p) == "a" })
+	h.p.Enqueue([]*Item{req("b", "ana")}, "txt")
+	if err := h.p.Remove("b", "ana"); err != nil {
+		t.Fatal(err)
+	}
+	h.p.handleEvent(MixEvent{Kind: EventStarted, Tag: "b"})
+	if nowID(h.p) != "a" {
+		t.Fatalf("now = %q", nowID(h.p))
+	}
+	// O Skip do mixer faz a atual sumir: só termina se o handler o chamou.
+	pulled := 0
+	eventually(t, "a cortada", func() bool {
+		if pulled < 100 { // 2 s de áudio: bem menos que os 30 s da faixa
+			h.pull(5)
+			pulled += 5
+		}
+		return nowID(h.p) == ""
+	})
+	if pulled >= 100 {
+		t.Fatal("a não foi cortada")
+	}
+}
+
+func TestPlayerIdleAfterRemovingPreparingItem(t *testing.T) {
+	h := newHarness(t, 1, 50*time.Millisecond)
+	release := make(chan struct{})
+	h.p.deps.Prepare = func(context.Context, string) (io.ReadCloser, error) {
+		<-release
+		return src(1, 0.3), nil
+	}
+	h.p.Enqueue([]*Item{req("a", "ana")}, "txt")
+	if err := h.p.Remove("a", "ana"); err != nil {
+		t.Fatal(err)
+	}
+	close(release)
+	eventually(t, "fechou por inatividade", func() bool {
+		h.n.mu.Lock()
+		defer h.n.mu.Unlock()
+		return h.n.closed == 1
+	})
+}
+
+func TestPlayerDoubleSkipIsIgnored(t *testing.T) {
+	h := newHarness(t, 30, time.Minute)
+	h.p.Enqueue([]*Item{req("a", "ana")}, "txt")
+	eventually(t, "a tocando", func() bool { return nowID(h.p) == "a" })
+	h.p.Skip("ana")
+	if r := h.p.Skip("ana"); r.Kind != SkipDone {
+		t.Fatalf("r = %+v", r)
+	}
+	n := 0
+	for _, s := range h.n.allPublics() {
+		if s == TextSkippedBy("A", "ana", "Sala 1") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("avisos de skip = %d", n)
+	}
 }

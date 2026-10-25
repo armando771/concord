@@ -50,6 +50,17 @@ func (q *Queue) PopHead() *Item {
 	return it
 }
 
+// Take tira da fila o item com esse ID (nil se não estiver).
+func (q *Queue) Take(id string) *Item {
+	i := q.index(id)
+	if i < 0 {
+		return nil
+	}
+	it := q.items[i]
+	q.items = append(q.items[:i], q.items[i+1:]...)
+	return it
+}
+
 func (q *Queue) index(id string) int {
 	for i, it := range q.items {
 		if it.ID == id {

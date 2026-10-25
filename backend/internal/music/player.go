@@ -88,6 +88,7 @@ type Player struct {
 	out        Output
 	preparing  map[string]context.CancelFunc
 	nextTag    string // item da fila já carregado no mixer como próxima
+	skipped    string // item atual que já teve skip emitido (ignora skips repetidos)
 	idle       *time.Timer
 	watchers   map[string]struct{}
 	videoJobs  map[string]bool
@@ -157,17 +158,20 @@ func (p *Player) handleEvent(e MixEvent) {
 	}
 	switch e.Kind {
 	case EventStarted:
-		head := p.queue.Head()
-		if head == nil || head.ID != e.Tag {
-			log.Printf("[music] faixa %s começou fora de ordem", e.Tag)
+		it := p.queue.Take(e.Tag)
+		if it == nil {
+			// Foi removida enquanto estava no mixer: corta, sem mexer na atual.
+			log.Printf("[music] faixa %s começou mas não está mais na fila", e.Tag)
+			p.mixer.Skip()
 			break
 		}
 		if p.now != nil {
 			p.fading[p.now.ID] = p.now
 		}
-		p.now = p.queue.PopHead()
+		p.now = it
 		p.nowStarted = p.deps.Now()
 		p.nextTag = ""
+		p.skipped = ""
 		p.votes.Reset()
 		p.stopIdleLocked()
 		p.ensurePreparingLocked()
@@ -180,9 +184,7 @@ func (p *Player) handleEvent(e MixEvent) {
 			removeFiles(p.now)
 			p.now = nil
 		}
-		if p.now == nil && p.queue.Len() == 0 && len(p.preparing) == 0 {
-			p.startIdleLocked()
-		}
+		p.idleIfEmptyLocked()
 	}
 	p.deps.Notify.PublishState(p)
 	p.mu.Unlock()
@@ -261,6 +263,7 @@ func (p *Player) onPrepared(it *Item, path string, r io.ReadCloser, err error) {
 		// Saiu da fila ou foi trocado de lugar enquanto baixava.
 		closeQuiet(r)
 		p.ensurePreparingLocked()
+		p.idleIfEmptyLocked()
 		return
 	}
 	if err != nil {
@@ -286,8 +289,12 @@ func (p *Player) Skip(userID string) SkipResult {
 	if p.now == nil || p.closed {
 		return SkipResult{Kind: SkipNothing}
 	}
+	if p.skipped == p.now.ID {
+		return SkipResult{Kind: SkipDone}
+	}
 	if p.now.RequestedBy.ID == userID {
 		p.deps.Notify.Public(p.lastTextFor(p.now), TextSkippedBy(p.now.Track.Title, p.now.RequestedBy.Username, p.ChannelName))
+		p.skipped = p.now.ID
 		p.mixer.Skip()
 		return SkipResult{Kind: SkipDone}
 	}
@@ -308,6 +315,10 @@ func (p *Player) Skip(userID string) SkipResult {
 }
 
 func (p *Player) skipByVoteLocked(votes, needed int) {
+	if p.skipped == p.now.ID {
+		return
+	}
+	p.skipped = p.now.ID
 	p.deps.Notify.Public(p.lastTextFor(p.now), TextSkippedByVote(p.now.Track.Title, votes, needed, p.ChannelName))
 	p.votes.Reset()
 	p.mixer.Skip()
@@ -348,6 +359,7 @@ func (p *Player) Remove(itemID, userID string) error {
 	p.dropPreparedLocked(it.ID)
 	removeFiles(it)
 	p.ensurePreparingLocked()
+	p.idleIfEmptyLocked()
 	p.deps.Notify.PublishState(p)
 	return nil
 }
@@ -366,6 +378,7 @@ func (p *Player) Swap(a, b, userID string) error {
 		p.dropPreparedLocked(oldHead)
 	}
 	p.ensurePreparingLocked()
+	p.idleIfEmptyLocked()
 	p.deps.Notify.PublishState(p)
 	return nil
 }
@@ -452,6 +465,13 @@ func (p *Player) snapshotLocked() Snapshot {
 	}
 	s.Needed = NeededVotes(len(p.deps.Notify.Humans(p.CallID)))
 	return s
+}
+
+// idleIfEmptyLocked arma o timer quando não há nada tocando, na fila nem sendo preparado.
+func (p *Player) idleIfEmptyLocked() {
+	if p.now == nil && p.queue.Len() == 0 && len(p.preparing) == 0 {
+		p.startIdleLocked()
+	}
 }
 
 func (p *Player) startIdleLocked() {
