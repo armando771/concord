@@ -17,6 +17,7 @@ import { PendingDisplayRequest } from './displayPicker'
 import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './background'
 import { setupUpdater } from './updater'
 import { setupOverlay } from './overlay'
+import { setupGlobalKeybinds } from './globalKeybinds'
 import { handleInviteArgs, setupInviteProtocol } from './inviteProtocol'
 import { closeActivity, setupActivities } from './activityWindow'
 import { APP_USER_MODEL_ID } from './toastPolicy'
@@ -253,6 +254,7 @@ app.whenReady().then(() => {
   registerScreenAudio()
   setupBackground(() => mainWindow, icon)
   setupOverlay(() => mainWindow)
+  setupGlobalKeybinds(() => mainWindow)
   setupActivities(() => mainWindow)
   setupUpdater(() => mainWindow, {
     feedUrl: __CONCORD_UPDATE_URL__,

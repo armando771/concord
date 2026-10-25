@@ -1,21 +1,21 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Modal from '../Modal'
 import Avatar from '../Avatar'
 import { useFriendStore } from '../../store/friendStore'
 import { useChatStore } from '../../store/chatStore'
 import { useAuthStore } from '../../store/authStore'
+import { useServerStore } from '../../store/serverStore'
+import { listChannels, type Channel } from '../../api/channels'
 import { conversationRoute, conversationTitle } from '../../lib/conversations'
+import { filterSwitcherItems, type SwitcherItem } from '../../lib/quickSwitcher'
 
-interface Item {
-  key: string
-  label: string
-  hint: string
-  route: string
-  avatar?: { userId: string; url?: string | null }
-}
+const MAX_RESULTS = 50
 
-/** "Encontre ou comece uma conversa": amigos e DMs abertas. */
+/**
+ * "Encontre ou comece uma conversa" (Ctrl+K): amigos, DMs, servidores e canais
+ * de texto. Prefixos: @ pessoas, * servidores, # canais.
+ */
 function QuickSwitcherModal({
   open,
   onClose
@@ -27,17 +27,37 @@ function QuickSwitcherModal({
   const meId = useAuthStore((s) => s.user?.id)
   const friends = useFriendStore((s) => s.friends)
   const conversations = useChatStore((s) => s.conversations)
+  const servers = useServerStore((s) => s.servers)
+  const [channelsByServer, setChannelsByServer] = useState<Record<string, Channel[]>>({})
   const [query, setQuery] = useState('')
   const [index, setIndex] = useState(0)
 
+  // Canais de todos os servidores (o store só guarda os do servidor aberto).
+  useEffect(() => {
+    let cancelled = false
+    Promise.all(
+      servers.map((s) =>
+        listChannels(s.id)
+          .then((list) => [s.id, Array.isArray(list) ? list : []] as const)
+          .catch(() => [s.id, [] as Channel[]] as const)
+      )
+    ).then((entries) => {
+      if (!cancelled) setChannelsByServer(Object.fromEntries(entries))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [servers])
+
   const items = useMemo(() => {
-    const all: Item[] = []
+    const all: SwitcherItem[] = []
     const seen = new Set<string>()
     for (const c of conversations) {
       const route = conversationRoute(c, meId)
       seen.add(route)
       all.push({
-        key: c.id,
+        key: `conv:${c.id}`,
+        kind: 'person',
         label: conversationTitle(c, meId),
         hint:
           c.type === 'group'
@@ -51,20 +71,40 @@ function QuickSwitcherModal({
       const route = `/dm/${f.id}`
       if (seen.has(route)) continue
       all.push({
-        key: f.id,
+        key: `friend:${f.id}`,
+        kind: 'person',
         label: f.display_name || f.username,
         hint: f.username,
         route,
         avatar: { userId: f.id, url: f.avatar_url }
       })
     }
-    const q = query.trim().toLowerCase()
-    return q
-      ? all.filter((i) => i.label.toLowerCase().includes(q) || i.hint.toLowerCase().includes(q))
-      : all
-  }, [conversations, friends, meId, query])
+    for (const s of servers) {
+      all.push({
+        key: `server:${s.id}`,
+        kind: 'server',
+        label: s.name,
+        hint: 'Servidor',
+        route: `/servers/${s.id}`,
+        iconUrl: s.icon_url
+      })
+    }
+    for (const s of servers) {
+      for (const ch of channelsByServer[s.id] ?? []) {
+        if ((ch.type ?? 'text') !== 'text') continue
+        all.push({
+          key: `channel:${ch.id}`,
+          kind: 'channel',
+          label: `#${ch.name}`,
+          hint: s.name,
+          route: `/servers/${s.id}/channels/${ch.id}`
+        })
+      }
+    }
+    return filterSwitcherItems(all, query).slice(0, MAX_RESULTS)
+  }, [conversations, friends, servers, channelsByServer, meId, query])
 
-  const go = (item: Item | undefined): void => {
+  const go = (item: SwitcherItem | undefined): void => {
     if (!item) return
     navigate(item.route)
     onClose()
@@ -88,6 +128,8 @@ function QuickSwitcherModal({
             setIndex((i) => Math.max(i - 1, 0))
           } else if (e.key === 'Enter') {
             go(items[index])
+          } else if (e.key === 'Escape') {
+            onClose()
           }
         }}
         placeholder="Para onde você quer ir?"
@@ -114,9 +156,11 @@ function QuickSwitcherModal({
                 avatarUrl={item.avatar.url}
                 size={24}
               />
+            ) : item.iconUrl ? (
+              <img src={item.iconUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
             ) : (
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#5865f2] text-[11px] font-bold text-white">
-                {item.label.slice(0, 1).toUpperCase()}
+                {item.label.replace(/^#/, '').slice(0, 1).toUpperCase()}
               </span>
             )}
             <span className="truncate text-sm text-white">{item.label}</span>
@@ -124,6 +168,9 @@ function QuickSwitcherModal({
           </button>
         ))}
       </div>
+      <p className="mt-3 border-t border-white/10 pt-2 text-xs text-gray-500">
+        Dica: use <b>@</b> para pessoas, <b>*</b> para servidores e <b>#</b> para canais.
+      </p>
     </Modal>
   )
 }

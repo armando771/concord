@@ -15,6 +15,7 @@ import { PencilIcon, SearchIcon, XIcon } from '../icons'
 import MyAccountSection from './sections/MyAccountSection'
 import ProfilesSection from './sections/ProfilesSection'
 import { PrivacySection } from './sections/PrivacySection'
+import { KeybindsSection } from './sections/KeybindsSection'
 import { AppSection, NotificationsSection, VoiceSection } from './sections/SimpleSections'
 
 const NAV_BG = '#0b0c10'
@@ -30,6 +31,7 @@ const SECTION_VIEW: Record<SettingsSectionId, () => React.JSX.Element | null> = 
   profiles: ProfilesSection,
   privacy: PrivacySection,
   voice: VoiceSection,
+  keybinds: KeybindsSection,
   notifications: NotificationsSection,
   app: AppSection
 }

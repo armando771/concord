@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useUIStore } from '../store/uiStore'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import type { Message } from '../api/messages'
@@ -525,6 +526,14 @@ function ChatPane({
     }
     addDraftFiles(files)
   }
+  // Ctrl+Shift+U (atalho global) abre o seletor de arquivos deste chat.
+  const filePickerRequest = useUIStore((s) => s.filePickerRequest)
+  const seenFilePickerRequest = useRef(filePickerRequest)
+  useEffect(() => {
+    if (filePickerRequest === seenFilePickerRequest.current) return
+    seenFilePickerRequest.current = filePickerRequest
+    if (permissions.canAttach) fileInputRef.current?.click()
+  }, [filePickerRequest, permissions.canAttach])
   const typing = useTypingSender(room)
   const attachmentState = draftStatus(drafts)
   const submittable = canSubmit(draft, drafts)
@@ -575,7 +584,8 @@ function ChatPane({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (suggestions.length > 0) {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      // Com Alt/Ctrl as setas são atalhos de navegação (useGlobalShortcuts).
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !e.altKey && !e.ctrlKey && !e.metaKey) {
         e.preventDefault()
         const step = e.key === 'ArrowDown' ? 1 : -1
         const from = highlight < 0 ? (step > 0 ? -1 : 0) : highlight
@@ -595,7 +605,14 @@ function ChatPane({
       if (e.key === 'Enter' || e.key === 'Tab') return
     }
     // ↑ no campo vazio edita a sua última mensagem (como no Discord).
-    if (e.key === 'ArrowUp' && draft === '' && !e.shiftKey && !e.altKey && !e.ctrlKey) {
+    if (
+      e.key === 'ArrowUp' &&
+      draft === '' &&
+      !e.shiftKey &&
+      !e.altKey &&
+      !e.ctrlKey &&
+      !e.metaKey
+    ) {
       const last = lastEditableMessage(messages, meId)
       if (last) {
         e.preventDefault()
