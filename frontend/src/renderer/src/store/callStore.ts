@@ -13,7 +13,7 @@ import type { MicHandle } from '../lib/noiseSuppression'
 import { CallMedia, type RemoteMedia } from '../lib/livekit'
 import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
-import { addWatched, pruneWatched, resolveFocus } from '../lib/screenWatch'
+import { addWatched, miniPlayerOnly, pruneWatched, resolveFocus } from '../lib/screenWatch'
 import { applyLiveEvent, type LivePayload } from '../lib/liveBadge'
 import { callNotification, notifyDesktop } from '../lib/notifications'
 import { playSound, setSoundOutput } from '../lib/sounds'
@@ -797,7 +797,27 @@ export const useCallStore = create<CallState>()((set, get) => {
     },
 
     setStageVisible: (visible) => {
-      set({ stageVisible: visible })
+      const s = get()
+      // Saiu da tela da call: a miniatura mostra uma transmissão só, e as
+      // outras param de baixar (e de tocar som) até a pessoa voltar e assistir.
+      const next = visible
+        ? s.watchedScreenIds
+        : miniPlayerOnly(s.watchedScreenIds, s.focusedScreenUserId, s.screenStreams)
+      if (next === s.watchedScreenIds) {
+        set({ stageVisible: visible })
+        return
+      }
+      const meId = useAuthStore.getState().user?.id ?? null
+      set({
+        stageVisible: visible,
+        watchedScreenIds: next,
+        focusedScreenUserId: resolveFocus(
+          s.focusedScreenUserId,
+          next,
+          s.isScreenSharing ? meId : null
+        )
+      })
+      media?.setWatchedScreens(next)
     },
 
     setDmMinimized: (minimized) => {

@@ -75,3 +75,20 @@ export function miniPlayerTarget(
   }
   return null
 }
+
+/**
+ * Fora da tela da call só a transmissão da miniatura continua assistida (as
+ * outras voltam a pausadas: sem baixar, sem som). Sem vídeo ainda, fica a em
+ * destaque ou a última assistida. Devolve o MESMO array se nada muda.
+ */
+export function miniPlayerOnly(
+  watched: string[],
+  focused: string | null,
+  screenStreams: Record<string, MediaStream>
+): string[] {
+  if (watched.length <= 1) return watched
+  const target =
+    miniPlayerTarget(watched, focused, screenStreams) ??
+    (focused !== null && watched.includes(focused) ? focused : watched[watched.length - 1])
+  return [target]
+}

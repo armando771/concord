@@ -739,6 +739,40 @@ describe('callStore — miniatura da transmissão', () => {
     expect(useCallStore.getState().dmMinimized).toBe(false)
   })
 
+  it('fora da tela da call só a transmissão da miniatura continua', async () => {
+    await joinChannel()
+    const screens = { ana: fakeStream('video'), bia: fakeStream('video') }
+    onRemoteMedia({ ...empty, availableScreens: ['ana', 'bia'], screenStreams: screens })
+    useCallStore.getState().watchScreen('ana')
+    useCallStore.getState().watchScreen('bia')
+    useCallStore.getState().setFocusedScreenUser('ana')
+    useCallStore.getState().setStageVisible(true)
+
+    useCallStore.getState().setStageVisible(false)
+
+    expect(useCallStore.getState().watchedScreenIds).toEqual(['ana'])
+    expect(useCallStore.getState().focusedScreenUserId).toBe('ana')
+    expect(media.setWatchedScreens).toHaveBeenLastCalledWith(['ana'])
+  })
+
+  it('a transmissão fora da miniatura que estava em destaque cede o foco', async () => {
+    await joinChannel()
+    onRemoteMedia({
+      ...empty,
+      availableScreens: ['ana', 'bia'],
+      screenStreams: { bia: fakeStream('video') }
+    })
+    useCallStore.getState().watchScreen('bia')
+    useCallStore.getState().watchScreen('ana')
+    useCallStore.getState().setStageVisible(true)
+
+    // Foco em ana, mas só bia tem vídeo: a miniatura mostra bia.
+    useCallStore.getState().setStageVisible(false)
+
+    expect(useCallStore.getState().watchedScreenIds).toEqual(['bia'])
+    expect(useCallStore.getState().focusedScreenUserId).toBe('bia')
+  })
+
   it('miniatura não foca transmissão que não estou assistindo', async () => {
     await joinChannel()
     onRemoteMedia({ ...empty, availableScreens: ['bia'] })

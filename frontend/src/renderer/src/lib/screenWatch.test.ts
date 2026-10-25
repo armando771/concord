@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   addWatched,
   buildScreenEntries,
+  miniPlayerOnly,
   miniPlayerTarget,
   pruneWatched,
   resolveFocus
@@ -91,5 +92,24 @@ describe('miniPlayerTarget', () => {
 
   it('sem assistir nada não mostra', () => {
     expect(miniPlayerTarget([], 'ana', { ana: s1 })).toBeNull()
+  })
+})
+
+describe('miniPlayerOnly', () => {
+  it('fica só a transmissão da miniatura', () => {
+    expect(miniPlayerOnly(['ana', 'bia'], 'ana', { ana: s1, bia: s2 })).toEqual(['ana'])
+    expect(miniPlayerOnly(['ana', 'bia'], null, { ana: s1, bia: s2 })).toEqual(['bia'])
+  })
+
+  it('assistida em destaque cujo vídeo ainda não chegou continua', () => {
+    expect(miniPlayerOnly(['ana', 'bia'], 'ana', {})).toEqual(['ana'])
+    expect(miniPlayerOnly(['ana', 'bia'], null, {})).toEqual(['bia'])
+  })
+
+  it('uma só (ou nenhuma) devolve o mesmo array', () => {
+    const one = ['ana']
+    const none: string[] = []
+    expect(miniPlayerOnly(one, null, {})).toBe(one)
+    expect(miniPlayerOnly(none, 'ana', {})).toBe(none)
   })
 })
