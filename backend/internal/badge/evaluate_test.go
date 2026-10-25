@@ -136,6 +136,14 @@ func TestEvaluateLevelFromXP(t *testing.T) {
 	}
 }
 
+func TestEvaluateLevelProgressStartsAtLevelOne(t *testing.T) {
+	// Todo mundo começa no nível 1: a barra até o 10 começa vazia.
+	badges, _ := Evaluate(Stats{CreatedAt: now}, nil, now)
+	if nivel := find(t, badges, "nivel"); nivel.Value != 1 || nivel.Progress != 0 {
+		t.Fatalf("nivel at start = value %d progress %v, want 1/0", nivel.Value, nivel.Progress)
+	}
+}
+
 func TestEvaluateFounderCutoff(t *testing.T) {
 	early, _ := Evaluate(Stats{CreatedAt: FounderCutoff.Add(-time.Minute)}, nil, now)
 	if f := find(t, early, "fundador"); f.Tier != 1 || f.Rarity != RarityLegendary {

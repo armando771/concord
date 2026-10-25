@@ -186,6 +186,9 @@ func Evaluate(s Stats, stored Unlocks, now time.Time) ([]Badge, []Unlock) {
 		}
 
 		var floor int64
+		if c.Unit == UnitLevel {
+			floor = 1 // ninguém tem nível 0
+		}
 		if earned > 0 {
 			current := tiers[earned-1]
 			b.TierName = current.Name

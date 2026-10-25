@@ -115,7 +115,7 @@ function Detail({
   const meta = rarityMeta(badge.rarity)
   const title = earned ? badge.tier_name : badge.next_tier_name
   const unlocked = formatUnlockDate(badge.unlocked_at)
-  const nextTier = badge.tier < badge.tiers.length ? badge.tier + 1 : badge.tier
+  const maxed = badge.tier >= badge.tiers.length
 
   return (
     <div className="flex flex-col items-center">
@@ -147,8 +147,10 @@ function Detail({
             <span>Desbloqueado em {unlocked}</span>
           </>
         )}
-        <span aria-hidden="true">•</span>
-        <RarityChip badge={badge} />
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+          <span aria-hidden="true">•</span>
+          <RarityChip badge={badge} />
+        </span>
       </p>
 
       <div className="mt-5 w-full rounded-xl bg-black/25 p-4">
@@ -156,13 +158,14 @@ function Detail({
           <>
             <p className="text-sm font-semibold text-white">Seu progresso</p>
             <div className="mt-3 flex items-center gap-3">
-              <BadgeIcon
-                category={badge.category}
-                tier={badge.tier}
-                rarity={badge.rarity}
-                size={32}
-                locked={!earned}
-              />
+              {earned && (
+                <BadgeIcon
+                  category={badge.category}
+                  tier={badge.tier}
+                  rarity={badge.rarity}
+                  size={32}
+                />
+              )}
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-gray-100">{remainingText(badge)}</p>
                 <div
@@ -179,12 +182,15 @@ function Detail({
                   />
                 </div>
               </div>
-              <BadgeIcon
-                category={badge.category}
-                tier={nextTier}
-                size={32}
-                locked={badge.tier === badge.tiers.length ? false : true}
-              />
+              {!maxed && (
+                <BadgeIcon
+                  category={badge.category}
+                  tier={badge.tier + 1}
+                  rarity={badge.tiers[badge.tier]?.rarity}
+                  size={32}
+                  locked
+                />
+              )}
             </div>
             <div className="my-4 h-px bg-white/10" />
           </>
