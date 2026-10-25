@@ -164,6 +164,13 @@ const client = new WsClient({
   onLost: () => reconnectNotice.lost()
 })
 
+/**
+ * Salas cujo histórico foi carregado (openRoom) e não fechado. Só elas são
+ * relidas ao reconectar: uma sala que só recebeu mensagens soltas pelo WS
+ * (canal de outro servidor, DM nunca aberta) mantém o contador como está.
+ */
+const loadedRooms = new Set<RoomKey>()
+
 /** Mensagens que já geraram notificação (chegam por mais de uma sala). */
 const notifiedMessages = new Set<string>()
 
@@ -219,6 +226,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     try {
       const fetched = await fetch()
       if (useAuthStore.getState().accessToken !== token) return
+      loadedRooms.add(room)
       set((state) => ({
         messagesByRoom: {
           ...state.messagesByRoom,
@@ -237,6 +245,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   closeRoom: (room) => {
     client.unsubscribe(room)
+    loadedRooms.delete(room)
     set((state) => {
       const next = { ...state.messagesByRoom }
       delete next[room]
@@ -445,7 +454,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   resyncAfterReconnect: async () => {
     const token = useAuthStore.getState().accessToken
     if (!token) return
-    const rooms = Object.keys(get().messagesByRoom)
+    // Só as salas carregadas, a aberta primeiro.
+    const { activeRoom, messagesByRoom } = get()
+    const rooms = [...loadedRooms]
+      .filter((room) => messagesByRoom[room])
+      .sort((a, b) => Number(b === activeRoom) - Number(a === activeRoom))
     const resyncRoom = async (room: RoomKey): Promise<void> => {
       try {
         const latest = await getRoomFetch(room)()
@@ -453,12 +466,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         set((state) => {
           const current = state.messagesByRoom[room]
           if (!current) return {} // sala fechada enquanto buscava
-          const { messages, added, reset } = mergeMissedMessages(current, latest)
+          const { messages, added, unseen, reset } = mergeMissedMessages(current, latest)
           // Já estão na tela: um evento atrasado da mesma mensagem não notifica.
           for (const m of added) notifiedMessages.add(m.id)
+          // Só o que chegou depois da última mensagem conhecida é não lido.
           const unread =
-            room !== state.activeRoom && added.length > 0
-              ? { ...state.unreadByRoom, [room]: (state.unreadByRoom[room] ?? 0) + added.length }
+            room !== state.activeRoom && unseen.length > 0
+              ? { ...state.unreadByRoom, [room]: (state.unreadByRoom[room] ?? 0) + unseen.length }
               : state.unreadByRoom
           return {
             messagesByRoom: { ...state.messagesByRoom, [room]: messages },
@@ -909,7 +923,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
-  reset: () =>
+  reset: () => {
+    loadedRooms.clear()
     set({
       messagesByRoom: {},
       hasMoreByRoom: {},
@@ -922,4 +937,5 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       conversations: [],
       conversationsLoading: false
     })
+  }
 }))

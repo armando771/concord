@@ -104,9 +104,47 @@ describe('mergeMissedMessages', () => {
     expect(result.added.map((m) => m.id)).toEqual(['a'])
   })
 
-  it('servidor sem nada (tudo apagado): esvazia o que estava na janela', () => {
+  it('página vazia não apaga o que está na tela (inclusive o que chegou pelo WS)', () => {
     const result = mergeMissedMessages([msg('a', 1)], [])
-    expect(result.messages).toEqual([])
+    expect(result.messages.map((m) => m.id)).toEqual(['a'])
     expect(result.added).toEqual([])
+  })
+
+  it('não lidas: só o que é mais novo que a última mensagem conhecida', () => {
+    // Sala com só a mensagem nova que chegou pelo WS: as 2 antigas da página
+    // não são "novas" para o usuário.
+    const current = [msg('nova', 5)]
+    const page = newestFirst(msg('x', 1), msg('y', 2), msg('nova', 5), msg('depois', 6))
+
+    const result = mergeMissedMessages(current, page)
+
+    expect(result.unseen.map((m) => m.id)).toEqual(['depois'])
+  })
+
+  it('sala carregada vazia: tudo que chegou é não lido', () => {
+    const result = mergeMissedMessages([], newestFirst(msg('a', 1), msg('b', 2)))
+    expect(result.unseen.map((m) => m.id)).toEqual(['a', 'b'])
+  })
+
+  it('mensagem fora da página com o mesmo horário da borda não some', () => {
+    // O Postgres guarda microssegundos; Date.parse corta em milissegundos.
+    const current = [
+      { id: 'velha', created_at: '2026-10-25T10:00:00.123Z' },
+      { id: 'a', created_at: '2026-10-25T10:00:00.123Z' }
+    ]
+    const page = [
+      { id: 'b', created_at: '2026-10-25T10:00:01Z' },
+      { id: 'a', created_at: '2026-10-25T10:00:00.123Z' }
+    ]
+
+    const result = mergeMissedMessages(current, page)
+
+    expect(result.messages.map((m) => m.id)).toEqual(['velha', 'a', 'b'])
+  })
+
+  it('página de uma mensagem só não duplica quem tem o mesmo horário', () => {
+    const current = [msg('irma', 1), msg('a', 1)]
+    const result = mergeMissedMessages(current, newestFirst(msg('a', 1)))
+    expect(result.messages.map((m) => m.id)).toEqual(['irma', 'a'])
   })
 })
