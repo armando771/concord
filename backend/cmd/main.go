@@ -25,6 +25,7 @@ import (
 	"gin-quickstart/backend/internal/health"
 	"gin-quickstart/backend/internal/httplog"
 	"gin-quickstart/backend/internal/level"
+	"gin-quickstart/backend/internal/proposal"
 	"gin-quickstart/backend/internal/lifecycle"
 	"gin-quickstart/backend/internal/livekit"
 	"gin-quickstart/backend/internal/media"
@@ -343,6 +344,23 @@ func main() {
 	levelHandler := level.LevelHandler(levelService)
 	go levelService.Run(ctx)
 
+	// Propostas (kanban com votação de 7 dias; aprovadas viram issue no GitHub)
+	var issueCreator proposal.IssueCreator
+	if token, repo := os.Getenv("GITHUB_TOKEN"), os.Getenv("GITHUB_REPO"); token != "" && repo != "" {
+		issueCreator = proposal.NewGitHubClient(token, repo)
+	} else {
+		log.Println("[proposal] GITHUB_TOKEN/GITHUB_REPO vazios: propostas aprovadas ficam sem issue")
+	}
+	var techIDs []string
+	for id := range strings.SplitSeq(os.Getenv("TECH_TEAM_USER_IDS"), ",") {
+		if id = strings.TrimSpace(id); id != "" {
+			techIDs = append(techIDs, id)
+		}
+	}
+	proposalService := proposal.ProposalService(proposal.ProposalRepository(db), hub, issueCreator, techIDs)
+	proposalHandler := proposal.ProposalHandler(proposalService)
+	go proposalService.Run(ctx)
+
 	// Badges do perfil (tempo transmitindo, madrugada, maior call... somados
 	// olhando as chamadas; o resto vem dos contadores do banco)
 	// Horas de Coruja/Madrugador em Brasília (nil), não no relógio da VPS. No
@@ -397,6 +415,7 @@ func main() {
 	soundboard.Routes(api, soundboardHandler, authMiddleware)
 	level.LevelRoutes(api, levelHandler, authMiddleware)
 	badge.BadgeRoutes(api, badgeHandler, authMiddleware)
+	proposal.ProposalRoutes(api, proposalHandler, authMiddleware, requireVerified)
 	birthday.BirthdayRoutes(api, birthdayHandler, authMiddleware)
 
 	// Presence (protected)
