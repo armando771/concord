@@ -107,7 +107,8 @@ const api = {
     },
     /**
      * Notificação nativa e aviso na barra de tarefas (só se a janela não
-     * estiver à vista). `toast`/`taskbar` = preferências do usuário.
+     * estiver à vista; o toast também com ela em foco se `elsewhere`).
+     * `toast`/`taskbar` = preferências do usuário.
      */
     notify(payload: {
       title: string
@@ -116,6 +117,7 @@ const api = {
       urgent?: boolean
       toast?: boolean
       taskbar?: boolean
+      elsewhere?: boolean
     }): void {
       ipcRenderer.send('notify', payload)
     },

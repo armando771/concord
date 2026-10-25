@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 import type { ServerMember } from '../api/servers'
 import {
+  deliverDesktop,
   friendRequestNotification,
   mentionNotification,
+  messageAlert,
   messageNotification,
   notificationSound,
   notifyDesktop
@@ -217,6 +219,9 @@ function markReadSoon(conversationId: string, messageId?: string): void {
     }, 400)
   )
 }
+
+/** A janela (ou a aba, no web) está à vista e com foco. */
+const windowFocused = (): boolean => document.visibilityState !== 'hidden' && document.hasFocus()
 
 const isBlocked = (userId: string): boolean =>
   useFriendStore.getState().blocked.some((u) => u.id === userId)
@@ -742,9 +747,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         // DM recebida ou menção a você num canal (inclusive @all/@here liberados
         // pelo backend no mention_everyone): notificação do Windows, aviso
         // na barra de tarefas e som — conforme Configurações → Notificações.
+        // Chega mesmo com a conversa fechada (canal pela sala do servidor, DM
+        // pela sala user:<eu>) e avisa sempre, menos para quem está lendo
+        // essa conversa com a janela em foco (messageAlert).
         // A mesma mensagem chega pela sala do canal e do servidor: avisa uma vez.
         const me = useAuthStore.getState().user
-        if (msg.conversation_id && room === get().activeRoom && document.hasFocus()) {
+        if (msg.conversation_id && room === get().activeRoom && windowFocused()) {
           markReadSoon(msg.conversation_id, msg.id)
         }
         if (me && !notifiedMessages.has(msg.id) && !isBlocked(msg.author_id)) {
@@ -765,10 +773,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           if (notification) {
             // "Não perturbe" silencia o aviso, a barra de tarefas e o som.
             const prefs = prefsForStatus(notificationPrefs(), me.status)
-            notifyDesktop(notification, prefs)
-            const looking = room === get().activeRoom && document.hasFocus()
-            const sound = notificationSound(notification.kind, prefs)
-            if (!looking && sound) playSound(sound)
+            const alert = messageAlert(
+              notification,
+              { focused: windowFocused(), viewingRoom: room === get().activeRoom },
+              prefs
+            )
+            if (alert) {
+              deliverDesktop(alert.payload)
+              if (alert.sound) playSound(alert.sound)
+            }
           }
         }
 

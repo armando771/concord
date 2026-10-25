@@ -22,6 +22,24 @@ describe('webNotificationAction', () => {
     })
   })
 
+  it('aba em foco mas em outro chat: avisa sem contar no título', () => {
+    const payload = desktopPayload(message, DEFAULT_NOTIFICATION_PREFS, { elsewhere: true })
+    expect(webNotificationAction(payload, 'granted', looking)).toEqual({
+      show: true,
+      countUnread: false
+    })
+    expect(webNotificationAction(payload, 'denied', looking)).toEqual({
+      show: false,
+      countUnread: false
+    })
+    const off = desktopPayload(
+      message,
+      { desktop: false, taskbar: true, sound: true },
+      { elsewhere: true }
+    )
+    expect(webNotificationAction(off, 'granted', looking).show).toBe(false)
+  })
+
   it('aba em segundo plano (ou visível sem foco): avisa e conta a não lida', () => {
     const payload = desktopPayload(message, DEFAULT_NOTIFICATION_PREFS)
     expect(webNotificationAction(payload, 'granted', away)).toEqual({
