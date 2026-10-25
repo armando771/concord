@@ -147,7 +147,7 @@ func (y *YTDLP) Resolve(ctx context.Context, url string) (Track, error) {
 func entries(info *ytInfo) []Track {
 	var out []Track
 	for _, e := range info.Entries {
-		if e.ID == "" || e.Duration == nil || strings.HasPrefix(e.Title, "[") {
+		if e.ID == "" || e.Duration == nil {
 			continue
 		}
 		t := toTrack(e)
@@ -183,7 +183,12 @@ func (y *YTDLP) download(ctx context.Context, format, suffix, videoID, dir strin
 	if err != nil {
 		return "", mapYTError(string(stderr), err)
 	}
-	lines := strings.Split(strings.TrimSpace(string(stdout)), "\n")
+	out := strings.TrimSpace(string(stdout))
+	if out == "" {
+		// yt-dlp saiu com 0 mas não imprimiu caminho (download filtrado/pulado)
+		return "", fmt.Errorf("%w: yt-dlp não baixou nada", ErrUnavailable)
+	}
+	lines := strings.Split(out, "\n")
 	return strings.TrimSpace(lines[len(lines)-1]), nil
 }
 

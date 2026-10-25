@@ -135,3 +135,20 @@ func TestDownloadVideoArgs(t *testing.T) {
 		t.Fatalf("args = %v", f.args)
 	}
 }
+
+func TestPlaylistKeepsBracketTitles(t *testing.T) {
+	f := &fakeRun{stdout: `{"title":"L","entries":[
+		{"id":"aaaaaaaaaaa","title":"[MV] Música","channel":"A","duration":100},
+		{"id":"bbbbbbbbbbb","title":"[Private video]","duration":null}]}`}
+	_, tracks, err := NewYTDLP("yt-dlp", "", "", f.run).Playlist(context.Background(), "u", 50)
+	if err != nil || len(tracks) != 1 || tracks[0].VideoID != "aaaaaaaaaaa" {
+		t.Fatalf("tracks=%+v err=%v", tracks, err)
+	}
+}
+
+func TestDownloadWithoutPathIsUnavailable(t *testing.T) {
+	f := &fakeRun{stdout: ""}
+	if _, err := NewYTDLP("yt-dlp", "", "", f.run).DownloadAudio(context.Background(), "dQw4w9WgXcQ", "/cache"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("err = %v", err)
+	}
+}
