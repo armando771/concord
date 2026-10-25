@@ -69,7 +69,8 @@ kind=$(cat "${server}/running" 2>/dev/null)
 case "$kind" in
   good) code=200 ;;
   sem-healthz) code=404 ;;
-  *) sleep 0.2; code=000 ;;
+  # Com o socket a conexão nunca é recusada: o curl espera o -m inteiro.
+  *) m=1; prev=""; for a in "$@"; do [ "$prev" = -m ] && m="$a"; prev="$a"; done; sleep "$m"; code=000 ;;
 esac
 for a in "$@"; do [ "$a" = '%{http_code}' ] && { printf %s "$code"; exit 0; }; done
 [ "$code" = 200 ]`)
@@ -135,12 +136,52 @@ test('binário novo que não fica saudável: volta para o anterior, no prazo', (
   assert.ok(r.ms < 15000, `demorou ${r.ms} ms`)
 })
 
+test('o prazo do /healthz é total: curl que espera o -m inteiro não estica a espera', () => {
+  // 60 tentativas com -m 2 davam ~150 s; com HEALTH_TIMEOUT=4 o deploy inteiro
+  // (espera do novo + volta ao anterior, que responde na hora) fica perto de 4 s.
+  const good = fakeBinary('good')
+  const ctx = setup({ newKind: 'quebrado', socketActive: true, current: good, good })
+  const r = deploy(ctx, ['root@vps'], { HEALTH_TIMEOUT: '4' })
+  assert.equal(r.status, 1)
+  assert.match(r.stderr, /não respondeu \/healthz em 4 s/)
+  assert.ok(r.ms < 9000, `demorou ${r.ms} ms`)
+})
+
 test('primeiro deploy que falha volta ao binário antigo, que não tem /healthz, e diz que ele está no ar', () => {
   const ctx = setup({ newKind: 'quebrado', current: fakeBinary('sem-healthz', { socket: false }) })
-  const r = deploy(ctx)
+  const r = deploy(ctx, ['root@vps'], { HEALTH_TIMEOUT: '4' })
   assert.equal(r.status, 1)
   assert.match(r.stderr, /que está no ar \(é de antes do \/healthz\)/)
-  assert.doesNotMatch(r.stderr, /nem o binário anterior/)
+  assert.doesNotMatch(r.stderr, /também não respondeu/)
+  // Uma espera só depois da volta: o 404 conta na hora (antes esperava o
+  // prazo inteiro por um 200 que nunca vinha).
+  assert.ok(r.ms < 9000, `demorou ${r.ms} ms`)
+})
+
+test('nem o anterior responde: diz isso, sem fingir que voltou', () => {
+  const ctx = setup({ newKind: 'quebrado', current: fakeBinary('quebrado') })
+  const r = deploy(ctx)
+  assert.equal(r.status, 1)
+  assert.match(r.stderr, /o binário anterior também não respondeu em 2 s/)
+  assert.doesNotMatch(r.stderr, /voltei para o binário anterior/)
+})
+
+test('com o socket ativo, não volta para um binário anterior sem suporte a ele', () => {
+  const ctx = setup({ newKind: 'quebrado', socketActive: true, current: fakeBinary('good', { socket: false }) })
+  const r = deploy(ctx)
+  assert.equal(r.status, 1)
+  assert.match(r.stderr, /anterior não sabe usar o socket/)
+  assert.equal(r.log.match(/systemctl restart/g)?.length, 1, 'reiniciou com o binário sem socket')
+})
+
+test('pasta remota com espaço e aspas chega inteira ao servidor', () => {
+  const ctx = setup({ current: fakeBinary('good') })
+  const odd = join(ctx.base, "opt concord's")
+  spawnSync('cp', ['-r', ctx.server, odd])
+  ctx.server = odd
+  const r = deploy(ctx)
+  assert.equal(r.status, 0, r.stderr)
+  assert.ok(existsSync(join(odd, 'concord-server.good')))
 })
 
 test('--infra chega ao servidor', () => {

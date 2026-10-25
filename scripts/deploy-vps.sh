@@ -136,13 +136,13 @@ supports_socket() { grep -aq "$CAPABILITY" "$1"; }
 # Espera o backend responder até o prazo (relógio, não número de tentativas:
 # com o socket a conexão nunca é recusada e cada curl espera o tempo dele).
 # wait_status 200: /healthz ok. wait_status 200 404: no ar, mesmo sem /healthz
-# (binário de antes desta versão).
+# (binário de antes desta versão). Escreve o código que chegou.
 wait_status() {
   local end=$((SECONDS + HEALTH_TIMEOUT)) code
   while ((SECONDS < end)); do
     code=$(curl -s -m 1 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/healthz" || true)
     for want in "$@"; do
-      [[ "$code" == "$want" ]] && return 0
+      [[ "$code" == "$want" ]] && { echo "$code"; return 0; }
     done
     sleep 0.3
   done
@@ -183,7 +183,7 @@ elif [[ -f concord-server ]]; then
 fi
 mv concord-server.new concord-server
 restart
-if wait_status 200; then
+if wait_status 200 >/dev/null; then
   cp -f concord-server concord-server.good
   echo "backend no ar (/healthz ok)"
   exit 0
@@ -204,13 +204,13 @@ if socket_active && ! supports_socket concord-server.prev; then
 fi
 cp -f concord-server.prev concord-server
 restart
-if wait_status 200; then
-  echo "ERRO: voltei para o binário anterior, que está no ar. O novo ficou em $DIR/concord-server.failed." >&2
-elif wait_status 404; then
-  echo "ERRO: voltei para o binário anterior, que está no ar (é de antes do /healthz). O novo ficou em $DIR/concord-server.failed." >&2
-else
-  echo "ERRO: nem o binário anterior respondeu; veja journalctl -u concord-server" >&2
-fi
+# Uma espera só (até HEALTH_TIMEOUT): 200 é um binário com /healthz, 404 um de
+# antes dele (o primeiro deploy com este script), que também está no ar.
+case "$(wait_status 200 404 || true)" in
+  200) echo "ERRO: voltei para o binário anterior, que está no ar. O novo ficou em $DIR/concord-server.failed." >&2 ;;
+  404) echo "ERRO: voltei para o binário anterior, que está no ar (é de antes do /healthz). O novo ficou em $DIR/concord-server.failed." >&2 ;;
+  *) echo "ERRO: o binário anterior também não respondeu em ${HEALTH_TIMEOUT} s; veja journalctl -u concord-server" >&2 ;;
+esac
 exit 1
 REMOTE
 
