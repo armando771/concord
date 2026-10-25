@@ -8,6 +8,8 @@ import Avatar from './Avatar'
 import VoiceConnectedPanel from './call/VoiceConnectedPanel'
 import UserBar from './UserBar'
 import { FriendsIcon, ClockIcon, UserPlusIcon, ChatBubbleIcon } from './icons'
+import ResizeHandle from './ResizeHandle'
+import { useResizableWidth } from './useResizableWidth'
 
 interface NavItem {
   id: FriendsTab
@@ -65,6 +67,8 @@ export function FriendsSidebar(): React.JSX.Element {
   const unreadByRoom = useChatStore((s) => s.unreadByRoom)
   const fetchConversations = useChatStore((s) => s.fetchConversations)
 
+  // Mesma preferência de largura na barra de canais e na de DMs/amigos.
+  const sidebar = useResizableWidth('channels')
 
   useEffect(() => {
     loadAll()
@@ -73,7 +77,12 @@ export function FriendsSidebar(): React.JSX.Element {
 
   return (
     <>
-      <aside className="flex h-full w-60 shrink-0 flex-col border-r border-white/6 bg-[#0b0c10]/80 backdrop-blur-2xl">
+      {/* z-10: a alça de redimensionar passa um pouco da borda, sobre o conteúdo. */}
+      <aside
+        style={sidebar.panelStyle}
+        className="relative z-10 flex h-full shrink-0 flex-col border-r border-white/6 bg-[#0b0c10]/80 backdrop-blur-2xl"
+      >
+        <ResizeHandle {...sidebar.handleProps} />
         {/* Scrollable Navigation Area */}
         <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
           {/* Main Navigation Links */}
@@ -183,7 +192,6 @@ export function FriendsSidebar(): React.JSX.Element {
 
         <UserBar />
       </aside>
-
     </>
   )
 }

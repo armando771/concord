@@ -191,14 +191,14 @@ try {
     const icons = row?.querySelector('[title]')
     return icons ? icons.getAttribute('title') : 'nenhum'
   }, name)
-  await pageA.getByRole('button', { name: 'Silenciar microfone' }).first().click()
+  await pageA.getByRole('button', { name: 'Silenciar Microfone' }).first().click()
   await waitFor('bia vê a ana mutada', () => voiceIcons(pageB, 'ana'), (t) => t === 'Microfone desativado')
-  await pageA.getByRole('button', { name: 'Ficar surdo' }).first().click()
+  await pageA.getByRole('button', { name: 'Silenciar Audio' }).first().click()
   await waitFor('bia vê a ana ensurdecida', () => voiceIcons(pageB, 'ana'), (t) => t === 'Áudio e microfone desativados')
   // Como no Discord: sair do ensurdecer volta ao mute de antes (ela estava mutada).
-  await pageA.getByRole('button', { name: 'Desativar surdez' }).first().click()
+  await pageA.getByRole('button', { name: 'Ativar Audio' }).first().click()
   await waitFor('bia vê a ana de volta só mutada', () => voiceIcons(pageB, 'ana'), (t) => t === 'Microfone desativado')
-  await pageA.getByRole('button', { name: 'Ativar microfone' }).first().click()
+  await pageA.getByRole('button', { name: 'Ativar Microfone' }).first().click()
   await waitFor('bia vê a ana com som de novo', () => voiceIcons(pageB, 'ana'), (t) => t === 'nenhum')
 
   // Botão direito na Bia: volume e silenciar só para a Ana.

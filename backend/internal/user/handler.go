@@ -1,14 +1,23 @@
 package user
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
+// userStore é a parte do Service que o Handler usa (trocável nos testes).
+type userStore interface {
+	FindByID(ctx context.Context, id string) (*User, error)
+	SearchByUsername(ctx context.Context, query string, excludeUserID string) ([]User, error)
+	GetBirthday(ctx context.Context, userID string) (*Birthday, error)
+	SetBirthday(ctx context.Context, userID string, b Birthday) error
+}
+
 type Handler struct {
-	service *Service
+	service userStore
 }
 
 func UserHandler(service *Service) *Handler {
@@ -30,7 +39,7 @@ func (h *Handler) GetMe(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, foundUser)
+	c.JSON(http.StatusOK, foundUser.Self())
 }
 
 func (h *Handler) SearchUsers(c *gin.Context) {

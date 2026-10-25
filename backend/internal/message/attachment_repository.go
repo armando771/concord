@@ -105,8 +105,8 @@ func (r *Repository) CreateWithAttachments(ctx context.Context, msg *Message, at
 	if _, err := tx.Exec(
 		ctx,
 		`
-		INSERT INTO messages (id, author_id, channel_id, conversation_id, reply_to_id, content)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO messages (id, author_id, channel_id, conversation_id, reply_to_id, content, mention_everyone)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		`,
 		msg.ID,
 		msg.AuthorID,
@@ -114,6 +114,7 @@ func (r *Repository) CreateWithAttachments(ctx context.Context, msg *Message, at
 		msg.ConversationID,
 		msg.ReplyToID,
 		msg.Content,
+		msg.MentionEveryone,
 	); err != nil {
 		return err
 	}

@@ -43,8 +43,8 @@ function VoiceControls(): React.JSX.Element {
     <div className="flex items-center gap-1.5 rounded-full border border-white/10 bg-[#0b0c10]/95 p-1.5 shadow-2xl backdrop-blur-xl">
       <button
         onClick={toggleMute}
-        aria-label={muted ? 'Ativar microfone' : 'Silenciar microfone'}
-        title={muted ? 'Ativar microfone' : 'Silenciar microfone'}
+        aria-label={muted ? 'Ativar Microfone' : 'Silenciar Microfone'}
+        title={muted ? 'Ativar Microfone' : 'Silenciar Microfone'}
         className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-colors ${
           muted ? 'bg-white text-[#07080b]' : 'bg-white/5 text-gray-200 hover:bg-white/10'
         }`}
@@ -53,8 +53,8 @@ function VoiceControls(): React.JSX.Element {
       </button>
       <button
         onClick={toggleDeafen}
-        aria-label={deafened ? 'Desativar surdez' : 'Ficar surdo'}
-        title={deafened ? 'Desativar surdez' : 'Ficar surdo'}
+        aria-label={deafened ? 'Ativar Audio' : 'Silenciar Audio'}
+        title={deafened ? 'Ativar Audio' : 'Silenciar Audio'}
         className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-colors ${
           deafened ? 'bg-white text-[#07080b]' : 'bg-white/5 text-gray-200 hover:bg-white/10'
         }`}

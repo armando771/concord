@@ -2,6 +2,8 @@ package user
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -66,6 +68,79 @@ func scanUser(row pgx.Row) (*User, error) {
 	return user, nil
 }
 
+// Uma query fixa por coluna: nada de montar SQL com o nome da coluna.
+var loginCandidatesQueries = map[loginColumn]string{
+	loginByEmail:    `SELECT ` + userColumns + ` FROM users WHERE lower(email) = lower($1) ORDER BY (email = $1) DESC LIMIT 2`,
+	loginByUsername: `SELECT ` + userColumns + ` FROM users WHERE lower(username) = lower($1) ORDER BY (username = $1) DESC LIMIT 2`,
+}
+
+// FindLoginCandidates traz até duas contas cuja coluna (username ou email)
+// bate com value ignorando caixa, com a que bate exatamente primeiro.
+// Duas linhas sem nenhuma exata = ambíguo (ver pickLoginMatch).
+func (r *Repository) FindLoginCandidates(ctx context.Context, column loginColumn, value string) ([]User, error) {
+	query, ok := loginCandidatesQueries[column]
+	if !ok {
+		return nil, fmt.Errorf("unknown login column %q", column)
+	}
+	rows, err := r.db.Query(ctx, query, value)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, *u)
+	}
+	return users, rows.Err()
+}
+
+// IdentityTaken diz se já existe conta com esse username ou e-mail, sem
+// diferenciar caixa (usa os índices em lower() da migration 000025).
+func (r *Repository) IdentityTaken(ctx context.Context, username, email string) (bool, error) {
+	var taken bool
+	err := r.db.QueryRow(
+		ctx,
+		`SELECT EXISTS(
+			SELECT 1 FROM users
+			WHERE lower(username) = lower($1) OR lower(email) = lower($2)
+		)`,
+		username,
+		email,
+	).Scan(&taken)
+	return taken, err
+}
+
+// LoginIndexes diz se os índices da migration 000025 existem: o de
+// lower(username) (único ou, com conflitos, comum) e o de lower(email).
+func (r *Repository) LoginIndexes(ctx context.Context) (hasUsername, hasEmail bool, err error) {
+	err = r.db.QueryRow(
+		ctx,
+		`SELECT
+			EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND tablename = 'users'
+				AND indexname IN ('users_username_lower_key', 'idx_users_username_lower')),
+			EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND tablename = 'users'
+				AND indexname = 'idx_users_email_lower')`,
+	).Scan(&hasUsername, &hasEmail)
+	return hasUsername, hasEmail, err
+}
+
+// CountCaseConflicts conta grupos de usernames e de e-mails iguais sem
+// diferenciar caixa (só os números, sem nomes).
+func (r *Repository) CountCaseConflicts(ctx context.Context) (usernameGroups, emailGroups int, err error) {
+	err = r.db.QueryRow(
+		ctx,
+		`SELECT
+			(SELECT count(*) FROM (SELECT 1 FROM users GROUP BY lower(username) HAVING count(*) > 1) u),
+			(SELECT count(*) FROM (SELECT 1 FROM users GROUP BY lower(email) HAVING count(*) > 1) e)`,
+	).Scan(&usernameGroups, &emailGroups)
+	return usernameGroups, emailGroups, err
+}
+
 func (r *Repository) FindByEmail(ctx context.Context, email string) (*User, error) {
 	return scanUser(r.db.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE email = $1`, email))
 }
@@ -78,6 +153,16 @@ func (r *Repository) FindByUsername(ctx context.Context, username string) (*User
 	return scanUser(r.db.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE username = $1`, username))
 }
 
+// escapeLike escapa os curingas do LIKE/ILIKE (% e _) e a própria barra, para
+// a busca tratar o texto digitado como literal (com ESCAPE '\').
+func escapeLike(s string) string {
+	return likeEscaper.Replace(s)
+}
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// SearchByUsername busca por trecho do username. Não traz o e-mail: o
+// resultado é de outras pessoas.
 func (r *Repository) SearchByUsername(ctx context.Context, query string, excludeUserID string) ([]User, error) {
 	rows, err := r.db.Query(
 		ctx,
@@ -86,16 +171,15 @@ func (r *Repository) SearchByUsername(ctx context.Context, query string, exclude
 			id,
 			username,
 			display_name,
-			email,
 			avatar_url,
 			created_at,
 			updated_at
 		FROM users
-		WHERE username ILIKE '%' || $1 || '%'
+		WHERE username ILIKE '%' || $1 || '%' ESCAPE '\'
 		AND id <> $2
 		LIMIT 20
 		`,
-		query,
+		escapeLike(query),
 		excludeUserID,
 	)
 	if err != nil {
@@ -110,7 +194,6 @@ func (r *Repository) SearchByUsername(ctx context.Context, query string, exclude
 			&u.ID,
 			&u.Username,
 			&u.DisplayName,
-			&u.Email,
 			&u.AvatarURL,
 			&u.CreatedAt,
 			&u.UpdatedAt,

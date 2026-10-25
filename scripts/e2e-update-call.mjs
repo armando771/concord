@@ -145,8 +145,8 @@ try {
   await waitFor('dois participantes reais no backend', async () => (await active()).participants.length === 2)
   await waitFor('áudio remoto real antes da atualização', () => secondary.page.evaluate(() =>
     [...document.querySelectorAll('audio')].some((el) => el.srcObject?.getAudioTracks().some((t) => t.readyState === 'live'))))
-  await primary.page.getByRole('button', { name: 'Ficar surdo', exact: true }).first().click()
-  await primary.page.getByRole('button', { name: 'Desativar surdez', exact: true }).first().waitFor()
+  await primary.page.getByRole('button', { name: 'Silenciar Audio', exact: true }).first().click()
+  await primary.page.getByRole('button', { name: 'Ativar Audio', exact: true }).first().waitFor()
   await primary.app.evaluate(() => global.e2eOffer())
   await primary.page.getByRole('button', { name: 'Atualizar', exact: true }).click()
   const closed = primary.app.waitForEvent('close')
@@ -161,8 +161,8 @@ try {
   primary = await launch('main')
   await primary.page.waitForURL((url) => url.hash === route)
   await primary.page.getByText('Voz conectada', { exact: true }).waitFor()
-  await primary.page.getByRole('button', { name: 'Desativar surdez', exact: true }).first().waitFor()
-  await primary.page.getByRole('button', { name: 'Ativar microfone', exact: true }).first().waitFor()
+  await primary.page.getByRole('button', { name: 'Ativar Audio', exact: true }).first().waitFor()
+  await primary.page.getByRole('button', { name: 'Ativar Microfone', exact: true }).first().waitFor()
   await waitFor('reentrada única com mudo/ensurdecido no backend', async () => {
     const state = await active()
     const mine = state.participants.filter((p) => p.user_id === owner.id)
@@ -173,8 +173,8 @@ try {
   assert.equal(await primary.page.getByRole('button', { name: 'Desligar câmera', exact: true }).count(), 0)
   assert.equal(await primary.page.getByRole('button', { name: 'Parar de compartilhar tela', exact: true }).count(), 0)
   console.log('PASS câmera e tela continuam desligadas')
-  await primary.page.getByRole('button', { name: 'Desativar surdez', exact: true }).first().click()
-  await primary.page.getByRole('button', { name: 'Silenciar microfone', exact: true }).first().waitFor()
+  await primary.page.getByRole('button', { name: 'Ativar Audio', exact: true }).first().click()
+  await primary.page.getByRole('button', { name: 'Silenciar Microfone', exact: true }).first().waitFor()
   await waitFor('estado de áudio anterior restaurado ao desensurdecer', async () => {
     const mine = (await active()).participants.find((p) => p.user_id === owner.id)
     return mine && !mine.muted && !mine.deafened
@@ -198,7 +198,7 @@ try {
     return state.participants.length === 1 && state.participants[0].user_id === owner.id
   })
   const oldCallId = (await active()).call.id
-  await primary.page.getByRole('button', { name: 'Silenciar microfone', exact: true }).first().click()
+  await primary.page.getByRole('button', { name: 'Silenciar Microfone', exact: true }).first().click()
   await primary.app.evaluate(() => global.e2eOffer())
   await primary.page.getByRole('button', { name: 'Atualizar', exact: true }).click()
   const slowClose = primary.app.waitForEvent('close')
@@ -208,7 +208,7 @@ try {
   primary = await launch('main')
   await primary.page.waitForURL((url) => url.hash === route)
   await primary.page.getByText('Voz conectada', { exact: true }).waitFor()
-  await primary.page.getByRole('button', { name: 'Ativar microfone', exact: true }).first().waitFor()
+  await primary.page.getByRole('button', { name: 'Ativar Microfone', exact: true }).first().waitFor()
   await waitFor('recria a chamada no mesmo canal, preservando apenas mudo', async () => {
     const state = await active()
     const mine = state.participants.find((p) => p.user_id === owner.id)
