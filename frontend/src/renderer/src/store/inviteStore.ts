@@ -30,16 +30,18 @@ export const useInviteStore = create<InviteState>()((set, get) => ({
   loading: false,
   fetchInvites: async () => {
     const token = useAuthStore.getState().accessToken
-    set({ loading: true })
+    // Relida a cada foco da janela: com convites na tela, busca por baixo e
+    // troca quando chegar (o "carregando" é só para a primeira carga).
+    if (get().invites.length === 0) set({ loading: true })
     try {
       const invites = await listInvites()
       if (!isSameSession(token)) return
       set({ invites: Array.isArray(invites) ? invites : [] })
     } catch (err) {
       console.error('[inviteStore] fetchInvites error:', err)
-      if (isSameSession(token)) set({ invites: [] })
+      // Falhou: fica com o que já estava na tela.
     } finally {
-      set({ loading: false })
+      if (get().loading) set({ loading: false })
     }
   },
   accept: async (id) => {
