@@ -2,6 +2,17 @@ import { create } from 'zustand'
 
 export type FriendsTab = 'all' | 'pending' | 'add'
 
+const CALL_CONTROLS_KEY = 'concord:call-controls-hidden'
+
+// Lembrado neste computador; sem armazenamento disponível, começa visível.
+function loadCallControlsHidden(): boolean {
+  try {
+    return localStorage.getItem(CALL_CONTROLS_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 interface UIState {
   friendsTab: FriendsTab
   setFriendsTab: (tab: FriendsTab) => void
@@ -11,6 +22,9 @@ interface UIState {
   createChannelModalOpen: boolean
   openCreateChannelModal: () => void
   closeCreateChannelModal: () => void
+  /** Barra de controles da chamada (mutar, câmera…) oculta. */
+  callControlsHidden: boolean
+  toggleCallControls: () => void
 }
 
 export const useUIStore = create<UIState>()((set) => ({
@@ -21,5 +35,16 @@ export const useUIStore = create<UIState>()((set) => ({
   closeServerInviteModal: () => set({ serverInviteModalOpen: false }),
   createChannelModalOpen: false,
   openCreateChannelModal: () => set({ createChannelModalOpen: true }),
-  closeCreateChannelModal: () => set({ createChannelModalOpen: false })
+  closeCreateChannelModal: () => set({ createChannelModalOpen: false }),
+  callControlsHidden: loadCallControlsHidden(),
+  toggleCallControls: () =>
+    set((state) => {
+      const callControlsHidden = !state.callControlsHidden
+      try {
+        localStorage.setItem(CALL_CONTROLS_KEY, callControlsHidden ? '1' : '0')
+      } catch {
+        // Sem armazenamento: vale só até fechar o app.
+      }
+      return { callControlsHidden }
+    })
 }))

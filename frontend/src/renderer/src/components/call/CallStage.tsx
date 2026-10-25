@@ -1,19 +1,22 @@
+import { useEffect, useMemo } from 'react'
 import { useAuthStore } from '../../store/authStore'
+import { useServerStore } from '../../store/serverStore'
+import { mergeCallPeople } from '../../lib/callParticipants'
 import { streamAudioKey, useUserAudioStore } from '../../store/userAudioStore'
 import { streamMenuHandler, userMenuHandler } from '../../store/userMenuStore'
 import { useCallStore } from '../../store/callStore'
 import type { CallUserInfo } from '../../store/callStore'
-import { ChevronDownIcon } from '../icons'
+import { buildScreenEntries, type ScreenEntry } from '../../lib/screenWatch'
+import { ChevronDownIcon, XIcon } from '../icons'
+import Button from '../Button'
 import ParticipantTile from './ParticipantTile'
-
-interface ScreenEntry {
-  userId: string
-  stream: MediaStream
-}
+import StreamMosaic from './StreamMosaic'
 
 /**
- * Palco da chamada estilo Discord: sem tela = grid de avatares; com telas,
- * cada tile de tela pode ser expandido (foco grande + demais em mini-grid).
+ * Palco da chamada estilo Discord: sem vídeo = grid de avatares; com telas
+ * ou câmeras, mosaico redimensionável e reorganizável e, ao clicar numa
+ * tela, foco grande + demais em mini-grid. Tela dos outros começa pausada
+ * (card "Assistir transmissão") e só é baixada depois do clique.
  * Compartilhado entre VoiceChannelView e DmCallView.
  */
 function CallStage({
@@ -25,19 +28,42 @@ function CallStage({
   speaking?: Set<string>
 }): React.JSX.Element {
   const me = useAuthStore((s) => s.user)
-  const participants = useCallStore((s) => s.participants)
+  const backendParticipants = useCallStore((s) => s.participants)
+  const mediaPeers = useCallStore((s) => s.mediaPeers)
+  const members = useServerStore((s) => s.currentMembers)
   const muted = useCallStore((s) => s.muted)
   const deafened = useCallStore((s) => s.deafened)
   const voiceStates = useCallStore((s) => s.voiceStates)
   const localAudio = useUserAudioStore((s) => s.settings)
   const localScreenStream = useCallStore((s) => s.localScreenStream)
   const screenStreams = useCallStore((s) => s.screenStreams)
+  const availableScreens = useCallStore((s) => s.availableScreens)
+  const watchedScreenIds = useCallStore((s) => s.watchedScreenIds)
+  const watchScreen = useCallStore((s) => s.watchScreen)
+  const stopWatchingScreen = useCallStore((s) => s.stopWatchingScreen)
+  const setStageVisible = useCallStore((s) => s.setStageVisible)
+
+  // Montado = tela da call visível (canal conectado ou DM expandida); fora
+  // dela a transmissão assistida vira miniatura (ScreenMiniPlayer).
+  useEffect(() => {
+    setStageVisible(true)
+    return () => setStageVisible(false)
+  }, [setStageVisible])
   const focusedId = useCallStore((s) => s.focusedScreenUserId)
   const setFocused = useCallStore((s) => s.setFocusedScreenUser)
   const localCameraStream = useCallStore((s) => s.localCameraStream)
   const videoStreams = useCallStore((s) => s.videoStreams)
 
   const meId = me?.id ?? 'me'
+  // Lista do backend + quem está na sala de mídia (o backend pode ter perdido alguém).
+  const participants = useMemo(
+    () =>
+      mergeCallPeople(backendParticipants, mediaPeers, meId, (id) => {
+        const m = members.find((x) => x.user_id === id)
+        return m?.display_name || m?.username
+      }),
+    [backendParticipants, mediaPeers, meId, members]
+  )
   const meSpeaking = !muted && (speaking?.has(meId) ?? false)
   const meInfo: CallUserInfo = {
     id: meId,
@@ -54,14 +80,60 @@ function CallStage({
           display_name: 'Usuário'
         })
 
-  const screens: ScreenEntry[] = [
-    ...(localScreenStream ? [{ userId: meId, stream: localScreenStream }] : []),
-    ...Object.entries(screenStreams).map(([userId, stream]) => ({ userId, stream }))
+  const screens = buildScreenEntries({
+    meId,
+    localScreenStream,
+    availableScreens,
+    watchedScreenIds,
+    screenStreams
+  })
+  const cameras: Array<{ userId: string; stream: MediaStream }> = [
+    ...(localCameraStream ? [{ userId: meId, stream: localCameraStream }] : []),
+    ...participants
+      .filter((p) => videoStreams[p.id])
+      .map((p) => ({ userId: p.id, stream: videoStreams[p.id] as MediaStream }))
   ]
-  const hasScreens = screens.length > 0
 
-  // Sem ninguém compartilhando: grid de avatares/vídeos de câmera (eu + participantes).
-  if (!hasScreens) {
+  /** Tile de uma tela: a minha, uma assistida (clicável + fechar) ou o card parado. */
+  const screenTile = (entry: ScreenEntry, size: 'md' | 'fill'): React.JSX.Element => {
+    const common = {
+      user: nameOf(entry.userId),
+      isScreen: true,
+      size,
+      onContextMenu: streamMenuHandler(entry.userId, nameOf(entry.userId).display_name, meId),
+      locallyMuted: localAudio[streamAudioKey(entry.userId)]?.muted ?? false
+    }
+    if (!entry.watching) {
+      return (
+        <ParticipantTile
+          key={entry.userId}
+          {...common}
+          videoStream={null}
+          action={
+            <Button
+              variant="success"
+              onClick={() => watchScreen(entry.userId)}
+              className={size === 'md' ? 'px-2.5 py-1 text-xs' : ''}
+            >
+              Assistir transmissão
+            </Button>
+          }
+        />
+      )
+    }
+    return (
+      <ParticipantTile
+        key={entry.userId}
+        {...common}
+        videoStream={entry.stream}
+        onClick={() => setFocused(entry.userId)}
+        onClose={entry.local ? undefined : () => stopWatchingScreen(entry.userId)}
+      />
+    )
+  }
+
+  // Voz pura: ninguém com tela nem câmera — grid de avatares.
+  if (screens.length === 0 && cameras.length === 0) {
     return (
       <div className={`flex flex-wrap items-center justify-center ${gap}`}>
         <ParticipantTile
@@ -69,8 +141,6 @@ function CallStage({
           selfMuted={muted}
           deafened={deafened}
           speaking={meSpeaking}
-          videoStream={localCameraStream}
-          mirror
         />
         {participants.map((p) => (
           <ParticipantTile
@@ -81,49 +151,103 @@ function CallStage({
             locallyMuted={localAudio[p.id]?.muted ?? false}
             deafened={voiceStates[p.id]?.deafened}
             speaking={speaking?.has(p.id) ?? false}
-            videoStream={videoStreams[p.id] ?? null}
           />
         ))}
       </div>
     )
   }
 
-  const focused = screens.find((entry) => entry.userId === focusedId) ?? null
+  const focused = screens.find((entry) => entry.userId === focusedId && entry.watching) ?? null
 
-  // Sem foco selecionado: todos os tiles lado a lado (telas clicáveis).
+  // Sem foco selecionado: mosaico com as telas e as câmeras (cada uma é um
+  // bloco: "screen:<id>" / "camera:<id>") + quem não tem vídeo embaixo.
   if (!focused) {
-    return (
-      <div className={`flex flex-wrap items-center justify-center ${gap}`}>
-        {screens.map((entry) => (
+    const tiles = new Map<
+      string,
+      | { kind: 'screen'; entry: ScreenEntry }
+      | { kind: 'camera'; entry: { userId: string; stream: MediaStream } }
+    >([
+      ...screens.map(
+        (entry) => [`screen:${entry.userId}`, { kind: 'screen' as const, entry }] as const
+      ),
+      ...cameras.map(
+        (entry) => [`camera:${entry.userId}`, { kind: 'camera' as const, entry }] as const
+      )
+    ])
+    // Quem transmite (assistido ou não) e quem tem câmera aparece no mosaico.
+    const inMosaic = new Set([...screens, ...cameras].map((entry) => entry.userId))
+    const renderTile = (key: string): React.JSX.Element | null => {
+      const tile = tiles.get(key)
+      if (!tile) return null
+      if (tile.kind === 'screen') return screenTile(tile.entry, 'fill')
+      const { userId, stream } = tile.entry
+      if (userId === meId) {
+        return (
           <ParticipantTile
-            key={entry.userId}
-            user={nameOf(entry.userId)}
-            videoStream={entry.stream}
-            isScreen
-            onClick={() => setFocused(entry.userId)}
-            onContextMenu={streamMenuHandler(entry.userId, nameOf(entry.userId).display_name, meId)}
-            locallyMuted={localAudio[streamAudioKey(entry.userId)]?.muted ?? false}
+            user={meInfo}
+            selfMuted={muted}
+            deafened={deafened}
+            speaking={meSpeaking}
+            videoStream={stream}
+            size="fill"
+            mirror
           />
-        ))}
+        )
+      }
+      const p = nameOf(userId)
+      return (
         <ParticipantTile
-          user={meInfo}
-          selfMuted={muted}
-          deafened={deafened}
-          speaking={meSpeaking}
+          user={p}
+          selfMuted={voiceStates[userId]?.muted}
+          onContextMenu={userMenuHandler(userId, p.display_name, meId, p.username)}
+          locallyMuted={localAudio[userId]?.muted ?? false}
+          deafened={voiceStates[userId]?.deafened}
+          speaking={speaking?.has(userId) ?? false}
+          videoStream={stream}
+          size="fill"
         />
-        {participants
-          .filter((p) => !screenStreams[p.id])
-          .map((p) => (
-            <ParticipantTile
-              key={p.id}
-              user={p}
-              selfMuted={voiceStates[p.id]?.muted}
-              onContextMenu={userMenuHandler(p.id, p.display_name, meId, p.username)}
-              locallyMuted={localAudio[p.id]?.muted ?? false}
-              deafened={voiceStates[p.id]?.deafened}
-              speaking={speaking?.has(p.id) ?? false}
-            />
-          ))}
+      )
+    }
+
+    return (
+      <div className="flex h-full w-full flex-col gap-4">
+        <StreamMosaic
+          ids={[...tiles.keys()]}
+          nameOf={(key) => {
+            const tile = tiles.get(key)
+            if (!tile) return ''
+            const name = nameOf(tile.entry.userId).display_name
+            return tile.kind === 'screen' ? `${name} (tela)` : `${name} (câmera)`
+          }}
+          renderTile={renderTile}
+        />
+        {(!inMosaic.has(meId) || participants.some((p) => !inMosaic.has(p.id))) && (
+          <div className="flex shrink-0 flex-wrap items-center justify-center gap-3">
+            {!inMosaic.has(meId) && (
+              <ParticipantTile
+                user={meInfo}
+                selfMuted={muted}
+                deafened={deafened}
+                speaking={meSpeaking}
+                size="md"
+              />
+            )}
+            {participants
+              .filter((p) => !inMosaic.has(p.id))
+              .map((p) => (
+                <ParticipantTile
+                  key={p.id}
+                  user={p}
+                  selfMuted={voiceStates[p.id]?.muted}
+                  onContextMenu={userMenuHandler(p.id, p.display_name, meId, p.username)}
+                  locallyMuted={localAudio[p.id]?.muted ?? false}
+                  deafened={voiceStates[p.id]?.deafened}
+                  size="md"
+                  speaking={speaking?.has(p.id) ?? false}
+                />
+              ))}
+          </div>
+        )}
       </div>
     )
   }
@@ -132,7 +256,7 @@ function CallStage({
   return (
     <div className="flex h-full w-full flex-col gap-4">
       <div className="relative flex min-h-0 flex-1 items-center justify-center [container-type:size]">
-        <div className="absolute inset-x-0 top-0 z-10 flex items-start justify-between px-1">
+        <div className="absolute inset-x-0 top-0 z-10 flex items-start gap-2 px-1">
           <button
             onClick={() => setFocused(null)}
             aria-label="Sair do modo foco"
@@ -141,6 +265,16 @@ function CallStage({
           >
             <ChevronDownIcon className="h-4 w-4" />
           </button>
+          {!focused.local && (
+            <button
+              onClick={() => stopWatchingScreen(focused.userId)}
+              aria-label="Fechar transmissão"
+              title="Fechar transmissão"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
+            >
+              <XIcon className="h-4 w-4" />
+            </button>
+          )}
         </div>
         <ParticipantTile
           user={nameOf(focused.userId)}
@@ -158,22 +292,7 @@ function CallStage({
       <div className="flex shrink-0 flex-wrap items-center justify-center gap-3">
         {screens
           .filter((entry) => entry.userId !== focused.userId)
-          .map((entry) => (
-            <ParticipantTile
-              key={entry.userId}
-              user={nameOf(entry.userId)}
-              videoStream={entry.stream}
-              isScreen
-              size="md"
-              onClick={() => setFocused(entry.userId)}
-              onContextMenu={streamMenuHandler(
-                entry.userId,
-                nameOf(entry.userId).display_name,
-                meId
-              )}
-              locallyMuted={localAudio[streamAudioKey(entry.userId)]?.muted ?? false}
-            />
-          ))}
+          .map((entry) => screenTile(entry, 'md'))}
         <ParticipantTile
           user={meInfo}
           selfMuted={muted}
@@ -184,7 +303,7 @@ function CallStage({
           mirror
         />
         {participants
-          .filter((p) => p.id !== focused.userId && !screenStreams[p.id])
+          .filter((p) => p.id !== focused.userId && !availableScreens.includes(p.id))
           .map((p) => (
             <ParticipantTile
               key={p.id}

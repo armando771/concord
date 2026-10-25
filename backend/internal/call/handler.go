@@ -209,13 +209,55 @@ func (h *Handler) Token(c *gin.Context) {
 		return
 	}
 
-	token, err := h.tokens.Issue(callID, userID.(string), "")
+	// O nome vai no token para quem está só na mídia (fora da lista do
+	// backend, ex.: queda do WS) aparecer com nome e não como "Usuário".
+	name := h.service.mediaName(c.Request.Context(), userID.(string))
+
+	token, err := h.tokens.Issue(callID, userID.(string), name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to issue media token"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"token": token})
+}
+
+// Move: um moderador tira alguém do canal de voz em que está e o põe em
+// outro canal de voz do mesmo servidor.
+func (h *Handler) Move(c *gin.Context) {
+	var input struct {
+		UserID    string `json:"user_id"`
+		ChannelID string `json:"channel_id"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil || input.UserID == "" || input.ChannelID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id and channel_id are required"})
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	call, err := h.service.MoveToChannel(c.Request.Context(), userID.(string), input.UserID, input.ChannelID)
+	if err != nil {
+		c.JSON(mapMoveError(err), gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, call)
+}
+
+func mapMoveError(err error) int {
+	switch {
+	case errors.Is(err, ErrNotModerator), errors.Is(err, ErrCannotMoveOwner):
+		return http.StatusForbidden
+	case errors.Is(err, ErrNotInVoice), errors.Is(err, ErrSameChannel), errors.Is(err, ErrNotVoiceChannel):
+		return http.StatusBadRequest
+	default:
+		return mapStartError(err)
+	}
 }
 
 func mapStartError(err error) int {

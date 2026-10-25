@@ -145,3 +145,195 @@
 .animate-blob-fast {
   animation: blob-float 16s ease-in-out infinite;
 }
+
+/* ===== Subida de nível (XP de voz) ===== */
+
+/* Halo que gira em volta do avatar. */
+@keyframes level-halo {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    transform: translate(-50%, -50%) rotate(70deg) scale(1);
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(420deg) scale(1.2);
+    opacity: 0;
+  }
+}
+
+/* Faísca saindo do centro na direção --angle até --dist. */
+@keyframes level-spark {
+  0% {
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0) scale(1.2);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(var(--dist) * -1))
+      scale(0.2);
+    opacity: 0;
+  }
+}
+
+/* "NÍVEL 12" subindo e sumindo. */
+@keyframes level-float {
+  0% {
+    transform: translate(-50%, 12px) scale(0.5);
+    opacity: 0;
+  }
+  14% {
+    transform: translate(-50%, 0) scale(1.2);
+    opacity: 1;
+  }
+  26% {
+    transform: translate(-50%, 0) scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -30px) scale(1);
+    opacity: 0;
+  }
+}
+
+/* Onda de choque dos níveis redondos (10, 20, 30…). */
+@keyframes level-shockwave {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(3.4);
+    opacity: 0;
+  }
+}
+
+@keyframes level-tile-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  25% {
+    box-shadow: 0 0 36px 6px var(--level-color);
+  }
+}
+
+@keyframes level-badge-pop {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.5);
+  }
+  55% {
+    transform: scale(0.9);
+  }
+  75% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes level-num-out {
+  to {
+    transform: translateY(-120%);
+    opacity: 0;
+  }
+}
+
+@keyframes level-num-in {
+  from {
+    transform: translateY(120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Brilho que atravessa a linha do usuário na lista do canal de voz. */
+@keyframes level-shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+@keyframes level-banner {
+  0% {
+    transform: translate(-50%, -140%);
+    opacity: 0;
+  }
+  10% {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+  85% {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -140%);
+    opacity: 0;
+  }
+}
+
+/* Gradiente que corre no badge Lendário (100+). */
+@keyframes level-legendary {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.level-legendary {
+  background-image: linear-gradient(90deg, #f472b6, #facc15, #34d399, #60a5fa, #c084fc, #f472b6);
+  background-size: 200% 100%;
+  animation: level-legendary 3s linear infinite;
+}
+
+.level-halo {
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    var(--level-color) 60deg,
+    transparent 120deg,
+    var(--level-accent) 180deg,
+    transparent 240deg,
+    var(--level-color) 300deg,
+    transparent 360deg
+  );
+  mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .level-anim,
+  .level-anim * {
+    animation-duration: 1ms !important;
+  }
+}
+
+/* Barra de título própria (Windows/Linux): faixa que arrasta a janela. */
+.app-drag {
+  -webkit-app-region: drag;
+}
+
+.app-no-drag {
+  -webkit-app-region: no-drag;
+}

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CallUserInfo } from '../../store/callStore'
 import VoiceStateIcons from './VoiceStateIcons'
-import { VolumeOffIcon } from '../icons'
+import { VolumeOffIcon, XIcon } from '../icons'
+import LevelBadge from '../level/LevelBadge'
+import LevelUpBurst from '../level/LevelUpBurst'
 
-function VideoFill({
+export function VideoFill({
   stream,
   fit,
   mirror,
@@ -63,7 +65,9 @@ function ParticipantTile({
   mirror = false,
   onClick,
   onContextMenu,
-  locallyMuted = false
+  locallyMuted = false,
+  action,
+  onClose
 }: {
   user: CallUserInfo
   speaking?: boolean
@@ -81,6 +85,10 @@ function ParticipantTile({
   onContextMenu?: (e: React.MouseEvent) => void
   /** Silenciado por você (só você não ouve). */
   locallyMuted?: boolean
+  /** Botão abaixo do avatar quando não há vídeo (ex.: "Assistir transmissão"). */
+  action?: React.ReactNode
+  /** Mostra o X de fechar a transmissão no canto superior direito (o esquerdo é do "Mover" do mosaico). */
+  onClose?: () => void
 }): React.JSX.Element {
   const initial = user.display_name.charAt(0).toUpperCase()
   // 'fill': o maior retângulo com a proporção do vídeo que cabe no container
@@ -117,16 +125,37 @@ function ParticipantTile({
         />
       )}
       {!videoStream && (
-        <div
-          className={`flex items-center justify-center rounded-full font-bold text-white transition-colors ${avatarDims} ${
-            speaking ? 'bg-[#23a55a]' : 'bg-violet-600'
-          }`}
-        >
-          {initial}
+        <div className="flex flex-col items-center gap-3">
+          <div
+            className={`flex items-center justify-center rounded-full font-bold text-white transition-colors ${avatarDims} ${
+              speaking ? 'bg-[#23a55a]' : 'bg-violet-600'
+            }`}
+          >
+            {initial}
+          </div>
+          {action}
         </div>
       )}
+      {onClose && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onClose()
+          }}
+          aria-label="Fechar transmissão"
+          title="Fechar transmissão"
+          className="absolute right-2 top-2 z-10 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
+        >
+          <XIcon className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {!isScreen && <LevelUpBurst userId={user.id} size={size === 'md' ? 'md' : 'lg'} />}
       {isScreen && (
-        <div className="absolute right-2 top-2 flex items-center gap-1.5 rounded-md bg-[#f23f43] px-1.5 py-0.5">
+        <div
+          className={`absolute top-2 flex items-center gap-1.5 rounded-md bg-[#f23f43] px-1.5 py-0.5 ${
+            onClose ? 'right-11' : 'right-2'
+          }`}
+        >
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
           <span className="text-[10px] font-bold uppercase tracking-wide text-white">Ao vivo</span>
         </div>
@@ -139,6 +168,7 @@ function ParticipantTile({
         )}
         <VoiceStateIcons muted={selfMuted} deafened={deafened} className="h-3 w-3" />
         <span className="truncate text-xs font-semibold text-white">{user.display_name}</span>
+        {!isScreen && <LevelBadge userId={user.id} />}
       </div>
     </div>
   )

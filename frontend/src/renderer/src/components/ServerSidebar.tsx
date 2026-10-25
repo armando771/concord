@@ -8,11 +8,20 @@ import { useUIStore } from '../store/uiStore'
 import { useChatStore } from '../store/chatStore'
 import { useCallStore } from '../store/callStore'
 import VoiceStateIcons from './call/VoiceStateIcons'
+import LiveBadge from './call/LiveBadge'
+import { liveUserIds } from '../lib/liveBadge'
+import LevelBadge from './level/LevelBadge'
+import VoiceRowShimmer from './level/VoiceRowShimmer'
 import { useUserAudioStore } from '../store/userAudioStore'
 import { userMenuHandler } from '../store/userMenuStore'
 import { logout } from '../api/auth'
 import type { Channel, ChannelType } from '../api/channels'
-import { listActiveServerCalls, type CallStateResponse } from '../api/calls'
+import {
+  listActiveServerCalls,
+  moveToVoiceChannel,
+  type CallStateResponse
+} from '../api/calls'
+import { canMoveVoiceUser, VOICE_USER_DRAG } from '../lib/voiceMove'
 import { showToast } from '../store/toastStore'
 import Modal from './Modal'
 import Button from './Button'
@@ -59,6 +68,7 @@ export function ServerSidebar(): React.JSX.Element {
   const selfDeafened = useCallStore((s) => s.deafened)
   const locallyMuted = useUserAudioStore((s) => s.settings)
   const serverCalls = useCallStore((s) => s.serverCalls)
+  const screenSharers = useCallStore((s) => s.screenSharers)
   const joinVoiceChannel = useCallStore((s) => s.joinVoiceChannel)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -85,6 +95,22 @@ export function ServerSidebar(): React.JSX.Element {
     currentServer?.owner_id === user?.id ||
     currentMembers.some((m) => m.user_id === user?.id && m.role === 'admin')
   const isOwner = currentServer?.owner_id === user?.id
+  /** Canal de voz sobre o qual alguém está sendo arrastado (moderadores). */
+  const [voiceDropTarget, setVoiceDropTarget] = useState<string | null>(null)
+  const canMove = (targetId: string): boolean =>
+    canMoveVoiceUser({
+      meId: user?.id,
+      ownerId: currentServer?.owner_id,
+      isModerator: isAdmin,
+      targetId
+    })
+  const moveUser = async (userId: string, channelId: string): Promise<void> => {
+    try {
+      await moveToVoiceChannel(userId, channelId)
+    } catch (err) {
+      showToast.error(err instanceof Error ? err.message : 'Não foi possível mover.')
+    }
+  }
 
   // A sala do servidor (eventos, menções, não lidas) é assinada pela
   // ServerRail para todos os servidores — sair desta tela não a cancela.
@@ -414,15 +440,39 @@ export function ServerSidebar(): React.JSX.Element {
                   callStatus !== 'idle' &&
                   activeCallType === 'channel' &&
                   activeCallChannelId === ch.id
+                const live = liveUserIds(callState, connectedHere ? screenSharers : [])
                 return (
-                  <div key={ch.id} className="relative">
+                  <div
+                    key={ch.id}
+                    className="relative"
+                    onDragOver={(e) => {
+                      if (!isAdmin || !e.dataTransfer.types.includes(VOICE_USER_DRAG)) return
+                      e.preventDefault()
+                      e.dataTransfer.dropEffect = 'move'
+                      setVoiceDropTarget(ch.id)
+                    }}
+                    onDragLeave={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                        setVoiceDropTarget((cur) => (cur === ch.id ? null : cur))
+                      }
+                    }}
+                    onDrop={(e) => {
+                      const userId = e.dataTransfer.getData(VOICE_USER_DRAG)
+                      setVoiceDropTarget(null)
+                      if (!userId || participants.some((p) => p.user_id === userId)) return
+                      e.preventDefault()
+                      void moveUser(userId, ch.id)
+                    }}
+                  >
                     <button
                       onClick={() => handleVoiceClick(ch)}
                       title={connectedHere ? 'Desconectar' : 'Conectar ao canal de voz'}
                       className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all cursor-pointer ${
-                        connectedHere
-                          ? 'bg-[#23a55a]/15 text-white shadow-sm'
-                          : 'text-gray-400 hover:bg-white/6 hover:text-gray-200'
+                        voiceDropTarget === ch.id
+                          ? 'bg-[#5865f2]/25 text-white ring-2 ring-[#5865f2]'
+                          : connectedHere
+                            ? 'bg-[#23a55a]/15 text-white shadow-sm'
+                            : 'text-gray-400 hover:bg-white/6 hover:text-gray-200'
                       }`}
                     >
                       <VolumeIcon className="h-4 w-4 shrink-0 text-gray-500" />
@@ -444,10 +494,18 @@ export function ServerSidebar(): React.JSX.Element {
                             <div
                               key={p.user_id}
                               onContextMenu={userMenuHandler(p.user_id, name, user?.id, p.username)}
-                              className={`flex items-center gap-2 rounded-md px-2 py-1 ${
-                                isMe ? 'bg-white/5' : ''
-                              }`}
+                              draggable={canMove(p.user_id)}
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData(VOICE_USER_DRAG, p.user_id)
+                                e.dataTransfer.effectAllowed = 'move'
+                              }}
+                              onDragEnd={() => setVoiceDropTarget(null)}
+                              title={canMove(p.user_id) ? 'Arraste para outro canal de voz' : undefined}
+                              className={`group/voiceuser relative flex items-center gap-2 overflow-hidden rounded-md px-2 py-1 transition-colors ${
+                                isMe ? 'bg-white/5 hover:bg-white/10' : 'hover:bg-white/[0.06]'
+                              } ${canMove(p.user_id) ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
                             >
+                              <VoiceRowShimmer userId={p.user_id} />
                               <div
                                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[9px] font-bold text-white transition-shadow ${
                                   talking ? 'ring-2 ring-[#23a55a]' : ''
@@ -455,11 +513,13 @@ export function ServerSidebar(): React.JSX.Element {
                               >
                                 {name.charAt(0).toUpperCase()}
                               </div>
-                              <span className="truncate text-xs font-medium text-gray-300">
+                              <span className="truncate text-xs font-medium text-gray-300 transition-colors group-hover/voiceuser:text-white">
                                 {name}
                                 {isMe ? ' (você)' : ''}
                               </span>
+                              <LevelBadge userId={p.user_id} />
                               <span className="ml-auto flex items-center gap-0.5 pr-1">
+                                {live.has(p.user_id) && <LiveBadge />}
                                 {!isMe && locallyMuted[p.user_id]?.muted && (
                                   <span title="Silenciado por você" className="text-gray-400">
                                     <VolumeOffIcon className="h-3.5 w-3.5" />

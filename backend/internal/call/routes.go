@@ -7,6 +7,7 @@ func CallRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin.Ha
 	calls.Use(authMiddleware)
 	{
 		calls.POST("", handler.Create)
+		calls.POST("/move", handler.Move)
 		calls.GET("/active", handler.Active)
 		calls.GET("/:id/state", handler.State)
 		calls.POST("/:id/token", handler.Token)
