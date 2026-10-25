@@ -267,3 +267,11 @@ func (r *Repository) DeleteStalePending(ctx context.Context, before time.Time) (
 	}
 	return ids, rows.Err()
 }
+
+// CountAttachments conta todas as linhas de anexo (a limpeza usa para não
+// varrer o disco contra um banco vazio).
+func (r *Repository) CountAttachments(ctx context.Context) (int64, error) {
+	var n int64
+	err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM message_attachments`).Scan(&n)
+	return n, err
+}

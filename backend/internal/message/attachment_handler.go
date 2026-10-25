@@ -7,6 +7,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"syscall"
 	"time"
 
 	"gin-quickstart/backend/internal/media"
@@ -79,6 +80,19 @@ func respondRoomError(c *gin.Context, err error) {
 func isTooLarge(err error) bool {
 	var maxBytes *http.MaxBytesError
 	return errors.Is(err, media.ErrTooLarge) || errors.As(err, &maxBytes)
+}
+
+// saveErrorStatus traduz o erro de gravar o arquivo. Disco cheio no meio do
+// upload (dois uploads passaram pelo HasRoom juntos) responde como o HasRoom.
+func saveErrorStatus(err error) (int, string) {
+	switch {
+	case isTooLarge(err):
+		return http.StatusRequestEntityTooLarge, "file too large"
+	case errors.Is(err, syscall.ENOSPC):
+		return http.StatusInsufficientStorage, "server out of space"
+	default:
+		return http.StatusBadRequest, "invalid upload"
+	}
 }
 
 func (h *AttachmentHandler) upload(c *gin.Context, room Room) {
@@ -164,11 +178,8 @@ func (h *AttachmentHandler) upload(c *gin.Context, room Room) {
 			declared = part.Header.Get("Content-Type")
 			a.SizeBytes, head, err = h.store.Save(a.ID, part, h.maxFileBytes)
 			if err != nil {
-				if isTooLarge(err) {
-					c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file too large"})
-				} else {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "invalid upload"})
-				}
+				status, msg := saveErrorStatus(err)
+				c.JSON(status, gin.H{"error": msg})
 				return
 			}
 			saved = true

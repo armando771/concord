@@ -81,8 +81,15 @@ function VoiceRecordButton({
         pending.current = null
         if (!p) return
         p.done = true
-        if (!p.recording) return // microfone ainda abrindo: cancela quando abrir
-        const durationMs = 'at' in event ? recordElapsed(previous, event.at) : 0
+        if (!p.recording) {
+          // Soltou antes de o microfone abrir (ex.: primeira permissão): o
+          // gravador é cancelado quando abrir.
+          showToast.error('Não foi possível gravar. Segure de novo.')
+          return
+        }
+        const at = 'at' in event ? event.at : Date.now()
+        // Conta do início real da gravação, não do clique.
+        const durationMs = Math.max(1, at - p.recording.startedAt)
         p.recording
           .stop()
           .then((blob) => onRecordedRef.current(blob, durationMs))

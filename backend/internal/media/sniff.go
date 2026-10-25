@@ -21,6 +21,14 @@ const MaxFileBytes int64 = 25 << 20
 // SniffLen é quantos bytes do começo do arquivo o Sniff precisa.
 const SniffLen = 512
 
+// mp4Brands são as marcas ISO-BMFF de mp4/m4a. Outras (heic, avif, qt, 3gp...)
+// usam o mesmo contêiner mas não tocam como mp4: são recusadas.
+var mp4Brands = map[string]bool{
+	"isom": true, "iso2": true, "iso4": true, "iso5": true, "iso6": true,
+	"mp41": true, "mp42": true, "avc1": true, "dash": true, "M4V ": true,
+	"M4A ": true, "M4B ": true,
+}
+
 // Sniff descobre o tipo pelos primeiros bytes. declared (o Content-Type da
 // parte do multipart) só desempata mp4/webm entre vídeo e áudio.
 func Sniff(head []byte, declared string) (kind Kind, contentType string, ok bool) {
@@ -39,6 +47,9 @@ func Sniff(head []byte, declared string) (kind Kind, contentType string, ok bool
 		return KindAudio, "audio/wav", true
 	case len(head) >= 12 && string(head[4:8]) == "ftyp":
 		brand := string(head[8:12])
+		if !mp4Brands[brand] {
+			return "", "", false
+		}
 		if brand == "M4A " || brand == "M4B " || declaredAudio {
 			return KindAudio, "audio/mp4", true
 		}

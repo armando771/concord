@@ -49,8 +49,13 @@ export function ensureMediaToken(now: number = Date.now()): Promise<string> {
   return request
 }
 
-/** Descarta o token (ex.: o servidor recusou um arquivo com ele). */
-export function invalidateMediaToken(): void {
+/**
+ * Descarta o token (ex.: o servidor recusou um arquivo com ele). Com
+ * usedToken, só descarta se ele ainda é o atual: várias mídias quebradas com o
+ * mesmo token velho pedem um só token novo, e não derrubam o que já renovou.
+ */
+export function invalidateMediaToken(usedToken?: string): void {
+  if (usedToken !== undefined && cached?.token !== usedToken) return
   cached = null
   pending = null
 }

@@ -14,6 +14,7 @@ export function useMediaSrc(
   active: boolean
 ): { src: string | null; onError: () => void; failed: boolean } {
   const [src, setSrc] = useState<string | null>(null)
+  const [usedToken, setUsedToken] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
   const [retried, setRetried] = useState(false)
 
@@ -22,7 +23,9 @@ export function useMediaSrc(
     let cancelled = false
     ensureMediaToken()
       .then((token) => {
-        if (!cancelled) setSrc(mediaFileUrl(API_BASE_URL, attachmentId, token))
+        if (cancelled) return
+        setUsedToken(token)
+        setSrc(mediaFileUrl(API_BASE_URL, attachmentId, token))
       })
       .catch(() => {
         if (!cancelled) setFailed(true)
@@ -38,9 +41,9 @@ export function useMediaSrc(
       return
     }
     setRetried(true)
-    invalidateMediaToken()
+    invalidateMediaToken(usedToken ?? undefined)
     setSrc(null)
-  }, [retried])
+  }, [retried, usedToken])
 
   return { src, onError, failed }
 }

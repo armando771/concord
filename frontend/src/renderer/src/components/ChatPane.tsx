@@ -8,7 +8,13 @@ import PollCard from './poll/PollCard'
 import CreatePollModal from './poll/CreatePollModal'
 import MessageAttachments from './chat/MessageAttachments'
 import { PaperclipIcon, PollIcon } from './icons'
-import { ACCEPT_ATTRIBUTE, canSubmit, draftStatus, uploadErrorMessage } from '../lib/attachments'
+import {
+  ACCEPT_ATTRIBUTE,
+  canSubmit,
+  draftStatus,
+  sendErrorMessage,
+  uploadErrorMessage
+} from '../lib/attachments'
 import { uploadAttachment } from '../api/attachments'
 import { ApiError } from '../api/client'
 import VoiceRecordButton from './chat/VoiceRecordButton'
@@ -128,18 +134,19 @@ function ChatPane({
   const [sending, setSending] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const {
-    drafts,
-    addFiles,
-    remove: removeAttachment,
-    clear: clearAttachments
-  } = useAttachmentDraft(room)
+  const { drafts, addFiles, remove: removeAttachment } = useAttachmentDraft(room)
   const attachmentState = draftStatus(drafts)
   const submittable = canSubmit(draft, drafts)
   // dragenter/dragleave disparam a cada filho; o contador evita piscar.
   const dragDepth = useRef(0)
   const [dragging, setDragging] = useState(false)
   const [sendingVoice, setSendingVoice] = useState(false)
+  // Sala atual, para um envio que termina depois da troca de sala não limpar
+  // o campo da sala nova.
+  const roomRef = useRef(room)
+  useEffect(() => {
+    roomRef.current = room
+  }, [room])
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
   const [highlight, setHighlight] = useState(0)
   const meUsername = useAuthStore((s) => s.user?.username)
@@ -219,12 +226,21 @@ function ChatPane({
     e.preventDefault()
     if (!submittable || sending) return
     setSending(true)
+    const sentRoom = room
+    // Só sai do rascunho o que foi enviado: arquivo adicionado durante o envio fica.
+    const sentDrafts = drafts.filter((d) => d.status === 'done').map((d) => d.localId)
     try {
       await sendToRoom(room, draft.trim(), attachmentState.readyIds)
-      setDraft('')
-      clearAttachments()
+      if (roomRef.current === sentRoom) {
+        setDraft('')
+        sentDrafts.forEach(removeAttachment)
+      }
     } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Falha ao enviar mensagem.')
+      showToast.error(
+        err instanceof ApiError
+          ? sendErrorMessage(err.status, err.message)
+          : 'Falha ao enviar mensagem.'
+      )
     } finally {
       setSending(false)
     }

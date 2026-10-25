@@ -11,6 +11,7 @@ import {
   formatDuration,
   mediaFileUrl,
   playableDuration,
+  sendErrorMessage,
   uploadErrorMessage
 } from './attachments'
 
@@ -111,5 +112,12 @@ describe('anexos', () => {
     expect(canSubmit('oi', [done, { status: 'uploading' as const }])).toBe(false)
     expect(canSubmit('oi', [{ status: 'error' as const }])).toBe(false)
     expect(draftStatus([done]).readyIds).toEqual(['a'])
+  })
+  it('erro ao enviar a mensagem com anexo vencido vira texto em português', () => {
+    expect(sendErrorMessage(400, 'invalid attachment')).toBe(
+      'Um dos arquivos expirou; anexe de novo.'
+    )
+    expect(sendErrorMessage(400, 'content is required')).toBe('content is required')
+    expect(sendErrorMessage(0, '')).toBe('Falha ao enviar mensagem.')
   })
 })

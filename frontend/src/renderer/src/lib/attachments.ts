@@ -165,6 +165,17 @@ export function uploadErrorMessage(status: number): string {
   }
 }
 
+/**
+ * Erro ao criar a mensagem. "invalid attachment" é quase sempre um anexo que
+ * ficou mais de 24 h no rascunho e foi limpo pelo servidor.
+ */
+export function sendErrorMessage(status: number, message: string): string {
+  if (status === 400 && message === 'invalid attachment') {
+    return 'Um dos arquivos expirou; anexe de novo.'
+  }
+  return message || 'Falha ao enviar mensagem.'
+}
+
 export function mediaFileUrl(apiBaseUrl: string, attachmentId: string, token: string): string {
   return `${apiBaseUrl}/media/${attachmentId}?token=${encodeURIComponent(token)}`
 }

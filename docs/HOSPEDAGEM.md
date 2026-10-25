@@ -254,7 +254,10 @@ Sem `DEPLOY_ENABLED`, o workflow só roda os testes.
 
 **Backup:** um timer do systemd roda `pg_dump` todo dia e guarda 14 dias em
 `/opt/concord/backups`. O backup diário é só do banco; a mídia do chat fica em
-`/opt/concord/uploads` e não entra nele.
+`/opt/concord/uploads` e não entra nele. Arquivos que a limpeza horária acha
+sem mensagem vão para `/opt/concord/uploads/.trash` e só são apagados depois de
+7 dias; com o banco sem nenhum anexo (banco novo ou restore pendente) a limpeza
+não mexe nos arquivos. Restaure o banco antes de 7 dias para não perder mídia.
 
 ## Segurança
 

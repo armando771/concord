@@ -139,3 +139,57 @@ func parseName(name string) (id string, temp bool, ok bool) {
 	}
 	return id, temp, true
 }
+
+// TrashDir é a lixeira dentro da pasta de mídia: o que a limpeza acha órfão
+// vai para lá e só é apagado depois de TrashTTL. Assim um banco vazio ou
+// restaurado tarde não apaga a mídia de vez (a mídia não tem backup).
+const TrashDir = ".trash"
+
+const TrashTTL = 7 * 24 * time.Hour
+
+// Trash move "<uuid>" ou ".tmp-<uuid>" para a lixeira, marcando a hora em que
+// entrou (o PurgeTrash conta a partir dela).
+func (s *Store) Trash(name string, now time.Time) error {
+	if _, _, ok := parseName(name); !ok {
+		return ErrInvalidName
+	}
+	trash := filepath.Join(s.dir, TrashDir)
+	if err := os.MkdirAll(trash, 0o750); err != nil {
+		return err
+	}
+	dest := filepath.Join(trash, name)
+	if err := os.Rename(filepath.Join(s.dir, name), dest); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	return os.Chtimes(dest, now, now)
+}
+
+// PurgeTrash apaga de vez o que entrou na lixeira antes de before.
+func (s *Store) PurgeTrash(before time.Time) (int, error) {
+	trash := filepath.Join(s.dir, TrashDir)
+	entries, err := os.ReadDir(trash)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	purged := 0
+	for _, e := range entries {
+		if _, _, ok := parseName(e.Name()); !ok || !e.Type().IsRegular() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || !info.ModTime().Before(before) {
+			continue
+		}
+		if err := os.Remove(filepath.Join(trash, e.Name())); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return purged, err
+		}
+		purged++
+	}
+	return purged, nil
+}

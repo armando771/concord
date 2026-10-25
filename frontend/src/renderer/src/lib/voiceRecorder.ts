@@ -1,6 +1,8 @@
 import { loadAudioPrefs } from './audioDevices'
 
 export interface VoiceRecording {
+  /** Date.now() de quando o gravador começou (o microfone pode demorar a abrir). */
+  startedAt: number
   /** Para e devolve o áudio gravado. */
   stop(): Promise<Blob>
   /** Para e joga fora. */
@@ -31,8 +33,10 @@ export async function startVoiceRecording(): Promise<VoiceRecording> {
     if (e.data.size > 0) chunks.push(e.data)
   }
   recorder.start()
+  const startedAt = Date.now()
 
   return {
+    startedAt,
     stop: () =>
       new Promise<Blob>((resolve) => {
         // O tipo vai no upload: "audio/..." faz o backend tratar o webm como áudio.

@@ -12,6 +12,7 @@ import (
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/database"
 	"gin-quickstart/backend/internal/friendship"
+	"gin-quickstart/backend/internal/httplog"
 	"gin-quickstart/backend/internal/level"
 	"gin-quickstart/backend/internal/livekit"
 	"gin-quickstart/backend/internal/media"
@@ -64,7 +65,9 @@ func main() {
 		log.Fatalf("failed to run migrations: %v", err)
 	}
 
-	router := gin.Default()
+	// Como o gin.Default(), mas o log não grava tokens que vão na URL.
+	router := gin.New()
+	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{Formatter: httplog.Formatter}), gin.Recovery())
 
 	router.Use(cors.New(cors.Config{
 		// O app empacotado carrega via file:// e a auth é por Bearer (sem

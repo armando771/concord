@@ -16,14 +16,21 @@ const (
 	PendingTTL = 24 * time.Hour
 )
 
-// Janitor apaga os arquivos que ficaram sem dono: uploads nunca usados e
-// arquivos cujas linhas sumiram por cascata (canal, servidor ou DM apagados).
+type janitorRepo interface {
+	DeleteStalePending(ctx context.Context, before time.Time) ([]string, error)
+	KnownAttachmentIDs(ctx context.Context, ids []string) (map[string]bool, error)
+	CountAttachments(ctx context.Context) (int64, error)
+}
+
+// Janitor limpa os arquivos que ficaram sem dono: uploads nunca usados (apaga
+// de vez) e arquivos cujas linhas sumiram por cascata (canal, servidor ou DM
+// apagados), que vão para a lixeira e só somem depois de media.TrashTTL.
 type Janitor struct {
-	repo  *Repository
+	repo  janitorRepo
 	store *media.Store
 }
 
-func NewJanitor(repo *Repository, store *media.Store) *Janitor {
+func NewJanitor(repo janitorRepo, store *media.Store) *Janitor {
 	return &Janitor{repo: repo, store: store}
 }
 
@@ -50,9 +57,27 @@ func (j *Janitor) RunOnce(ctx context.Context, now time.Time) error {
 	}
 	removed := j.remove(stale)
 
-	files, err := j.store.List()
+	purged, err := j.store.PurgeTrash(now.Add(-media.TrashTTL))
+	if err != nil {
+		log.Printf("media janitor: failed to purge trash: %v", err)
+	}
+
+	orphans, err := j.sweepOrphans(ctx, now)
 	if err != nil {
 		return err
+	}
+
+	if removed > 0 || orphans > 0 || purged > 0 {
+		log.Printf("media janitor: removed %d stale uploads, moved %d orphan files to trash, purged %d from trash", removed, orphans, purged)
+	}
+	return nil
+}
+
+// sweepOrphans manda para a lixeira os arquivos sem linha no banco.
+func (j *Janitor) sweepOrphans(ctx context.Context, now time.Time) (int, error) {
+	files, err := j.store.List()
+	if err != nil {
+		return 0, err
 	}
 	ids := make([]string, 0, len(files))
 	for _, f := range files {
@@ -60,16 +85,38 @@ func (j *Janitor) RunOnce(ctx context.Context, now time.Time) error {
 			ids = append(ids, f.ID)
 		}
 	}
+	if len(ids) == 0 {
+		return j.trash(orphanFiles(files, nil, now, OrphanGrace), now), nil
+	}
+
+	// Banco sem nenhum anexo mas disco com arquivos: quase certamente o banco
+	// é novo, foi perdido ou ainda vai ser restaurado. Não mexe em nada.
+	total, err := j.repo.CountAttachments(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if total == 0 {
+		log.Printf("media janitor: WARNING: database has no attachments but %d files are on disk; skipping orphan sweep (wrong or empty DATABASE_URL, or a restore pending?)", len(ids))
+		return 0, nil
+	}
+
 	known, err := j.repo.KnownAttachmentIDs(ctx, ids)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	orphans := j.remove(orphanFiles(files, known, now, OrphanGrace))
+	return j.trash(orphanFiles(files, known, now, OrphanGrace), now), nil
+}
 
-	if removed > 0 || orphans > 0 {
-		log.Printf("media janitor: removed %d stale uploads and %d orphan files", removed, orphans)
+func (j *Janitor) trash(names []string, now time.Time) int {
+	n := 0
+	for _, name := range names {
+		if err := j.store.Trash(name, now); err != nil {
+			log.Printf("media janitor: failed to trash %s: %v", name, err)
+			continue
+		}
+		n++
 	}
-	return nil
+	return n
 }
 
 func (j *Janitor) remove(names []string) int {

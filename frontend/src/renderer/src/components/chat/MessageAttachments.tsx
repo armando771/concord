@@ -53,6 +53,8 @@ function ImageAttachment({ attachment }: { attachment: Attachment }): React.JSX.
 function VideoAttachment({ attachment }: { attachment: Attachment }): React.JSX.Element {
   const [activated, setActivated] = useState(false)
   const { src, onError, failed } = useMediaSrc(attachment.id, activated)
+  // Token vencido no meio do vídeo: recarrega com token novo do mesmo ponto.
+  const resumeAt = useRef(0)
   const box = fitMedia(attachment.width, attachment.height)
 
   return (
@@ -66,7 +68,14 @@ function VideoAttachment({ attachment }: { attachment: Attachment }): React.JSX.
           controls
           autoPlay
           preload="none"
-          onError={onError}
+          onError={(e) => {
+            resumeAt.current = e.currentTarget.currentTime
+            onError()
+          }}
+          onLoadedMetadata={(e) => {
+            if (resumeAt.current > 0) e.currentTarget.currentTime = resumeAt.current
+            resumeAt.current = 0
+          }}
           className="h-full w-full rounded-md bg-black"
         />
       ) : (

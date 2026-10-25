@@ -20,9 +20,9 @@ export function useAttachmentDraft(room: string): {
   const [draftRoom, setDraftRoom] = useState(room)
   const uploads = useRef(new Map<string, AbortController>())
   const previews = useRef(new Map<string, string>())
-  // Quantos há no rascunho agora (addFiles pode ser chamado de novo antes do
+  // Quais há no rascunho agora (addFiles pode ser chamado de novo antes do
   // próximo render).
-  const count = useRef(0)
+  const ids = useRef(new Set<string>())
 
   if (draftRoom !== room) {
     setDraftRoom(room)
@@ -39,7 +39,7 @@ export function useAttachmentDraft(room: string): {
 
   const releaseAll = useCallback(() => {
     for (const id of [...uploads.current.keys(), ...previews.current.keys()]) release(id)
-    count.current = 0
+    ids.current.clear()
   }, [release])
 
   useEffect(() => releaseAll, [room, releaseAll])
@@ -50,13 +50,13 @@ export function useAttachmentDraft(room: string): {
 
   const addFiles = useCallback(
     (files: File[]) => {
-      const { accepted, errors } = acceptFiles(count.current, files)
+      const { accepted, errors } = acceptFiles(ids.current.size, files)
       errors.forEach((msg) => showToast.error(msg))
       if (accepted.length === 0) return
-      count.current += accepted.length
 
       const added: DraftAttachment[] = accepted.map(({ file, kind }) => {
         const localId = crypto.randomUUID()
+        ids.current.add(localId)
         const previewUrl = kind === 'audio' ? null : URL.createObjectURL(file)
         if (previewUrl) previews.current.set(localId, previewUrl)
         return { localId, file, kind, previewUrl, status: 'uploading', progress: 0 }
@@ -100,7 +100,7 @@ export function useAttachmentDraft(room: string): {
   const remove = useCallback(
     (localId: string) => {
       release(localId)
-      count.current = Math.max(0, count.current - 1)
+      ids.current.delete(localId)
       setDrafts((ds) => ds.filter((d) => d.localId !== localId))
     },
     [release]

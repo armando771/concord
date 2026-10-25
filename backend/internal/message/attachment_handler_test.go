@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"os"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -343,5 +345,25 @@ func TestMediaTokenEndpoint(t *testing.T) {
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || body.Token == "" || body.ExpiresAt == "" {
 		t.Fatalf("corpo = %s (%v)", rec.Body.String(), err)
+	}
+}
+
+func TestSaveErrorStatus(t *testing.T) {
+	cases := []struct {
+		err    error
+		status int
+		msg    string
+	}{
+		{media.ErrTooLarge, http.StatusRequestEntityTooLarge, "file too large"},
+		{&http.MaxBytesError{Limit: 1}, http.StatusRequestEntityTooLarge, "file too large"},
+		// Disco encheu no meio (outro upload ao mesmo tempo): mesmo erro do HasRoom.
+		{&os.PathError{Op: "write", Path: "x", Err: syscall.ENOSPC}, http.StatusInsufficientStorage, "server out of space"},
+		{io.ErrUnexpectedEOF, http.StatusBadRequest, "invalid upload"},
+	}
+	for _, tc := range cases {
+		status, msg := saveErrorStatus(tc.err)
+		if status != tc.status || msg != tc.msg {
+			t.Fatalf("saveErrorStatus(%v) = (%d, %q), want (%d, %q)", tc.err, status, msg, tc.status, tc.msg)
+		}
 	}
 }

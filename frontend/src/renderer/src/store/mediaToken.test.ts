@@ -74,4 +74,24 @@ describe('ensureMediaToken', () => {
     expect(await ensureMediaToken(expiresAt - 5 * MIN)).toBe('T2')
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
+
+  it('vários elementos com o mesmo token vencido pedem um só token novo', async () => {
+    const expires = new Date(Date.now() + 60 * MIN).toISOString()
+    fetchMock
+      .mockResolvedValueOnce({ token: 'T1', expires_at: expires })
+      .mockResolvedValueOnce({ token: 'T2', expires_at: expires })
+    expect(await ensureMediaToken()).toBe('T1')
+    // Três imagens quebradas com T1, ao mesmo tempo.
+    invalidateMediaToken('T1')
+    const a = ensureMediaToken()
+    invalidateMediaToken('T1')
+    const b = ensureMediaToken()
+    invalidateMediaToken('T1')
+    expect(await a).toBe('T2')
+    expect(await b).toBe('T2')
+    // Quem ainda usava T1 e falhou depois da renovação não derruba o T2.
+    invalidateMediaToken('T1')
+    expect(await ensureMediaToken()).toBe('T2')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
 })

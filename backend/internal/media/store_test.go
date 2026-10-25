@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -110,5 +111,54 @@ func TestListReportsIDsAndTemp(t *testing.T) {
 	}
 	if !sawFile || !sawTemp {
 		t.Fatalf("List = %+v", files)
+	}
+}
+
+func TestTrashMovesFileAndPurgeRemovesOldOnes(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := NewStore(dir)
+	now := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
+	oldID, newID := uuid.NewString(), uuid.NewString()
+	for _, id := range []string{oldID, newID} {
+		if _, _, err := s.Save(id, bytes.NewReader([]byte("x")), 1024); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Trash(oldID, now.Add(-8*24*time.Hour)); err != nil {
+		t.Fatalf("Trash: %v", err)
+	}
+	if err := s.Trash(newID, now.Add(-time.Hour)); err != nil {
+		t.Fatalf("Trash: %v", err)
+	}
+	if err := s.Trash("../../etc/passwd", now); !errors.Is(err, ErrInvalidName) {
+		t.Fatalf("err = %v, want ErrInvalidName", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, oldID)); !os.IsNotExist(err) {
+		t.Fatal("arquivo deveria ter saído da pasta principal")
+	}
+	if _, err := os.Stat(filepath.Join(dir, TrashDir, oldID)); err != nil {
+		t.Fatalf("arquivo deveria estar na lixeira: %v", err)
+	}
+	// A lixeira é uma pasta: List não a devolve como anexo.
+	if files, _ := s.List(); len(files) != 0 {
+		t.Fatalf("List = %+v, want vazio", files)
+	}
+
+	purged, err := s.PurgeTrash(now.Add(-TrashTTL))
+	if err != nil || purged != 1 {
+		t.Fatalf("PurgeTrash = (%d, %v), want 1", purged, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, TrashDir, oldID)); !os.IsNotExist(err) {
+		t.Fatal("item com mais de 7 dias deveria sumir")
+	}
+	if _, err := os.Stat(filepath.Join(dir, TrashDir, newID)); err != nil {
+		t.Fatalf("item recente deveria ficar: %v", err)
+	}
+}
+
+func TestPurgeTrashWithoutTrashDir(t *testing.T) {
+	s, _ := NewStore(t.TempDir())
+	if n, err := s.PurgeTrash(time.Now()); err != nil || n != 0 {
+		t.Fatalf("PurgeTrash sem lixeira = (%d, %v)", n, err)
 	}
 }
