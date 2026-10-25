@@ -11,8 +11,9 @@ import (
 )
 
 // De quanto em quanto tempo o serviço olha quem está em call. O XP só é dado
-// por minuto completo sem mute: mutar ou sair antes de fechar o minuto perde
-// os segundos acumulados.
+// por minuto completo de voz captada: o tempo calado não conta (mas também
+// não zera), e mutar, ensurdecer ou sair antes de fechar o minuto perde os
+// segundos acumulados.
 const tickInterval = 10 * time.Second
 
 type EventPublisher interface {
@@ -82,9 +83,10 @@ func (s *Service) tick(ctx context.Context, now time.Time) {
 	}
 }
 
-// accrue soma o tempo desde o último tick para quem está elegível agora e
-// devolve os minutos completos. Quem não está mais elegível perde o que tinha
-// acumulado.
+// accrue soma o tempo desde o último tick para quem está falando agora e
+// devolve os minutos completos. Quem está na call desmutado mas calado não
+// soma nada e mantém o que tinha; quem não está mais elegível (mutou, saiu…)
+// perde o que tinha acumulado.
 func (s *Service) accrue(active []call.VoiceActivity, now time.Time) []grant {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -103,6 +105,9 @@ func (s *Service) accrue(active []call.VoiceActivity, now time.Time) []grant {
 			continue
 		}
 		stillActive[a.UserID] = true
+		if !a.Speaking {
+			continue
+		}
 
 		total := s.pending[a.UserID] + elapsed
 		minutes := int64(total / time.Minute)
