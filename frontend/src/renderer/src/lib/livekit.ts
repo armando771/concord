@@ -19,6 +19,7 @@ import {
 import { pruneWatched } from './screenWatch'
 import { canPublishSource, type PublishSource } from './mediaPermissions'
 import { reportLatency } from './connectionStats'
+import { screenEncoding, streamQuality } from './screenShareQuality'
 
 // Mídia das chamadas via SFU (LiveKit): cada pessoa envia uma cópia de cada
 // track para o servidor, que distribui para os demais. Substitui o mesh P2P.
@@ -60,9 +61,6 @@ export interface CallMediaHandlers {
   onRemovedByModerator?: () => void
 }
 
-const SCREEN_MAX_BITRATE = 4_000_000
-const SCREEN_MAX_FRAMERATE = 30
-
 export class CallMedia {
   private room: Room
   private cache = new StreamCache<MediaStream>((tracks) => new MediaStream(tracks))
@@ -85,11 +83,8 @@ export class CallMedia {
         dtx: true,
         red: true,
         simulcast: true,
-        videoCodec: 'vp8',
-        screenShareEncoding: {
-          maxBitrate: SCREEN_MAX_BITRATE,
-          maxFramerate: SCREEN_MAX_FRAMERATE
-        }
+        // A qualidade de tela é definida por publicação, não pela sala.
+        videoCodec: 'vp8'
       }
     })
 
@@ -233,7 +228,8 @@ export class CallMedia {
       await this.room.localParticipant.publishTrack(video, {
         source: Track.Source.ScreenShare,
         name: 'screen',
-        simulcast: false
+        simulcast: false,
+        screenShareEncoding: screenEncoding(streamQuality(stream), video.getSettings())
       })
     }
     const [audio] = stream.getAudioTracks()
