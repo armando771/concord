@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, Tray } fr
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { badgeBitmap, badgeDescription, badgeLabel, taskbarAction } from './taskbarBadge'
+import { logNotification } from './toasts'
 import {
   launchedHidden,
   LOGIN_ITEM_ARGS,
@@ -210,10 +211,16 @@ export function setupBackground(getWindow: () => BrowserWindow | null, icon: str
     const win = getWindow()
     if (!win || win.isDestroyed()) return
     if (!shouldNotify({ visible: win.isVisible(), focused: win.isFocused() })) return
-    const toast = (payload.urgent || payload.toast !== false) && Notification.isSupported()
+    const wantsToast = payload.urgent || payload.toast !== false
+    const toast = wantsToast && Notification.isSupported()
+    if (wantsToast && !toast) logNotification('Notification.isSupported() = false')
     if (toast) {
       const notification = new Notification({ title: payload.title, body: payload.body, icon })
       activeNotifications.add(notification)
+      notification.on('failed', (_event, error) => {
+        activeNotifications.delete(notification)
+        logNotification(`notificação falhou: ${error}`)
+      })
       notification.on('click', () => {
         activeNotifications.delete(notification)
         showWindow(win)
