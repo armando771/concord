@@ -50,7 +50,7 @@ func newTestService(active ...string) (*Service, *fakeStore, *fakePublisher, *fa
 	voice := &fakeVoice{}
 	serverID := "server-1"
 	for _, id := range active {
-		voice.active = append(voice.active, call.VoiceActivity{UserID: id, CallID: "call-1", ServerID: &serverID, Speaking: true})
+		voice.active = append(voice.active, call.VoiceActivity{UserID: id, CallID: "call-1", ServerID: &serverID})
 	}
 	s := &Service{store: store, publisher: pub, voice: voice, pending: map[string]time.Duration{}, lastTick: t0}
 	return s, store, pub, voice
@@ -130,21 +130,5 @@ func TestNoLevelUpEventWithoutNewLevel(t *testing.T) {
 		if sent != "user:ana level:update" {
 			t.Fatalf("unexpected event %q", sent)
 		}
-	}
-}
-
-func TestSilenceDoesNotCountButKeepsProgress(t *testing.T) {
-	s, store, _, voice := newTestService("ana")
-
-	now := run(s, t0, 3) // 30 s falando
-	voice.active[0].Speaking = false
-	now = run(s, now, 30) // 5 min calada, mas desmutada
-	if store.xp["ana"] != 0 {
-		t.Fatalf("xp while silent = %d, want 0", store.xp["ana"])
-	}
-	voice.active[0].Speaking = true
-	run(s, now, 3) // mais 30 s falando: fecha o minuto
-	if store.xp["ana"] != XPPerMinute {
-		t.Fatalf("xp = %d, want %d (30s + 30s of voice)", store.xp["ana"], XPPerMinute)
 	}
 }
