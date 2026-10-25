@@ -24,6 +24,11 @@ export interface MergedMessages<T> {
 
 const time = (m: TimedMessage): number => Date.parse(m.created_at)
 
+/** Horário da mensagem mais nova (-Infinity numa sala vazia). */
+export function newestTime(messages: TimedMessage[]): number {
+  return messages.length > 0 ? Math.max(...messages.map(time)) : -Infinity
+}
+
 /**
  * `latest` é a página mais nova do servidor (da mais nova para a mais antiga,
  * como a API devolve). Dentro do intervalo da página vale o servidor (apagadas
@@ -31,13 +36,7 @@ const time = (m: TimedMessage): number => Date.parse(m.created_at)
  * antigas carregadas e as que chegaram pelo WebSocket depois da busca.
  * Mensagens com o mesmo horário da borda (o Date.parse corta microssegundos)
  * ficam, para nada sumir por engano.
- */
-/** Horário da mensagem mais nova (-Infinity numa sala vazia). */
-export function newestTime(messages: TimedMessage[]): number {
-  return messages.length > 0 ? Math.max(...messages.map(time)) : -Infinity
-}
-
-/**
+ *
  * `knownBefore`: horário da mensagem mais nova que a sala tinha quando a busca
  * começou (o padrão é o de `current`). Uma mensagem que chegou pelo WS durante
  * a busca não pode fazer as perdidas, mais velhas que ela, deixarem de contar.

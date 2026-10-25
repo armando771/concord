@@ -319,24 +319,41 @@ que o Caddy usa. Sem o socket (PC de casa, `go run`), ele escuta sozinho como
 antes.
 
 Ativar numa VPS que já roda (uma vez, depois de um deploy desta versão, com
-ninguém em chamada: a porta fica fechada por ~1 s):
+ninguém em chamada: a porta fica fechada por ~1 s). O deploy não envia
+`deploy/`, então primeiro, **do PC**, na pasta do repositório:
 
 ```bash
+scp deploy/concord-server.socket deploy/concord-server.service.d/zero-downtime.conf root@IP:/opt/concord/
+```
+
+Depois, **na VPS**, cole o bloco inteiro. Ele para no primeiro erro (se algo
+falhar depois de parar o serviço, sobe o serviço de novo) e só imprime
+`socket ativo` no fim se tudo passou:
+
+```bash
+bash -euo pipefail <<'EOS'
+trap 'echo "ERRO na linha $LINENO: parei aqui; subindo o serviço de novo" >&2; systemctl start concord-server || true' ERR
 cd /opt/concord
-# O binário no ar e o .good têm que saber usar o socket (deploy desta versão):
-grep -aq concord-capability:socket-activation-v1 concord-server && \
-  grep -aq concord-capability:socket-activation-v1 concord-server.good && echo ok   # ok
+# Os arquivos que o scp mandou:
+test -f concord-server.socket
+test -f zero-downtime.conf
+# O binário no ar e o .good sabem usar o socket (deploy desta versão):
+grep -aq concord-capability:socket-activation-v1 concord-server
+grep -aq concord-capability:socket-activation-v1 concord-server.good
 # O .prev ainda é o binário de antes desta versão, que não sobe com o socket:
-cp concord-server.good concord-server.prev
+cp -f concord-server.good concord-server.prev
 mkdir -p /etc/systemd/system/concord-server.service.d
-cp concord-server.socket /etc/systemd/system/                                   # deploy/concord-server.socket
-cp zero-downtime.conf /etc/systemd/system/concord-server.service.d/             # deploy/concord-server.service.d/
+install -m 644 concord-server.socket /etc/systemd/system/
+install -m 644 zero-downtime.conf /etc/systemd/system/concord-server.service.d/
 systemctl daemon-reload
 systemctl stop concord-server
 systemctl enable --now concord-server.socket
 systemctl start concord-server
-journalctl -u concord-server -n 5 | grep "socket do systemd"                    # "servidor pronto em … (socket do systemd)"
-curl -s http://127.0.0.1:8090/healthz                                           # {"status":"ok"}
+for _ in $(seq 30); do curl -fs -m 1 -o /dev/null http://127.0.0.1:8090/healthz && break; sleep 1; done
+curl -fsS -m 2 http://127.0.0.1:8090/healthz; echo                                  # {"status":"ok"}
+journalctl -u concord-server --since -2min --no-pager | grep "socket do systemd"    # "servidor pronto em … (socket do systemd)"
+echo "socket ativo"
+EOS
 ```
 
 O backend precisa ser desta versão ou mais nova: um binário antigo não sabe
@@ -434,8 +451,11 @@ Para uma VPS que já roda a versão anterior. Cada passo diz quando pode ser
 feito.
 
 1. **Deploy desta versão** (qualquer hora; o CI ao chegar na `main` — ele só
-   faz deploy da `main` — ou `scripts/deploy-vps.sh root@IP` do PC). A
-   migration `000026` entra antes do reinício. Esse deploy ainda trava a voz
+   faz deploy da `main` — ou `scripts/deploy-vps.sh root@IP` do PC). As
+   migrations `000022`, `000024`, `000025` e `000026` entram, nessa ordem,
+   antes do reinício, com o binário antigo no ar. Se houver nomes de usuário
+   que só diferem na caixa, a `000025` cria um índice comum em vez do único (não
+   falha; aparece um `NOTICE` no log do migrate). Esse deploy ainda trava a voz
    uma vez, como antes (o Caddy ainda manda `/rtc` pelo backend). O aviso
    `docker-compose.yml/.env mudou: postgres … --infra` é esperado (versão fixa
    do Postgres) e se repete até o passo 5.
@@ -443,7 +463,9 @@ feito.
 3. **Socket e complemento do systemd** (com ninguém em chamada; a porta fecha
    por ~1 s): [Porta do backend com o systemd](#porta-do-backend-com-o-systemd).
    Inclui conferir que o binário no ar sabe usar o socket e
-   `cp concord-server.good concord-server.prev` (senão o `.prev` continua o
+   Começa com um `scp` do PC (o deploy não envia `deploy/`), confere que o
+   binário no ar sabe usar o socket e faz
+   `cp -f concord-server.good concord-server.prev` (senão o `.prev` continua o
    binário antigo, que não sobe com o socket).
 4. **Caddyfile** (com ninguém em chamada; o script confere):
    `scripts/apply-caddyfile.sh --also https://app-salinha.bhrx.com.br root@IP deploy/Caddyfile`.
@@ -463,7 +485,9 @@ sobe). Com o socket ativo, só volte para um binário que sabe usá-lo:
 ```bash
 cd /opt/concord
 if ! systemctl is-active -q concord-server.socket || grep -aq concord-capability:socket-activation-v1 concord-server.prev; then
-  cp concord-server concord-server.failed && cp concord-server.prev concord-server
+  # -f: o binário no ar está em execução; sem -f o cp falha ("Text file busy")
+  # e o restart sobe o mesmo binário de novo.
+  cp -f concord-server concord-server.failed && cp -f concord-server.prev concord-server
   systemctl reset-failed concord-server; systemctl restart concord-server
   sleep 2; curl -s http://127.0.0.1:8090/healthz                                # {"status":"ok"}
 else
@@ -492,7 +516,10 @@ systemctl start concord-server                                                  
 curl -s http://127.0.0.1:8090/healthz                                           # {"status":"ok"}
 ```
 
-O `PORT` do `.env` tem que ser `8090` (o endereço do Caddy). Depois faça o
+O `PORT` do `.env` tem que ser `8090` (o endereço do Caddy). **Não use
+"Re-run" num Deploy do GitHub Actions de antes desta versão:** ele usa o
+`deploy-vps.sh` antigo, que não tem a checagem do socket, e instalaria um
+binário que não sobe enquanto o socket estiver ativo. Depois faça o
 deploy da versão antiga: ela não traz a volta automática nem a checagem do
 socket. Para voltar ao socket, siga
 [Porta do backend com o systemd](#porta-do-backend-com-o-systemd) de novo.
