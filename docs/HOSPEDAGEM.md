@@ -289,6 +289,19 @@ por mais de 3 s.
 `GET /healthz` responde `200` só com o servidor pronto (banco respondendo e
 chamadas recarregadas) e `503` enquanto sobe ou desliga. Não aparece no log.
 
+**As requisições esperam em vez de falhar.** No Caddy (`salinha_backend` do
+[`deploy/Caddyfile`](../deploy/Caddyfile)):
+
+- `lb_try_duration 15s` e `lb_try_interval 100ms`: enquanto a porta do backend
+  está fechada, o Caddy tenta de novo a cada 100 ms por até 15 s, em vez de
+  devolver 502. Vale para qualquer método (POST e uploads inclusive), porque só
+  repete o que nem chegou a conectar;
+- `health_uri /healthz` (a cada 500 ms, duas falhas seguidas): só manda tráfego
+  para um backend pronto.
+
+O deploy espera o `/healthz` responder (até 30 s) em vez de um `sleep` fixo e,
+se o backend não subir, mostra o fim do `journalctl` e falha.
+
 O systemd precisa esperar esse desligamento: `TimeoutStopSec` maior que os
 10 s do backend. Na VPS, instale o complemento uma vez (não reinicia nada):
 

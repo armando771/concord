@@ -128,6 +128,7 @@ jobs:
             curl -fsS "${PUBLIC_URL%/}/updates/$path.sig" | grep -q .
           done
           test "$(curl -s -o /dev/null -w '%{http_code}' "${PUBLIC_URL%/}/rtc/validate")" = 401
+          curl -fsS "${PUBLIC_URL%/}/healthz" | grep -q '"ok"'
           if [[ -n "$SITE_URL" ]]; then
             curl -fsS "${SITE_URL%/}/" | grep -q 'data-download'
             curl -fsS "${SITE_URL%/}/updates/latest.yml" | grep -q "version: ${{ steps.version.outputs.version }}"

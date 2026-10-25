@@ -91,4 +91,23 @@ fi
 docker compose up -d --no-recreate
 REMOTE
 
-ssh "$HOST" 'cd /opt/concord && chmod +x concord-server.new && mv concord-server.new concord-server && systemctl restart concord-server && sleep 2 && systemctl is-active concord-server'
+# Reinicia e espera o /healthz (banco no ar e chamadas recarregadas). Durante
+# o reinício o Caddy segura as requisições (deploy/Caddyfile).
+ssh "$HOST" bash -s <<'REMOTE'
+set -euo pipefail
+cd /opt/concord
+chmod +x concord-server.new
+mv concord-server.new concord-server
+systemctl restart concord-server
+port=$(sed -n 's/^PORT=//p' .env | tail -n 1 | tr -d "\"' \r")
+for _ in $(seq 1 60); do
+  if curl -fsS -o /dev/null "http://127.0.0.1:${port:-8080}/healthz"; then
+    echo "backend no ar (/healthz ok)"
+    exit 0
+  fi
+  sleep 0.5
+done
+echo "backend não respondeu /healthz em 30 s" >&2
+journalctl -u concord-server -n 30 --no-pager >&2 || true
+exit 1
+REMOTE
