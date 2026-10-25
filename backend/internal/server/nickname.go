@@ -11,7 +11,7 @@ import (
 )
 
 // MaxNickname: o apelido segue as regras do nome de exibição (até 32
-// caracteres, sem espaços nas pontas). A coluna da migration 000031 tem o
+// caracteres, sem espaços nas pontas). A coluna da migration 000036 tem o
 // mesmo tamanho.
 const MaxNickname = user.MaxDisplayName
 

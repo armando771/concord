@@ -42,7 +42,7 @@ export const ALL_PERMISSIONS: number = Object.values(Perm).reduce((sum, bit) => 
 
 /**
  * O que todo membro faz num servidor novo (igual ao backend). "Alterar apelido"
- * vem ligado, como no Discord; nos servidores antigos a migration 000031 ligou.
+ * vem ligado, como no Discord; nos servidores antigos a migration 000036 ligou.
  */
 export const DEFAULT_EVERYONE: number =
   Perm.VIEW_CHANNEL |
