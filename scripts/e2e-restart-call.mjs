@@ -11,7 +11,10 @@
 //     duplicada) para a ana, que estava com o canal de texto aberto;
 //   - a troca de processo fica abaixo de 1 s mesmo com um download longo em
 //     andamento (cliente que não lê) e um WebSocket morto (não confirma o
-//     fechamento) — os dois direto no backend.
+//     fechamento) — os dois direto no backend;
+//   - uma chamada de DM atravessa outro reinício: continua no servidor, os dois
+//     se ouvem, mudo e tela ainda chegam ao servidor e desligar encerra para os
+//     dois.
 //
 // Precisa do mesmo caminho da VPS: Caddy na frente (o deploy/Caddyfile de
 // verdade, com /rtc direto para o LiveKit), backend com a porta segurada como
@@ -460,7 +463,8 @@ try {
   await waitFor('bia recebe a tela da ana', () => packets(pageB), (p) => p.videoIn > 0)
 
   // A ana vai para o canal de texto (continua na chamada) e manda uma mensagem.
-  await pageA.getByText(textChannel.name, { exact: true }).first().click()
+  // Pelo title do botão: o canal principal tem uma estrela junto do nome.
+  await pageA.locator(`button[title="${textChannel.name}"]`).first().click()
   await api(`/channels/${textChannel.id}/messages`, { token: bia.token, method: 'POST', body: { content: `antes ${run}` } })
   await waitFor('ana vê a mensagem de antes', () => pageA.getByText(`antes ${run}`).count(), (n) => n === 1)
   await waitFor('ana vê a bia mutada', () => pageA.evaluate((name) => {
@@ -550,6 +554,72 @@ try {
   check('mensagem de antes não duplicou', (await pageA.getByText(`antes ${run}`).count()) === 1,
     await pageA.getByText(`antes ${run}`).count())
   check('chamada continua (bia ouve a ana)', (await liveTracks(pageB)).includes('live'))
+
+  // ─── DM: reinício no meio de uma chamada de DM ─────────────────────────
+  // Antes, atender a DM não ia para o banco ("ringing") e todo reinício a
+  // encerrava; o app então ficava com mídia e sem chamada no servidor (mudo,
+  // tela e desligar davam 404, e o outro lado nunca recebia o fim).
+  // A ana está no canal de texto (painel "Desconectar da voz"), a bia no de voz.
+  const leaveVoice = (page) => page.getByRole('button', { name: /^Desconectar( da voz)?$/ }).first().click()
+  await leaveVoice(pageB)
+  await leaveVoice(pageA)
+  await waitFor('DM: canal de voz desfeito',
+    async () => [...(await liveTracks(pageA)), ...(await liveTracks(pageB))], (t) => t.length === 0)
+  await pageA.goto(APP + `#/dm/${bia.id}`)
+  await pageA.getByRole('button', { name: 'Iniciar chamada de voz' }).click({ timeout: 15000 })
+  await pageB.getByRole('button', { name: 'Aceitar chamada' }).click({ timeout: 15000 })
+  await waitFor('DM: bia ouve a ana', () => liveTracks(pageB), (t) => t.includes('live'))
+  await waitFor('DM: ana ouve a bia', () => liveTracks(pageA), (t) => t.includes('live'))
+  const conversations = await api('/conversations', { token: ana.token })
+  const conversationId = (Array.isArray(conversations) ? conversations : conversations.conversations)
+    .find((c) => c.other_user?.id === bia.id)?.id
+  const dmState = (token = ana.token) => api(`/calls/active?scope=dm&id=${conversationId}`, { token })
+    .catch((err) => ({ error: err.message }))
+  const dmBefore = await waitFor('DM: ativa no servidor antes do reinício', dmState,
+    (st) => st.call?.status === 'active')
+
+  const dmConsole = consoleLines.length
+  const dmT0 = { a: await clock(pageA), b: await clock(pageB) }
+  await stopBackend()
+  await startBackend()
+  await waitHealthy()
+  // Passa do prazo em que o app confirmaria um 404 (~4 s).
+  await sleep(8000)
+
+  const dmAfter = await dmState()
+  check('DM: a chamada continua no servidor depois do reinício',
+    dmAfter.call?.id === dmBefore.call?.id && dmAfter.call?.status === 'active' &&
+      dmAfter.participants?.length === 2, dmAfter)
+  check('DM: os dois continuam se ouvindo',
+    (await liveTracks(pageA)).includes('live') && (await liveTracks(pageB)).includes('live'))
+  const dmSignal = consoleLines.slice(dmConsole).filter((l) =>
+    /ICE restart|resuming signal|signal disconnected/i.test(l.text))
+  check('DM: sinalização do LiveKit não caiu', dmSignal.length === 0, dmSignal)
+  const dmTexts = [
+    ...(await pageA.evaluate((from) => window.__texts.filter(([t]) => t >= from).map(([, x]) => x), dmT0.a)),
+    ...(await pageB.evaluate((from) => window.__texts.filter(([t]) => t >= from).map(([, x]) => x), dmT0.b))
+  ].filter((x) => /reconect|encerrad|saiu da chamada|Não foi possível/i.test(x))
+  check('DM: nenhum aviso de queda ou fim na tela', dmTexts.length === 0, dmTexts)
+
+  // Depois do reinício o servidor ainda conhece a chamada: mudo e tela chegam.
+  const anaIn = (st) => st.participants?.find((p) => p.user_id === ana.id)
+  await pageA.getByRole('button', { name: 'Silenciar microfone' }).first().click()
+  await waitFor('DM: mudo da ana chega ao servidor depois do reinício', dmState, (st) => anaIn(st)?.muted === true)
+  await pageA.getByRole('button', { name: 'Ativar microfone' }).first().click()
+  await waitFor('DM: desmutar também chega', dmState, (st) => anaIn(st)?.muted === false)
+  await pageA.getByRole('button', { name: 'Compartilhar tela' }).first().click()
+  await waitFor('DM: tela da ana chega ao servidor depois do reinício', dmState,
+    (st) => (st.screen_sharing ?? []).includes(ana.id))
+  const videoBefore = (await packets(pageB)).videoIn
+  await pageB.getByText('Assistir transmissão').first().click({ timeout: 20000 })
+  await waitFor('DM: bia recebe a tela da ana', () => packets(pageB), (p) => p.videoIn > videoBefore + 10)
+
+  // Desligar depois do reinício encerra para os dois (não virou zumbi).
+  await pageA.getByRole('button', { name: 'Encerrar chamada' }).first().click()
+  await waitFor('DM: desligar encerra a chamada para a bia', () => liveTracks(pageB), (t) => t.length === 0, 10000)
+  await waitFor('DM: a bia sai da tela da chamada',
+    () => pageB.getByRole('button', { name: 'Encerrar chamada' }).count(), (n) => n === 0, 10000)
+  await waitFor('DM: o servidor encerrou a chamada', () => dmState(bia.token), (st) => /404/.test(st.error ?? ''))
 
   if (failures.length) throw new Error(`${failures.length} conferência(s) falharam`)
 } catch (err) {
