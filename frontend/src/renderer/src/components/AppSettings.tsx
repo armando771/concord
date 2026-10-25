@@ -158,8 +158,10 @@ function AppSettings(): React.JSX.Element | null {
           />
         </div>
       )}
+      {/* Overlay de jogo: só Windows (preload: process.platform, sandbox desligado). */}
       {window.api?.overlay?.supported && (
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-400">Overlay</h3>
           <Toggle
             title="Overlay nos jogos"
             description="Mostra quem está na chamada e quem está falando por cima de jogos em tela cheia (modo janela)."
