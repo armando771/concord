@@ -17,11 +17,18 @@ export class ApiError extends Error {
   status: number
   /** Código do erro quando o servidor manda (ex.: "user_not_found"). */
   code?: string
+  /** Corpo JSON da resposta de erro (ex.: call_id do 423 de sala trancada). */
+  body: Record<string, unknown>
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(status: number, message: string, codeOrBody?: string | Record<string, unknown>, body?: Record<string, unknown>) {
     super(message)
     this.status = status
-    this.code = code
+    if (typeof codeOrBody === 'string') {
+      this.code = codeOrBody
+      this.body = body ?? {}
+    } else {
+      this.body = codeOrBody ?? {}
+    }
   }
 }
 
@@ -56,8 +63,11 @@ async function rawRequest<T>(path: string, options: RequestInit = {}, token?: st
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
-    const { error, code } = body as { error?: string; code?: string }
-    throw new ApiError(response.status, error ?? 'Request failed', code)
+    const bodyRecord = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>
+    const { error, code } = bodyRecord as { error?: string; code?: string }
+    const message = error ?? 'Request failed'
+    const err = new ApiError(response.status, message, code, bodyRecord)
+    throw err
   }
 
   if (response.status === 204) {

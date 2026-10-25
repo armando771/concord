@@ -52,7 +52,8 @@ import {
   StarIcon,
   TrashIcon,
   VolumeIcon,
-  VolumeOffIcon
+  VolumeOffIcon,
+  XIcon
 } from './icons'
 import { setPrimaryChannel } from '../api/servers'
 import { primaryChannelId } from '../lib/primaryChannel'
@@ -95,6 +96,10 @@ export function ServerSidebar(): React.JSX.Element {
   const serverCalls = useCallStore((s) => s.serverCalls)
   const screenSharers = useCallStore((s) => s.screenSharers)
   const joinVoiceChannel = useCallStore((s) => s.joinVoiceChannel)
+  const knock = useCallStore((s) => s.knock)
+  const cancelJoinRequest = useCallStore((s) => s.cancelJoinRequest)
+  const admittedChannelId = useCallStore((s) => s.admittedChannelId)
+  const clearAdmittedChannel = useCallStore((s) => s.clearAdmittedChannel)
   const levels = useLevelStore((s) => s.levels)
   const ensureLevels = useLevelStore((s) => s.ensureLevels)
 
@@ -289,6 +294,14 @@ export function ServerSidebar(): React.JSX.Element {
   useEffect(() => {
     if (voiceUserIdsKey) ensureLevels(voiceUserIdsKey.split(','))
   }, [voiceUserIdsKey, ensureLevels])
+
+  // Se nosso pedido para entrar na sala trancada foi aceito, navegamos para o canal automaticamente
+  useEffect(() => {
+    if (admittedChannelId && currentServer?.id) {
+      navigate(`/servers/${currentServer.id}/channels/${admittedChannelId}`)
+      clearAdmittedChannel()
+    }
+  }, [admittedChannelId, currentServer?.id, navigate, clearAdmittedChannel])
 
   const handleVoiceClick = (ch: Channel): void => {
     if (!access.canInChannel(ch.id, Perm.CONNECT)) {
@@ -731,6 +744,9 @@ export function ServerSidebar(): React.JSX.Element {
                   activeCallType === 'channel' &&
                   activeCallChannelId === ch.id
                 const live = liveUserIds(callState, connectedHere ? screenSharers : [])
+                const isLocked = Boolean(callState?.call?.locked)
+                const isPendingKnock = knock?.channelId === ch.id && knock.status === 'pending'
+                const isDeclinedKnock = knock?.channelId === ch.id && knock.status === 'declined'
                 return (
                   <div
                     key={ch.id}
@@ -798,6 +814,15 @@ export function ServerSidebar(): React.JSX.Element {
                             altura da primeira linha. */}
                         <span title={ch.name} className={`min-w-0 flex-1 leading-6 ${WRAP_NAME}`}>
                           {ch.name}
+                          {isLocked && (
+                            <span
+                              title="Sala trancada"
+                              className="ml-1.5 inline-flex align-[-1px] text-amber-500/90"
+                            >
+                              <LockIcon className="h-3 w-3" />
+                              <span className="sr-only">(trancada)</span>
+                            </span>
+                          )}
                           {(access.isPrivate(ch.id) ||
                             !access.canInChannel(ch.id, Perm.CONNECT)) && (
                             <span
@@ -833,6 +858,47 @@ export function ServerSidebar(): React.JSX.Element {
                       {/* Com gente no canal, o "•••" troca de lugar com a contagem no hover. */}
                       {canOpenChannelMenu(ch) && channelMenuButton(ch, participants.length > 0)}
                       {channelMenuFor === ch.id && channelMenu(ch)}
+
+                      {/* Overlay para salas trancadas quando o usuário não está conectado nela */}
+                      {isLocked && !connectedHere && (
+                        isPendingKnock ? (
+                          <div className="absolute inset-0 z-10 flex items-center justify-between rounded-lg bg-amber-950/80 px-2.5 backdrop-blur-sm border border-amber-500/40 animate-in fade-in duration-150">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="h-2 w-2 shrink-0 animate-ping rounded-full bg-amber-400" />
+                              <span className="truncate text-xs font-semibold text-amber-200">
+                                Pedido enviado...
+                              </span>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                cancelJoinRequest()
+                              }}
+                              title="Cancelar pedido"
+                              className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-full bg-white/10 text-gray-300 hover:bg-white/20 hover:text-white"
+                            >
+                              <XIcon className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : isDeclinedKnock ? (
+                          <div className="absolute inset-0 z-10 flex items-center gap-1.5 rounded-lg bg-red-950/80 px-2.5 backdrop-blur-sm border border-red-500/40 animate-in fade-in duration-150">
+                            <XIcon className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                            <span className="truncate text-xs font-medium text-red-200">
+                              Pedido recusado
+                            </span>
+                          </div>
+                        ) : (
+                          <div
+                            onClick={() => handleVoiceClick(ch)}
+                            className="pointer-events-none group-hover/voicech:pointer-events-auto absolute inset-0 z-10 flex items-center justify-center gap-1.5 rounded-lg bg-black/80 px-2 opacity-0 backdrop-blur-xs transition-opacity group-hover/voicech:opacity-100 cursor-pointer border border-amber-500/20"
+                          >
+                            <LockIcon className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                            <span className="truncate text-xs font-semibold text-amber-200">
+                              Sala trancada · Pedir permissão
+                            </span>
+                          </div>
+                        )
+                      )}
                     </div>
                     {participants.length > 0 && (
                       <div className="mb-1 ml-4 flex flex-col gap-0.5">
