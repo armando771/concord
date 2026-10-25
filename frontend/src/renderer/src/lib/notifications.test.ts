@@ -4,6 +4,7 @@ import {
   callNotification,
   DEFAULT_NOTIFICATION_PREFS,
   desktopPayload,
+  friendRequestNotification,
   mentionNotification,
   messageNotification,
   notificationSound,
@@ -247,5 +248,29 @@ describe('notifyDesktop', () => {
   it('sem Electron e sem aviso ligado, não faz nada', () => {
     vi.stubGlobal('window', {})
     expect(() => notifyDesktop(dm, prefs)).not.toThrow()
+  })
+})
+
+describe('DM em grupo e pedido de amizade', () => {
+  it('mensagem de grupo leva o nome do grupo e abre o grupo', () => {
+    const n = messageNotification(
+      {
+        id: 'm',
+        author_id: 'ana',
+        conversation_id: 'g1',
+        content: 'oi',
+        created_at: '',
+        author: { id: 'ana', username: 'ana', display_name: 'Ana' }
+      } as Message,
+      'eu',
+      { name: 'Galera' }
+    )
+    expect(n).toMatchObject({ title: 'Ana em Galera', route: '/dm/c/g1' })
+  })
+
+  it('pedido de amizade abre Pendente e toca o som de mensagem', () => {
+    const n = friendRequestNotification({ username: 'bia', display_name: 'Bia' })
+    expect(n).toMatchObject({ kind: 'friend_request', route: '/friends?tab=pending' })
+    expect(notificationSound(n.kind, { sound: true })).toBe('message')
   })
 })

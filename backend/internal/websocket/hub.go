@@ -361,6 +361,25 @@ func (h *Hub) PublishFriendRemoved(recipientID string, removed *user.User) {
 	h.publishFriendEvent("friend:removed", recipientID, removed)
 }
 
+func (h *Hub) PublishUserBlocked(blockerID string, blocked *user.User) {
+	h.publishFriendEvent("relationship:blocked", blockerID, blocked)
+}
+
+func (h *Hub) PublishUserUnblocked(blockerID string, unblocked *user.User) {
+	h.publishFriendEvent("relationship:unblocked", blockerID, unblocked)
+}
+
+// PublishConversationEvent avisa cada participante (sala user:<id>) que a
+// conversa foi criada/alterada/removida/lida; o app recarrega o que precisa.
+func (h *Hub) PublishConversationEvent(eventType string, conversationID string, userIDs []string) {
+	event := writeEvent(eventType, map[string]string{"conversation_id": conversationID})
+	for _, userID := range userIDs {
+		if userID != "" {
+			h.BroadcastToRoom("user:"+userID, event)
+		}
+	}
+}
+
 func (h *Hub) publishFriendEvent(eventType string, recipientID string, target *user.User) {
 	if recipientID == "" || target == nil {
 		return

@@ -598,3 +598,31 @@ func (r *Repository) SharesServer(ctx context.Context, userA string, userB strin
 	).Scan(&shares)
 	return shares, err
 }
+
+// MutualServers: servidores em que os dois estão (cartão de perfil).
+func (r *Repository) MutualServers(ctx context.Context, userA string, userB string) ([]MutualServer, error) {
+	rows, err := r.db.Query(
+		ctx,
+		`SELECT s.id, s.name, s.icon_url
+		FROM servers s
+		JOIN server_members a ON a.server_id = s.id AND a.user_id = $1
+		JOIN server_members b ON b.server_id = s.id AND b.user_id = $2
+		ORDER BY s.name`,
+		userA,
+		userB,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	servers := []MutualServer{}
+	for rows.Next() {
+		var s MutualServer
+		if err := rows.Scan(&s.ID, &s.Name, &s.IconURL); err != nil {
+			return nil, err
+		}
+		servers = append(servers, s)
+	}
+	return servers, rows.Err()
+}

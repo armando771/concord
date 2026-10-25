@@ -5,7 +5,7 @@ import type { ChosenStatus } from './presenceStatus'
 import type { SoundName } from './sounds'
 
 /** De onde veio o aviso: decide o som e o que as preferências controlam. */
-export type NotificationKind = 'message' | 'mention' | 'call'
+export type NotificationKind = 'message' | 'mention' | 'call' | 'friend_request'
 
 /** Preferências de notificação do usuário (Configurações → Notificações). */
 export interface NotificationPrefs {
@@ -39,14 +39,35 @@ function truncate(text: string): string {
   return text.length > MAX_BODY ? `${text.slice(0, MAX_BODY - 1)}…` : text
 }
 
-/** Notificação para uma DM recebida (mensagens de canal não notificam). */
-export function messageNotification(message: Message, meId: string): AppNotification | null {
+/**
+ * Notificação para uma DM recebida (mensagens de canal não notificam). Em DM
+ * em grupo, o título leva o nome do grupo e o clique abre o grupo.
+ */
+export function messageNotification(
+  message: Message,
+  meId: string,
+  group?: { name: string }
+): AppNotification | null {
   if (!message.conversation_id || message.author_id === meId) return null
+  const author = message.author?.display_name || message.author?.username || 'Nova mensagem'
   return {
     kind: 'message',
-    title: message.author?.display_name || message.author?.username || 'Nova mensagem',
+    title: group ? `${author} em ${group.name}` : author,
     body: truncate(messagePreview(message)),
-    route: `/dm/${message.author_id}`
+    route: group ? `/dm/c/${message.conversation_id}` : `/dm/${message.author_id}`
+  }
+}
+
+/** Pedido de amizade recebido: abre a aba Pendentes. */
+export function friendRequestNotification(requester: {
+  display_name: string
+  username: string
+}): AppNotification {
+  return {
+    kind: 'friend_request',
+    title: 'Pedido de amizade',
+    body: `${requester.display_name || requester.username} quer ser seu amigo`,
+    route: '/friends?tab=pending'
   }
 }
 
@@ -104,7 +125,7 @@ export function notificationSound(
   prefs: Pick<NotificationPrefs, 'sound'>
 ): SoundName | null {
   if (!prefs.sound || kind === 'call') return null
-  return kind === 'message' ? 'message' : 'mention'
+  return kind === 'mention' ? 'mention' : 'message'
 }
 
 export interface DesktopPayload {

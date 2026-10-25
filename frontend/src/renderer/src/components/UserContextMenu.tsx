@@ -5,11 +5,16 @@ import { canMoveVoiceUser, voiceChannelOf } from '../lib/voiceMove'
 import router from '../router'
 import { useAuthStore } from '../store/authStore'
 import { useCallStore } from '../store/callStore'
-import { useFriendStore } from '../store/friendStore'
+import { useFriendStore, useRelationship } from '../store/friendStore'
+import { useChatStore } from '../store/chatStore'
+import { useProfileCardStore } from '../store/profileCardStore'
+import { getOrCreateConversationWith, hideConversation } from '../api/conversations'
+import { confirmBlock, confirmRemoveFriend } from '../store/friendActionsStore'
 import { useServerStore } from '../store/serverStore'
 import { showToast } from '../store/toastStore'
 import { streamAudioKey, useUserAudioStore } from '../store/userAudioStore'
 import { useUserMenuStore } from '../store/userMenuStore'
+import { friendRequestError } from '../lib/relationship'
 
 const MENU_WIDTH = 232
 
@@ -17,8 +22,8 @@ const itemClass =
   'cursor-pointer rounded px-2 py-1.5 text-left hover:bg-white/5 disabled:opacity-50'
 
 /**
- * Botão direito em um usuário (como no Discord): mensagem e amizade para
- * todos; volume e silenciar para quem está na chamada com você; para o dono
+ * Botão direito em um usuário (como no Discord): perfil, mensagem, ligar,
+ * amizade (adicionar/aceitar/remover), bloquear e copiar ID para todos; volume e silenciar para quem está na chamada com você; para o dono
  * do servidor, tornar moderador; para moderadores, mover para outro canal de
  * voz.
  */
@@ -37,8 +42,12 @@ function UserContextMenu(): React.JSX.Element | null {
   const audio = useUserAudioStore((s) => (target ? s.get(audioKey) : null))
   const setVolume = useUserAudioStore((s) => s.setVolume)
   const toggleMuted = useUserAudioStore((s) => s.toggleMuted)
-  const isFriend = useFriendStore((s) => s.friends.some((f) => f.id === target?.userId))
+  const relationship = useRelationship(target?.userId)
   const sendRequest = useFriendStore((s) => s.sendRequest)
+  const accept = useFriendStore((s) => s.accept)
+  const unblock = useFriendStore((s) => s.unblock)
+  const callIdle = useCallStore((s) => s.status === 'idle')
+  const startDMCall = useCallStore((s) => s.startDMCall)
   const server = useServerStore((s) => s.currentServer)
   const member = useServerStore((s) => s.currentMembers.find((m) => m.user_id === target?.userId))
   const amModerator = useServerStore(
@@ -70,7 +79,7 @@ function UserContextMenu(): React.JSX.Element | null {
   if (!target || !audio) return null
 
   const left = Math.min(target.x, window.innerWidth - MENU_WIDTH - 8)
-  const top = Math.min(target.y, window.innerHeight - 280)
+  const top = Math.max(8, Math.min(target.y, window.innerHeight - 420))
 
   const volumeControls = (label: string, muteLabel: string): React.JSX.Element => (
     <>
@@ -157,12 +166,90 @@ function UserContextMenu(): React.JSX.Element | null {
   const addFriend = async (): Promise<void> => {
     if (!username) return
     try {
-      await sendRequest(username)
-      showToast.success(`Pedido de amizade enviado para ${target.name}.`)
+      const result = await sendRequest(username)
+      showToast.success(
+        result === 'accepted'
+          ? `Você e ${target.name} agora são amigos.`
+          : `Pedido de amizade enviado para ${target.name}.`
+      )
       close()
     } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Não foi possível enviar o pedido.')
+      showToast.error(friendRequestError(err))
     }
+  }
+
+  const acceptRequest = async (): Promise<void> => {
+    if (!username) return
+    try {
+      await accept(username)
+      close()
+    } catch (err) {
+      showToast.error(err instanceof Error ? err.message : 'Não foi possível aceitar.')
+    }
+  }
+
+  const openProfile = (): void => {
+    close()
+    useProfileCardStore.getState().open({
+      userId: target.userId,
+      name: target.name,
+      username,
+      side: 'right',
+      anchor: { top: target.y, left: target.x, right: target.x, bottom: target.y }
+    })
+  }
+
+  const call = async (): Promise<void> => {
+    close()
+    try {
+      const conv = await getOrCreateConversationWith(target.userId)
+      await router.navigate(`/dm/${target.userId}`)
+      await startDMCall(conv.id, {
+        id: target.userId,
+        username: username ?? '',
+        display_name: target.name
+      })
+    } catch (err) {
+      showToast.error(err instanceof Error ? err.message : 'Não foi possível ligar.')
+    }
+  }
+
+  const closeDm = async (): Promise<void> => {
+    if (!target.conversationId) return
+    const id = target.conversationId
+    close()
+    try {
+      await hideConversation(id)
+      useChatStore.setState((s) => ({ conversations: s.conversations.filter((c) => c.id !== id) }))
+      if (router.state.location.pathname === `/dm/${target.userId}`) {
+        void router.navigate('/friends')
+      }
+    } catch (err) {
+      showToast.error(err instanceof Error ? err.message : 'Não foi possível fechar a DM.')
+    }
+  }
+
+  const copyId = (): void => {
+    close()
+    void navigator.clipboard?.writeText(target.userId)
+    showToast.success('ID copiado.')
+  }
+
+  const askRemove = (): void => {
+    close()
+    if (username) confirmRemoveFriend({ userId: target.userId, username, name: target.name })
+  }
+
+  const askBlock = (): void => {
+    close()
+    confirmBlock({ userId: target.userId, username: username ?? '', name: target.name })
+  }
+
+  const doUnblock = (): void => {
+    close()
+    unblock(target.userId).catch((err) =>
+      showToast.error(err instanceof Error ? err.message : 'Não foi possível desbloquear.')
+    )
   }
 
   const toggleRole = async (): Promise<void> => {
@@ -191,12 +278,56 @@ function UserContextMenu(): React.JSX.Element | null {
     >
       <p className="truncate px-2 pb-1 pt-0.5 text-xs font-bold text-gray-400">{target.name}</p>
 
-      <button role="menuitem" onClick={sendMessage} className={itemClass}>
-        Enviar mensagem
+      <button role="menuitem" onClick={openProfile} className={itemClass}>
+        Perfil
       </button>
-      {!isFriend && username && (
+      <button role="menuitem" onClick={sendMessage} className={itemClass}>
+        Mensagem
+      </button>
+      {relationship === 'friend' && (
+        <button
+          role="menuitem"
+          disabled={!callIdle}
+          onClick={() => void call()}
+          className={itemClass}
+        >
+          Ligar
+        </button>
+      )}
+      {target.conversationId && (
+        <button role="menuitem" onClick={() => void closeDm()} className={itemClass}>
+          Fechar DM
+        </button>
+      )}
+
+      <div className="my-1 h-px bg-white/10" />
+      {relationship === 'none' && username && (
         <button role="menuitem" onClick={() => void addFriend()} className={itemClass}>
           Adicionar amigo
+        </button>
+      )}
+      {relationship === 'outgoing' && (
+        <button role="menuitem" disabled className={itemClass}>
+          Pedido de amizade enviado
+        </button>
+      )}
+      {relationship === 'incoming' && (
+        <button role="menuitem" onClick={() => void acceptRequest()} className={itemClass}>
+          Aceitar pedido de amizade
+        </button>
+      )}
+      {relationship === 'friend' && username && (
+        <button role="menuitem" onClick={askRemove} className={`${itemClass} text-[#f23f43]`}>
+          Remover amigo
+        </button>
+      )}
+      {relationship === 'blocked' ? (
+        <button role="menuitem" onClick={doUnblock} className={itemClass}>
+          Desbloquear
+        </button>
+      ) : (
+        <button role="menuitem" onClick={askBlock} className={`${itemClass} text-[#f23f43]`}>
+          Bloquear
         </button>
       )}
 
@@ -228,6 +359,11 @@ function UserContextMenu(): React.JSX.Element | null {
           </div>
         </>
       )}
+
+      <div className="my-1 h-px bg-white/10" />
+      <button role="menuitem" onClick={copyId} className={itemClass}>
+        Copiar ID do usuário
+      </button>
 
       {canSetRole && (
         <>

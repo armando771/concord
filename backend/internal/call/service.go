@@ -22,6 +22,7 @@ var (
 	ErrBusy           = errors.New("user is busy in another call")
 	ErrCalleeOffline  = errors.New("callee is offline")
 	ErrNotParticipant = errors.New("you are not a participant of this conversation")
+	ErrBlocked        = errors.New("you cannot call this user")
 	ErrNotMember      = errors.New("you are not a member of this server")
 	ErrNotAllowed     = errors.New("not allowed")
 	ErrInvalidType    = errors.New("invalid call type")
@@ -68,6 +69,7 @@ type Service struct {
 	repository          *Repository
 	publisher           EventPublisher
 	conversationService *conversation.Service
+	blockedCheck        func(ctx context.Context, a string, b string) (bool, error)
 	serverService       *server.Service
 	channelService      *channel.Service
 	userService         *user.Service
@@ -91,6 +93,11 @@ type Service struct {
 }
 
 const defaultDisconnectGrace = 15 * time.Second
+
+// SetBlockedCheck liga a checagem de bloqueio da chamada na DM.
+func (s *Service) SetBlockedCheck(check func(ctx context.Context, a string, b string) (bool, error)) {
+	s.blockedCheck = check
+}
 
 func CallService(
 	repository *Repository,
@@ -132,13 +139,20 @@ func (s *Service) StartDM(ctx context.Context, initiatorID string, conversationI
 		return nil, ErrNotFound
 	}
 
-	if conv.UserAID != initiatorID && conv.UserBID != initiatorID {
+	// Chamada só na DM 1:1 (grupo não liga).
+	if conv.IsGroup() || (conv.UserAID != initiatorID && conv.UserBID != initiatorID) {
 		return nil, ErrNotParticipant
 	}
 
 	calleeID := conv.UserAID
 	if initiatorID == conv.UserAID {
 		calleeID = conv.UserBID
+	}
+
+	if s.blockedCheck != nil {
+		if blocked, err := s.blockedCheck(ctx, initiatorID, calleeID); err != nil || blocked {
+			return nil, ErrBlocked
+		}
 	}
 
 	if s.isOnline != nil && !s.isOnline(calleeID) {

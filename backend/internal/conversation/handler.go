@@ -1,40 +1,76 @@
 package conversation
 
 import (
+	"context"
+	"errors"
+	"log"
 	"net/http"
 
 	"gin-quickstart/backend/internal/friendship"
-	"gin-quickstart/backend/internal/server"
 	"gin-quickstart/backend/internal/user"
 
 	"github.com/gin-gonic/gin"
 )
 
-type Handler struct {
-	service       *Service
-	friendService *friendship.Service
-	serverService *server.Service
-	userService   *user.Service
+// ImageUploader recebe o ícone do grupo (o mesmo upload do avatar).
+type ImageUploader interface {
+	UploadImage(c *gin.Context, apply user.ImageApply)
+	RemoveMediaURL(url *string)
 }
 
-func ConversationHandler(service *Service, friendService *friendship.Service, serverService *server.Service, userService *user.Service) *Handler {
+type Handler struct {
+	service     *Service
+	userService *user.Service
+	images      ImageUploader
+}
+
+func ConversationHandler(service *Service, userService *user.Service, images ImageUploader) *Handler {
 	return &Handler{
-		service:       service,
-		friendService: friendService,
-		serverService: serverService,
-		userService:   userService,
+		service:     service,
+		userService: userService,
+		images:      images,
 	}
 }
 
-func (h *Handler) List(c *gin.Context) {
+func currentUser(c *gin.Context) (string, bool) {
 	userID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return "", false
+	}
+	return userID.(string), true
+}
+
+func respondError(c *gin.Context, err error) {
+	status := http.StatusInternalServerError
+	switch {
+	case errors.Is(err, ErrNotFound), errors.Is(err, friendship.ErrUserNotFound):
+		status = http.StatusNotFound
+	case errors.Is(err, ErrNotParticipant), errors.Is(err, ErrNotOwner),
+		errors.Is(err, ErrOnlyFriends), errors.Is(err, friendship.ErrBlocked),
+		errors.Is(err, friendship.ErrCannotMessage):
+		status = http.StatusForbidden
+	case errors.Is(err, ErrNotGroup), errors.Is(err, ErrIsGroup), errors.Is(err, ErrGroupFull),
+		errors.Is(err, ErrGroupEmpty), errors.Is(err, ErrInvalidName):
+		status = http.StatusBadRequest
+	}
+	if status == http.StatusInternalServerError {
+		log.Printf("[conversation] %v", err)
+		c.JSON(status, gin.H{"error": "internal error"})
+		return
+	}
+	c.JSON(status, gin.H{"error": err.Error()})
+}
+
+func (h *Handler) List(c *gin.Context) {
+	userID, ok := currentUser(c)
+	if !ok {
 		return
 	}
 
-	summaries, err := h.service.ListByUserID(c.Request.Context(), userID.(string))
+	summaries, err := h.service.ListByUserID(c.Request.Context(), userID)
 	if err != nil {
+		log.Printf("[conversation] list: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list conversations"})
 		return
 	}
@@ -45,13 +81,12 @@ func (h *Handler) List(c *gin.Context) {
 func (h *Handler) GetOrCreateWith(c *gin.Context) {
 	otherUserID := c.Param("userId")
 
-	userID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+	userID, ok := currentUser(c)
+	if !ok {
 		return
 	}
 
-	if otherUserID == userID.(string) {
+	if otherUserID == userID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot start a conversation with yourself"})
 		return
 	}
@@ -62,19 +97,9 @@ func (h *Handler) GetOrCreateWith(c *gin.Context) {
 		return
 	}
 
-	// DM liberada entre amigos ou entre quem divide um servidor.
-	areFriends, _ := h.friendService.AreFriends(c.Request.Context(), userID.(string), otherUser.ID)
-	if !areFriends {
-		shares, err := h.serverService.SharesServer(c.Request.Context(), userID.(string), otherUser.ID)
-		if err != nil || !shares {
-			c.JSON(http.StatusForbidden, gin.H{"error": "you can only message friends or people from your servers"})
-			return
-		}
-	}
-
-	conv, err := h.service.GetOrCreateWith(c.Request.Context(), userID.(string), otherUser.ID)
+	conv, err := h.service.GetOrCreateWith(c.Request.Context(), userID, otherUser.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create conversation"})
+		respondError(c, err)
 		return
 	}
 
@@ -84,23 +109,181 @@ func (h *Handler) GetOrCreateWith(c *gin.Context) {
 func (h *Handler) Get(c *gin.Context) {
 	id := c.Param("id")
 
-	userID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+	userID, ok := currentUser(c)
+	if !ok {
 		return
 	}
 
-	isParticipant, err := h.service.IsParticipant(c.Request.Context(), id, userID.(string))
+	isParticipant, err := h.service.IsParticipant(c.Request.Context(), id, userID)
 	if err != nil || !isParticipant {
 		c.JSON(http.StatusForbidden, gin.H{"error": "you are not a participant of this conversation"})
 		return
 	}
 
-	conv, err := h.service.FindByID(c.Request.Context(), id)
+	detail, err := h.service.Detail(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "conversation not found"})
+		respondError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, conv)
+	c.JSON(http.StatusOK, detail)
+}
+
+func (h *Handler) CreateGroup(c *gin.Context) {
+	userID, ok := currentUser(c)
+	if !ok {
+		return
+	}
+
+	var input struct {
+		UserIDs []string `json:"user_ids"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	conv, err := h.service.CreateGroup(c.Request.Context(), userID, input.UserIDs)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, conv)
+}
+
+func (h *Handler) Update(c *gin.Context) {
+	userID, ok := currentUser(c)
+	if !ok {
+		return
+	}
+
+	var input struct {
+		Name string `json:"name"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if err := h.service.Rename(c.Request.Context(), userID, c.Param("id"), input.Name); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	h.respondDetail(c)
+}
+
+func (h *Handler) UploadIcon(c *gin.Context) {
+	id := c.Param("id")
+	h.images.UploadImage(c, func(ctx context.Context, userID string, url *string) (*string, bool) {
+		old, err := h.service.SetIcon(ctx, userID, id, url)
+		if err != nil {
+			respondError(c, err)
+			return nil, false
+		}
+		h.respondDetail(c)
+		return old, true
+	})
+}
+
+func (h *Handler) DeleteIcon(c *gin.Context) {
+	userID, ok := currentUser(c)
+	if !ok {
+		return
+	}
+
+	old, err := h.service.SetIcon(c.Request.Context(), userID, c.Param("id"), nil)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	h.images.RemoveMediaURL(old)
+
+	h.respondDetail(c)
+}
+
+func (h *Handler) respondDetail(c *gin.Context) {
+	detail, err := h.service.Detail(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, detail)
+}
+
+func (h *Handler) AddMembers(c *gin.Context) {
+	userID, ok := currentUser(c)
+	if !ok {
+		return
+	}
+
+	var input struct {
+		UserIDs []string `json:"user_ids"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if err := h.service.AddMembers(c.Request.Context(), userID, c.Param("id"), input.UserIDs); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	h.respondDetail(c)
+}
+
+// RemoveMember: ":userId" = "me" sai do grupo.
+func (h *Handler) RemoveMember(c *gin.Context) {
+	userID, ok := currentUser(c)
+	if !ok {
+		return
+	}
+
+	target := c.Param("userId")
+	if target == "me" {
+		target = userID
+	}
+
+	if err := h.service.RemoveMember(c.Request.Context(), userID, c.Param("id"), target); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "member removed"})
+}
+
+func (h *Handler) Hide(c *gin.Context) {
+	userID, ok := currentUser(c)
+	if !ok {
+		return
+	}
+
+	if err := h.service.Hide(c.Request.Context(), userID, c.Param("id")); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "conversation closed"})
+}
+
+func (h *Handler) MarkRead(c *gin.Context) {
+	userID, ok := currentUser(c)
+	if !ok {
+		return
+	}
+
+	var input struct {
+		MessageID string `json:"message_id"`
+	}
+	// Corpo vazio = marcar tudo como lido.
+	_ = c.ShouldBindJSON(&input)
+
+	if err := h.service.MarkRead(c.Request.Context(), userID, c.Param("id"), input.MessageID); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }

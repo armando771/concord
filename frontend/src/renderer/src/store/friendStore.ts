@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import type { PublicUser } from './authStore'
 import { useAuthStore } from './authStore'
-import { useChatStore } from './chatStore'
-import type { PendingRequest } from '../api/friends'
+import type { PendingRequest, RelationshipType, SendRequestResult } from '../api/friends'
+import { relationshipOf } from '../lib/relationship'
 import {
   listFriends,
   listPending,
@@ -10,22 +10,28 @@ import {
   acceptFriendRequest,
   declineFriendRequest,
   cancelFriendRequest,
-  removeFriend
+  removeFriend,
+  listBlocked,
+  blockUser,
+  unblockUser
 } from '../api/friends'
 
 interface FriendState {
   friends: PublicUser[]
   pending: PendingRequest[]
+  blocked: PublicUser[]
   loading: boolean
   error: string | null
   fetchFriends: () => Promise<void>
   fetchPending: () => Promise<void>
   loadAll: () => Promise<void>
-  sendRequest: (username: string) => Promise<void>
+  sendRequest: (username: string) => Promise<SendRequestResult>
   accept: (username: string) => Promise<void>
   decline: (username: string) => Promise<void>
   cancel: (username: string) => Promise<void>
   remove: (username: string) => Promise<void>
+  block: (userId: string) => Promise<void>
+  unblock: (userId: string) => Promise<void>
   reset: () => void
 }
 
@@ -44,6 +50,7 @@ if (typeof window !== 'undefined') {
 export const useFriendStore = create<FriendState>()((set, get) => ({
   friends: [],
   pending: [],
+  blocked: [],
   loading: false,
   error: null,
   fetchFriends: async () => {
@@ -72,7 +79,11 @@ export const useFriendStore = create<FriendState>()((set, get) => ({
     const token = useAuthStore.getState().accessToken
     set({ loading: true, error: null })
     try {
-      const [friends, pending] = await Promise.allSettled([listFriends(), listPending()])
+      const [friends, pending, blocked] = await Promise.allSettled([
+        listFriends(),
+        listPending(),
+        listBlocked()
+      ])
 
       if (!isSameSession(token)) return
 
@@ -89,14 +100,19 @@ export const useFriendStore = create<FriendState>()((set, get) => ({
         console.error('[friendStore] listPending failed:', pending.reason)
       }
 
-      set({ friends: resolvedFriends, pending: resolvedPending })
+      const resolvedBlocked =
+        blocked.status === 'fulfilled' && Array.isArray(blocked.value) ? blocked.value : []
+
+      set({ friends: resolvedFriends, pending: resolvedPending, blocked: resolvedBlocked })
     } finally {
       set({ loading: false })
     }
   },
   sendRequest: async (username) => {
-    await sendFriendRequest(username)
-    await get().fetchPending()
+    const { result } = await sendFriendRequest(username)
+    // Pedido cruzado vira amizade na hora: recarrega as duas listas.
+    await get().loadAll()
+    return result
   },
   accept: async (username) => {
     await acceptFriendRequest(username)
@@ -112,13 +128,23 @@ export const useFriendStore = create<FriendState>()((set, get) => ({
     await get().fetchPending()
   },
   remove: async (username) => {
+    // A DM continua na lista (como no Discord); só a amizade sai.
     await removeFriend(username)
-    const removed = get().friends.find((f) => f.username === username)
-    if (removed) {
-      useChatStore.getState().handleFriendRemoved(removed.id)
-    }
     set({ friends: get().friends.filter((f) => f.username !== username) })
     await get().fetchPending()
   },
-  reset: () => set({ friends: [], pending: [], loading: false, error: null })
+  block: async (userId) => {
+    await blockUser(userId)
+    await get().loadAll()
+  },
+  unblock: async (userId) => {
+    await unblockUser(userId)
+    await get().loadAll()
+  },
+  reset: () => set({ friends: [], pending: [], blocked: [], loading: false, error: null })
 }))
+
+/** Relação com alguém (amigo, pedido, bloqueado) pelo que já está carregado. */
+export function useRelationship(userId: string | undefined): RelationshipType {
+  return useFriendStore((s) => (userId ? relationshipOf(userId, s) : 'none'))
+}

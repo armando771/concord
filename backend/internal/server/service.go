@@ -314,3 +314,7 @@ func (s *Service) DeclineInvite(ctx context.Context, inviteID string, userID str
 
 	return s.repository.UpdateInviteStatus(ctx, inviteID, "declined")
 }
+
+func (s *Service) MutualServers(ctx context.Context, userA string, userB string) ([]MutualServer, error) {
+	return s.repository.MutualServers(ctx, userA, userB)
+}

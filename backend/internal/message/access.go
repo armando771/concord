@@ -20,6 +20,7 @@ var (
 	ErrRoomNotFound  = errors.New("room not found")
 	ErrNoRoomAccess  = errors.New("you do not have access to this room")
 	ErrCannotMessage = errors.New("you can only message friends or people from your servers")
+	ErrBlocked       = errors.New("you cannot message this user")
 )
 
 // RoomAccess diz quem lê e quem escreve numa sala (mensagens e anexos).
@@ -51,7 +52,7 @@ func (a *ServiceRoomAccess) CanRead(ctx context.Context, room Room, userID strin
 	if room.ChannelID != "" {
 		return a.channelMember(ctx, room.ChannelID, userID)
 	}
-	_, err := a.conversationOther(ctx, room.ConversationID, userID)
+	_, err := a.conversationMember(ctx, room.ConversationID, userID)
 	return err
 }
 
@@ -59,18 +60,25 @@ func (a *ServiceRoomAccess) CanWrite(ctx context.Context, room Room, userID stri
 	if room.ChannelID != "" {
 		return a.channelMember(ctx, room.ChannelID, userID)
 	}
-	otherUserID, err := a.conversationOther(ctx, room.ConversationID, userID)
+	conv, err := a.conversationMember(ctx, room.ConversationID, userID)
 	if err != nil {
 		return err
 	}
+	if conv.IsGroup() {
+		return nil
+	}
 
-	// DM liberada entre amigos ou entre quem divide um servidor.
-	areFriends, _ := a.friends.AreFriends(ctx, userID, otherUserID)
-	if !areFriends {
-		shares, err := a.servers.SharesServer(ctx, userID, otherUserID)
-		if err != nil || !shares {
-			return ErrCannotMessage
+	otherUserID := conv.UserAID
+	if otherUserID == userID {
+		otherUserID = conv.UserBID
+	}
+	// DM 1:1: sem bloqueio; amigos ou quem divide um servidor (se o outro
+	// aceita DM de membros de servidores).
+	if err := a.friends.CanDirectMessage(ctx, userID, otherUserID); err != nil {
+		if errors.Is(err, friendship.ErrBlocked) {
+			return ErrBlocked
 		}
+		return ErrCannotMessage
 	}
 	return nil
 }
@@ -87,17 +95,15 @@ func (a *ServiceRoomAccess) channelMember(ctx context.Context, channelID string,
 	return nil
 }
 
-// conversationOther confere que userID participa da DM e devolve o outro.
-func (a *ServiceRoomAccess) conversationOther(ctx context.Context, conversationID string, userID string) (string, error) {
+// conversationMember confere que userID participa da conversa.
+func (a *ServiceRoomAccess) conversationMember(ctx context.Context, conversationID string, userID string) (*conversation.Conversation, error) {
 	conv, err := a.conversations.FindByID(ctx, conversationID)
 	if err != nil {
-		return "", ErrRoomNotFound
+		return nil, ErrRoomNotFound
 	}
-	switch userID {
-	case conv.UserAID:
-		return conv.UserBID, nil
-	case conv.UserBID:
-		return conv.UserAID, nil
+	ok, err := a.conversations.IsParticipant(ctx, conversationID, userID)
+	if err != nil || !ok {
+		return nil, ErrNoRoomAccess
 	}
-	return "", ErrNoRoomAccess
+	return conv, nil
 }

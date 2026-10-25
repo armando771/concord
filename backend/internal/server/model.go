@@ -57,3 +57,10 @@ type MemberLeaveEvent struct {
 	ServerID string `json:"server_id"`
 	UserID   string `json:"user_id"`
 }
+
+// MutualServer é um servidor em comum com outra pessoa (cartão de perfil).
+type MutualServer struct {
+	ID      string  `json:"id"`
+	Name    string  `json:"name"`
+	IconURL *string `json:"icon_url,omitempty"`
+}

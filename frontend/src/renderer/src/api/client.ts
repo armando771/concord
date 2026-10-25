@@ -15,10 +15,13 @@ import {
 
 export class ApiError extends Error {
   status: number
+  /** Código do erro quando o servidor manda (ex.: "user_not_found"). */
+  code?: string
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message)
     this.status = status
+    this.code = code
   }
 }
 
@@ -53,8 +56,8 @@ async function rawRequest<T>(path: string, options: RequestInit = {}, token?: st
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
-    const message = (body as { error?: string }).error ?? 'Request failed'
-    throw new ApiError(response.status, message)
+    const { error, code } = body as { error?: string; code?: string }
+    throw new ApiError(response.status, error ?? 'Request failed', code)
   }
 
   if (response.status === 204) {
