@@ -14,6 +14,7 @@ import { CallMedia, type RemoteMedia } from '../lib/livekit'
 import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
 import { addWatched, pruneWatched, resolveFocus } from '../lib/screenWatch'
+import { applyLiveEvent, type LivePayload } from '../lib/liveBadge'
 import { callNotification, notifyDesktop } from '../lib/notifications'
 import { playSound, setSoundOutput } from '../lib/sounds'
 import {
@@ -972,6 +973,13 @@ export const useCallStore = create<CallState>()((set, get) => {
               !p.active && s.focusedScreenUserId === p.user.id ? null : s.focusedScreenUserId,
             participants: upsertParticipant(s.participants, p.user)
           }))
+          return
+        }
+
+        case 'call:live': {
+          // Selo LIVE na lista do servidor (inclusive de chamadas em que não estou).
+          const p = payload as unknown as LivePayload
+          set((s) => ({ serverCalls: applyLiveEvent(s.serverCalls, p) }))
           return
         }
 

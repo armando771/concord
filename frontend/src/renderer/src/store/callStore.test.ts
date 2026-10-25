@@ -721,3 +721,23 @@ describe('callStore — miniatura da transmissão', () => {
     expect(useCallStore.getState().focusedScreenUserId).toBeNull()
   })
 })
+
+describe('callStore — selo LIVE', () => {
+  it('call:live atualiza o selo da lista do servidor mesmo fora da call', () => {
+    useCallStore.getState().setServerCalls({
+      'canal-1': { call: { id: 'call-9' } as never, participants: [] }
+    })
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:live',
+      payload: { call_id: 'call-9', user_id: 'ana', active: true }
+    })
+    expect(useCallStore.getState().serverCalls['canal-1'].screen_sharing).toEqual(['ana'])
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:live',
+      payload: { call_id: 'call-9', user_id: 'ana', active: false }
+    })
+    expect(useCallStore.getState().serverCalls['canal-1'].screen_sharing).toEqual([])
+  })
+})

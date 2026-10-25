@@ -8,6 +8,8 @@ import { useUIStore } from '../store/uiStore'
 import { useChatStore } from '../store/chatStore'
 import { useCallStore } from '../store/callStore'
 import VoiceStateIcons from './call/VoiceStateIcons'
+import LiveBadge from './call/LiveBadge'
+import { liveUserIds } from '../lib/liveBadge'
 import LevelBadge from './level/LevelBadge'
 import VoiceRowShimmer from './level/VoiceRowShimmer'
 import { useUserAudioStore } from '../store/userAudioStore'
@@ -61,6 +63,7 @@ export function ServerSidebar(): React.JSX.Element {
   const selfDeafened = useCallStore((s) => s.deafened)
   const locallyMuted = useUserAudioStore((s) => s.settings)
   const serverCalls = useCallStore((s) => s.serverCalls)
+  const screenSharers = useCallStore((s) => s.screenSharers)
   const joinVoiceChannel = useCallStore((s) => s.joinVoiceChannel)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -416,6 +419,7 @@ export function ServerSidebar(): React.JSX.Element {
                   callStatus !== 'idle' &&
                   activeCallType === 'channel' &&
                   activeCallChannelId === ch.id
+                const live = liveUserIds(callState, connectedHere ? screenSharers : [])
                 return (
                   <div key={ch.id} className="relative">
                     <button
@@ -464,6 +468,7 @@ export function ServerSidebar(): React.JSX.Element {
                               </span>
                               <LevelBadge userId={p.user_id} />
                               <span className="ml-auto flex items-center gap-0.5 pr-1">
+                                {live.has(p.user_id) && <LiveBadge />}
                                 {!isMe && locallyMuted[p.user_id]?.muted && (
                                   <span title="Silenciado por você" className="text-gray-400">
                                     <VolumeOffIcon className="h-3.5 w-3.5" />
