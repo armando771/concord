@@ -4,6 +4,11 @@ import { useChatStore } from '../store/chatStore'
 import type { Message } from '../api/messages'
 import { showToast } from '../store/toastStore'
 import SystemMessage from './SystemMessage'
+import MusicMessage from './music/MusicMessage'
+import MusicEphemeralList from './music/MusicEphemeralList'
+import SlashSuggestions from './music/SlashSuggestions'
+import { useMusicStore } from '../store/musicStore'
+import { useServerStore } from '../store/serverStore'
 import Avatar from './Avatar'
 import { useUserLook } from '../store/profileStore'
 import { profileCardHandler } from '../store/profileCardStore'
@@ -176,6 +181,7 @@ function MessageItem({
   const replyAuthorName =
     message.reply_to?.author?.display_name ?? message.reply_to?.author?.username ?? 'Usuário'
 
+  if (message.system_kind === 'music') return <MusicMessage message={message} />
   if (message.system_kind) return <SystemMessage message={message} />
 
   // Mensagem de quem você bloqueou: escondida, como no Discord.
@@ -451,6 +457,8 @@ function ChatPane({
   }
   const [loadingOlder, setLoadingOlder] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const serverId = useServerStore((s) => s.currentServer?.id ?? null)
+  const ephemeralCount = useMusicStore((s) => s.ephemeral.length)
   const stickToBottom = useRef(true)
   const firstRender = useRef(true)
 
@@ -471,7 +479,7 @@ function ChatPane({
     if (stickToBottom.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages.length])
+  }, [messages.length, ephemeralCount])
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>): void => {
     const el = e.currentTarget
@@ -647,6 +655,7 @@ function ChatPane({
                 onEndPoll={() => endPollInRoom(room, m.id)}
               />
             ))}
+            <MusicEphemeralList room={room} serverId={serverId} />
             <div ref={bottomRef} />
           </div>
         )}
@@ -714,6 +723,15 @@ function ChatPane({
             onSubmit={handleSubmit}
             className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
           >
+            {room.startsWith('channel:') && !mention && (
+              <SlashSuggestions
+                input={draft}
+                onPick={(text) => {
+                  setDraft(text)
+                  inputRef.current?.focus()
+                }}
+              />
+            )}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
