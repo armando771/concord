@@ -161,11 +161,18 @@ function requestQuit(win: BrowserWindow | null): void {
 
 /**
  * Garante uma única instância. Retorna false se já havia outra aberta (esta
- * deve encerrar); a outra recebe o foco.
+ * deve encerrar); a outra recebe o foco e os args dela (ex.: o link
+ * salinha://convite/… que abriu o app de novo).
  */
-export function ensureSingleInstance(getWindow: () => BrowserWindow | null): boolean {
+export function ensureSingleInstance(
+  getWindow: () => BrowserWindow | null,
+  onSecondInstance?: (argv: string[]) => void
+): boolean {
   if (!app.requestSingleInstanceLock()) return false
-  app.on('second-instance', () => showWindow(getWindow()))
+  app.on('second-instance', (_event, argv) => {
+    onSecondInstance?.(argv)
+    showWindow(getWindow())
+  })
   return true
 }
 

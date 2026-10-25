@@ -56,6 +56,14 @@ export interface BackgroundApi {
   onNavigate(cb: (route: string) => void): () => void
 }
 
+/** Links salinha://convite/<código> que abriram o app. */
+export interface InviteLinksApi {
+  /** Convite que chegou e ainda não foi aberto (busca uma vez só), ou null. */
+  takePending(): Promise<string | null>
+  /** Chegou um convite (busque com takePending). Retorna unsubscribe. */
+  onPending(cb: () => void): () => void
+}
+
 /** Atalho do modo de edição e se outro programa já tem ele. */
 export interface OverlayShortcutStatus {
   accelerator: string
@@ -103,6 +111,7 @@ declare global {
       updates?: UpdatesApi
       screenAudio?: ScreenAudioApi
       overlay?: OverlayApi
+      inviteLinks?: InviteLinksApi
     }
   }
 }
