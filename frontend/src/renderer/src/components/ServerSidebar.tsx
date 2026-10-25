@@ -12,7 +12,6 @@ import { liveUserIds } from '../lib/liveBadge'
 import { useUserAudioStore } from '../store/userAudioStore'
 import { useLevelStore } from '../store/levelStore'
 import { sortVoiceMembers } from '../lib/voiceOrder'
-import LevelBadge from './level/LevelBadge'
 import { userMenuHandler } from '../store/userMenuStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import type { Channel, ChannelType } from '../api/channels'
@@ -785,7 +784,8 @@ export function ServerSidebar(): React.JSX.Element {
                               >
                                 {name}
                               </span>
-                              <LevelBadge userId={p.user_id} />
+                              {/* Selo de nível só na lista de membros da direita; aqui o
+                                  nível só ordena a lista (ver voiceOrder). */}
                               <span className="ml-auto flex items-center gap-0.5 pr-1">
                                 {live.has(p.user_id) && <LiveBadge />}
                                 {!isMe && locallyMuted[p.user_id]?.muted && (
