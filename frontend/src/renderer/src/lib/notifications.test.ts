@@ -105,6 +105,60 @@ describe('mentionNotification', () => {
   it('DM já tem a própria notificação', () => {
     expect(mentionNotification(dm({ content: '@fulano oi' }), me, null)).toBeNull()
   })
+
+  it('@all pinga todo mundo do canal, pelo campo mention_everyone', () => {
+    expect(
+      mentionNotification(inChannel({ content: '@all bora', mention_everyone: 'all' }), me, 'srv1')
+    ).toEqual({
+      kind: 'mention',
+      title: 'Ana mencionou @all',
+      body: '@all bora',
+      route: '/servers/srv1/channels/ch1'
+    })
+    expect(
+      mentionNotification(
+        inChannel({ content: '@all bora', mention_everyone: 'all' }),
+        { ...me, status: 'idle' },
+        'srv1'
+      )?.title
+    ).toBe('Ana mencionou @all')
+  })
+
+  it('@here só pinga quem está online', () => {
+    const msg = inChannel({ content: '@here alguém?', mention_everyone: 'here' })
+    expect(mentionNotification(msg, { ...me, status: 'online' }, 'srv1')?.title).toBe(
+      'Ana mencionou @here'
+    )
+    expect(mentionNotification(msg, { ...me, status: 'idle' }, 'srv1')).toBeNull()
+    expect(mentionNotification(msg, { ...me, status: 'invisible' }, 'srv1')).toBeNull()
+  })
+
+  it('"@all" no texto sem mention_everyone (autor sem permissão) não pinga', () => {
+    expect(mentionNotification(inChannel({ content: '@all bora' }), me, 'srv1')).toBeNull()
+    expect(
+      mentionNotification(inChannel({ content: '@all bora', mention_everyone: null }), me, 'srv1')
+    ).toBeNull()
+  })
+
+  it('quem mandou o @all não pinga a si mesmo', () => {
+    expect(
+      mentionNotification(
+        inChannel({ author_id: 'eu', content: '@all', mention_everyone: 'all' }),
+        me,
+        'srv1'
+      )
+    ).toBeNull()
+  })
+
+  it('menção pessoal junto com @all continua "mencionou você"', () => {
+    expect(
+      mentionNotification(
+        inChannel({ content: '@all e @fulano', mention_everyone: 'all' }),
+        me,
+        'srv1'
+      )?.title
+    ).toBe('Ana mencionou você')
+  })
 })
 
 describe('notificationSound', () => {
