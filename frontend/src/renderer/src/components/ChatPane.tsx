@@ -32,6 +32,7 @@ import { ApiError } from '../api/client'
 import VoiceRecordButton from './chat/VoiceRecordButton'
 import ComposerAttachments from './chat/ComposerAttachments'
 import { useAttachmentDraft } from './chat/useAttachmentDraft'
+import { anchoredScrollTop, measureOffset } from '../lib/scrollAnchor'
 
 export interface Mentionable {
   username: string
@@ -418,17 +419,21 @@ function ChatPane({
       setReplyState(null)
     }
   }
-  const [loadingOlder, setLoadingOlder] = useState(false)
+  // Por sala: o ServerView reaproveita o ChatPane entre canais, e o
+  // carregamento de um canal não pode travar o botão do outro.
+  const [loadingOlderRoom, setLoadingOlderRoom] = useState<string | null>(null)
+  const loadingOlder = loadingOlderRoom === room
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
   const firstRender = useRef(true)
-  // Rolagem antes do loadOlder: as mensagens antigas entram em cima e a que
-  // estava sendo lida tem de ficar no mesmo lugar da tela.
-  const olderAnchor = useRef<{ height: number; top: number; firstId?: string } | null>(null)
+  // loadOlder: a antiga primeira mensagem (e sua posição no conteúdo) fica
+  // no mesmo lugar da tela quando a página antiga entra em cima dela.
+  const olderAnchor = useRef<{ room: string; firstId: string; offset: number } | null>(null)
 
   useEffect(() => {
     stickToBottom.current = true
+    olderAnchor.current = null
     void openRoom(room)
     return () => {
       useChatStore.getState().closeRoom(room)
@@ -450,10 +455,14 @@ function ChatPane({
   useLayoutEffect(() => {
     const el = scrollRef.current
     const anchor = olderAnchor.current
+    // Só quando algo entrou em cima (a primeira mudou); mensagem ao vivo
+    // embaixo não mexe na âncora.
     if (!el || !anchor || firstId === anchor.firstId) return
     olderAnchor.current = null
-    el.scrollTop = anchor.top + (el.scrollHeight - anchor.height)
-  }, [firstId])
+    const oldFirst = document.getElementById(`msg-${anchor.firstId}`)
+    if (anchor.room !== room || !oldFirst || !el.contains(oldFirst)) return
+    el.scrollTop = anchoredScrollTop(el.scrollTop, anchor.offset, measureOffset(el, oldFirst))
+  }, [firstId, room])
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>): void => {
     const el = e.currentTarget
@@ -462,17 +471,20 @@ function ChatPane({
 
   const handleLoadOlder = async (): Promise<void> => {
     if (loadingOlder) return
-    setLoadingOlder(true)
+    const startedRoom = room
+    setLoadingOlderRoom(startedRoom)
     const el = scrollRef.current
-    if (el) {
-      olderAnchor.current = { height: el.scrollHeight, top: el.scrollTop, firstId }
+    const first = firstId ? document.getElementById(`msg-${firstId}`) : null
+    if (el && first && firstId) {
+      olderAnchor.current = { room: startedRoom, firstId, offset: measureOffset(el, first) }
       stickToBottom.current = false
     }
-    await loadOlder(room)
-    setLoadingOlder(false)
+    await loadOlder(startedRoom)
+    setLoadingOlderRoom((current) => (current === startedRoom ? null : current))
     // Nada novo (ou já aplicado no layout effect): não vale para a próxima mudança.
+    const anchor = olderAnchor.current
     requestAnimationFrame(() => {
-      olderAnchor.current = null
+      if (olderAnchor.current === anchor) olderAnchor.current = null
     })
   }
 
@@ -602,7 +614,12 @@ function ChatPane({
           Solte os arquivos para enviar
         </div>
       )}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto" onScroll={handleScroll}>
+      {/* Sem o scroll anchoring do navegador: a âncora do loadOlder é a única. */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto [overflow-anchor:none]"
+        onScroll={handleScroll}
+      >
         {loading ? (
           <div className="flex h-full items-center justify-center text-sm text-gray-400">
             Carregando mensagens...
