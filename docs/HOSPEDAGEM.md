@@ -194,6 +194,9 @@ Numa VPS com IP público não precisa de playit, e dá para ter HTTPS de graça.
 2. **Instale** Docker (repositório oficial), `caddy` e `rsync`.
 3. **`/opt/concord/.env`** (a partir do `backend/.env.example`):
    - `HOST=127.0.0.1`, para o backend escutar só local, atrás do Caddy;
+     com isso o backend confia no `X-Forwarded-For` só quando a conexão vem
+     do loopback (o Caddy), e o limite de tentativas de login usa o IP real.
+     `TRUSTED_PROXIES` troca essa escolha (veja o `.env.example`);
    - `LIVEKIT_NODE_IP` com o IP público da VPS;
    - `LIVEKIT_UDP_PORT=7882` e `LIVEKIT_TCP_PORT=7881` (sem túnel, as portas
      são as mesmas);
@@ -629,6 +632,9 @@ Permitir notificações**.
    `docker run -d --restart unless-stopped --name concord-relay --network host alpine/socat TCP-LISTEN:<PORT>,fork,reuseaddr TCP:<IP-da-VPS>:8080`.
    Na VPS, um bloco `:8080 { reverse_proxy 127.0.0.1:8090 }` no Caddy recebe
    esse tráfego. Assim o endereço antigo (playit) continua funcionando.
+   Enquanto o repasse existir, todo mundo que chega por ele aparece com o IP
+   do PC antigo e divide o limite de 30 tentativas de login a cada 5 minutos
+   por IP.
 4. Publique uma versão nova com o `PUBLIC_URL` da VPS. Os apps antigos se
    atualizam pelo endereço antigo e passam a falar direto com a VPS.
 5. Quando todos estiverem na versão nova, desligue o repasse, o playit e o
@@ -672,6 +678,36 @@ não mexe nos arquivos. Restaure o banco antes de 7 dias para não perder mídia
    estava errado: `mv /opt/concord/uploads/.trash/* /opt/concord/uploads/`.
    É seguro: o que for órfão de verdade volta para a lixeira na próxima limpeza.
 4. Suba o backend: `systemctl start concord-server`.
+
+## Nomes de usuário sem diferenciar caixa
+
+O login aceita e-mail ou nome de usuário sem diferenciar maiúsculas de
+minúsculas, e o cadastro recusa (409) um nome ou e-mail que já exista com
+outra caixa. A migration 000025 cria um índice **único** em `lower(username)`
+quando o banco não tem usernames que só diferem na caixa; se tiver, cria um
+índice comum e não falha. Nesse caso o backend avisa no boot com uma linha
+`WARNING: N grupo(s) de usernames ...` (só contagens, sem nomes).
+
+**Antes do deploy**, rode no Postgres de produção:
+```sql
+SELECT lower(username), count(*) FROM users GROUP BY 1 HAVING count(*) > 1;
+SELECT lower(email), count(*) FROM users GROUP BY 1 HAVING count(*) > 1;
+```
+Sem linhas na primeira query, a migration cria o índice único. Com linhas,
+combine com os donos qual conta muda de nome (`UPDATE users SET username = ...
+WHERE id = ...`) e depois crie o índice à mão:
+```sql
+CREATE UNIQUE INDEX users_username_lower_key ON users (lower(username));
+DROP INDEX IF EXISTS idx_users_username_lower;
+```
+Enquanto isso, essas contas só entram digitando o nome com a caixa exata (ou
+pelo e-mail).
+
+Se o boot logar `ERROR: faltam os índices do login ...`, a 000025 foi pulada
+(o runner guarda só a maior versão aplicada, então uma migration de número
+maior aplicada antes dela faz a 000025 nunca rodar). Ela é idempotente: rode
+`psql "$DATABASE_URL" -f /opt/concord/migrations/000025_add_login_lower_indexes.up.sql`
+e reinicie o backend.
 
 ## Segurança
 

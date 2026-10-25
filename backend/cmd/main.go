@@ -17,6 +17,7 @@ import (
 	"gin-quickstart/backend/internal/birthday"
 	"gin-quickstart/backend/internal/call"
 	"gin-quickstart/backend/internal/channel"
+	"gin-quickstart/backend/internal/clientip"
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/database"
 	"gin-quickstart/backend/internal/friendship"
@@ -148,6 +149,12 @@ func main() {
 
 	// Como o gin.Default(), mas o log não grava tokens que vão na URL.
 	router := gin.New()
+	// Em quem confiar para o IP do cliente (log e limite de login).
+	trustedProxies := clientip.TrustedProxies(os.Getenv("HOST"), os.Getenv("TRUSTED_PROXIES"))
+	if err := clientip.Configure(router, trustedProxies); err != nil {
+		log.Fatalf("invalid TRUSTED_PROXIES: %v", err)
+	}
+	log.Printf("trusted proxies: %v", trustedProxies)
 	// O deploy e o apply-caddyfile consultam /healthz em laço: fora do log.
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{Formatter: httplog.Formatter, SkipPaths: []string{"/healthz"}}), gin.Recovery())
 
@@ -184,6 +191,19 @@ func main() {
 	// User
 	userRepository := user.UserRepository(db)
 	userService := user.UserService(userRepository)
+	// A migration 000025 não falha com usernames que só diferem na caixa:
+	// cai num índice comum. Aqui isso aparece no log (só contagens).
+	// E se a 000025 nem rodou (pulada por ordem de aplicação), ERROR no log.
+	if hasUsername, hasEmail, err := userService.LoginIndexes(context.Background()); err != nil {
+		log.Printf("[user] check login indexes: %v", err)
+	} else if msg := user.MissingLoginIndexesError(hasUsername, hasEmail); msg != "" {
+		log.Print(msg)
+	}
+	if usernameGroups, emailGroups, err := userService.CaseConflicts(context.Background()); err != nil {
+		log.Printf("[user] check case conflicts: %v", err)
+	} else if warning := user.CaseConflictWarning(usernameGroups, emailGroups); warning != "" {
+		log.Print(warning)
+	}
 
 	// WebSocket hub (created before services that publish events)
 	hub := websocket.NewHub()
