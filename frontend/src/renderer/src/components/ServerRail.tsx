@@ -252,7 +252,9 @@ function ServerRail(): React.JSX.Element {
         </div>
 
         {/* Real User Servers List */}
-        <div className="flex flex-col gap-2 overflow-y-auto no-scrollbar py-1">
+        {/* O padding dá espaço aos selos (voz, não lidas), que ficam metade para fora do
+            ícone: sem ele o overflow da lista corta os selos. */}
+        <div className="-my-1 flex flex-col gap-2 overflow-y-auto no-scrollbar px-2 py-2">
           {servers.map((srv) => {
             const isActive = location.pathname === `/servers/${srv.id}`
             const initialChar = srv.name.charAt(0).toUpperCase()
@@ -303,11 +305,13 @@ function ServerRail(): React.JSX.Element {
                   <span
                     title={srv.id === voiceSrvId ? 'Em chamada' : 'Chamada em andamento'}
                     aria-label={srv.id === voiceSrvId ? 'Em chamada' : 'Chamada em andamento'}
-                    className={`absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border-2 border-[#12141d] shadow-md ${
-                      srv.id === voiceSrvId ? 'bg-discord-green text-white' : 'bg-[#12141d] text-white'
+                    className={`absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border-[3px] border-[#06070a] shadow-md ${
+                      srv.id === voiceSrvId
+                        ? 'bg-discord-green text-white'
+                        : 'bg-[#2b2f3d] text-discord-green'
                     }`}
                   >
-                    <VolumeIcon className="h-2 w-2" />
+                    <VolumeIcon className="h-3 w-3" />
                   </span>
                 )}
               </div>
