@@ -5,7 +5,7 @@ import ToastContainer from './components/ToastContainer'
 import BackgroundBridge from './components/BackgroundBridge'
 import OverlayBridge from './components/OverlayBridge'
 import GameActivityBridge from './components/GameActivityBridge'
-import UpdateNotice from './components/UpdateNotice'
+import UpdateBridge from './components/UpdateBridge'
 import SandboxNotice from './components/SandboxNotice'
 import AutoUpdateUnavailableNotice from './components/AutoUpdateUnavailableNotice'
 import UpdateCallBridge from './components/UpdateCallBridge'
@@ -39,7 +39,7 @@ function App(): React.JSX.Element {
           <BackgroundBridge />
           <OverlayBridge />
           <GameActivityBridge />
-          <UpdateNotice />
+          <UpdateBridge />
           <SandboxNotice />
           <AutoUpdateUnavailableNotice />
           <UpdateCallBridge />
