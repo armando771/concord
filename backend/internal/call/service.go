@@ -66,7 +66,7 @@ type participantState struct {
 	serverMuted    bool
 	serverDeafened bool
 	lastSoundAt    time.Time
-	// lastActivityAt: última vez que abriu/trocou/encerrou uma atividade.
+	// lastActivityAt: última vez que abriu ou trocou o link de uma atividade.
 	lastActivityAt time.Time
 }
 

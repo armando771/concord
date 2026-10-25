@@ -317,12 +317,9 @@ func TestActivityCooldownPerParticipant(t *testing.T) {
 	if err := s.StartActivity(ctx, "call-1", "user-1", "krunker", ""); err != nil {
 		t.Fatalf("StartActivity: %v", err)
 	}
-	// Abrir/encerrar em sequência (spam de toasts para a chamada) é barrado.
-	if err := s.StopActivity("call-1", "user-1"); !errors.Is(err, ErrActivityCooldown) {
-		t.Fatalf("StopActivity logo depois = %v, want ErrActivityCooldown", err)
-	}
+	// Trocar o link logo depois espera o cooldown.
 	if err := s.StartActivity(ctx, "call-1", "user-1", "krunker", "https://krunker.io/?game=NY:zz9"); !errors.Is(err, ErrActivityCooldown) {
-		t.Fatalf("StartActivity logo depois = %v, want ErrActivityCooldown", err)
+		t.Fatalf("troca de link logo depois = %v, want ErrActivityCooldown", err)
 	}
 	if got := s.ActivityFor("call-1", "user-2"); got == nil || got.URL != "" {
 		t.Fatalf("atividade mudou durante o cooldown: %+v", got)
@@ -332,22 +329,62 @@ func TestActivityCooldownPerParticipant(t *testing.T) {
 	}
 
 	// Pelo WS, o cooldown vira call:activity:error (nunca call:error).
-	raw, _ := json.Marshal(LeavePayload{CallID: "call-1"})
-	s.HandleCallMessage("user-1", "call:activity:stop", raw)
+	raw, _ := json.Marshal(ActivityPayload{CallID: "call-1", ActivityID: "krunker"})
+	s.HandleCallMessage("user-1", "call:activity", raw)
 	errs := eventsOfType(pub, "call:activity:error")["user:user-1"]
 	if len(errs) != 1 || !strings.Contains(string(errs[0]), ErrActivityCooldown.Error()) {
 		t.Fatalf("call:activity:error = %s", errs)
 	}
 
-	// O cooldown é de cada participante: outra pessoa pode agir.
+	// O cooldown é de cada participante: outra pessoa pode abrir.
 	if err := s.StartActivity(ctx, "call-1", "user-2", "krunker", ""); err != nil {
 		t.Fatalf("StartActivity(user-2): %v", err)
 	}
+}
 
-	// Passado o cooldown, volta a valer.
-	s.calls["call-1"].participants["user-2"].lastActivityAt = time.Now().Add(-2 * time.Hour)
-	if err := s.StopActivity("call-1", "user-2"); err != nil {
-		t.Fatalf("StopActivity depois do cooldown: %v", err)
+func TestStopActivityIgnoresCooldown(t *testing.T) {
+	pub := &fakePublisher{}
+	s := activityCall(pub, "user-1", "user-2")
+	s.activityCooldown = time.Hour
+	ctx := context.Background()
+
+	if err := s.StartActivity(ctx, "call-1", "user-1", "krunker", ""); err != nil {
+		t.Fatalf("StartActivity: %v", err)
+	}
+	// Encerrar logo depois de abrir (fechar a janela, Encerrar) nunca é recusado.
+	raw, _ := json.Marshal(LeavePayload{CallID: "call-1"})
+	s.HandleCallMessage("user-1", "call:activity:stop", raw)
+	if s.ActivityFor("call-1", "user-2") != nil {
+		t.Fatalf("stop logo depois de abrir foi recusado pelo cooldown")
+	}
+	if errs := eventsOfType(pub, "call:activity:error"); len(errs) != 0 {
+		t.Fatalf("stop gerou erro: %v", errs)
+	}
+	if stops := eventsOfType(pub, "call:activity:stop"); len(stops["user:user-2"]) != 1 {
+		t.Fatalf("call:activity:stop foi para %v", stops)
+	}
+	// O stop não reabre a janela do cooldown: abrir de novo continua esperando.
+	if err := s.StartActivity(ctx, "call-1", "user-1", "krunker", ""); !errors.Is(err, ErrActivityCooldown) {
+		t.Fatalf("reabrir logo depois = %v, want ErrActivityCooldown", err)
+	}
+}
+
+func TestLeavingRightAfterStartEndsActivity(t *testing.T) {
+	pub := &fakePublisher{}
+	s := activityCall(pub, "user-1", "user-2")
+	s.activityCooldown = time.Hour
+
+	if err := s.StartActivity(context.Background(), "call-1", "user-1", "krunker", ""); err != nil {
+		t.Fatalf("StartActivity: %v", err)
+	}
+	if _, _, err := s.detachParticipant("call-1", "user-1"); err != nil {
+		t.Fatalf("detachParticipant: %v", err)
+	}
+	if s.ActivityFor("call-1", "user-2") != nil {
+		t.Fatalf("sair logo depois de abrir não encerrou a atividade")
+	}
+	if stops := eventsOfType(pub, "call:activity:stop"); len(stops["user:user-2"]) != 1 {
+		t.Fatalf("call:activity:stop foi para %v", stops)
 	}
 }
 

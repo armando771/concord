@@ -13,8 +13,9 @@ import (
 // só guarda (em memória) qual atividade está aberta e o link da sala para quem
 // está na chamada — o jogo roda inteiro no site de quem o hospeda.
 
-// activityCooldown: intervalo mínimo entre abrir/trocar link/encerrar de cada
+// activityCooldown: intervalo mínimo entre abrir e trocar o link, por
 // participante (cada mudança avisa a chamada inteira), como a mesa de áudio.
+// Encerrar não espera.
 const activityCooldown = 2 * time.Second
 
 // maxActivityURL limita o link guardado e repassado a todos da chamada.
@@ -139,8 +140,7 @@ func (s *Service) StopActivity(callID, userID string) error {
 		s.mu.Unlock()
 		return ErrNotFound
 	}
-	p, ok := ac.participants[userID]
-	if !ok {
+	if _, ok := ac.participants[userID]; !ok {
 		s.mu.Unlock()
 		return ErrNotAllowed
 	}
@@ -153,12 +153,8 @@ func (s *Service) StopActivity(callID, userID string) error {
 		s.mu.Unlock()
 		return ErrActivityOwner
 	}
-	now := time.Now()
-	if s.activityOnCooldownLocked(p, now) {
-		s.mu.Unlock()
-		return ErrActivityCooldown
-	}
-	p.lastActivityAt = now
+	// Encerrar nunca espera o cooldown (nem conta para ele): fechar a janela ou
+	// clicar em Encerrar logo depois de abrir sempre acaba a atividade.
 	delete(s.activities, callID)
 	targets := participantIDsLocked(ac)
 	s.mu.Unlock()
