@@ -1,4 +1,5 @@
 import GlassCard from './GlassCard'
+import { SalinhaMarkIcon } from './icons'
 
 interface AuthLayoutProps {
   children: React.ReactNode
@@ -17,8 +18,8 @@ function AuthLayout({ children, wide }: AuthLayoutProps): React.JSX.Element {
         <div className="grid md:grid-cols-[1fr_17rem]">
           <div className="p-6 sm:p-10">{children}</div>
           <aside className="hidden flex-col items-center justify-center gap-4 bg-gradient-to-br from-[#4b22c9]/40 via-[#2a0e85]/30 to-transparent p-8 text-center md:flex">
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-[#5865f2] to-[#8b5cf6] text-4xl font-bold text-white shadow-lg shadow-[#5865f2]/30">
-              S
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-[#5865f2] to-[#8b5cf6] text-white shadow-lg shadow-[#5865f2]/30">
+              <SalinhaMarkIcon className="h-14 w-14" />
             </div>
             <p className="text-xl font-semibold text-gray-50">Salinha</p>
             <p className="text-sm leading-relaxed text-gray-300">
