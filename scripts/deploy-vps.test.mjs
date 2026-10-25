@@ -59,6 +59,7 @@ while [ $# -gt 0 ]; do [ "$1" = -o ] && { cp "${join(base, 'new-binary')}" "$2";
 echo "systemctl $*" >> "$LOG"
 case "$1" in
   is-active) [ "$SOCKET_ACTIVE" = 1 ] && [ "$3" = concord-server.socket ] && exit 0; exit 3 ;;
+  is-enabled) [ "$SOCKET_ENABLED" = 1 ] && [ "$3" = concord-server.socket ] && exit 0; exit 1 ;;
   show) echo "127.0.0.1:8090 (Stream)" ;;
   restart) sed -n 's/^# KIND=//p' "${server}/concord-server" > "${server}/running" ;;
 esac
@@ -109,6 +110,17 @@ test('com o socket ativo, recusa binário sem suporte a ele sem trocar nada', ()
   assert.ok(existsSync(join(ctx.server, 'migrations', 'ANTIGA')))
   assert.doesNotMatch(r.log, /systemctl restart/)
   assert.doesNotMatch(r.log, /migrate/)
+})
+
+test('socket habilitado mas parado (manutenção) também recusa binário sem suporte a ele', () => {
+  // O restart traria o socket de volta pelo Wants= e o binário não subiria.
+  const old = fakeBinary('good')
+  const ctx = setup({ newSocket: false, current: old, good: old })
+  const r = deploy(ctx, ['root@vps'], { SOCKET_ENABLED: '1' })
+  assert.equal(r.status, 1)
+  assert.match(r.stderr, /socket está ativo \(ou habilitado\)/)
+  assert.equal(read(ctx, 'concord-server'), old)
+  assert.doesNotMatch(r.log, /systemctl restart/)
 })
 
 test('migration que falha não troca nada', () => {

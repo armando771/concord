@@ -122,7 +122,14 @@ set -euo pipefail
 cd "$DIR"
 CAPABILITY=concord-capability:socket-activation-v1
 
-socket_active() { systemctl is-active -q concord-server.socket 2>/dev/null; }
+# O socket conta como em uso se está ativo, se está habilitado ou se o arquivo
+# existe: parado (manutenção), o restart o traz de volta pelo Wants= do
+# serviço, e um binário sem suporte a ele não subiria (porta ocupada).
+socket_active() {
+  systemctl is-active -q concord-server.socket 2>/dev/null ||
+    systemctl is-enabled -q concord-server.socket 2>/dev/null ||
+    [[ -e /etc/systemd/system/concord-server.socket ]]
+}
 # Com o socket do systemd, a porta é a dele (o backend ignora o PORT do .env).
 if socket_active; then
   listen=$(systemctl show -p Listen --value concord-server.socket 2>/dev/null | awk '{print $1}')
@@ -158,7 +165,7 @@ chmod +x concord-server.new
 if socket_active && ! supports_socket concord-server.new; then
   rm -f concord-server.new
   rm -rf migrations.new site.new
-  echo "ERRO: o concord-server.socket está ativo e este binário não sabe usá-lo (não subiria: porta ocupada)." >&2
+  echo "ERRO: o concord-server.socket está ativo (ou habilitado) e este binário não sabe usá-lo (não subiria: porta ocupada)." >&2
   echo "      Nada foi trocado. Para instalar uma versão antiga, desative o socket antes (docs/HOSPEDAGEM.md, \"Voltar a uma versão antiga\")." >&2
   exit 1
 fi
