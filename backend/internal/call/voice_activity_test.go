@@ -101,3 +101,20 @@ func TestSpeakingWhileMutedIsIgnored(t *testing.T) {
 		t.Fatal("non-participant must be rejected")
 	}
 }
+
+// O evento do WS ("call:speaking") é o que marca a voz captada que o XP de
+// voz (level.Service, via ActiveVoiceUsers) exige.
+func TestSpeakingMessageMarksParticipantAsSpeaking(t *testing.T) {
+	s := serviceWithCall("call-1", "ana", "bia")
+
+	s.HandleCallMessage("ana", "call:speaking", []byte(`{"call_id":"call-1","speaking":true}`))
+
+	for _, a := range s.ActiveVoiceUsers() {
+		if a.UserID == "ana" && !a.Speaking {
+			t.Fatal("ana mandou call:speaking e não conta como falando")
+		}
+		if a.UserID == "bia" && a.Speaking {
+			t.Fatal("bia não falou")
+		}
+	}
+}

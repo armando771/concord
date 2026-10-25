@@ -82,7 +82,9 @@ func (c *Client) readPump(ctx context.Context) {
 			}
 
 			c.hub.Unsubscribe(c, p.Room)
-		case "call:invite", "call:accept", "call:decline", "call:leave", "call:screen", "call:voice":
+		// call:speaking: voz captada (detector do LiveKit no app) — é o que
+		// conta para o XP de voz.
+		case "call:invite", "call:accept", "call:decline", "call:leave", "call:screen", "call:voice", "call:speaking":
 			if c.callRouter != nil {
 				c.callRouter.HandleCallMessage(c.userID, ev.Type, ev.Payload)
 			}
