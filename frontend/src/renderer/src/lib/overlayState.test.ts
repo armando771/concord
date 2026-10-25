@@ -2,9 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   buildOverlaySnapshot,
   clampOverlayOpacity,
+  migrateOverlayPrefs,
+  normalizeOverlayPrefs,
+  OVERLAY_PREFS_VERSION,
   OVERLAY_OPACITY_DEFAULT,
+  overlayRowOpacity,
   type OverlayInput
 } from './overlayState'
+import { OVERLAY_DEFAULT_LAYOUT } from './overlayLayout'
 
 const ana = { id: 'ana', username: 'ana', display_name: 'Ana' }
 const bia = { id: 'bia', username: 'bia', display_name: 'Bia' }
@@ -20,6 +25,8 @@ function input(over: Partial<OverlayInput> = {}): OverlayInput {
     muted: false,
     deafened: false,
     opacity: OVERLAY_OPACITY_DEFAULT,
+    layout: OVERLAY_DEFAULT_LAYOUT,
+    shortcut: 'Shift+Tab',
     ...over
   }
 }
@@ -115,16 +122,17 @@ describe('buildOverlaySnapshot', () => {
 })
 
 describe('opacidade do overlay', () => {
-  it('padrão de 70%', () => {
-    expect(OVERLAY_OPACITY_DEFAULT).toBe(70)
+  it('padrão de 30% em repouso', () => {
+    expect(OVERLAY_OPACITY_DEFAULT).toBe(30)
   })
 
-  it('fica entre 20% e 100%, em passos de 5%', () => {
-    expect(clampOverlayOpacity(70)).toBe(70)
-    expect(clampOverlayOpacity(5)).toBe(20)
-    expect(clampOverlayOpacity(150)).toBe(100)
-    expect(clampOverlayOpacity(72)).toBe(70)
-    expect(clampOverlayOpacity(73)).toBe(75)
+  it('repouso fica entre 10% e 60%, em passos de 5%', () => {
+    expect(clampOverlayOpacity(30)).toBe(30)
+    expect(clampOverlayOpacity(5)).toBe(10)
+    expect(clampOverlayOpacity(0)).toBe(10)
+    expect(clampOverlayOpacity(150)).toBe(60)
+    expect(clampOverlayOpacity(32)).toBe(30)
+    expect(clampOverlayOpacity(33)).toBe(35)
   })
 
   it('valor salvo estragado volta ao padrão', () => {
@@ -134,7 +142,133 @@ describe('opacidade do overlay', () => {
 
   it('vai junto no estado mandado ao overlay, também fora da call', () => {
     expect(buildOverlaySnapshot(input({ opacity: 45 })).opacity).toBe(45)
-    expect(buildOverlaySnapshot(input({ opacity: 3 })).opacity).toBe(20)
+    expect(buildOverlaySnapshot(input({ opacity: 3 })).opacity).toBe(10)
+    expect(buildOverlaySnapshot(input({ opacity: 90 })).opacity).toBe(60)
     expect(buildOverlaySnapshot(input({ status: 'idle', opacity: 45 })).opacity).toBe(45)
+  })
+})
+
+describe('posição/tamanho do overlay no estado', () => {
+  it('vai junto, também fora da call', () => {
+    const layout = { position: { x: 0.4, y: 0.6 }, scale: 1.3 }
+    expect(buildOverlaySnapshot(input({ layout })).layout).toEqual(layout)
+    expect(buildOverlaySnapshot(input({ status: 'idle', layout })).layout).toEqual(layout)
+  })
+
+  it('valor salvo estragado vira o padrão', () => {
+    expect(
+      buildOverlaySnapshot(input({ layout: { position: { x: 3, y: -1 }, scale: 9 } })).layout
+    ).toEqual({ position: { x: 1, y: 0 }, scale: 1.6 })
+    expect(buildOverlaySnapshot(input({ layout: undefined as never })).layout).toEqual(
+      OVERLAY_DEFAULT_LAYOUT
+    )
+  })
+})
+
+describe('overlayRowOpacity', () => {
+  it('quem não fala fica na opacidade de repouso', () => {
+    expect(overlayRowOpacity(30, false)).toBe(30)
+    expect(overlayRowOpacity(10, false)).toBe(10)
+  })
+
+  it('quem fala ganha +40', () => {
+    expect(overlayRowOpacity(30, true)).toBe(70)
+    expect(overlayRowOpacity(10, true)).toBe(50)
+  })
+
+  it('quem fala para em 85%, nunca 100%', () => {
+    expect(overlayRowOpacity(45, true)).toBe(85)
+    expect(overlayRowOpacity(60, true)).toBe(85)
+    expect(overlayRowOpacity(100, true)).toBe(85)
+    expect(overlayRowOpacity(100, false)).toBe(60)
+  })
+
+  it('valor estragado usa o padrão', () => {
+    expect(overlayRowOpacity(Number.NaN, false)).toBe(OVERLAY_OPACITY_DEFAULT)
+    expect(overlayRowOpacity(Number.NaN, true)).toBe(OVERLAY_OPACITY_DEFAULT + 40)
+  })
+})
+
+describe('migrateOverlayPrefs', () => {
+  it('versão 2: atalho configurável (v1: opacidade em repouso)', () => {
+    expect(OVERLAY_PREFS_VERSION).toBe(2)
+  })
+
+  it('opacidade salva antes da v1 (20–100% na lista toda) volta para 30%; o resto é mantido', () => {
+    expect(migrateOverlayPrefs({ enabled: true, opacity: 70 }, 0)).toMatchObject({
+      enabled: true,
+      opacity: 30
+    })
+    expect(migrateOverlayPrefs({ enabled: false, opacity: 20 }, 0)).toMatchObject({
+      enabled: false,
+      opacity: 30
+    })
+    expect(migrateOverlayPrefs({ opacity: 45 }, 0).opacity).toBe(30)
+  })
+
+  it('opacidade salva da v1 em diante é mantida, encaixada em 10–60%', () => {
+    expect(migrateOverlayPrefs({ enabled: true, opacity: 45 }, 1)).toMatchObject({
+      enabled: true,
+      opacity: 45
+    })
+    expect(migrateOverlayPrefs({ opacity: 90 }, 1).opacity).toBe(60)
+    expect(migrateOverlayPrefs({ opacity: 3 }, 2).opacity).toBe(10)
+    expect(migrateOverlayPrefs({ opacity: 'x' }, 1).opacity).toBe(OVERLAY_OPACITY_DEFAULT)
+  })
+
+  it('antes da v2 não havia atalho: fica o padrão (Shift+Tab)', () => {
+    expect(migrateOverlayPrefs({ opacity: 30 }, 0).shortcut).toBe('Shift+Tab')
+    expect(migrateOverlayPrefs({ opacity: 30, shortcut: 'Ctrl+Shift+O' }, 1).shortcut).toBe(
+      'Shift+Tab'
+    )
+  })
+
+  it('da v2 em diante, o atalho salvo é mantido; inválido volta ao padrão', () => {
+    expect(migrateOverlayPrefs({ shortcut: 'ctrl+shift+o' }, 2).shortcut).toBe('Ctrl+Shift+O')
+    expect(migrateOverlayPrefs({ shortcut: 'Tab' }, 2).shortcut).toBe('Shift+Tab')
+  })
+
+  it('nada salvo não quebra', () => {
+    expect(migrateOverlayPrefs(undefined, 0)).toMatchObject({
+      opacity: OVERLAY_OPACITY_DEFAULT,
+      shortcut: 'Shift+Tab'
+    })
+    expect(migrateOverlayPrefs(null, 1)).toMatchObject({ opacity: OVERLAY_OPACITY_DEFAULT })
+  })
+})
+
+describe('normalizeOverlayPrefs (a cada carga, mesmo sem mudar de versão)', () => {
+  it('encaixa opacidade, posição/tamanho e atalho; mantém o resto', () => {
+    expect(
+      normalizeOverlayPrefs({
+        enabled: false,
+        opacity: 99,
+        layout: { position: { x: 2, y: 0.5 }, scale: 9 },
+        shortcut: 'O'
+      })
+    ).toEqual({
+      enabled: false,
+      opacity: 60,
+      layout: { position: { x: 1, y: 0.5 }, scale: 1.6 },
+      shortcut: 'Shift+Tab'
+    })
+  })
+
+  it('layout estragado (ex.: null) vira o padrão em vez de quebrar a tela de configurações', () => {
+    expect(normalizeOverlayPrefs({ layout: null }).layout).toEqual(OVERLAY_DEFAULT_LAYOUT)
+    expect(normalizeOverlayPrefs(undefined)).toEqual({
+      opacity: OVERLAY_OPACITY_DEFAULT,
+      layout: OVERLAY_DEFAULT_LAYOUT,
+      shortcut: 'Shift+Tab'
+    })
+  })
+})
+
+describe('atalho no estado do overlay', () => {
+  it('vai junto, normalizado, também fora da call', () => {
+    expect(buildOverlaySnapshot(input({ shortcut: 'alt+f9' })).shortcut).toBe('Alt+F9')
+    expect(buildOverlaySnapshot(input({ status: 'idle', shortcut: 'Tab' })).shortcut).toBe(
+      'Shift+Tab'
+    )
   })
 })
