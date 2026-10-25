@@ -32,6 +32,9 @@ backend/concord-server
 backend/updates/
 backend/.release-key
 
+# ─── Mídia do chat (UPLOADS_DIR em dev) ─────────────────────────
+backend/uploads/
+
 # ─── Helper nativo (gerado no build) ────────────────────────────
 frontend/resources/win/
 native/concord-audio/target/

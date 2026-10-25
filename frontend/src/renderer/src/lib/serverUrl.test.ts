@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildConnectSrc, deriveServerUrls } from './serverUrl'
+import { buildConnectSrc, buildMediaSrc, deriveServerUrls } from './serverUrl'
 
 describe('deriveServerUrls', () => {
   it('deriva API, WebSocket e LiveKit de um endereço http', () => {
@@ -35,5 +35,19 @@ describe('buildConnectSrc', () => {
     expect(buildConnectSrc('https://concord.exemplo.com.br')).toBe(
       "'self' https://concord.exemplo.com.br wss://concord.exemplo.com.br"
     )
+  })
+})
+
+describe('buildMediaSrc', () => {
+  it('libera blob e a origem do servidor', () => {
+    expect(buildMediaSrc('http://abc.gl.at.ply.gg:12345')).toBe(
+      "'self' blob: http://abc.gl.at.ply.gg:12345"
+    )
+    expect(buildMediaSrc('https://concord.exemplo.com.br/')).toBe(
+      "'self' blob: https://concord.exemplo.com.br"
+    )
+  })
+  it('usa o localhost:8080 sem endereço', () => {
+    expect(buildMediaSrc(undefined)).toBe("'self' blob: http://localhost:8080")
   })
 })

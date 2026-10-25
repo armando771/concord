@@ -1,4 +1,5 @@
 import type { CreatePollInput, Message, Poll } from '../api/messages'
+import { attachmentLabel } from './attachments'
 
 // Limites iguais aos do backend (e do Discord).
 export const POLL_QUESTION_MAX = 300
@@ -108,9 +109,10 @@ export function applyPollUpdate(
 }
 
 /** Texto da mensagem para prévias (lista de DMs, notificações). */
-export function messagePreview(message: Pick<Message, 'content' | 'poll'>): string {
+export function messagePreview(message: Pick<Message, 'content' | 'poll' | 'attachments'>): string {
   if (message.poll) return `📊 ${message.poll.question}`
-  return message.content
+  if (message.content) return message.content
+  return attachmentLabel(message.attachments) ?? ''
 }
 
 export interface PollDraftAnswer {

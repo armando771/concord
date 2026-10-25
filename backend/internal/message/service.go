@@ -3,6 +3,7 @@ package message
 import (
 	"context"
 	"errors"
+	"log"
 
 	"github.com/google/uuid"
 )
@@ -27,24 +28,31 @@ type ConversationResolver interface {
 	ConversationParticipantIDs(ctx context.Context, conversationID string) ([]string, error)
 }
 
+// FileRemover apaga o arquivo de um anexo do disco (media.Store).
+type FileRemover interface {
+	Remove(name string) error
+}
+
 type Service struct {
 	repository      *Repository
 	publisher       EventPublisher
 	channelResolver ChannelResolver
 	convResolver    ConversationResolver
+	files           FileRemover
 }
 
-func MessageService(repository *Repository, publisher EventPublisher, channelResolver ChannelResolver, convResolver ConversationResolver) *Service {
+func MessageService(repository *Repository, publisher EventPublisher, channelResolver ChannelResolver, convResolver ConversationResolver, files FileRemover) *Service {
 	return &Service{
 		repository:      repository,
 		publisher:       publisher,
 		channelResolver: channelResolver,
 		convResolver:    convResolver,
+		files:           files,
 	}
 }
 
-func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, authorID string, content string) (*Message, error) {
-	msg, err := s.create(ctx, channelID, "", authorID, content)
+func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, authorID string, content string, attachmentIDs []string) (*Message, error) {
+	msg, err := s.create(ctx, channelID, "", authorID, content, attachmentIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -63,8 +71,8 @@ func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, au
 	return msg, nil
 }
 
-func (s *Service) CreateConversationMessage(ctx context.Context, conversationID string, authorID string, content string) (*Message, error) {
-	msg, err := s.create(ctx, "", conversationID, authorID, content)
+func (s *Service) CreateConversationMessage(ctx context.Context, conversationID string, authorID string, content string, attachmentIDs []string) (*Message, error) {
+	msg, err := s.create(ctx, "", conversationID, authorID, content, attachmentIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -83,9 +91,9 @@ func (s *Service) CreateConversationMessage(ctx context.Context, conversationID 
 	return msg, nil
 }
 
-func (s *Service) create(ctx context.Context, channelID string, conversationID string, authorID string, content string) (*Message, error) {
-	if content == "" {
-		return nil, ErrContentRequired
+func (s *Service) create(ctx context.Context, channelID string, conversationID string, authorID string, content string, attachmentIDs []string) (*Message, error) {
+	if err := validateNewMessage(content, attachmentIDs); err != nil {
+		return nil, err
 	}
 
 	msg := &Message{
@@ -103,7 +111,11 @@ func (s *Service) create(ctx context.Context, channelID string, conversationID s
 		msg.ConversationID = nil
 	}
 
-	if err := s.repository.Create(ctx, msg); err != nil {
+	if len(attachmentIDs) == 0 {
+		if err := s.repository.Create(ctx, msg); err != nil {
+			return nil, err
+		}
+	} else if err := s.repository.CreateWithAttachments(ctx, msg, attachmentIDs); err != nil {
 		return nil, err
 	}
 
@@ -112,7 +124,13 @@ func (s *Service) create(ctx context.Context, channelID string, conversationID s
 		return nil, err
 	}
 
-	return full, nil
+	// O message:create publicado já leva os anexos.
+	page := []Message{*full}
+	if err := s.repository.AttachAttachments(ctx, page); err != nil {
+		return nil, err
+	}
+
+	return &page[0], nil
 }
 
 func (s *Service) ListChannelMessages(ctx context.Context, channelID string, viewerID string, limit int, before string) ([]Message, error) {
@@ -121,6 +139,9 @@ func (s *Service) ListChannelMessages(ctx context.Context, channelID string, vie
 		return nil, err
 	}
 	if err := s.repository.AttachPolls(ctx, messages, viewerID); err != nil {
+		return nil, err
+	}
+	if err := s.repository.AttachAttachments(ctx, messages); err != nil {
 		return nil, err
 	}
 	return messages, nil
@@ -132,6 +153,9 @@ func (s *Service) ListConversationMessages(ctx context.Context, conversationID s
 		return nil, err
 	}
 	if err := s.repository.AttachPolls(ctx, messages, viewerID); err != nil {
+		return nil, err
+	}
+	if err := s.repository.AttachAttachments(ctx, messages); err != nil {
 		return nil, err
 	}
 	return messages, nil
@@ -151,7 +175,7 @@ func (s *Service) DeleteChannelMessage(ctx context.Context, channelID string, me
 		return ErrNotAuthor
 	}
 
-	if err := s.repository.Delete(ctx, messageID); err != nil {
+	if err := s.deleteWithFiles(ctx, messageID); err != nil {
 		return err
 	}
 
@@ -183,7 +207,7 @@ func (s *Service) DeleteConversationMessage(ctx context.Context, conversationID 
 		return ErrNotAuthor
 	}
 
-	if err := s.repository.Delete(ctx, messageID); err != nil {
+	if err := s.deleteWithFiles(ctx, messageID); err != nil {
 		return err
 	}
 
@@ -198,5 +222,27 @@ func (s *Service) DeleteConversationMessage(ctx context.Context, conversationID 
 		MessageID:      messageID,
 	})
 
+	return nil
+}
+
+// deleteWithFiles apaga a mensagem (a cascata leva as linhas dos anexos) e
+// depois os arquivos dela no disco.
+func (s *Service) deleteWithFiles(ctx context.Context, messageID string) error {
+	ids, err := s.repository.MessageAttachmentIDs(ctx, messageID)
+	if err != nil {
+		return err
+	}
+
+	if err := s.repository.Delete(ctx, messageID); err != nil {
+		return err
+	}
+
+	if s.files != nil {
+		for _, id := range ids {
+			if err := s.files.Remove(id); err != nil {
+				log.Printf("failed to remove attachment file %s: %v", id, err)
+			}
+		}
+	}
 	return nil
 }

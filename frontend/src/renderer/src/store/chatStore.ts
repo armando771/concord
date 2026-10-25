@@ -58,7 +58,7 @@ interface ChatState {
   openServer: (serverId: string) => void
   closeServer: (serverId: string) => void
   loadOlder: (room: RoomKey) => Promise<void>
-  sendToRoom: (room: RoomKey, content: string) => Promise<void>
+  sendToRoom: (room: RoomKey, content: string, attachmentIds?: string[]) => Promise<void>
   deleteFromRoom: (room: RoomKey, messageId: string) => Promise<void>
   createPollInRoom: (room: RoomKey, input: CreatePollInput) => Promise<void>
   votePollInRoom: (room: RoomKey, messageId: string, answerIds: number[]) => Promise<void>
@@ -228,14 +228,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
-  sendToRoom: async (room, content) => {
+  sendToRoom: async (room, content, attachmentIds = []) => {
     const trimmed = content.trim()
-    if (!trimmed) return
+    // Mensagem pode ter só anexo, sem texto.
+    if (!trimmed && attachmentIds.length === 0) return
 
     if (room.startsWith('channel:')) {
-      await sendChannelMessage(room.slice('channel:'.length), trimmed)
+      await sendChannelMessage(room.slice('channel:'.length), trimmed, attachmentIds)
     } else {
-      await sendConversationMessage(room.slice('conversation:'.length), trimmed)
+      await sendConversationMessage(room.slice('conversation:'.length), trimmed, attachmentIds)
     }
 
     if (!client.isConnected()) {
