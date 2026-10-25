@@ -1,6 +1,7 @@
 import { useUIStore } from '../../store/uiStore'
 import { ChevronDownIcon, ChevronUpIcon } from '../icons'
 import VoiceControls from './VoiceControls'
+import ActivityBar from './ActivityBar'
 
 /**
  * Faixa dos controles da chamada embaixo do palco. Ela ocupa o próprio espaço
@@ -13,34 +14,40 @@ function CallControlsDock(): React.JSX.Element {
 
   if (hidden) {
     return (
-      <div className="flex shrink-0 justify-center pb-3">
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label="Mostrar controles da chamada"
-          title="Mostrar controles"
-          className="flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-white/10 bg-[#0b0c10]/95 px-3 text-[11px] font-semibold text-gray-300 shadow-lg transition-colors hover:bg-white/10 hover:text-white"
-        >
-          <ChevronUpIcon className="h-3.5 w-3.5" />
-          Mostrar controles
-        </button>
-      </div>
+      <>
+        <ActivityBar />
+        <div className="flex shrink-0 justify-center pb-3">
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label="Mostrar controles da chamada"
+            title="Mostrar controles"
+            className="flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-white/10 bg-[#0b0c10]/95 px-3 text-[11px] font-semibold text-gray-300 shadow-lg transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <ChevronUpIcon className="h-3.5 w-3.5" />
+            Mostrar controles
+          </button>
+        </div>
+      </>
     )
   }
 
   return (
-    <div className="flex shrink-0 items-center justify-center gap-2 pb-4">
-      <VoiceControls />
-      <button
-        type="button"
-        onClick={toggle}
-        aria-label="Ocultar controles da chamada"
-        title="Ocultar controles"
-        className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-[#0b0c10]/95 text-gray-400 shadow-lg transition-colors hover:bg-white/10 hover:text-white"
-      >
-        <ChevronDownIcon className="h-4 w-4" />
-      </button>
-    </div>
+    <>
+      <ActivityBar />
+      <div className="flex shrink-0 items-center justify-center gap-2 pb-4">
+        <VoiceControls />
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label="Ocultar controles da chamada"
+          title="Ocultar controles"
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-[#0b0c10]/95 text-gray-400 shadow-lg transition-colors hover:bg-white/10 hover:text-white"
+        >
+          <ChevronDownIcon className="h-4 w-4" />
+        </button>
+      </div>
+    </>
   )
 }
 
