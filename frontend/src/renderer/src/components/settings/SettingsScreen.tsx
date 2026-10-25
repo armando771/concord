@@ -124,9 +124,7 @@ function SettingsContent(): React.JSX.Element {
             if (items.length === 0) return null
             return (
               <div key={group.id} className="mb-4">
-                <p className="mb-1 px-2 text-ds-sm font-medium text-gray-500">
-                  {group.label}
-                </p>
+                <p className="mb-1 px-2 text-ds-sm font-medium text-gray-500">{group.label}</p>
                 {items.map((item) => (
                   <button
                     key={item.id}

@@ -28,11 +28,7 @@ const POLICIES: { id: FriendRequestPolicy; title: string; description: string }[
 ]
 
 function SectionTitle({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return (
-    <h2 className="mb-3 text-ds-sm font-medium text-gray-400">
-      {children}
-    </h2>
-  )
+  return <h2 className="mb-3 text-ds-sm font-medium text-gray-400">{children}</h2>
 }
 
 /**

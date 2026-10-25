@@ -414,9 +414,7 @@ function ProfilesSection(): React.JSX.Element | null {
 
         {/* Prévia */}
         <div className="w-full shrink-0 lg:sticky lg:top-0 lg:w-[300px]">
-          <p className="mb-2 text-ds-sm font-medium text-gray-300">
-            Prévia
-          </p>
+          <p className="mb-2 text-ds-sm font-medium text-gray-300">Prévia</p>
           <div
             className="rounded-xl border border-white/10 text-sm text-gray-200 shadow-2xl"
             style={{ background: CARD_BG }}

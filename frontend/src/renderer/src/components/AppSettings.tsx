@@ -139,9 +139,7 @@ export function BirthdaySettings(): React.JSX.Element {
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-      <h3 className="mb-3 text-ds-sm font-medium text-gray-400">
-        Aniversário
-      </h3>
+      <h3 className="mb-3 text-ds-sm font-medium text-gray-400">Aniversário</h3>
       <div className="flex flex-col gap-3">
         <BirthdayFields
           value={birthday}
@@ -229,9 +227,7 @@ export function DesktopSettings(): React.JSX.Element {
       {/* Overlay de jogo: só Windows (preload: process.platform, sandbox desligado). */}
       {hasOverlay && (
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-          <h3 className="mb-3 text-ds-sm font-medium text-gray-400">
-            Overlay
-          </h3>
+          <h3 className="mb-3 text-ds-sm font-medium text-gray-400">Overlay</h3>
           <Toggle
             title="Overlay nos jogos"
             description="Mostra quem está na chamada e quem está falando por cima de jogos em tela cheia (modo janela)."
