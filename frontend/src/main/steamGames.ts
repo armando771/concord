@@ -1,5 +1,5 @@
 import { execFile } from 'child_process'
-import { readFile } from 'fs/promises'
+import { readdir, readFile } from 'fs/promises'
 import { join } from 'path'
 
 // Jogos da Steam fora do catálogo: a Steam grava o appid do jogo aberto no
@@ -33,6 +33,15 @@ export function parseAppManifestName(acf: string): string | undefined {
   return /"name"\s+"([^"]+)"/.exec(acf)?.[1].trim() || undefined
 }
 
+/** O ícone do jogo no cache da Steam é o único `<sha1>.jpg` da pasta do appid. */
+export function findIconHash(fileNames: readonly string[]): string | undefined {
+  for (const file of fileNames) {
+    const match = /^([0-9a-f]{40})\.jpg$/i.exec(file)
+    if (match) return match[1].toLowerCase()
+  }
+  return undefined
+}
+
 function regQuery(value: string): Promise<string> {
   return new Promise((resolve) => {
     execFile('reg', ['query', STEAM_KEY, '/v', value], { windowsHide: true }, (error, stdout) =>
@@ -42,13 +51,25 @@ function regQuery(value: string): Promise<string> {
 }
 
 const names = new Map<number, string>()
+const icons = new Map<number, string>()
 
-async function resolveName(appId: number): Promise<string | undefined> {
+async function resolveIconHash(steamPath: string, appId: number): Promise<string | undefined> {
+  const cached = icons.get(appId)
+  if (cached) return cached
+  try {
+    const files = await readdir(join(steamPath, 'appcache', 'librarycache', String(appId)))
+    const hash = findIconHash(files)
+    if (hash) icons.set(appId, hash)
+    return hash
+  } catch {
+    // a Steam ainda não baixou as imagens do jogo
+    return undefined
+  }
+}
+
+async function resolveName(steamPath: string, appId: number): Promise<string | undefined> {
   const cached = names.get(appId)
   if (cached) return cached
-
-  const steamPath = parseSteamPath(await regQuery('SteamPath'))
-  if (!steamPath) return undefined
 
   let libraries = [steamPath]
   try {
@@ -73,9 +94,21 @@ async function resolveName(appId: number): Promise<string | undefined> {
   return undefined
 }
 
-/** Nome do jogo da Steam em andamento, ou null (sem jogo / fora da Steam). */
-export async function detectSteamGame(): Promise<string | null> {
+export interface SteamGame {
+  appId: number
+  name: string
+  /** sha1 do ícone no CDN da Steam; ausente se a Steam ainda não o baixou. */
+  iconHash?: string
+}
+
+/** Jogo da Steam em andamento, ou null (sem jogo / fora da Steam). */
+export async function detectSteamGame(): Promise<SteamGame | null> {
   const appId = parseRunningAppId(await regQuery('RunningAppID'))
   if (!appId) return null
-  return (await resolveName(appId)) ?? null
+  const steamPath = parseSteamPath(await regQuery('SteamPath'))
+  if (!steamPath) return null
+  const name = await resolveName(steamPath, appId)
+  if (!name) return null
+  const iconHash = await resolveIconHash(steamPath, appId)
+  return iconHash ? { appId, name, iconHash } : { appId, name }
 }

@@ -9,13 +9,15 @@ interface PresenceActivityState {
   /** Atividade de cada usuário (só quem o servidor deixa eu ver). */
   byUser: Record<string, PresenceActivity>
   /** Jogo detectado neste PC (só Windows), antes de ir ao servidor. */
-  detected: { name: string; startedAt: number } | null
+  detected: { name: string; startedAt: number; appId?: number; iconHash?: string } | null
   /** Mostrar meu jogo aos outros (Configurações → Privacidade). */
   enabled: boolean
   setActivity: (userId: string, activity: PresenceActivity | null) => void
   /** Carga inicial: quem veio sem atividade na resposta deixa de ter. */
   applyFetched: (requestedIds: string[], fetched: Record<string, unknown>) => void
-  setDetected: (game: { name: string; startedAt: number } | null) => void
+  setDetected: (
+    game: { name: string; startedAt: number; appId?: number; iconHash?: string } | null
+  ) => void
   setEnabled: (enabled: boolean) => void
   /** Manda ao servidor o que vale agora (também ao reconectar o WS). */
   publishMine: () => void
@@ -60,7 +62,10 @@ export const usePresenceActivityStore = create<PresenceActivityState>()(
           sendEvent('activity:set', {
             name: detected.name,
             kind: 'game',
-            started_at: detected.startedAt
+            started_at: detected.startedAt,
+            ...(detected.appId && detected.iconHash
+              ? { app_id: detected.appId, icon_hash: detected.iconHash }
+              : {})
           })
         } else {
           sendEvent('activity:clear', {})

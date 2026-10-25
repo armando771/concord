@@ -144,3 +144,32 @@ func TestActivityRateLimitedPerUser(t *testing.T) {
 		t.Fatalf("troca imediata devia ser ignorada: %+v", evs)
 	}
 }
+
+const testIconHash = "0e56e01c18bf303a65ba60dddfa842cc85d1da33"
+
+func TestActivityCarriesSteamAppID(t *testing.T) {
+	h, _, friend, _ := activityHub()
+	h.HandleActivity("a", "activity:set", json.RawMessage(`{"name":"Grounded 2","kind":"game","app_id":2661300,"icon_hash":"`+testIconHash+`"}`))
+	evs := drainActivity(t, friend)
+	if len(evs) != 1 || evs[0].Payload.Activity == nil || evs[0].Payload.Activity.AppID != 2661300 ||
+		evs[0].Payload.Activity.IconHash != testIconHash {
+		t.Fatalf("app_id não chegou ao amigo: %+v", evs)
+	}
+}
+
+func TestActivityInvalidAppIDDropped(t *testing.T) {
+	cases := []string{
+		`"app_id":-5,"icon_hash":"` + testIconHash + `"`,
+		`"app_id":99999999999,"icon_hash":"` + testIconHash + `"`,
+		`"app_id":730,"icon_hash":"../../x"`,
+		`"app_id":730`,
+	}
+	for _, raw := range cases {
+		h, _, friend, _ := activityHub()
+		h.HandleActivity("a", "activity:set", json.RawMessage(`{"name":"Jogo","kind":"game",`+raw+`}`))
+		evs := drainActivity(t, friend)
+		if len(evs) != 1 || evs[0].Payload.Activity.AppID != 0 || evs[0].Payload.Activity.IconHash != "" {
+			t.Fatalf("%s deveria perder o ícone: %+v", raw, evs)
+		}
+	}
+}

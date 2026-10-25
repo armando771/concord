@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -20,15 +21,24 @@ const (
 	ActivityKindGame = "game"
 
 	maxActivityNameRunes = 64
+	// Limite do appid da Steam (inteiro de 32 bits); acima disso é lixo.
+	maxSteamAppID = 1<<31 - 1
 	// Um jogo novo a cada tantos segundos, no máximo, por usuário.
 	activityMinInterval = time.Second
 )
+
+// steamIconHashRE: sha1 em hexadecimal do ícone do jogo no CDN da Steam.
+var steamIconHashRE = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 type Activity struct {
 	Name string `json:"name"`
 	Kind string `json:"kind"`
 	// Unix em milissegundos de quando começou.
 	StartedAt int64 `json:"started_at"`
+	// AppID do jogo na Steam (ícone no cliente); 0 = jogo fora da Steam.
+	AppID int64 `json:"app_id,omitempty"`
+	// IconHash é o sha1 do ícone na Steam; só vale junto com AppID.
+	IconHash string `json:"icon_hash,omitempty"`
 }
 
 // AudienceProvider diz quem pode ver a atividade de userID: amigos e quem
@@ -53,6 +63,8 @@ func (h *Hub) HandleActivity(userID, evType string, payload json.RawMessage) {
 		Name      string `json:"name"`
 		Kind      string `json:"kind"`
 		StartedAt int64  `json:"started_at"`
+		AppID     int64  `json:"app_id"`
+		IconHash  string `json:"icon_hash"`
 	}
 	if err := json.Unmarshal(payload, &p); err != nil {
 		return
@@ -70,7 +82,12 @@ func (h *Hub) HandleActivity(userID, evType string, payload json.RawMessage) {
 	if started <= 0 || started > now {
 		started = now
 	}
-	h.SetActivity(userID, &Activity{Name: name, Kind: p.Kind, StartedAt: started})
+	// O ícone só vale com appid e hash válidos; senão o cliente usa o genérico.
+	appID, iconHash := p.AppID, p.IconHash
+	if appID <= 0 || appID > maxSteamAppID || !steamIconHashRE.MatchString(iconHash) {
+		appID, iconHash = 0, ""
+	}
+	h.SetActivity(userID, &Activity{Name: name, Kind: p.Kind, StartedAt: started, AppID: appID, IconHash: iconHash})
 }
 
 // SetActivity guarda (ou limpa, com nil) a atividade e avisa o público. Sem
@@ -98,7 +115,7 @@ func (h *Hub) SetActivity(userID string, a *Activity) {
 		return
 	}
 	h.activitySetAt[userID] = now
-	if had && prev.Name == a.Name && prev.Kind == a.Kind {
+	if had && prev.Name == a.Name && prev.Kind == a.Kind && prev.AppID == a.AppID && prev.IconHash == a.IconHash {
 		h.mu.Unlock()
 		return
 	}

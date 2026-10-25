@@ -90,6 +90,9 @@ export interface DetectedGameInfo {
   name: string
   /** Unix em ms de quando a Salinha o viu abrir. */
   startedAt: number
+  /** appid e ícone (sha1) na Steam, quando o jogo é da Steam. */
+  appId?: number
+  iconHash?: string
 }
 
 export interface GamesApi {
