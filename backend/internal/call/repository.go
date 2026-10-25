@@ -76,6 +76,16 @@ func (r *Repository) MarkParticipantLeft(ctx context.Context, callID string, use
 	return err
 }
 
+// MarkCallActive grava que a chamada foi atendida (só sai de "ringing").
+func (r *Repository) MarkCallActive(ctx context.Context, callID string) error {
+	_, err := r.db.Exec(
+		ctx,
+		`UPDATE calls SET status = 'active' WHERE id = $1 AND status = 'ringing'`,
+		callID,
+	)
+	return err
+}
+
 // SaveVoiceState guarda o mudo/ensurdecido de quem está na chamada.
 func (r *Repository) SaveVoiceState(ctx context.Context, callID string, userID string, muted bool, deafened bool) error {
 	_, err := r.db.Exec(

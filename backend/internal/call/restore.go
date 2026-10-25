@@ -66,6 +66,11 @@ func (s *Service) restore(calls []*Call, participants map[string][]CallParticipa
 
 	var toEnd []string
 	for _, c := range calls {
+		// DM atendida antes de o status ir para o banco ficou "ringing": com
+		// os dois ainda dentro, estava em andamento.
+		if c.Type == TypeDM && c.Status == StatusRinging && stillInside(participants[c.ID]) >= 2 {
+			c.Status = StatusActive
+		}
 		if c.Status != StatusActive {
 			toEnd = append(toEnd, c.ID)
 			continue
@@ -104,4 +109,15 @@ func (s *Service) restore(calls []*Call, participants map[string][]CallParticipa
 		}
 	}
 	return toEnd
+}
+
+// stillInside conta quem não saiu da chamada.
+func stillInside(list []CallParticipant) int {
+	n := 0
+	for _, p := range list {
+		if p.LeftAt == nil {
+			n++
+		}
+	}
+	return n
 }

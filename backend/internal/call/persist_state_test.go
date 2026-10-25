@@ -12,6 +12,7 @@ type fakeStateStore struct {
 	mu     sync.Mutex
 	voice  []string
 	screen []string
+	active []string
 }
 
 func (f *fakeStateStore) SaveVoiceState(_ context.Context, callID, userID string, muted, deafened bool) error {
@@ -146,5 +147,34 @@ func TestSetScreenShareUnchangedIsSilent(t *testing.T) {
 	}
 	if len(store.screen) != 1 {
 		t.Fatalf("gravado = %v, want só o início da transmissão", store.screen)
+	}
+}
+
+func (f *fakeStateStore) MarkCallActive(_ context.Context, callID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.active = append(f.active, callID)
+	return nil
+}
+
+// Atender a DM tem que ir para o banco: senão ela continua "ringing" e o
+// próximo reinício a encerra.
+func TestAcceptPersistsCallAsActive(t *testing.T) {
+	s := serviceWithCall("dm-1", "ana")
+	s.calls["dm-1"].info.Type = TypeDM
+	s.calls["dm-1"].info.Status = StatusRinging
+	s.calls["dm-1"].inviteeID = "bia"
+	s.publisher = &fakePublisher{}
+	s.lookupUser = func(_ context.Context, id string) (UserInfo, error) { return UserInfo{ID: id}, nil }
+	s.addParticipant = func(context.Context, *CallParticipant) error { return nil }
+	store := &fakeStateStore{}
+	s.stateStore = store
+
+	if err := s.Accept(context.Background(), "dm-1", "bia"); err != nil {
+		t.Fatalf("Accept: %v", err)
+	}
+
+	if len(store.active) != 1 || store.active[0] != "dm-1" {
+		t.Fatalf("status ativo gravado = %v, want [dm-1]", store.active)
 	}
 }

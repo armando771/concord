@@ -92,6 +92,8 @@ type Service struct {
 	stateStore participantStateStore
 	// De onde RestoreActive lê as chamadas na subida (o banco).
 	restoreStore restoreStore
+	// Grava a entrada de alguém na chamada (trocável nos testes).
+	addParticipant func(ctx context.Context, participant *CallParticipant) error
 }
 
 // participantStateStore guarda o estado de voz/tela de quem está na chamada,
@@ -99,6 +101,9 @@ type Service struct {
 type participantStateStore interface {
 	SaveVoiceState(ctx context.Context, callID string, userID string, muted bool, deafened bool) error
 	SaveScreenSharing(ctx context.Context, callID string, userID string, active bool) error
+	// A DM atendida passa a ativa no banco: senão continua "ringing" e o
+	// próximo reinício a encerra.
+	MarkCallActive(ctx context.Context, callID string) error
 }
 
 // Gravar o estado não pode travar o WebSocket de quem mutou.
@@ -112,6 +117,17 @@ func (s *Service) saveVoiceState(callID, userID string, muted, deafened bool) {
 	defer cancel()
 	if err := s.stateStore.SaveVoiceState(ctx, callID, userID, muted, deafened); err != nil {
 		log.Printf("[call] persist voice state %s failed: %v", userID, err)
+	}
+}
+
+func (s *Service) markCallActive(callID string) {
+	if s.stateStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), saveStateTimeout)
+	defer cancel()
+	if err := s.stateStore.MarkCallActive(ctx, callID); err != nil {
+		log.Printf("[call] persist active %s failed: %v", callID, err)
 	}
 }
 
@@ -153,6 +169,9 @@ func CallService(
 	if repository != nil {
 		s.stateStore = repository
 		s.restoreStore = repository
+		s.addParticipant = repository.AddParticipant
+	} else {
+		s.addParticipant = func(context.Context, *CallParticipant) error { return nil }
 	}
 	s.leaveAfterDisconnect = s.Leave
 	s.lookupUser = s.userInfo
@@ -241,7 +260,7 @@ func (s *Service) StartDM(ctx context.Context, initiatorID string, conversationI
 	if err := s.repository.Create(ctx, call); err != nil {
 		log.Printf("[call] persist call %s failed: %v", call.ID, err)
 	}
-	if err := s.repository.AddParticipant(ctx, &CallParticipant{
+	if err := s.addParticipant(ctx, &CallParticipant{
 		CallID: call.ID,
 		UserID: initiatorID,
 		Role:   RoleMember,
@@ -337,7 +356,7 @@ func (s *Service) Accept(ctx context.Context, callID string, userID string) erro
 		return ErrBusy
 	}
 
-	userInfo, err := s.userInfo(ctx, userID)
+	userInfo, err := s.lookupUser(ctx, userID)
 	if err != nil {
 		s.mu.Unlock()
 		return err
@@ -349,12 +368,17 @@ func (s *Service) Accept(ctx context.Context, callID string, userID string) erro
 		role:     RoleMember,
 		joinedAt: now,
 	}
+	wasRinging := ac.info.Status != StatusActive
 	ac.info.Status = StatusActive
 	s.busy[userID] = callID
 	callIDCopy := ac.info.ID
 	s.mu.Unlock()
 
-	if err := s.repository.AddParticipant(ctx, &CallParticipant{
+	if wasRinging {
+		s.markCallActive(callID)
+	}
+
+	if err := s.addParticipant(ctx, &CallParticipant{
 		CallID: callID,
 		UserID: userID,
 		Role:   RoleMember,
@@ -910,10 +934,13 @@ func (s *Service) joinLocked(ctx context.Context, ac *activeCall, userID string,
 		role:     role,
 		joinedAt: now,
 	}
-	ac.info.Status = StatusActive
+	if ac.info.Status != StatusActive {
+		ac.info.Status = StatusActive
+		s.markCallActive(ac.info.ID)
+	}
 	s.busy[userID] = ac.info.ID
 
-	if err := s.repository.AddParticipant(ctx, &CallParticipant{
+	if err := s.addParticipant(ctx, &CallParticipant{
 		CallID: ac.info.ID,
 		UserID: userID,
 		Role:   role,

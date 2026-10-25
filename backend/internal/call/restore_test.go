@@ -123,3 +123,35 @@ func TestRestoreActiveFailsWhenCallsCannotBeListed(t *testing.T) {
 		t.Fatal("RestoreActive = nil sem conseguir listar as chamadas")
 	}
 }
+
+// DM atendida antes desta correção ficava "ringing" no banco: com os dois
+// participantes dentro, ela estava em andamento e tem que voltar.
+func TestRestoreKeepsAnsweredDMStillMarkedRinging(t *testing.T) {
+	s := CallService(nil, nil, nil, nil, nil, nil, nil)
+	conv := "conversa-1"
+	left := time.Now()
+
+	toEnd := s.restore(
+		[]*Call{
+			{ID: "dm-atendida", Type: TypeDM, Status: StatusRinging, ConversationID: &conv},
+			{ID: "dm-tocando", Type: TypeDM, Status: StatusRinging},
+			{ID: "dm-um-saiu", Type: TypeDM, Status: StatusRinging},
+		},
+		map[string][]CallParticipant{
+			"dm-atendida": {{CallID: "dm-atendida", UserID: "ana"}, {CallID: "dm-atendida", UserID: "bia"}},
+			"dm-tocando":  {{CallID: "dm-tocando", UserID: "caio"}},
+			"dm-um-saiu":  {{CallID: "dm-um-saiu", UserID: "dani"}, {CallID: "dm-um-saiu", UserID: "edu", LeftAt: &left}},
+		},
+	)
+
+	if !s.IsParticipant("dm-atendida", "ana") || !s.IsParticipant("dm-atendida", "bia") {
+		t.Fatal("DM atendida não voltou depois do reinício")
+	}
+	if c, err := s.FindActiveByScope(TypeDM, conv); err != nil || c.Status != StatusActive {
+		t.Fatalf("DM restaurada = %+v, %v; want ativa", c, err)
+	}
+	sort.Strings(toEnd)
+	if len(toEnd) != 2 || toEnd[0] != "dm-tocando" || toEnd[1] != "dm-um-saiu" {
+		t.Fatalf("toEnd = %v, want [dm-tocando dm-um-saiu]", toEnd)
+	}
+}
