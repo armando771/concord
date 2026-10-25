@@ -423,6 +423,22 @@ export function TrashIcon({ className = '' }: IconProps): React.JSX.Element {
   )
 }
 
+/** Enquete (barras de resultado). */
+export function PollIcon({ className = '' }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M5 4h9a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm0 6h14a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1zm0 6h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1z" />
+    </svg>
+  )
+}
+
 export function PencilIcon({ className = '' }: IconProps): React.JSX.Element {
   return (
     <svg

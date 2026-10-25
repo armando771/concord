@@ -4,6 +4,9 @@ import { useChatStore } from '../store/chatStore'
 import type { Message } from '../api/messages'
 import { showToast } from '../store/toastStore'
 import { applyMention, mentionQuery, mentionsUser, splitMentions } from '../lib/mentions'
+import PollCard from './poll/PollCard'
+import CreatePollModal from './poll/CreatePollModal'
+import { PollIcon } from './icons'
 
 export interface Mentionable {
   username: string
@@ -25,10 +28,14 @@ function formatTime(iso: string): string {
 
 function MessageItem({
   message,
-  onDelete
+  onDelete,
+  onVote,
+  onEndPoll
 }: {
   message: Message
   onDelete: () => void
+  onVote: (answerIds: number[]) => Promise<void>
+  onEndPoll: () => Promise<void>
 }): React.JSX.Element {
   const me = useAuthStore((s) => s.user)
   const isMine = message.author_id === me?.id
@@ -57,17 +64,22 @@ function MessageItem({
           <span className="text-sm font-semibold text-white">{name}</span>
           <span className="text-[10px] text-gray-500">{formatTime(message.created_at)}</span>
         </div>
-        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">
-          {splitMentions(message.content).map((part, i) =>
-            part.mention ? (
-              <span key={i} className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]">
-                {part.text}
-              </span>
-            ) : (
-              part.text
-            )
-          )}
-        </p>
+        {message.content && (
+          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">
+            {splitMentions(message.content).map((part, i) =>
+              part.mention ? (
+                <span key={i} className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]">
+                  {part.text}
+                </span>
+              ) : (
+                part.text
+              )
+            )}
+          </p>
+        )}
+        {message.poll && (
+          <PollCard poll={message.poll} isAuthor={isMine} onVote={onVote} onEnd={onEndPoll} />
+        )}
       </div>
       {isMine && hover && (
         <button
@@ -97,6 +109,10 @@ function ChatPane({
   const loadOlder = useChatStore((s) => s.loadOlder)
   const sendToRoom = useChatStore((s) => s.sendToRoom)
   const deleteFromRoom = useChatStore((s) => s.deleteFromRoom)
+  const createPollInRoom = useChatStore((s) => s.createPollInRoom)
+  const votePollInRoom = useChatStore((s) => s.votePollInRoom)
+  const endPollInRoom = useChatStore((s) => s.endPollInRoom)
+  const [pollOpen, setPollOpen] = useState(false)
 
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -225,7 +241,13 @@ function ChatPane({
               </div>
             )}
             {messages.map((m) => (
-              <MessageItem key={m.id} message={m} onDelete={() => handleDelete(m.id)} />
+              <MessageItem
+                key={m.id}
+                message={m}
+                onDelete={() => handleDelete(m.id)}
+                onVote={(answerIds) => votePollInRoom(room, m.id, answerIds)}
+                onEndPoll={() => endPollInRoom(room, m.id)}
+              />
             ))}
             <div ref={bottomRef} />
           </div>
@@ -263,6 +285,15 @@ function ChatPane({
           onSubmit={handleSubmit}
           className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
         >
+          <button
+            type="button"
+            onClick={() => setPollOpen(true)}
+            title="Criar enquete"
+            aria-label="Criar enquete"
+            className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <PollIcon className="h-5 w-5" />
+          </button>
           <input
             ref={inputRef}
             value={draft}
@@ -286,6 +317,11 @@ function ChatPane({
           </button>
         </form>
       </div>
+      <CreatePollModal
+        open={pollOpen}
+        onClose={() => setPollOpen(false)}
+        onCreate={(input) => createPollInRoom(room, input)}
+      />
     </div>
   )
 }

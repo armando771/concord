@@ -10,7 +10,7 @@ import { playSound } from '../lib/sounds'
 import { notificationPrefs } from './notificationPrefsStore'
 import { useAuthStore } from './authStore'
 import { WsClient, type WsEvent } from '../api/ws'
-import type { Message } from '../api/messages'
+import type { CreatePollInput, Message, Poll } from '../api/messages'
 import type { Server } from '../api/servers'
 import {
   listChannelMessages,
@@ -18,8 +18,12 @@ import {
   deleteChannelMessage,
   listConversationMessages,
   sendConversationMessage,
-  deleteConversationMessage
+  deleteConversationMessage,
+  createPoll,
+  votePoll,
+  endPoll
 } from '../api/messages'
+import { applyPollUpdate, messagePreview, type PollUpdate } from '../lib/polls'
 import type { ConversationSummary } from '../api/conversations'
 import { listConversations } from '../api/conversations'
 import type { PresenceMap } from '../api/presence'
@@ -55,6 +59,9 @@ interface ChatState {
   loadOlder: (room: RoomKey) => Promise<void>
   sendToRoom: (room: RoomKey, content: string) => Promise<void>
   deleteFromRoom: (room: RoomKey, messageId: string) => Promise<void>
+  createPollInRoom: (room: RoomKey, input: CreatePollInput) => Promise<void>
+  votePollInRoom: (room: RoomKey, messageId: string, answerIds: number[]) => Promise<void>
+  endPollInRoom: (room: RoomKey, messageId: string) => Promise<void>
   fetchConversations: () => Promise<void>
   fetchPresenceFor: (userIds: string[]) => Promise<void>
   fetchChannelsForServers: (serverIds: string[]) => Promise<void>
@@ -86,6 +93,21 @@ const appendUnique = (messages: Message[], incoming: Message[]): Message[] => {
     }
   }
   return merged
+}
+
+/** Troca a enquete de uma mensagem carregada na sala (sem efeito se não estiver). */
+const replacePoll = (
+  messagesByRoom: Record<RoomKey, Message[]>,
+  room: RoomKey,
+  messageId: string,
+  next: (current: Poll | null | undefined) => Poll
+): Record<RoomKey, Message[]> => {
+  const messages = messagesByRoom[room]
+  if (!messages?.some((m) => m.id === messageId)) return messagesByRoom
+  return {
+    ...messagesByRoom,
+    [room]: messages.map((m) => (m.id === messageId ? { ...m, poll: next(m.poll) } : m))
+  }
 }
 
 const client = new WsClient({
@@ -232,6 +254,28 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }))
   },
 
+  createPollInRoom: async (room, input) => {
+    await createPoll(room, input)
+    if (!client.isConnected()) {
+      await get().openRoom(room)
+    }
+    get().fetchConversations()
+  },
+
+  votePollInRoom: async (room, messageId, answerIds) => {
+    const poll = await votePoll(room, messageId, answerIds)
+    set((state) => ({
+      messagesByRoom: replacePoll(state.messagesByRoom, room, messageId, () => poll)
+    }))
+  },
+
+  endPollInRoom: async (room, messageId) => {
+    const poll = await endPoll(room, messageId)
+    set((state) => ({
+      messagesByRoom: replacePoll(state.messagesByRoom, room, messageId, () => poll)
+    }))
+  },
+
   fetchConversations: async () => {
     const token = useAuthStore.getState().accessToken
     set({ conversationsLoading: true })
@@ -359,7 +403,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                 last_message: {
                   id: msg.id,
                   author_id: msg.author_id,
-                  content: msg.content,
+                  content: messagePreview(msg),
                   created_at: msg.created_at
                 }
               }
@@ -385,7 +429,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                   last_message: {
                     id: msg.id,
                     author_id: msg.author_id,
-                    content: msg.content,
+                    content: messagePreview(msg),
                     created_at: msg.created_at
                   }
                 },
@@ -426,6 +470,24 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           unreadByServer: nextServerUnread
         }
       })
+      return
+    }
+
+    if (event.type === 'message:poll:update') {
+      const update = payload as unknown as PollUpdate & {
+        message_id: string
+        channel_id?: string
+        conversation_id?: string
+      }
+      const room = update.channel_id
+        ? `channel:${update.channel_id}`
+        : `conversation:${update.conversation_id}`
+      const meId = useAuthStore.getState().user?.id ?? null
+      set((state) => ({
+        messagesByRoom: replacePoll(state.messagesByRoom, room, update.message_id, (current) =>
+          applyPollUpdate(current, update, meId)
+        )
+      }))
       return
     }
 

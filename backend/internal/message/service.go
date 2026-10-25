@@ -16,6 +16,7 @@ var (
 type EventPublisher interface {
 	PublishMessageCreate(event CreateEvent)
 	PublishMessageDelete(event DeleteEvent)
+	PublishPollUpdate(event PollUpdateEvent)
 }
 
 type ChannelResolver interface {
@@ -27,10 +28,10 @@ type ConversationResolver interface {
 }
 
 type Service struct {
-	repository       *Repository
-	publisher        EventPublisher
-	channelResolver  ChannelResolver
-	convResolver     ConversationResolver
+	repository      *Repository
+	publisher       EventPublisher
+	channelResolver ChannelResolver
+	convResolver    ConversationResolver
 }
 
 func MessageService(repository *Repository, publisher EventPublisher, channelResolver ChannelResolver, convResolver ConversationResolver) *Service {
@@ -114,17 +115,23 @@ func (s *Service) create(ctx context.Context, channelID string, conversationID s
 	return full, nil
 }
 
-func (s *Service) ListChannelMessages(ctx context.Context, channelID string, limit int, before string) ([]Message, error) {
+func (s *Service) ListChannelMessages(ctx context.Context, channelID string, viewerID string, limit int, before string) ([]Message, error) {
 	messages, err := s.repository.ListByChannel(ctx, channelID, limit, before)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.repository.AttachPolls(ctx, messages, viewerID); err != nil {
 		return nil, err
 	}
 	return messages, nil
 }
 
-func (s *Service) ListConversationMessages(ctx context.Context, conversationID string, limit int, before string) ([]Message, error) {
+func (s *Service) ListConversationMessages(ctx context.Context, conversationID string, viewerID string, limit int, before string) ([]Message, error) {
 	messages, err := s.repository.ListByConversation(ctx, conversationID, limit, before)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.repository.AttachPolls(ctx, messages, viewerID); err != nil {
 		return nil, err
 	}
 	return messages, nil

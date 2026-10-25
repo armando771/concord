@@ -1,5 +1,6 @@
 import type { Message } from '../api/messages'
 import { mentionsUser } from './mentions'
+import { messagePreview } from './polls'
 import type { SoundName } from './sounds'
 
 /** De onde veio o aviso: decide o som e o que as preferências controlam. */
@@ -43,7 +44,7 @@ export function messageNotification(message: Message, meId: string): AppNotifica
   return {
     kind: 'message',
     title: message.author?.display_name || message.author?.username || 'Nova mensagem',
-    body: truncate(message.content),
+    body: truncate(messagePreview(message)),
     route: `/dm/${message.author_id}`
   }
 }
