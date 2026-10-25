@@ -8,6 +8,7 @@ import { IS_WEB } from './config'
 import { requestScreenQuality } from '../store/screenQualityStore'
 import {
   loadScreenQuality,
+  rememberScreenSource,
   rememberStreamQuality,
   screenVideoConstraints
 } from './screenShareQuality'
@@ -44,6 +45,7 @@ export async function getDisplayStream(): Promise<MediaStream> {
       throw pickerError(err)
     })
   const quality = requestedQuality ?? loadScreenQuality()
+  stream.getVideoTracks().forEach(rememberScreenSource)
   try {
     await Promise.all(
       stream

@@ -9,6 +9,12 @@ import {
 } from '../api/calls'
 import { ApiError } from '../api/client'
 import { getAudioStream, getCameraStream, getDisplayStream } from '../lib/rtc'
+import {
+  rememberStreamQuality,
+  saveScreenQuality,
+  streamQuality,
+  type ScreenShareQuality
+} from '../lib/screenShareQuality'
 import type { MicHandle } from '../lib/noiseSuppression'
 import { CallMedia, type RemoteMedia } from '../lib/livekit'
 import { watchLocalSpeaking } from '../lib/localSpeaking'
@@ -189,6 +195,8 @@ interface CallState {
   /** stream de tela local enquanto isScreenSharing (reativo p/ preview) */
   localScreenStream: MediaStream | null
   isScreenSharing: boolean
+  screenShareQuality: ScreenShareQuality | null
+  screenQualityUpdating: boolean
   /** userId -> stream de câmera remota (Fase 4, DM) */
   videoStreams: Record<string, MediaStream>
   /** userId -> nome de quem está na sala de mídia (LiveKit), mesmo fora da lista do backend */
@@ -258,6 +266,7 @@ interface CallState {
   setOutputDevice: (deviceId: string) => void
   startScreenShare: () => Promise<void>
   stopScreenShare: () => void
+  updateScreenQuality: (quality: ScreenShareQuality) => Promise<boolean>
   toggleCamera: () => Promise<void>
   setFocusedScreenUser: (userId: string | null) => void
   /** Começa a baixar e assistir a transmissão de alguém (e foca nela). */
@@ -734,6 +743,8 @@ export const useCallStore = create<CallState>()((set, get) => {
       ...EMPTY_MEDIA,
       localScreenStream: null,
       isScreenSharing: false,
+      screenShareQuality: null,
+      screenQualityUpdating: false,
       localCameraStream: null,
       screenSharers: [],
       speakingIds: [],
@@ -801,6 +812,8 @@ export const useCallStore = create<CallState>()((set, get) => {
     ...EMPTY_MEDIA,
     localScreenStream: null,
     isScreenSharing: false,
+    screenShareQuality: null,
+    screenQualityUpdating: false,
     localCameraStream: null,
     screenSharers: [],
     speakingIds: [],
@@ -1138,6 +1151,7 @@ export const useCallStore = create<CallState>()((set, get) => {
         const callId = get().callId
         set((prev) => ({
           isScreenSharing: true,
+          screenShareQuality: streamQuality(stream),
           localScreenStream: stream,
           screenSharers: meId
             ? Array.from(new Set([...prev.screenSharers, meId]))
@@ -1165,6 +1179,38 @@ export const useCallStore = create<CallState>()((set, get) => {
       }
     },
 
+    updateScreenQuality: async (quality) => {
+      const s = get()
+      const stream = localScreenStream
+      const connection = media
+      if (
+        s.status !== 'active' ||
+        !s.isScreenSharing ||
+        !stream ||
+        !connection ||
+        s.screenQualityUpdating ||
+        screenSharePending ||
+        transitioning
+      )
+        return false
+      set({ screenQualityUpdating: true })
+      const current = (): boolean =>
+        localScreenStream === stream && media === connection && get().callId === s.callId
+      try {
+        await connection.updateScreenQuality(stream, quality)
+        if (!current()) return false
+        rememberStreamQuality(stream, quality)
+        saveScreenQuality(quality)
+        set({ screenShareQuality: { ...quality } })
+        return true
+      } catch {
+        if (current()) showToast.error('Não foi possível alterar a qualidade da transmissão.')
+        return false
+      } finally {
+        if (current()) set({ screenQualityUpdating: false })
+      }
+    },
+
     stopScreenShare: () => {
       const s = get()
       if (!s.isScreenSharing && !localScreenStream) return
@@ -1179,6 +1225,8 @@ export const useCallStore = create<CallState>()((set, get) => {
 
       set((prev) => ({
         isScreenSharing: false,
+        screenShareQuality: null,
+        screenQualityUpdating: false,
         localScreenStream: null,
         screenSharers: prev.screenSharers.filter((id) => id !== meId),
         focusedScreenUserId: prev.focusedScreenUserId === meId ? null : prev.focusedScreenUserId
