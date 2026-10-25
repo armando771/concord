@@ -34,6 +34,8 @@ type Service struct {
 	repository *Repository
 	publisher  EventPublisher
 	roles      RoleDefaults
+	presence   PresenceLookup
+	previews   *previewCache
 }
 
 func ServerService(repository *Repository, publisher EventPublisher, roles RoleDefaults) *Service {
@@ -41,6 +43,7 @@ func ServerService(repository *Repository, publisher EventPublisher, roles RoleD
 		repository: repository,
 		publisher:  publisher,
 		roles:      roles,
+		previews:   newPreviewCache(invitePreviewTTL, invitePreviewMaxKeys),
 	}
 }
 
@@ -290,6 +293,8 @@ func (s *Service) JoinByCode(ctx context.Context, rawCode string, userID string)
 		if err := s.repository.AddingUserServer(ctx, &Server{ID: serverID}, member, userID, "member"); err != nil {
 			return nil, err
 		}
+		// A prévia do convite mostra o número de membros: entrou, conta já.
+		s.previews.forgetServer(serverID)
 		fullMember, err := s.repository.FindMemberByUserID(ctx, serverID, userID)
 		if err == nil && s.publisher != nil {
 			s.publisher.PublishMemberJoin(MemberJoinEvent{ServerID: serverID, Member: *fullMember})

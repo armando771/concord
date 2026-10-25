@@ -21,7 +21,8 @@ func nicknameRequest(t *testing.T, actor, target, body string) (*httptest.Respon
 		}
 		c.Next()
 	}
-	ServerRoutes(router.Group("/api"), &Handler{nicknames: n}, auth, func(c *gin.Context) { c.Next() })
+	next := func(c *gin.Context) { c.Next() }
+	ServerRoutes(router.Group("/api"), &Handler{nicknames: n}, auth, next, next)
 	req := httptest.NewRequest(http.MethodPut, "/api/servers/s1/members/"+target+"/nickname", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()

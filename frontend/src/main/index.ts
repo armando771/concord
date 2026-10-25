@@ -17,6 +17,7 @@ import { PendingDisplayRequest } from './displayPicker'
 import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './background'
 import { setupUpdater } from './updater'
 import { setupOverlay } from './overlay'
+import { handleInviteArgs, setupInviteProtocol } from './inviteProtocol'
 import { closeActivity, setupActivities } from './activityWindow'
 import { APP_USER_MODEL_ID } from './toastPolicy'
 import { setupToasts } from './toasts'
@@ -226,7 +227,18 @@ function createWindow(): void {
 // O app se chamava Concord: a pasta de dados continua a mesma para ninguém
 // perder o login nem as configurações (antes do lock, que mora nela).
 app.setPath('userData', join(app.getPath('appData'), 'Concord'))
-if (!ensureSingleInstance(() => mainWindow)) app.exit(0)
+if (
+  !ensureSingleInstance(
+    () => mainWindow,
+    (argv) => handleInviteArgs(argv, () => mainWindow)
+  )
+) {
+  app.exit(0)
+} else {
+  // Link salinha://convite/<código>: registra o protocolo e guarda o convite
+  // que abriu o app (o renderer busca quando carregar).
+  setupInviteProtocol(() => mainWindow)
+}
 
 app.whenReady().then(() => {
   // Set app user model id for windows. Mantém o id do Concord (nome antigo):

@@ -65,33 +65,6 @@ func TestLoginKeyIsFixedSizeHash(t *testing.T) {
 	}
 }
 
-func TestIPKeyGroupsIPv6By64(t *testing.T) {
-	cases := []struct{ a, b string }{
-		{"2001:db8:1:2:aaaa::1", "2001:db8:1:2:bbbb:cccc:dddd:9"},
-		{"2001:db8:1:2::1", "2001:0db8:0001:0002:0000:0000:0000:0002"},
-	}
-	for _, c := range cases {
-		if ipKey(c.a) != ipKey(c.b) {
-			t.Errorf("ipKey(%q) = %q e ipKey(%q) = %q, want o mesmo /64", c.a, ipKey(c.a), c.b, ipKey(c.b))
-		}
-	}
-	if ipKey("2001:db8:1:2::1") == ipKey("2001:db8:1:3::1") {
-		t.Error("/64 diferentes não podem dividir chave")
-	}
-	if got := ipKey("203.0.113.7"); got != "203.0.113.7" {
-		t.Errorf("IPv4 = %q, want o endereço inteiro", got)
-	}
-	if ipKey("203.0.113.7") == ipKey("203.0.113.8") {
-		t.Error("IPv4 vizinhos não podem dividir chave")
-	}
-	if got := ipKey("::ffff:203.0.113.7"); got != "203.0.113.7" {
-		t.Errorf("IPv4 mapeado = %q, want 203.0.113.7", got)
-	}
-	if got := ipKey("não-é-ip"); got != "não-é-ip" {
-		t.Errorf("texto qualquer = %q, want igual", got)
-	}
-}
-
 func TestLoginGuardSuccessResetsIdentifier(t *testing.T) {
 	g := newLoginGuard()
 	id, _ := ParseLoginIdentifier("nicccls", "")

@@ -10,6 +10,7 @@ import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import VerifyEmail from './pages/VerifyEmail'
+import InviteLanding from './pages/InviteLanding'
 import RequireAuth from './components/RequireAuth'
 import RedirectIfAuthed from './components/RedirectIfAuthed'
 import AppShell from './components/AppShell'
@@ -70,6 +71,12 @@ export const router = createRouter([
   // Links dos e-mails: valem com ou sem sessão neste navegador.
   { path: '/reset-password', element: <ResetPassword /> },
   { path: '/verify-email', element: <VerifyEmail /> },
+  {
+    // Link de convite: abre sem login (o cartão mostra o servidor antes).
+    path: '/convite/:code',
+    element: <InviteLanding />,
+    errorElement: <RouteErrorScreen />
+  },
   {
     path: '*',
     element: <Navigate to="/" replace />

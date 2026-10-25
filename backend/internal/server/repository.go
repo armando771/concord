@@ -605,10 +605,40 @@ func (r *Repository) SetInviteCodeIfMissing(ctx context.Context, serverID string
 	return err
 }
 
+// SetInviteCode troca o código do servidor ("Gerar novo link").
+func (r *Repository) SetInviteCode(ctx context.Context, serverID string, code string) error {
+	_, err := r.db.Exec(ctx, `UPDATE servers SET invite_code = $2 WHERE id = $1`, serverID, code)
+	return err
+}
+
 func (r *Repository) FindIDByInviteCode(ctx context.Context, code string) (string, error) {
 	var id string
 	err := r.db.QueryRow(ctx, `SELECT id FROM servers WHERE invite_code = $1`, code).Scan(&id)
 	return id, err
+}
+
+// InvitePreview: servidor do código e os ids dos membros (para contar e ver
+// quem está online). Sem servidor com esse código, pgx.ErrNoRows.
+func (r *Repository) InvitePreview(ctx context.Context, code string) (*InvitePreview, []string, error) {
+	p := &InvitePreview{}
+	var iconURL *string
+	var memberIDs []string
+	err := r.db.QueryRow(
+		ctx,
+		`SELECT
+			s.id,
+			s.name,
+			NULLIF(s.icon_url, ''),
+			COALESCE((SELECT array_agg(sm.user_id::text) FROM server_members sm WHERE sm.server_id = s.id), '{}')
+		FROM servers s
+		WHERE s.invite_code = $1`,
+		code,
+	).Scan(&p.ServerID, &p.Name, &iconURL, &memberIDs)
+	if err != nil {
+		return nil, nil, err
+	}
+	p.IconURL = iconURL
+	return p, memberIDs, nil
 }
 
 // SharesServer: os dois estão em pelo menos um servidor em comum.

@@ -34,6 +34,8 @@ interface ProfileCardBodyProps {
   avatarFallbackClassName?: string
   /** Canto direito, na altura do avatar (selo de nível). */
   badge?: ReactNode
+  /** Fileira de badges ao lado do username. */
+  badges?: ReactNode
   /** Só no próprio perfil: avatar e nota vazia levam ao editor. */
   onEditProfile?: () => void
   /** Prévia do editor: o avatar não usa o profileStore (mostra o rascunho). */
@@ -52,6 +54,7 @@ function ProfileCardBody({
   fallbackBanner,
   avatarFallbackClassName,
   badge,
+  badges,
   onEditProfile,
   preview = false,
   children
@@ -152,12 +155,15 @@ function ProfileCardBody({
               {profile.display_name}
             </p>
           )}
-          {(profile.username || profile.pronouns) && (
-            <p className="truncate text-sm text-gray-300">
-              {profile.username && <span>{profile.username}</span>}
-              {profile.username && profile.pronouns && <span className="text-gray-500"> • </span>}
-              {profile.pronouns && <span className="text-gray-400">{profile.pronouns}</span>}
-            </p>
+          {(profile.username || profile.pronouns || badges) && (
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="min-w-0 truncate text-sm text-gray-300">
+                {profile.username && <span>{profile.username}</span>}
+                {profile.username && profile.pronouns && <span className="text-gray-500"> • </span>}
+                {profile.pronouns && <span className="text-gray-400">{profile.pronouns}</span>}
+              </p>
+              {badges}
+            </div>
           )}
         </div>
 

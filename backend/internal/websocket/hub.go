@@ -419,6 +419,19 @@ func (h *Hub) IsOnline(userID string) bool {
 	return h.presence[userID] > 0
 }
 
+// OnlineUserIDs lista quem tem pelo menos uma conexão aberta (badges).
+func (h *Hub) OnlineUserIDs() []string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	ids := make([]string, 0, len(h.presence))
+	for id, n := range h.presence {
+		if n > 0 {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 // PresenceMap devolve o status efetivo de cada id ("offline" se desconectado
 // ou invisível).
 func (h *Hub) PresenceMap(userIDs []string) map[string]string {
@@ -603,6 +616,24 @@ func (h *Hub) PublishPermissionsChanged(serverID string) {
 	if hook != nil {
 		go hook(serverID)
 	}
+}
+
+// O server.Service avisa do link novo por aqui (type assertion no publisher).
+var _ server.InviteCodePublisher = (*Hub)(nil)
+
+// PublishInviteCode: o link de convite do servidor mudou ("Gerar novo link").
+// Só quem pode convidar (CREATE_INVITE) recebe o código novo.
+func (h *Hub) PublishInviteCode(serverID, code string) {
+	snap := h.snapshot(serverID)
+	if snap == nil {
+		return
+	}
+	h.BroadcastToRoomFiltered("server:"+serverID, writeEvent("server:invite_code", map[string]string{
+		"server_id": serverID,
+		"code":      code,
+	}), func(userID string) bool {
+		return permission.Has(snap.Server(userID), permission.CreateInvite)
+	})
 }
 
 // SendToUser delivers an event directly to every connection of a user

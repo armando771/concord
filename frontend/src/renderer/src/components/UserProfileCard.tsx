@@ -8,6 +8,7 @@ import { useUserMenuStore } from '../store/userMenuStore'
 import { getRelationship, type Relationship } from '../api/friends'
 import { friendRequestError } from '../lib/relationship'
 import { useLevelStore } from '../store/levelStore'
+import { useBadgeStore } from '../store/badgeStore'
 import { useProfileCardStore } from '../store/profileCardStore'
 import { useProfileStore } from '../store/profileStore'
 import { useServerStore } from '../store/serverStore'
@@ -24,6 +25,7 @@ import { memberColor } from '../lib/memberGroups'
 import { roleColorCss, rolesOfMember } from '../lib/permissions'
 import { CHOSEN_STATUSES, STATUS_META, type PresenceStatus } from '../lib/presenceStatus'
 import LevelBadge from './level/LevelBadge'
+import BadgeRow from './badges/BadgeRow'
 import ProfileCardBody, { CARD_BG, type CardProfile } from './profile/ProfileCardBody'
 import StatusIcon from './StatusIcon'
 import { DotsIcon, PencilIcon, VolumeIcon } from './icons'
@@ -155,6 +157,8 @@ function UserProfileCard(): React.JSX.Element | null {
   const openSettings = useSettingsStore((s) => s.openSettings)
   const access = useServerAccess()
   const askNickname = useModerationStore((s) => s.askNickname)
+  // Os badges chegam depois e podem mudar a altura do cartão.
+  const badgesLoaded = useBadgeStore((s) => (target ? Boolean(s.byUser[target.userId]) : false))
   const ref = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
   const [sending, setSending] = useState(false)
@@ -199,7 +203,7 @@ function UserProfileCard(): React.JSX.Element | null {
         { width: window.innerWidth, height: window.innerHeight }
       )
     )
-  }, [target, profile, me, mutual])
+  }, [target, profile, me, mutual, badgesLoaded])
 
   useEffect(() => {
     if (!target) return
@@ -368,6 +372,14 @@ function UserProfileCard(): React.JSX.Element | null {
         fallbackBanner={fallbackBanner}
         avatarFallbackClassName={role.avatar}
         badge={<LevelBadge userId={target.userId} size="md" />}
+        badges={
+          <BadgeRow
+            userId={target.userId}
+            name={card.display_name}
+            avatarUrl={card.avatar_url}
+            onOpen={close}
+          />
+        }
         onEditProfile={isMe ? editProfile : undefined}
       >
         {hasInfo && (

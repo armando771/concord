@@ -11,6 +11,7 @@ vi.mock('./authStore', () => ({
 
 const { useServerStore } = await import('./serverStore')
 const { handleServerRoleEvent, removedMessage } = await import('./serverEvents')
+const { useInviteCodeStore } = await import('./inviteCodeStore')
 
 const role = (id: string, position: number, extra: Partial<Role> = {}): Role => ({
   id,
@@ -103,6 +104,15 @@ describe('eventos de permissão e remoção', () => {
   it('server:permissions:invalidate avisa quem decide a tela', () => {
     send('server:permissions:invalidate', { server_id: 's1' })
     expect(deps.onPermissionsChanged).toHaveBeenCalledWith('s1')
+  })
+
+  it('server:invite_code (link novo gerado) troca o código guardado', () => {
+    useInviteCodeStore.getState().set('s1', 'AAAA2222')
+    expect(send('server:invite_code', { server_id: 's1', code: 'BBBB3333' })).toBe(true)
+    expect(useInviteCodeStore.getState().codes.s1).toBe('BBBB3333')
+    // Sem código válido não mexe em nada.
+    send('server:invite_code', { server_id: 's1', code: '../x' })
+    expect(useInviteCodeStore.getState().codes.s1).toBe('BBBB3333')
   })
 
   it('server:removed passa o motivo', () => {

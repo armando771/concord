@@ -147,7 +147,7 @@ func (h *Handler) Register(c *gin.Context) {
 
 	// Só agora conta no limite por IP: erro de validação não custa nada.
 	// Nome/e-mail já usado (409) conta; erro interno devolve a vaga.
-	ipSlot := ipKey(c.ClientIP())
+	ipSlot := ratelimit.IPKey(c.ClientIP())
 	if retry, ok := h.registerByIP.Reserve(ipSlot); !ok {
 		c.Header("Retry-After", ratelimit.RetryAfterSeconds(retry))
 		c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many registrations"})
