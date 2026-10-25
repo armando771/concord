@@ -14,10 +14,10 @@ ouvindo — `call.eligibleVoiceUsers`).
 | Elegíveis | Multiplicador |
 |-----------|---------------|
 | 0–3       | x1.0 (sem buff) |
-| 4         | x1.25 |
-| 5         | x1.5  |
-| 6         | x1.75 |
-| 7+        | x2.0 (teto) |
+| 4–5       | x1.25 |
+| 6–7       | x1.5  |
+| 8–9       | x1.75 |
+| 10+       | x2.0 (teto) |
 
 Implementação em inteiros: `boostPercent(eligible int) int` devolve 100, 125,
 150, 175 ou 200. O XP creditado é `minutes * XPPerMinute * percent / 100`.
@@ -48,7 +48,7 @@ O multiplicador vale no instante em que o minuto fecha (sem média retroativa).
   animado enquanto o buff está ativo; apagado quando "XP pausado (mutado)".
 - `VoiceChannelView`: mesmo badge no cabeçalho.
 - Ao ativar ou subir de degrau: pulso único no badge e toast curto
-  ("Buff de XP x1.5 ativado — 5 pessoas na call").
+  ("Buff de XP x1.5 ativado — 6 pessoas na call").
 - `prefers-reduced-motion` desliga shimmer e pulso.
 
 ## Testes
