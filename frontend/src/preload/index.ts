@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
 
 interface ScreenSourceInfo {
   id: string
@@ -113,6 +114,24 @@ const api = {
       const listener = (_e: unknown, route: string): void => cb(route)
       ipcRenderer.on('navigate', listener)
       return () => ipcRenderer.removeListener('navigate', listener)
+    }
+  },
+  overlay: {
+    /** Overlay de jogo existe nesta plataforma (só Windows). */
+    supported: process.platform === 'win32',
+    /** Renderer principal → main: estado atual da call para o overlay. */
+    setState(snapshot: OverlaySnapshot): void {
+      ipcRenderer.send('overlay:state', snapshot)
+    },
+    /** Página do overlay: último estado conhecido ao abrir. */
+    current(): Promise<OverlaySnapshot | null> {
+      return ipcRenderer.invoke('overlay:current')
+    },
+    /** Página do overlay: novos estados. */
+    onUpdate(cb: (snapshot: OverlaySnapshot) => void): () => void {
+      const listener = (_e: unknown, snapshot: OverlaySnapshot): void => cb(snapshot)
+      ipcRenderer.on('overlay:update', listener)
+      return () => ipcRenderer.removeListener('overlay:update', listener)
     }
   }
 }

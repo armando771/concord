@@ -6,6 +6,7 @@ import { displayAudioMode } from './displayMedia'
 import { PendingDisplayRequest } from './displayPicker'
 import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './background'
 import { setupUpdater } from './updater'
+import { setupOverlay } from './overlay'
 import {
   audioLogPath,
   hwndFromSourceId,
@@ -151,6 +152,7 @@ app.whenReady().then(() => {
   registerScreenShareHandlers()
   registerScreenAudio()
   setupBackground(() => mainWindow, icon)
+  setupOverlay(() => mainWindow)
   setupUpdater(() => mainWindow, {
     feedUrl: __CONCORD_UPDATE_URL__,
     publicKeyPem: __CONCORD_UPDATE_PUBKEY__

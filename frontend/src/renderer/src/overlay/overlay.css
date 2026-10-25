@@ -1,0 +1,13 @@
+@import 'tailwindcss';
+
+/* Janela transparente por cima do jogo: só as pílulas aparecem. */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  font-family: 'gg sans', 'Noto Sans', 'Helvetica Neue', 'Segoe UI', 'Inter', sans-serif;
+}

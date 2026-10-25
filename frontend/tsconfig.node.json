@@ -4,7 +4,8 @@
     "electron.vite.config.*",
     "src/main/**/*",
     "src/preload/**/*",
-    "src/renderer/src/lib/serverUrl.ts"
+    "src/renderer/src/lib/serverUrl.ts",
+    "src/renderer/src/lib/overlayState.ts"
   ],
   "compilerOptions": {
     "composite": true,
