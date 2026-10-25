@@ -12,6 +12,7 @@ import (
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/database"
 	"gin-quickstart/backend/internal/friendship"
+	"gin-quickstart/backend/internal/level"
 	"gin-quickstart/backend/internal/livekit"
 	"gin-quickstart/backend/internal/message"
 	"gin-quickstart/backend/internal/server"
@@ -134,6 +135,12 @@ func main() {
 	// Reinício do servidor não derruba quem está em chamada.
 	callService.RestoreActive(context.Background())
 
+	// Level (XP por tempo em call, sem mute)
+	levelRepository := level.LevelRepository(db)
+	levelService := level.LevelService(levelRepository, hub, callService)
+	levelHandler := level.LevelHandler(levelService)
+	go levelService.Run(context.Background())
+
 	// WebSocket handler
 	wsHandler := websocket.WsHandler(hub, authService, channelService, serverService, conversationService, callService)
 	hub.SetDisconnectHandler(callService.HandleDisconnect)
@@ -156,6 +163,7 @@ func main() {
 	conversation.ConversationRoutes(api, conversationHandler, authMiddleware)
 	message.MessageRoutes(api, messageHandler, authMiddleware)
 	call.CallRoutes(api, callHandler, authMiddleware)
+	level.LevelRoutes(api, levelHandler, authMiddleware)
 
 	// Presence (protected)
 	presence := api.Group("/presence")

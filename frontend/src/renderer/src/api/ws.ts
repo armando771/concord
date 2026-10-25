@@ -4,6 +4,8 @@ export type WsEventType =
   | 'message:create'
   | 'message:delete'
   | 'message:poll:update'
+  | 'level:update'
+  | 'level:up'
   | 'presence:update'
   | 'channel:create'
   | 'channel:update'
