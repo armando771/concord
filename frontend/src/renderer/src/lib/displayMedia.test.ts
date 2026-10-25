@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { displayMediaOptions, retryWithoutAudio } from './displayMedia'
 
 describe('displayMediaOptions', () => {
+  it('permite solicitar captura a 60 FPS sem mudar o áudio', () => {
+    expect(displayMediaOptions(false, { frameRate: 60 }).video).toEqual({ frameRate: 60 })
+  })
   it('desktop: o mesmo pedido de sempre (o picker é o modal do app)', () => {
     expect(displayMediaOptions(false)).toEqual({
       video: { frameRate: 30 },
