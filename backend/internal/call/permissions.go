@@ -190,6 +190,9 @@ func (s *Service) setServerVoice(ctx context.Context, callID, actorID, targetID 
 	serverMuted, serverDeafened := p.serverMuted, p.serverDeafened
 	s.mu.Unlock()
 
+	// Fica no banco como o mudo normal: o reinício (deploy) recarrega.
+	s.saveServerVoiceState(callID, targetID, serverMuted, serverDeafened)
+
 	if s.media != nil {
 		grant := grantFor(snap.Channel(channelID, targetID), serverMuted, serverDeafened)
 		if err := s.media.UpdatePermissions(ctx, callID, targetID, grant); err != nil {

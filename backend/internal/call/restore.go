@@ -93,6 +93,9 @@ func (s *Service) restore(calls []*Call, participants map[string][]CallParticipa
 				joinedAt: p.JoinedAt,
 				muted:    p.Muted,
 				deafened: p.Deafened,
+				// Imposto por moderador: um deploy não libera ninguém.
+				serverMuted:    p.ServerMuted,
+				serverDeafened: p.ServerDeafened,
 			}
 		}
 		if len(ac.participants) == 0 {
