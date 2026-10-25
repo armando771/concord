@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { gameAccent } from '../../../shared/gameCatalog'
 import { activityElapsed, type PresenceActivity } from '../lib/presenceActivity'
 import Avatar from './Avatar'
-import { GamepadIcon } from './icons'
+import GameIcon from './GameIcon'
 
 /** "há 5 min": o tempo é lido uma vez por montagem (o cartão reabre a cada visita). */
 export function Elapsed({ startedAt }: { startedAt: number }): React.JSX.Element {
@@ -46,7 +46,7 @@ export function ActivityCard({
         className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md"
         style={{ background: `${accent}33`, color: accent }}
       >
-        <GamepadIcon className="h-6 w-6" />
+        <GameIcon name={activity.name} className="h-6 w-6" />
       </span>
     </button>
   )
