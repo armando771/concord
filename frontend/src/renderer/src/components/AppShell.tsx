@@ -5,6 +5,7 @@ import FriendsSidebar from './FriendsSidebar'
 import ServerSidebar from './ServerSidebar'
 import IncomingCallModal from './call/IncomingCallModal'
 import CallOverlay from './call/CallOverlay'
+import BirthdayModal from './BirthdayModal'
 import ScreenMiniPlayer from './call/ScreenMiniPlayer'
 import ScreenSharePickerModal from './call/ScreenSharePickerModal'
 import LevelUpBanner from './level/LevelUpBanner'
@@ -34,6 +35,7 @@ function AppShell(): React.JSX.Element {
       </main>
       <IncomingCallModal />
       <CallOverlay />
+      <BirthdayModal />
       <ScreenMiniPlayer />
       <ScreenSharePickerModal />
       <LevelUpBanner />

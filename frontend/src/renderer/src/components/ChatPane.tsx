@@ -3,6 +3,7 @@ import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import type { Message } from '../api/messages'
 import { showToast } from '../store/toastStore'
+import SystemMessage from './SystemMessage'
 import { applyMention, mentionQuery, mentionsUser, splitMentions } from '../lib/mentions'
 import { filterEmoteCategories, QUICK_EMOTES } from '../lib/emotes'
 import { messagePreview } from '../lib/polls'
@@ -148,6 +149,8 @@ function MessageItem({
   const hasReplyReference = Boolean(message.reply_to_id || message.reply_to)
   const replyAuthorName =
     message.reply_to?.author?.display_name ?? message.reply_to?.author?.username ?? 'Usuário'
+
+  if (message.system_kind) return <SystemMessage message={message} />
 
   return (
     <div
