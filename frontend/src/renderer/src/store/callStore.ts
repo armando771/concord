@@ -1079,6 +1079,35 @@ export const useCallStore = create<CallState>()((set, get) => {
           return
         }
 
+        case 'call:moved': {
+          // Um moderador moveu alguém de canal de voz: as listas mudam.
+          bumpList()
+          const p = payload as unknown as {
+            from_call_id: string
+            channel_id: string
+            channel_name: string
+            user: CallUserInfo
+            moved_by: CallUserInfo
+          }
+          if (p.user.id !== meId || get().callId !== p.from_call_id) return
+          // Fui eu: o servidor já me colocou no canal novo; troca a mídia de
+          // sala mantendo o mute/ensurdecer de antes.
+          const { muted, deafened } = get()
+          cleanup()
+          void get()
+            .startChannelCall(p.channel_id)
+            .then(() => {
+              if (get().channelId !== p.channel_id) return
+              set({ muted: muted || deafened, deafened })
+              applyMute(muted || deafened)
+              sendVoiceState()
+              showToast.info(
+                `${p.moved_by.display_name || 'Um moderador'} moveu você para ${p.channel_name || 'outro canal'}.`
+              )
+            })
+          return
+        }
+
         case 'call:error': {
           const message = (payload.message as string) ?? 'Erro na chamada.'
           showToast.error(message)

@@ -31,6 +31,7 @@ fn target(mode: &Mode) -> Result<(u32, bool), String> {
         }
         Mode::Include(pid) => Ok((pid, true)),
         Mode::Exclude(pid) => Ok((pid, false)),
+        Mode::Foreground => Err("foreground não captura áudio".to_string()),
     }
 }
 

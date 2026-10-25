@@ -67,3 +67,11 @@ export function listActiveServerCalls(serverId: string): Promise<CallStateRespon
 export function getCallToken(callId: string): Promise<{ token: string }> {
   return request<{ token: string }>(`/calls/${callId}/token`, { method: 'POST' })
 }
+
+/** Moderadores: tira alguém do canal de voz em que está e o põe em outro. */
+export function moveToVoiceChannel(userId: string, channelId: string): Promise<CallInfo> {
+  return request<CallInfo>('/calls/move', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId, channel_id: channelId })
+  })
+}

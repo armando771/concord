@@ -10,12 +10,14 @@ import { buildScreenEntries, type ScreenEntry } from '../../lib/screenWatch'
 import { ChevronDownIcon, XIcon } from '../icons'
 import Button from '../Button'
 import ParticipantTile from './ParticipantTile'
+import StreamMosaic from './StreamMosaic'
 
 /**
- * Palco da chamada estilo Discord: sem tela = grid de avatares; com telas,
- * cada tile de tela pode ser expandido (foco grande + demais em mini-grid).
- * Tela dos outros começa pausada (card "Assistir transmissão") e só é
- * baixada depois do clique. Compartilhado entre VoiceChannelView e DmCallView.
+ * Palco da chamada estilo Discord: sem vídeo = grid de avatares; com telas
+ * ou câmeras, mosaico redimensionável e reorganizável e, ao clicar numa
+ * tela, foco grande + demais em mini-grid. Tela dos outros começa pausada
+ * (card "Assistir transmissão") e só é baixada depois do clique.
+ * Compartilhado entre VoiceChannelView e DmCallView.
  */
 function CallStage({
   gap = 'gap-6',
@@ -85,10 +87,15 @@ function CallStage({
     watchedScreenIds,
     screenStreams
   })
-  const hasScreens = screens.length > 0
+  const cameras: Array<{ userId: string; stream: MediaStream }> = [
+    ...(localCameraStream ? [{ userId: meId, stream: localCameraStream }] : []),
+    ...participants
+      .filter((p) => videoStreams[p.id])
+      .map((p) => ({ userId: p.id, stream: videoStreams[p.id] as MediaStream }))
+  ]
 
   /** Tile de uma tela: a minha, uma assistida (clicável + fechar) ou o card parado. */
-  const screenTile = (entry: ScreenEntry, size?: 'md'): React.JSX.Element => {
+  const screenTile = (entry: ScreenEntry, size: 'md' | 'fill'): React.JSX.Element => {
     const common = {
       user: nameOf(entry.userId),
       isScreen: true,
@@ -125,8 +132,8 @@ function CallStage({
     )
   }
 
-  // Sem ninguém compartilhando: grid de avatares/vídeos de câmera (eu + participantes).
-  if (!hasScreens) {
+  // Voz pura: ninguém com tela nem câmera — grid de avatares.
+  if (screens.length === 0 && cameras.length === 0) {
     return (
       <div className={`flex flex-wrap items-center justify-center ${gap}`}>
         <ParticipantTile
@@ -134,8 +141,6 @@ function CallStage({
           selfMuted={muted}
           deafened={deafened}
           speaking={meSpeaking}
-          videoStream={localCameraStream}
-          mirror
         />
         {participants.map((p) => (
           <ParticipantTile
@@ -146,7 +151,6 @@ function CallStage({
             locallyMuted={localAudio[p.id]?.muted ?? false}
             deafened={voiceStates[p.id]?.deafened}
             speaking={speaking?.has(p.id) ?? false}
-            videoStream={videoStreams[p.id] ?? null}
           />
         ))}
       </div>
@@ -155,30 +159,95 @@ function CallStage({
 
   const focused = screens.find((entry) => entry.userId === focusedId && entry.watching) ?? null
 
-  // Sem foco selecionado: todos os tiles lado a lado (telas clicáveis).
+  // Sem foco selecionado: mosaico com as telas e as câmeras (cada uma é um
+  // bloco: "screen:<id>" / "camera:<id>") + quem não tem vídeo embaixo.
   if (!focused) {
-    return (
-      <div className={`flex flex-wrap items-center justify-center ${gap}`}>
-        {screens.map((entry) => screenTile(entry))}
+    const tiles = new Map<
+      string,
+      | { kind: 'screen'; entry: ScreenEntry }
+      | { kind: 'camera'; entry: { userId: string; stream: MediaStream } }
+    >([
+      ...screens.map(
+        (entry) => [`screen:${entry.userId}`, { kind: 'screen' as const, entry }] as const
+      ),
+      ...cameras.map(
+        (entry) => [`camera:${entry.userId}`, { kind: 'camera' as const, entry }] as const
+      )
+    ])
+    // Quem transmite (assistido ou não) e quem tem câmera aparece no mosaico.
+    const inMosaic = new Set([...screens, ...cameras].map((entry) => entry.userId))
+    const renderTile = (key: string): React.JSX.Element | null => {
+      const tile = tiles.get(key)
+      if (!tile) return null
+      if (tile.kind === 'screen') return screenTile(tile.entry, 'fill')
+      const { userId, stream } = tile.entry
+      if (userId === meId) {
+        return (
+          <ParticipantTile
+            user={meInfo}
+            selfMuted={muted}
+            deafened={deafened}
+            speaking={meSpeaking}
+            videoStream={stream}
+            size="fill"
+            mirror
+          />
+        )
+      }
+      const p = nameOf(userId)
+      return (
         <ParticipantTile
-          user={meInfo}
-          selfMuted={muted}
-          deafened={deafened}
-          speaking={meSpeaking}
+          user={p}
+          selfMuted={voiceStates[userId]?.muted}
+          onContextMenu={userMenuHandler(userId, p.display_name, meId, p.username)}
+          locallyMuted={localAudio[userId]?.muted ?? false}
+          deafened={voiceStates[userId]?.deafened}
+          speaking={speaking?.has(userId) ?? false}
+          videoStream={stream}
+          size="fill"
         />
-        {participants
-          .filter((p) => !availableScreens.includes(p.id))
-          .map((p) => (
-            <ParticipantTile
-              key={p.id}
-              user={p}
-              selfMuted={voiceStates[p.id]?.muted}
-              onContextMenu={userMenuHandler(p.id, p.display_name, meId, p.username)}
-              locallyMuted={localAudio[p.id]?.muted ?? false}
-              deafened={voiceStates[p.id]?.deafened}
-              speaking={speaking?.has(p.id) ?? false}
-            />
-          ))}
+      )
+    }
+
+    return (
+      <div className="flex h-full w-full flex-col gap-4">
+        <StreamMosaic
+          ids={[...tiles.keys()]}
+          nameOf={(key) => {
+            const tile = tiles.get(key)
+            if (!tile) return ''
+            const name = nameOf(tile.entry.userId).display_name
+            return tile.kind === 'screen' ? `${name} (tela)` : `${name} (câmera)`
+          }}
+          renderTile={renderTile}
+        />
+        {(!inMosaic.has(meId) || participants.some((p) => !inMosaic.has(p.id))) && (
+          <div className="flex shrink-0 flex-wrap items-center justify-center gap-3">
+            {!inMosaic.has(meId) && (
+              <ParticipantTile
+                user={meInfo}
+                selfMuted={muted}
+                deafened={deafened}
+                speaking={meSpeaking}
+                size="md"
+              />
+            )}
+            {participants
+              .filter((p) => !inMosaic.has(p.id))
+              .map((p) => (
+                <ParticipantTile
+                  key={p.id}
+                  user={p}
+                  selfMuted={voiceStates[p.id]?.muted}
+                  onContextMenu={userMenuHandler(p.id, p.display_name, meId, p.username)}
+                  locallyMuted={localAudio[p.id]?.muted ?? false}
+                  deafened={voiceStates[p.id]?.deafened}
+                  size="md"
+                  speaking={speaking?.has(p.id) ?? false}
+                />
+              ))}
+          </div>
+        )}
       </div>
     )
   }

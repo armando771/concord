@@ -87,7 +87,7 @@ function ParticipantTile({
   locallyMuted?: boolean
   /** Botão abaixo do avatar quando não há vídeo (ex.: "Assistir transmissão"). */
   action?: React.ReactNode
-  /** Mostra o X de fechar a transmissão no canto superior esquerdo. */
+  /** Mostra o X de fechar a transmissão no canto superior direito (o esquerdo é do "Mover" do mosaico). */
   onClose?: () => void
 }): React.JSX.Element {
   const initial = user.display_name.charAt(0).toUpperCase()
@@ -144,14 +144,18 @@ function ParticipantTile({
           }}
           aria-label="Fechar transmissão"
           title="Fechar transmissão"
-          className="absolute left-2 top-2 z-10 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
+          className="absolute right-2 top-2 z-10 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
         >
           <XIcon className="h-3.5 w-3.5" />
         </button>
       )}
       {!isScreen && <LevelUpBurst userId={user.id} size={size === 'md' ? 'md' : 'lg'} />}
       {isScreen && (
-        <div className="absolute right-2 top-2 flex items-center gap-1.5 rounded-md bg-[#f23f43] px-1.5 py-0.5">
+        <div
+          className={`absolute top-2 flex items-center gap-1.5 rounded-md bg-[#f23f43] px-1.5 py-0.5 ${
+            onClose ? 'right-11' : 'right-2'
+          }`}
+        >
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
           <span className="text-[10px] font-bold uppercase tracking-wide text-white">Ao vivo</span>
         </div>

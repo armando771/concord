@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { NotificationPrefs } from '../lib/notifications'
 import { useNotificationPrefsStore } from '../store/notificationPrefsStore'
+import { useOverlayPrefsStore } from '../store/overlayPrefsStore'
 
 function Toggle({
   title,
@@ -54,6 +55,8 @@ function AppSettings(): React.JSX.Element | null {
   // undefined = ainda carregando; null = não suportado nesta plataforma
   const [autostart, setAutostart] = useState<boolean | null | undefined>(undefined)
   const prefs = useNotificationPrefsStore()
+  const overlayEnabled = useOverlayPrefsStore((s) => s.enabled)
+  const setOverlayEnabled = useOverlayPrefsStore((s) => s.setEnabled)
 
   useEffect(() => {
     void background?.getAutostart().then(setAutostart)
@@ -76,6 +79,16 @@ function AppSettings(): React.JSX.Element | null {
             description="Abre escondido na bandeja, pronto para receber chamadas."
             checked={autostart}
             onChange={toggleAutostart}
+          />
+        </div>
+      )}
+      {window.api?.overlay?.supported && (
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <Toggle
+            title="Overlay nos jogos"
+            description="Mostra quem está na chamada e quem está falando por cima de jogos em tela cheia (modo janela)."
+            checked={overlayEnabled}
+            onChange={() => setOverlayEnabled(!overlayEnabled)}
           />
         </div>
       )}

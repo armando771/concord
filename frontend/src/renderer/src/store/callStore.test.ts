@@ -833,3 +833,35 @@ describe('callStore — selo LIVE em dia', () => {
     expect(useCallStore.getState().listVersion).toBe(before + 1)
   })
 })
+
+describe('callStore — movido de canal por um moderador', () => {
+  it('trocar de chamada fecha a transmissão que eu assistia, como sair da call', async () => {
+    await joinChannel()
+    onRemoteMedia({
+      ...empty,
+      availableScreens: ['ana'],
+      screenStreams: { ana: fakeStream('video') }
+    })
+    useCallStore.getState().watchScreen('ana')
+    api.startCall.mockResolvedValue({ id: 'call-2', server_id: 'srv-1' })
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:moved',
+      payload: {
+        from_call_id: 'call-1',
+        channel_id: 'canal-2',
+        channel_name: 'Outro',
+        user: { id: 'eu', username: 'eu', display_name: 'Eu' },
+        moved_by: { id: 'mod', username: 'mod', display_name: 'Mod' }
+      }
+    })
+    await flush()
+    await flush()
+
+    const s = useCallStore.getState()
+    expect(s.callId).toBe('call-2')
+    expect(s.watchedScreenIds).toEqual([])
+    expect(s.availableScreens).toEqual([])
+    expect(s.focusedScreenUserId).toBeNull()
+  })
+})

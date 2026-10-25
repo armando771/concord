@@ -1,4 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
+import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
 
 export interface ScreenSourceInfo {
   id: string
@@ -50,6 +51,17 @@ export interface BackgroundApi {
   onNavigate(cb: (route: string) => void): () => void
 }
 
+export interface OverlayApi {
+  /** Overlay de jogo existe nesta plataforma (só Windows). */
+  supported: boolean
+  /** Renderer principal → main: estado atual da call para o overlay. */
+  setState(snapshot: OverlaySnapshot): void
+  /** Página do overlay: último estado conhecido ao abrir. */
+  current(): Promise<OverlaySnapshot | null>
+  /** Página do overlay: novos estados. Retorna unsubscribe. */
+  onUpdate(cb: (snapshot: OverlaySnapshot) => void): () => void
+}
+
 declare global {
   interface Window {
     electron: ElectronAPI
@@ -58,6 +70,7 @@ declare global {
       background?: BackgroundApi
       updates?: UpdatesApi
       screenAudio?: ScreenAudioApi
+      overlay?: OverlayApi
     }
   }
 }

@@ -52,7 +52,7 @@ export function logAudio(message: string): void {
 let helper: ChildProcess | null = null
 let port: MessagePortMain | null = null
 
-function helperPath(): string {
+export function helperPath(): string {
   return app.isPackaged
     ? join(process.resourcesPath, 'concord-audio.exe')
     : join(app.getAppPath(), 'resources', 'win', 'concord-audio.exe')
