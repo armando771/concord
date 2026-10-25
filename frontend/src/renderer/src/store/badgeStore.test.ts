@@ -11,7 +11,7 @@ describe('badgeStore', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     fetchMock.mockReset()
-    fetchMock.mockResolvedValue({ user_id: 'eu', badges: [] })
+    fetchMock.mockResolvedValue({ user_id: 'eu', self: true, badges: [] })
     useBadgeStore.getState().reset()
   })
   afterEach(() => vi.useRealTimers())

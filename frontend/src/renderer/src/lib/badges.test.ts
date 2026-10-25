@@ -5,10 +5,12 @@ import {
   formatUnlockDate,
   profileBadgeRow,
   progressPercent,
+  publicStatText,
   RARITY,
   remainingText,
   splitBadges,
-  statText
+  statText,
+  unlockCount
 } from './badges'
 
 const HOUR = 3600
@@ -189,5 +191,55 @@ describe('misc', () => {
     expect(RARITY.lendario.label).toBe('Lendário')
     expect(RARITY.epico.label).toBe('Épico')
     expect(RARITY.raro.color).toMatch(/^#/)
+  })
+})
+
+describe('visão pública (perfil de outra pessoa)', () => {
+  const tiers = [
+    { tier: 1, name: 'Puxa-assunto', threshold: 50, rarity: 'comum' as const },
+    { tier: 2, name: 'Papo Reto', threshold: 500, rarity: 'comum' as const },
+    { tier: 3, name: 'Fofoqueiro', threshold: 2000, rarity: 'raro' as const }
+  ]
+
+  it('mostra o limite do tier conquistado, não o número exato', () => {
+    const pub = badge({ category: 'mensagens', unit: 'messages', tier: 3, tiers, value: undefined })
+    expect(publicStatText(pub)).toBe('2.000+ mensagens')
+    const voz = badge({
+      tier: 1,
+      value: undefined,
+      tiers: [{ tier: 1, name: 'Ouvinte', threshold: 3600, rarity: 'comum' }]
+    })
+    expect(publicStatText(voz)).toBe('1+ hora em call')
+  })
+
+  it('fundador não tem número', () => {
+    const f = badge({
+      category: 'fundador',
+      unit: 'founder',
+      tier: 1,
+      tiers: [{ tier: 1, name: 'Fundador', threshold: 1, rarity: 'lendario' }]
+    })
+    expect(publicStatText(f)).toBe('Chegou nas primeiras semanas')
+  })
+
+  it('data só com o dia não muda de dia com o fuso', () => {
+    expect(formatUnlockDate('2026-07-29')).toBe('29/07/26')
+  })
+
+  it('sem value/progress (visão pública) não quebra as contas', () => {
+    expect(progressPercent(badge({ progress: undefined }))).toBe(0)
+    expect(splitBadges([badge({ obtainable: undefined })]).available).toEqual([])
+  })
+})
+
+describe('unlockCount', () => {
+  it('conta badges (categorias), não tiers', () => {
+    expect(
+      unlockCount([
+        { category: 'voz', name: '', tier: 4, tier_name: '', rarity: 'epico' },
+        { category: 'voz', name: '', tier: 3, tier_name: '', rarity: 'raro' },
+        { category: 'conta', name: '', tier: 1, tier_name: '', rarity: 'comum' }
+      ])
+    ).toBe(2)
   })
 })

@@ -3,8 +3,12 @@
  * "<categoria>-<tier>-64.webp" com 64 px. Categoria sem arte (nova no
  * backend, app antigo) cai no ícone genérico do BadgeIcon.
  */
+// ?no-inline: os 64 px têm menos de 4 KB e o Vite os colocaria em base64
+// dentro do bundle principal; assim cada um vira um arquivo à parte, que só
+// é baixado quando aparece na tela.
 const files = import.meta.glob('../assets/badges/*.webp', {
   eager: true,
+  query: '?no-inline',
   import: 'default'
 }) as Record<string, string>
 

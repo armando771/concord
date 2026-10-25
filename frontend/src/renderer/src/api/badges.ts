@@ -13,13 +13,18 @@ export interface BadgeTier {
   unlocked_at?: string
 }
 
-/** Uma categoria de badge (backend: internal/badge). Tier 0 = nada ainda. */
+/**
+ * Uma categoria de badge (backend: internal/badge). Tier 0 = nada ainda.
+ * No perfil de outra pessoa só vêm os conquistados, sem value/progress/
+ * próximos tiers, e unlocked_at é só o dia ("2026-07-29").
+ */
 export interface Badge {
   category: string
   name: string
   description: string
   unit: BadgeUnit
-  value: number
+  /** Só no próprio perfil. */
+  value?: number
   tier: number
   tier_name?: string
   rarity?: BadgeRarity
@@ -29,14 +34,16 @@ export interface Badge {
   /** Só na idade da conta: quando o próximo tier chega. */
   next_at?: string
   /** Do tier atual até o próximo, de 0 a 1. */
-  progress: number
+  progress?: number
   /** false: não dá mais para conseguir (Fundador depois do corte). */
-  obtainable: boolean
+  obtainable?: boolean
   tiers: BadgeTier[]
 }
 
 export interface BadgesResponse {
   user_id: string
+  /** true: a própria pessoa (visão completa). */
+  self: boolean
   badges: Badge[]
 }
 

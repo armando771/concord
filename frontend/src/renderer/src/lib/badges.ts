@@ -1,4 +1,4 @@
-import type { Badge, BadgeRarity, BadgeUnit } from '../api/badges'
+import type { Badge, BadgeRarity, BadgeUnit, BadgeUnlockEvent } from '../api/badges'
 
 /**
  * Badges do perfil: textos e ordem. O catálogo (nomes, limites, raridade)
@@ -61,27 +61,43 @@ const TIME_SUFFIX: Record<string, string> = {
 
 /** A estatística da linha "798 horas em call • Desbloqueado em … • RARO". */
 export function statText(b: Badge): string {
+  const value = b.value ?? 0
   switch (b.unit) {
     case 'seconds': {
       const suffix = TIME_SUFFIX[b.category] ?? 'em call'
-      return `${hoursText(b.value)} ${suffix}`
+      return `${hoursText(value)} ${suffix}`
     }
     case 'months':
-      return `${monthsText(b.value)} de conta`
+      return `${monthsText(value)} de conta`
     case 'messages':
-      return b.value === 1 ? '1 mensagem enviada' : `${num(b.value)} mensagens enviadas`
+      return value === 1 ? '1 mensagem enviada' : `${num(value)} mensagens enviadas`
     case 'reactions':
-      return plural(b.value, 'reação', 'reações')
+      return plural(value, 'reação', 'reações')
     case 'level':
-      return `Nível ${num(b.value)}`
+      return `Nível ${num(value)}`
     case 'people':
-      return `Call com até ${plural(b.value, 'pessoa', 'pessoas')}`
+      return `Call com até ${plural(value, 'pessoa', 'pessoas')}`
     case 'servers':
-      return `Dono de ${plural(b.value, 'servidor', 'servidores')}`
+      return `Dono de ${plural(value, 'servidor', 'servidores')}`
     case 'founder':
-      return b.value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas'
+      return value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas'
   }
-  return num(b.value)
+  return num(value)
+}
+
+/**
+ * Estatística no perfil de outra pessoa: o limite do tier conquistado
+ * ("2.000+ mensagens"), nunca o número exato.
+ */
+export function publicStatText(b: Badge): string {
+  if (b.unit === 'founder') return 'Chegou nas primeiras semanas'
+  const reached = b.tiers[b.tier - 1]
+  if (!reached) return ''
+  const label = `${formatThreshold(b.unit, reached.threshold)}`
+  if (b.unit === 'level') return `${label}+`
+  const [n, ...rest] = label.split(' ')
+  const suffix = b.unit === 'seconds' ? ` ${TIME_SUFFIX[b.category] ?? 'em call'}` : ''
+  return `${n}+ ${rest.join(' ')}${suffix}`
 }
 
 /** Rótulo de um degrau da escada: "1 hora", "3 meses", "2.000 mensagens". */
@@ -117,7 +133,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 /** "Faltam 20 horas", "Faltam 4 meses", "Tier máximo!". */
 export function remainingText(b: Badge, now: Date = new Date()): string {
   if (b.next_threshold === undefined || b.next_threshold === null) return 'Tier máximo!'
-  const left = Math.max(0, b.next_threshold - b.value)
+  const left = Math.max(0, b.next_threshold - (b.value ?? 0))
   switch (b.unit) {
     case 'seconds':
       if (left < HOUR) return `Faltam ${Math.max(1, Math.ceil(left / 60))} min`
@@ -146,12 +162,15 @@ export function remainingText(b: Badge, now: Date = new Date()): string {
 
 /** 0–100 para a barra de progresso. */
 export function progressPercent(b: Badge): number {
-  return Math.min(100, Math.max(0, Math.round(b.progress * 100)))
+  return Math.min(100, Math.max(0, Math.round((b.progress ?? 0) * 100)))
 }
 
 /** "29/07/26" (vazio sem data). */
 export function formatUnlockDate(iso: string | undefined): string {
   if (!iso) return ''
+  // Só o dia (perfil de outra pessoa): sem fuso, não pode virar o dia anterior.
+  const dayOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (dayOnly) return `${dayOnly[3]}/${dayOnly[2]}/${dayOnly[1].slice(2)}`
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
   const dd = String(d.getDate()).padStart(2, '0')
@@ -179,6 +198,11 @@ export function profileBadgeRow(badges: Badge[], max = 6): { shown: Badge[]; ove
 export function splitBadges(badges: Badge[]): { earned: Badge[]; available: Badge[] } {
   return {
     earned: earnedBadges(badges),
-    available: badges.filter((b) => b.tier === 0 && b.obtainable)
+    available: badges.filter((b) => b.tier === 0 && b.obtainable === true)
   }
+}
+
+/** Quantos badges (categorias) o aviso de desbloqueio tem, não tiers. */
+export function unlockCount(unlocks: BadgeUnlockEvent['unlocks']): number {
+  return new Set(unlocks.map((u) => u.category)).size
 }

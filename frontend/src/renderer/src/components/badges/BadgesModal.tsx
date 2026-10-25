@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Badge } from '../../api/badges'
 import type { BadgesModalTarget } from '../../store/badgeStore'
@@ -11,8 +11,10 @@ import {
   rarityMeta,
   remainingText,
   splitBadges,
+  publicStatText,
   statText
 } from '../../lib/badges'
+import { trapTab } from '../../lib/focusTrap'
 import Avatar from '../Avatar'
 import { LockIcon } from '../icons'
 import BadgeIcon from './BadgeIcon'
@@ -140,7 +142,8 @@ function Detail({
         {title}
       </h3>
       <p className="mt-1.5 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 text-center text-xs text-gray-400">
-        <span>{statText(badge)}</span>
+        {/* Perfil de outra pessoa: só o limite do tier, nunca o número exato. */}
+        <span>{isMe ? statText(badge) : publicStatText(badge)}</span>
         {unlocked && (
           <>
             <span aria-hidden="true">•</span>
@@ -253,14 +256,36 @@ function BadgesModal(): React.JSX.Element | null {
   // Escolha vale só para esta abertura do modal (target novo = escolha nova).
   const [picked, setPicked] = useState<{ target: BadgesModalTarget; category: string } | null>(null)
 
+  const dialogRef = useRef<HTMLDivElement | null>(null)
+  const closeRef = useRef<HTMLButtonElement | null>(null)
+  const titleId = useId()
+  const open = Boolean(target)
+
+  // Ao abrir: foco no Fechar. Ao fechar: o foco volta para onde estava.
   useEffect(() => {
-    if (!target) return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') close()
+    if (!open) return
+    const previous = document.activeElement as HTMLElement | null
+    closeRef.current?.focus()
+    return () => {
+      if (previous?.isConnected) previous.focus()
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [target, close])
+  }, [open])
+
+  // Captura na janela: Esc fecha só este modal (não chega nos outros
+  // atalhos) e o Tab fica preso dentro dele.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        close()
+        return
+      }
+      trapTab(e, dialogRef.current)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [open, close])
 
   if (!target) return null
 
@@ -287,9 +312,10 @@ function BadgesModal(): React.JSX.Element | null {
       onClick={close}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={isMe ? 'Seus badges' : `Badges de ${target.name}`}
+        aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
         className="flex h-[min(600px,100%)] w-full max-w-[760px] overflow-hidden rounded-2xl border border-white/10 text-gray-200 shadow-2xl"
       >
@@ -304,7 +330,7 @@ function BadgesModal(): React.JSX.Element | null {
                   size={28}
                 />
               )}
-              <h2 className="min-w-0 truncate text-xl font-bold text-white">
+              <h2 id={titleId} className="min-w-0 truncate text-xl font-bold text-white">
                 {isMe ? 'Seus badges' : `Badges de ${target.name}`}
               </h2>
             </div>
@@ -358,6 +384,7 @@ function BadgesModal(): React.JSX.Element | null {
 
         <section className="relative min-w-0 flex-1 overflow-y-auto bg-[#232428] p-6">
           <button
+            ref={closeRef}
             type="button"
             onClick={close}
             aria-label="Fechar"

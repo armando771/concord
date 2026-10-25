@@ -1,7 +1,7 @@
 import { useAuthStore } from '../../store/authStore'
 import { UNLOCK_TOAST_MS, useBadgeStore } from '../../store/badgeStore'
 import { useLevelStore } from '../../store/levelStore'
-import { rarityMeta } from '../../lib/badges'
+import { rarityMeta, unlockCount } from '../../lib/badges'
 import BadgeIcon from './BadgeIcon'
 
 /**
@@ -18,8 +18,10 @@ function BadgeUnlockToast(): React.JSX.Element | null {
   const levelUp = useLevelStore((s) => (me ? Boolean(s.celebrations[me.id]) : false))
 
   if (!toast || !me) return null
-  const [first, ...rest] = toast.unlocks
+  const [first] = toast.unlocks
   const meta = rarityMeta(first.rarity)
+  // Badges, não tiers (no primeiro deploy, voz 1–4 de uma vez é um só).
+  const count = unlockCount(toast.unlocks)
 
   const open = (): void => {
     dismiss()
@@ -34,6 +36,8 @@ function BadgeUnlockToast(): React.JSX.Element | null {
   return (
     <div
       key={toast.key}
+      role="status"
+      aria-live="polite"
       className={`pointer-events-none fixed inset-x-0 z-50 flex justify-center ${
         levelUp
           ? 'top-[calc(var(--titlebar-height,0px)+5.5rem)]'
@@ -42,7 +46,6 @@ function BadgeUnlockToast(): React.JSX.Element | null {
     >
       <button
         type="button"
-        role="status"
         onClick={open}
         className="badge-toast pointer-events-auto relative flex cursor-pointer items-center gap-3 overflow-hidden rounded-2xl border bg-[#0b0b10]/90 py-2 pl-2.5 pr-4 text-left shadow-2xl backdrop-blur-xl"
         style={
@@ -56,11 +59,11 @@ function BadgeUnlockToast(): React.JSX.Element | null {
         <BadgeIcon category={first.category} tier={first.tier} rarity={first.rarity} size={36} />
         <span className="leading-tight">
           <span className="block text-sm font-bold text-white">
-            {rest.length > 0 ? `${toast.unlocks.length} badges novos!` : 'Badge novo!'}
+            {count > 1 ? `${count} badges novos!` : 'Badge novo!'}
           </span>
           <span className="block text-[11px] text-gray-400">
             <span style={{ color: meta.color }}>{first.tier_name}</span> · {first.name}
-            {rest.length > 0 && ` e mais ${rest.length}`}
+            {count > 1 && ` e mais ${count - 1}`}
           </span>
         </span>
       </button>
