@@ -2,13 +2,16 @@ import { resolve } from 'path'
 import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { buildConnectSrc } from './src/renderer/src/lib/serverUrl'
+import { buildConnectSrc, buildMediaSrc } from './src/renderer/src/lib/serverUrl'
 
-// A CSP do renderer precisa liberar o servidor embutido no build.
+// A CSP do renderer precisa liberar o servidor embutido no build (API,
+// WebSocket e os arquivos de mídia do chat).
 const connectSrcPlugin = {
   name: 'concord-connect-src',
   transformIndexHtml: (html: string): string =>
-    html.replace('%CONCORD_CONNECT_SRC%', buildConnectSrc(process.env.VITE_SERVER_URL))
+    html
+      .replace('%CONCORD_CONNECT_SRC%', buildConnectSrc(process.env.VITE_SERVER_URL))
+      .replaceAll('%CONCORD_MEDIA_SRC%', buildMediaSrc(process.env.VITE_SERVER_URL))
 }
 
 // Atualizações: servidas pelo próprio servidor e assinadas pelo dono.

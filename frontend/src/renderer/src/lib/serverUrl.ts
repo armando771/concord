@@ -33,3 +33,11 @@ export function buildConnectSrc(serverUrl: string | undefined): string {
   const url = normalize(serverUrl)
   return `'self' ${url.origin} ${toWsOrigin(url)}`
 }
+
+/**
+ * Valor do `media-src` (e parte do `img-src`) da CSP: arquivos do chat vêm do
+ * servidor e as prévias locais do campo de envio são URLs `blob:`.
+ */
+export function buildMediaSrc(serverUrl: string | undefined): string {
+  return `'self' blob: ${normalize(serverUrl).origin}`
+}
