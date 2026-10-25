@@ -213,6 +213,7 @@ func main() {
 	// WebSocket hub (created before services that publish events)
 	hub := websocket.NewHub()
 	hub.SetStatusLookup(userRepository.GetStatus)
+	hub.SetAudience(websocket.NewSQLAudience(db))
 
 	// Permissões (cargos, @everyone, sobrescritas por canal)
 	permissionRepository := permission.PermissionRepository(db)
@@ -424,6 +425,7 @@ func main() {
 	{
 		presence.GET("", wsHandler.Presence)
 		presence.GET("/", wsHandler.Presence)
+		presence.GET("/activities", wsHandler.Activities)
 	}
 
 	// WebSocket endpoint (public, auth via ?token=)

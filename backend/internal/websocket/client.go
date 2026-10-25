@@ -94,6 +94,8 @@ func (c *Client) readPump(ctx context.Context) {
 			if c.typing != nil {
 				c.typing.Handle(ctx, c.userID, ev.Type, ev.Payload)
 			}
+		case "activity:set", "activity:clear":
+			c.hub.HandleActivity(c.userID, ev.Type, ev.Payload)
 		case "call:invite", "call:accept", "call:decline", "call:leave", "call:screen", "call:voice", "call:soundboard",
 			"call:activity", "call:activity:stop",
 			"call:lock", "call:knock", "call:knock_cancel", "call:knock_respond":

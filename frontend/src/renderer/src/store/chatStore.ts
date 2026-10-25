@@ -41,7 +41,7 @@ import type { ConversationSummary } from '../api/conversations'
 import { listConversations, markConversationRead } from '../api/conversations'
 import { conversationTitle, sanitizeConversations } from '../lib/conversations'
 import type { PresenceMap } from '../api/presence'
-import { fetchPresence } from '../api/presence'
+import { fetchActivities, fetchPresence } from '../api/presence'
 import { listChannels } from '../api/channels'
 import { useChannelNameStore } from './channelNameStore'
 import { useServerStore } from './serverStore'
@@ -54,6 +54,8 @@ import { useProposalStore } from './proposalStore'
 import { useSoundboardStore } from './soundboardStore'
 import { useActivityStore } from './activityStore'
 import { useTypingStore } from './typingStore'
+import { usePresenceActivityStore } from './presenceActivityStore'
+import { sanitizeActivity } from '../lib/presenceActivity'
 import { showToast, useToastStore } from './toastStore'
 import { createReconnectNotice } from '../lib/wsReconnect'
 import { router } from '../router'
@@ -236,6 +238,8 @@ const client = new WsClient({
     // Avisos de digitando de antes da queda podem nunca receber o stop.
     useTypingStore.getState().reset()
     useCallStore.getState().handleWsReconnect()
+    // O servidor perdeu o jogo em andamento na queda: manda de novo.
+    usePresenceActivityStore.getState().publishMine()
     // Reconexão costuma ser deploy: checa atualização (o aviso app:update é o
     // caminho principal; isto cobre o manifesto publicado antes do reinício).
     requestUpdateCheck()
@@ -539,6 +543,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         presence: { ...state.presence, ...presence },
         statuses: { ...state.statuses, ...statuses }
       }))
+      // Atividade vem à parte: backend antigo não tem a rota (erro = ignora).
+      fetchActivities(unique)
+        .then((activities) => {
+          if (useAuthStore.getState().accessToken !== token) return
+          usePresenceActivityStore.getState().applyFetched(unique, activities)
+        })
+        .catch(() => {})
     } catch (err) {
       console.error('[chatStore] fetchPresenceFor error:', err)
     }
@@ -1057,6 +1068,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return
     }
 
+    // Jogo em andamento de alguém (null = parou).
+    if (event.type === 'presence:activity') {
+      usePresenceActivityStore
+        .getState()
+        .setActivity(payload.user_id as string, sanitizeActivity(payload.activity))
+      return
+    }
+
     if (event.type === 'presence:update') {
       const userId = payload.user_id as string
       const status = presenceStatusOf(payload.status, Boolean(payload.online))
@@ -1182,6 +1201,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   reset: () => {
     useTypingStore.getState().reset()
+    usePresenceActivityStore.getState().reset()
     openRooms.clear()
     set({
       messagesByRoom: {},

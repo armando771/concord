@@ -132,3 +132,14 @@ func (h *Handler) Presence(c *gin.Context) {
 
 	c.JSON(http.StatusOK, presence)
 }
+
+// Activities devolve a atividade (jogo) de quem o usuário pode ver.
+func (h *Handler) Activities(c *gin.Context) {
+	raw := c.Query("ids")
+	if raw == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ids query is required"})
+		return
+	}
+	userID := c.GetString("userID")
+	c.JSON(http.StatusOK, h.hub.ActivitiesFor(c.Request.Context(), userID, strings.Split(raw, ",")))
+}

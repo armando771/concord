@@ -12,6 +12,7 @@ export type WsEventType =
   | 'proposal:update'
   | 'proposal:delete'
   | 'presence:update'
+  | 'presence:activity'
   | 'channel:create'
   | 'channel:update'
   | 'channel:delete'
