@@ -13,6 +13,7 @@ import { useServerStore } from '../store/serverStore'
 function OverlayBridge(): null {
   const overlay = window.api?.overlay
   const enabled = useOverlayPrefsStore((s) => s.enabled)
+  const opacity = useOverlayPrefsStore((s) => s.opacity)
   const me = useAuthStore((s) => s.user)
   const status = useCallStore((s) => s.status)
   const backendParticipants = useCallStore((s) => s.participants)
@@ -44,10 +45,22 @@ function OverlayBridge(): null {
         voiceStates,
         speakingIds,
         muted,
-        deafened
+        deafened,
+        opacity
       })
     )
-  }, [overlay, enabled, status, me, participants, voiceStates, speakingIds, muted, deafened])
+  }, [
+    overlay,
+    enabled,
+    opacity,
+    status,
+    me,
+    participants,
+    voiceStates,
+    speakingIds,
+    muted,
+    deafened
+  ])
 
   return null
 }
