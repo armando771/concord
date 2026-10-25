@@ -1,6 +1,7 @@
 import { activityLine } from '../lib/presenceActivity'
 import { useActivity, useInVoice } from '../store/presenceActivityStore'
-import { GamepadIcon, VolumeIcon } from './icons'
+import { VolumeIcon } from './icons'
+import GameIcon from './GameIcon'
 
 /** Só o jogo (ícone + nome); nada se a pessoa não está jogando. */
 export function GameLine({
@@ -14,7 +15,7 @@ export function GameLine({
   if (!activity) return null
   return (
     <span className={`flex min-w-0 items-center gap-1 ${className}`} title={activity.name}>
-      <GamepadIcon className="h-3.5 w-3.5 shrink-0" />
+      <GameIcon name={activity.name} className="h-3.5 w-3.5 shrink-0" />
       <span className="truncate">{activity.name}</span>
     </span>
   )
@@ -41,7 +42,9 @@ export function ActivityLine({
   const line = activityLine({ activity, inVoice, note, statusLabel })
   return (
     <span className={`flex min-w-0 items-center gap-1 ${className}`} title={line.text}>
-      {line.kind === 'game' && <GamepadIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />}
+      {line.kind === 'game' && activity && (
+        <GameIcon name={activity.name} className="h-3.5 w-3.5 shrink-0" />
+      )}
       {line.kind === 'voice' && <VolumeIcon className="h-3.5 w-3.5 shrink-0 text-[#23a55a]" />}
       <span className={`truncate ${line.kind === 'voice' ? 'text-[#23a55a]' : ''}`}>
         {line.text}

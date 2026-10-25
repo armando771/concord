@@ -4,7 +4,8 @@ import { profileMediaSrc } from '../../lib/profileMedia'
 import { detectProvider, linkLabel, splitLinks } from '../../lib/profileLinks'
 import type { PresenceStatus } from '../../lib/presenceStatus'
 import Avatar from '../Avatar'
-import { GamepadIcon, PencilIcon, PlusIcon } from '../icons'
+import { PencilIcon, PlusIcon } from '../icons'
+import GameIcon from '../GameIcon'
 import { Elapsed } from '../ActivityCard'
 import { useActivity } from '../../store/presenceActivityStore'
 import LinkIcon from './LinkIcon'
@@ -174,7 +175,7 @@ function ProfileCardBody({
           <div className="mt-3 rounded-lg bg-white/5 p-2.5">
             <p className="text-ds-xs font-bold uppercase text-gray-400">Jogando agora</p>
             <p className="mt-1 flex items-center gap-1.5 text-ds-md font-semibold text-white">
-              <GamepadIcon className="h-4 w-4 shrink-0 text-gray-400" />
+              <GameIcon name={game.name} className="h-4 w-4 shrink-0" />
               <span className="truncate">{game.name}</span>
               <span className="shrink-0 text-ds-xs font-normal text-gray-400">
                 <Elapsed startedAt={game.started_at} />

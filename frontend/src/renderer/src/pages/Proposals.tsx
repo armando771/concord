@@ -28,6 +28,7 @@ import {
   REJECTED_COLUMN,
   sortColumn
 } from '../lib/proposals'
+import { snapCenterToCursor } from '../lib/dragModifiers'
 import { useAuthStore } from '../store/authStore'
 import { useProposalStore } from '../store/proposalStore'
 import { showToast } from '../store/toastStore'
@@ -248,7 +249,7 @@ function Proposals(): React.JSX.Element {
               {dragging && !showRejected && dragging.status !== 'rejected' && <RejectDropZone />}
             </div>
             {/* Sem animação de soltar: o card já está na coluna nova (movido na hora). */}
-            <DragOverlay dropAnimation={null}>
+            <DragOverlay dropAnimation={null} modifiers={[snapCenterToCursor]}>
               {dragging && (
                 <ProposalCard
                   overlay
