@@ -91,6 +91,8 @@ interface CallState {
   type: CallKind | null
   conversationId: string | null
   channelId: string | null
+  /** servidor do canal de voz da chamada (rota de volta da miniatura) */
+  serverId: string | null
   participants: CallUserInfo[]
   isInitiator: boolean
   /** userId -> microfone remoto */
@@ -110,6 +112,10 @@ interface CallState {
   availableScreens: string[]
   /** telas remotas que estou assistindo (só essas são baixadas); zera ao sair da call */
   watchedScreenIds: string[]
+  /** palco da call (CallStage) montado = tela da call visível; senão a miniatura aparece */
+  stageVisible: boolean
+  /** chamada de DM minimizada (barrinha sobre o chat) */
+  dmMinimized: boolean
   /** stream da câmera local enquanto ligada (reativo p/ preview espelhado) */
   localCameraStream: MediaStream | null
   /** quem está compartilhando tela segundo o backend (registry) */
@@ -148,6 +154,10 @@ interface CallState {
   watchScreen: (userId: string) => void
   /** Fecha a transmissão: para de baixar e volta ao card "Assistir transmissão". */
   stopWatchingScreen: (userId: string) => void
+  setStageVisible: (visible: boolean) => void
+  setDmMinimized: (minimized: boolean) => void
+  /** Clique na miniatura: põe em destaque uma transmissão que estou assistindo. */
+  focusWatchedScreen: (userId: string) => void
   setServerCalls: (map: Record<string, CallStateResponse>) => void
   joinVoiceChannel: (channelId: string) => Promise<void>
   /** WS de chat reconectou: volta a se registrar na chamada de canal, se houver. */
@@ -403,6 +413,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       type: null,
       conversationId: null,
       channelId: null,
+      serverId: null,
       participants: [],
       isInitiator: false,
       ...EMPTY_MEDIA,
@@ -413,6 +424,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       speakingIds: [],
       voiceStates: {},
       watchedScreenIds: [],
+      dmMinimized: false,
       focusedScreenUserId: null,
       muted: false,
       deafened: false,
@@ -463,6 +475,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     type: null,
     conversationId: null,
     channelId: null,
+    serverId: null,
     participants: [],
     isInitiator: false,
     ...EMPTY_MEDIA,
@@ -473,6 +486,8 @@ export const useCallStore = create<CallState>()((set, get) => {
     speakingIds: [],
     voiceStates: {},
     watchedScreenIds: [],
+    stageVisible: false,
+    dmMinimized: false,
     inputDeviceId: loadAudioPrefs().inputId,
     outputDeviceId: loadAudioPrefs().outputId,
     focusedScreenUserId: null,
@@ -537,6 +552,7 @@ export const useCallStore = create<CallState>()((set, get) => {
           type: 'channel',
           conversationId: null,
           channelId,
+          serverId: call.server_id ?? null,
           participants: [],
           isInitiator: false,
           streams: {},
@@ -774,6 +790,20 @@ export const useCallStore = create<CallState>()((set, get) => {
         focusedScreenUserId: s.focusedScreenUserId === userId ? null : s.focusedScreenUserId
       })
       media?.setWatchedScreens(next)
+    },
+
+    setStageVisible: (visible) => {
+      set({ stageVisible: visible })
+    },
+
+    setDmMinimized: (minimized) => {
+      set({ dmMinimized: minimized })
+    },
+
+    focusWatchedScreen: (userId) => {
+      if (!get().watchedScreenIds.includes(userId)) return
+      // DM minimizada: a rota já é a da call, então só expandir mostra o palco.
+      set({ focusedScreenUserId: userId, dmMinimized: false })
     },
 
     toggleCamera: async () => {

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useAuthStore } from '../../store/authStore'
 import { useServerStore } from '../../store/serverStore'
 import { mergeCallPeople } from '../../lib/callParticipants'
@@ -39,6 +39,14 @@ function CallStage({
   const watchedScreenIds = useCallStore((s) => s.watchedScreenIds)
   const watchScreen = useCallStore((s) => s.watchScreen)
   const stopWatchingScreen = useCallStore((s) => s.stopWatchingScreen)
+  const setStageVisible = useCallStore((s) => s.setStageVisible)
+
+  // Montado = tela da call visível (canal conectado ou DM expandida); fora
+  // dela a transmissão assistida vira miniatura (ScreenMiniPlayer).
+  useEffect(() => {
+    setStageVisible(true)
+    return () => setStageVisible(false)
+  }, [setStageVisible])
   const focusedId = useCallStore((s) => s.focusedScreenUserId)
   const setFocused = useCallStore((s) => s.setFocusedScreenUser)
   const localCameraStream = useCallStore((s) => s.localCameraStream)

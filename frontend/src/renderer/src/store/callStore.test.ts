@@ -684,3 +684,40 @@ describe('callStore — transmissões sob demanda', () => {
     expect(useCallStore.getState().screenSharers).toEqual(['ana'])
   })
 })
+
+describe('callStore — miniatura da transmissão', () => {
+  it('guarda o servidor da chamada de canal', async () => {
+    api.startCall.mockResolvedValue({ id: 'call-1', server_id: 'srv-1' })
+    await joinChannel()
+    expect(useCallStore.getState().serverId).toBe('srv-1')
+
+    useCallStore.getState().endCall()
+    expect(useCallStore.getState().serverId).toBeNull()
+  })
+
+  it('clicar na miniatura volta à call com a transmissão em destaque', async () => {
+    await joinChannel()
+    onRemoteMedia({
+      ...empty,
+      availableScreens: ['ana'],
+      screenStreams: { ana: fakeStream('video') }
+    })
+    useCallStore.getState().watchScreen('ana')
+    useCallStore.getState().setDmMinimized(true)
+    useCallStore.getState().setFocusedScreenUser(null)
+
+    useCallStore.getState().focusWatchedScreen('ana')
+
+    expect(useCallStore.getState().focusedScreenUserId).toBe('ana')
+    expect(useCallStore.getState().dmMinimized).toBe(false)
+  })
+
+  it('miniatura não foca transmissão que não estou assistindo', async () => {
+    await joinChannel()
+    onRemoteMedia({ ...empty, availableScreens: ['bia'] })
+
+    useCallStore.getState().focusWatchedScreen('bia')
+
+    expect(useCallStore.getState().focusedScreenUserId).toBeNull()
+  })
+})
