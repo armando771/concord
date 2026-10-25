@@ -1,14 +1,16 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useCallStore } from '../../store/callStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { deviceOptions } from '../../lib/audioDevices'
+import { nextMenuIndex } from '../../lib/menuNav'
 import { CAN_CHOOSE_OUTPUT, useAudioDevices } from '../useAudioDevices'
 import { CheckIcon } from '../icons'
 
 const MENU_WIDTH = 260
 const GAP = 8
 const MARGIN = 8
+const ITEM_SELECTOR = '[role="menuitemradio"], [role="menuitem"]'
 
 export type AudioDeviceKind = 'input' | 'output'
 
@@ -16,6 +18,9 @@ export type AudioDeviceKind = 'input' | 'output'
  * Menu da setinha ao lado do microfone/fone (como no Discord): escolhe o
  * dispositivo de entrada ou de saída sem abrir as Configurações. Usa as mesmas
  * ações do store que Configurações → Voz.
+ *
+ * Teclado: abre com o foco no dispositivo marcado; setas, Home e End andam
+ * entre os itens; Esc ou Tab fecham e devolvem o foco à setinha.
  */
 function AudioDeviceMenu({
   kind,
@@ -27,7 +32,10 @@ function AudioDeviceMenu({
   onClose: () => void
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
-  const devices = useAudioDevices()
+  /** A pessoa já andou pelo menu: a lista chegando não puxa mais o foco. */
+  const moved = useRef(false)
+  // Sem o "pedido de permissão" das Configurações: um clique não abre o prompt.
+  const devices = useAudioDevices({ probe: false })
   const selected = useCallStore((s) => (kind === 'input' ? s.inputDeviceId : s.outputDeviceId))
   const setInputDevice = useCallStore((s) => s.setInputDevice)
   const setOutputDevice = useCallStore((s) => s.setOutputDevice)
@@ -36,6 +44,8 @@ function AudioDeviceMenu({
   const title = kind === 'input' ? 'Dispositivo de entrada' : 'Dispositivo de saída'
   const canChoose = kind === 'input' || CAN_CHOOSE_OUTPUT
   const options = deviceOptions(devices, kind === 'input' ? 'audioinput' : 'audiooutput')
+  // Dispositivo escolhido foi desconectado: o áudio está no padrão, marca ele.
+  const checkedId = options.some((o) => o.id === selected) ? selected : ''
 
   // Acima da setinha, sem sair da janela (a sidebar fica colada na esquerda).
   const rect = anchor.getBoundingClientRect()
@@ -45,13 +55,19 @@ function AudioDeviceMenu({
   )
   const bottom = window.innerHeight - rect.top + GAP
 
+  /** Fecha devolvendo o foco à setinha (teclado). */
+  const closeToAnchor = useCallback(() => {
+    onClose()
+    anchor.focus()
+  }, [anchor, onClose])
+
   useEffect(() => {
     const onDown = (e: MouseEvent): void => {
       const target = e.target as Node
       if (!ref.current?.contains(target) && !anchor.contains(target)) onClose()
     }
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') closeToAnchor()
     }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
@@ -59,12 +75,39 @@ function AudioDeviceMenu({
       document.removeEventListener('mousedown', onDown)
       document.removeEventListener('keydown', onKey)
     }
-  }, [anchor, onClose])
+  }, [anchor, onClose, closeToAnchor])
+
+  // Foco no item marcado ao abrir e de novo quando a lista de dispositivos
+  // chega (antes dela só existe "Padrão do sistema").
+  const optionCount = options.length
+  useEffect(() => {
+    const menu = ref.current
+    if (!menu || moved.current) return
+    const target =
+      menu.querySelector<HTMLElement>('[aria-checked="true"]') ??
+      menu.querySelector<HTMLElement>(ITEM_SELECTOR)
+    target?.focus()
+  }, [optionCount])
+
+  const onMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (e.key === 'Tab') {
+      e.preventDefault()
+      closeToAnchor()
+      return
+    }
+    const items = [...(ref.current?.querySelectorAll<HTMLElement>(ITEM_SELECTOR) ?? [])]
+    const current = items.indexOf(document.activeElement as HTMLElement)
+    const next = nextMenuIndex(current, items.length, e.key)
+    if (next === null) return
+    e.preventDefault()
+    moved.current = true
+    items[next].focus()
+  }
 
   const choose = (id: string): void => {
     if (kind === 'input') void setInputDevice(id)
     else setOutputDevice(id)
-    onClose()
+    closeToAnchor()
   }
 
   return createPortal(
@@ -72,6 +115,7 @@ function AudioDeviceMenu({
       ref={ref}
       role="menu"
       aria-label={title}
+      onKeyDown={onMenuKeyDown}
       style={{ width: MENU_WIDTH, left, bottom }}
       className="fixed z-50 rounded-lg border border-white/10 bg-[#111214] p-1.5 shadow-2xl"
     >
@@ -81,16 +125,17 @@ function AudioDeviceMenu({
       {canChoose ? (
         <div className="max-h-64 overflow-y-auto">
           {options.map((o) => {
-            const checked = o.id === selected
+            const checked = o.id === checkedId
             return (
               <button
                 key={o.id || 'default'}
                 type="button"
                 role="menuitemradio"
                 aria-checked={checked}
+                tabIndex={-1}
                 onClick={() => choose(o.id)}
                 title={o.label}
-                className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-[#5865f2] hover:text-white ${
+                className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-[#5865f2] hover:text-white focus-visible:bg-[#5865f2] focus-visible:text-white ${
                   checked ? 'text-white' : 'text-gray-300'
                 }`}
               >
@@ -109,11 +154,12 @@ function AudioDeviceMenu({
       <button
         type="button"
         role="menuitem"
+        tabIndex={-1}
         onClick={() => {
           onClose()
           openSettings('voice')
         }}
-        className="flex w-full cursor-pointer items-center rounded px-2 py-1.5 text-left text-sm text-gray-300 transition-colors hover:bg-[#5865f2] hover:text-white"
+        className="flex w-full cursor-pointer items-center rounded px-2 py-1.5 text-left text-sm text-gray-300 outline-none transition-colors hover:bg-[#5865f2] hover:text-white focus-visible:bg-[#5865f2] focus-visible:text-white"
       >
         Configurações de voz
       </button>

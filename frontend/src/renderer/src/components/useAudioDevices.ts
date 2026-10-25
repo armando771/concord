@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
  * Microfones e saídas da máquina, atualizados quando algo é plugado ou tirado
  * (Configurações → Voz e o menu da setinha do microfone/fone).
  */
-export function useAudioDevices(): MediaDeviceInfo[] {
+export function useAudioDevices({ probe = true }: { probe?: boolean } = {}): MediaDeviceInfo[] {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
 
   useEffect(() => {
@@ -12,10 +12,11 @@ export function useAudioDevices(): MediaDeviceInfo[] {
     const refresh = async (): Promise<void> => {
       let list = await navigator.mediaDevices.enumerateDevices()
       // Sem permissão de microfone os nomes vêm vazios: pede uma vez e relista.
-      if (list.some((d) => d.kind === 'audioinput' && !d.label)) {
+      // (probe: false no menu da setinha, para um clique não pedir permissão.)
+      if (probe && list.some((d) => d.kind === 'audioinput' && !d.label)) {
         try {
-          const probe = await navigator.mediaDevices.getUserMedia({ audio: true })
-          probe.getTracks().forEach((t) => t.stop())
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+          stream.getTracks().forEach((t) => t.stop())
           list = await navigator.mediaDevices.enumerateDevices()
         } catch {
           // sem permissão: fica com os ids sem nome
@@ -29,7 +30,7 @@ export function useAudioDevices(): MediaDeviceInfo[] {
       cancelled = true
       navigator.mediaDevices.removeEventListener('devicechange', refresh)
     }
-  }, [])
+  }, [probe])
 
   return devices
 }

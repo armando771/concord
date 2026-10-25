@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useCallStore } from '../../store/callStore'
 import { useServerStore } from '../../store/serverStore'
 import { useNoiseSuppressionStore } from '../../store/noiseSuppressionStore'
+import { useActivityStore } from '../../store/activityStore'
 import {
   ActivityIcon,
   CameraIcon,
@@ -13,6 +14,7 @@ import {
   SignalIcon,
   SoundboardIcon
 } from '../icons'
+import ActivityPickerPopover from './ActivityPickerPopover'
 import NoiseSuppressionPopover from './NoiseSuppressionPopover'
 import SoundboardPopover from './SoundboardPopover'
 import { useSoundboardHotkeys } from './useSoundboardHotkeys'
@@ -24,11 +26,28 @@ import VoiceXPBar from '../level/VoiceXPBar'
 const ICON_BUTTON =
   'flex h-8 w-8 @max-[239px]:w-7 shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors'
 
-/** Botão da fileira de baixo (câmera, tela, atividades, mesa de áudio). */
+/**
+ * Cor do botão: 'on' = câmera/tela ligada (verde); 'open' = popover aberto e
+ * 'running' = atividade rodando (roxo, como no palco).
+ */
+type RowTone = 'idle' | 'on' | 'open' | 'running'
+
+const ROW_TONE: Record<RowTone, string> = {
+  idle: 'bg-white/6 text-gray-200 hover:bg-white/12 hover:text-white',
+  on: 'bg-[#23a55a] text-white hover:bg-[#1e8c4a]',
+  open: 'bg-[#5865f2] text-white',
+  running: 'bg-[#5865f2]/25 text-white hover:bg-[#5865f2]/40'
+}
+
+/**
+ * Botão da fileira de baixo (câmera, tela, atividades, mesa de áudio). O
+ * rótulo já diz o estado ("Ligar câmera"/"Desligar câmera"), então sem
+ * aria-pressed (o leitor de tela anunciaria o estado duas vezes).
+ */
 function RowButton({
   label,
   title,
-  active = false,
+  tone = 'idle',
   disabled = false,
   expanded,
   onClick,
@@ -36,7 +55,7 @@ function RowButton({
 }: {
   label: string
   title: string
-  active?: boolean
+  tone?: RowTone
   disabled?: boolean
   expanded?: boolean
   onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void
@@ -48,15 +67,12 @@ function RowButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      aria-pressed={expanded === undefined ? active : undefined}
       aria-expanded={expanded}
       title={title}
       className={`flex h-8 min-w-0 flex-1 items-center justify-center rounded-md transition-colors ${
         disabled
           ? 'cursor-not-allowed bg-white/5 text-gray-600'
-          : active
-            ? 'cursor-pointer bg-[#23a55a] text-white hover:bg-[#1e8c4a]'
-            : 'cursor-pointer bg-white/6 text-gray-200 hover:bg-white/12 hover:text-white'
+          : `cursor-pointer ${ROW_TONE[tone]}`
       }`}
     >
       {children}
@@ -75,7 +91,9 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   const type = useCallStore((s) => s.type)
   const channelId = useCallStore((s) => s.channelId)
   const serverId = useCallStore((s) => s.serverId)
-  const participants = useCallStore((s) => s.participants)
+  // Só a outra pessoa da DM: sem re-render a cada mudança na lista da call.
+  const peerId = useCallStore((s) => s.participants[0]?.id ?? null)
+  const peerName = useCallStore((s) => s.participants[0]?.display_name)
   const muted = useCallStore((s) => s.muted)
   const deafened = useCallStore((s) => s.deafened)
   const canStream = useCallStore((s) => s.canStream)
@@ -98,6 +116,10 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   /** Botão do popover da mesa de áudio (null = fechado). */
   const [soundboardAnchor, setSoundboardAnchor] = useState<HTMLElement | null>(null)
   const closeSoundboard = useCallback(() => setSoundboardAnchor(null), [])
+  /** Botão do seletor de atividades (null = fechado). */
+  const [activityAnchor, setActivityAnchor] = useState<HTMLElement | null>(null)
+  const closeActivities = useCallback(() => setActivityAnchor(null), [])
+  const activityRunning = useActivityStore((s) => s.shared !== null || s.local !== null)
 
   useSoundboardHotkeys()
 
@@ -108,9 +130,14 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
     type,
     channelName,
     serverName,
-    peerName: participants[0]?.display_name
+    peerName
   })
-  const route = voicePanelRoute({ type, serverId, channelId, participants })
+  const route = voicePanelRoute({
+    type,
+    serverId,
+    channelId,
+    participants: peerId ? [{ id: peerId }] : []
+  })
   const goTitle = type === 'dm' ? 'Ir para a conversa' : 'Ir para o canal de voz'
   const cameraBlocked = !canStream && !cameraOn
   const screenBlocked = !canStream && !sharing
@@ -184,7 +211,7 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
                 ? 'Desligar câmera'
                 : 'Ligar câmera'
           }
-          active={cameraOn}
+          tone={cameraOn ? 'on' : 'idle'}
           disabled={!connected || cameraBlocked}
           onClick={() => void toggleCamera()}
         >
@@ -199,14 +226,23 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
                 ? 'Parar de compartilhar'
                 : 'Compartilhar tela'
           }
-          active={sharing}
+          tone={sharing ? 'on' : 'idle'}
           disabled={!connected || screenBlocked}
           onClick={() => (sharing ? stopScreenShare() : void startScreenShare())}
         >
           <MonitorIcon className="h-5 w-5" />
         </RowButton>
-        {/* Atividades chegam em outra branch; até lá o botão só avisa. */}
-        <RowButton label="Atividades" title="Em breve" disabled>
+        <RowButton
+          label="Atividades"
+          title="Atividades"
+          tone={activityAnchor ? 'open' : activityRunning ? 'running' : 'idle'}
+          expanded={connected ? activityAnchor !== null : undefined}
+          disabled={!connected}
+          onClick={(e) => {
+            const button = e.currentTarget
+            setActivityAnchor((open) => (open ? null : button))
+          }}
+        >
           <ActivityIcon className="h-5 w-5" />
         </RowButton>
         <RowButton
@@ -214,7 +250,7 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
           title={
             type === 'channel' ? 'Mesa de Áudio' : 'A mesa de áudio é só em canais de servidor'
           }
-          active={soundboardAnchor !== null}
+          tone={soundboardAnchor ? 'open' : 'idle'}
           expanded={soundboardAvailable ? soundboardAnchor !== null : undefined}
           disabled={!soundboardAvailable}
           onClick={(e) => {
@@ -230,6 +266,9 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
       {noiseAnchor && <NoiseSuppressionPopover anchor={noiseAnchor} onClose={closeNoise} />}
       {soundboardAnchor && soundboardAvailable && (
         <SoundboardPopover anchor={soundboardAnchor} onClose={closeSoundboard} />
+      )}
+      {activityAnchor && connected && (
+        <ActivityPickerPopover anchor={activityAnchor} onClose={closeActivities} />
       )}
     </div>
   )

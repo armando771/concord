@@ -1,52 +1,62 @@
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect } from 'react'
 import { listChannels } from '../../api/channels'
 import { useServerStore } from '../../store/serverStore'
+import {
+  CHANNEL_NAMES_TTL_MS,
+  channelNamesStale,
+  useChannelNameStore
+} from '../../store/channelNameStore'
+
+/** Servidores com a lista de canais a caminho (um pedido de cada vez). */
+const inFlight = new Set<string>()
+
+function fetchNames(serverId: string): void {
+  if (inFlight.has(serverId)) return
+  inFlight.add(serverId)
+  listChannels(serverId)
+    .then((channels) => useChannelNameStore.getState().learn(serverId, channels))
+    .catch(() => {
+      // fica o nome que já havia (ou "Canal de voz"); tenta de novo depois
+    })
+    .finally(() => inFlight.delete(serverId))
+}
 
 /**
- * Nomes de canais já vistos. O serverStore só tem os canais do servidor
- * aberto; a chamada continua quando você vai para outro servidor ou para as
- * DMs, e o painel ainda precisa do nome.
+ * Nome do canal da chamada, de qualquer tela (null enquanto não se sabe). No
+ * servidor aberto vem do serverStore; fora dele, da lista do servidor da
+ * chamada, buscada de novo quando um canal muda ou a cada minuto.
  */
-const knownNames = new Map<string, string>()
-/** Servidores com a lista de canais já pedida (uma vez só). */
-const requested = new Set<string>()
-const listeners = new Set<() => void>()
-let version = 0
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function learn(channels: { id: string; name: string }[]): void {
-  channels.forEach((c) => knownNames.set(c.id, c.name))
-  version++
-  listeners.forEach((l) => l())
-}
-
-/** Nome do canal da chamada, de qualquer tela (null enquanto não se sabe). */
 export function useCallChannelName(
   serverId: string | null,
   channelId: string | null
 ): string | null {
-  const fromStore = useServerStore((s) =>
-    channelId ? s.channels.find((c) => c.id === channelId)?.name : undefined
+  const openChannels = useServerStore((s) =>
+    serverId && s.currentServer?.id === serverId ? s.channels : null
   )
-  useSyncExternalStore(subscribe, () => version)
+  const fromOpen = channelId
+    ? openChannels?.find((c) => c.id === channelId && c.server_id === serverId)?.name
+    : undefined
+  const cached = useChannelNameStore((s) =>
+    serverId && channelId ? s.nameOf(serverId, channelId) : null
+  )
+  const fetchedAt = useChannelNameStore((s) => (serverId ? s.fetchedAt[serverId] : undefined))
 
-  if (channelId && fromStore) knownNames.set(channelId, fromStore)
-  const known = channelId ? knownNames.get(channelId) : undefined
-
+  // Servidor aberto: a lista dele já está fresca, vira o cache. (Logo depois
+  // de trocar de servidor a lista ainda pode ser a do anterior: ignora.)
   useEffect(() => {
-    if (!serverId || !channelId || known || requested.has(serverId)) return
-    requested.add(serverId)
-    listChannels(serverId)
-      .then(learn)
-      .catch(() => {
-        // fica o "Canal de voz"; tenta de novo na próxima vez que montar
-        requested.delete(serverId)
-      })
-  }, [serverId, channelId, known])
+    if (!serverId || !openChannels) return
+    const mine = openChannels.filter((c) => c.server_id === serverId)
+    if (mine.length > 0) useChannelNameStore.getState().learn(serverId, mine)
+  }, [serverId, openChannels])
 
-  return fromStore ?? known ?? null
+  // Fora dele: busca se nunca buscou, se um evento invalidou ou se expirou.
+  const away = openChannels === null
+  useEffect(() => {
+    if (!serverId || !channelId || !away) return
+    if (channelNamesStale(fetchedAt, Date.now())) fetchNames(serverId)
+    const timer = setInterval(() => fetchNames(serverId), CHANNEL_NAMES_TTL_MS)
+    return () => clearInterval(timer)
+  }, [serverId, channelId, away, fetchedAt])
+
+  return fromOpen ?? cached
 }

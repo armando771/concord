@@ -54,7 +54,6 @@ function AudioToggle({
         type="button"
         onClick={onToggle}
         aria-label={label}
-        aria-pressed={off}
         title={title}
         className={`flex h-8 w-7 cursor-pointer items-center justify-center rounded-l-md transition-colors @max-[239px]:rounded-md ${tone} ${
           dimmed ? 'opacity-50' : ''
