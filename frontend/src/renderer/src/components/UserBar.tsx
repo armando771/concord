@@ -21,6 +21,7 @@ const BAR_BG = '#07080b'
 /**
  * Microfone ou fone com a setinha do lado (como no Discord): o botão liga e
  * desliga; a setinha abre o menu do dispositivo. Vermelho quando desligado.
+ * Com a sidebar no mínimo a setinha some (o menu segue em Configurações → Voz).
  */
 function AudioToggle({
   kind,
@@ -55,7 +56,7 @@ function AudioToggle({
         aria-label={label}
         aria-pressed={off}
         title={title}
-        className={`flex h-8 w-7 cursor-pointer items-center justify-center rounded-l-md transition-colors ${tone} ${
+        className={`flex h-8 w-7 cursor-pointer items-center justify-center rounded-l-md transition-colors @max-[239px]:rounded-md ${tone} ${
           dimmed ? 'opacity-50' : ''
         }`}
       >
@@ -68,7 +69,7 @@ function AudioToggle({
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         title={menuLabel}
-        className={`flex h-8 w-4 cursor-pointer items-center justify-center rounded-r-md transition-colors ${
+        className={`flex h-8 w-4 cursor-pointer items-center justify-center rounded-r-md transition-colors @max-[239px]:hidden ${
           menuOpen ? 'bg-white/15 text-white' : tone
         }`}
       >
@@ -112,7 +113,7 @@ function UserBar(): React.JSX.Element {
 
   return (
     <div
-      className="flex shrink-0 items-center gap-1 border-t border-white/6 px-2 py-1.5"
+      className="flex shrink-0 items-center gap-1 border-t border-white/6 px-2 py-1.5 @max-[239px]:gap-0"
       style={{ background: `${BAR_BG}e6` }}
     >
       <button

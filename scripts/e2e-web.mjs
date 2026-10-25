@@ -183,7 +183,7 @@ try {
     return event.defaultPrevented
   })
   check('fechar a aba em chamada pede confirmação', beforeUnload === true)
-  await pageA.getByRole('button', { name: 'Parar de compartilhar tela' }).click()
+  await pageA.getByRole('button', { name: 'Parar de compartilhar tela' }).first().click()
 
   // Access token vencido: o refresh renova sem deslogar.
   await pageB.evaluate(() => {

@@ -9,7 +9,7 @@ import {
   CameraOffIcon,
   MonitorIcon,
   NoiseSuppressionIcon,
-  PhoneOffIcon,
+  HangUpIcon,
   SignalIcon,
   SoundboardIcon
 } from '../icons'
@@ -20,8 +20,9 @@ import { useCallChannelName } from './useCallChannelName'
 import { showVoicePanel, voicePanelHeading, voicePanelLabel, voicePanelRoute } from './voicePanel'
 import VoiceXPBar from '../level/VoiceXPBar'
 
+// @max-[239px]: sidebar no mínimo (o @container é o SidebarFooter).
 const ICON_BUTTON =
-  'flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors'
+  'flex h-8 w-8 @max-[239px]:w-7 shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors'
 
 /** Botão da fileira de baixo (câmera, tela, atividades, mesa de áudio). */
 function RowButton({
@@ -169,7 +170,7 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
           title="Desconectar"
           className={`${ICON_BUTTON} text-gray-300 hover:bg-[#f23f43]/15 hover:text-[#f23f43]`}
         >
-          <PhoneOffIcon className="h-5 w-5" />
+          <HangUpIcon className="h-5 w-5" />
         </button>
       </div>
 
