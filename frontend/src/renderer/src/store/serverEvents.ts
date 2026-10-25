@@ -1,6 +1,8 @@
 import type { WsEvent } from '../api/ws'
 import type { Role } from '../lib/permissions'
 import { useServerStore } from './serverStore'
+import { useInviteCodeStore } from './inviteCodeStore'
+import { normalizeInviteCode } from '../lib/inviteLink'
 
 /** Como o evento mudou o que a pessoa vê (quem chama decide o que fazer na tela). */
 export interface ServerEventDeps {
@@ -52,6 +54,12 @@ export function handleServerRoleEvent(event: WsEvent, deps: ServerEventDeps): bo
     }
     case 'server:permissions:invalidate': {
       if (serverId) deps.onPermissionsChanged(serverId)
+      return true
+    }
+    case 'server:invite_code': {
+      // Alguém gerou um link novo (só chega a quem pode convidar).
+      const code = normalizeInviteCode(String(payload.code ?? ''))
+      if (serverId && code) useInviteCodeStore.getState().set(serverId, code)
       return true
     }
     case 'server:removed': {

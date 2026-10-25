@@ -9,14 +9,17 @@ export type InvitePreviewState =
 
 type Loaded = Exclude<InvitePreviewState, { status: 'loading' }> & { code: string }
 
-/** Prévia pública do código (nome, ícone, membros, online). */
-export function useInvitePreview(code: string): InvitePreviewState {
+/**
+ * Prévia do código (nome, ícone, membros, online). signedIn: manda o token e
+ * recebe também o id do servidor e se já é membro (modal dentro do app).
+ */
+export function useInvitePreview(code: string, signedIn = false): InvitePreviewState {
   // Guarda de qual código é o resultado: trocou o código, volta a "carregando".
   const [loaded, setLoaded] = useState<Loaded | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    getInvitePreview(code)
+    getInvitePreview(code, signedIn)
       .then((preview) => !cancelled && setLoaded({ code, status: 'ready', preview }))
       .catch((err: unknown) => {
         if (!cancelled) setLoaded({ code, status: 'error', message: inviteErrorMessage(err) })
@@ -24,7 +27,7 @@ export function useInvitePreview(code: string): InvitePreviewState {
     return () => {
       cancelled = true
     }
-  }, [code])
+  }, [code, signedIn])
 
   return loaded && loaded.code === code ? loaded : { status: 'loading' }
 }

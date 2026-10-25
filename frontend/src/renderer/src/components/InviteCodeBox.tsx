@@ -1,22 +1,37 @@
 import { useEffect, useState } from 'react'
-import { getInviteCode } from '../api/servers'
+import { getInviteCode, rotateInviteCode } from '../api/servers'
 import { showToast } from '../store/toastStore'
+import { useInviteCodeStore } from '../store/inviteCodeStore'
 import { inviteLink } from '../lib/inviteLink'
+import { actionErrorMessage } from '../lib/permissionErrors'
 import Button from './Button'
+import ConfirmModal from './friends/ConfirmModal'
 
 /** Link de convite do servidor para mandar aos amigos (entram sozinhos com ele). */
 function InviteCodeBox({ serverId }: { serverId: string }): React.JSX.Element {
-  const [code, setCode] = useState<string | null>(null)
+  // Do store: quando alguém gera um link novo (server:invite_code), este muda junto.
+  const code = useInviteCodeStore((s) => s.codes[serverId] ?? null)
+  const [confirmReset, setConfirmReset] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     getInviteCode(serverId)
-      .then(({ code }) => !cancelled && setCode(code))
-      .catch(() => !cancelled && setCode(null))
+      .then(({ code }) => !cancelled && useInviteCodeStore.getState().set(serverId, code))
+      .catch(() => {})
     return () => {
       cancelled = true
     }
   }, [serverId])
+
+  const reset = async (): Promise<void> => {
+    try {
+      const { code } = await rotateInviteCode(serverId)
+      useInviteCodeStore.getState().set(serverId, code)
+      showToast.success('Link novo gerado. O anterior não funciona mais.')
+    } catch (err) {
+      showToast.error(actionErrorMessage(err, 'Não foi possível gerar um link novo.'))
+    }
+  }
 
   const link = code ? inviteLink(code) : null
 
@@ -49,6 +64,24 @@ function InviteCodeBox({ serverId }: { serverId: string }): React.JSX.Element {
         o código <code className="font-mono text-gray-300">{code ?? '········'}</code>) em{' '}
         <strong>+</strong> → <strong>Entrar com código</strong>.
       </p>
+      <button
+        type="button"
+        onClick={() => setConfirmReset(true)}
+        disabled={!code}
+        className="cursor-pointer text-xs font-medium text-violet-300 hover:text-white hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Gerar novo link
+      </button>
+      <ConfirmModal
+        open={confirmReset}
+        title="Gerar novo link?"
+        confirmLabel="Gerar novo link"
+        onConfirm={reset}
+        onClose={() => setConfirmReset(false)}
+      >
+        O link atual para de funcionar na hora: quem ainda não entrou vai precisar do link novo.
+        Quem já está no servidor continua nele.
+      </ConfirmModal>
     </div>
   )
 }

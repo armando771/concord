@@ -37,7 +37,7 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
   const me = useAuthStore((s) => s.user)
   const servers = useServerStore((s) => s.servers)
   const fetchServers = useServerStore((s) => s.fetchServers)
-  const state = useInvitePreview(code)
+  const state = useInvitePreview(code, true)
   const [joining, setJoining] = useState(false)
   const [joinError, setJoinError] = useState<string | null>(null)
   // Banido: tentar de novo não adianta, então some o "Aceitar".
@@ -54,7 +54,10 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
   }, [close])
 
   const preview = state.status === 'ready' ? state.preview : null
-  const isMember = preview ? servers.some((s) => s.id === preview.server_id) : false
+  // is_member vem do servidor (logado); a lista local cobre o resto.
+  const isMember = preview
+    ? (preview.is_member ?? servers.some((s) => s.id === preview.server_id))
+    : false
   const myName = me?.display_name || me?.username || 'você'
   // Entrar em servidor pede o e-mail confirmado (contas antigas não trazem o campo).
   const unverified = me?.email_verified === false
@@ -197,7 +200,7 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
                   </p>
                   <Button
                     className="mt-3 w-full py-2.5"
-                    onClick={() => openServer(preview.server_id)}
+                    onClick={() => preview.server_id && openServer(preview.server_id)}
                   >
                     Abrir servidor
                   </Button>

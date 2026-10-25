@@ -20,6 +20,7 @@ export type WsEventType =
   | 'server:member:roles'
   | 'server:removed'
   | 'server:permissions:invalidate'
+  | 'server:invite_code'
   | 'role:create'
   | 'role:update'
   | 'role:delete'

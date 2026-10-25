@@ -116,7 +116,9 @@ check('ban da carol antes de ela entrar', (await api(`/servers/${server.id}/bans
 // Prévia pública: só o necessário, sem login.
 const preview = await api(`/invites/${code.toLowerCase()}/preview`)
 check('prévia sem login responde 200', preview.status === 200, preview.status)
-check('prévia só com campos públicos', JSON.stringify(Object.keys(preview.body).sort()) === JSON.stringify(['icon_url', 'member_count', 'name', 'online_count', 'server_id']), Object.keys(preview.body))
+check('prévia anônima só com campos públicos (sem id)', JSON.stringify(Object.keys(preview.body).sort()) === JSON.stringify(['icon_url', 'member_count', 'name', 'online_count']), Object.keys(preview.body))
+const signedPreview = (await api(`/invites/${code}/preview`, { token: ana.token })).body
+check('logado recebe id e se já é membro', signedPreview.server_id === server.id && signedPreview.is_member === true, { id: signedPreview.server_id, is_member: signedPreview.is_member })
 check('prévia conta 1 membro', preview.body.member_count === 1, preview.body.member_count)
 check('código inexistente é 404', (await api('/invites/ZZZZ2222/preview')).status === 404)
 check('código malformado é 404', (await api('/invites/abc!/preview')).status === 404)
@@ -244,10 +246,31 @@ try {
   await anonPage.getByText('Você foi convidado(a) para entrar').waitFor({ timeout: 15000 })
   await anonPage.screenshot({ path: `${SHOTS}/11-landing-celular.png` })
 
-  // 11. Limite por IP da prévia (por último: gasta a cota deste IP).
+  // 11. "Gerar novo link" (a Bia, membro comum, pode convidar): o link
+  // antigo para de funcionar na hora.
+  await page.goto(APP + `servers/${server.id}`)
+  await page.getByRole('button', { name: 'Convidar', exact: true }).first().click()
+  const linkBox = page.getByLabel('Link de convite')
+  await page.waitForFunction((c) => document.querySelector('[aria-label="Link de convite"]')?.value.endsWith(`/convite/${c}`), code)
+  await page.getByRole('button', { name: 'Gerar novo link' }).click()
+  await page.getByText('O link atual para de funcionar na hora').waitFor({ timeout: 5000 })
+  await shot('12-gerar-novo-link')
+  await page.getByRole('dialog', { name: 'Gerar novo link?' }).getByRole('button', { name: 'Gerar novo link' }).click()
+  await page.waitForFunction((c) => {
+    const v = document.querySelector('[aria-label="Link de convite"]')?.value ?? ''
+    return /\/convite\/[A-Z2-9]{8}$/.test(v) && !v.endsWith(`/convite/${c}`)
+  }, code)
+  const newCode = (await linkBox.inputValue()).split('/').pop()
+  check('o link mudou na tela', newCode !== code, newCode)
+  check('o link antigo deixa de valer na hora', (await api(`/invites/${code}/preview`)).status === 404)
+  check('o link novo vale', (await api(`/invites/${newCode}/preview`)).status === 200)
+  const noPerm = await api(`/servers/${server.id}/invite-code/reset`, { token: carol.token, method: 'POST' })
+  check('quem não é membro não gera link', noPerm.status === 403, noPerm.status)
+
+  // 12. Limite por IP da prévia (por último: gasta a cota deste IP).
   let limited = null
   for (let i = 0; i < 80 && !limited; i++) {
-    const res = await fetch(`${API}/invites/${code}/preview`)
+    const res = await fetch(`${API}/invites/${newCode}/preview`)
     if (res.status === 429) limited = res.headers.get('retry-after')
   }
   check('prévia tem limite por IP (429 + Retry-After)', Boolean(limited), limited)

@@ -29,15 +29,20 @@ export function declineInvite(id: string): Promise<{ message: string }> {
   return request<{ message: string }>(`/invites/${id}/decline`, { method: 'POST' })
 }
 
-/** Prévia pública do link de convite (abre antes do login; sem token). */
+/**
+ * Prévia do link de convite. Pública (abre antes do login); só quem manda o
+ * token recebe o id do servidor e se já é membro.
+ */
 export interface InvitePreview {
-  server_id: string
+  server_id?: string
+  is_member?: boolean
   name: string
   icon_url?: string | null
   member_count: number
   online_count: number
 }
 
-export function getInvitePreview(code: string): Promise<InvitePreview> {
-  return rawRequest<InvitePreview>(`/invites/${encodeURIComponent(code)}/preview`)
+export function getInvitePreview(code: string, signedIn = false): Promise<InvitePreview> {
+  const path = `/invites/${encodeURIComponent(code)}/preview`
+  return signedIn ? request<InvitePreview>(path) : rawRequest<InvitePreview>(path)
 }
