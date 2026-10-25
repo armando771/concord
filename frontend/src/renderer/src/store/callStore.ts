@@ -200,7 +200,7 @@ let serverSpeakers: string[] = []
 /** Fala do próprio usuário detectada aqui; null = sem detecção local. */
 let localSpeaking: boolean | null = null
 /** Detecção local em andamento (identifica callbacks de uma já parada). */
-let speakingWatch: { stop: () => void } | null = null
+let speakingWatch: { track: MediaStreamTrack; stop: () => void } | null = null
 
 // Compartilhamento de tela (não-reativo; o estado reativo é localScreenStream)
 let localScreenStream: MediaStream | null = null
@@ -266,7 +266,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     stopLocalSpeaking()
     const track = localMic?.stream.getAudioTracks()[0]
     if (!track) return
-    const watch = { stop: () => {} }
+    const watch = { track, stop: () => {} }
     speakingWatch = watch
     localSpeaking = false
     watch.stop = watchLocalSpeaking(track, {
@@ -342,7 +342,8 @@ export const useCallStore = create<CallState>()((set, get) => {
     })
     media = connection
     // Mesma track que vai ser publicada; sobrevive à troca de sala (resync).
-    if (!speakingWatch) startLocalSpeaking()
+    // Só reinicia se a detecção ficou presa a uma track antiga.
+    if (speakingWatch?.track !== mic) startLocalSpeaking()
 
     try {
       const { token } = await retry(() => getCallToken(callId), {

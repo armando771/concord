@@ -5,6 +5,13 @@ import workletUrl from './voiceActivityWorklet.ts?worker&url'
 // para o que os outros de fato ouvem. Contexto de áudio próprio, sem saída
 // (sinkId "none"), então não abre dispositivo de som.
 
+/**
+ * Contexto que não sai de "suspended" (política de autoplay sem gesto, ex.:
+ * web) nunca mediria nada e deixaria o anel apagado: depois disto, volta ao
+ * servidor.
+ */
+const RESUME_TIMEOUT_MS = 2_000
+
 export interface LocalSpeakingHandlers {
   onChange: (speaking: boolean) => void
   /** Não deu para montar (worklet não carregou etc.): quem chama volta ao servidor. */
@@ -43,11 +50,23 @@ export function watchLocalSpeaking(
     }
     // Ligado ao destino para ser processado em todo navegador (a saída é muda).
     source.connect(node).connect(ctx.destination)
-    if (ctx.state === 'suspended') await ctx.resume()
+    if (ctx.state !== 'running') {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('AudioContext suspenso')), RESUME_TIMEOUT_MS)
+      })
+      try {
+        await Promise.race([ctx.resume(), timeout])
+      } finally {
+        clearTimeout(timer)
+      }
+    }
   }
   setup().catch((err) => {
     if (stopped) return
     console.error('[fala] detecção local indisponível — usando a do servidor:', err)
+    stopped = true
+    void ctx.close().catch(() => {})
     handlers.onUnavailable()
   })
 
