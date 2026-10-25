@@ -107,6 +107,7 @@ Defina `PUBLIC_URL` no `backend/.env` com o endereço público do túnel
 
 ```bash
 scripts/release-win.sh          # ou: scripts/release-win.sh 0.3.0
+scripts/release-linux.sh        # usa a mesma versão do package.json, sem incrementá-la
 ```
 
 O script faz quatro coisas:
@@ -122,8 +123,22 @@ O script faz quatro coisas:
 Como o app não é assinado, o Windows mostra "O Windows protegeu o
 computador". Basta clicar em **Mais informações → Executar assim mesmo**.
 
+**Linux x64:** mande `frontend/dist/Salinha-<versão>-x64.AppImage` ou o link da
+landing page. Nas propriedades do arquivo, permita executar como programa
+(ou use `chmod +x Salinha-<versão>-x64.AppImage`) e abra-o como usuário normal.
+Algumas distribuições exigem instalar o FUSE 2. Não use `sudo` nem desative o
+sandbox. Guarde o AppImage numa pasta sua com permissão de escrita: o
+atualizador substitui o arquivo nessa pasta. Executar uma cópia extraída em
+vez do AppImage não oferece atualização automática.
+
+O release Linux usa a mesma chave Ed25519 do Windows e publica o AppImage,
+seu `.sig` e `latest-linux.yml`. O Windows continua usando `latest.yml`.
+Para manter versões iguais, execute o release Windows e depois o Linux,
+ou passe explicitamente a mesma versão aos dois scripts. Ambos precisam
+terminar com sucesso antes de executar o deploy. No CI isso é obrigatório.
+
 **Depois disso, não precisa mandar mais nada.** Para cada versão nova, rode
-`scripts/release-win.sh` de novo:
+`scripts/release-win.sh` e depois `scripts/release-linux.sh` de novo:
 
 - O app checa atualizações ao abrir e a cada 5 minutos.
 - Ele baixa a versão nova em segundo plano, mas só fora de chamada, porque o
@@ -135,6 +150,18 @@ computador". Basta clicar em **Mais informações → Executar assim mesmo**.
 
 > `scripts/build-win.sh <endereço>` ainda gera um `.exe` avulso (portable +
 > instalador), mas sem atualização automática.
+> Para um AppImage avulso: `scripts/build-linux.sh <endereço>`.
+
+### No app (Linux)
+
+- Chat, voz e vídeo precisam ser validados na distribuição de destino.
+- Compartilhamento de tela é **sem áudio**; o helper de áudio é exclusivo do Windows.
+- No Wayland, a captura depende do portal de compartilhamento do ambiente gráfico.
+- Não há promessa de fechar para a bandeja nem de iniciar com o sistema no Linux.
+- Para validar um release: abrir o AppImage, entrar na conta, enviar mensagem,
+  testar microfone/câmera e compartilhar tela. Depois publicar uma segunda
+  versão e conferir download, assinatura e substituição do AppImage, inclusive
+  adiamento do download durante chamadas. Conferir também uma sessão X11 e Wayland.
 
 ### No app (Windows)
 
@@ -194,11 +221,14 @@ Numa VPS com IP público não precisa de playit, e dá para ter HTTPS de graça.
    migrations, o compose, a página de download (`site/`) e as atualizações
    do app, e reinicia. Reiniciar não
    derruba quem está em chamada.
-7. **Publicar versão do app:** `scripts/release-win.sh` e depois
+7. **Publicar versão do app:** `scripts/release-win.sh`, `scripts/release-linux.sh` e depois
    `scripts/deploy-vps.sh root@IP`.
 
 **Página de download:** `site/` é uma página estática que lê
-`/updates/latest.yml` e aponta o botão para o instalador mais recente. No
+`/updates/latest.yml` (Windows) e `/updates/latest-linux.yml` (Linux) e aponta
+cada botão para o artefato correspondente. A falha de um manifesto não bloqueia
+o download da outra plataforma. O deploy mantém os três instaladores Windows
+e três AppImages mais recentes. No
 Caddyfile, um domínio próprio serve a página e repassa `/updates/` ao backend:
 ```
 salinha.exemplo.com {
