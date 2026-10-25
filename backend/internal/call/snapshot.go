@@ -10,6 +10,8 @@ type CallSnapshot struct {
 	Participants []string
 	// Quem conta como "em call de verdade" (as mesmas regras do XP de voz).
 	Voice []string
+	// Quem não está surdo (está ouvindo), como os ouvintes do XP.
+	Listeners []string
 	// Quem está compartilhando a tela.
 	ScreenSharers []string
 }
@@ -26,8 +28,11 @@ func (s *Service) CallSnapshots() []CallSnapshot {
 			continue
 		}
 		snap := CallSnapshot{CallID: callID, Voice: eligibleVoiceUsers(ac)}
-		for userID := range ac.participants {
+		for userID, p := range ac.participants {
 			snap.Participants = append(snap.Participants, userID)
+			if !p.deafened {
+				snap.Listeners = append(snap.Listeners, userID)
+			}
 		}
 		for userID := range s.screenSharers[callID] {
 			if _, ok := ac.participants[userID]; ok {
@@ -35,6 +40,7 @@ func (s *Service) CallSnapshots() []CallSnapshot {
 			}
 		}
 		sort.Strings(snap.Participants)
+		sort.Strings(snap.Listeners)
 		sort.Strings(snap.ScreenSharers)
 		snaps = append(snaps, snap)
 	}

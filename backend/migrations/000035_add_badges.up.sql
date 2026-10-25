@@ -4,7 +4,8 @@
 --     a cada perfil aberto). Mensagem apagada não desconta; reação removida
 --     desconta (senão tirar e pôr a mesma reação subiria o badge).
 --   - tempo transmitindo, call de madrugada/manhã, maior call e maior call
---     seguida: gravados pelo tracker do backend (internal/badge).
+--     seguida: gravados pelo tracker do backend (internal/badge), com as
+--     mesmas regras do XP de voz.
 CREATE TABLE user_badge_stats (
     user_id UUID PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
     messages_sent BIGINT NOT NULL DEFAULT 0 CHECK (messages_sent >= 0),
@@ -14,6 +15,10 @@ CREATE TABLE user_badge_stats (
     morning_seconds BIGINT NOT NULL DEFAULT 0 CHECK (morning_seconds >= 0),
     peak_call_size INT NOT NULL DEFAULT 0 CHECK (peak_call_size >= 0),
     longest_session_seconds BIGINT NOT NULL DEFAULT 0 CHECK (longest_session_seconds >= 0),
+    -- Sessão de maratona em andamento, gravada no desligamento (deploy) para
+    -- o processo novo continuar a contagem.
+    session_seconds BIGINT NOT NULL DEFAULT 0 CHECK (session_seconds >= 0),
+    session_saved_at TIMESTAMPTZ NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

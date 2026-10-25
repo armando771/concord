@@ -342,9 +342,15 @@ func main() {
 
 	// Badges do perfil (tempo transmitindo, madrugada, maior call... somados
 	// olhando as chamadas; o resto vem dos contadores do banco)
-	badgeService := badge.BadgeService(badge.BadgeRepository(db), hub, callService, hub, time.Local)
+	// Horas de Coruja/Madrugador em Brasília (nil), não no relógio da VPS. No
+	// desligamento grava o que estava na memória antes de fechar o banco.
+	badgeService := badge.BadgeService(badge.BadgeRepository(db), hub, callService, hub, nil)
 	badgeHandler := badge.BadgeHandler(badgeService)
-	go badgeService.Run(context.Background())
+	badgeDone := make(chan struct{})
+	go func() {
+		defer close(badgeDone)
+		badgeService.Run(ctx)
+	}()
 
 	// WebSocket handler
 	// "Fulano está digitando…": mesma regra de escrita das mensagens.
@@ -453,6 +459,13 @@ func main() {
 	}
 	if err != nil {
 		log.Printf("desligamento: requisições ainda em andamento após %s foram cortadas", shutdownTimeout)
+	}
+	// Os badges gravam o último minuto e as maratonas em andamento (o ctx já
+	// foi cancelado pelo SIGTERM); o db.Close do defer vem depois.
+	select {
+	case <-badgeDone:
+	case <-time.After(5 * time.Second):
+		log.Println("desligamento: badges não terminaram de gravar a tempo")
 	}
 	log.Println("servidor desligado")
 }

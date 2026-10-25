@@ -11,7 +11,7 @@ import (
 )
 
 type badgeSource interface {
-	Badges(ctx context.Context, userID string) (Response, error)
+	Badges(ctx context.Context, viewerID, userID string) (Response, error)
 }
 
 type Handler struct {
@@ -23,9 +23,11 @@ func BadgeHandler(service *Service) *Handler {
 }
 
 // Get devolve os badges de alguém: GET /users/:id/badges. Quem pode ver o
-// perfil (qualquer pessoa logada, como em /users/:id/profile) vê os badges.
+// perfil (qualquer pessoa logada, como em /users/:id/profile) vê os badges
+// conquistados; números e progresso, só a própria pessoa.
 func (h *Handler) Get(c *gin.Context) {
-	if _, ok := c.Get("userID"); !ok {
+	viewer, ok := c.Get("userID")
+	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -34,7 +36,8 @@ func (h *Handler) Get(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
-	res, err := h.service.Badges(c.Request.Context(), id)
+	viewerID, _ := viewer.(string)
+	res, err := h.service.Badges(c.Request.Context(), viewerID, id)
 	if errors.Is(err, ErrUserNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return

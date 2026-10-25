@@ -1,7 +1,6 @@
 package badge
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,24 +9,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type fakeSource struct{ called string }
+const (
+	ownerID = "00000000-0000-0000-0000-000000000001"
+	otherID = "00000000-0000-0000-0000-000000000009"
+)
 
-func (f *fakeSource) Badges(_ context.Context, userID string) (Response, error) {
-	f.called = userID
-	if userID == "00000000-0000-0000-0000-000000000002" {
-		return Response{}, ErrUserNotFound
-	}
-	badges, _ := Evaluate(Stats{CreatedAt: now}, nil, now)
-	return Response{UserID: userID, Badges: badges}, nil
-}
-
-func serve(t *testing.T, src badgeSource, path string, logged bool) *httptest.ResponseRecorder {
+func serve(t *testing.T, src badgeSource, path string, viewer string) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	auth := func(c *gin.Context) {
-		if logged {
-			c.Set("userID", "00000000-0000-0000-0000-000000000009")
+		if viewer != "" {
+			c.Set("userID", viewer)
 		}
 		c.Next()
 	}
@@ -37,33 +30,69 @@ func serve(t *testing.T, src badgeSource, path string, logged bool) *httptest.Re
 	return w
 }
 
-func TestHandlerReturnsBadges(t *testing.T) {
-	src := &fakeSource{}
-	w := serve(t, src, "/api/users/00000000-0000-0000-0000-000000000001/badges", true)
+func serviceWithOwner() *Service {
+	s, st, _, _, _ := newTestService()
+	st.stats[ownerID] = Stats{CreatedAt: now.AddDate(0, -2, 0), MessagesSent: 2345, OwnedServers: 2}
+	return s
+}
+
+func TestHandlerOwnerGetsTheFullView(t *testing.T) {
+	w := serve(t, serviceWithOwner(), "/api/users/"+ownerID+"/badges", ownerID)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d", w.Code)
 	}
-	var res Response
+	var res struct {
+		Self   bool    `json:"self"`
+		Badges []Badge `json:"badges"`
+	}
 	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Badges) != len(Catalog) || res.Badges[0].Tiers[0].Name != "Ouvinte" {
-		t.Fatalf("body = %s", w.Body.String())
+	if !res.Self || len(res.Badges) != len(Catalog) {
+		t.Fatalf("owner body = %s", w.Body.String())
+	}
+	if msgs := find(t, res.Badges, "mensagens"); msgs.Value != 2345 || msgs.NextThreshold == nil {
+		t.Fatalf("owner mensagens = %+v", msgs)
+	}
+}
+
+func TestHandlerOthersGetThePublicView(t *testing.T) {
+	w := serve(t, serviceWithOwner(), "/api/users/"+ownerID+"/badges", otherID)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	var res struct {
+		Self   bool             `json:"self"`
+		Badges []map[string]any `json:"badges"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Self {
+		t.Fatal("public view marked as self")
+	}
+	for _, b := range res.Badges {
+		if _, ok := b["value"]; ok {
+			t.Fatalf("value leaked: %v", b)
+		}
+		if _, ok := b["progress"]; ok {
+			t.Fatalf("progress leaked: %v", b)
+		}
+		if b["category"] == "dono" && b["tier_name"] != "Anfitrião" {
+			t.Fatalf("dono = %v", b)
+		}
 	}
 }
 
 func TestHandlerRejectsBadIDsAndUnknownUsers(t *testing.T) {
-	src := &fakeSource{}
-	if w := serve(t, src, "/api/users/nope/badges", true); w.Code != http.StatusNotFound {
+	s := serviceWithOwner()
+	if w := serve(t, s, "/api/users/nope/badges", otherID); w.Code != http.StatusNotFound {
 		t.Fatalf("bad id status = %d", w.Code)
 	}
-	if src.called != "" {
-		t.Fatalf("service called with a bad id")
-	}
-	if w := serve(t, src, "/api/users/00000000-0000-0000-0000-000000000002/badges", true); w.Code != http.StatusNotFound {
+	if w := serve(t, s, "/api/users/00000000-0000-0000-0000-000000000002/badges", otherID); w.Code != http.StatusNotFound {
 		t.Fatalf("unknown user status = %d", w.Code)
 	}
-	if w := serve(t, src, "/api/users/00000000-0000-0000-0000-000000000001/badges", false); w.Code != http.StatusUnauthorized {
+	if w := serve(t, s, "/api/users/"+ownerID+"/badges", ""); w.Code != http.StatusUnauthorized {
 		t.Fatalf("anonymous status = %d", w.Code)
 	}
 }

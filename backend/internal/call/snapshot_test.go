@@ -8,6 +8,7 @@ import (
 func TestCallSnapshotsListActiveCallsOnly(t *testing.T) {
 	s := serviceWithCall("call-1", "ana", "bia", "caio")
 	s.calls["call-1"].participants["bia"].muted = true
+	s.calls["call-1"].participants["caio"].deafened = true
 	s.screenSharers["call-1"] = map[string]struct{}{"caio": {}}
 
 	ringing := serviceWithCall("call-2", "duda", "eli")
@@ -25,8 +26,11 @@ func TestCallSnapshotsListActiveCallsOnly(t *testing.T) {
 	if !reflect.DeepEqual(snap.Participants, []string{"ana", "bia", "caio"}) {
 		t.Fatalf("participants = %v", snap.Participants)
 	}
-	if !reflect.DeepEqual(snap.Voice, []string{"ana", "caio"}) {
-		t.Fatalf("voice = %v, want the XP-eligible ones (bia is muted)", snap.Voice)
+	if !reflect.DeepEqual(snap.Voice, []string{"ana"}) {
+		t.Fatalf("voice = %v, want the XP-eligible ones (bia muted, caio deafened)", snap.Voice)
+	}
+	if !reflect.DeepEqual(snap.Listeners, []string{"ana", "bia"}) {
+		t.Fatalf("listeners = %v, want everyone not deafened", snap.Listeners)
 	}
 	if !reflect.DeepEqual(snap.ScreenSharers, []string{"caio"}) {
 		t.Fatalf("screen sharers = %v", snap.ScreenSharers)

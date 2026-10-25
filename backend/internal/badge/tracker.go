@@ -2,6 +2,7 @@ package badge
 
 import (
 	"time"
+	_ "time/tzdata" // fuso de Brasília também no Windows e em contêineres sem tzdata
 
 	"gin-quickstart/backend/internal/call"
 )
@@ -25,6 +26,15 @@ type pending struct {
 	longest                time.Duration
 }
 
+// Brasilia é o fuso das horas de Coruja e Madrugador, fixo no código (o
+// relógio da VPS costuma estar em UTC). Mesmo padrão dos aniversários.
+func Brasilia() *time.Location {
+	if loc, err := time.LoadLocation("America/Sao_Paulo"); err == nil {
+		return loc
+	}
+	return time.FixedZone("BRT", -3*60*60)
+}
+
 // tracker soma, em memória, o que os badges de call precisam. Não sabe de
 // banco: o serviço drena de tempos em tempos e grava.
 type tracker struct {
@@ -37,7 +47,7 @@ type tracker struct {
 
 func newTracker(start time.Time, loc *time.Location) *tracker {
 	if loc == nil {
-		loc = time.Local
+		loc = Brasilia()
 	}
 	return &tracker{
 		loc:      loc,
@@ -69,31 +79,36 @@ func (t *tracker) accrue(snaps []call.CallSnapshot, now time.Time) {
 
 	inSession := make(map[string]bool)
 	for _, s := range snaps {
-		size := int64(len(s.Participants))
-		company := size >= 2
-		for _, userID := range s.Participants {
-			if company {
+		// Festeiro: quantas pessoas estão ouvindo (surdo não conta), e só
+		// quem está ouvindo leva o crédito.
+		if size := int64(len(s.Listeners)); size >= 2 {
+			for _, userID := range s.Listeners {
 				p := t.get(userID)
 				if size > p.peak {
 					p.peak = size
 				}
-				inSession[userID] = true
-				t.sessions[userID] += elapsed
-				if t.sessions[userID] > p.longest {
-					p.longest = t.sessions[userID]
-				}
 			}
 		}
+		// Coruja, Madrugador e Maratona seguem o XP de voz: sem mute, sem
+		// surdo e com mais alguém ouvindo.
 		for _, userID := range s.Voice {
+			p := t.get(userID)
 			switch {
 			case hour < 5:
-				t.get(userID).night += elapsed
+				p.night += elapsed
 			case hour < 8:
-				t.get(userID).morning += elapsed
+				p.morning += elapsed
+			}
+			inSession[userID] = true
+			t.sessions[userID] += elapsed
+			if t.sessions[userID] > p.longest {
+				p.longest = t.sessions[userID]
 			}
 		}
-		if company {
-			for _, userID := range s.ScreenSharers {
+		// Streamer: precisa de mais alguém ouvindo (quem transmite pode
+		// estar mutado).
+		for _, userID := range s.ScreenSharers {
+			if hasOtherListener(s.Listeners, userID) {
 				t.get(userID).stream += elapsed
 			}
 		}
@@ -102,6 +117,49 @@ func (t *tracker) accrue(snaps []call.CallSnapshot, now time.Time) {
 		if !inSession[userID] {
 			delete(t.sessions, userID)
 		}
+	}
+}
+
+func hasOtherListener(listeners []string, userID string) bool {
+	for _, id := range listeners {
+		if id != userID {
+			return true
+		}
+	}
+	return false
+}
+
+// resumeSessions recebe as sessões de maratona que o processo anterior
+// gravou ao desligar (deploy): quem continua em call não recomeça do zero.
+func (t *tracker) resumeSessions(sessions map[string]time.Duration) {
+	for userID, d := range sessions {
+		if d > t.sessions[userID] {
+			t.sessions[userID] = d
+		}
+	}
+}
+
+// activeSessions é uma cópia das sessões em andamento (para gravar).
+func (t *tracker) activeSessions() map[string]time.Duration {
+	out := make(map[string]time.Duration, len(t.sessions))
+	for userID, d := range t.sessions {
+		out[userID] = d
+	}
+	return out
+}
+
+// restore devolve um delta que não conseguiu ser gravado, para ir no
+// próximo flush.
+func (t *tracker) restore(userID string, d Delta) {
+	p := t.get(userID)
+	p.stream += time.Duration(d.Stream) * time.Second
+	p.night += time.Duration(d.Night) * time.Second
+	p.morning += time.Duration(d.Morning) * time.Second
+	if d.PeakCallSize > p.peak {
+		p.peak = d.PeakCallSize
+	}
+	if l := time.Duration(d.LongestSession) * time.Second; l > p.longest {
+		p.longest = l
 	}
 }
 

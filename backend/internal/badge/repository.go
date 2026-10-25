@@ -141,3 +141,64 @@ func (r *Repository) AddCallStats(ctx context.Context, userID string, d Delta) e
 	)
 	return err
 }
+
+// SaveSessions grava, no desligamento, as sessões de maratona em andamento
+// (segundos seguidos em call) para o processo novo continuar a contagem.
+func (r *Repository) SaveSessions(ctx context.Context, sessions map[string]int64) error {
+	if len(sessions) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(sessions))
+	secs := make([]int64, 0, len(sessions))
+	for id, s := range sessions {
+		ids = append(ids, id)
+		secs = append(secs, s)
+	}
+	_, err := r.db.Exec(
+		ctx,
+		`
+		INSERT INTO user_badge_stats (user_id, session_seconds, session_saved_at)
+		SELECT id, s, NOW() FROM unnest($1::uuid[], $2::bigint[]) AS x(id, s)
+		ON CONFLICT (user_id) DO UPDATE SET
+			session_seconds = EXCLUDED.session_seconds,
+			session_saved_at = EXCLUDED.session_saved_at
+		`,
+		ids, secs,
+	)
+	return err
+}
+
+// LoadSessions lê as sessões gravadas há menos de maxAge (o deploy acabou de
+// reiniciar) e as consome: um reinício depois não as reaproveita de novo.
+func (r *Repository) LoadSessions(ctx context.Context, maxAge time.Duration) (map[string]int64, error) {
+	rows, err := r.db.Query(
+		ctx,
+		`
+		UPDATE user_badge_stats SET session_seconds = 0, session_saved_at = NULL
+		FROM (
+			SELECT user_id, session_seconds AS s, session_saved_at AS at
+			FROM user_badge_stats WHERE session_saved_at IS NOT NULL FOR UPDATE
+		) old
+		WHERE user_badge_stats.user_id = old.user_id
+		RETURNING old.user_id, old.s, old.at > NOW() - make_interval(secs => $1)
+		`,
+		maxAge.Seconds(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int64{}
+	for rows.Next() {
+		var id string
+		var s int64
+		var fresh bool
+		if err := rows.Scan(&id, &s, &fresh); err != nil {
+			return nil, err
+		}
+		if fresh && s > 0 {
+			out[id] = s
+		}
+	}
+	return out, rows.Err()
+}

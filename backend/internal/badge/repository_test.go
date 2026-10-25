@@ -94,6 +94,25 @@ func TestRepositoryDB(t *testing.T) {
 		t.Fatalf("dono unlocked_at = %v, want the first one %v", got, at)
 	}
 
+	// Maratona em andamento sobrevive ao deploy, uma vez só.
+	if err := repo.SaveSessions(ctx, map[string]int64{userID: 7200}); err != nil {
+		t.Fatal(err)
+	}
+	sessions, err := repo.LoadSessions(ctx, time.Minute)
+	if err != nil || sessions[userID] != 7200 {
+		t.Fatalf("sessions = %v, %v", sessions, err)
+	}
+	if again, _ := repo.LoadSessions(ctx, time.Minute); again[userID] != 0 {
+		t.Fatalf("sessions read twice: %v", again)
+	}
+	if err := repo.SaveSessions(ctx, map[string]int64{userID: 60}); err != nil {
+		t.Fatal(err)
+	}
+	exec(`UPDATE user_badge_stats SET session_saved_at = NOW() - INTERVAL '1 hour' WHERE user_id = $1`, userID)
+	if old, _ := repo.LoadSessions(ctx, time.Minute); old[userID] != 0 {
+		t.Fatalf("stale session resumed: %v", old)
+	}
+
 	if _, err := repo.Stats(ctx, uuid.NewString()); err != ErrUserNotFound {
 		t.Fatalf("unknown user err = %v", err)
 	}
