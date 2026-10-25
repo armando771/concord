@@ -1,6 +1,12 @@
-import { useState } from 'react'
-import { removeQueueItem, skipMusic, swapQueueItems, type MusicItem } from '../../api/music'
-import { canSwap, formatDuration, T17, T20 } from '../../lib/music'
+import { useEffect, useState } from 'react'
+import {
+  removeQueueItem,
+  setVideoWatching,
+  skipMusic,
+  swapQueueItems,
+  type MusicItem
+} from '../../api/music'
+import { canSwap, formatDuration, T17, T20, wantsVideo } from '../../lib/music'
 import { useAuthStore } from '../../store/authStore'
 import { useMusicStore } from '../../store/musicStore'
 import { showToast } from '../../store/toastStore'
@@ -27,6 +33,16 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
   // useElapsed recebe o início em ms (relógio local) e devolve segundos.
   const startedAt = state?.now ? state.now.started_at - serverOffsetMs : null
   const elapsed = useElapsed(startedAt)
+  const watching = wantsVideo(!!state?.now?.item.has_video, stageVideo, videoEnabled)
+
+  // Único ponto que avisa o backend que há espectador (não é contado por referência).
+  useEffect(() => {
+    if (!watching) return
+    void setVideoWatching(serverId, true).catch(() => {})
+    return () => {
+      void setVideoWatching(serverId, false).catch(() => {})
+    }
+  }, [serverId, watching])
 
   if (!state) return null
   const now = state.now

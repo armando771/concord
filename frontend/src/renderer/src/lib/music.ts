@@ -121,3 +121,8 @@ export function videoSyncAction(currentSec: number, targetSec: number): VideoSyn
   if (Math.abs(drift) < 1) return { kind: 'rate', rate: drift > 0 ? 1.05 : 0.95 }
   return { kind: 'seek', to: targetSec }
 }
+
+/** O cliente conta como espectador se o vídeo está no painel ou no palco. */
+export function wantsVideo(hasVideo: boolean, stageVideo: boolean, panelVideo: boolean): boolean {
+  return hasVideo && (stageVideo || panelVideo)
+}

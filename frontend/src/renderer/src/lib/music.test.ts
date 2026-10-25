@@ -9,6 +9,7 @@ import {
   splitBold,
   stepGain,
   videoSyncAction,
+  wantsVideo,
   videoTargetSec
 } from './music'
 import type { MusicItem } from '../api/music'
@@ -102,5 +103,14 @@ describe('sincronia do vídeo', () => {
     expect(videoSyncAction(10, 10.5)).toEqual({ kind: 'rate', rate: 1.05 })
     expect(videoSyncAction(10.5, 10)).toEqual({ kind: 'rate', rate: 0.95 })
     expect(videoSyncAction(10, 12)).toEqual({ kind: 'seek', to: 12 })
+  })
+})
+
+describe('wantsVideo', () => {
+  it('só conta com vídeo disponível e painel ou palco ligado', () => {
+    expect(wantsVideo(false, true, true)).toBe(false)
+    expect(wantsVideo(true, false, false)).toBe(false)
+    expect(wantsVideo(true, true, false)).toBe(true)
+    expect(wantsVideo(true, false, true)).toBe(true)
   })
 })
