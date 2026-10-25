@@ -165,3 +165,20 @@ func TestWatcherRunPollsUntilCancelled(t *testing.T) {
 		t.Fatal("Run não parou com o contexto cancelado")
 	}
 }
+
+func TestWatcherAnnouncesLinuxTarballManifest(t *testing.T) {
+	// Instalação por usuário do Linux (.tar.gz): manifesto próprio.
+	dir := t.TempDir()
+	base := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	var got []Release
+	w := NewWatcher(dir, func(r Release) { got = append(got, r) })
+	w.Poll()
+
+	writeManifest(t, dir, "latest-linux-tar.yml", "version: 0.7.0\npath: Salinha-0.7.0-x64.tar.gz\n", base)
+	w.Poll()
+
+	want := []Release{{File: "latest-linux-tar.yml", Version: "0.7.0"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}

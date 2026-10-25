@@ -31,6 +31,7 @@ const messageColumns = `
 	m.system_kind,
 	m.mention_everyone,
 	m.created_at,
+	m.edited_at,
 	rm.id,
 	rm.author_id,
 	ru.username,
@@ -106,6 +107,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Message, error) 
 		&msg.SystemKind,
 		&msg.MentionEveryone,
 		&msg.CreatedAt,
+		&msg.EditedAt,
 		&replyID,
 		&replyAuthorID,
 		&replyUsername,
@@ -244,6 +246,31 @@ func (r *Repository) ListByConversation(ctx context.Context, conversationID stri
 		return nil, err
 	}
 	return messages, nil
+}
+
+// UpdateContent troca o texto (e o mention_everyone) de uma mensagem do
+// autor e marca edited_at. Mensagem de outro autor (ou que sumiu) não muda e
+// dá ErrMessageNotFound.
+func (r *Repository) UpdateContent(ctx context.Context, id string, authorID string, content string, mentionEveryone *string) error {
+	tag, err := r.db.Exec(
+		ctx,
+		`
+		UPDATE messages
+		SET content = $3, mention_everyone = $4, edited_at = NOW()
+		WHERE id = $1 AND author_id = $2
+		`,
+		id,
+		authorID,
+		content,
+		mentionEveryone,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrMessageNotFound
+	}
+	return nil
 }
 
 func (r *Repository) Delete(ctx context.Context, id string) error {
@@ -395,6 +422,7 @@ func scanMessages(rows rowScanner) ([]Message, error) {
 			&msg.SystemKind,
 			&msg.MentionEveryone,
 			&msg.CreatedAt,
+			&msg.EditedAt,
 			&replyID,
 			&replyAuthorID,
 			&replyUsername,

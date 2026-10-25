@@ -1,4 +1,7 @@
 import { useCallStore } from '../../store/callStore'
+import { useServerStore } from '../../store/serverStore'
+import { useServerNicknames } from '../../store/useServerNames'
+import { serverDisplayName } from '../../lib/serverNames'
 import { showToast } from '../../store/toastStore'
 import Button from '../Button'
 import { VolumeIcon } from '../icons'
@@ -18,6 +21,8 @@ function VoiceChannelView({ channelId }: { channelId: string }): React.JSX.Eleme
   const startedAt = useCallStore((s) => s.startedAt)
   const serverCalls = useCallStore((s) => s.serverCalls)
   const joinVoiceChannel = useCallStore((s) => s.joinVoiceChannel)
+  // O canal é do servidor aberto: nomes com o apelido de lá.
+  const nicknames = useServerNicknames(useServerStore((s) => s.currentServer?.id))
 
   const connectedHere = status !== 'idle' && type === 'channel' && activeChannelId === channelId
 
@@ -82,7 +87,7 @@ function VoiceChannelView({ channelId }: { channelId: string }): React.JSX.Eleme
                 user={{
                   id: p.user_id,
                   username: p.username ?? '',
-                  display_name: p.display_name ?? p.username ?? 'Usuário',
+                  display_name: serverDisplayName({ nickname: nicknames?.[p.user_id] }, p),
                   avatar_url: p.avatar_url ?? null
                 }}
                 isScreen={(serverCalls[channelId]?.screen_sharing ?? []).includes(p.user_id)}

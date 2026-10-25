@@ -7,7 +7,9 @@
 # Envia o backend (binário Linux), migrations, docker-compose.yml, a página
 # de download (site/), o app web (frontend/dist-web, gerado por
 # `yarn build:web`) e as atualizações do app (backend/updates, geradas por
-# release-win.sh/release-linux.sh) para /opt/concord e reinicia o backend.
+# release-win.sh/release-linux.sh: instaladores, AppImage, .tar.gz do Linux e
+# manifestos) para /opt/concord e reinicia o backend. O site/install.sh vai
+# com a chave pública de backend/.release-key embutida.
 # Reiniciar não derruba chamadas: o backend recarrega as chamadas ativas, e a
 # mídia e a sinalização (/rtc, que o Caddy manda direto para o LiveKit —
 # deploy/Caddyfile) seguem no LiveKit. O Caddyfile da VPS não é enviado (use
@@ -46,7 +48,23 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIR="${CONCORD_REMOTE_DIR:-/opt/concord}"
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-30}"
 BIN="$(mktemp)"
-trap 'rm -f "$BIN"' EXIT
+SITE="$(mktemp -d)"
+trap 'rm -rf "$BIN" "$SITE"' EXIT
+
+# Página de download com a chave pública embutida no install.sh: o instalador
+# confere a assinatura Ed25519 do pacote já na primeira instalação.
+KEY="$ROOT/backend/.release-key"
+cp -a "$ROOT/site/." "$SITE/"
+if [[ -f "$KEY" ]]; then
+  openssl pkey -in "$KEY" -pubout >"$SITE/.release-key.pub"
+  "$ROOT/scripts/embed-pubkey.sh" "$ROOT/site/install.sh" "$SITE/.release-key.pub" "$SITE/install.sh"
+  rm -f "$SITE/.release-key.pub"
+elif [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+  echo "chave de assinatura ausente em $KEY: install.sh ficaria sem a chave pública" >&2
+  exit 1
+else
+  echo "aviso: $KEY não existe — install.sh vai sem a chave (só HTTPS + sha512)" >&2
+fi
 
 # Roda um script bash no servidor com variáveis. O ssh junta os argumentos num
 # texto só (um argumento vazio some), então os valores vão como VAR=valor já
@@ -66,12 +84,12 @@ rsync -az "$BIN" "$HOST:$DIR/concord-server.new"
 rsync -az --delete "$ROOT/backend/migrations/" "$HOST:$DIR/migrations.new/"
 # O compose novo só substitui o atual se não recriar nada (ver abaixo).
 rsync -az "$ROOT/backend/docker-compose.yml" "$HOST:$DIR/docker-compose.yml.new"
-rsync -az --delete --chmod=D755,F644 "$ROOT/site/" "$HOST:$DIR/site.new/"
+rsync -az --delete --chmod=D755,F644 "$SITE/" "$HOST:$DIR/site.new/"
 # Instaladores e assinaturas já (arquivos novos, com a versão no nome); os
 # manifestos (latest*.yml) só depois que o backend novo estiver no ar. O Caddy
 # serve /updates direto do disco, então os arquivos precisam ser legíveis.
 if [[ -d "$ROOT/backend/updates" ]]; then
-  rsync -az --chmod=D755,F644 --exclude latest.yml --exclude latest-linux.yml "$ROOT/backend/updates/" "$HOST:$DIR/updates/"
+  rsync -az --chmod=D755,F644 --exclude latest.yml --exclude latest-linux.yml --exclude latest-linux-tar.yml "$ROOT/backend/updates/" "$HOST:$DIR/updates/"
 fi
 
 # Postgres/LiveKit: compara o hash da configuração nova de cada serviço (o que
@@ -241,7 +259,7 @@ if [[ -f "$WEB/index.html" ]]; then
 else
   echo "aviso: $WEB não existe (rode 'yarn build:web' em frontend/) — app web não atualizado" >&2
 fi
-for manifest in latest.yml latest-linux.yml; do
+for manifest in latest.yml latest-linux-tar.yml latest-linux.yml; do
   if [[ -f "$ROOT/backend/updates/$manifest" ]]; then
     rsync -az --chmod=F644 "$ROOT/backend/updates/$manifest" "$HOST:$DIR/updates/"
   fi
@@ -253,4 +271,5 @@ set -euo pipefail
 cd "$DIR/updates"
 { ls -t Salinha-*-setup.exe Concord-*-setup.exe 2>/dev/null || true; } | tail -n +4 | while read -r f; do rm -f "$f" "$f.blockmap" "$f.sig"; done
 { ls -t Salinha-*-x64.AppImage 2>/dev/null || true; } | tail -n +4 | while read -r f; do rm -f "$f" "$f.sig"; done
+{ ls -t Salinha-*-x64.tar.gz 2>/dev/null || true; } | tail -n +4 | while read -r f; do rm -f "$f" "$f.sig"; done
 REMOTE

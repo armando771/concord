@@ -239,7 +239,7 @@ try {
   await waitFor('bia continua ouvindo a ana', () => audioTracks(pageB), (t) => t.includes('live'))
 
   // Seletor do app: aba Aplicativos → a janela "Jogo".
-  await pageA.getByRole('button', { name: 'Compartilhar tela' }).click()
+  await pageA.getByRole('button', { name: 'Compartilhar tela' }).first().click()
   await pageA.getByRole('button', { name: 'Aplicativos' }).click()
   await pageA.getByRole('button', { name: 'Compartilhar', exact: true }).click()
   // A live só é baixada quando alguém assiste.
@@ -295,7 +295,7 @@ try {
     return { w: +(w / a.width).toFixed(2), h: +((w / ar) / a.height).toFixed(2) }
   }), (r) => r !== null && (r.w >= 0.85 || r.h >= 0.7))
 
-  await pageB.getByRole('button', { name: 'Compartilhar tela' }).click()
+  await pageB.getByRole('button', { name: 'Compartilhar tela' }).first().click()
   await pageA.getByRole('button', { name: 'Assistir transmissão' }).click({ timeout: 20000 })
   await waitFor('ana vê a tela da bia (duas telas ao mesmo tempo)', () => videoTracks(pageA), (t) => t.filter((v) => v.startsWith('live:') && !v.endsWith(':0x0')).length >= 2)
 

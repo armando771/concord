@@ -156,6 +156,62 @@ func (h *Handler) DeleteChannelMessage(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "message deleted"})
 }
 
+type editInput struct {
+	Content *string `json:"content"`
+}
+
+// bindEdit lê o corpo do PATCH; content é obrigatório (pode vir vazio).
+func bindEdit(c *gin.Context) (string, bool) {
+	var input editInput
+	if err := c.ShouldBindJSON(&input); err != nil || input.Content == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return "", false
+	}
+	return *input.Content, true
+}
+
+func respondEditError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, ErrNotEditAuthor):
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "not_author"})
+	case errors.Is(err, ErrMessageNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	case errors.Is(err, ErrContentRequired), errors.Is(err, ErrContentTooLong), errors.Is(err, ErrNotEditable):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to edit message"})
+	}
+}
+
+// EditChannelMessage: PATCH /channels/:channelId/messages/:messageId {content}.
+// Só o autor, e só se ainda pode escrever no canal.
+func (h *Handler) EditChannelMessage(c *gin.Context) {
+	channelID := c.Param("channelId")
+	messageID := c.Param("messageId")
+
+	content, ok := bindEdit(c)
+	if !ok {
+		return
+	}
+
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	if !h.requireChannel(c, channelID, userID, permission.SendMessages) {
+		return
+	}
+
+	msg, err := h.service.EditChannelMessage(c.Request.Context(), channelID, messageID, userID, content)
+	if err != nil {
+		respondEditError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, msg)
+}
+
 func (h *Handler) CreateConversationMessage(c *gin.Context) {
 	conversationID := c.Param("id")
 
@@ -232,6 +288,35 @@ func (h *Handler) ListConversationMessages(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, messages)
+}
+
+// EditConversationMessage: PATCH /conversations/:id/messages/:messageId
+// {content}. Só o autor, e só se ainda pode escrever na DM.
+func (h *Handler) EditConversationMessage(c *gin.Context) {
+	conversationID := c.Param("id")
+	messageID := c.Param("messageId")
+
+	content, ok := bindEdit(c)
+	if !ok {
+		return
+	}
+
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	if !h.canSendToConversation(c, conversationID, userID) {
+		return
+	}
+
+	msg, err := h.service.EditConversationMessage(c.Request.Context(), conversationID, messageID, userID, content)
+	if err != nil {
+		respondEditError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, msg)
 }
 
 func (h *Handler) DeleteConversationMessage(c *gin.Context) {

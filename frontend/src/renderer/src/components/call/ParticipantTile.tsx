@@ -3,6 +3,9 @@ import type { CallUserInfo } from '../../store/callStore'
 import { useSoundboardStore } from '../../store/soundboardStore'
 import VoiceStateIcons from './VoiceStateIcons'
 import StreamAudioControls from './StreamAudioControls'
+import FullscreenOverlay from './FullscreenOverlay'
+import { useStreamFullscreen } from './useStreamFullscreen'
+import { ClickDisambiguator, isInteractiveTarget } from '../../lib/fullscreenControls'
 import { VolumeOffIcon, XIcon } from '../icons'
 import { useAuthStore } from '../../store/authStore'
 import { useLevelStore } from '../../store/levelStore'
@@ -14,11 +17,14 @@ export function VideoFill({
   stream,
   fit,
   mirror,
+  square,
   onAspect
 }: {
   stream: MediaStream
   fit: 'cover' | 'contain'
   mirror?: boolean
+  /** Sem cantos arredondados (tela cheia). */
+  square?: boolean
   /** Proporção (largura/altura) do vídeo assim que ela é conhecida/muda. */
   onAspect?: (aspect: number) => void
 }): React.JSX.Element {
@@ -52,7 +58,7 @@ export function VideoFill({
       autoPlay
       playsInline
       muted
-      className={`absolute inset-0 h-full w-full rounded-2xl ${
+      className={`absolute inset-0 h-full w-full ${square ? '' : 'rounded-2xl'} ${
         fit === 'contain' ? 'bg-black object-contain' : 'object-cover'
       } ${mirror ? '-scale-x-100' : ''}`}
     />
@@ -75,7 +81,8 @@ function ParticipantTile({
   locallyMuted = false,
   action,
   onClose,
-  streamAudioUserId
+  streamAudioUserId,
+  fullscreenable = false
 }: {
   user: CallUserInfo
   speaking?: boolean
@@ -102,6 +109,8 @@ function ParticipantTile({
   onClose?: () => void
   /** Live de outra pessoa: barra de mutar/volume (só para você) ao passar o mouse. */
   streamAudioUserId?: string
+  /** Transmissão assistida: botão e duplo clique de tela cheia (só com vídeo). */
+  fullscreenable?: boolean
 }): React.JSX.Element {
   const activeSound = useSoundboardStore((s) => (isScreen ? undefined : s.activePlays[user.id]))
   const isPlayingSound = Boolean(activeSound)
@@ -120,26 +129,54 @@ function ParticipantTile({
   const celebration = useLevelStore((s) => (isScreen ? undefined : s.celebrations[user.id]))
   const levelFx = celebration ? levelUpEffects(celebration.level, celebration.previous) : null
 
+  const canFullscreen = fullscreenable && !!videoStream && !!streamAudioUserId
+  const {
+    ref: tileRef,
+    active: inFullscreen,
+    toggle: toggleFullscreen
+  } = useStreamFullscreen(canFullscreen)
+  // Clique abre o foco, duplo clique é tela cheia: o clique espera a janela do
+  // duplo para não trocar de tela (e sair do fullscreen) no meio do gesto.
+  const [clicks] = useState(() => new ClickDisambiguator())
+  useEffect(() => () => clicks.cancel(), [clicks])
+  const handleClick = (): void => {
+    if (!onClick || inFullscreen) return
+    if (canFullscreen) clicks.click(onClick)
+    else onClick()
+  }
+  const handleDoubleClick = (e: React.MouseEvent): void => {
+    if (!canFullscreen || isInteractiveTarget(e.target as Element)) return
+    clicks.cancel()
+    toggleFullscreen()
+  }
+
   return (
     <div
-      onClick={onClick}
+      ref={tileRef}
+      onClick={handleClick}
+      onDoubleClick={canFullscreen ? handleDoubleClick : undefined}
       onContextMenu={onContextMenu}
       role={onClick ? 'button' : undefined}
       title={onClick && isScreen ? 'Expandir tela' : undefined}
-      style={fillStyle}
-      className={`group/tile relative flex items-center justify-center overflow-hidden rounded-2xl bg-white/[0.04] transition-all ${dims} ${
-        isScreen
-          ? 'ring-2 ring-[#23a55a] shadow-[0_0_24px_rgba(35,165,90,0.25)]'
-          : speaking || isPlayingSound
+      style={inFullscreen ? undefined : fillStyle}
+      className={`group/tile relative flex items-center justify-center overflow-hidden transition-all ${
+        inFullscreen ? 'bg-black' : `rounded-2xl bg-white/[0.04] ${dims}`
+      } ${
+        inFullscreen
+          ? ''
+          : isScreen
             ? 'ring-2 ring-[#23a55a] shadow-[0_0_24px_rgba(35,165,90,0.25)]'
-            : 'ring-1 ring-white/6'
-      } ${onClick ? 'cursor-pointer hover:brightness-110' : ''}`}
+            : speaking || isPlayingSound
+              ? 'ring-2 ring-[#23a55a] shadow-[0_0_24px_rgba(35,165,90,0.25)]'
+              : 'ring-1 ring-white/6'
+      } ${onClick && !inFullscreen ? 'cursor-pointer hover:brightness-110' : ''}`}
     >
       {videoStream && (
         <VideoFill
           stream={videoStream}
           fit={isScreen ? 'contain' : 'cover'}
           mirror={mirror}
+          square={inFullscreen}
           onAspect={size === 'fill' ? setAspect : undefined}
         />
       )}
@@ -149,7 +186,7 @@ function ParticipantTile({
           aria-hidden="true"
           className="level-anim pointer-events-none absolute inset-0 z-[1] rounded-2xl"
           style={{
-            boxShadow: `inset 0 0 40px 8px ${levelFx.tier.color}, inset 0 0 0 2px ${levelFx.tier.color}`,
+            boxShadow: `inset 0 0 ${Math.round(24 + 32 * levelFx.glow)}px ${Math.round(4 + 8 * levelFx.glow)}px ${levelFx.tier.color}, inset 0 0 0 2px ${levelFx.tier.color}`,
             animation: 'level-tile-glow 1.6s ease-in-out 2 both'
           }}
         />
@@ -184,7 +221,7 @@ function ParticipantTile({
           <span className="h-1.5 w-1.5 shrink-0 animate-ping rounded-full bg-[#23a55a]" />
         </div>
       )}
-      {onClose && (
+      {onClose && !inFullscreen && (
         <button
           onClick={(e) => {
             e.stopPropagation()
@@ -197,7 +234,7 @@ function ParticipantTile({
           <XIcon className="h-3.5 w-3.5" />
         </button>
       )}
-      {isScreen && (
+      {isScreen && !inFullscreen && (
         <div
           className={`absolute top-2 flex items-center gap-1.5 rounded-md bg-[#f23f43] px-1.5 py-0.5 ${
             onClose ? 'right-11' : 'right-2'
@@ -207,8 +244,24 @@ function ParticipantTile({
           <span className="text-[10px] font-bold uppercase tracking-wide text-white">Ao vivo</span>
         </div>
       )}
-      {streamAudioUserId && videoStream && <StreamAudioControls userId={streamAudioUserId} />}
-      <div className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm">
+      {streamAudioUserId && videoStream && !inFullscreen && (
+        <StreamAudioControls
+          userId={streamAudioUserId}
+          onToggleFullscreen={canFullscreen ? toggleFullscreen : undefined}
+        />
+      )}
+      {inFullscreen && streamAudioUserId && (
+        <FullscreenOverlay
+          name={user.display_name}
+          userId={streamAudioUserId}
+          onExit={toggleFullscreen}
+        />
+      )}
+      <div
+        className={`absolute bottom-2 left-2 max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm ${
+          inFullscreen ? 'hidden' : 'flex'
+        }`}
+      >
         {locallyMuted && (
           <span title="Silenciado por você" className="text-gray-300">
             <VolumeOffIcon className="h-3 w-3" />

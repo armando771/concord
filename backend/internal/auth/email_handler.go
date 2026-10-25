@@ -79,7 +79,7 @@ func (h *Handler) VerifyEmail(c *gin.Context) {
 	if !bindJSON(c, &input) {
 		return
 	}
-	if retry, ok := h.limits.verifyByIP.Allow(ipKey(c.ClientIP())); !ok {
+	if retry, ok := h.limits.verifyByIP.Allow(ratelimit.IPKey(c.ClientIP())); !ok {
 		rateLimited(c, retry)
 		return
 	}
@@ -142,7 +142,7 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": user.ErrInvalidEmail.Error()})
 		return
 	}
-	if retry, ok := h.limits.forgotByIP.Allow(ipKey(c.ClientIP())); !ok {
+	if retry, ok := h.limits.forgotByIP.Allow(ratelimit.IPKey(c.ClientIP())); !ok {
 		rateLimited(c, retry)
 		return
 	}
@@ -175,7 +175,7 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	ip := ipKey(c.ClientIP())
+	ip := ratelimit.IPKey(c.ClientIP())
 	if retry, ok := h.limits.resetByIP.Allow(ip); !ok {
 		rateLimited(c, retry)
 		return

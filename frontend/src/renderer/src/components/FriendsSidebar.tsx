@@ -11,17 +11,16 @@ import { useUserLook } from '../store/profileStore'
 import { useUserMenuStore } from '../store/userMenuStore'
 import { showToast } from '../store/toastStore'
 import Avatar from './Avatar'
-import VoiceConnectedPanel from './call/VoiceConnectedPanel'
-import UserBar from './UserBar'
+import SidebarFooter from './SidebarFooter'
 import { FriendsIcon, PlusIcon, XIcon } from './icons'
 import ResizeHandle from './ResizeHandle'
 import { useResizableWidth } from './useResizableWidth'
 import GroupIcon from './friends/GroupIcon'
 import CreateGroupModal from './friends/CreateGroupModal'
-import QuickSwitcherModal from './friends/QuickSwitcherModal'
 import { conversationRoute, conversationTitle } from '../lib/conversations'
 import { hideConversation, leaveGroup, type ConversationSummary } from '../api/conversations'
 import ConfirmModal from './friends/ConfirmModal'
+import { GameLine } from './ActivityLine'
 
 const SIDEBAR_BG = '#0b0c10'
 
@@ -110,7 +109,7 @@ function ConversationRow({
       )}
       <div className="min-w-0 flex-1">
         <p
-          className={`truncate text-[15px] ${
+          className={`truncate text-ds-md ${
             active || unread > 0
               ? 'font-semibold text-white'
               : 'font-medium text-gray-400 group-hover:text-gray-200'
@@ -123,9 +122,14 @@ function ConversationRow({
           )}
         </p>
         {typing ? (
-          <p className="truncate text-xs italic text-violet-300">digitando…</p>
+          <p className="truncate text-ds-xs italic text-violet-300">digitando…</p>
         ) : (
-          isGroup && <p className="truncate text-xs text-gray-500">{conv.members.length} membros</p>
+          (isGroup && (
+            <p className="truncate text-ds-xs font-medium text-gray-500">
+              {(conv.members ?? []).length} membros
+            </p>
+          )) ||
+          (other && <GameLine userId={other.id} className="text-ds-xs font-medium text-gray-500" />)
         )}
       </div>
       {unread > 0 && (
@@ -171,7 +175,7 @@ export function FriendsSidebar(): React.JSX.Element {
   const conversationsLoading = useChatStore((s) => s.conversationsLoading)
   const unreadByRoom = useChatStore((s) => s.unreadByRoom)
   const fetchConversations = useChatStore((s) => s.fetchConversations)
-  const [switcherOpen, setSwitcherOpen] = useState(false)
+  const setQuickSwitcherOpen = useUIStore((s) => s.setQuickSwitcherOpen)
   const [groupOpen, setGroupOpen] = useState(false)
   const [leaving, setLeaving] = useState<ConversationSummary | null>(null)
 
@@ -215,8 +219,8 @@ export function FriendsSidebar(): React.JSX.Element {
         <div className="flex h-12 shrink-0 items-center border-b border-white/6 px-2.5">
           <button
             type="button"
-            onClick={() => setSwitcherOpen(true)}
-            className="w-full cursor-pointer truncate rounded-md bg-[#111214] px-2 py-1.5 text-left text-[13px] text-gray-400 transition-colors hover:text-gray-200"
+            onClick={() => setQuickSwitcherOpen(true)}
+            className="w-full cursor-pointer truncate rounded-md bg-[#111214] px-2 py-1.5 text-left text-ds-sm text-gray-400 transition-colors hover:text-gray-200"
           >
             Encontre ou comece uma conversa
           </button>
@@ -230,7 +234,7 @@ export function FriendsSidebar(): React.JSX.Element {
                 setFriendsTab('online')
                 navigate('/friends')
               }}
-              className={`flex w-full cursor-pointer items-center justify-between rounded-md px-3 py-2 text-[15px] font-medium transition-colors ${
+              className={`flex w-full cursor-pointer items-center justify-between rounded-md px-3 py-2 text-ds-md font-medium transition-colors ${
                 onFriendsPage
                   ? 'bg-white/10 text-white'
                   : 'text-gray-400 hover:bg-white/6 hover:text-gray-200'
@@ -250,7 +254,7 @@ export function FriendsSidebar(): React.JSX.Element {
 
           <div>
             <div className="group flex items-center justify-between px-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 group-hover:text-gray-200">
+              <p className="text-ds-sm font-medium text-gray-400 group-hover:text-gray-200">
                 Mensagens diretas
               </p>
               <button
@@ -265,10 +269,10 @@ export function FriendsSidebar(): React.JSX.Element {
             </div>
             <div className="mt-1 flex flex-col gap-0.5">
               {conversationsLoading && conversations.length === 0 && (
-                <p className="px-2 py-1 text-xs italic text-gray-500">Carregando...</p>
+                <p className="px-2 py-1 text-ds-sm italic text-gray-500">Carregando...</p>
               )}
               {!conversationsLoading && conversations.length === 0 && (
-                <p className="px-2 py-1 text-xs italic text-gray-500">Nenhuma conversa ainda.</p>
+                <p className="px-2 py-1 text-ds-sm italic text-gray-500">Nenhuma conversa ainda.</p>
               )}
               {conversations.map((conv) => (
                 <ConversationRow
@@ -285,13 +289,10 @@ export function FriendsSidebar(): React.JSX.Element {
           </div>
         </div>
 
-        {/* Painel de voz conectada (estilo Discord) */}
-        <VoiceConnectedPanel />
-
-        <UserBar />
+        {/* "Voz conectada" na chamada + a barra do usuário (igual em todas as telas) */}
+        <SidebarFooter />
       </aside>
 
-      {switcherOpen && <QuickSwitcherModal open onClose={() => setSwitcherOpen(false)} />}
       {groupOpen && <CreateGroupModal open onClose={() => setGroupOpen(false)} />}
       <ConfirmModal
         open={leaving !== null}

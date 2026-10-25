@@ -7,7 +7,7 @@ import {
   launchedHidden,
   LOGIN_ITEM_ARGS,
   shouldHideOnClose,
-  shouldNotify,
+  notifyPlan,
   staleLoginItem
 } from './windowPolicy'
 
@@ -28,6 +28,8 @@ interface NotifyPayload {
   toast?: boolean
   /** "Mostrar na barra de tarefas": piscar + selo de não lidas (padrão: ligada). */
   taskbar?: boolean
+  /** A conversa do aviso não está na tela: toast mesmo com a janela em foco. */
+  elsewhere?: boolean
 }
 
 let tray: Tray | null = null
@@ -161,11 +163,18 @@ function requestQuit(win: BrowserWindow | null): void {
 
 /**
  * Garante uma única instância. Retorna false se já havia outra aberta (esta
- * deve encerrar); a outra recebe o foco.
+ * deve encerrar); a outra recebe o foco e os args dela (ex.: o link
+ * salinha://convite/… que abriu o app de novo).
  */
-export function ensureSingleInstance(getWindow: () => BrowserWindow | null): boolean {
+export function ensureSingleInstance(
+  getWindow: () => BrowserWindow | null,
+  onSecondInstance?: (argv: string[]) => void
+): boolean {
   if (!app.requestSingleInstanceLock()) return false
-  app.on('second-instance', () => showWindow(getWindow()))
+  app.on('second-instance', (_event, argv) => {
+    onSecondInstance?.(argv)
+    showWindow(getWindow())
+  })
   return true
 }
 
@@ -210,7 +219,8 @@ export function setupBackground(getWindow: () => BrowserWindow | null, icon: str
   ipcMain.on('notify', (_e, payload: NotifyPayload) => {
     const win = getWindow()
     if (!win || win.isDestroyed()) return
-    if (!shouldNotify({ visible: win.isVisible(), focused: win.isFocused() })) return
+    const plan = notifyPlan({ visible: win.isVisible(), focused: win.isFocused() }, payload)
+    if (!plan.toast) return
     const wantsToast = payload.urgent || payload.toast !== false
     const toast = wantsToast && Notification.isSupported()
     if (wantsToast && !toast) logNotification('Notification.isSupported() = false')
@@ -229,6 +239,7 @@ export function setupBackground(getWindow: () => BrowserWindow | null, icon: str
       notification.on('close', () => activeNotifications.delete(notification))
       notification.show()
     }
+    if (!plan.taskbar) return
     const action = taskbarAction(payload)
     if (action.flash) win.flashFrame(true)
     if (action.badge) {

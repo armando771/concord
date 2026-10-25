@@ -53,7 +53,8 @@ func (r *Repository) AddParticipant(ctx context.Context, participant *CallPartic
 		-- o reinício do backend não o recolocaria na chamada.
 		ON CONFLICT (call_id, user_id) DO UPDATE
 		SET role = EXCLUDED.role, joined_at = NOW(), left_at = NULL,
-			muted = false, deafened = false, screen_sharing = false
+			muted = false, deafened = false, screen_sharing = false,
+			server_muted = false, server_deafened = false
 		RETURNING joined_at
 		`,
 		participant.CallID,
@@ -99,6 +100,23 @@ func (r *Repository) SaveVoiceState(ctx context.Context, callID string, userID s
 		userID,
 		muted,
 		deafened,
+	)
+	return err
+}
+
+// SaveServerVoiceState guarda o silenciar/ensurdecer imposto por um moderador.
+func (r *Repository) SaveServerVoiceState(ctx context.Context, callID string, userID string, serverMuted bool, serverDeafened bool) error {
+	_, err := r.db.Exec(
+		ctx,
+		`
+		UPDATE call_participants
+		SET server_muted = $3, server_deafened = $4
+		WHERE call_id = $1 AND user_id = $2 AND left_at IS NULL
+		`,
+		callID,
+		userID,
+		serverMuted,
+		serverDeafened,
 	)
 	return err
 }
@@ -180,7 +198,9 @@ func (r *Repository) ListParticipants(ctx context.Context, callID string) ([]Cal
 			left_at,
 			muted,
 			deafened,
-			screen_sharing
+			screen_sharing,
+			server_muted,
+			server_deafened
 		FROM call_participants
 		WHERE call_id = $1
 		ORDER BY joined_at
@@ -204,6 +224,8 @@ func (r *Repository) ListParticipants(ctx context.Context, callID string) ([]Cal
 			&p.Muted,
 			&p.Deafened,
 			&p.ScreenSharing,
+			&p.ServerMuted,
+			&p.ServerDeafened,
 		); err != nil {
 			return nil, err
 		}

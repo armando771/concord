@@ -2,6 +2,8 @@ import { useEffect, useMemo } from 'react'
 import { useAuthStore } from '../../store/authStore'
 import { useServerStore } from '../../store/serverStore'
 import { mergeCallPeople } from '../../lib/callParticipants'
+import { serverDisplayName, withServerNames } from '../../lib/serverNames'
+import { useCallNicknames } from '../../store/useServerNames'
 import { sortVoiceMembers } from '../../lib/voiceOrder'
 import { useLevelStore } from '../../store/levelStore'
 import { streamAudioKey, useUserAudioStore } from '../../store/userAudioStore'
@@ -61,14 +63,19 @@ function CallStage({
   const channelEntry = useCallStore((s) => (s.channelId ? s.serverCalls[s.channelId] : undefined))
 
   const meId = me?.id ?? 'me'
+  // Call num canal de voz: cada um com o apelido daquele servidor.
+  const nicknames = useCallNicknames()
   // Lista do backend + quem está na sala de mídia (o backend pode ter perdido alguém).
   const participants = useMemo(
     () =>
-      mergeCallPeople(backendParticipants, mediaPeers, meId, (id) => {
-        const m = members.find((x) => x.user_id === id)
-        return m?.display_name || m?.username
-      }),
-    [backendParticipants, mediaPeers, meId, members]
+      withServerNames(
+        mergeCallPeople(backendParticipants, mediaPeers, meId, (id) => {
+          const m = members.find((x) => x.user_id === id)
+          return m?.display_name || m?.username
+        }),
+        nicknames
+      ),
+    [backendParticipants, mediaPeers, meId, members, nicknames]
   )
   // Mesma ordem da lista do canal na barra lateral (nível, entrada, nome). O
   // mosaico de vídeo tem a ordem que a pessoa arrumou e não passa por aqui.
@@ -89,7 +96,7 @@ function CallStage({
   const meInfo: CallUserInfo = {
     id: meId,
     username: me?.username ?? '',
-    display_name: me?.display_name ?? 'Você'
+    display_name: serverDisplayName({ nickname: nicknames?.[meId] }, me, 'Você')
   }
 
   const nameOf = (userId: string): CallUserInfo =>
@@ -150,6 +157,7 @@ function CallStage({
         onClick={() => setFocused(entry.userId)}
         onClose={entry.local ? undefined : () => stopWatchingScreen(entry.userId)}
         streamAudioUserId={entry.local ? undefined : entry.userId}
+        fullscreenable={!entry.local}
       />
     )
   }
@@ -288,7 +296,7 @@ function CallStage({
           <button
             onClick={() => setFocused(null)}
             aria-label="Sair do modo foco"
-            title="Sair da tela cheia"
+            title="Sair do modo foco"
             className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
           >
             <ChevronDownIcon className="h-4 w-4" />
@@ -316,6 +324,7 @@ function CallStage({
           )}
           locallyMuted={localAudio[streamAudioKey(focused.userId)]?.muted ?? false}
           streamAudioUserId={focused.local ? undefined : focused.userId}
+          fullscreenable={!focused.local}
         />
       </div>
       <div className="flex shrink-0 flex-wrap items-center justify-center gap-3">

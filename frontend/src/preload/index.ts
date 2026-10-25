@@ -31,6 +31,18 @@ const api = {
       ipcRenderer.send('screen-picker:cancel')
     }
   },
+  screenShare: {
+    /** A janela compartilhada sumiu da tela (minimizada): a live congela. */
+    onWindowHidden(cb: () => void): () => void {
+      const listener = (): void => cb()
+      ipcRenderer.on('screen-share:window-hidden', listener)
+      return () => ipcRenderer.removeListener('screen-share:window-hidden', listener)
+    },
+    /** O compartilhamento acabou: para de vigiar a janela. */
+    ended(): void {
+      ipcRenderer.send('screen-share:ended')
+    }
+  },
   screenAudio: {
     /** Não deu para capturar só a janela: o som vai ser o do sistema. */
     onFallback(cb: (logPath: string) => void): () => void {
@@ -53,6 +65,10 @@ const api = {
     /** Versão nova conhecida (e se já está pronta para instalar), ou null. */
     status(): Promise<{ version: string; ready: boolean } | null> {
       return ipcRenderer.invoke('update:status')
+    },
+    /** true = esta instalação não se atualiza sozinha (Linux sem AppImage). */
+    autoUpdateUnavailable(): Promise<boolean> {
+      return ipcRenderer.invoke('update:unavailable')
     },
     /** Existe versão nova (pode ainda estar baixando). */
     onAvailable(cb: (version: string) => void): () => void {
@@ -82,6 +98,13 @@ const api = {
     /** Checa atualização agora (servidor avisou de versão nova / WS reconectou). */
     checkNow(): void {
       ipcRenderer.send('update:check-now')
+    },
+    /**
+     * Linux: o app abriu sem o sandbox do Chromium (motivo) — só na primeira
+     * vez; depois null.
+     */
+    sandboxNotice(): Promise<string | null> {
+      return ipcRenderer.invoke('update:sandbox-notice')
     }
   },
   background: {
@@ -91,7 +114,8 @@ const api = {
     },
     /**
      * Notificação nativa e aviso na barra de tarefas (só se a janela não
-     * estiver à vista). `toast`/`taskbar` = preferências do usuário.
+     * estiver à vista; o toast também com ela em foco se `elsewhere`).
+     * `toast`/`taskbar` = preferências do usuário.
      */
     notify(payload: {
       title: string
@@ -100,6 +124,7 @@ const api = {
       urgent?: boolean
       toast?: boolean
       taskbar?: boolean
+      elsewhere?: boolean
     }): void {
       ipcRenderer.send('notify', payload)
     },
@@ -126,6 +151,71 @@ const api = {
       const listener = (_e: unknown, route: string): void => cb(route)
       ipcRenderer.on('navigate', listener)
       return () => ipcRenderer.removeListener('navigate', listener)
+    }
+  },
+  inviteLinks: {
+    /** Convite do salinha://convite/<código> ainda não aberto (uma vez só), ou null. */
+    takePending(): Promise<string | null> {
+      return ipcRenderer.invoke('invite:take-pending')
+    },
+    /** Chegou um convite (o app já estava aberto): busque com takePending. */
+    onPending(cb: () => void): () => void {
+      const listener = (): void => cb()
+      ipcRenderer.on('invite:open', listener)
+      return () => ipcRenderer.removeListener('invite:open', listener)
+    }
+  },
+  games: {
+    /** Liga/desliga a detecção de jogos (Em atividade). Só Windows. */
+    watch(enabled: boolean): void {
+      ipcRenderer.send('games:watch', enabled)
+    },
+    current(): Promise<{ name: string; startedAt: number } | null> {
+      return ipcRenderer.invoke('games:current')
+    },
+    /** O jogo em andamento mudou (null = parou). Retorna unsubscribe. */
+    onChange(cb: (game: { name: string; startedAt: number } | null) => void): () => void {
+      const listener = (_e: unknown, game: { name: string; startedAt: number } | null): void =>
+        cb(game)
+      ipcRenderer.on('games:current', listener)
+      return () => ipcRenderer.removeListener('games:current', listener)
+    }
+  },
+  activities: {
+    /** Abre o jogo numa janela própria; false = link recusado pelo main. */
+    open(activityId: string, url: string): Promise<boolean> {
+      return ipcRenderer.invoke('activity:open', activityId, url)
+    },
+    close(): void {
+      ipcRenderer.send('activity:close')
+    },
+    /** A janela do jogo fechou (pelo usuário ou pelo app). */
+    onClosed(cb: (activityId: string) => void): () => void {
+      const listener = (_e: unknown, activityId: string): void => cb(activityId)
+      ipcRenderer.on('activity:closed', listener)
+      return () => ipcRenderer.removeListener('activity:closed', listener)
+    }
+  },
+  keybinds: {
+    /** Atalhos de voz com o app em segundo plano; devolve, por ação, se ficou valendo. */
+    setGlobal(list: { id: string; binding: string }[]): Promise<Record<string, boolean>> {
+      return ipcRenderer.invoke('keybinds:set-global', list)
+    },
+    /** Gravando um atalho nas configurações: solta os globais enquanto isso. */
+    suspend(on: boolean): void {
+      ipcRenderer.send('keybinds:suspend', on)
+    },
+    /** Um atalho global foi acionado (id da ação). */
+    onFire(cb: (id: string) => void): () => void {
+      const listener = (_e: unknown, id: string): void => cb(id)
+      ipcRenderer.on('keybinds:fire', listener)
+      return () => ipcRenderer.removeListener('keybinds:fire', listener)
+    },
+    /** Os globais voltaram depois de uma suspensão: de novo o que ficou valendo. */
+    onStatus(cb: (status: Record<string, boolean>) => void): () => void {
+      const listener = (_e: unknown, status: Record<string, boolean>): void => cb(status)
+      ipcRenderer.on('keybinds:status', listener)
+      return () => ipcRenderer.removeListener('keybinds:status', listener)
     }
   },
   overlay: {

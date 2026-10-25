@@ -30,6 +30,10 @@ type Hub struct {
 	presence     map[string]int
 	statuses     map[string]string // status escolhido (online, idle, dnd, invisible)
 	statusLookup StatusLookup
+	// Atividade (jogo em andamento) por usuário; só memória (activity.go).
+	activities    map[string]Activity
+	activitySetAt map[string]time.Time
+	audience      AudienceProvider
 	onDisconnect func(userID string)
 	// Desligando (deploy): quem cai não "saiu", então nem presença offline
 	// nem saída da chamada — o processo novo recarrega tudo.
@@ -55,6 +59,9 @@ func NewHub() *Hub {
 		rooms:    make(map[string]map[*Client]struct{}),
 		presence: make(map[string]int),
 		statuses: make(map[string]string),
+
+		activities:    make(map[string]Activity),
+		activitySetAt: make(map[string]time.Time),
 	}
 }
 
@@ -136,13 +143,19 @@ func (h *Hub) Unregister(client *Client) {
 	client.rooms = map[string]struct{}{}
 
 	wasOnline := false
+	hadActivity := false
 	h.presence[client.userID]--
 	if h.presence[client.userID] <= 0 {
 		delete(h.presence, client.userID)
 		delete(h.statuses, client.userID)
+		hadActivity = h.clearActivityLocked(client.userID)
 		wasOnline = !h.shuttingDown
 	}
 	h.mu.Unlock()
+
+	if wasOnline && hadActivity {
+		h.publishActivity(client.userID, nil)
+	}
 
 	if wasOnline && h.onDisconnect != nil {
 		h.onDisconnect(client.userID)
@@ -234,12 +247,23 @@ func (h *Hub) EffectiveStatus(userID string) string {
 func (h *Hub) SetUserStatus(userID, status string) {
 	h.mu.Lock()
 	before := h.effectiveStatusLocked(userID)
+	wasInvisible := h.statuses[userID] == user.StatusInvisible
 	h.statuses[userID] = status
 	after := h.effectiveStatusLocked(userID)
+	current, hasActivity := h.activities[userID]
 	h.mu.Unlock()
 
 	if before != after {
 		h.broadcastPresence(userID, after)
+	}
+	// Invisível esconde a atividade; ao voltar, ela reaparece.
+	if hasActivity && h.IsOnline(userID) {
+		switch {
+		case status == user.StatusInvisible && !wasInvisible:
+			h.publishActivity(userID, nil)
+		case status != user.StatusInvisible && wasInvisible:
+			h.publishActivity(userID, &current)
+		}
 	}
 }
 
@@ -419,6 +443,19 @@ func (h *Hub) IsOnline(userID string) bool {
 	return h.presence[userID] > 0
 }
 
+// OnlineUserIDs lista quem tem pelo menos uma conexão aberta (badges).
+func (h *Hub) OnlineUserIDs() []string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	ids := make([]string, 0, len(h.presence))
+	for id, n := range h.presence {
+		if n > 0 {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 // PresenceMap devolve o status efetivo de cada id ("offline" se desconectado
 // ou invisível).
 func (h *Hub) PresenceMap(userIDs []string) map[string]string {
@@ -434,7 +471,8 @@ func (h *Hub) PresenceMap(userIDs []string) map[string]string {
 	return result
 }
 
-// messageRooms são as salas por onde chegam message:create e message:delete:
+// messageRooms são as salas por onde chegam message:create, message:update e
+// message:delete:
 // o canal e o servidor dele, ou a DM e a sala pessoal de cada participante.
 func messageRooms(channelID *string, serverID string, conversationID *string, userIDs []string) []string {
 	var rooms []string
@@ -470,6 +508,11 @@ func (h *Hub) publishMessage(data []byte, channelID *string, serverID string, co
 
 func (h *Hub) PublishMessageCreate(event message.CreateEvent) {
 	h.publishMessage(writeEvent("message:create", event), event.ChannelID, event.ServerID, event.ConversationID, event.UserIDs)
+}
+
+// PublishMessageUpdate (mensagem editada) vai pelas mesmas salas do create.
+func (h *Hub) PublishMessageUpdate(event message.UpdateEvent) {
+	h.publishMessage(writeEvent("message:update", event), event.ChannelID, event.ServerID, event.ConversationID, event.UserIDs)
 }
 
 func (h *Hub) PublishMessageDelete(event message.DeleteEvent) {
@@ -537,6 +580,12 @@ func (h *Hub) PublishMemberUpdate(event server.MemberJoinEvent) {
 	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:update", event))
 }
 
+// PublishMemberNickname: o apelido de alguém mudou; todo o servidor atualiza
+// o nome na hora (lista de membros, chat, voz).
+func (h *Hub) PublishMemberNickname(event server.NicknameEvent) {
+	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:nickname", event))
+}
+
 func (h *Hub) PublishMemberJoin(event server.MemberJoinEvent) {
 	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:join", event))
 }
@@ -591,6 +640,24 @@ func (h *Hub) PublishPermissionsChanged(serverID string) {
 	if hook != nil {
 		go hook(serverID)
 	}
+}
+
+// O server.Service avisa do link novo por aqui (type assertion no publisher).
+var _ server.InviteCodePublisher = (*Hub)(nil)
+
+// PublishInviteCode: o link de convite do servidor mudou ("Gerar novo link").
+// Só quem pode convidar (CREATE_INVITE) recebe o código novo.
+func (h *Hub) PublishInviteCode(serverID, code string) {
+	snap := h.snapshot(serverID)
+	if snap == nil {
+		return
+	}
+	h.BroadcastToRoomFiltered("server:"+serverID, writeEvent("server:invite_code", map[string]string{
+		"server_id": serverID,
+		"code":      code,
+	}), func(userID string) bool {
+		return permission.Has(snap.Server(userID), permission.CreateInvite)
+	})
 }
 
 // SendToUser delivers an event directly to every connection of a user

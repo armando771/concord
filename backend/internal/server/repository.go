@@ -186,6 +186,23 @@ func (r *Repository) Update(ctx context.Context, id string, name string, iconURL
 	return err
 }
 
+// SetIcon troca o ícone (nil tira) e devolve o antigo (para apagar o arquivo).
+func (r *Repository) SetIcon(ctx context.Context, id string, url *string) (*string, error) {
+	var old *string
+	err := r.db.QueryRow(
+		ctx,
+		`
+		UPDATE servers s SET icon_url = COALESCE($2, ''), updated_at = NOW()
+		FROM (SELECT icon_url FROM servers WHERE id = $1 FOR UPDATE) prev
+		WHERE s.id = $1
+		RETURNING prev.icon_url
+		`,
+		id,
+		url,
+	).Scan(&old)
+	return old, err
+}
+
 func (r *Repository) Delete(ctx context.Context, id string) error {
 	_, err := r.db.Exec(ctx, `DELETE FROM servers WHERE id = $1`, id)
 	return err
@@ -249,6 +266,7 @@ func (r *Repository) ListMembers(ctx context.Context, serverID string) ([]Server
 			u.username,
 			u.display_name,
 			u.avatar_url,
+			sm.nickname,
 			`+legacyRoleColumn+`,
 			`+memberRoleIDsColumn+`,
 			sm.joined_at,
@@ -274,6 +292,7 @@ func (r *Repository) ListMembers(ctx context.Context, serverID string) ([]Server
 			&m.Username,
 			&m.DisplayName,
 			&m.AvatarURL,
+			&m.Nickname,
 			&m.Role,
 			&m.RoleIDs,
 			&m.JoinedAt,
@@ -289,6 +308,21 @@ func (r *Repository) ListMembers(ctx context.Context, serverID string) ([]Server
 	}
 
 	return members, nil
+}
+
+// SetNickname grava (ou tira, com nil) o apelido do membro no servidor.
+func (r *Repository) SetNickname(ctx context.Context, serverID, userID string, nickname *string) (bool, error) {
+	tag, err := r.db.Exec(
+		ctx,
+		`UPDATE server_members SET nickname = $3, updated_at = NOW() WHERE server_id = $1 AND user_id = $2`,
+		serverID,
+		userID,
+		nickname,
+	)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 func (r *Repository) IsMember(ctx context.Context, serverID string, userID string) (bool, error) {
@@ -313,6 +347,7 @@ func (r *Repository) FindMemberByUserID(ctx context.Context, serverID string, us
 			u.username,
 			u.display_name,
 			u.avatar_url,
+			sm.nickname,
 			`+legacyRoleColumn+`,
 			`+memberRoleIDsColumn+`,
 			sm.joined_at,
@@ -329,6 +364,7 @@ func (r *Repository) FindMemberByUserID(ctx context.Context, serverID string, us
 		&m.Username,
 		&m.DisplayName,
 		&m.AvatarURL,
+		&m.Nickname,
 		&m.Role,
 		&m.RoleIDs,
 		&m.JoinedAt,
@@ -586,10 +622,40 @@ func (r *Repository) SetInviteCodeIfMissing(ctx context.Context, serverID string
 	return err
 }
 
+// SetInviteCode troca o código do servidor ("Gerar novo link").
+func (r *Repository) SetInviteCode(ctx context.Context, serverID string, code string) error {
+	_, err := r.db.Exec(ctx, `UPDATE servers SET invite_code = $2 WHERE id = $1`, serverID, code)
+	return err
+}
+
 func (r *Repository) FindIDByInviteCode(ctx context.Context, code string) (string, error) {
 	var id string
 	err := r.db.QueryRow(ctx, `SELECT id FROM servers WHERE invite_code = $1`, code).Scan(&id)
 	return id, err
+}
+
+// InvitePreview: servidor do código e os ids dos membros (para contar e ver
+// quem está online). Sem servidor com esse código, pgx.ErrNoRows.
+func (r *Repository) InvitePreview(ctx context.Context, code string) (*InvitePreview, []string, error) {
+	p := &InvitePreview{}
+	var iconURL *string
+	var memberIDs []string
+	err := r.db.QueryRow(
+		ctx,
+		`SELECT
+			s.id,
+			s.name,
+			NULLIF(s.icon_url, ''),
+			COALESCE((SELECT array_agg(sm.user_id::text) FROM server_members sm WHERE sm.server_id = s.id), '{}')
+		FROM servers s
+		WHERE s.invite_code = $1`,
+		code,
+	).Scan(&p.ServerID, &p.Name, &iconURL, &memberIDs)
+	if err != nil {
+		return nil, nil, err
+	}
+	p.IconURL = iconURL
+	return p, memberIDs, nil
 }
 
 // SharesServer: os dois estão em pelo menos um servidor em comum.

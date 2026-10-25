@@ -49,7 +49,10 @@ func ValidateProfile(in ProfileInput) (ProfileInput, error) {
 		Links:       []ProfileLink{},
 	}
 
-	if n := utf8.RuneCountInString(out.DisplayName); n < 1 || n > MaxDisplayName {
+	if _, err := NormalizeName(out.DisplayName, MaxDisplayName); err != nil {
+		if errors.Is(err, ErrNameInvalidChars) || errors.Is(err, ErrNameBlank) {
+			return ProfileInput{}, invalid("o nome de exibição não pode ter caracteres invisíveis ou de controle")
+		}
 		return ProfileInput{}, invalid(fmt.Sprintf("o nome de exibição precisa ter de 1 a %d caracteres", MaxDisplayName))
 	}
 	if utf8.RuneCountInString(out.Pronouns) > MaxPronouns {

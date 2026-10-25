@@ -1,4 +1,5 @@
 import { request } from './client'
+import { uploadImage } from './users'
 import type { Role } from '../lib/permissions'
 
 export interface Server {
@@ -23,6 +24,8 @@ export interface ServerMember {
   username?: string
   display_name?: string
   avatar_url?: string | null
+  /** Apelido neste servidor (null = sem; vale o display_name). */
+  nickname?: string | null
 }
 
 export interface GetServerResponse {
@@ -59,7 +62,8 @@ export async function inviteMember(serverId: string, userId: string): Promise<vo
   })
 }
 
-export async function updateServer(serverId: string, input: CreateServerInput): Promise<Server> {
+/** Só o nome: sem icon_url o backend mantém o ícone atual. */
+export async function updateServer(serverId: string, input: { name: string }): Promise<Server> {
   return request<Server>(`/servers/${serverId}`, {
     method: 'PUT',
     body: JSON.stringify(input)
@@ -77,6 +81,11 @@ export async function getInviteCode(serverId: string): Promise<{ code: string }>
   return request<{ code: string }>(`/servers/${serverId}/invite-code`)
 }
 
+/** "Gerar novo link": troca o código (o link antigo para de funcionar). */
+export async function rotateInviteCode(serverId: string): Promise<{ code: string }> {
+  return request<{ code: string }>(`/servers/${serverId}/invite-code/reset`, { method: 'POST' })
+}
+
 /** Entra no servidor do código. Já sendo membro, só devolve o servidor. */
 export async function joinServerByCode(code: string): Promise<Server> {
   return request<Server>('/invites/join', { method: 'POST', body: JSON.stringify({ code }) })
@@ -85,6 +94,27 @@ export async function joinServerByCode(code: string): Promise<Server> {
 /** Quem tem KICK_MEMBERS expulsa o membro (ele pode voltar por convite). */
 export function kickMember(serverId: string, userId: string): Promise<void> {
   return request<void>(`/servers/${serverId}/members/${userId}`, { method: 'DELETE' })
+}
+
+export interface NicknameResult {
+  server_id: string
+  user_id: string
+  nickname: string | null
+}
+
+/**
+ * Muda o apelido de alguém no servidor ("" tira). O próprio pede "Alterar
+ * apelido"; o dos outros, "Gerenciar apelidos" e cargo acima do dela.
+ */
+export function setMemberNickname(
+  serverId: string,
+  userId: string,
+  nickname: string
+): Promise<NicknameResult> {
+  return request<NicknameResult>(`/servers/${serverId}/members/${userId}/nickname`, {
+    method: 'PUT',
+    body: JSON.stringify({ nickname })
+  })
 }
 
 /** Sai do servidor (o dono não sai: apaga o servidor). */
@@ -125,4 +155,18 @@ export async function setPrimaryChannel(serverId: string, channelId: string): Pr
     method: 'PUT',
     body: JSON.stringify({ channel_id: channelId })
   })
+}
+
+/** Ícone por upload (PNG, JPG, WebP ou GIF): o mesmo pipeline do avatar. */
+export function uploadServerIcon(
+  serverId: string,
+  file: Blob,
+  staticFrame?: Blob,
+  onProgress?: (fraction: number) => void
+): Promise<Server> {
+  return uploadImage<Server>(`/servers/${serverId}/icon`, 'icon', file, staticFrame, onProgress)
+}
+
+export async function removeServerIcon(serverId: string): Promise<Server> {
+  return request<Server>(`/servers/${serverId}/icon`, { method: 'DELETE' })
 }

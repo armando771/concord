@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  passwordStrength,
-  validateRegister,
-  validateReset,
-  type RegisterValues
-} from './authForms'
+import { passwordStrength, validateRegister, validateReset, type RegisterValues } from './authForms'
 
 const valid: RegisterValues = {
   username: 'hugo_1',
@@ -32,6 +27,16 @@ describe('validateRegister', () => {
     expect(Object.keys(errors).sort()).toEqual(
       ['confirm', 'displayName', 'email', 'password', 'username'].sort()
     )
+  })
+
+  it('nome de exibição sem invisíveis, controle ou bidi (emoji com ZWJ vale)', () => {
+    for (const bad of ['\u{200b}', 'Hu\u{0}go', 'Hu\u{202e}go', '\u{3164}', 'Hu\ngo']) {
+      expect(
+        validateRegister({ ...valid, displayName: bad }).displayName,
+        JSON.stringify(bad)
+      ).toBe('O nome de exibição não pode ter caracteres invisíveis ou de controle.')
+    }
+    expect(validateRegister({ ...valid, displayName: '👨\u{200d}👩\u{200d}👧' })).toEqual({})
   })
 
   it('senha acima de 72 bytes é recusada', () => {

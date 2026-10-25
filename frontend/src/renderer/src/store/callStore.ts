@@ -24,7 +24,7 @@ import {
   type LivePayload,
   type LiveRecord
 } from '../lib/liveBadge'
-import { callNotification, notifyDesktop } from '../lib/notifications'
+import { callNotification, knockNotification, notifyDesktop } from '../lib/notifications'
 import { playSound, setSoundOutput } from '../lib/sounds'
 import {
   abortWindowAudio,
@@ -35,14 +35,16 @@ import {
 import { loadAudioPrefs, resolveDeviceId, saveAudioPrefs } from '../lib/audioDevices'
 import { useChatStore } from './chatStore'
 import { useAuthStore } from './authStore'
+import { useServerStore } from './serverStore'
+import { serverDisplayName } from '../lib/serverNames'
 import { showToast } from './toastStore'
 
 import type { CallResume } from '../../../shared/callResume'
 
 import { useSoundboardStore } from './soundboardStore'
 import { useBoostStore } from './boostStore'
+import { useActivityStore } from './activityStore'
 import { stopAllSoundboardAudio } from '../lib/soundboardPlayer'
-
 
 export type CallStatus = 'idle' | 'ringing' | 'outgoing' | 'active'
 export type CallKind = 'dm' | 'channel'
@@ -103,6 +105,67 @@ interface EndedPayload {
   call_id: string
 }
 
+/** Nome de quem está na call: numa call de canal, com o apelido daquele servidor. */
+function callName(
+  state: { type: CallKind | null; serverId: string | null },
+  user: { id: string; display_name?: string | null; username?: string | null } | undefined,
+  fallback?: string
+): string {
+  const nickname =
+    state.type === 'channel' && state.serverId && user
+      ? useServerStore.getState().nicknames?.[state.serverId]?.[user.id]
+      : undefined
+  return serverDisplayName({ nickname }, user, fallback)
+}
+
+interface LockPayload {
+  call_id: string
+  channel_id?: string | null
+  locked: boolean
+  by: CallUserInfo
+}
+
+interface KnockPayload {
+  call_id: string
+  channel_id?: string | null
+  user: CallUserInfo
+}
+
+interface KnockResolvedPayload {
+  call_id: string
+  user_id: string
+  accepted: boolean
+  reason: string
+  by?: CallUserInfo | null
+}
+
+interface KnockAnswerPayload {
+  call_id: string
+  channel_id?: string | null
+  server_id?: string | null
+  reason: 'accepted' | 'declined' | 'expired' | 'unlocked' | 'ended'
+  by?: CallUserInfo | null
+}
+
+/** Meu pedido para entrar numa sala trancada. */
+export interface KnockState {
+  channelId: string
+  callId: string
+  status: 'pending' | 'declined'
+}
+
+/** POST /calls respondeu 423: a sala do canal está trancada. */
+export class CallLockedError extends Error {
+  callId: string | null
+
+  constructor(callId: string | null) {
+    super('A sala está trancada.')
+    this.callId = callId
+  }
+}
+
+/** Quanto tempo o aviso "pedido recusado" fica no canal. */
+const KNOCK_DECLINED_MS = 4000
 function upsertParticipant(list: CallUserInfo[], user: CallUserInfo): CallUserInfo[] {
   return list.some((p) => p.id === user.id) ? list : [...list, user]
 }
@@ -168,6 +231,21 @@ interface CallState {
   listVersion: number
   /** chamadas ativas por canal do servidor aberto (polling da sidebar) */
   serverCalls: Record<string, CallStateResponse>
+  /** a sala de voz em que estou está trancada */
+  locked: boolean
+  /** pedidos para entrar na minha sala trancada (aceitar/recusar) */
+  joinRequests: CallUserInfo[]
+  /** meu pedido para entrar numa sala trancada, se houver */
+  knock: KnockState | null
+  /** canal em que acabei de entrar por pedido aceito (a sidebar navega e limpa) */
+  admittedChannelId: string | null
+
+  toggleLock: () => void
+  /** Bate na porta da sala trancada do canal. */
+  requestJoin: (channelId: string) => void
+  cancelJoinRequest: () => void
+  respondJoinRequest: (userId: string, accept: boolean) => void
+  clearAdmittedChannel: () => void
 
   startDMCall: (conversationId: string, peer: CallUserInfo) => Promise<void>
   startChannelCall: (channelId: string, resume?: CallResume, signal?: AbortSignal) => Promise<void>
@@ -222,6 +300,8 @@ let localCameraStream: MediaStream | null = null
 
 /** call:live recentes, reaplicados sobre o polling da lista do servidor. */
 let recentLive: LiveRecord[] = []
+/** Limpa o aviso de pedido recusado. */
+let knockDeclinedTimer: ReturnType<typeof setTimeout> | null = null
 
 /** Ao reconectar, um 404 só fecha/troca a chamada se repetir (ver confirmGone). */
 const GONE_CHECKS = 3
@@ -456,7 +536,16 @@ export const useCallStore = create<CallState>()((set, get) => {
           avatar_url: p.avatar_url ?? null
         }))
       const sharing = state.screen_sharing ?? []
+      useActivityStore.getState().hydrate(callId, state.activity ?? null)
+      const joinReqs = (state.join_requests ?? []).map((p) => ({
+        id: p.id,
+        username: p.username,
+        display_name: p.display_name,
+        avatar_url: p.avatar_url ?? null
+      }))
       set((s) => ({
+        locked: state.call?.locked ?? s.locked,
+        joinRequests: replace ? joinReqs : [...s.joinRequests, ...joinReqs.filter((r) => !s.joinRequests.some((q) => q.id === r.id))],
         screenSharers: sharing,
         voiceStates: {
           ...Object.fromEntries(
@@ -649,7 +738,9 @@ export const useCallStore = create<CallState>()((set, get) => {
       canSpeak: true,
       canStream: true,
       mutedBeforeDeafen: false,
-      startedAt: null
+      startedAt: null,
+      locked: false,
+      joinRequests: []
     })
   }
 
@@ -720,6 +811,48 @@ export const useCallStore = create<CallState>()((set, get) => {
     startedAt: null,
     listVersion: 0,
     serverCalls: {},
+    locked: false,
+    joinRequests: [],
+    knock: null,
+    admittedChannelId: null,
+
+    toggleLock: () => {
+      const { callId, type, locked, status } = get()
+      if (!callId || type !== 'channel' || status !== 'active') return
+      useChatStore.getState().sendEvent('call:lock', { call_id: callId, locked: !locked })
+    },
+
+    requestJoin: (channelId: string) => {
+      const serverCalls = get().serverCalls
+      const call = serverCalls[channelId]?.call
+      if (!call) return
+      set({ knock: { channelId, callId: call.id, status: 'pending' } })
+      playSound('knock')
+      useChatStore.getState().sendEvent('call:knock', { call_id: call.id })
+    },
+
+    cancelJoinRequest: () => {
+      const { knock } = get()
+      if (!knock) return
+      useChatStore.getState().sendEvent('call:knock_cancel', { call_id: knock.callId })
+      set({ knock: null })
+    },
+
+    respondJoinRequest: (userId: string, accept: boolean) => {
+      const { callId, status } = get()
+      if (!callId || status !== 'active') return
+      // Remove otimista da lista de pedidos locais
+      set((s) => ({ joinRequests: s.joinRequests.filter((r) => r.id !== userId) }))
+      useChatStore.getState().sendEvent('call:knock_respond', {
+        call_id: callId,
+        user_id: userId,
+        accept
+      })
+    },
+
+    clearAdmittedChannel: () => {
+      set({ admittedChannelId: null })
+    },
 
     startDMCall: async (conversationId, peer) => {
       if (get().status !== 'idle' || transitioning) return
@@ -804,7 +937,8 @@ export const useCallStore = create<CallState>()((set, get) => {
           muted,
           deafened: resume?.deafened ?? false,
           mutedBeforeDeafen: resume?.mutedBeforeDeafen ?? false,
-          startedAt: Date.now()
+          startedAt: Date.now(),
+          locked: call.locked ?? false
         })
         playSound('join')
         useChatStore.getState().subscribeRoom(`call:${call.id}`)
@@ -816,6 +950,10 @@ export const useCallStore = create<CallState>()((set, get) => {
         bumpList()
       } catch (err) {
         stopLocalStream()
+        if (err instanceof ApiError && err.status === 423) {
+          const callId = (err.body?.call_id as string) ?? null
+          throw new CallLockedError(callId)
+        }
         if (resume) throw err
         showToast.error(err instanceof Error ? err.message : 'Não foi possível entrar na chamada.')
       } finally {
@@ -1155,6 +1293,13 @@ export const useCallStore = create<CallState>()((set, get) => {
 
     joinVoiceChannel: async (channelId) => {
       const s = get()
+      // Se a sala estiver trancada e o usuário não estiver nela, pede para entrar diretamente
+      const targetCall = s.serverCalls[channelId]?.call
+      if (targetCall?.locked && (s.status === 'idle' || s.channelId !== channelId)) {
+        s.requestJoin(channelId)
+        return
+      }
+
       if (s.status !== 'idle') {
         if (s.type !== 'channel') {
           throw new Error('Você já está em uma chamada.')
@@ -1166,7 +1311,19 @@ export const useCallStore = create<CallState>()((set, get) => {
         // Entrar em outro canal de voz desconecta do atual.
         s.endCall()
       }
-      await get().startChannelCall(channelId)
+      try {
+        await get().startChannelCall(channelId)
+      } catch (err) {
+        if (err instanceof CallLockedError) {
+          if (err.callId) {
+            set({ knock: { channelId, callId: err.callId, status: 'pending' } })
+            playSound('knock')
+            useChatStore.getState().sendEvent('call:knock', { call_id: err.callId })
+          }
+          return
+        }
+        throw err
+      }
     },
 
     handleWsReconnect: () => {
@@ -1174,6 +1331,10 @@ export const useCallStore = create<CallState>()((set, get) => {
       void resyncDmCall()
       // Listas dos canais de voz (quem está em cada um, LIVE) voltam a valer.
       bumpList()
+      const { knock } = get()
+      if (knock && knock.status === 'pending') {
+        useChatStore.getState().sendEvent('call:knock', { call_id: knock.callId })
+      }
     },
 
     handleWsEvent: (event) => {
@@ -1326,7 +1487,7 @@ export const useCallStore = create<CallState>()((set, get) => {
             void resyncChannelCall()
             return
           }
-          showToast.info(`${p.user.display_name} saiu da chamada.`)
+          showToast.info(`${callName(get(), p.user)} saiu da chamada.`)
           if (get().type === 'channel') {
             playSound('userLeave')
             // A mídia do participante some sozinha quando ele sai da sala do LiveKit.
@@ -1379,7 +1540,7 @@ export const useCallStore = create<CallState>()((set, get) => {
               publishSpeaking()
               sendVoiceState()
               showToast.info(
-                `${p.moved_by.display_name || 'Um moderador'} moveu você para ${p.channel_name || 'outro canal'}.`
+                `${callName(get(), p.moved_by, 'Um moderador')} moveu você para ${p.channel_name || 'outro canal'}.`
               )
             })
           return
@@ -1394,11 +1555,108 @@ export const useCallStore = create<CallState>()((set, get) => {
           return
         }
 
+        case 'call:lock': {
+          const p = payload as unknown as LockPayload
+          set((s) => {
+            const serverCalls = { ...s.serverCalls }
+            for (const [chId, entry] of Object.entries(serverCalls)) {
+              if (entry.call?.id === p.call_id) {
+                serverCalls[chId] = {
+                  ...entry,
+                  call: entry.call ? { ...entry.call, locked: p.locked } : null
+                }
+              }
+            }
+            const isMyCall = s.callId === p.call_id
+            return {
+              serverCalls,
+              locked: isMyCall ? p.locked : s.locked
+            }
+          })
+          if (get().callId === p.call_id) {
+            playSound(p.locked ? 'lock' : 'unlock')
+            const byName = p.by.display_name || p.by.username || 'Alguém'
+            showToast.info(p.locked ? `${byName} trancou a sala.` : `${byName} destrancou a sala.`)
+          }
+          return
+        }
+
+        case 'call:knock': {
+          const p = payload as unknown as KnockPayload
+          if (get().callId !== p.call_id) return
+          playSound('knock')
+          notifyDesktop(knockNotification(p.user, get().serverId, get().channelId))
+          set((s) => ({
+            joinRequests: upsertParticipant(s.joinRequests, p.user)
+          }))
+          return
+        }
+
+        case 'call:knock_resolved': {
+          const p = payload as unknown as KnockResolvedPayload
+          if (get().callId !== p.call_id) return
+          set((s) => ({
+            joinRequests: s.joinRequests.filter((r) => r.id !== p.user_id)
+          }))
+          return
+        }
+
+        case 'call:knock_accepted': {
+          const p = payload as unknown as KnockAnswerPayload
+          const { knock } = get()
+          if (!knock || knock.callId !== p.call_id) return
+          if (knockDeclinedTimer) {
+            clearTimeout(knockDeclinedTimer)
+            knockDeclinedTimer = null
+          }
+          const chId = p.channel_id ?? knock.channelId
+          set({ knock: null, admittedChannelId: chId })
+          const byName = p.by?.display_name || p.by?.username
+          showToast.success(byName ? `${byName} permitiu sua entrada na sala!` : 'Sua entrada na sala foi permitida!')
+          void get().joinVoiceChannel(chId)
+          return
+        }
+
+        case 'call:knock_declined': {
+          const p = payload as unknown as KnockAnswerPayload
+          const { knock } = get()
+          if (!knock || knock.callId !== p.call_id) return
+          if (p.reason === 'ended' || p.reason === 'unlocked') {
+            // A sala acabou ou destrancou: pode entrar livremente
+            if (knockDeclinedTimer) clearTimeout(knockDeclinedTimer)
+            set({ knock: null })
+            showToast.info(p.reason === 'ended' ? 'A chamada terminou. A sala agora está livre.' : 'A sala foi destrancada!')
+            return
+          }
+          set({ knock: { ...knock, status: 'declined' } })
+          if (knockDeclinedTimer) clearTimeout(knockDeclinedTimer)
+          knockDeclinedTimer = setTimeout(() => {
+            set((s) => (s.knock?.callId === p.call_id ? { knock: null } : {}))
+          }, KNOCK_DECLINED_MS)
+          return
+        }
+
+        case 'call:knock_error': {
+          const message = (payload.message as string) ?? 'Não foi possível solicitar entrada.'
+          showToast.error(message)
+          return
+        }
+
         default:
           return
       }
     }
   }
+})
+
+// Atividades seguem a chamada atual: sair/trocar de chamada fecha o jogo aqui.
+useCallStore.subscribe((s) => {
+  useActivityStore
+    .getState()
+    .setCall(
+      s.status === 'idle' ? null : s.callId,
+      s.status !== 'idle' && s.type === 'channel' ? s.serverId : null
+    )
 })
 
 // Os efeitos sonoros saem no mesmo dispositivo escolhido para as vozes.

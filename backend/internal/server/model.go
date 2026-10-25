@@ -20,6 +20,8 @@ type ServerMember struct {
 	Username    string  `json:"username"`
 	DisplayName string  `json:"display_name"`
 	AvatarURL   *string `json:"avatar_url,omitempty"`
+	// Nickname: apelido neste servidor (null = sem; vale o display_name).
+	Nickname *string `json:"nickname"`
 	// Role é legado (apps de antes dos cargos): "admin" se o membro pode
 	// gerenciar canais. Os cargos de verdade estão em RoleIDs.
 	Role      string    `json:"role"`

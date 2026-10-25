@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Salinha — chat, voz e tela com os amigos</title>
-  <meta name="description" content="Salinha: servidores, canais de texto e voz, vídeo e compartilhamento de tela. Baixe para Windows ou Linux (AppImage).">
+  <meta name="description" content="Salinha: servidores, canais de texto e voz, vídeo e compartilhamento de tela. Baixe para Windows ou Linux (instalação de um comando ou AppImage).">
   <meta name="theme-color" content="#050508">
   <meta property="og:title" content="Salinha">
   <meta property="og:description" content="Chat, voz, vídeo e compartilhamento de tela com os amigos.">
@@ -132,7 +132,9 @@
     .btn[hidden] { display: none; }
     .dl-group { display: contents; }
     .dl-group .btn svg { width: 22px; height: 22px; flex: none; }
-    .dl-group.single { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    /* O "Outras opções" fica numa linha própria, abaixo dos botões: a linha
+       dos botões não muda de altura e todos começam no mesmo topo. */
+    .dl-more-row { margin-top: 10px; text-align: center; }
     .dl-more {
       background: none; border: 0; padding: 4px 6px; font: inherit; font-size: 13px;
       color: var(--muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; border-radius: 6px;
@@ -140,7 +142,7 @@
     .dl-more:hover { color: var(--text); }
     .dl-more:focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
     .dl-more[hidden] { display: none; }
-    .cta { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: center; }
+    .cta { display: flex; flex-wrap: wrap; gap: 14px; align-items: stretch; justify-content: center; }
     .meta { margin-top: 18px; font-size: 13px; color: var(--dim); display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; }
     .meta svg { width: 14px; height: 14px; }
     .os-note { margin-top: 10px; font-size: 13px; color: #f0b232; display: none; }
@@ -239,6 +241,32 @@
       background: rgba(240,178,50,.06); border: 1px solid rgba(240,178,50,.22); color: #e8d6ad; font-size: 14.5px;
     }
     .smartscreen svg { width: 20px; height: 20px; flex: none; margin-top: 2px; color: #f0b232; }
+    .linux-install {
+      margin-top: 18px; padding: 22px; border-radius: 16px; background: var(--card); border: 1px solid var(--border);
+    }
+    .linux-install h3 { margin: 0 0 10px; font-size: 17px; }
+    .linux-install p { margin: 10px 0 0; color: var(--muted); font-size: 14.5px; }
+    .linux-install pre {
+      margin: 0; padding: 12px 14px; border-radius: 10px; overflow-x: auto;
+      background: #0b0b12; border: 1px solid var(--border-light); font-size: 14px;
+    }
+    .linux-install code { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; color: var(--text); user-select: all; }
+    .cmd { display: flex; align-items: stretch; gap: 8px; }
+    .cmd pre { flex: 1; min-width: 0; }
+    .copy {
+      flex: none; padding: 0 16px; border-radius: 10px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+      color: var(--text); background: rgba(255,255,255,.06); border: 1px solid var(--border-light);
+    }
+    .copy:hover { background: rgba(255,255,255,.1); }
+    .copy:focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
+    .linux-install h4 { margin: 18px 0 0; font-size: 15px; }
+    .linux-install ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 14.5px; }
+    .linux-install li + li { margin-top: 4px; }
+    .linux-install pre.small { margin-top: 8px; font-size: 13px; }
+    .gh { display: inline-flex; align-items: center; gap: 8px; }
+    .gh svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
+    footer .gh { color: var(--muted); }
+    footer .gh:hover { color: var(--text); }
 
     /* ---------- CTA final ---------- */
     .final {
@@ -269,7 +297,8 @@
     }
     @media (max-width: 640px) {
       .wrap { padding: 0 16px; }
-      .nav-links a:not(.btn) { display: none; }
+      .nav-links a:not(.btn):not(.gh) { display: none; }
+      .nav-links .gh span { display: none; }
       .features { grid-template-columns: 1fr; }
       .card.wide { grid-column: auto; flex-direction: column; align-items: flex-start; }
       .toast { width: 100%; }
@@ -297,6 +326,7 @@
 
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></symbol>
     <symbol id="i-windows" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 10.5 4.5v7H3zM11.5 4.4 21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zM11.5 12.5H21V21l-9.5-1.4z"/></symbol>
   </svg>
 
@@ -306,6 +336,7 @@
       <div class="nav-links">
         <a href="#recursos">Recursos</a>
         <a href="#instalar">Como instalar</a>
+        <a class="gh" href="https://github.com/hugoemannuel/concord" aria-label="Código-fonte no GitHub"><svg aria-hidden="true"><use href="#i-github"/></svg><span>GitHub</span></a>
         <a class="btn btn-sm" href="#downloads">Baixar</a>
       </div>
     </div>
@@ -327,16 +358,16 @@
               <a class="btn btn-ghost" data-download="linux" aria-disabled="true" tabindex="-1">
                 <span class="lbl">Baixar para Linux<small data-version-meta="linux">AppImage x64 · buscando versão…</small></span>
               </a>
-              <button type="button" class="dl-more" data-dl-more aria-expanded="false" hidden>Outras opções de download</button>
             </div>
             <a class="btn btn-ghost" href="https://app-salinha.bhrx.com.br" data-web-app>Usar no navegador</a>
             <a class="btn btn-ghost" href="#instalar">Como instalar</a>
           </div>
+          <div class="dl-more-row"><button type="button" class="dl-more" data-dl-more aria-expanded="false" hidden>Outras opções de download</button></div>
           <div class="meta">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
             Instale uma vez — o app se atualiza sozinho.
           </div>
-          <p>Windows 10/11 ou Linux x64 (AppImage) — ou direto no navegador.</p>
+          <p>Windows 10/11 ou Linux x64 (um comando no terminal, ou AppImage) — ou direto no navegador.</p>
         </div>
 
         <div class="shot-wrap reveal">
@@ -420,13 +451,13 @@
           <div class="step reveal">
             <div class="n"></div>
             <h3>Baixe o instalador</h3>
-            <p>Escolha <strong>Windows</strong> ou <strong>Linux (AppImage x64)</strong>. O tamanho de cada arquivo aparece no botão de download.</p>
+            <p>No Windows, baixe o instalador. No Linux, use o comando abaixo (ou o AppImage, se preferir). O tamanho de cada arquivo aparece no botão de download.</p>
           </div>
           <div class="step reveal">
             <div class="n"></div>
             <h3>Abra o arquivo</h3>
             <p>No Windows, execute o <kbd data-filename="windows">Salinha-setup.exe</kbd> e siga a instalação.</p>
-            <p>No Linux, nas propriedades do AppImage, permita executar como programa e abra o arquivo. Guarde-o numa pasta sua com permissão de escrita para receber atualizações.</p>
+            <p>No Linux, o comando já instala e cria o atalho no menu. Com o AppImage: permita executar como programa nas propriedades do arquivo e guarde-o numa pasta sua com permissão de escrita para receber atualizações.</p>
           </div>
           <div class="step reveal">
             <div class="n"></div>
@@ -438,7 +469,26 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
           <div>Se aparecer <strong>"O Windows protegeu o computador"</strong>, é normal: o app não tem certificado pago. Clique em <kbd>Mais informações</kbd> e depois em <kbd>Executar assim mesmo</kbd>.</div>
         </div>
-        <p>No Linux, o AppImage pode precisar do FUSE 2 instalado na sua distribuição. Execute como usuário normal; não use <kbd>sudo</kbd> nem desative o sandbox. A captura de tela depende do ambiente gráfico e, no Wayland, do portal de compartilhamento do sistema.</p>
+        <div class="linux-install reveal" id="linux">
+          <h3>Linux x64: instalar pela linha de comando</h3>
+          <div class="cmd">
+            <pre><code data-install-cmd>curl -fsSL https://salinha.bhrx.com.br/install.sh | sh</code></pre>
+            <button type="button" class="copy" data-copy-cmd>Copiar</button>
+          </div>
+          <p>Cole no terminal e rode como o seu usuário, sem <kbd>sudo</kbd>. O comando instala a Salinha na sua pasta pessoal (<kbd>~/.local/share/salinha</kbd>), cria o comando <kbd>salinha</kbd> e o atalho no menu. Não precisa de root, FUSE nem pacote nenhum, e daí em diante a Salinha se atualiza sozinha, conferindo a assinatura de cada versão.</p>
+          <p>Já usa o AppImage extraído (por exemplo em <kbd>~/.local/opt/salinha</kbd>)? Rode o mesmo comando: ele substitui o atalho antigo e avisa a pasta que pode ser apagada.</p>
+          <h4>Desinstalar</h4>
+          <pre class="small"><code>rm -rf ~/.local/share/salinha ~/.local/bin/salinha ~/.local/share/applications/salinha.desktop</code></pre>
+          <p>Seu login e as configurações ficam em <kbd>~/.config/Concord</kbd> (apague também, se quiser zerar).</p>
+          <h4 id="sandbox">Proteção do navegador (sandbox)</h4>
+          <p>A Salinha usa o sandbox do Chromium, que no Linux sem root depende dos <em>user namespaces</em> do sistema. Se o app avisar <strong>"Proteção do navegador (sandbox) desativada neste sistema"</strong>, ative de um destes jeitos:</p>
+          <ul>
+            <li><strong>Ubuntu 24.04 ou mais novo</strong> (o AppArmor bloqueia): rode o comando de instalação de novo e responda <kbd>s</kbd> em "Instalar perfil do AppArmor para manter a proteção (sandbox)?". Ele pede <kbd>sudo</kbd> uma vez e cria <kbd>/etc/apparmor.d/salinha</kbd>, que libera só o app.</li>
+            <li><strong>Debian e outras</strong> com os user namespaces desligados: <kbd>sudo sysctl -w kernel.unprivileged_userns_clone=1</kbd> (e o mesmo em <kbd>/etc/sysctl.d/</kbd> para ficar).</li>
+          </ul>
+          <p>Feche e abra a Salinha depois. O motivo fica registrado em <kbd>~/.local/share/salinha/launcher.log</kbd>.</p>
+          <p>Prefere o AppImage? O botão "Baixar para Linux" continua aqui; ele precisa do <kbd>fusermount3</kbd> (FUSE 3), que quase toda distribuição já traz. A captura de tela depende do ambiente gráfico e, no Wayland, do portal de compartilhamento do sistema.</p>
+        </div>
       </div>
     </section>
 
@@ -456,10 +506,10 @@
               <a class="btn btn-ghost" data-download="linux" aria-disabled="true" tabindex="-1">
                 <span class="lbl">Baixar para Linux<small data-version-meta="linux">AppImage x64 · buscando versão…</small></span>
               </a>
-              <button type="button" class="dl-more" data-dl-more aria-expanded="false" hidden>Outras opções de download</button>
             </div>
             <a class="btn btn-ghost" href="https://app-salinha.bhrx.com.br" data-web-app>Usar no navegador</a>
           </div>
+          <div class="dl-more-row"><button type="button" class="dl-more" data-dl-more aria-expanded="false" hidden>Outras opções de download</button></div>
         </div>
       </div>
     </section>
@@ -468,11 +518,29 @@
   <footer>
     <div class="wrap">
       <a class="brand" href="#"><img src="favicon.svg?v=3" alt="">Salinha</a>
+      <a class="gh" href="https://github.com/hugoemannuel/concord"><svg aria-hidden="true"><use href="#i-github"/></svg>Código-fonte no GitHub</a>
       <span>Feito entre amigos · <span data-version-foot></span></span>
     </div>
   </footer>
 
   <script src="downloads.js" defer></script>
+  <script>
+    // "Copiar" do comando de instalação do Linux.
+    document.querySelectorAll('[data-copy-cmd]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const code = button.parentElement.querySelector('code');
+        try {
+          await navigator.clipboard.writeText(code.textContent.trim());
+          button.textContent = 'Copiado!';
+        } catch {
+          // Sem permissão de área de transferência: seleciona para Ctrl+C.
+          getSelection().selectAllChildren(code);
+          button.textContent = 'Selecionado';
+        }
+        setTimeout(() => (button.textContent = 'Copiar'), 2000);
+      });
+    });
+  </script>
   <script type="module">
     import { detectOS } from './detect-os.js';
 
@@ -483,7 +551,8 @@
       document.querySelectorAll('[data-dl-group]').forEach((group, i) => {
         const main = group.querySelector(`[data-download="${os}"]`);
         const alt = group.querySelector(`[data-download="${other}"]`);
-        const toggle = group.querySelector('[data-dl-more]');
+        // O botão fica na linha logo abaixo da fileira de downloads (.cta).
+        const toggle = group.closest('.cta').nextElementSibling.querySelector('[data-dl-more]');
         main.classList.replace('btn-ghost', 'btn-primary');
         alt.classList.replace('btn-primary', 'btn-ghost');
         alt.id = 'dl-alt-' + i;

@@ -11,6 +11,7 @@ vi.mock('./authStore', () => ({
 
 const { useServerStore } = await import('./serverStore')
 const { handleServerRoleEvent, removedMessage } = await import('./serverEvents')
+const { useInviteCodeStore } = await import('./inviteCodeStore')
 
 const role = (id: string, position: number, extra: Partial<Role> = {}): Role => ({
   id,
@@ -41,7 +42,8 @@ beforeEach(() => {
       { server_id: 's1', user_id: 'ana', role: 'member', role_ids: ['a', 'b'] },
       { server_id: 's1', user_id: 'bia', role: 'member', role_ids: ['b'] }
     ],
-    roles: [role('b', 2), role('a', 1), role('everyone', 0, { is_default: true })]
+    roles: [role('b', 2), role('a', 1), role('everyone', 0, { is_default: true })],
+    nicknames: { s1: { bia: 'Bibi' } }
   })
 })
 
@@ -104,6 +106,15 @@ describe('eventos de permissão e remoção', () => {
     expect(deps.onPermissionsChanged).toHaveBeenCalledWith('s1')
   })
 
+  it('server:invite_code (link novo gerado) troca o código guardado', () => {
+    useInviteCodeStore.getState().set('s1', 'AAAA2222')
+    expect(send('server:invite_code', { server_id: 's1', code: 'BBBB3333' })).toBe(true)
+    expect(useInviteCodeStore.getState().codes.s1).toBe('BBBB3333')
+    // Sem código válido não mexe em nada.
+    send('server:invite_code', { server_id: 's1', code: '../x' })
+    expect(useInviteCodeStore.getState().codes.s1).toBe('BBBB3333')
+  })
+
   it('server:removed passa o motivo', () => {
     send('server:removed', { server_id: 's1', user_id: 'eu', reason: 'ban' })
     expect(deps.onServerRemoved).toHaveBeenCalledWith('s1', 'ban')
@@ -129,5 +140,86 @@ describe('removedMessage', () => {
   it('quem saiu sozinho não precisa de aviso', () => {
     expect(removedMessage('leave', 'Salinha')).toBeNull()
     expect(removedMessage('', 'Salinha')).toBeNull()
+  })
+})
+
+describe('server:member:nickname', () => {
+  const nickOf = (userId: string): string | null | undefined =>
+    useServerStore.getState().currentMembers.find((m) => m.user_id === userId)?.nickname
+
+  it('troca o apelido no servidor aberto (lista e mapa)', () => {
+    expect(
+      send('server:member:nickname', { server_id: 's1', user_id: 'ana', nickname: 'Aninha' })
+    ).toBe(true)
+    expect(nickOf('ana')).toBe('Aninha')
+    expect(useServerStore.getState().nicknames.s1).toEqual({ ana: 'Aninha', bia: 'Bibi' })
+  })
+
+  it('nickname nulo tira o apelido', () => {
+    send('server:member:nickname', { server_id: 's1', user_id: 'bia', nickname: null })
+    expect(nickOf('bia')).toBeNull()
+    expect(useServerStore.getState().nicknames.s1).toEqual({})
+  })
+
+  it('outro servidor: só o mapa dele muda (overlay da call de lá)', () => {
+    send('server:member:nickname', { server_id: 'outro', user_id: 'ana', nickname: 'Ana de lá' })
+    expect(nickOf('ana')).toBeUndefined()
+    expect(useServerStore.getState().nicknames).toEqual({
+      s1: { bia: 'Bibi' },
+      outro: { ana: 'Ana de lá' }
+    })
+  })
+
+  it('payload incompleto não quebra', () => {
+    expect(send('server:member:nickname', { server_id: 's1' })).toBe(true)
+    expect(useServerStore.getState().nicknames.s1).toEqual({ bia: 'Bibi' })
+  })
+})
+
+describe('apelidos ao sair, ser expulso e voltar', () => {
+  const store = (): ReturnType<typeof useServerStore.getState> => useServerStore.getState()
+
+  it('sair (ou ser expulso) tira o apelido do mapa; voltar sem apelido não traz o antigo', () => {
+    store().removeMember('s1', 'bia')
+    expect(store().nicknames.s1).toEqual({})
+    store().addMember('s1', { server_id: 's1', user_id: 'bia', role: 'member', nickname: null })
+    expect(store().nicknames.s1).toEqual({})
+    expect(store().currentMembers.find((m) => m.user_id === 'bia')?.nickname).toBeNull()
+  })
+
+  it('vale também para o servidor que não está aberto (call de lá)', () => {
+    useServerStore.setState({ nicknames: { s1: {}, outro: { ana: 'Ana de lá' } } })
+    store().removeMember('outro', 'ana')
+    expect(store().nicknames.outro).toEqual({})
+    store().addMember('outro', {
+      server_id: 'outro',
+      user_id: 'ana',
+      role: 'member',
+      nickname: 'Volta'
+    })
+    expect(store().nicknames.outro).toEqual({ ana: 'Volta' })
+  })
+
+  it('server:member:update com apelido atualiza o mapa junto', () => {
+    store().updateMember('s1', {
+      server_id: 's1',
+      user_id: 'ana',
+      role: 'member',
+      nickname: 'Aninha'
+    })
+    expect(store().nicknames.s1).toEqual({ ana: 'Aninha', bia: 'Bibi' })
+    store().updateMember('s1', { server_id: 's1', user_id: 'bia', role: 'member', nickname: null })
+    expect(store().nicknames.s1).toEqual({ ana: 'Aninha' })
+  })
+
+  it('update sem o campo nickname não mexe no apelido', () => {
+    store().updateMember('s1', { server_id: 's1', user_id: 'bia', role: 'admin' })
+    expect(store().nicknames.s1).toEqual({ bia: 'Bibi' })
+  })
+
+  it('perder o servidor (saiu, expulso, banido) esquece os apelidos dele', () => {
+    useServerStore.setState({ servers: [{ id: 's1', name: 's', owner_id: 'x' }] })
+    store().removeLocalServer('s1')
+    expect(store().nicknames.s1).toBeUndefined()
   })
 })
