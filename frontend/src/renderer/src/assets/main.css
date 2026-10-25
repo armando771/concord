@@ -1,40 +1,8 @@
 @import 'tailwindcss';
-/* Outfit (OFL, empacotada local: CSP do desktop e uso offline) no lugar da
-   gg sans do Discord, que é proprietária: é a livre mais parecida (altura-x
-   e de maiúscula iguais, medidas no discord.com/app). */
-@import '@fontsource-variable/outfit';
+/* Fonte e escala de texto do Discord (compartilhado com o overlay). */
+@import './typography.css';
 
 @theme {
-  /* Pilha do Discord (--font-primary) com a Outfit no lugar da gg sans; emoji
-     por último para nomes de canal/servidor com emoji (🐺) em qualquer SO. */
-  --font-sans:
-    'Outfit Variable', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif,
-    'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
-  /* --font-code do Discord sem a gg mono (proprietária). */
-  --font-mono:
-    'Source Code Pro', Consolas, 'Andale Mono WT', 'Andale Mono', 'Lucida Console',
-    'Lucida Sans Typewriter', 'DejaVu Sans Mono', 'Bitstream Vera Sans Mono', 'Liberation Mono',
-    'Nimbus Mono L', Monaco, 'Courier New', Courier, monospace;
-
-  /* Escala de texto do Discord (variantes text-* e heading-* do cliente web,
-     tamanho / altura de linha). text-ds-chat é a mensagem: 16px / 22px. */
-  --text-ds-xxs: 0.625rem;
-  --text-ds-xxs--line-height: 0.75rem;
-  --text-ds-xs: 0.75rem;
-  --text-ds-xs--line-height: 1rem;
-  --text-ds-sm: 0.875rem;
-  --text-ds-sm--line-height: 1.125rem;
-  --text-ds-md: 1rem;
-  --text-ds-md--line-height: 1.25rem;
-  --text-ds-chat: 1rem;
-  --text-ds-chat--line-height: 1.375rem;
-  --text-ds-lg: 1.25rem;
-  --text-ds-lg--line-height: 1.5rem;
-  --text-ds-xl: 1.5rem;
-  --text-ds-xl--line-height: 2rem;
-  --text-ds-xxl: 2rem;
-  --text-ds-xxl--line-height: 2.5rem;
-
   --color-discord-violet: #5865f2;
   --color-discord-violet-hover: #4752c4;
   --color-discord-green: #23a55a;
@@ -69,11 +37,6 @@
 
   body {
     font-family: var(--font-sans);
-    /* A Outfit é ~4% mais larga que a gg sans e tem o espaço mais estreito.
-       Com estes ajustes a largura das palavras e dos espaços fica igual à do
-       Discord (medido), e o truncamento cai no mesmo lugar. */
-    letter-spacing: -0.02em;
-    word-spacing: 0.03em;
     color: #f2f3f5;
     background: #050508;
   }
