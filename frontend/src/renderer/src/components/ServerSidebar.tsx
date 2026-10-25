@@ -19,6 +19,7 @@ import { useCallStore } from '../store/callStore'
 import VoiceStateIcons from './call/VoiceStateIcons'
 import VoiceChannelTimer from './call/VoiceChannelTimer'
 import LiveBadge from './call/LiveBadge'
+import { GameBadge } from './ActivityLine'
 import { liveUserIds } from '../lib/liveBadge'
 import { useUserAudioStore } from '../store/userAudioStore'
 import { useLevelStore } from '../store/levelStore'
@@ -908,8 +909,9 @@ export function ServerSidebar(): React.JSX.Element {
                       {channelMenuFor === ch.id && channelMenu(ch)}
 
                       {/* Overlay para salas trancadas quando o usuário não está conectado nela */}
-                      {isLocked && !connectedHere && (
-                        isPendingKnock ? (
+                      {isLocked &&
+                        !connectedHere &&
+                        (isPendingKnock ? (
                           <div className="absolute inset-0 z-10 flex items-center justify-between rounded-lg bg-amber-950/80 px-2.5 backdrop-blur-sm border border-amber-500/40 animate-in fade-in duration-150">
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className="h-2 w-2 shrink-0 animate-ping rounded-full bg-amber-400" />
@@ -945,8 +947,7 @@ export function ServerSidebar(): React.JSX.Element {
                               Sala trancada · Pedir permissão
                             </span>
                           </div>
-                        )
-                      )}
+                        ))}
                     </div>
                     {participants.length > 0 && (
                       <div className="mb-1 ml-4 flex flex-col gap-0.5">
@@ -995,6 +996,7 @@ export function ServerSidebar(): React.JSX.Element {
                               {/* Selo de nível só na lista de membros da direita; aqui o
                                   nível só ordena a lista (ver voiceOrder). */}
                               <span className="ml-auto flex items-center gap-0.5 pr-1">
+                                <GameBadge userId={p.user_id} />
                                 {live.has(p.user_id) && <LiveBadge />}
                                 {!isMe && locallyMuted[p.user_id]?.muted && (
                                   <span title="Silenciado por você" className="text-gray-400">

@@ -6,15 +6,34 @@ export interface PresenceActivity {
   kind: 'game'
   /** Unix em ms de quando começou. */
   started_at: number
+  /** appid e ícone (sha1) na Steam; ausentes em jogos fora da Steam. */
+  app_id?: number
+  icon_hash?: string
+}
+
+const ICON_HASH = /^[0-9a-f]{40}$/
+
+function isIconHash(value: unknown): value is string {
+  return typeof value === 'string' && ICON_HASH.test(value)
 }
 
 /** Valida o que veio do servidor; qualquer coisa fora do formato vira null. */
 export function sanitizeActivity(raw: unknown): PresenceActivity | null {
   if (typeof raw !== 'object' || raw === null) return null
-  const { name, kind, started_at } = raw as Record<string, unknown>
+  const { name, kind, started_at, app_id, icon_hash } = raw as Record<string, unknown>
   if (typeof name !== 'string' || !name.trim() || kind !== 'game') return null
   if (typeof started_at !== 'number' || !Number.isFinite(started_at)) return null
-  return { name: name.trim(), kind: 'game', started_at }
+  const activity: PresenceActivity = { name: name.trim(), kind: 'game', started_at }
+  if (
+    typeof app_id === 'number' &&
+    Number.isInteger(app_id) &&
+    app_id > 0 &&
+    isIconHash(icon_hash)
+  ) {
+    activity.app_id = app_id
+    activity.icon_hash = icon_hash
+  }
+  return activity
 }
 
 /** "há 5 min", "há 2 h", "há 1 d": desde quando a pessoa joga. */

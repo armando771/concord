@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  findIconHash,
   parseAppManifestName,
   parseLibraryFolders,
   parseRunningAppId,
@@ -48,6 +49,18 @@ describe('parseLibraryFolders', () => {
 \t}
 }`
     expect(parseLibraryFolders(vdf)).toEqual(['C:\\Program Files (x86)\\Steam', 'D:\\SteamLibrary'])
+  })
+})
+
+describe('findIconHash', () => {
+  const hash = '0e56e01c18bf303a65ba60dddfa842cc85d1da33'
+
+  it('acha o jpg com nome sha1 entre os arquivos do appid', () => {
+    expect(findIconHash(['logo.png', `${hash.toUpperCase()}.jpg`, 'header.jpg'])).toBe(hash)
+  })
+
+  it('devolve undefined sem o ícone', () => {
+    expect(findIconHash(['header.jpg', 'library_600x900.jpg', 'abc'])).toBeUndefined()
   })
 })
 

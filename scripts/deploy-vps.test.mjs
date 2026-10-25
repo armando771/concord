@@ -54,6 +54,8 @@ exec /usr/bin/rsync "\${args[@]}"`)
   stub(bin, 'go', `
 while [ $# -gt 0 ]; do [ "$1" = -o ] && { cp "${join(base, 'new-binary')}" "$2"; exit 0; }; shift; done`)
   stub(bin, 'docker', 'exit 0')
+  stub(bin, 'ffmpeg', 'exit 0') // dependências do Maestro já presentes: o deploy não instala nada
+  stub(bin, 'yt-dlp', 'exit 0')
   stub(bin, 'journalctl', 'echo "(journal)"')
   stub(bin, 'systemctl', `
 echo "systemctl $*" >> "$LOG"
@@ -80,7 +82,7 @@ for a in "$@"; do [ "$a" = '%{http_code}' ] && { printf %s "$code"; exit 0; }; d
 }
 
 function deploy(ctx, args = ['root@vps'], extraEnv = {}) {
-  const env = { ...process.env, ...ctx.env, CONCORD_REMOTE_DIR: ctx.server, HEALTH_TIMEOUT: '2', ...extraEnv }
+  const env = { ...process.env, ...ctx.env, CONCORD_REMOTE_DIR: ctx.server, CONCORD_SYSTEMD_DIR: join(ctx.base, 'systemd'), HEALTH_TIMEOUT: '2', ...extraEnv }
   delete env.GITHUB_ACTIONS // como no PC: o problema era o argumento vazio
   const begin = Date.now()
   const r = spawnSync('bash', [SCRIPT, ...args], { env, encoding: 'utf8' })

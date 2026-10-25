@@ -12,6 +12,34 @@ describe('sanitizeActivity', () => {
     })
   })
 
+  it('guarda o appid da Steam quando válido e ignora o inválido', () => {
+    const icon_hash = '0e56e01c18bf303a65ba60dddfa842cc85d1da33'
+    expect(
+      sanitizeActivity({
+        name: 'Grounded 2',
+        kind: 'game',
+        started_at: 5,
+        app_id: 2661300,
+        icon_hash
+      })
+    ).toEqual({ name: 'Grounded 2', kind: 'game', started_at: 5, app_id: 2661300, icon_hash })
+    for (const bad of [0, -1, 1.5, '730']) {
+      expect(
+        sanitizeActivity({ name: 'x', kind: 'game', started_at: 5, app_id: bad, icon_hash })
+      ).toEqual({
+        name: 'x',
+        kind: 'game',
+        started_at: 5
+      })
+    }
+    // appid sem hash válido também perde o ícone
+    for (const bad of [undefined, '../x', icon_hash.toUpperCase()]) {
+      expect(
+        sanitizeActivity({ name: 'x', kind: 'game', started_at: 5, app_id: 730, icon_hash: bad })
+      ).toEqual({ name: 'x', kind: 'game', started_at: 5 })
+    }
+  })
+
   it('recusa o que não for uma atividade válida', () => {
     expect(sanitizeActivity(null)).toBeNull()
     expect(sanitizeActivity({ name: '', kind: 'game', started_at: 1 })).toBeNull()
