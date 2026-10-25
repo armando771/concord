@@ -1,6 +1,14 @@
 // Cada plataforma usa o mesmo manifesto que seu atualizador, sem depender da outra.
 (async () => {
   const $$ = (selector) => document.querySelectorAll(selector);
+  // Comando de instalação do Linux apontando para este mesmo servidor.
+  const DEFAULT_ORIGIN = 'https://salinha.bhrx.com.br';
+  const origin = typeof location !== 'undefined' && /^https?:$/.test(location.protocol)
+    ? location.origin
+    : DEFAULT_ORIGIN;
+  $$('[data-install-cmd]').forEach((el) => {
+    el.textContent = `curl -fsSL ${origin}/install.sh | ` + (origin === DEFAULT_ORIGIN ? 'sh' : `SALINHA_URL=${origin} sh`);
+  });
   const releases = await Promise.all(['windows', 'linux'].map(async (platform) => {
     const manifest = platform === 'linux' ? 'latest-linux.yml' : 'latest.yml';
     const prefix = platform === 'linux' ? 'AppImage x64 · ' : '';

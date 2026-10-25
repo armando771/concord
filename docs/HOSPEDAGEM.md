@@ -123,16 +123,51 @@ O script faz quatro coisas:
 Como o app não é assinado, o Windows mostra "O Windows protegeu o
 computador". Basta clicar em **Mais informações → Executar assim mesmo**.
 
-**Linux x64:** mande `frontend/dist/Salinha-<versão>-x64.AppImage` ou o link da
-landing page. Nas propriedades do arquivo, permita executar como programa
-(ou use `chmod +x Salinha-<versão>-x64.AppImage`) e abra-o como usuário normal.
-Algumas distribuições exigem instalar o FUSE 2. Não use `sudo` nem desative o
-sandbox. Guarde o AppImage numa pasta sua com permissão de escrita: o
-atualizador substitui o arquivo nessa pasta. Executar uma cópia extraída em
-vez do AppImage não oferece atualização automática.
+**Linux x64 (recomendado):** mande o link da landing page ou o comando, que
+roda no terminal como usuário normal (sem `sudo`):
 
-O release Linux usa a mesma chave Ed25519 do Windows e publica o AppImage,
-seu `.sig` e `latest-linux.yml`. O Windows continua usando `latest.yml`.
+```bash
+curl -fsSL https://salinha.bhrx.com.br/install.sh | sh
+```
+
+Ele instala em `~/.local/share/salinha/versions/<versão>/` (um `.tar.gz` por
+versão), aponta `~/.local/share/salinha/current` para ela e cria o comando
+`~/.local/bin/salinha` e o atalho `~/.local/share/applications/salinha.desktop`.
+Não precisa de FUSE, root nem pacote nenhum (só `tar`, `sha512sum` e `curl` ou
+`wget`, que toda distribuição traz). Daí em diante o próprio app se atualiza:
+baixa o `.tar.gz`, confere sha512 e a assinatura Ed25519, extrai numa pasta
+nova e troca o `current` de uma vez, guardando a versão anterior. Se a versão
+nova não abrir três vezes seguidas, o lançador volta sozinho para a anterior.
+Para outro servidor: `curl -fsSL <endereço>/install.sh | SALINHA_URL=<endereço> sh`.
+Para remover: `rm -rf ~/.local/share/salinha ~/.local/bin/salinha
+~/.local/share/applications/salinha.desktop` (login e configurações ficam em
+`~/.config/Concord`).
+
+Sandbox: sem root não existe o `chrome-sandbox` SUID, então o Chromium usa o
+sandbox de user namespaces do kernel, ligado na maioria das distribuições.
+Onde eles estão desligados (`kernel.unprivileged_userns_clone=0`,
+`user.max_user_namespaces=0`) ou restritos (AppArmor do Ubuntu 24.04+), o
+lançador abre com `--no-sandbox` como último recurso e registra em
+`~/.local/share/salinha/launcher.log`. `SALINHA_SANDBOX=1` ou `0` força.
+
+**Quem usa o AppImage extraído** (por exemplo em `~/.local/opt/salinha`, com o
+lançador `~/.local/bin/salinha`): rode o mesmo comando uma vez. Ele guarda o
+lançador e o atalho antigos em `~/.local/share/salinha/legacy/` e avisa a pasta
+antiga, que pode ser apagada. A partir desta versão, um AppImage extraído
+também migra sozinho: ele oferece "Atualizar" para a mesma versão, que instala
+no layout novo e reabre por ele.
+
+**Linux x64 (AppImage):** `frontend/dist/Salinha-<versão>-x64.AppImage`, ou o
+botão da landing page. Nas propriedades do arquivo, permita executar como
+programa (ou use `chmod +x`) e abra-o como usuário normal. O AppImage usa o
+runtime estático (AppImage/type2-runtime): só precisa do `fusermount3` (FUSE 3),
+não da libfuse2. Guarde-o numa pasta sua com permissão de escrita: o
+atualizador (electron-updater) substitui o arquivo nessa pasta.
+
+O release Linux usa a mesma chave Ed25519 do Windows e publica o AppImage, o
+`.tar.gz`, os `.sig` de cada um, `latest-linux-tar.yml` (o do `.tar.gz`) e
+`latest-linux.yml` (o do AppImage), nessa ordem. O Windows continua usando
+`latest.yml`.
 Para manter versões iguais, execute o release Windows e depois o Linux,
 ou passe explicitamente a mesma versão aos dois scripts. Ambos precisam
 terminar com sucesso antes de executar o deploy. No CI isso é obrigatório.
@@ -150,7 +185,7 @@ terminar com sucesso antes de executar o deploy. No CI isso é obrigatório.
 
 > `scripts/build-win.sh <endereço>` ainda gera um `.exe` avulso (portable +
 > instalador), mas sem atualização automática.
-> Para um AppImage avulso: `scripts/build-linux.sh <endereço>`.
+> Para um AppImage e um `.tar.gz` avulsos: `scripts/build-linux.sh <endereço>`.
 
 ### No app (Linux)
 
@@ -158,10 +193,11 @@ terminar com sucesso antes de executar o deploy. No CI isso é obrigatório.
 - Compartilhamento de tela é **sem áudio**; o helper de áudio é exclusivo do Windows.
 - No Wayland, a captura depende do portal de compartilhamento do ambiente gráfico.
 - Não há promessa de fechar para a bandeja nem de iniciar com o sistema no Linux.
-- Para validar um release: abrir o AppImage, entrar na conta, enviar mensagem,
-  testar microfone/câmera e compartilhar tela. Depois publicar uma segunda
-  versão e conferir download, assinatura e substituição do AppImage, inclusive
-  adiamento do download durante chamadas. Conferir também uma sessão X11 e Wayland.
+- Para validar um release: abrir o app (instalação por comando e AppImage),
+  entrar na conta, enviar mensagem, testar microfone/câmera e compartilhar tela.
+  Depois publicar uma segunda versão e conferir download, assinatura e troca
+  (do `current` e do AppImage), inclusive adiamento do download durante
+  chamadas. Conferir também uma sessão X11 e Wayland.
 
 ### No app (Windows)
 
@@ -231,7 +267,7 @@ Numa VPS com IP público não precisa de playit, e dá para ter HTTPS de graça.
 `/updates/latest.yml` (Windows) e `/updates/latest-linux.yml` (Linux) e aponta
 cada botão para o artefato correspondente. A falha de um manifesto não bloqueia
 o download da outra plataforma. O deploy mantém os três instaladores Windows
-e três AppImages mais recentes. No
+e três AppImages e `.tar.gz` mais recentes. No
 Caddyfile, um domínio próprio serve a página e repassa `/updates/` ao backend:
 ```
 salinha.exemplo.com {

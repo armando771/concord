@@ -8,7 +8,7 @@ const html = readFileSync(new URL('../site/index.html', import.meta.url), 'utf8'
 const windows = 'version: 0.7.0\nfiles:\n  - url: Salinha-0.7.0-setup.exe\n    size: 125829120\npath: Salinha-0.7.0-setup.exe\n';
 const linux = "version: 0.7.0\nfiles:\n  - url: Salinha-0.7.0-x64.AppImage\n    size: 157286400\npath: 'Salinha-0.7.0-x64.AppImage'\n";
 
-async function load(manifests) {
+async function load(manifests, location) {
   const elements = new Map();
   const querySelectorAll = (selector) => {
     if (!elements.has(selector)) elements.set(selector, [{
@@ -21,6 +21,7 @@ async function load(manifests) {
   };
   const requests = [];
   await runInNewContext(source, {
+    ...(location ? { location } : {}),
     document: { querySelectorAll },
     fetch: async (url, options) => {
       requests.push([url, options.cache]);
@@ -64,4 +65,17 @@ test('manifesto inválido ou caminho externo não habilita download', async () =
     assert.equal(get('[data-download="linux"]').href, undefined);
     assert.match(get('[data-version-meta="linux"]').textContent, /indisponível/);
   }
+});
+
+test('comando de instalação do Linux aponta para o servidor da página', async () => {
+  assert.match(html, /<code data-install-cmd>curl -fsSL https:\/\/salinha.bhrx.com.br\/install.sh \| sh<\/code>/);
+  const own = await load({}, { protocol: 'https:', origin: 'https://salinha.bhrx.com.br' });
+  assert.equal(own.get('[data-install-cmd]').textContent, 'curl -fsSL https://salinha.bhrx.com.br/install.sh | sh');
+  const other = await load({}, { protocol: 'https:', origin: 'https://outra.exemplo' });
+  assert.equal(
+    other.get('[data-install-cmd]').textContent,
+    'curl -fsSL https://outra.exemplo/install.sh | SALINHA_URL=https://outra.exemplo sh'
+  );
+  const file = await load({}, { protocol: 'file:', origin: 'null' });
+  assert.equal(file.get('[data-install-cmd]').textContent, 'curl -fsSL https://salinha.bhrx.com.br/install.sh | sh');
 });
