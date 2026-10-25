@@ -20,6 +20,7 @@ import CreateGroupModal from './friends/CreateGroupModal'
 import { conversationRoute, conversationTitle } from '../lib/conversations'
 import { hideConversation, leaveGroup, type ConversationSummary } from '../api/conversations'
 import ConfirmModal from './friends/ConfirmModal'
+import { GameLine } from './ActivityLine'
 
 const SIDEBAR_BG = '#0b0c10'
 
@@ -123,11 +124,12 @@ function ConversationRow({
         {typing ? (
           <p className="truncate text-ds-xs italic text-violet-300">digitando…</p>
         ) : (
-          isGroup && (
+          (isGroup && (
             <p className="truncate text-ds-xs font-medium text-gray-500">
               {(conv.members ?? []).length} membros
             </p>
-          )
+          )) ||
+          (other && <GameLine userId={other.id} className="text-ds-xs font-medium text-gray-500" />)
         )}
       </div>
       {unread > 0 && (

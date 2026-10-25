@@ -50,7 +50,10 @@ export function userBarSubtitle(user: {
   inCall: boolean
   note: string | null | undefined
   statusLabel: string
+  /** Jogo em andamento (Em atividade): vale mais que "Em call". */
+  game?: string | null
 }): string {
+  if (user.game) return user.game
   if (user.inCall) return 'Em call'
   return user.note?.trim() || user.statusLabel
 }

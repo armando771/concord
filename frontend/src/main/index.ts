@@ -18,6 +18,7 @@ import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden }
 import { setupUpdater } from './updater'
 import { setupOverlay } from './overlay'
 import { setupGlobalKeybinds } from './globalKeybinds'
+import { setupGames } from './games'
 import { handleInviteArgs, setupInviteProtocol } from './inviteProtocol'
 import { closeActivity, setupActivities } from './activityWindow'
 import { APP_USER_MODEL_ID } from './toastPolicy'
@@ -256,6 +257,7 @@ app.whenReady().then(() => {
   setupOverlay(() => mainWindow)
   setupGlobalKeybinds(() => mainWindow)
   setupActivities(() => mainWindow)
+  setupGames(() => mainWindow)
   setupUpdater(() => mainWindow, {
     feedUrl: __CONCORD_UPDATE_URL__,
     publicKeyPem: __CONCORD_UPDATE_PUBKEY__
