@@ -7,7 +7,13 @@ import SystemMessage from './SystemMessage'
 import Avatar from './Avatar'
 import { useUserLook } from '../store/profileStore'
 import { profileCardHandler } from '../store/profileCardStore'
-import { applyMention, mentionQuery, mentionsUser, splitMentions } from '../lib/mentions'
+import {
+  applyMention,
+  mentionQuery,
+  mentionSuggestions,
+  messageMentionsMe,
+  splitMentions
+} from '../lib/mentions'
 import { filterEmoteCategories, QUICK_EMOTES } from '../lib/emotes'
 import { messagePreview } from '../lib/polls'
 import PollCard from './poll/PollCard'
@@ -37,6 +43,8 @@ interface ChatPaneProps {
   placeholder?: string
   /** Quem pode ser marcado com @ (membros do servidor, ou a pessoa da DM). */
   mentionable?: Mentionable[]
+  /** Sugere @all/@here (canal de servidor, só dono e moderadores). */
+  canMentionEveryone?: boolean
 }
 
 const MAX_SUGGESTIONS = 6
@@ -149,8 +157,7 @@ function MessageItem({
   const [hover, setHover] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
 
-  const isReplyToMe = !isMine && message.reply_to?.author_id === me?.id
-  const mentionsMe = !isMine && (mentionsUser(message.content, me?.username ?? '') || isReplyToMe)
+  const mentionsMe = messageMentionsMe(message, me)
   const reactions = message.reactions ?? []
   const hasReplyReference = Boolean(message.reply_to_id || message.reply_to)
   const replyAuthorName =
@@ -213,9 +220,12 @@ function MessageItem({
           </div>
           {message.content && (
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">
-              {splitMentions(message.content).map((part, i) =>
+              {splitMentions(message.content, message.mention_everyone ?? null).map((part, i) =>
                 part.mention ? (
-                  <span key={i} className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]">
+                  <span
+                    key={i}
+                    className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]"
+                  >
                     {part.text}
                   </span>
                 ) : (
@@ -319,7 +329,8 @@ function MessageItem({
 function ChatPane({
   room,
   placeholder = 'Digite sua mensagem',
-  mentionable = []
+  mentionable = [],
+  canMentionEveryone = false
 }: ChatPaneProps): React.JSX.Element {
   const messagesByRoom = useChatStore((s) => s.messagesByRoom)
   const hasMoreByRoom = useChatStore((s) => s.hasMoreByRoom)
@@ -358,18 +369,17 @@ function ChatPane({
     roomRef.current = room
   }, [room])
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
-  const [highlight, setHighlight] = useState(0)
+  const [highlightChoice, setHighlight] = useState<number | null>(null)
   const meUsername = useAuthStore((s) => s.user?.username)
-  const suggestions = mention
-    ? mentionable
-        .filter((m) => m.username !== meUsername)
-        .filter((m) =>
-          [m.username, m.display_name].some((v) =>
-            v.toLowerCase().startsWith(mention.query.toLowerCase())
-          )
-        )
-        .slice(0, MAX_SUGGESTIONS)
-    : []
+  // Tab/Enter pegam o item padrão (sempre uma pessoa, se houver) até a
+  // pessoa navegar com as setas.
+  const { items: suggestions, defaultIndex } = mention
+    ? mentionSuggestions(mention.query, mentionable, canMentionEveryone, {
+        exclude: meUsername,
+        max: MAX_SUGGESTIONS
+      })
+    : { items: [], defaultIndex: -1 }
+  const highlight = highlightChoice ?? defaultIndex
 
   const pickMention = (username: string): void => {
     const el = inputRef.current
@@ -388,14 +398,21 @@ function ChatPane({
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault()
         const step = e.key === 'ArrowDown' ? 1 : -1
-        setHighlight((h) => (h + step + suggestions.length) % suggestions.length)
-      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        const from = highlight < 0 ? (step > 0 ? -1 : 0) : highlight
+        setHighlight((from + step + suggestions.length) % suggestions.length)
+        return
+      }
+      if ((e.key === 'Enter' || e.key === 'Tab') && highlight >= 0) {
         e.preventDefault()
         pickMention(suggestions[highlight].username)
-      } else if (e.key === 'Escape') {
-        setMention(null)
+        return
       }
-      return
+      if (e.key === 'Escape') {
+        setMention(null)
+        return
+      }
+      // Sem item escolhido, Enter/Tab seguem normais (nada de @all sem querer).
+      if (e.key === 'Enter' || e.key === 'Tab') return
     }
     if (e.key === 'Escape' && replyingTo) {
       setReplyState(null)
@@ -613,7 +630,7 @@ function ChatPane({
           >
             {suggestions.map((m, i) => (
               <li
-                key={m.username}
+                key={`${m.kind}:${m.username}`}
                 role="option"
                 aria-selected={i === highlight}
                 onMouseDown={(e) => {
@@ -625,8 +642,17 @@ function ChatPane({
                   i === highlight ? 'bg-[#5865f2]/30 text-white' : 'text-gray-300'
                 }`}
               >
-                <span className="font-semibold">{m.display_name}</span>
-                <span className="text-xs text-gray-400">@{m.username}</span>
+                {m.kind === 'everyone' ? (
+                  <>
+                    <span className="font-semibold">@{m.username}</span>
+                    <span className="text-xs text-gray-400">{m.description}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold">{m.display_name}</span>
+                    <span className="text-xs text-gray-400">@{m.username}</span>
+                  </>
+                )}
               </li>
             ))}
           </ul>
@@ -687,7 +713,7 @@ function ChatPane({
             onChange={(e) => {
               setDraft(e.target.value)
               setMention(mentionQuery(e.target.value, e.target.selectionStart ?? 0))
-              setHighlight(0)
+              setHighlight(null)
             }}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}

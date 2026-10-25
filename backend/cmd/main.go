@@ -128,7 +128,7 @@ func main() {
 
 	// Message
 	messageRepository := message.MessageRepository(db)
-	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository, uploads)
+	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository, uploads, channelRepository)
 	// Limpeza horária de arquivos sem dono (cascatas e uploads abandonados).
 	go message.NewJanitor(messageRepository, uploads).Run(context.Background(), time.Hour)
 	messageHandler := message.MessageHandler(messageService, channelService, conversationService, friendshipService, serverService)

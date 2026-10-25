@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -46,15 +47,19 @@ type Service struct {
 	channelResolver ChannelResolver
 	convResolver    ConversationResolver
 	files           FileRemover
+	moderators      ModeratorChecker
+	mentionLimiter  *mentionLimiter
 }
 
-func MessageService(repository *Repository, publisher EventPublisher, channelResolver ChannelResolver, convResolver ConversationResolver, files FileRemover) *Service {
+func MessageService(repository *Repository, publisher EventPublisher, channelResolver ChannelResolver, convResolver ConversationResolver, files FileRemover, moderators ModeratorChecker) *Service {
 	return &Service{
 		repository:      repository,
 		publisher:       publisher,
 		channelResolver: channelResolver,
 		convResolver:    convResolver,
 		files:           files,
+		moderators:      moderators,
+		mentionLimiter:  newMentionLimiter(mentionEveryoneCooldown, time.Now),
 	}
 }
 
@@ -84,14 +89,23 @@ func SameRoomTarget(target *Message, channelID string, conversationID string) bo
 }
 
 func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, authorID string, content string, replyToID *string, attachmentIDs []string) (*Message, error) {
-	msg, err := s.create(ctx, channelID, "", authorID, content, replyToID, attachmentIDs)
-	if err != nil {
+	if err := validateNewMessage(content, attachmentIDs); err != nil {
 		return nil, err
 	}
 
 	serverID := ""
 	if s.channelResolver != nil {
 		serverID, _ = s.channelResolver.ChannelServerID(ctx, channelID)
+	}
+
+	mentionEveryone := s.resolveMentionEveryone(ctx, serverID, channelID, authorID, content)
+	msg, err := s.create(ctx, channelID, "", authorID, content, replyToID, attachmentIDs, mentionEveryone)
+	if err != nil {
+		// Mensagem que não saiu não gasta a vez do anti-spam.
+		if mentionEveryone != nil {
+			s.mentionLimiter.Release(authorID, channelID)
+		}
+		return nil, err
 	}
 
 	s.publisher.PublishMessageCreate(CreateEvent{
@@ -104,7 +118,8 @@ func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, au
 }
 
 func (s *Service) CreateConversationMessage(ctx context.Context, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string) (*Message, error) {
-	msg, err := s.create(ctx, "", conversationID, authorID, content, replyToID, attachmentIDs)
+	// Em DM @all/@here é texto puro.
+	msg, err := s.create(ctx, "", conversationID, authorID, content, replyToID, attachmentIDs, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +138,7 @@ func (s *Service) CreateConversationMessage(ctx context.Context, conversationID 
 	return msg, nil
 }
 
-func (s *Service) create(ctx context.Context, channelID string, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string) (*Message, error) {
+func (s *Service) create(ctx context.Context, channelID string, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string, mentionEveryone *string) (*Message, error) {
 	if err := validateNewMessage(content, attachmentIDs); err != nil {
 		return nil, err
 	}
@@ -141,12 +156,13 @@ func (s *Service) create(ctx context.Context, channelID string, conversationID s
 	}
 
 	msg := &Message{
-		ID:             uuid.New().String(),
-		AuthorID:       authorID,
-		ChannelID:      &channelID,
-		ConversationID: &conversationID,
-		ReplyToID:      normalizedReplyID,
-		Content:        content,
+		ID:              uuid.New().String(),
+		AuthorID:        authorID,
+		ChannelID:       &channelID,
+		ConversationID:  &conversationID,
+		ReplyToID:       normalizedReplyID,
+		Content:         content,
+		MentionEveryone: mentionEveryone,
 	}
 
 	if channelID == "" {
