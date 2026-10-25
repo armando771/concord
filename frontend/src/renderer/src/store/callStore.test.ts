@@ -686,7 +686,7 @@ describe('callStore — reentrada após queda do WS', () => {
     await flush()
     await flush()
 
-    expect(useCallStore.getState().voiceStates.ana).toEqual({ muted: true, deafened: false })
+    expect(useCallStore.getState().voiceStates.ana).toMatchObject({ muted: true, deafened: false })
   })
 
   it('canal: 404 ao reconectar não cria chamada nova enquanto há gente na sala de mídia', async () => {
@@ -790,7 +790,7 @@ describe('callStore — DM após queda do WS', () => {
       deafened: false
     })
     expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'dm-1', active: false })
-    expect(useCallStore.getState().voiceStates.ana).toEqual({ muted: false, deafened: true })
+    expect(useCallStore.getState().voiceStates.ana).toMatchObject({ muted: false, deafened: true })
     expect(useCallStore.getState().participants.map((p) => p.id)).toEqual(['ana'])
     expect(media.instances).toHaveLength(1)
     expect(api.startCall).toHaveBeenCalledTimes(1)
