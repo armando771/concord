@@ -148,7 +148,7 @@ func main() {
 
 	// Como o gin.Default(), mas o log não grava tokens que vão na URL.
 	router := gin.New()
-	// O Caddy consulta /healthz a cada segundo: fora do log.
+	// O deploy e o apply-caddyfile consultam /healthz em laço: fora do log.
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{Formatter: httplog.Formatter, SkipPaths: []string{"/healthz"}}), gin.Recovery())
 
 	// Downloads longos não seguram o desligamento (ver isLongDownload).

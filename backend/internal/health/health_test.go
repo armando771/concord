@@ -53,3 +53,19 @@ func TestNotReadyWhileStopping(t *testing.T) {
 		t.Fatalf("status = %d, want 503 desligando", code)
 	}
 }
+
+// Bater muito no /healthz (é público) não vira uma consulta ao banco por
+// requisição.
+func TestDatabasePingedAtMostOncePerInterval(t *testing.T) {
+	pings := 0
+	r := New(func(context.Context) error { pings++; return nil })
+	r.SetReady()
+	for i := 0; i < 50; i++ {
+		if code := get(t, r); code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", code)
+		}
+	}
+	if pings != 1 {
+		t.Fatalf("pings = %d, want 1 dentro de pingEvery", pings)
+	}
+}

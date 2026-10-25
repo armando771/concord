@@ -15,7 +15,6 @@ const listenFdsStart = 3
 // ativo — um binário sem ela não usa o socket e não sobe (porta ocupada).
 const SocketActivationCapability = "concord-capability:socket-activation-v1"
 
-
 // Listen abre a porta do servidor. Com ativação por socket do systemd
 // (deploy/concord-server.socket) usa o socket que o systemd mantém aberto: no
 // reinício a porta nunca fecha — as conexões ficam na fila do kernel até o
