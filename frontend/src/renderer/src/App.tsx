@@ -4,6 +4,7 @@ import Background from './components/Background'
 import ToastContainer from './components/ToastContainer'
 import BackgroundBridge from './components/BackgroundBridge'
 import OverlayBridge from './components/OverlayBridge'
+import GameActivityBridge from './components/GameActivityBridge'
 import UpdateNotice from './components/UpdateNotice'
 import AutoUpdateUnavailableNotice from './components/AutoUpdateUnavailableNotice'
 import UpdateCallBridge from './components/UpdateCallBridge'
@@ -36,6 +37,7 @@ function App(): React.JSX.Element {
           {/* Só no Electron: bandeja, overlay de jogo e atualizações. */}
           <BackgroundBridge />
           <OverlayBridge />
+          <GameActivityBridge />
           <UpdateNotice />
           <AutoUpdateUnavailableNotice />
           <UpdateCallBridge />
