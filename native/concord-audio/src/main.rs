@@ -1,6 +1,8 @@
 //! Helper do Concord: captura o áudio de um processo para o compartilhamento
 //! de tela e escreve PCM float32 48 kHz estéreo intercalado em stdout.
 //! Escreve "ready" em stderr quando a captura começa; erros também em stderr.
+//! No modo `foreground`, informa em stdout a janela em tela cheia na frente
+//! (overlay de jogo).
 
 mod args;
 // Regra pura (testada no Linux); só o laço do Windows a usa.
@@ -8,6 +10,8 @@ mod args;
 mod fullscreen;
 #[cfg(windows)]
 mod capture;
+#[cfg(windows)]
+mod foreground;
 
 use std::process::ExitCode;
 
@@ -42,7 +46,11 @@ fn exit_when_parent_goes_away() {
 
 #[cfg(windows)]
 fn run(mode: &args::Mode) -> ExitCode {
-    match capture::run(mode) {
+    let result = match mode {
+        args::Mode::Foreground => foreground::run(),
+        _ => capture::run(mode),
+    };
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("erro em {err}");
@@ -53,6 +61,6 @@ fn run(mode: &args::Mode) -> ExitCode {
 
 #[cfg(not(windows))]
 fn run(_mode: &args::Mode) -> ExitCode {
-    eprintln!("erro: captura por processo só existe no Windows");
+    eprintln!("erro: o helper só funciona no Windows");
     ExitCode::FAILURE
 }
