@@ -390,7 +390,8 @@ async function openClient(user, { holdableChat = false } = {}) {
   await page.addInitScript(instrument)
   page.on('console', (m) => consoleLines.push({ who: user.username, type: m.type(), text: m.text(), at: Date.now() }))
   await page.goto(APP + '#/login')
-  await page.fill('input[type=email]', user.email)
+  // Campo "E-mail ou nome de usuário" (type=text desde o login por usuário).
+  await page.fill('input[autocomplete=username]', user.email)
   await page.fill('input[type=password]', user.password)
   await page.click('button[type=submit]')
   await page.waitForURL((u) => !u.hash.includes('login'))
