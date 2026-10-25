@@ -379,20 +379,55 @@ const selectComment = `
 		COALESCE((SELECT jsonb_agg(jsonb_build_object('id', m.user_id, 'username', mu.username,
 			'display_name', mu.display_name) ORDER BY mu.username)
 			FROM proposal_comment_mentions m JOIN users mu ON mu.id = m.user_id
-			WHERE m.comment_id = c.id), '[]'::jsonb)
+			WHERE m.comment_id = c.id), '[]'::jsonb),
+		c.reply_to_id,
+		(SELECT jsonb_build_object('id', rc.id, 'author_id', rc.author_id,
+			'author_name', ru.display_name, 'body', left(rc.body, 120))
+			FROM proposal_comments rc JOIN users ru ON ru.id = rc.author_id
+			WHERE rc.id = c.reply_to_id),
+		COALESCE((SELECT jsonb_agg(jsonb_build_object('emoji', g.emoji, 'count', g.cnt,
+			'user_ids', g.uids) ORDER BY g.first_at, g.emoji)
+			FROM (SELECT emoji, COUNT(*)::int AS cnt, jsonb_agg(user_id ORDER BY created_at) AS uids,
+				MIN(created_at) AS first_at
+				FROM proposal_comment_reactions WHERE comment_id = c.id GROUP BY emoji) g), '[]'::jsonb),
+		COALESCE((SELECT jsonb_agg(jsonb_build_object('id', a.id, 'kind', a.kind,
+			'content_type', a.content_type, 'filename', a.filename, 'size_bytes', a.size_bytes,
+			'width', a.width, 'height', a.height, 'duration_ms', a.duration_ms)
+			ORDER BY a.position, a.created_at)
+			FROM proposal_comment_attachments a WHERE a.comment_id = c.id), '[]'::jsonb)
 	FROM proposal_comments c
 	JOIN users u ON u.id = c.author_id
 `
 
 func scanComment(row pgx.Row) (Comment, error) {
 	var c Comment
-	var mentions []byte
+	var mentions, reply, reactions, attachments []byte
 	if err := row.Scan(&c.ID, &c.ProposalID, &c.AuthorID, &c.AuthorName, &c.AuthorAvatarURL,
-		&c.Body, &c.CreatedAt, &c.EditedAt, &mentions); err != nil {
+		&c.Body, &c.CreatedAt, &c.EditedAt, &mentions, &c.ReplyToID, &reply, &reactions, &attachments); err != nil {
 		return c, err
 	}
 	c.Mentions = []Mention{}
-	return c, json.Unmarshal(mentions, &c.Mentions)
+	c.Reactions = []ReactionSummary{}
+	c.Attachments = []CommentAttachment{}
+	if err := json.Unmarshal(mentions, &c.Mentions); err != nil {
+		return c, err
+	}
+	if len(reply) > 0 && string(reply) != "null" {
+		c.ReplyTo = &CommentReply{}
+		if err := json.Unmarshal(reply, c.ReplyTo); err != nil {
+			return c, err
+		}
+	}
+	if err := json.Unmarshal(reactions, &c.Reactions); err != nil {
+		return c, err
+	}
+	if err := json.Unmarshal(attachments, &c.Attachments); err != nil {
+		return c, err
+	}
+	for i := range c.Attachments {
+		c.Attachments[i].URL = commentMediaURL(c.Attachments[i].ID)
+	}
+	return c, nil
 }
 
 func (r *Repository) ListComments(ctx context.Context, proposalID string) ([]Comment, error) {
@@ -423,18 +458,34 @@ func (r *Repository) GetComment(ctx context.Context, id string) (*Comment, error
 	return &c, nil
 }
 
-// CreateComment grava o comentário e as menções (já validadas) juntos.
-func (r *Repository) CreateComment(ctx context.Context, proposalID, authorID, body string, mentionIDs []string) (string, error) {
+// CreateComment grava o comentário, as menções (já validadas), a resposta e os
+// anexos juntos. A resposta tem de ser de um comentário da mesma proposta e cada
+// anexo, um pendente de quem comenta; senão devolve ErrInvalidReply/ErrInvalidAttachment
+// e nada é gravado.
+func (r *Repository) CreateComment(ctx context.Context, proposalID, authorID, body string, mentionIDs []string, replyToID *string, attachmentIDs []string) (string, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return "", err
 	}
 	defer tx.Rollback(ctx)
 
+	if replyToID != nil {
+		var ok bool
+		if err := tx.QueryRow(ctx, `
+			SELECT EXISTS (SELECT 1 FROM proposal_comments WHERE id = $1 AND proposal_id = $2)`,
+			*replyToID, proposalID).Scan(&ok); err != nil {
+			return "", err
+		}
+		if !ok {
+			return "", ErrInvalidReply
+		}
+	}
+
 	var id string
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO proposal_comments (proposal_id, author_id, body) VALUES ($1, $2, $3) RETURNING id`,
-		proposalID, authorID, body).Scan(&id); err != nil {
+		INSERT INTO proposal_comments (proposal_id, author_id, body, reply_to_id) VALUES ($1, $2, $3, $4)
+		RETURNING id`,
+		proposalID, authorID, body, replyToID).Scan(&id); err != nil {
 		return "", err
 	}
 	for _, uid := range mentionIDs {
@@ -442,6 +493,18 @@ func (r *Repository) CreateComment(ctx context.Context, proposalID, authorID, bo
 			INSERT INTO proposal_comment_mentions (comment_id, user_id) VALUES ($1, $2)
 			ON CONFLICT DO NOTHING`, id, uid); err != nil {
 			return "", err
+		}
+	}
+	for pos, attID := range attachmentIDs {
+		tag, err := tx.Exec(ctx, `
+			UPDATE proposal_comment_attachments SET comment_id = $1, position = $3
+			WHERE id = $2 AND comment_id IS NULL AND uploader_id = $4`,
+			id, attID, pos, authorID)
+		if err != nil {
+			return "", err
+		}
+		if tag.RowsAffected() == 0 {
+			return "", ErrInvalidAttachment
 		}
 	}
 	return id, tx.Commit(ctx)

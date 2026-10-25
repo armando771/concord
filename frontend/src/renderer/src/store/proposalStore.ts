@@ -14,8 +14,10 @@ import {
   listProposalMentions,
   listProposals,
   markProposalMentionsSeen,
+  reactToProposalComment,
   removeProposalVote,
   setProposalStatus,
+  unreactProposalComment,
   updateProposal,
   updateProposalComment,
   voteProposal
@@ -45,7 +47,15 @@ interface ProposalState {
   fetchMentions: () => Promise<void>
   markMentionsSeen: (proposalId?: string) => Promise<void>
   loadComments: (id: string) => Promise<void>
-  addComment: (id: string, body: string, mentions: string[]) => Promise<void>
+  addComment: (
+    id: string,
+    body: string,
+    mentions: string[],
+    replyToId?: string | null,
+    attachmentIds?: string[]
+  ) => Promise<void>
+  /** Põe (`add`) ou tira a reação da pessoa logada no comentário. */
+  reactToComment: (id: string, commentId: string, emoji: string, add: boolean) => Promise<void>
   editComment: (id: string, commentId: string, body: string) => Promise<void>
   removeComment: (id: string, commentId: string) => Promise<void>
   handleWsEvent: (event: WsEvent) => void
@@ -204,8 +214,14 @@ export const useProposalStore = create<ProposalState>()((set, get) => {
       if (!isSameSession(token)) return
       set({ commentsByProposal: { ...get().commentsByProposal, [id]: comments } })
     },
-    addComment: async (id, body, mentions) => {
-      const comment = await createProposalComment(id, body, mentions)
+    addComment: async (id, body, mentions, replyToId = null, attachmentIds = []) => {
+      const comment = await createProposalComment(id, body, mentions, replyToId, attachmentIds)
+      setComments(id, (list) => upsertComment(list, comment))
+    },
+    reactToComment: async (id, commentId, emoji, add) => {
+      const comment = add
+        ? await reactToProposalComment(id, commentId, emoji)
+        : await unreactProposalComment(id, commentId, emoji)
       setComments(id, (list) => upsertComment(list, comment))
     },
     editComment: async (id, commentId, body) => {

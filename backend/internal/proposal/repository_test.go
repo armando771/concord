@@ -160,11 +160,11 @@ func TestRepositoryDB(t *testing.T) {
 	}
 
 	// Comentários e menções.
-	c1, err := repo.CreateComment(ctx, id, third, "oi @um", []string{other, author})
+	c1, err := repo.CreateComment(ctx, id, third, "oi @um", []string{other, author}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repo.CreateComment(ctx, id, other, "segundo", nil); err != nil {
+	if _, err := repo.CreateComment(ctx, id, other, "segundo", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	comments, err := repo.ListComments(ctx, id)

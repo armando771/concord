@@ -8,7 +8,7 @@ import { useMediaSrc } from './useMediaSrc'
 function AudioPlayer({ attachment }: { attachment: Attachment }): React.JSX.Element {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [activated, setActivated] = useState(false)
-  const { src, onError, failed } = useMediaSrc(attachment.id, activated)
+  const { src, onError, failed } = useMediaSrc(attachment.id, activated, attachment.url)
   const [playing, setPlaying] = useState(false)
   const [current, setCurrent] = useState(0)
   const [elementDuration, setElementDuration] = useState(NaN)

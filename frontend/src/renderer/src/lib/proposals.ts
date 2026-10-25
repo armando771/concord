@@ -4,6 +4,7 @@ import type {
   ProposalComment,
   ProposalStatus
 } from '../api/proposals'
+import { attachmentLabel } from './attachments'
 import { API_BASE_URL } from './config'
 import { mentionsUser } from './mentions'
 import { profileMediaSrc } from './profileMedia'
@@ -193,6 +194,29 @@ export function canDeleteProposal(
   isTech: boolean
 ): boolean {
   return isTech || (meId != null && meId === p.author_id && p.status === 'voting')
+}
+
+/** A pessoa já reagiu a este comentário com este emoji? */
+export function hasReacted(
+  comment: Pick<ProposalComment, 'reactions'>,
+  meId: string | null,
+  emoji: string
+): boolean {
+  if (!meId) return false
+  return (comment.reactions ?? []).some((r) => r.emoji === emoji && r.user_ids.includes(meId))
+}
+
+/**
+ * Texto curto do comentário (prévia de resposta, aviso): o corpo, ou o rótulo do
+ * anexo quando o comentário só tem arquivo.
+ */
+export function commentPreview(
+  comment: Pick<ProposalComment, 'body'> & Partial<Pick<ProposalComment, 'attachments'>>,
+  max = 100
+): string {
+  const text = comment.body.replace(/\s+/g, ' ').trim()
+  const base = text || attachmentLabel(comment.attachments) || ''
+  return base.length > max ? `${base.slice(0, max)}…` : base
 }
 
 /** O autor do comentário edita; ele ou o time tech apagam. */

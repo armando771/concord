@@ -35,6 +35,11 @@ const (
 	PendingImageTTL = 24 * time.Hour
 	// CommentsPerMinute limita o spam de comentários por pessoa.
 	CommentsPerMinute = 10
+
+	// MaxCommentAttachments é quantos arquivos cabem num comentário (como no chat).
+	MaxCommentAttachments = 10
+	// MaxReactionEmojisPerComment limita os emojis diferentes num comentário.
+	MaxReactionEmojisPerComment = 20
 )
 
 // ImagesDir é a subpasta dos uploads onde ficam as imagens das propostas, fora
@@ -51,6 +56,53 @@ type Image struct {
 }
 
 func imageURL(id string) string { return imagePath + id }
+
+// Os anexos dos comentários ficam na mesma pasta de uploads, mas têm rota
+// própria (aceitam vídeo e áudio, e o tipo é conferido contra o do banco).
+const commentMediaPath = "/api/proposal-comment-media/"
+
+func commentMediaURL(id string) string { return commentMediaPath + id }
+
+// CommentAttachment é um arquivo anexado a um comentário (imagem, vídeo ou áudio).
+type CommentAttachment struct {
+	ID          string `json:"id"`
+	Kind        string `json:"kind"`
+	ContentType string `json:"content_type"`
+	Filename    string `json:"filename"`
+	SizeBytes   int64  `json:"size_bytes"`
+	Width       *int   `json:"width,omitempty"`
+	Height      *int   `json:"height,omitempty"`
+	DurationMs  *int   `json:"duration_ms,omitempty"`
+	URL         string `json:"url"`
+}
+
+// CommentAttachmentRow é o anexo recém-enviado, ainda pendente (entrada do repositório).
+type CommentAttachmentRow struct {
+	ID          string
+	UploaderID  string
+	Kind        string
+	ContentType string
+	Filename    string
+	SizeBytes   int64
+	Width       *int
+	Height      *int
+	DurationMs  *int
+}
+
+// ReactionSummary agrupa as reações de um emoji num comentário.
+type ReactionSummary struct {
+	Emoji   string   `json:"emoji"`
+	Count   int      `json:"count"`
+	UserIDs []string `json:"user_ids"`
+}
+
+// CommentReply é a prévia do comentário a que outro responde.
+type CommentReply struct {
+	ID         string `json:"id"`
+	AuthorID   string `json:"author_id"`
+	AuthorName string `json:"author_name"`
+	Body       string `json:"body"`
+}
 
 // Mention é uma pessoa marcada num comentário.
 type Mention struct {
@@ -70,6 +122,11 @@ type Comment struct {
 	CreatedAt       time.Time  `json:"created_at"`
 	EditedAt        *time.Time `json:"edited_at,omitempty"`
 	Mentions        []Mention  `json:"mentions"`
+	// ReplyToID/ReplyTo: o comentário respondido; ReplyTo some se ele foi apagado.
+	ReplyToID   *string             `json:"reply_to_id,omitempty"`
+	ReplyTo     *CommentReply       `json:"reply_to,omitempty"`
+	Reactions   []ReactionSummary   `json:"reactions"`
+	Attachments []CommentAttachment `json:"attachments"`
 }
 
 // PendingMention é uma menção ainda não vista (GET /proposals/mentions).

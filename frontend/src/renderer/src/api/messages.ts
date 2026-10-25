@@ -49,6 +49,11 @@ export interface Attachment {
   width?: number | null
   height?: number | null
   duration_ms?: number | null
+  /**
+   * Só nos anexos de comentários de propostas: endereço público do arquivo. Sem
+   * ele (chat) o arquivo é pedido com o token de mídia da sala.
+   */
+  url?: string | null
 }
 
 /** Menção em massa num canal: @all (todo mundo) ou @here (quem está online). */
