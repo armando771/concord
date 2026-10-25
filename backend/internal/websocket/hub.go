@@ -193,6 +193,26 @@ func (h *Hub) PublishPollUpdate(event message.PollUpdateEvent) {
 	}
 }
 
+func (h *Hub) PublishReactionAdd(event message.ReactionEvent) {
+	if event.ChannelID != nil {
+		h.BroadcastToRoom("channel:"+*event.ChannelID, writeEvent("message:reaction:add", event))
+		return
+	}
+	if event.ConversationID != nil {
+		h.BroadcastToRoom("conversation:"+*event.ConversationID, writeEvent("message:reaction:add", event))
+	}
+}
+
+func (h *Hub) PublishReactionRemove(event message.ReactionEvent) {
+	if event.ChannelID != nil {
+		h.BroadcastToRoom("channel:"+*event.ChannelID, writeEvent("message:reaction:remove", event))
+		return
+	}
+	if event.ConversationID != nil {
+		h.BroadcastToRoom("conversation:"+*event.ConversationID, writeEvent("message:reaction:remove", event))
+	}
+}
+
 func (h *Hub) PublishChannelCreate(event channel.CreateEvent) {
 	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("channel:create", event))
 }
