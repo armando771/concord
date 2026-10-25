@@ -622,6 +622,33 @@ describe('callStore — transmissões sob demanda', () => {
     expect(useCallStore.getState().watchedScreenIds).toEqual(['ana'])
   })
 
+  it('reconexão da sala não fecha a transmissão que estou assistindo', async () => {
+    await watchingAna()
+
+    // Na reconexão completa os participantes somem por um instante.
+    onRemoteMedia({ ...empty, reconnecting: true })
+    expect(useCallStore.getState().watchedScreenIds).toEqual(['ana'])
+    expect(useCallStore.getState().focusedScreenUserId).toBe('ana')
+
+    onRemoteMedia({
+      ...empty,
+      availableScreens: ['ana'],
+      screenStreams: { ana: fakeStream('video') }
+    })
+    expect(useCallStore.getState().watchedScreenIds).toEqual(['ana'])
+    expect(useCallStore.getState().focusedScreenUserId).toBe('ana')
+  })
+
+  it('quem parou de transmitir durante a reconexão é podado depois dela', async () => {
+    await watchingAna()
+
+    onRemoteMedia({ ...empty, reconnecting: true })
+    onRemoteMedia(empty)
+
+    expect(useCallStore.getState().watchedScreenIds).toEqual([])
+    expect(useCallStore.getState().focusedScreenUserId).toBeNull()
+  })
+
   it('fechar a transmissão para de baixar e volta ao card', async () => {
     await watchingAna()
 

@@ -1,5 +1,6 @@
 import {
   AudioPresets,
+  ConnectionState,
   DisconnectReason,
   Room,
   RoomEvent,
@@ -33,6 +34,11 @@ export interface RemoteMedia {
   mediaPeers: Record<string, string>
   /** userIds com tela publicada (assistida ou não — a não assistida não é baixada) */
   availableScreens: string[]
+  /**
+   * Sala reconectando: os participantes somem por um instante sem terem saído
+   * nem parado de transmitir — quem assiste não deve perder o que assistia.
+   */
+  reconnecting?: boolean
 }
 
 export interface CallMediaHandlers {
@@ -56,6 +62,7 @@ export class CallMedia {
   private connected = false
   /** De quem baixar a tela: transmissão dos outros começa pausada (ver setWatchedScreens). */
   private watched = new Set<string>()
+  private refreshQueued = false
 
   constructor(private readonly handlers: CallMediaHandlers) {
     this.room = new Room({
@@ -75,7 +82,17 @@ export class CallMedia {
       }
     })
 
-    const refresh = (): void => this.emitRemoteMedia()
+    // Rajadas de eventos viram uma emissão só, depois do handler do SDK. Numa
+    // reconexão completa ele desmonta todos os participantes e só depois muda
+    // o estado para Reconnecting — emitir no meio leria "pararam de transmitir".
+    const refresh = (): void => {
+      if (this.refreshQueued) return
+      this.refreshQueued = true
+      queueMicrotask(() => {
+        this.refreshQueued = false
+        if (!this.closing) this.emitRemoteMedia()
+      })
+    }
     const published = (): void => {
       this.applySubscriptions()
       refresh()
@@ -92,7 +109,9 @@ export class CallMedia {
       .on(RoomEvent.ParticipantNameChanged, refresh)
       .on(RoomEvent.Reconnecting, () => this.handlers.onReconnecting())
       .on(RoomEvent.Reconnected, () => {
+        // Assina de novo o que eu assistia e só então poda quem de fato parou.
         this.applySubscriptions()
+        this.emitRemoteMedia()
         this.handlers.onReconnected()
       })
       .on(RoomEvent.ActiveSpeakersChanged, (speakers) =>
@@ -228,8 +247,10 @@ export class CallMedia {
     }
 
     const availableScreens = listScreenPublishers(publications)
+    const reconnecting = this.room.state !== ConnectionState.Connected
     // Parou de transmitir: sai dos assistidos — se voltar, começa pausada de novo.
-    this.watched = new Set(pruneWatched([...this.watched], availableScreens))
+    // Reconectando, a lista está vazia por engano: poda no Reconnected.
+    if (!reconnecting) this.watched = new Set(pruneWatched([...this.watched], availableScreens))
 
     const media: RemoteMedia = {
       streams: toStreams('voice'),
@@ -237,7 +258,8 @@ export class CallMedia {
       screenAudioStreams: toStreams('screenAudio'),
       videoStreams: toStreams('camera'),
       mediaPeers,
-      availableScreens
+      availableScreens,
+      reconnecting
     }
     this.cache.prune(inUse)
     this.handlers.onRemoteMedia(media)

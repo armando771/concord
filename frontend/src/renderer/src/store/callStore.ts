@@ -219,12 +219,15 @@ export const useCallStore = create<CallState>()((set, get) => {
     set((s) => ({ listVersion: s.listVersion + 1 }))
   }
 
-  const applyRemoteMedia = (remote: RemoteMedia): void => {
+  const applyRemoteMedia = ({ reconnecting, ...remote }: RemoteMedia): void => {
     set((s) => {
       const meId = useAuthStore.getState().user?.id ?? null
       const availableScreens = remote.availableScreens ?? []
       // Parou de transmitir: deixa de ser assistida (se voltar, começa pausada).
-      const watchedScreenIds = pruneWatched(s.watchedScreenIds, availableScreens)
+      // Reconectando, as telas somem só por um instante: mantém o que assisto.
+      const watchedScreenIds = reconnecting
+        ? s.watchedScreenIds
+        : pruneWatched(s.watchedScreenIds, availableScreens)
       // Nada ganha foco sozinho; o foco só muda se a tela em foco acabou. Uma
       // assistida cujo vídeo ainda não chegou continua em foco.
       const focusedScreenUserId = resolveFocus(
