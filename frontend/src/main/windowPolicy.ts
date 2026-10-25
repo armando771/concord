@@ -32,3 +32,26 @@ export function staleLoginItem<T extends { path: string }>(
     (item) => item.path.toLowerCase() !== current && dir(item.path) === dir(execPath)
   )
 }
+
+/** Altura da barra de título (a faixa de arrastar e os botões nativos). */
+export const TITLE_BAR_HEIGHT = 32
+
+/** Mesmo preto do fundo do app (body), para a barra não destoar. */
+export const TITLE_BAR_COLOR = '#050508'
+
+/**
+ * No Windows (e Linux) a moldura nativa segue o tema do sistema e fica clara.
+ * Escondemos a moldura e pintamos os botões nativos (minimizar, maximizar,
+ * fechar) com a cor do app; o renderer desenha a faixa de arrastar. No macOS
+ * a barra nativa já combina, então fica como está.
+ */
+export function titleBarOptions(platform: NodeJS.Platform): {
+  titleBarStyle?: 'hidden'
+  titleBarOverlay?: { color: string; symbolColor: string; height: number }
+} {
+  if (platform === 'darwin') return {}
+  return {
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: TITLE_BAR_COLOR, symbolColor: '#e5e7eb', height: TITLE_BAR_HEIGHT }
+  }
+}

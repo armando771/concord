@@ -6,6 +6,10 @@ import BackgroundBridge from './components/BackgroundBridge'
 import OverlayBridge from './components/OverlayBridge'
 import UpdateNotice from './components/UpdateNotice'
 import UserContextMenu from './components/UserContextMenu'
+import TitleBar from './components/TitleBar'
+import { currentPlatform, hasCustomTitleBar } from './lib/titleBar'
+
+const customTitleBar = hasCustomTitleBar(currentPlatform())
 
 function App(): React.JSX.Element {
   return (
@@ -16,7 +20,16 @@ function App(): React.JSX.Element {
       <OverlayBridge />
       <UpdateNotice />
       <UserContextMenu />
-      <RouterProvider router={router} />
+      {customTitleBar ? (
+        <div className="flex h-full flex-col">
+          <TitleBar />
+          <div className="relative min-h-0 flex-1">
+            <RouterProvider router={router} />
+          </div>
+        </div>
+      ) : (
+        <RouterProvider router={router} />
+      )}
     </>
   )
 }

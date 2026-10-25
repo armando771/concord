@@ -20,7 +20,7 @@ function LevelUpBanner(): React.JSX.Element | null {
     <div
       key={celebration.key}
       role="status"
-      className="level-anim pointer-events-none fixed left-1/2 top-4 z-50 flex items-center gap-3 overflow-hidden rounded-2xl border bg-[#0b0b10]/90 px-4 py-2.5 shadow-2xl backdrop-blur-xl"
+      className="level-anim pointer-events-none fixed left-1/2 top-[calc(var(--titlebar-height,0px)+1rem)] z-50 flex items-center gap-3 overflow-hidden rounded-2xl border bg-[#0b0b10]/90 px-4 py-2.5 shadow-2xl backdrop-blur-xl"
       style={{
         borderColor: `${tier.color}66`,
         boxShadow: `0 0 28px ${tier.color}55`,
