@@ -34,7 +34,7 @@ import ComposerAttachments from './chat/ComposerAttachments'
 import { useAttachmentDraft } from './chat/useAttachmentDraft'
 import { useTypingSender } from './chat/useTypingSender'
 import TypingIndicator from './chat/TypingIndicator'
-import { draftAfterSendFailure } from '../lib/composerDraft'
+import { afterSendFailure, restoreFailedText } from '../lib/composerDraft'
 
 export interface Mentionable {
   username: string
@@ -459,13 +459,6 @@ function ChatPane({
     setLoadingOlder(false)
   }
 
-  // Texto atual do campo, para um envio que falhou não apagar o que foi
-  // digitado enquanto ele ia.
-  const draftRef = useRef(draft)
-  useEffect(() => {
-    draftRef.current = draft
-  }, [draft])
-
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
     if (!submittable || sending) return
@@ -479,31 +472,67 @@ function ChatPane({
     // esperar o servidor. Os anexos só saem quando o envio dá certo.
     typing.onSent()
     setDraft('')
-    draftRef.current = ''
     setReplyState(null)
+    setMention(null)
+    setHighlight(null)
     try {
       await sendToRoom(room, sentText.trim(), attachmentState.readyIds, sentReply?.id ?? null)
       if (roomRef.current === sentRoom) {
         sentDrafts.forEach(removeAttachment)
       }
     } catch (err) {
-      // Volta o texto (e a resposta) se a pessoa não começou outra mensagem.
-      const restored =
-        roomRef.current === sentRoom ? draftAfterSendFailure(sentText, draftRef.current) : null
-      if (restored !== null) {
-        setDraft(restored)
-        if (sentReply) {
-          setReplyState((current) => current ?? { room: sentRoom, message: sentReply })
-        }
-      }
-      showToast.error(
+      const message =
         err instanceof ApiError
           ? sendErrorMessage(err.status, err.message)
           : 'Falha ao enviar mensagem.'
-      )
+      handleSendFailure(message, sentRoom, sentText, sentReply)
     } finally {
       setSending(false)
     }
+  }
+
+  // O texto que falhou nunca se perde: volta sozinho se o campo continua
+  // vazio; senão o aviso oferece "Restaurar" (vem antes do texto novo, com a
+  // resposta). Em outra sala o campo é de lá: o aviso oferece copiar.
+  const handleSendFailure = (
+    message: string,
+    sentRoom: string,
+    sentText: string,
+    sentReply: Message | null
+  ): void => {
+    const sentReplyState = sentReply ? { room: sentRoom, message: sentReply } : null
+    const copyAction = {
+      label: 'Copiar',
+      run: () => void navigator.clipboard?.writeText(sentText)
+    }
+    if (roomRef.current !== sentRoom) {
+      showToast.error(message, 10000, sentText.trim() ? copyAction : undefined)
+      return
+    }
+    const current = inputRef.current?.value ?? ''
+    const action = afterSendFailure(sentText, sentReply !== null, current)
+    if (action === 'restore') {
+      setDraft(sentText)
+      setReplyState((now) => now ?? sentReplyState)
+      showToast.error(message)
+      return
+    }
+    if (action === 'nothing') {
+      showToast.error(message)
+      return
+    }
+    showToast.error(message, 10000, {
+      label: 'Restaurar',
+      run: () => {
+        if (roomRef.current !== sentRoom) {
+          copyAction.run()
+          return
+        }
+        setDraft((now) => restoreFailedText(sentText, now))
+        if (sentReplyState) setReplyState(sentReplyState)
+        requestAnimationFrame(() => inputRef.current?.focus())
+      }
+    })
   }
 
   // Áudio gravado vai sozinho; o texto digitado continua no campo.

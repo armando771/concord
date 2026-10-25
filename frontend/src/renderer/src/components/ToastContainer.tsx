@@ -28,6 +28,18 @@ export function ToastContainer(): React.JSX.Element {
               <p className="truncate text-xs font-semibold leading-relaxed">{toast.message}</p>
             </div>
 
+            {toast.action && (
+              <button
+                type="button"
+                onClick={() => {
+                  toast.action?.run()
+                  removeToast(toast.id)
+                }}
+                className="shrink-0 cursor-pointer rounded-md border border-white/15 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-white/10"
+              >
+                {toast.action.label}
+              </button>
+            )}
             <button
               onClick={() => removeToast(toast.id)}
               className="shrink-0 text-gray-400 hover:text-white transition-colors p-1 rounded-md hover:bg-white/10"
