@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import type { CallUserInfo } from '../../store/callStore'
 import VoiceStateIcons from './VoiceStateIcons'
 import { VolumeOffIcon, XIcon } from '../icons'
-import LevelBadge from '../level/LevelBadge'
-import LevelUpBurst from '../level/LevelUpBurst'
 
 export function VideoFill({
   stream,
@@ -149,7 +147,6 @@ function ParticipantTile({
           <XIcon className="h-3.5 w-3.5" />
         </button>
       )}
-      {!isScreen && <LevelUpBurst userId={user.id} size={size === 'md' ? 'md' : 'lg'} />}
       {isScreen && (
         <div
           className={`absolute top-2 flex items-center gap-1.5 rounded-md bg-[#f23f43] px-1.5 py-0.5 ${
@@ -168,7 +165,6 @@ function ParticipantTile({
         )}
         <VoiceStateIcons muted={selfMuted} deafened={deafened} className="h-3 w-3" />
         <span className="truncate text-xs font-semibold text-white">{user.display_name}</span>
-        {!isScreen && <LevelBadge userId={user.id} />}
       </div>
     </div>
   )

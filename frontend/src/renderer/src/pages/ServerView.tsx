@@ -14,6 +14,9 @@ import Modal from '../components/Modal'
 import ChatPane from '../components/ChatPane'
 import VoiceChannelView from '../components/call/VoiceChannelView'
 import { UserPlusIcon, SearchIcon, VolumeIcon } from '../components/icons'
+import LevelBadge from '../components/level/LevelBadge'
+import LevelRowShimmer from '../components/level/LevelRowShimmer'
+import LevelUpBurst from '../components/level/LevelUpBurst'
 
 interface MemberRowProps {
   userId: string
@@ -38,9 +41,11 @@ function MemberRow({
     <div
       key={userId}
       onContextMenu={userMenuHandler(userId, displayName, meId, handle)}
-      className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-white/5"
+      className="relative flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-white/5"
     >
+      <LevelRowShimmer userId={userId} />
       <div className="relative shrink-0">
+        <LevelUpBurst userId={userId} />
         <div
           className={`flex h-8 w-8 items-center justify-center rounded-full font-bold text-xs text-white ${colorClass}`}
         >
@@ -53,8 +58,11 @@ function MemberRow({
           title={online ? 'Online' : 'Offline'}
         />
       </div>
-      <div className="min-w-0 leading-tight">
-        <p className={`truncate text-sm font-semibold ${nameClass}`}>{displayName}</p>
+      <div className="relative min-w-0 leading-tight">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <p className={`truncate text-sm font-semibold ${nameClass}`}>{displayName}</p>
+          <LevelBadge userId={userId} />
+        </div>
         <p className="truncate text-[11px] text-gray-400">@{handle}</p>
       </div>
     </div>

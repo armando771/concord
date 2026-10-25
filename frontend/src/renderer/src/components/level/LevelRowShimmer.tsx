@@ -2,10 +2,10 @@ import { useLevelStore } from '../../store/levelStore'
 import { levelTier } from '../../lib/levels'
 
 /**
- * Brilho na cor da faixa que atravessa a linha do usuário na lista do canal
- * de voz quando ele sobe de nível (o pai precisa de relative + overflow-hidden).
+ * Brilho na cor da faixa que atravessa a linha do usuário na lista de membros
+ * quando ele sobe de nível (o pai precisa ser relative).
  */
-function VoiceRowShimmer({ userId }: { userId: string }): React.JSX.Element | null {
+function LevelRowShimmer({ userId }: { userId: string }): React.JSX.Element | null {
   const celebration = useLevelStore((s) => s.celebrations[userId])
   if (!celebration) return null
 
@@ -14,7 +14,7 @@ function VoiceRowShimmer({ userId }: { userId: string }): React.JSX.Element | nu
     <span
       key={celebration.key}
       aria-hidden="true"
-      className="level-anim pointer-events-none absolute inset-0"
+      className="level-anim pointer-events-none absolute inset-0 overflow-hidden rounded-lg"
       style={{ background: `${tier.color}14` }}
     >
       <span
@@ -28,4 +28,4 @@ function VoiceRowShimmer({ userId }: { userId: string }): React.JSX.Element | nu
   )
 }
 
-export default VoiceRowShimmer
+export default LevelRowShimmer
