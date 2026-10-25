@@ -34,7 +34,7 @@ function MusicVideo({
     return () => {
       alive = false
     }
-  }, [item.video_ready, watching])
+  }, [item.id, item.video_ready, watching])
 
   const src = watching && item.video_ready && token ? musicVideoUrl(item.id, token) : null
   const loaded = src !== null && loadedSrc === src
