@@ -19,6 +19,9 @@ describe('inviteErrorMessage', () => {
   it('decide pelo status, não pelo texto do backend', () => {
     expect(inviteErrorMessage(apiError(404))).toBe('Este convite é inválido ou expirou.')
     expect(inviteErrorMessage(apiError(403, 'banned'))).toBe('Você foi banido deste servidor.')
+    expect(inviteErrorMessage(apiError(403, 'email_not_verified'))).toBe(
+      'Confirme seu e-mail para entrar no servidor.'
+    )
     expect(inviteErrorMessage(apiError(429))).toBe(
       'Muitas tentativas. Espere um pouco e tente de novo.'
     )

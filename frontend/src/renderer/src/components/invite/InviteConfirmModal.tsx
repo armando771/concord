@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { joinServerByCode } from '../../api/servers'
+import { resendVerification } from '../../api/auth'
+import { getMe } from '../../api/users'
 import { inviteErrorMessage } from '../../lib/invitePreview'
 import { useAuthStore } from '../../store/authStore'
 import { useInviteLinkStore } from '../../store/inviteLinkStore'
@@ -40,6 +42,8 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
   const [joinError, setJoinError] = useState<string | null>(null)
   // Banido: tentar de novo não adianta, então some o "Aceitar".
   const [banned, setBanned] = useState(false)
+  const [checking, setChecking] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -52,6 +56,36 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
   const preview = state.status === 'ready' ? state.preview : null
   const isMember = preview ? servers.some((s) => s.id === preview.server_id) : false
   const myName = me?.display_name || me?.username || 'você'
+  // Entrar em servidor pede o e-mail confirmado (contas antigas não trazem o campo).
+  const unverified = me?.email_verified === false
+
+  /** Confirmou o e-mail em outra aba: relê a conta para liberar o "Aceitar". */
+  const recheckEmail = async (): Promise<void> => {
+    setChecking(true)
+    setJoinError(null)
+    setNotice(null)
+    try {
+      const fresh = await getMe()
+      useAuthStore.getState().setUser(fresh)
+      if (fresh.email_verified === false) setJoinError('Seu e-mail ainda não foi confirmado.')
+    } catch (err) {
+      setJoinError(inviteErrorMessage(err))
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  const resend = async (): Promise<void> => {
+    setJoinError(null)
+    try {
+      const { sent } = await resendVerification()
+      setNotice(
+        sent ? `Enviamos um novo e-mail para ${me?.email}.` : 'Seu e-mail já está confirmado.'
+      )
+    } catch (err) {
+      setJoinError(inviteErrorMessage(err))
+    }
+  }
 
   const openServer = (serverId: string): void => {
     close()
@@ -68,7 +102,13 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
       openServer(server.id)
     } catch (err) {
       setJoinError(inviteErrorMessage(err))
-      setBanned((err as { code?: unknown }).code === 'banned')
+      const code = (err as { code?: unknown }).code
+      setBanned(code === 'banned')
+      // A conta em memória dizia confirmada, mas o servidor não: relê.
+      if (code === 'email_not_verified')
+        void getMe()
+          .then((fresh) => useAuthStore.getState().setUser(fresh))
+          .catch(() => {})
       setJoining(false)
     }
   }
@@ -113,10 +153,43 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
                   {joinError}
                 </p>
               )}
+              {notice && (
+                <p className="mt-6 w-full text-center text-sm text-emerald-300">{notice}</p>
+              )}
               {banned ? (
                 <Button variant="secondary" className="mt-6 w-full py-2.5" onClick={close}>
                   Fechar
                 </Button>
+              ) : unverified && !isMember ? (
+                <>
+                  <p className="mt-6 text-center text-sm text-gray-200">
+                    Confirme seu e-mail{me?.email ? ` (${me.email})` : ''} para entrar no servidor.
+                    O link está no e-mail que enviamos.
+                  </p>
+                  <Button
+                    className="mt-4 w-full py-2.5"
+                    onClick={() => void recheckEmail()}
+                    disabled={checking}
+                  >
+                    {checking ? 'Conferindo...' : 'Já confirmei'}
+                  </Button>
+                  <div className="mt-3 flex gap-4">
+                    <button
+                      type="button"
+                      className="cursor-pointer text-sm font-medium text-violet-300 hover:text-white hover:underline"
+                      onClick={() => void resend()}
+                    >
+                      Reenviar e-mail
+                    </button>
+                    <button
+                      type="button"
+                      className="cursor-pointer text-sm font-medium text-gray-300 hover:text-white hover:underline"
+                      onClick={close}
+                    >
+                      Não, obrigado
+                    </button>
+                  </div>
+                </>
               ) : isMember ? (
                 <>
                   <p className="mt-6 text-sm font-medium text-gray-200">

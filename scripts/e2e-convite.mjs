@@ -5,8 +5,9 @@
 // código inválido, banido e o limite por IP da prévia.
 // Uso: backend rodando e o dist-web servido com o proxy do backend:
 //   (frontend) yarn build:web && WEB_BACKEND_URL=http://localhost:8080 yarn preview:web
-//   APP=http://localhost:4173/ SHOTS=/tmp/convite-shots node scripts/e2e-convite.mjs
-import { mkdirSync } from 'fs'
+//   APP=http://localhost:4173/ BACKEND_LOG=/caminho/backend.log node scripts/e2e-convite.mjs
+// BACKEND_LOG: log do backend sem SMTP (o link de confirmação de e-mail sai lá).
+import { mkdirSync, readFileSync } from 'fs'
 import { createRequire } from 'module'
 import { deflateSync } from 'zlib'
 const require = createRequire(new URL('../frontend/package.json', import.meta.url))
@@ -28,6 +29,23 @@ async function api(path, { token, method = 'GET', body } = {}) {
   return { status: res.status, body: text ? JSON.parse(text) : null }
 }
 
+// Confirma o e-mail pelo link que o backend sem SMTP imprime no log.
+async function verifyEmail(email) {
+  for (let i = 0; i < 50; i++) {
+    const log = readFileSync(process.env.BACKEND_LOG, 'utf8')
+    const at = log.lastIndexOf(`para ${email} —`)
+    const match = at >= 0 && /verify-email\?token=([^\s]+)/.exec(log.slice(at))
+    if (match) {
+      const token = decodeURIComponent(match[1])
+      const res = await api('/auth/verify-email', { method: 'POST', body: { token } })
+      if (res.status >= 300) throw new Error(`verify-email ${res.status}`)
+      return
+    }
+    await new Promise((r) => setTimeout(r, 200))
+  }
+  throw new Error(`sem e-mail de confirmação para ${email} no log`)
+}
+
 async function makeUser(name) {
   const email = `${name}-${run}@teste.dev`
   const password = 'senha-forte-123'
@@ -36,6 +54,7 @@ async function makeUser(name) {
     body: { username: `${name}${run}`, display_name: name, email, password }
   })
   const me = (await api('/users/me', { token: body.access_token })).body
+  await verifyEmail(email)
   return { email, password, token: body.access_token, id: me.id, name }
 }
 
@@ -135,19 +154,27 @@ try {
   await page.getByRole('button', { name: 'Continuar no Navegador' }).click()
   await page.waitForURL((u) => u.pathname === '/login' && u.searchParams.get('convite') === code)
   check('login avisa do convite', await page.getByText('Entre na sua conta para aceitar o convite.').isVisible())
-  await page.getByRole('link', { name: 'Crie uma' }).click()
+  await page.getByRole('link', { name: 'Registre-se' }).click()
   await page.waitForURL((u) => u.pathname === '/register' && u.searchParams.get('convite') === code)
   await page.reload()
   check('o código sobrevive ao recarregar o cadastro', new URL(page.url()).searchParams.get('convite') === code)
   await page.getByLabel('Nome de usuário').fill(`bia${run}`)
   await page.getByLabel('Nome de exibição').fill('Bia')
-  await page.getByLabel('Email').fill(`bia-${run}@teste.dev`)
+  await page.getByLabel('E-mail').fill(`bia-${run}@teste.dev`)
   await page.getByLabel('Senha', { exact: true }).fill('senha-forte-123')
   await page.getByLabel('Confirmar senha').fill('senha-forte-123')
   await shot('03-cadastro')
-  await page.getByRole('button', { name: 'Registrar' }).click()
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click()
 
-  // 4. Confirmação "Aceitar como Bia".
+  // 4. Conta nova: entrar em servidor pede o e-mail confirmado.
+  await page.getByRole('button', { name: 'Já confirmei' }).waitFor({ timeout: 15000 })
+  check('conta nova vê "Confirme seu e-mail"', await page.getByText(/Confirme seu e-mail/).first().isVisible())
+  await page.waitForTimeout(300)
+  await shot('04a-confirme-email')
+  await verifyEmail(`bia-${run}@teste.dev`)
+  await page.getByRole('button', { name: 'Já confirmei' }).click()
+
+  // Confirmação "Aceitar como Bia".
   const accept = page.getByRole('button', { name: 'Aceitar como Bia' })
   await accept.waitFor({ timeout: 15000 })
   const dialog = page.getByRole('dialog', { name: `Convite para ${serverName}` })
@@ -198,6 +225,7 @@ try {
   await carolPage.fill('input[autocomplete=username]', carol.email)
   await carolPage.fill('input[type=password]', carol.password)
   await carolPage.click('button[type=submit]')
+  await carolPage.getByRole('button', { name: 'Aceitar como carol' }).waitFor({ timeout: 15000 })
   await carolPage.getByRole('button', { name: 'Aceitar como carol' }).click({ timeout: 15000 })
   await carolPage.getByText('Você foi banido deste servidor.').waitFor({ timeout: 10000 })
   check('banido vê o aviso', true)

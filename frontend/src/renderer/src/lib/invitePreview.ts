@@ -11,8 +11,10 @@ export function formatInviteCount(count: number, singular: string, plural: strin
 export function inviteErrorMessage(err: unknown): string {
   const status = statusOf(err)
   if (status === 404) return 'Este convite é inválido ou expirou.'
-  if (status === 403 && (err as { code?: unknown }).code === 'banned') {
-    return 'Você foi banido deste servidor.'
+  const code = (err as { code?: unknown } | null)?.code
+  if (status === 403 && code === 'banned') return 'Você foi banido deste servidor.'
+  if (status === 403 && code === 'email_not_verified') {
+    return 'Confirme seu e-mail para entrar no servidor.'
   }
   return commonMessage(status) ?? 'Não foi possível abrir o convite.'
 }
