@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/outfit';
 
 /* Janela transparente por cima do jogo: só as pílulas aparecem. */
 html,
@@ -9,5 +10,8 @@ body,
   overflow: hidden;
   background: transparent;
   user-select: none;
-  font-family: 'gg sans', 'Noto Sans', 'Helvetica Neue', 'Segoe UI', 'Inter', sans-serif;
+  /* Mesma fonte do app (assets/main.css). */
+  font-family: 'Outfit Variable', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  letter-spacing: -0.02em;
+  word-spacing: 0.03em;
 }
