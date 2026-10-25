@@ -9,6 +9,7 @@ export type WsEventType =
   | 'level:up'
   | 'badge:unlock'
   | 'presence:update'
+  | 'presence:activity'
   | 'channel:create'
   | 'channel:update'
   | 'channel:delete'

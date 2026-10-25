@@ -1,6 +1,8 @@
 import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCallStore } from '../../store/callStore'
+import { useAuthStore } from '../../store/authStore'
+import { useActivity } from '../../store/presenceActivityStore'
 import { useServerStore } from '../../store/serverStore'
 import { useNoiseSuppressionStore } from '../../store/noiseSuppressionStore'
 import { useActivityStore } from '../../store/activityStore'
@@ -16,6 +18,7 @@ import {
   SignalIcon,
   SoundboardIcon
 } from '../icons'
+import { GamepadIcon } from '../icons'
 import ActivityPickerPopover from './ActivityPickerPopover'
 import NoiseSuppressionPopover from './NoiseSuppressionPopover'
 import SoundboardPopover from './SoundboardPopover'
@@ -96,6 +99,8 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   // Só a outra pessoa da DM: sem re-render a cada mudança na lista da call.
   const peerId = useCallStore((s) => s.participants[0]?.id ?? null)
   const peerName = useCallStore((s) => s.participants[0]?.display_name)
+  const meId = useAuthStore((s) => s.user?.id)
+  const myGame = useActivity(meId)
   const muted = useCallStore((s) => s.muted)
   const deafened = useCallStore((s) => s.deafened)
   const canStream = useCallStore((s) => s.canStream)
@@ -149,6 +154,12 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
 
   return (
     <div className="shrink-0 border-t border-white/6 bg-[#07080b]/90 px-2 pb-2 pt-1.5">
+      {myGame && (
+        <p className="mb-1.5 flex items-center gap-2 border-b border-white/6 pb-1.5 text-ds-md font-semibold text-white">
+          <GamepadIcon className="h-4 w-4 shrink-0 text-gray-400" />
+          <span className="truncate">{myGame.name}</span>
+        </p>
+      )}
       <div className="flex items-center gap-1">
         <div className="min-w-0 flex-1">
           <p

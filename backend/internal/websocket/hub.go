@@ -30,6 +30,10 @@ type Hub struct {
 	presence     map[string]int
 	statuses     map[string]string // status escolhido (online, idle, dnd, invisible)
 	statusLookup StatusLookup
+	// Atividade (jogo em andamento) por usuário; só memória (activity.go).
+	activities    map[string]Activity
+	activitySetAt map[string]time.Time
+	audience      AudienceProvider
 	onDisconnect func(userID string)
 	// Desligando (deploy): quem cai não "saiu", então nem presença offline
 	// nem saída da chamada — o processo novo recarrega tudo.
@@ -55,6 +59,9 @@ func NewHub() *Hub {
 		rooms:    make(map[string]map[*Client]struct{}),
 		presence: make(map[string]int),
 		statuses: make(map[string]string),
+
+		activities:    make(map[string]Activity),
+		activitySetAt: make(map[string]time.Time),
 	}
 }
 
@@ -136,13 +143,19 @@ func (h *Hub) Unregister(client *Client) {
 	client.rooms = map[string]struct{}{}
 
 	wasOnline := false
+	hadActivity := false
 	h.presence[client.userID]--
 	if h.presence[client.userID] <= 0 {
 		delete(h.presence, client.userID)
 		delete(h.statuses, client.userID)
+		hadActivity = h.clearActivityLocked(client.userID)
 		wasOnline = !h.shuttingDown
 	}
 	h.mu.Unlock()
+
+	if wasOnline && hadActivity {
+		h.publishActivity(client.userID, nil)
+	}
 
 	if wasOnline && h.onDisconnect != nil {
 		h.onDisconnect(client.userID)
@@ -234,12 +247,23 @@ func (h *Hub) EffectiveStatus(userID string) string {
 func (h *Hub) SetUserStatus(userID, status string) {
 	h.mu.Lock()
 	before := h.effectiveStatusLocked(userID)
+	wasInvisible := h.statuses[userID] == user.StatusInvisible
 	h.statuses[userID] = status
 	after := h.effectiveStatusLocked(userID)
+	current, hasActivity := h.activities[userID]
 	h.mu.Unlock()
 
 	if before != after {
 		h.broadcastPresence(userID, after)
+	}
+	// Invisível esconde a atividade; ao voltar, ela reaparece.
+	if hasActivity && h.IsOnline(userID) {
+		switch {
+		case status == user.StatusInvisible && !wasInvisible:
+			h.publishActivity(userID, nil)
+		case status != user.StatusInvisible && wasInvisible:
+			h.publishActivity(userID, &current)
+		}
 	}
 }
 
