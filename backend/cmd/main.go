@@ -122,6 +122,8 @@ func main() {
 	// Message
 	messageRepository := message.MessageRepository(db)
 	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository, uploads)
+	// Limpeza horária de arquivos sem dono (cascatas e uploads abandonados).
+	go message.NewJanitor(messageRepository, uploads).Run(context.Background(), time.Hour)
 	messageHandler := message.MessageHandler(messageService, channelService, conversationService, friendshipService, serverService)
 	uploadSpace := media.NewSpace(uploadsDir, media.ReserveFromEnv(os.Getenv("UPLOADS_MIN_FREE_GB")))
 	roomAccess := message.NewServiceRoomAccess(channelService, serverService, conversationService, friendshipService)

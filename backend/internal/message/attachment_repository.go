@@ -3,6 +3,7 @@ package message
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -198,6 +199,59 @@ func (r *Repository) MessageAttachmentIDs(ctx context.Context, messageID string)
 		ctx,
 		`SELECT id FROM message_attachments WHERE message_id = $1`,
 		messageID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// KnownAttachmentIDs diz quais desses ids ainda têm linha no banco.
+func (r *Repository) KnownAttachmentIDs(ctx context.Context, ids []string) (map[string]bool, error) {
+	known := make(map[string]bool, len(ids))
+	const batch = 1000
+	for start := 0; start < len(ids); start += batch {
+		chunk := ids[start:min(start+batch, len(ids))]
+		rows, err := r.db.Query(
+			ctx,
+			`SELECT id FROM message_attachments WHERE id = ANY($1::uuid[])`,
+			chunk,
+		)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			known[id] = true
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return known, nil
+}
+
+// DeleteStalePending apaga os uploads que nunca viraram mensagem até before e
+// devolve os ids (para apagar os arquivos).
+func (r *Repository) DeleteStalePending(ctx context.Context, before time.Time) ([]string, error) {
+	rows, err := r.db.Query(
+		ctx,
+		`DELETE FROM message_attachments WHERE message_id IS NULL AND created_at < $1 RETURNING id`,
+		before,
 	)
 	if err != nil {
 		return nil, err
