@@ -2,9 +2,9 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
-	"unicode/utf8"
 
 	"gin-quickstart/backend/internal/permission"
 	"gin-quickstart/backend/internal/user"
@@ -15,17 +15,24 @@ import (
 // mesmo tamanho.
 const MaxNickname = user.MaxDisplayName
 
-var ErrInvalidNickname = fmt.Errorf("o apelido pode ter até %d caracteres", MaxNickname)
+// ErrInvalidNickname vale para todo apelido recusado (400, invalid_nickname);
+// a mensagem diz o motivo.
+var ErrInvalidNickname = errors.New("apelido inválido")
 
-// NormalizeNickname tira os espaços das pontas e confere o tamanho (conta
-// caracteres, não bytes). Vazio vira nil: tira o apelido.
+// NormalizeNickname tira os espaços das pontas e confere o apelido com as
+// regras do nome de exibição (user.NormalizeName): até 32 caracteres (conta
+// caractere, não byte), sem caractere invisível, de controle (NUL incluso) ou
+// de bidi. Vazio vira nil: tira o apelido.
 func NormalizeNickname(raw string) (*string, error) {
-	nick := strings.TrimSpace(raw)
-	if nick == "" {
+	if strings.TrimSpace(raw) == "" {
 		return nil, nil
 	}
-	if utf8.RuneCountInString(nick) > MaxNickname {
-		return nil, ErrInvalidNickname
+	nick, err := user.NormalizeName(raw, MaxNickname)
+	switch {
+	case errors.Is(err, user.ErrNameTooLong):
+		return nil, fmt.Errorf("%w: o apelido pode ter até %d caracteres", ErrInvalidNickname, MaxNickname)
+	case err != nil:
+		return nil, fmt.Errorf("%w: o apelido não pode ter caracteres invisíveis ou de controle", ErrInvalidNickname)
 	}
 	return &nick, nil
 }

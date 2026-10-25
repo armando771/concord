@@ -1,4 +1,5 @@
 import { birthdayError, type BirthdayValue } from './birthday'
+import { nameCharsError } from './nameChars'
 import { PASSWORD_TOO_LONG, passwordTooLong } from './password'
 
 /**
@@ -12,12 +13,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export const MIN_PASSWORD_LENGTH = 8
 
 export type RegisterField =
-  | 'username'
-  | 'displayName'
-  | 'email'
-  | 'password'
-  | 'confirm'
-  | 'birthday'
+  'username' | 'displayName' | 'email' | 'password' | 'confirm' | 'birthday'
 
 export type FieldErrors<K extends string> = Partial<Record<K, string>>
 
@@ -37,7 +33,11 @@ export function usernameError(value: string): string | null {
 }
 
 export function displayNameError(value: string): string | null {
-  return value.trim() ? null : 'Informe seu nome de exibição.'
+  const name = value.trim()
+  if (!name) return 'Informe seu nome de exibição.'
+  return nameCharsError(name)
+    ? 'O nome de exibição não pode ter caracteres invisíveis ou de controle.'
+    : null
 }
 
 export function emailError(value: string): string | null {

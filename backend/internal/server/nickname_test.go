@@ -58,6 +58,17 @@ func TestNormalizeNickname(t *testing.T) {
 		{strings.Repeat("🎮", MaxNickname), strPtr(strings.Repeat("🎮", MaxNickname)), false},
 		{strings.Repeat("a", MaxNickname+1), nil, true},
 		{" " + strings.Repeat("a", MaxNickname) + " ", strPtr(strings.Repeat("a", MaxNickname)), false},
+		{"👨\U0000200d👩\U0000200d👧", strPtr("👨\U0000200d👩\U0000200d👧"), false}, // ZWJ entre emoji vale
+		{"\U0000200b", nil, true},   // zero-width
+		{"a\U0000200bb", nil, true}, // zero-width no meio
+		{"\U00003164", nil, true},   // hangul filler (nome "em branco")
+		{"\U00002800", nil, true},   // braille em branco
+		{"a\U0000202eb", nil, true}, // bidi override
+		{"a\U00002066b", nil, true}, // bidi isolate
+		{"a\nb", nil, true},         // quebra de linha
+		{"a\tb", nil, true},         // tab
+		{"\x00", nil, true},         // NUL (o Postgres recusa: dava 500)
+		{"\U00000301", nil, true},   // só marca combinante: nada visível
 	}
 	for _, tc := range cases {
 		got, err := NormalizeNickname(tc.in)

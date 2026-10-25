@@ -40,6 +40,13 @@ describe('profileErrors', () => {
     expect(profileErrors({ ...saved(), display_name: '  ' }).display_name).toBeTruthy()
     expect(profileErrors({ ...saved(), display_name: 'a'.repeat(33) }).display_name).toBeTruthy()
     expect(profileErrors({ ...saved(), display_name: 'a'.repeat(32) }).display_name).toBeUndefined()
+    for (const bad of ['\u{200b}', 'a\u{0}b', 'a\u{202e}b', '\u{2800}', 'a\tb']) {
+      expect(
+        profileErrors({ ...saved(), display_name: bad }).display_name,
+        JSON.stringify(bad)
+      ).toBe('Sem caracteres invisíveis ou de controle.')
+    }
+    expect(profileErrors({ ...saved(), display_name: '👩🏽\u{200d}💻' }).display_name).toBeUndefined()
   })
 
   it('bio conta caracteres, não bytes', () => {

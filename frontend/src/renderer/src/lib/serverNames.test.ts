@@ -72,6 +72,29 @@ describe('normalizeNickname (mesmas regras do backend)', () => {
     expect(normalizeNickname('   ')).toEqual({ ok: true, nickname: null })
   })
 
+  it('recusa invisíveis, controle (NUL incluso) e bidi, como o backend', () => {
+    for (const bad of [
+      '\u{200b}',
+      'a\u{200b}b',
+      '\u{3164}',
+      '\u{2800}',
+      'a\u{202e}b',
+      'a\u{2066}b',
+      'a\nb',
+      '\u{0}',
+      '\u{301}'
+    ]) {
+      expect(normalizeNickname(bad), JSON.stringify(bad)).toEqual({
+        ok: false,
+        error: 'O apelido não pode ter caracteres invisíveis ou de controle.'
+      })
+    }
+    expect(normalizeNickname('👨\u{200d}👩\u{200d}👧')).toEqual({
+      ok: true,
+      nickname: '👨\u{200d}👩\u{200d}👧'
+    })
+  })
+
   it('até 32 caracteres de verdade (emoji e acento contam um)', () => {
     expect(MAX_NICKNAME).toBe(32)
     expect(normalizeNickname('é'.repeat(32)).ok).toBe(true)

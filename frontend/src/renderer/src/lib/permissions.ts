@@ -435,7 +435,7 @@ export function permissionError(code: string | undefined, fallback = 'Algo deu e
     case 'invalid_target':
       return 'Cargo ou membro não encontrado neste servidor.'
     case 'invalid_nickname':
-      return 'O apelido pode ter até 32 caracteres.'
+      return 'Apelido inválido: até 32 caracteres, sem caracteres invisíveis ou de controle.'
     default:
       return fallback
   }

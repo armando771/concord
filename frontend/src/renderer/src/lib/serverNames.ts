@@ -1,4 +1,5 @@
 import { charCount, MAX_DISPLAY_NAME } from './profileValidation'
+import { nameCharsError } from './nameChars'
 
 // Nome das pessoas dentro de um servidor. O apelido (server_members.nickname)
 // só vale naquele servidor: em DM, amigos e grupos continua o nome de
@@ -80,12 +81,18 @@ export function withServerNames<T extends { id: string; username?: string; displ
 
 export type NicknameCheck = { ok: true; nickname: string | null } | { ok: false; error: string }
 
-/** As regras do backend: sem espaços nas pontas, até 32 caracteres; vazio tira. */
+/**
+ * As regras do backend (as do nome de exibição): sem espaços nas pontas, até
+ * 32 caracteres, sem invisíveis, controle ou bidi (lib/nameChars); vazio tira.
+ */
 export function normalizeNickname(raw: string): NicknameCheck {
   const nickname = raw.trim()
   if (!nickname) return { ok: true, nickname: null }
   if (charCount(nickname) > MAX_NICKNAME) {
     return { ok: false, error: `O apelido pode ter até ${MAX_NICKNAME} caracteres.` }
+  }
+  if (nameCharsError(nickname)) {
+    return { ok: false, error: 'O apelido não pode ter caracteres invisíveis ou de controle.' }
   }
   return { ok: true, nickname }
 }
