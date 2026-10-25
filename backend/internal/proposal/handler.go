@@ -2,35 +2,53 @@ package proposal
 
 import (
 	"errors"
+	"io"
 	"log"
 	"net/http"
+	"syscall"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	"gin-quickstart/backend/internal/media"
 )
+
+// multipartOverhead é a folga do multipart (cabeçalhos das partes) sobre o
+// limite do arquivo.
+const multipartOverhead = 1 << 20
 
 type Handler struct {
 	service *Service
+	images  *media.Store
+	space   *media.Space
 }
 
-func ProposalHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func ProposalHandler(service *Service, images *media.Store, space *media.Space) *Handler {
+	return &Handler{service: service, images: images, space: space}
 }
 
 func (h *Handler) fail(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": "proposal not found"})
+	case errors.Is(err, ErrCommentNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": "comment not found"})
 	case errors.Is(err, ErrInvalidTitle):
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid title"})
 	case errors.Is(err, ErrInvalidDescription):
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid description"})
+	case errors.Is(err, ErrInvalidImage):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid image"})
+	case errors.Is(err, ErrInvalidComment):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid comment"})
 	case errors.Is(err, ErrInvalidStatus):
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status"})
 	case errors.Is(err, ErrTooManyOpen):
 		c.JSON(http.StatusConflict, gin.H{"error": "too many open proposals", "code": "too_many_open"})
 	case errors.Is(err, ErrVotingClosed):
 		c.JSON(http.StatusConflict, gin.H{"error": "voting closed", "code": "voting_closed"})
+	case errors.Is(err, ErrRateLimited):
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many comments", "code": "rate_limited"})
 	case errors.Is(err, ErrForbidden):
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 	default:
@@ -39,15 +57,18 @@ func (h *Handler) fail(c *gin.Context, err error) {
 	}
 }
 
-// proposalID lê e valida :id; responde 400 e devolve false se for inválido.
-func proposalID(c *gin.Context) (string, bool) {
-	id := c.Param("id")
+// uuidParam lê e valida o parâmetro de rota; responde 400 e devolve false se
+// não for um UUID.
+func uuidParam(c *gin.Context, name string) (string, bool) {
+	id := c.Param(name)
 	if _, err := uuid.Parse(id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid proposal id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return "", false
 	}
 	return id, true
 }
+
+func proposalID(c *gin.Context) (string, bool) { return uuidParam(c, "id") }
 
 func (h *Handler) List(c *gin.Context) {
 	board, err := h.service.Board(c.Request.Context(), c.GetString("userID"))
@@ -58,21 +79,52 @@ func (h *Handler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, board)
 }
 
-func (h *Handler) Create(c *gin.Context) {
-	var body struct {
-		Title       string `json:"title"`
-		Description string `json:"description"`
+type contentBody struct {
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	ImageIDs    []string `json:"image_ids"`
+}
+
+// validImageIDs descarta o pedido inteiro se alguma id não for UUID.
+func validImageIDs(ids []string) bool {
+	for _, id := range ids {
+		if _, err := uuid.Parse(id); err != nil {
+			return false
+		}
 	}
-	if err := c.ShouldBindJSON(&body); err != nil {
+	return true
+}
+
+func (h *Handler) Create(c *gin.Context) {
+	var body contentBody
+	if err := c.ShouldBindJSON(&body); err != nil || !validImageIDs(body.ImageIDs) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
 		return
 	}
-	p, err := h.service.Create(c.Request.Context(), c.GetString("userID"), body.Title, body.Description)
+	p, err := h.service.Create(c.Request.Context(), c.GetString("userID"), body.Title, body.Description, body.ImageIDs)
 	if err != nil {
 		h.fail(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, p)
+}
+
+func (h *Handler) Update(c *gin.Context) {
+	id, ok := proposalID(c)
+	if !ok {
+		return
+	}
+	var body contentBody
+	if err := c.ShouldBindJSON(&body); err != nil || !validImageIDs(body.ImageIDs) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+	p, err := h.service.Update(c.Request.Context(), id, c.GetString("userID"), body.Title, body.Description, body.ImageIDs)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, p)
 }
 
 func (h *Handler) Vote(c *gin.Context) {
@@ -138,4 +190,260 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+// --- comentários ---
+
+func (h *Handler) Comments(c *gin.Context) {
+	id, ok := proposalID(c)
+	if !ok {
+		return
+	}
+	list, err := h.service.Comments(c.Request.Context(), id)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"comments": list})
+}
+
+func (h *Handler) AddComment(c *gin.Context) {
+	id, ok := proposalID(c)
+	if !ok {
+		return
+	}
+	var body struct {
+		Body     string   `json:"body"`
+		Mentions []string `json:"mentions"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || !validImageIDs(body.Mentions) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+	comment, err := h.service.AddComment(c.Request.Context(), id, c.GetString("userID"), body.Body, body.Mentions)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, comment)
+}
+
+func (h *Handler) EditComment(c *gin.Context) {
+	id, ok := proposalID(c)
+	if !ok {
+		return
+	}
+	commentID, ok := uuidParam(c, "commentId")
+	if !ok {
+		return
+	}
+	var body struct {
+		Body string `json:"body"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+	comment, err := h.service.EditComment(c.Request.Context(), id, commentID, c.GetString("userID"), body.Body)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, comment)
+}
+
+func (h *Handler) DeleteComment(c *gin.Context) {
+	id, ok := proposalID(c)
+	if !ok {
+		return
+	}
+	commentID, ok := uuidParam(c, "commentId")
+	if !ok {
+		return
+	}
+	if err := h.service.DeleteComment(c.Request.Context(), id, commentID, c.GetString("userID")); err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// --- menções ---
+
+func (h *Handler) Mentions(c *gin.Context) {
+	list, err := h.service.PendingMentions(c.Request.Context(), c.GetString("userID"))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"mentions": list})
+}
+
+// MarkMentionsSeen: com {"proposal_id": "..."} marca as de uma proposta; sem
+// corpo ou com proposal_id vazio, todas.
+func (h *Handler) MarkMentionsSeen(c *gin.Context) {
+	var body struct {
+		ProposalID *string `json:"proposal_id"`
+	}
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+			return
+		}
+	}
+	if body.ProposalID != nil {
+		if _, err := uuid.Parse(*body.ProposalID); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+			return
+		}
+	}
+	if err := h.service.MarkMentionsSeen(c.Request.Context(), c.GetString("userID"), body.ProposalID); err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// --- imagens ---
+
+func uploadStatus(err error) (int, string) {
+	var maxBytes *http.MaxBytesError
+	switch {
+	case errors.Is(err, media.ErrTooLarge), errors.As(err, &maxBytes):
+		return http.StatusRequestEntityTooLarge, "file too large"
+	case errors.Is(err, syscall.ENOSPC):
+		return http.StatusInsufficientStorage, "server out of space"
+	default:
+		return http.StatusBadRequest, "invalid upload"
+	}
+}
+
+// UploadImage recebe uma imagem (multipart, campo "file") e a deixa pendente
+// até a proposta ser criada ou editada com a id dela.
+func (h *Handler) UploadImage(c *gin.Context) {
+	limit := MaxImageBytes + multipartOverhead
+	incoming := c.Request.ContentLength
+	if incoming < 0 {
+		incoming = limit
+	}
+	if !h.space.HasRoom(incoming) {
+		c.JSON(http.StatusInsufficientStorage, gin.H{"error": "server out of space"})
+		return
+	}
+	if c.Request.ContentLength > limit {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file too large"})
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
+
+	reader, err := c.Request.MultipartReader()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid upload"})
+		return
+	}
+
+	id := uuid.NewString()
+	saved, keep := false, false
+	defer func() {
+		if saved && !keep {
+			if err := h.images.Remove(id); err != nil {
+				log.Printf("[proposal] remove image %s: %v", id, err)
+			}
+		}
+	}()
+
+	var size int64
+	var contentType string
+	for {
+		part, err := reader.NextPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			status, msg := uploadStatus(err)
+			c.JSON(status, gin.H{"error": msg})
+			return
+		}
+		if part.FormName() != "file" {
+			part.Close()
+			continue
+		}
+		if saved {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid upload"})
+			return
+		}
+		n, head, err := h.images.Save(id, part, MaxImageBytes)
+		if err != nil {
+			status, msg := uploadStatus(err)
+			c.JSON(status, gin.H{"error": msg})
+			return
+		}
+		saved, size = true, n
+		kind, ct, ok := media.Sniff(head, "")
+		if !ok || kind != media.KindImage {
+			c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "unsupported file type"})
+			return
+		}
+		contentType = ct
+	}
+	if !saved {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid upload"})
+		return
+	}
+
+	if err := h.service.RegisterImage(c.Request.Context(), id, c.GetString("userID"), contentType, size); err != nil {
+		h.fail(c, err)
+		return
+	}
+	keep = true
+	c.JSON(http.StatusCreated, Image{ID: id, URL: imageURL(id), ContentType: contentType})
+}
+
+// ServeImage entrega a imagem sem token: <img> não manda Bearer, o GitHub
+// precisa buscá-la e o nome é um UUID novo a cada upload (não dá para
+// adivinhar, e a resposta pode ficar em cache para sempre).
+func (h *Handler) ServeImage(c *gin.Context) {
+	notFound := func() { c.JSON(http.StatusNotFound, gin.H{"error": "media not found"}) }
+
+	id := c.Param("id")
+	if parsed, err := uuid.Parse(id); err != nil || parsed.String() != id {
+		notFound()
+		return
+	}
+	// O tipo vem do banco, mas só vale se o arquivo ainda é uma imagem (o
+	// banco pode ter sobrado de um arquivo trocado).
+	if _, err := h.service.ImageContentType(c.Request.Context(), id); err != nil {
+		notFound()
+		return
+	}
+	file, err := h.images.Open(id)
+	if err != nil {
+		notFound()
+		return
+	}
+	defer file.Close()
+
+	head := make([]byte, media.SniffLen)
+	n, _ := io.ReadFull(file, head)
+	kind, contentType, ok := media.Sniff(head[:n], "")
+	if !ok || kind != media.KindImage {
+		notFound()
+		return
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		notFound()
+		return
+	}
+	info, err := file.Stat()
+	if err != nil {
+		notFound()
+		return
+	}
+
+	header := c.Writer.Header()
+	header.Set("Content-Type", contentType)
+	header.Set("X-Content-Type-Options", "nosniff")
+	header.Set("Content-Security-Policy", "sandbox")
+	header.Set("Cache-Control", "public, max-age=31536000, immutable")
+	http.ServeContent(c.Writer, c.Request, "", info.ModTime(), file)
 }

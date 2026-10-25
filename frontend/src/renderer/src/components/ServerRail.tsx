@@ -4,11 +4,12 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { PlusIcon, InboxIcon, DiamondIcon, SalinhaMarkIcon } from './icons'
 import { useServerStore } from '../store/serverStore'
 import { useInviteStore } from '../store/inviteStore'
+import { useAuthStore } from '../store/authStore'
 import { useProposalStore } from '../store/proposalStore'
 import { useNotifySettingsStore } from '../store/notifySettingsStore'
 import { isMutedNow } from '../lib/notificationMute'
 import { useNow } from './useNow'
-import { pendingVoteCount } from '../lib/proposals'
+import { badgeCount } from '../lib/proposals'
 import { useChatStore } from '../store/chatStore'
 import { useFriendStore } from '../store/friendStore'
 import { showToast } from '../store/toastStore'
@@ -35,8 +36,15 @@ function ServerRail(): React.JSX.Element {
 
   const proposals = useProposalStore((s) => s.proposals)
   const fetchProposals = useProposalStore((s) => s.fetchProposals)
-  const proposalsToVote = pendingVoteCount(proposals)
+  const proposalMentions = useProposalStore((s) => s.pendingMentions)
+  const proposalsSeenAt = useProposalStore((s) => s.lastSeenAt)
+  const fetchProposalMentions = useProposalStore((s) => s.fetchMentions)
+  const meId = useAuthStore((s) => s.user?.id ?? null)
   const onProposals = location.pathname === '/proposals'
+  // Propostas novas e menções desde a última visita; com o quadro aberto não mostra nada.
+  const proposalsBadge = onProposals
+    ? 0
+    : badgeCount(proposals, proposalMentions, proposalsSeenAt, meId)
 
   const unreadByRoom = useChatStore((s) => s.unreadByRoom)
   const unreadByServer = useChatStore((s) => s.unreadByServer)
@@ -68,6 +76,10 @@ function ServerRail(): React.JSX.Element {
   useEffect(() => {
     fetchProposals()
   }, [fetchProposals])
+
+  useEffect(() => {
+    void fetchProposalMentions()
+  }, [fetchProposalMentions])
 
   useEffect(() => {
     if (servers.length > 0) {
@@ -227,9 +239,9 @@ function ServerRail(): React.JSX.Element {
           >
             <DiamondIcon className={`h-6 w-6 ${onProposals ? 'text-white' : 'text-violet-400'}`} />
           </button>
-          {proposalsToVote > 0 && (
+          {proposalsBadge > 0 && (
             <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-md">
-              {proposalsToVote > 99 ? '99+' : proposalsToVote}
+              {proposalsBadge > 99 ? '99+' : proposalsBadge}
             </span>
           )}
         </div>

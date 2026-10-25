@@ -1,13 +1,14 @@
 import type { Proposal, ProposalStatus } from '../../api/proposals'
 import {
+  canDeleteProposal,
   canVote,
-  NEXT_STATUSES,
-  STATUS_ACTION_LABEL,
+  proposalImageSrc,
   timeLeftLabel,
   yesPercent
 } from '../../lib/proposals'
 import Avatar from '../Avatar'
 import Button from '../Button'
+import MoveSelect from './MoveSelect'
 
 interface ProposalCardProps {
   proposal: Proposal
@@ -15,6 +16,8 @@ interface ProposalCardProps {
   meId: string | null
   isTech: boolean
   busy: boolean
+  /** Abre a versão expandida (modal) do card. */
+  onOpen: () => void
   onVote: (approve: boolean) => void
   onRemoveVote: () => void
   onMove: (status: ProposalStatus) => void
@@ -27,6 +30,7 @@ function ProposalCard({
   meId,
   isTech,
   busy,
+  onOpen,
   onVote,
   onRemoveVote,
   onMove,
@@ -35,11 +39,42 @@ function ProposalCard({
   const open = canVote(p, now)
   const total = p.yes_votes + p.no_votes
   const percent = yesPercent(p)
-  const moves = isTech ? (NEXT_STATUSES[p.status] ?? []) : []
-  const canDelete = isTech || (meId === p.author_id && p.status === 'voting')
+  const canDelete = canDeleteProposal(p, meId, isTech)
+  const firstImage = p.images[0]
+  // Os controles de dentro do card não abrem o modal.
+  const stop = (e: React.SyntheticEvent): void => e.stopPropagation()
 
   return (
-    <article className="flex flex-col gap-3 rounded-xl border border-white/6 bg-white/3 p-3">
+    <article
+      role="button"
+      tabIndex={0}
+      aria-label={`Abrir proposta: ${p.title}`}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
+      className="flex cursor-pointer flex-col gap-3 rounded-xl border border-white/6 bg-white/3 p-3 transition-colors hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-violet-400"
+    >
+      {firstImage && (
+        <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black/30">
+          <img
+            src={proposalImageSrc(firstImage.url)}
+            alt=""
+            loading="lazy"
+            draggable={false}
+            className="h-full w-full object-cover"
+          />
+          {p.images.length > 1 && (
+            <span className="absolute bottom-1 right-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+              +{p.images.length - 1}
+            </span>
+          )}
+        </div>
+      )}
       <div className="min-w-0">
         <h3 className="wrap-break-word text-sm font-semibold leading-snug text-white">{p.title}</h3>
         {p.description && (
@@ -57,6 +92,14 @@ function ProposalCard({
           size={20}
         />
         <span className="min-w-0 truncate">{p.author_name}</span>
+        {p.comment_count > 0 && (
+          <span
+            className="shrink-0 text-gray-400"
+            title={`${p.comment_count} ${p.comment_count === 1 ? 'comentário' : 'comentários'}`}
+          >
+            💬 {p.comment_count}
+          </span>
+        )}
         {p.status === 'voting' && (
           <span className="ml-auto shrink-0 text-violet-300">
             {timeLeftLabel(p.voting_ends_at, now)}
@@ -85,7 +128,7 @@ function ProposalCard({
       )}
 
       {open && (
-        <div className="flex gap-2">
+        <div className="flex gap-2" onClick={stop}>
           <Button
             variant={p.my_vote === true ? 'success' : 'ghost'}
             className="flex-1"
@@ -112,25 +155,19 @@ function ProposalCard({
           href={p.github_issue_url}
           target="_blank"
           rel="noreferrer"
+          onClick={stop}
           className="text-xs font-medium text-violet-300 hover:text-violet-200 hover:underline"
         >
           Issue #{p.github_issue_number} no GitHub
         </a>
       )}
 
-      {(moves.length > 0 || canDelete) && (
-        <div className="flex flex-wrap gap-2 border-t border-white/6 pt-2">
-          {moves.map((status) => (
-            <Button
-              key={status}
-              variant={status === 'rejected' ? 'danger' : 'secondary'}
-              className="px-3 py-1 text-xs"
-              disabled={busy}
-              onClick={() => onMove(status)}
-            >
-              {STATUS_ACTION_LABEL[status]}
-            </Button>
-          ))}
+      {(isTech || canDelete) && (
+        <div
+          className="flex flex-wrap items-center gap-2 border-t border-white/6 pt-2"
+          onClick={stop}
+        >
+          {isTech && <MoveSelect status={p.status} disabled={busy} onMove={onMove} />}
           {canDelete && (
             <Button
               variant="ghost"

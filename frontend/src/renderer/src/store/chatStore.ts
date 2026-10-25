@@ -3,6 +3,7 @@ import type { ServerMember } from '../api/servers'
 import {
   deliverDesktop,
   friendRequestNotification,
+  proposalMentionNotification,
   mentionNotification,
   messageAlert,
   messageNotification,
@@ -739,6 +740,22 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     if (event.type.startsWith('badge:')) {
       useBadgeStore.getState().handleWsEvent(event)
+      return
+    }
+
+    if (event.type === 'proposal:mention') {
+      useProposalStore.getState().handleWsEvent(event)
+      const mention = payload as unknown as Parameters<typeof proposalMentionNotification>[0]
+      if (mention?.proposal_id) {
+        // Marcaram você num comentário de proposta: som + notificação (Não perturbe silencia).
+        const me = useAuthStore.getState().user
+        const prefs = prefsForStatus(notificationPrefs(), me?.status)
+        const notification = proposalMentionNotification(mention)
+        notifyDesktop(notification, prefs)
+        const sound = notificationSound(notification.kind, prefs)
+        if (sound) playSound(sound)
+        showToast.info(`${mention.author_name} te marcou na proposta "${mention.proposal_title}"`)
+      }
       return
     }
 
