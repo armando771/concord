@@ -34,11 +34,12 @@ O multiplicador vale no instante em que o minuto fecha (sem média retroativa).
   (novo campo `percent`).
 - `give`: aplica o percentual ao XP.
 - Evento `voice:boost` via `BroadcastToCall` com payload
-  `{call_id, percent, eligible}`. Enviado só quando o percentual da call muda
-  (estado `lastBoost map[callID]int` no service), inclusive a volta para 100
-  (fim do buff). Calls que deixam de existir são removidas do mapa.
-- Quem entra numa call com buff já ativo recebe o estado atual no tick
-  seguinte (reenvio por usuário novo na call via `SendToUser`).
+  `{call_id, percent, eligible}`. Enviado a cada tick (10 s) enquanto a call
+  está com buff (heartbeat: quem entra depois recebe o estado no tick
+  seguinte, sem estado por usuário) e uma última vez com `percent: 100` quando
+  o buff acaba ou a call some (estado `lastBoost map[callID]int` guarda as
+  calls com buff). Calls sem buff nunca recebem o evento.
+- O cliente descarta o buff de uma call se ficar 25 s sem heartbeat.
 - `level:update` e `level:up` não mudam.
 
 ## Frontend (`frontend/src/renderer/src`)
