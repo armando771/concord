@@ -1,23 +1,41 @@
 /**
- * Mensagem em português para uma falha na tela de login. Decide pelo status
- * HTTP (o texto do backend vem em inglês e pode mudar), não pela mensagem.
+ * Mensagens em português para falhas nas telas de login e cadastro. Decide
+ * pelo status HTTP (o texto do backend vem em inglês e pode mudar), não pela
+ * mensagem.
  */
-export function loginErrorMessage(err: unknown): string {
-  const status =
+
+/** Status do ApiError; null quando nem chegou ao servidor (fetch rejeitou). */
+function statusOf(err: unknown): number | null | undefined {
+  if (
     typeof err === 'object' &&
     err !== null &&
     typeof (err as { status?: unknown }).status === 'number'
-      ? (err as { status: number }).status
-      : undefined
-
-  if (status === undefined) {
-    // fetch rejeita com TypeError quando nem chega ao servidor.
-    return err instanceof TypeError ? 'Sem conexão com o servidor.' : 'Falha ao entrar.'
+  ) {
+    return (err as { status: number }).status
   }
-  if (status === 0) return 'Sem conexão com o servidor.'
-  if (status === 401) return 'E-mail/usuário ou senha incorretos.'
-  if (status === 400) return 'Não foi possível entrar. Confira os dados e tente de novo.'
+  // fetch rejeita com TypeError quando nem chega ao servidor.
+  return err instanceof TypeError ? null : undefined
+}
+
+function commonMessage(status: number | null | undefined): string | null {
+  if (status === null || status === 0) return 'Sem conexão com o servidor.'
+  if (status === undefined) return null
   if (status === 429) return 'Muitas tentativas. Espere um pouco e tente de novo.'
   if (status >= 500) return 'Erro no servidor. Tente de novo em instantes.'
-  return 'Falha ao entrar.'
+  return null
+}
+
+export function loginErrorMessage(err: unknown): string {
+  const status = statusOf(err)
+  if (status === 401) return 'E-mail/usuário ou senha incorretos.'
+  if (status === 400) return 'Não foi possível entrar. Confira os dados e tente de novo.'
+  return commonMessage(status) ?? 'Falha ao entrar.'
+}
+
+export function registerErrorMessage(err: unknown): string {
+  const status = statusOf(err)
+  // O backend não diz qual dos dois, para não revelar e-mails cadastrados.
+  if (status === 409) return 'Nome de usuário ou e-mail já em uso.'
+  if (status === 400) return 'Confira os dados e tente de novo.'
+  return commonMessage(status) ?? 'Falha ao criar conta.'
 }
