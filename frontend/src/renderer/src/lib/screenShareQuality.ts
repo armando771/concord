@@ -7,6 +7,16 @@ export const DEFAULT_SCREEN_QUALITY: ScreenShareQuality = { resolution: '1080p',
 const STORAGE_KEY = 'salinha:screen-share-quality'
 let memoryQuality: ScreenShareQuality | null = null
 const streamQualities = new WeakMap<MediaStream, ScreenShareQuality>()
+const screenSources = new WeakMap<MediaStreamTrack, MediaTrackSettings>()
+
+/** Guarda a fonte antes de reduzir a captura, permitindo aumentar a qualidade depois. */
+export function rememberScreenSource(track: MediaStreamTrack): void {
+  screenSources.set(track, { ...track.getSettings() })
+}
+
+export function screenSource(track: MediaStreamTrack): MediaTrackSettings {
+  return screenSources.get(track) ?? track.getSettings()
+}
 
 export function loadScreenQuality(): ScreenShareQuality {
   if (memoryQuality) return { ...memoryQuality }
@@ -76,5 +86,5 @@ export function rememberStreamQuality(stream: MediaStream, quality: ScreenShareQ
 }
 
 export function streamQuality(stream: MediaStream): ScreenShareQuality {
-  return streamQualities.get(stream) ?? DEFAULT_SCREEN_QUALITY
+  return { ...(streamQualities.get(stream) ?? DEFAULT_SCREEN_QUALITY) }
 }

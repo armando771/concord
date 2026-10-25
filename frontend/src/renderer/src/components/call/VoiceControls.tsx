@@ -17,6 +17,7 @@ import {
 } from '../icons'
 import SoundboardPopover from './SoundboardPopover'
 import ActivityPickerPopover from './ActivityPickerPopover'
+import ScreenQualityButton from './ScreenQualityButton'
 
 function VoiceControls(): React.JSX.Element {
   const muted = useCallStore((s) => s.muted)
@@ -122,6 +123,7 @@ function VoiceControls(): React.JSX.Element {
       >
         <MonitorIcon className="h-5 w-5" />
       </button>
+      <ScreenQualityButton />
       {callType === 'channel' && (
         <button
           onClick={toggleLock}

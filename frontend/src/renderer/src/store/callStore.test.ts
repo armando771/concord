@@ -74,6 +74,7 @@ const media = vi.hoisted(() => ({
   events: [] as string[],
   connect: vi.fn(),
   publishScreen: vi.fn(),
+  updateScreenQuality: vi.fn(),
   publishCamera: vi.fn(),
   setWatchedScreens: vi.fn()
 }))
@@ -82,6 +83,7 @@ vi.mock('../lib/livekit', () => ({
     handlers: unknown
     connect = media.connect
     publishScreen = media.publishScreen
+    updateScreenQuality = media.updateScreenQuality
     publishCamera = media.publishCamera
     setWatchedScreens = media.setWatchedScreens
     setMicMuted = vi.fn(async (muted: boolean) => {
@@ -173,10 +175,79 @@ beforeEach(() => {
   api.startCall.mockResolvedValue({ id: 'call-1' })
   media.connect.mockResolvedValue(undefined)
   media.publishScreen.mockResolvedValue(undefined)
+  media.updateScreenQuality.mockResolvedValue(undefined)
   media.publishCamera.mockResolvedValue(undefined)
 })
 
 describe('callStore — mídia via LiveKit', () => {
+  it('troca qualidade sem encerrar a transmissão nem anunciar saída aos espectadores', async () => {
+    await joinChannel()
+    const stream = fakeStream('video', 'audio')
+    rtc.getDisplayStream.mockResolvedValueOnce(stream)
+    await useCallStore.getState().startScreenShare()
+    chat.sendEvent.mockClear()
+    const watched = useCallStore.getState().watchedScreenIds
+    const sharers = useCallStore.getState().screenSharers
+    expect(
+      await useCallStore.getState().updateScreenQuality({ resolution: '720p', frameRate: 60 })
+    ).toBe(true)
+    expect(media.updateScreenQuality).toHaveBeenCalledWith(stream, {
+      resolution: '720p',
+      frameRate: 60
+    })
+    expect(useCallStore.getState()).toMatchObject({
+      isScreenSharing: true,
+      localScreenStream: stream,
+      screenQualityUpdating: false,
+      screenShareQuality: { resolution: '720p', frameRate: 60 },
+      screenSharers: sharers,
+      watchedScreenIds: watched
+    })
+    expect(chat.sendEvent).not.toHaveBeenCalled()
+    expect(media.publishScreen).toHaveBeenCalledTimes(1)
+    expect(allStopped(stream)).toBe(false)
+  })
+
+  it('serializa atualizações e ignora conclusão após encerrar o share', async () => {
+    await joinChannel()
+    const stream = fakeStream('video')
+    rtc.getDisplayStream.mockResolvedValueOnce(stream)
+    await useCallStore.getState().startScreenShare()
+    const waiting = deferred<void>()
+    media.updateScreenQuality.mockReturnValueOnce(waiting.promise)
+    const pending = useCallStore
+      .getState()
+      .updateScreenQuality({ resolution: '720p', frameRate: 60 })
+    expect(useCallStore.getState().screenQualityUpdating).toBe(true)
+    expect(
+      await useCallStore.getState().updateScreenQuality({ resolution: 'source', frameRate: 60 })
+    ).toBe(false)
+    useCallStore.getState().stopScreenShare()
+    waiting.resolve()
+    expect(await pending).toBe(false)
+    expect(useCallStore.getState()).toMatchObject({
+      screenShareQuality: null,
+      screenQualityUpdating: false
+    })
+  })
+
+  it('mantém a qualidade ativa e a transmissão quando a atualização falha', async () => {
+    await joinChannel()
+    rtc.getDisplayStream.mockResolvedValueOnce(fakeStream('video'))
+    await useCallStore.getState().startScreenShare()
+    const previous = useCallStore.getState().screenShareQuality
+    media.updateScreenQuality.mockRejectedValueOnce(new Error('encoder'))
+    expect(
+      await useCallStore.getState().updateScreenQuality({ resolution: '720p', frameRate: 60 })
+    ).toBe(false)
+    expect(useCallStore.getState()).toMatchObject({
+      isScreenSharing: true,
+      screenShareQuality: previous,
+      screenQualityUpdating: false
+    })
+    expect(showToast.error).toHaveBeenCalled()
+  })
+
   it('retoma ensurdecido sem publicar áudio e restaura o mute anterior ao desensurdecer', async () => {
     const mic = fakeMic()
     rtc.getAudioStream.mockResolvedValue(mic)
@@ -1477,7 +1548,15 @@ describe('callStore — salas trancadas e pedidos de entrada', () => {
   it('evento call:lock atualiza o estado local e serverCalls', () => {
     useCallStore.getState().setServerCalls({
       'canal-1': {
-        call: { id: 'call-1', type: 'channel', channel_id: 'canal-1', initiator_id: 'ana', status: 'active', started_at: '', locked: false },
+        call: {
+          id: 'call-1',
+          type: 'channel',
+          channel_id: 'canal-1',
+          initiator_id: 'ana',
+          status: 'active',
+          started_at: '',
+          locked: false
+        },
         participants: []
       }
     })

@@ -71,7 +71,7 @@ vi.mock('livekit-client', () => ({
 }))
 
 import { CallMedia, type RemoteMedia } from './livekit'
-import { rememberStreamQuality } from './screenShareQuality'
+import { rememberScreenSource, rememberStreamQuality } from './screenShareQuality'
 
 function publication(source: string): FakePublication {
   const pub: FakePublication = {
@@ -323,6 +323,92 @@ describe('CallMedia — permissões de publicação', () => {
 })
 
 describe('CallMedia — qualidade de tela', () => {
+  async function activeScreen() {
+    const media = createMedia()
+    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    const video = {
+      readyState: 'live',
+      getSettings: () => ({ width: 3840, height: 2160 }),
+      getConstraints: () => ({ width: { max: 1920 }, height: { max: 1080 } }),
+      applyConstraints: vi.fn(async () => {}),
+      stop: vi.fn()
+    }
+    rememberScreenSource(video as unknown as MediaStreamTrack)
+    // A captura atual já foi reduzida: aumentar deve usar as dimensões originais.
+    video.getSettings = () => ({ width: 1280, height: 720 })
+    let parameters = { encodings: [{ maxBitrate: 4_000_000, maxFramerate: 30, active: true }] }
+    const sender = {
+      getParameters: () => structuredClone(parameters),
+      setParameters: vi.fn(async (next) => {
+        parameters = next
+      })
+    }
+    const track = { mediaStreamTrack: video, sender, publishOptions: { simulcast: false } }
+    const pub = { videoTrack: track }
+    room().localParticipant.getTrackPublication.mockReturnValue(pub)
+    room().localParticipant.publishTrack.mockClear()
+    const stream = { getVideoTracks: () => [video] } as unknown as MediaStream
+    return { media, stream, video, sender, track }
+  }
+
+  it('altera captura e envio mantendo a publicação e os espectadores', async () => {
+    const { media, stream, video, sender, track } = await activeScreen()
+    await media.updateScreenQuality(stream, { resolution: '1080p', frameRate: 60 })
+    expect(video.applyConstraints).toHaveBeenCalledWith({
+      width: { max: 1920 },
+      height: { max: 1080 },
+      frameRate: { ideal: 60, max: 60 }
+    })
+    expect(sender.getParameters().encodings[0]).toMatchObject({
+      maxBitrate: 8_000_000,
+      maxFramerate: 60,
+      active: true
+    })
+    expect(track.publishOptions).toMatchObject({
+      screenShareEncoding: { maxBitrate: 8_000_000, maxFramerate: 60 }
+    })
+    expect(room().localParticipant.getTrackPublication('screen_share').options).toMatchObject({
+      screenShareEncoding: { maxBitrate: 8_000_000, maxFramerate: 60 }
+    })
+    expect(room().localParticipant.publishTrack).not.toHaveBeenCalled()
+    expect(video.stop).not.toHaveBeenCalled()
+    await media.updateScreenQuality(stream, { resolution: 'source', frameRate: 30 })
+    expect(video.applyConstraints).toHaveBeenLastCalledWith({ frameRate: { ideal: 30, max: 30 } })
+  })
+
+  it('restaura a captura se o envio recusar a atualização, sem parar o vídeo', async () => {
+    const { media, stream, video, sender, track } = await activeScreen()
+    sender.setParameters.mockRejectedValueOnce(new Error('encoder'))
+    await expect(
+      media.updateScreenQuality(stream, { resolution: '720p', frameRate: 60 })
+    ).rejects.toThrow('encoder')
+    expect(video.applyConstraints).toHaveBeenLastCalledWith(video.getConstraints())
+    expect(track.publishOptions).toEqual({ simulcast: false })
+    expect(video.stop).not.toHaveBeenCalled()
+  })
+
+  it('não altera uma publicação encerrada ou reconectando', async () => {
+    const { media, stream, video, sender } = await activeScreen()
+    room().state = 'reconnecting'
+    await expect(
+      media.updateScreenQuality(stream, { resolution: '720p', frameRate: 60 })
+    ).rejects.toThrow('screen_not_available')
+    expect(video.applyConstraints).not.toHaveBeenCalled()
+    expect(sender.setParameters).not.toHaveBeenCalled()
+  })
+
+  it('descarta uma alteração se a publicação mudar durante a aplicação', async () => {
+    const { media, stream, video, sender } = await activeScreen()
+    video.applyConstraints.mockImplementationOnce(async () => {
+      room().localParticipant.getTrackPublication.mockReturnValue(undefined)
+    })
+    await expect(
+      media.updateScreenQuality(stream, { resolution: '720p', frameRate: 60 })
+    ).rejects.toThrow('screen_changed')
+    expect(sender.setParameters).not.toHaveBeenCalled()
+    expect(video.stop).not.toHaveBeenCalled()
+  })
+
   it('publica e republica com o encoding escolhido, sem alterar o áudio', async () => {
     const media = createMedia()
     await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
