@@ -101,7 +101,7 @@ port=$(sed -n -E 's/^(export[[:space:]]+)?PORT=//p' .env | tail -n 1 | sed -E 's
 port="${port:-8080}" # mesmo padrão do backend
 healthy() {
   for _ in $(seq 1 60); do
-    if curl -fs -o /dev/null "http://127.0.0.1:$port/healthz"; then return 0; fi
+    if curl -fs -m 2 -o /dev/null "http://127.0.0.1:$port/healthz"; then return 0; fi
     sleep 0.5
   done
   return 1

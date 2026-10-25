@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -305,14 +304,20 @@ func main() {
 		port = "8080"
 	}
 
-	// HOST=127.0.0.1 quando há um proxy na frente (Caddy na VPS). A porta só
-	// abre com tudo pronto: até lá o Caddy segura as requisições.
-	ln, err := net.Listen("tcp", os.Getenv("HOST")+":"+port)
+	// HOST=127.0.0.1 quando há um proxy na frente (Caddy na VPS). Com o
+	// socket do systemd (deploy/concord-server.socket) a porta fica aberta
+	// durante o reinício e as conexões esperam na fila; sem ele, a porta só
+	// abre com tudo pronto. Nos dois casos nada é atendido antes de pronto.
+	ln, activated, err := lifecycle.Listen(os.Getenv("HOST") + ":" + port)
 	if err != nil {
 		log.Fatal(err)
 	}
 	readiness.SetReady()
-	log.Printf("servidor pronto em %s", ln.Addr())
+	if activated {
+		log.Printf("servidor pronto em %s (socket do systemd)", ln.Addr())
+	} else {
+		log.Printf("servidor pronto em %s", ln.Addr())
+	}
 
 	srv := &http.Server{Handler: router, ReadHeaderTimeout: 10 * time.Second}
 	err = lifecycle.Run(ctx, srv, ln, shutdownTimeout, func(ctx context.Context) {

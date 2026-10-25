@@ -49,7 +49,7 @@ if ! out=$(caddy validate --config "$NEW" --adapter caddyfile 2>&1); then
 fi
 
 port=$(env_value PORT)
-curl -fs -o /dev/null "http://127.0.0.1:${port:-8080}/healthz" ||
+curl -fs -m 2 -o /dev/null "http://127.0.0.1:${port:-8080}/healthz" ||
   { rm -f "$NEW"; fail "backend sem /healthz em 127.0.0.1:${port:-8080} — faça o deploy do backend antes"; }
 
 in_call=$(docker exec concord-postgres psql -U concord-user -d concord -tAc \

@@ -8,7 +8,10 @@
 //   - nenhum aviso de reconexão nem "saiu da chamada" apareceu;
 //   - o selo LIVE da ana e o ícone de mudo da bia não piscaram;
 //   - a mensagem mandada durante o reinício aparece uma vez (nem perdida nem
-//     duplicada) para a ana, que estava com o canal de texto aberto.
+//     duplicada) para a ana, que estava com o canal de texto aberto;
+//   - a troca de processo fica abaixo de 1 s mesmo com um download longo em
+//     andamento (cliente que não lê) e um WebSocket morto (não confirma o
+//     fechamento) — os dois direto no backend.
 //
 // Precisa do mesmo caminho da VPS: Caddy na frente (o deploy/Caddyfile de
 // verdade, com /rtc direto para o LiveKit), backend e LiveKit locais.
@@ -34,10 +37,11 @@
 //   5. BACKEND_DIR=<pasta> APP=http://localhost:5174/ node scripts/e2e-restart-call.mjs
 //
 // Variáveis: CADDY_PORT (18080), BACKEND_PORT (18090), LIVEKIT_PORT (17880),
-// MAX_AUDIO_STALL_MS (150), CHROME (Chromium alternativo).
+// MAX_AUDIO_STALL_MS (150), MAX_HANDOVER_MS (1000), CHROME (Chromium alternativo).
 import { createRequire } from 'module'
 import { spawn } from 'child_process'
-import { readFileSync, writeFileSync } from 'fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { connect as tcpConnect } from 'net'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -65,6 +69,7 @@ const HEALTH = `http://127.0.0.1:${BACKEND_PORT}/healthz`
 const APP = process.env.APP ?? 'http://localhost:5174/'
 const BACKEND_DIR = process.env.BACKEND_DIR
 const MAX_AUDIO_STALL_MS = Number(process.env.MAX_AUDIO_STALL_MS ?? 150)
+const MAX_HANDOVER_MS = Number(process.env.MAX_HANDOVER_MS ?? 1000)
 const run = Date.now().toString(36)
 if (!BACKEND_DIR) {
   console.error('defina BACKEND_DIR (pasta com .env, migrations/ e concord-server) — ver o cabeçalho')
@@ -88,6 +93,48 @@ const TONE = join(tmpdir(), 'concord-e2e-restart-tone.wav')
 writeToneWav(TONE)
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+// ─── Clientes problemáticos, direto no backend ──────────────────────────────
+
+// Arquivo grande em updates/ do backend (o PC de casa serve /updates por ele).
+const BIG_FILE = 'e2e-restart-download.bin'
+mkdirSync(join(BACKEND_DIR, 'updates'), { recursive: true })
+writeFileSync(join(BACKEND_DIR, 'updates', BIG_FILE), Buffer.alloc(64 << 20))
+
+/** Pede o download e nunca lê: a resposta fica travada no backend. */
+function stuckDownload() {
+  return new Promise((resolve, reject) => {
+    const socket = tcpConnect(Number(BACKEND_PORT), '127.0.0.1', () => {
+      socket.write(`GET /updates/${BIG_FILE} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n`)
+      socket.once('data', () => {
+        socket.pause() // para de ler: o kernel enche e o backend trava na escrita
+        resolve(socket)
+      })
+    })
+    socket.on('error', () => {})
+    socket.once('error', reject)
+  })
+}
+
+/** Abre o WebSocket do chat e some: não lê nem confirma o fechamento. */
+function deadWebSocket(token) {
+  return new Promise((resolve, reject) => {
+    const socket = tcpConnect(Number(BACKEND_PORT), '127.0.0.1', () => {
+      socket.write(
+        `GET /ws?token=${encodeURIComponent(token)} HTTP/1.1\r\nHost: 127.0.0.1\r\n` +
+          'Upgrade: websocket\r\nConnection: Upgrade\r\n' +
+          'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n'
+      )
+      socket.once('data', (d) => {
+        if (!d.toString().startsWith('HTTP/1.1 101')) return reject(new Error(`upgrade: ${d}`))
+        socket.pause()
+        resolve(socket)
+      })
+    })
+    socket.on('error', () => {})
+    socket.once('error', reject)
+  })
+}
 
 // ─── Backend: sobe e reinicia como o systemd (SIGTERM, espera sair, sobe) ───
 
@@ -364,6 +411,9 @@ try {
   await sleep(2000)
 
   // ─── Reinício ──────────────────────────────────────────────────────────
+  // Um download travado e um app "dormindo" seguravam o reinício (até 10 s + 5 s).
+  const stuck = [await stuckDownload(), await deadWebSocket(bia.token)]
+
   const consoleBefore = consoleLines.length
   const t0 = { a: await clock(pageA), b: await clock(pageB) }
   chatHeld = true
@@ -381,6 +431,9 @@ try {
   // A ana volta só agora: a mensagem já foi criada sem ela conectada.
   chatHeld = false
   console.log(`backend: SIGTERM→saiu ${exitedAt - stopAt} ms, saiu→/healthz ${healthyAt - exitedAt} ms`)
+  check(`troca de processo abaixo de ${MAX_HANDOVER_MS} ms com download travado e WebSocket morto`,
+    healthyAt - stopAt < MAX_HANDOVER_MS, { handoverMs: healthyAt - stopAt })
+  stuck.forEach((socket) => socket.destroy())
   const sent = typeof sentAt === 'number'
   check('mensagem mandada durante o reinício foi aceita (o Caddy segurou)', sent, sent ? null : sentAt.message)
   if (sent) {
