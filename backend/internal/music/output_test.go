@@ -3,6 +3,7 @@ package music
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os/exec"
 	"strings"
 	"testing"
@@ -67,4 +68,28 @@ func (p *pipeWriter) Write(b []byte) (int, error) {
 		p.cancel()
 	}
 	return n, err
+}
+
+func TestRunAttemptsRetriesOnceThenGivesUp(t *testing.T) {
+	calls := 0
+	err := runAttempts(context.Background(), 2, func(context.Context) error {
+		calls++
+		return errors.New("caiu")
+	})
+	if calls != 2 || err == nil {
+		t.Fatalf("calls=%d err=%v", calls, err)
+	}
+}
+
+func TestRunAttemptsStopsWhenCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	calls := 0
+	_ = runAttempts(ctx, 2, func(context.Context) error {
+		calls++
+		cancel()
+		return errors.New("cancelado")
+	})
+	if calls != 1 {
+		t.Fatalf("calls=%d, quer 1", calls)
+	}
 }

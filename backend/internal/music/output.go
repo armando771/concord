@@ -80,15 +80,29 @@ func (o *liveKitOutput) Close() {
 }
 
 func (o *liveKitOutput) run(ctx context.Context, ffmpeg string, src FrameSource) {
-	var err error
-	for attempt := 1; attempt <= 2; attempt++ {
-		err = o.runOnce(ctx, ffmpeg, src)
-		if ctx.Err() != nil {
-			return
-		}
-		log.Printf("[music] encoder caiu (tentativa %d): %v", attempt, err)
+	// Sai da sala em qualquer caminho (cancelamento, desistência), para que
+	// Done disparar signifique que o participante já saiu.
+	defer o.Close()
+	err := runAttempts(ctx, 2, func(actx context.Context) error {
+		return o.runOnce(actx, ffmpeg, src)
+	})
+	if ctx.Err() != nil {
+		return
 	}
 	o.done <- err
+}
+
+// runAttempts roda o encoder até `max` vezes, parando se o contexto acabar.
+func runAttempts(ctx context.Context, max int, attempt func(context.Context) error) error {
+	var err error
+	for i := 1; i <= max; i++ {
+		err = attempt(ctx)
+		if ctx.Err() != nil {
+			return err
+		}
+		log.Printf("[music] encoder caiu (tentativa %d): %v", i, err)
+	}
+	return err
 }
 
 func (o *liveKitOutput) runOnce(ctx context.Context, ffmpeg string, src FrameSource) error {
@@ -125,11 +139,19 @@ func (o *liveKitOutput) runOnce(ctx context.Context, ffmpeg string, src FrameSou
 		return err
 	}
 
+	// O Pump é por tentativa e a gente espera ele sair: senão o Pump antigo
+	// ainda leria um frame do src e roubaria 20 ms da tentativa seguinte.
+	actx, cancel := context.WithCancel(ctx)
+	pumpDone := make(chan struct{})
 	go func() {
-		_ = Pump(ctx, src, stdin, RealClock{}, pumpLead)
+		defer close(pumpDone)
+		_ = Pump(actx, src, stdin, RealClock{}, pumpLead)
 		_ = stdin.Close()
 	}()
 	waitErr := cmd.Wait()
+	cancel()
+	_ = stdin.Close()
+	<-pumpDone
 	_ = o.room.LocalParticipant.UnpublishTrack(pub.SID())
 	return fmt.Errorf("ffmpeg: %v: %s", waitErr, stderr.String())
 }
