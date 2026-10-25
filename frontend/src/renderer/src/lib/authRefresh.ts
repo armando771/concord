@@ -5,7 +5,7 @@
 
 /** Chave do zustand persist do authStore (localStorage). */
 export const AUTH_STORAGE_KEY = 'concord-auth'
-/** Nome do Web Lock que deixa uma aba renovar por vez. */
+/** Nome do Web Lock que deixa uma aba por vez renovar ou sair da conta. */
 export const REFRESH_LOCK = 'salinha-auth-refresh'
 
 export interface StoredTokens {
@@ -64,9 +64,40 @@ export function planRefreshFailure(failedRefreshToken: string, stored: StoredTok
   }
 }
 
+export type SuccessPlan =
+  { kind: 'save'; tokens: Tokens } | { kind: 'adopt'; tokens: Tokens } | { kind: 'logged-out' }
+
 /**
- * Roda `fn` com exclusividade entre as abas (Web Locks). Sem a API, roda
- * direto — no Electron há uma janela só.
+ * O servidor renovou com `usedRefreshToken`. Só salva os tokens novos se o
+ * salvo ainda é o usado: se a sessão saiu (logout nesta ou noutra aba) ou foi
+ * trocada no meio, os novos são descartados — um logout não pode "voltar".
+ */
+export function planRefreshSuccess(
+  usedRefreshToken: string,
+  stored: StoredTokens,
+  fresh: Tokens
+): SuccessPlan {
+  if (stored.refreshToken === usedRefreshToken) return { kind: 'save', tokens: fresh }
+  if (!stored.refreshToken || !stored.accessToken) return { kind: 'logged-out' }
+  return {
+    kind: 'adopt',
+    tokens: { accessToken: stored.accessToken, refreshToken: stored.refreshToken }
+  }
+}
+
+/**
+ * Resposta que encerra a sessão: só 401/403 (o servidor recusou o token).
+ * Falha de rede, tempo esgotado (status 0) ou erro do servidor mantêm o login
+ * — com a sincronização entre abas, limpar por isso deslogaria todas.
+ */
+export function isDefinitiveRejection(status: number): boolean {
+  return status === 401 || status === 403
+}
+
+/**
+ * Roda `fn` com exclusividade entre as abas (Web Locks). Sem a API (navegador
+ * antigo), roda direto. No Electron a API existe; com uma janela só, o lock
+ * apenas nunca é disputado.
  */
 export function runExclusive<T>(
   locks: LockManager | undefined,

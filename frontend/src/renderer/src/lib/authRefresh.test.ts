@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  isDefinitiveRejection,
   parseStoredTokens,
   planRefresh,
   planRefreshFailure,
+  planRefreshSuccess,
   runExclusive,
   type StoredTokens
 } from './authRefresh'
@@ -65,6 +67,42 @@ describe('planRefreshFailure', () => {
   })
 })
 
+describe('planRefreshSuccess', () => {
+  const fresh = { accessToken: 'a2', refreshToken: 'r2' }
+
+  it('o refresh token usado ainda é o salvo: salva os tokens novos', () => {
+    expect(planRefreshSuccess('r1', stored('a1', 'r1'), fresh)).toEqual({
+      kind: 'save',
+      tokens: fresh
+    })
+  })
+
+  it('saiu da conta (nesta ou noutra aba) durante a renovação: descarta, não volta a logar', () => {
+    expect(planRefreshSuccess('r1', stored(null, null), fresh)).toEqual({ kind: 'logged-out' })
+    expect(planRefreshSuccess('r1', stored('a1', null), fresh)).toEqual({ kind: 'logged-out' })
+  })
+
+  it('entrou outra sessão no meio (outro login): fica com a salva, descarta a nova', () => {
+    expect(planRefreshSuccess('r1', stored('a9', 'r9'), fresh)).toEqual({
+      kind: 'adopt',
+      tokens: { accessToken: 'a9', refreshToken: 'r9' }
+    })
+  })
+})
+
+describe('isDefinitiveRejection', () => {
+  it('só 401/403 do servidor encerram a sessão', () => {
+    expect(isDefinitiveRejection(401)).toBe(true)
+    expect(isDefinitiveRejection(403)).toBe(true)
+  })
+
+  it('falha de rede, tempo esgotado (0) ou erro do servidor (5xx, 429) mantêm o login', () => {
+    for (const status of [0, 400, 404, 429, 500, 502, 503, 504]) {
+      expect(isDefinitiveRejection(status)).toBe(false)
+    }
+  })
+})
+
 describe('runExclusive', () => {
   it('com Web Locks, roda dentro do lock com o nome pedido', async () => {
     const request = vi.fn((_name: string, cb: () => Promise<number>) => cb())
@@ -73,7 +111,7 @@ describe('runExclusive', () => {
     expect(request).toHaveBeenCalledWith('trava', expect.any(Function))
   })
 
-  it('sem Web Locks (Electron antigo, navegador velho): roda direto', async () => {
+  it('sem Web Locks (navegador antigo): roda direto', async () => {
     expect(await runExclusive(undefined, 'trava', async () => 'ok')).toBe('ok')
   })
 

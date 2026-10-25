@@ -2,9 +2,11 @@ import { useAuthStore } from '../store/authStore'
 import { API_BASE_URL } from '../lib/config'
 import {
   AUTH_STORAGE_KEY,
+  isDefinitiveRejection,
   parseStoredTokens,
   planRefresh,
   planRefreshFailure,
+  planRefreshSuccess,
   REFRESH_LOCK,
   runExclusive,
   type StoredTokens,
@@ -72,67 +74,99 @@ function storedTokens(): StoredTokens {
   }
 }
 
-function adopt(tokens: Tokens): true {
+function adopt(tokens: Tokens): 'ok' {
   useAuthStore.getState().setTokens(tokens.accessToken, tokens.refreshToken)
-  return true
+  return 'ok'
 }
 
-/** Recusado (ou falhou): limpa só se ninguém renovou nesse meio-tempo. */
-function onRefreshFailed(failedRefreshToken: string): boolean {
+/** O servidor recusou (401/403): limpa só se ninguém renovou nesse meio-tempo. */
+function onRefreshRejected(failedRefreshToken: string): RefreshOutcome {
   const plan = planRefreshFailure(failedRefreshToken, storedTokens())
   if (plan.kind === 'adopt') return adopt(plan.tokens)
   useAuthStore.getState().clear()
-  return false
+  return 'rejected'
 }
 
-async function refreshLocked(failedAccessToken: string | null): Promise<boolean> {
+/** Resultado da renovação. 'unavailable' = rede/servidor fora: o login fica. */
+export type RefreshOutcome = 'ok' | 'rejected' | 'unavailable'
+
+const REFRESH_TIMEOUT_MS = 15_000
+
+function locks(): LockManager | undefined {
+  return typeof navigator !== 'undefined' ? navigator.locks : undefined
+}
+
+async function refreshLocked(failedAccessToken: string | null): Promise<RefreshOutcome> {
   const plan = planRefresh(failedAccessToken, storedTokens())
   if (plan.kind === 'adopt') return adopt(plan.tokens)
   if (plan.kind === 'logged-out') {
     // Outra aba saiu da conta: esta acompanha (sem nada para renovar).
     if (useAuthStore.getState().refreshToken) useAuthStore.getState().clear()
-    return false
+    return 'rejected'
   }
 
+  let response: Response
+  let data: { access_token: string; refresh_token: string }
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    response = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: plan.refreshToken })
+      body: JSON.stringify({ refresh_token: plan.refreshToken }),
+      // Servidor travado não pode segurar o lock (e todas as abas) para sempre.
+      signal: AbortSignal.timeout?.(REFRESH_TIMEOUT_MS)
     })
-
-    if (!response.ok) return onRefreshFailed(plan.refreshToken)
-
-    const data = (await response.json()) as {
-      access_token: string
-      refresh_token: string
+    if (!response.ok) {
+      return isDefinitiveRejection(response.status)
+        ? onRefreshRejected(plan.refreshToken)
+        : 'unavailable'
     }
-    useAuthStore.getState().setTokens(data.access_token, data.refresh_token)
-    return true
+    data = (await response.json()) as typeof data
   } catch {
-    return onRefreshFailed(plan.refreshToken)
+    // Rede caiu ou tempo esgotado: não é recusa, o login continua salvo.
+    return 'unavailable'
   }
+
+  const saved = planRefreshSuccess(plan.refreshToken, storedTokens(), {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token
+  })
+  if (saved.kind === 'save' || saved.kind === 'adopt') return adopt(saved.tokens)
+  // Saiu da conta enquanto renovava: os tokens novos são descartados.
+  if (useAuthStore.getState().refreshToken) useAuthStore.getState().clear()
+  return 'rejected'
 }
 
-let inflight: Promise<boolean> | null = null
+let inflight: Promise<RefreshOutcome> | null = null
 
 /**
  * Renova o access token. Uma renovação por vez: na mesma aba os 401
  * simultâneos esperam a mesma; entre abas, o Web Lock faz cada uma esperar a
  * outra e, ao entrar, usar os tokens que a anterior salvou.
  */
-async function refreshTokens(
+async function refreshSession(
   failedAccessToken: string | null = useAuthStore.getState().accessToken
-): Promise<boolean> {
-  if (!useAuthStore.getState().refreshToken && !storedTokens().refreshToken) return false
-  inflight ??= runExclusive(
-    typeof navigator !== 'undefined' ? navigator.locks : undefined,
-    REFRESH_LOCK,
-    () => refreshLocked(failedAccessToken)
-  ).finally(() => {
-    inflight = null
-  })
+): Promise<RefreshOutcome> {
+  if (!useAuthStore.getState().refreshToken && !storedTokens().refreshToken) return 'rejected'
+  inflight ??= runExclusive(locks(), REFRESH_LOCK, () => refreshLocked(failedAccessToken)).finally(
+    () => {
+      inflight = null
+    }
+  )
   return inflight
+}
+
+/** Como refreshSession, mas só diz se renovou. */
+async function refreshTokens(failedAccessToken?: string | null): Promise<boolean> {
+  return (await refreshSession(failedAccessToken)) === 'ok'
+}
+
+/**
+ * Sai da conta localmente sob o mesmo lock da renovação: uma renovação em
+ * andamento (nesta ou noutra aba) termina antes e, ao ver a sessão vazia,
+ * descarta os tokens novos.
+ */
+function clearSession(): Promise<void> {
+  return runExclusive(locks(), REFRESH_LOCK, async () => useAuthStore.getState().clear())
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -142,14 +176,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     return await rawRequest<T>(path, options, accessToken ?? undefined)
   } catch (err) {
     if (err instanceof ApiError && err.status === 401 && accessToken) {
-      const refreshed = await refreshTokens(accessToken)
-      if (refreshed) {
+      const outcome = await refreshSession(accessToken)
+      if (outcome === 'ok') {
         const newToken = useAuthStore.getState().accessToken
         return rawRequest<T>(path, options, newToken ?? undefined)
       }
+      // Sem rede para renovar: não é "login inválido" (quem chama não desloga).
+      if (outcome === 'unavailable') throw new ApiError(0, 'Sem conexão com o servidor')
     }
     throw err
   }
 }
 
-export { rawRequest, refreshTokens, request }
+export { clearSession, rawRequest, refreshSession, refreshTokens, request }

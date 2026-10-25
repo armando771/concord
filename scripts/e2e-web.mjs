@@ -224,6 +224,25 @@ try {
       { status: me.status, a: pageB.url(), b: pageB2.url() })
   }
 
+  // Queda de rede na renovação não desloga: mantém os tokens e tenta de novo.
+  await pageB2.goto('about:blank')
+  await pageB.route('**/api/auth/refresh', (route) => route.abort('internetdisconnected'))
+  await pageB.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('concord-auth'))
+    saved.state.accessToken = 'vencido-rede'
+    saved.state.user = null
+    localStorage.setItem('concord-auth', JSON.stringify(saved))
+  })
+  await pageB.goto(APP + 'friends')
+  await pageB.getByText('Sem conexão com o servidor').waitFor({ timeout: 15000 })
+  const kept = await pageB.evaluate(() => JSON.parse(localStorage.getItem('concord-auth')).state)
+  check('rede fora na renovação mantém a sessão salva', kept.refreshToken && new URL(pageB.url()).pathname === '/friends', kept)
+  await pageB.unroute('**/api/auth/refresh')
+  await pageB.getByText('Adicionar amigo').first().waitFor({ timeout: 15000 })
+  check('a rede volta e o app renova sozinho', true)
+  await pageB2.goto(APP + 'friends')
+  await pageB2.getByText('Adicionar amigo').first().waitFor({ timeout: 15000 })
+
   // Logout limpa a sessão, vale para a outra aba e sobrevive ao reload.
   await pageB.getByRole('button', { name: 'Configurações do usuário' }).click()
   await pageB.getByRole('button', { name: 'Sair da conta' }).click()
