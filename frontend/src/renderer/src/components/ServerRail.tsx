@@ -10,6 +10,8 @@ import { showToast } from '../store/toastStore'
 import Modal from './Modal'
 import Button from './Button'
 import Input from './Input'
+import ServerIconPicker from './serverSettings/ServerIconPicker'
+import type { MediaChange } from '../lib/profileValidation'
 import { joinServerByCode } from '../api/servers'
 import { parseInviteInput } from '../lib/inviteLink'
 
@@ -20,6 +22,7 @@ function ServerRail(): React.JSX.Element {
   const servers = useServerStore((s) => s.servers)
   const fetchServers = useServerStore((s) => s.fetchServers)
   const addServer = useServerStore((s) => s.addServer)
+  const setServerIcon = useServerStore((s) => s.setServerIcon)
   const clearCurrentServer = useServerStore((s) => s.clearCurrentServer)
 
   const invites = useInviteStore((s) => s.invites)
@@ -35,7 +38,7 @@ function ServerRail(): React.JSX.Element {
 
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [serverName, setServerName] = useState('')
-  const [iconUrl, setIconUrl] = useState('')
+  const [icon, setIcon] = useState<MediaChange>({ kind: 'keep' })
   const [creating, setCreating] = useState(false)
   const [joinCode, setJoinCode] = useState('')
   const [joining, setJoining] = useState(false)
@@ -81,10 +84,20 @@ function ServerRail(): React.JSX.Element {
 
     setCreating(true)
     try {
-      const newServer = await addServer(serverName.trim(), iconUrl.trim() || undefined)
+      const newServer = await addServer(serverName.trim())
+      if (icon.kind === 'set') {
+        try {
+          await setServerIcon(newServer.id, { file: icon.file, staticFrame: icon.staticFrame })
+        } catch (err) {
+          // O servidor já existe: o ícone pode ser tentado de novo nas configurações.
+          showToast.error(
+            err instanceof Error ? err.message : 'Servidor criado, mas o ícone não foi enviado.'
+          )
+        }
+      }
       showToast.success(`Servidor "${newServer.name}" criado com sucesso!`)
       setServerName('')
-      setIconUrl('')
+      setIcon({ kind: 'keep' })
       setCreateModalOpen(false)
       navigate(`/servers/${newServer.id}`)
     } catch (err) {
@@ -257,12 +270,7 @@ function ServerRail(): React.JSX.Element {
             autoFocus
           />
 
-          <Input
-            label="URL DO ÍCONE (OPCIONAL)"
-            placeholder="https://exemplo.com/icone.png"
-            value={iconUrl}
-            onChange={(e) => setIconUrl(e.target.value)}
-          />
+          <ServerIconPicker name={serverName} value={icon} onChange={setIcon} />
 
           <div className="mt-2 flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setCreateModalOpen(false)}>
