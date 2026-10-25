@@ -1,17 +1,33 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useAuthStore } from '../../store/authStore'
 import { useTypingStore } from '../../store/typingStore'
+import { useServerNicknames } from '../../store/useServerNames'
 import { typersIn, typingSegments } from '../../lib/typing'
+import { serverDisplayName } from '../../lib/serverNames'
 
 /**
  * Linha "Fulano está digitando…" embaixo do campo. A altura fica reservada
- * mesmo vazia, para o chat não pular quando ela aparece.
+ * mesmo vazia, para o chat não pular quando ela aparece. Num canal de
+ * servidor (serverId), quem tem apelido aparece pelo apelido.
  */
-function TypingIndicator({ room }: { room: string }): React.JSX.Element {
+function TypingIndicator({
+  room,
+  serverId
+}: {
+  room: string
+  serverId?: string
+}): React.JSX.Element {
   const meId = useAuthStore((s) => s.user?.id)
+  const nicknames = useServerNicknames(serverId)
   // Só os nomes desta sala: aviso em outra sala (ou renovação sem mudança)
   // não redesenha a linha.
-  const names = useTypingStore(useShallow((s) => typersIn(s.byRoom, room, meId).map((t) => t.name)))
+  const names = useTypingStore(
+    useShallow((s) =>
+      typersIn(s.byRoom, room, meId).map((t) =>
+        serverDisplayName({ nickname: nicknames?.[t.userId] }, { display_name: t.name })
+      )
+    )
+  )
   const segments = typingSegments(names)
 
   return (

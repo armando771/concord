@@ -41,7 +41,8 @@ beforeEach(() => {
       { server_id: 's1', user_id: 'ana', role: 'member', role_ids: ['a', 'b'] },
       { server_id: 's1', user_id: 'bia', role: 'member', role_ids: ['b'] }
     ],
-    roles: [role('b', 2), role('a', 1), role('everyone', 0, { is_default: true })]
+    roles: [role('b', 2), role('a', 1), role('everyone', 0, { is_default: true })],
+    nicknames: { s1: { bia: 'Bibi' } }
   })
 })
 
@@ -129,5 +130,38 @@ describe('removedMessage', () => {
   it('quem saiu sozinho não precisa de aviso', () => {
     expect(removedMessage('leave', 'Salinha')).toBeNull()
     expect(removedMessage('', 'Salinha')).toBeNull()
+  })
+})
+
+describe('server:member:nickname', () => {
+  const nickOf = (userId: string): string | null | undefined =>
+    useServerStore.getState().currentMembers.find((m) => m.user_id === userId)?.nickname
+
+  it('troca o apelido no servidor aberto (lista e mapa)', () => {
+    expect(
+      send('server:member:nickname', { server_id: 's1', user_id: 'ana', nickname: 'Aninha' })
+    ).toBe(true)
+    expect(nickOf('ana')).toBe('Aninha')
+    expect(useServerStore.getState().nicknames.s1).toEqual({ ana: 'Aninha', bia: 'Bibi' })
+  })
+
+  it('nickname nulo tira o apelido', () => {
+    send('server:member:nickname', { server_id: 's1', user_id: 'bia', nickname: null })
+    expect(nickOf('bia')).toBeNull()
+    expect(useServerStore.getState().nicknames.s1).toEqual({})
+  })
+
+  it('outro servidor: só o mapa dele muda (overlay da call de lá)', () => {
+    send('server:member:nickname', { server_id: 'outro', user_id: 'ana', nickname: 'Ana de lá' })
+    expect(nickOf('ana')).toBeUndefined()
+    expect(useServerStore.getState().nicknames).toEqual({
+      s1: { bia: 'Bibi' },
+      outro: { ana: 'Ana de lá' }
+    })
+  })
+
+  it('payload incompleto não quebra', () => {
+    expect(send('server:member:nickname', { server_id: 's1' })).toBe(true)
+    expect(useServerStore.getState().nicknames.s1).toEqual({ bia: 'Bibi' })
   })
 })

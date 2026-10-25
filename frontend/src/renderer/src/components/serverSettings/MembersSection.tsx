@@ -6,6 +6,8 @@ import { showToast } from '../../store/toastStore'
 import { actionErrorMessage } from '../../lib/permissionErrors'
 import { Perm, roleColorCss, rolesOfMember } from '../../lib/permissions'
 import { assignableRoles } from '../../lib/roleList'
+import { serverDisplayName } from '../../lib/serverNames'
+import { useAuthStore } from '../../store/authStore'
 import Avatar from '../Avatar'
 import Button from '../Button'
 import Input from '../Input'
@@ -19,6 +21,8 @@ function MembersSection(): React.JSX.Element {
   const removeMemberRole = useServerStore((s) => s.removeMemberRole)
   const askKick = useModerationStore((s) => s.askKick)
   const askBan = useModerationStore((s) => s.askBan)
+  const askNickname = useModerationStore((s) => s.askNickname)
+  const meId = useAuthStore((s) => s.user?.id)
   const access = useServerAccess()
   const [query, setQuery] = useState('')
   const [pickerFor, setPickerFor] = useState<string | null>(null)
@@ -30,13 +34,12 @@ function MembersSection(): React.JSX.Element {
     actorHighest: access.highest,
     canManageRoles: access.can(Perm.MANAGE_ROLES)
   })
-  const nameOf = (m: (typeof members)[number]): string => m.display_name || m.username || 'Usuário'
+  // Nome no servidor (apelido, senão o de exibição); a busca acha pelos três.
+  const nameOf = (m: (typeof members)[number]): string => serverDisplayName(m, m)
   const term = query.trim().toLowerCase()
   const shown = members.filter(
     (m) =>
-      !term ||
-      nameOf(m).toLowerCase().includes(term) ||
-      (m.username ?? '').toLowerCase().includes(term)
+      !term || [m.nickname, m.display_name, m.username].some((v) => v?.toLowerCase().includes(term))
   )
 
   const toggleRole = async (userId: string, roleId: string, has: boolean): Promise<void> => {
@@ -87,6 +90,24 @@ function MembersSection(): React.JSX.Element {
                   </span>
                 </span>
                 <span className="flex shrink-0 gap-2">
+                  {access.canChangeNickname(m.user_id) && (
+                    <Button
+                      variant="ghost"
+                      className="px-3 py-1 text-xs"
+                      onClick={() =>
+                        askNickname({
+                          serverId: server.id,
+                          userId: m.user_id,
+                          name: nameOf(m),
+                          nickname: m.nickname ?? null,
+                          displayName: m.display_name || m.username || nameOf(m),
+                          self: m.user_id === meId
+                        })
+                      }
+                    >
+                      Apelido
+                    </Button>
+                  )}
                   {canAct && access.can(Perm.KICK_MEMBERS) && (
                     <Button
                       variant="ghost"

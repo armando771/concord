@@ -2,6 +2,7 @@ import type { Message } from '../api/messages'
 import { everyonePingsMe, mentionsUser } from './mentions'
 import { messagePreview } from './polls'
 import type { ChosenStatus } from './presenceStatus'
+import { serverDisplayName } from './serverNames'
 import type { SoundName } from './sounds'
 
 /** De onde veio o aviso: decide o som e o que as preferências controlam. */
@@ -75,11 +76,13 @@ export function friendRequestNotification(requester: {
  * Notificação para uma mensagem de canal que menciona você (@nick), responde
  * sua mensagem ou pinga o canal (@all/@here, pelo mention_everyone que o
  * backend liberou). `status` é o escolhido por você: @here não pinga ausente.
+ * `nicknames`: apelidos do servidor (o autor aparece pelo apelido).
  */
 export function mentionNotification(
   message: Message,
   me: { id: string; username: string; status?: ChosenStatus },
-  serverId: string | null
+  serverId: string | null,
+  nicknames?: Record<string, string>
 ): AppNotification | null {
   if (!message.channel_id || !serverId || message.author_id === me.id) return null
   const isReplyToMe = message.reply_to?.author_id === me.id
@@ -88,7 +91,11 @@ export function mentionNotification(
     ? message.mention_everyone
     : null
   if (!isMention && !isReplyToMe && !everyone) return null
-  const author = message.author?.display_name || message.author?.username || 'Alguém'
+  const author = serverDisplayName(
+    { nickname: nicknames?.[message.author_id] },
+    message.author,
+    'Alguém'
+  )
   return {
     kind: 'mention',
     // Aviso do próprio servidor (ex.: aniversário) não é "Fulano mencionou você".

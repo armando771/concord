@@ -23,6 +23,8 @@ export interface ServerMember {
   username?: string
   display_name?: string
   avatar_url?: string | null
+  /** Apelido neste servidor (null = sem; vale o display_name). */
+  nickname?: string | null
 }
 
 export interface GetServerResponse {
@@ -85,6 +87,27 @@ export async function joinServerByCode(code: string): Promise<Server> {
 /** Quem tem KICK_MEMBERS expulsa o membro (ele pode voltar por convite). */
 export function kickMember(serverId: string, userId: string): Promise<void> {
   return request<void>(`/servers/${serverId}/members/${userId}`, { method: 'DELETE' })
+}
+
+export interface NicknameResult {
+  server_id: string
+  user_id: string
+  nickname: string | null
+}
+
+/**
+ * Muda o apelido de alguém no servidor ("" tira). O próprio pede "Alterar
+ * apelido"; o dos outros, "Gerenciar apelidos" e cargo acima do dela.
+ */
+export function setMemberNickname(
+  serverId: string,
+  userId: string,
+  nickname: string
+): Promise<NicknameResult> {
+  return request<NicknameResult>(`/servers/${serverId}/members/${userId}/nickname`, {
+    method: 'PUT',
+    body: JSON.stringify({ nickname })
+  })
 }
 
 /** Sai do servidor (o dono não sai: apaga o servidor). */

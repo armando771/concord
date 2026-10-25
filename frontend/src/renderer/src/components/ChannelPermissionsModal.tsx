@@ -5,6 +5,7 @@ import { useServerAccess } from '../store/useServerAccess'
 import { showToast } from '../store/toastStore'
 import { deleteChannelOverwrite, setChannelOverwrite, type Channel } from '../api/channels'
 import { actionErrorMessage } from '../lib/permissionErrors'
+import { serverDisplayName } from '../lib/serverNames'
 import {
   findOverwrite,
   isEmptyOverwrite,
@@ -65,7 +66,7 @@ function ChannelPermissionsModal({
   const everyone = everyoneRole(roles)
   const memberName = (id: string): string | undefined => {
     const m = members.find((x) => x.user_id === id)
-    return m ? m.display_name || m.username || 'Usuário' : undefined
+    return m ? serverDisplayName(m, m) : undefined
   }
   const rows = useMemo(
     () => overwriteRows(overwrites, roles, (id) => memberName(id)),
@@ -167,11 +168,13 @@ function ChannelPermissionsModal({
     ...(term
       ? members
           .filter((m) => !findOverwrite(overwrites, { type: 'member', id: m.user_id }))
-          .filter((m) => (m.display_name || m.username || '').toLowerCase().includes(term))
+          .filter((m) =>
+            [m.nickname, m.display_name, m.username].some((v) => v?.toLowerCase().includes(term))
+          )
           .slice(0, 6)
           .map((m) => ({
             ref: { type: 'member' as const, id: m.user_id },
-            name: m.display_name || m.username || 'Usuário',
+            name: serverDisplayName(m, m),
             color: null as number | null
           }))
       : [])

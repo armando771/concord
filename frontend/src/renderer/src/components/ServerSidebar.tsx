@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
+import { useServerNicknames } from '../store/useServerNames'
+import { serverDisplayName } from '../lib/serverNames'
 import { useServerStore } from '../store/serverStore'
 import { useUIStore } from '../store/uiStore'
 import { useServerAccess } from '../store/useServerAccess'
 import { useServerSettingsStore } from '../store/serverSettingsStore'
+import { useModerationStore } from '../store/moderationStore'
 import { Perm } from '../lib/permissions'
 import { canOpenServerSettings } from '../lib/serverSettingsNav'
 import { actionErrorMessage } from '../lib/permissionErrors'
@@ -69,6 +72,7 @@ export function ServerSidebar(): React.JSX.Element {
 
   const user = useAuthStore((s) => s.user)
   const currentServer = useServerStore((s) => s.currentServer)
+  const nicknames = useServerNicknames(currentServer?.id)
   const roles = useServerStore((s) => s.roles)
   const channels = useServerStore((s) => s.channels)
   const createChannel = useServerStore((s) => s.createChannel)
@@ -529,6 +533,31 @@ export function ServerSidebar(): React.JSX.Element {
                   <UserPlusIcon className="h-4 w-4" />
                 </button>
               )}
+              {/* O próprio apelido neste servidor ("Alterar apelido", todo mundo por padrão). */}
+              {user && access.canChangeNickname(user.id) && (
+                <button
+                  onClick={() => {
+                    setDropdownOpen(false)
+                    if (!currentServer) return
+                    const mine = useServerStore
+                      .getState()
+                      .currentMembers.find((m) => m.user_id === user.id)
+                    const displayName = user.display_name || user.username
+                    useModerationStore.getState().askNickname({
+                      serverId: currentServer.id,
+                      userId: user.id,
+                      name: serverDisplayName(mine, user),
+                      nickname: mine?.nickname ?? null,
+                      displayName,
+                      self: true
+                    })
+                  }}
+                  className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+                >
+                  <span>Alterar apelido</span>
+                  <PencilIcon className="h-3.5 w-3.5" />
+                </button>
+              )}
               {canOpenServerSettings(access.perms) && (
                 <button
                   onClick={() => {
@@ -698,7 +727,7 @@ export function ServerSidebar(): React.JSX.Element {
                 // O backend manda em ordem de entrada; aqui vale nível (ver voiceOrder).
                 const participants = sortVoiceMembers(callState?.participants ?? [], (p) => ({
                   id: p.user_id,
-                  name: p.display_name ?? p.username ?? 'Usuário',
+                  name: serverDisplayName({ nickname: nicknames?.[p.user_id] }, p),
                   level: levels[p.user_id],
                   joinedAt: p.joined_at
                 }))
@@ -813,7 +842,7 @@ export function ServerSidebar(): React.JSX.Element {
                     {participants.length > 0 && (
                       <div className="mb-1 ml-4 flex flex-col gap-0.5">
                         {participants.map((p) => {
-                          const name = p.display_name ?? p.username ?? 'Usuário'
+                          const name = serverDisplayName({ nickname: nicknames?.[p.user_id] }, p)
                           const isMe = p.user_id === user?.id
                           // Só sabemos quem fala no canal em que estamos conectados.
                           const talking = connectedHere && speakingIds.includes(p.user_id)

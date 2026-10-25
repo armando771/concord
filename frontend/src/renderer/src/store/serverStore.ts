@@ -13,7 +13,8 @@ import {
   deleteServer as apiDeleteServer,
   kickMember as apiKickMember,
   leaveServer as apiLeaveServer,
-  banMember as apiBanMember
+  banMember as apiBanMember,
+  setMemberNickname as apiSetMemberNickname
 } from '../api/servers'
 import {
   createRole as apiCreateRole,
@@ -34,6 +35,7 @@ import {
 } from '../api/channels'
 import { applyChannelOrder } from '../lib/channelOrder'
 import { removeRole, sortRoles, stripRoleFromMembers, upsertRole } from '../lib/roleList'
+import { nicknameMap, withNickname } from '../lib/serverNames'
 
 interface ServerState {
   servers: Server[]
@@ -43,6 +45,11 @@ interface ServerState {
   roles: Role[]
   serverInvites: ServerInvite[]
   channels: Channel[]
+  /**
+   * serverId -> userId -> apelido. Fica guardado ao trocar de servidor: a
+   * call (palco e overlay) pode ser de outro servidor que não o aberto.
+   */
+  nicknames: Record<string, Record<string, string>>
   loading: boolean
   fetchServers: () => Promise<void>
   selectServer: (id: string) => Promise<void>
@@ -90,6 +97,10 @@ interface ServerState {
   updateMember: (serverId: string, member: ServerMember) => void
   /** Cargos de um membro mudaram (evento server:member:roles). */
   setMemberRoleIds: (serverId: string, userId: string, roleIds: string[]) => void
+  /** Apelido de um membro mudou (evento server:member:nickname ou resposta da API). */
+  setMemberNickname: (serverId: string, userId: string, nickname: string | null) => void
+  /** Muda o apelido no servidor ("" tira) e já mostra o novo. */
+  changeNickname: (serverId: string, userId: string, nickname: string) => Promise<void>
   /** Cargos do servidor (resposta da API ou evento role:reorder). */
   setRoles: (serverId: string, roles: Role[]) => void
   upsertLocalRole: (serverId: string, role: Role) => void
@@ -154,6 +165,7 @@ export const useServerStore = create<ServerState>()((set, get) => ({
   roles: [],
   serverInvites: [],
   channels: [],
+  nicknames: {},
   loading: false,
   fetchServers: async () => {
     const token = useAuthStore.getState().accessToken
@@ -174,7 +186,8 @@ export const useServerStore = create<ServerState>()((set, get) => ({
       set({
         currentServer: res.server,
         currentMembers: res.members,
-        roles: sortRoles(res.roles ?? [])
+        roles: sortRoles(res.roles ?? []),
+        nicknames: { ...get().nicknames, [id]: nicknameMap(res.members) }
       })
     } catch (err) {
       if (isSameSession(token)) set({ currentServer: null, currentMembers: [], roles: [] })
@@ -192,7 +205,8 @@ export const useServerStore = create<ServerState>()((set, get) => ({
         currentServer: res.server,
         currentMembers: res.members,
         roles: sortRoles(res.roles ?? []),
-        channels: Array.isArray(channels) ? channels : []
+        channels: Array.isArray(channels) ? channels : [],
+        nicknames: { ...get().nicknames, [serverId]: nicknameMap(res.members) }
       })
     } catch {
       // Sem acesso (foi expulso/banido) ou rede fora: o evento server:removed
@@ -344,6 +358,21 @@ export const useServerStore = create<ServerState>()((set, get) => ({
       )
     })
   },
+  setMemberNickname: (serverId, userId, nickname) => {
+    const current = get().nicknames[serverId] ?? {}
+    const next = withNickname(current, userId, nickname)
+    if (next !== current) set({ nicknames: { ...get().nicknames, [serverId]: next } })
+    if (get().currentServer?.id !== serverId) return
+    set({
+      currentMembers: get().currentMembers.map((m) =>
+        m.user_id === userId ? { ...m, nickname } : m
+      )
+    })
+  },
+  changeNickname: async (serverId, userId, nickname) => {
+    const res = await apiSetMemberNickname(serverId, userId, nickname)
+    get().setMemberNickname(serverId, userId, res.nickname)
+  },
   setRoles: (serverId, roles) => {
     if (get().currentServer?.id === serverId) set({ roles: sortRoles(roles) })
   },
@@ -414,6 +443,7 @@ export const useServerStore = create<ServerState>()((set, get) => ({
       roles: [],
       serverInvites: [],
       channels: [],
+      nicknames: {},
       loading: false
     })
 }))

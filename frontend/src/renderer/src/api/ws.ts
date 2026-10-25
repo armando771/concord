@@ -17,6 +17,7 @@ export type WsEventType =
   | 'server:member:update'
   | 'server:member:leave'
   | 'server:member:roles'
+  | 'server:member:nickname'
   | 'server:removed'
   | 'server:permissions:invalidate'
   | 'role:create'

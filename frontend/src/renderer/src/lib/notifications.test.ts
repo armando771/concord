@@ -74,6 +74,15 @@ describe('mentionNotification', () => {
     })
   })
 
+  it('quem tem apelido no servidor aparece pelo apelido', () => {
+    expect(mentionNotification(inChannel(), me, 'srv1', { ana: 'Aninha' })?.title).toBe(
+      'Aninha mencionou você'
+    )
+    expect(mentionNotification(inChannel(), me, 'srv1', { outra: 'X' })?.title).toBe(
+      'Ana mencionou você'
+    )
+  })
+
   it('resposta a uma mensagem minha em canal vira notificação que abre o canal', () => {
     expect(
       mentionNotification(

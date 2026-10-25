@@ -13,6 +13,8 @@ export const CARD_BG = '#111214'
 export interface CardProfile {
   id?: string
   display_name: string
+  /** Apelido no servidor aberto: aparece em destaque, com o nome de verdade embaixo. */
+  nickname?: string | null
   username?: string
   avatar_url?: string | null
   banner_url?: string | null
@@ -83,7 +85,7 @@ function ProfileCardBody({
             <div className="relative shrink-0 rounded-full p-1.5" style={{ background: CARD_BG }}>
               <Avatar
                 userId={preview ? undefined : profile.id}
-                name={profile.display_name}
+                name={profile.nickname || profile.display_name}
                 avatarUrl={profile.avatar_url}
                 size={80}
                 animate="always"
@@ -137,11 +139,19 @@ function ProfileCardBody({
 
         <div className="mt-2">
           <p className="truncate text-xl font-bold text-white">
-            {profile.display_name || ' '}
+            {profile.nickname || profile.display_name || ' '}
             {isMe && !preview && (
               <span className="ml-1.5 text-xs font-medium text-gray-400">(você)</span>
             )}
           </p>
+          {profile.nickname && (
+            <p
+              className="truncate text-sm font-semibold text-gray-200"
+              title="Nome de exibição (fora deste servidor)"
+            >
+              {profile.display_name}
+            </p>
+          )}
           {(profile.username || profile.pronouns) && (
             <p className="truncate text-sm text-gray-300">
               {profile.username && <span>{profile.username}</span>}

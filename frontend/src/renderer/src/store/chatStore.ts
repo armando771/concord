@@ -583,7 +583,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             mentionNotification(
               msg,
               { id: me.id, username: me.username, status: me.status },
-              serverId
+              serverId,
+              serverId ? useServerStore.getState().nicknames?.[serverId] : undefined
             )
           if (notification) {
             // "Não perturbe" silencia o aviso, a barra de tarefas e o som.

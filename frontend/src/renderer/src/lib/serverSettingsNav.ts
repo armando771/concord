@@ -18,7 +18,7 @@ export const SERVER_SETTINGS_SECTIONS: ServerSettingsSection[] = [
   {
     id: 'members',
     label: 'Membros',
-    anyOf: Perm.MANAGE_ROLES | Perm.KICK_MEMBERS | Perm.BAN_MEMBERS
+    anyOf: Perm.MANAGE_ROLES | Perm.KICK_MEMBERS | Perm.BAN_MEMBERS | Perm.MANAGE_NICKNAMES
   },
   { id: 'bans', label: 'Banimentos', anyOf: Perm.BAN_MEMBERS }
 ]

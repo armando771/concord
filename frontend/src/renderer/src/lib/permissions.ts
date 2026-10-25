@@ -30,7 +30,9 @@ export const Perm = {
   DEAFEN_MEMBERS: 1 << 20,
   MOVE_MEMBERS: 1 << 21,
   USE_SOUNDBOARD: 1 << 22,
-  MANAGE_EXPRESSIONS: 1 << 23
+  MANAGE_EXPRESSIONS: 1 << 23,
+  CHANGE_NICKNAME: 1 << 26,
+  MANAGE_NICKNAMES: 1 << 27
 } as const
 
 export type PermName = keyof typeof Perm
@@ -38,7 +40,10 @@ export type PermName = keyof typeof Perm
 /** Soma de todas as permissões conhecidas (dono e ADMINISTRATOR). */
 export const ALL_PERMISSIONS: number = Object.values(Perm).reduce((sum, bit) => sum | bit, 0)
 
-/** O que todo membro faz num servidor novo (igual ao backend). */
+/**
+ * O que todo membro faz num servidor novo (igual ao backend). "Alterar apelido"
+ * vem ligado, como no Discord; nos servidores antigos a migration 000031 ligou.
+ */
 export const DEFAULT_EVERYONE: number =
   Perm.VIEW_CHANNEL |
   Perm.SEND_MESSAGES |
@@ -49,7 +54,8 @@ export const DEFAULT_EVERYONE: number =
   Perm.CONNECT |
   Perm.SPEAK |
   Perm.STREAM |
-  Perm.USE_SOUNDBOARD
+  Perm.USE_SOUNDBOARD |
+  Perm.CHANGE_NICKNAME
 
 export interface Role {
   id: string
@@ -280,6 +286,16 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         description: 'Banir membros: eles não voltam até serem desbanidos.'
       },
       {
+        name: 'CHANGE_NICKNAME',
+        label: 'Alterar apelido',
+        description: 'Mudar o próprio apelido neste servidor.'
+      },
+      {
+        name: 'MANAGE_NICKNAMES',
+        label: 'Gerenciar apelidos',
+        description: 'Mudar o apelido de quem está abaixo do seu cargo.'
+      },
+      {
         name: 'ADMINISTRATOR',
         label: 'Administrador',
         description:
@@ -418,6 +434,8 @@ export function permissionError(code: string | undefined, fallback = 'Algo deu e
       return 'Esse canal não existe ou você não tem acesso a ele.'
     case 'invalid_target':
       return 'Cargo ou membro não encontrado neste servidor.'
+    case 'invalid_nickname':
+      return 'O apelido pode ter até 32 caracteres.'
     default:
       return fallback
   }

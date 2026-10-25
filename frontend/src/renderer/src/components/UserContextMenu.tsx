@@ -24,6 +24,7 @@ import { showToast } from '../store/toastStore'
 import { streamAudioKey, useUserAudioStore } from '../store/userAudioStore'
 import { useUserMenuStore } from '../store/userMenuStore'
 import { friendRequestError } from '../lib/relationship'
+import { serverIdFromPath } from '../lib/serverNames'
 
 const MENU_WIDTH = 232
 
@@ -65,6 +66,7 @@ function UserContextMenu(): React.JSX.Element | null {
   const removeMemberRole = useServerStore((s) => s.removeMemberRole)
   const askKick = useModerationStore((s) => s.askKick)
   const askBan = useModerationStore((s) => s.askBan)
+  const askNickname = useModerationStore((s) => s.askNickname)
   const access = useServerAccess()
   const channels = useServerStore((s) => s.channels)
   const serverCalls = useCallStore((s) => s.serverCalls)
@@ -142,6 +144,29 @@ function UserContextMenu(): React.JSX.Element | null {
 
   // Moderação: só dentro de um servidor, sobre quem é membro e está abaixo do seu cargo.
   const inServer = Boolean(server && member)
+  // Apelido: só com o servidor aberto na tela (em DM o apelido não existe).
+  const canNickname =
+    inServer &&
+    serverIdFromPath(router.state.location.pathname) === server?.id &&
+    access.canChangeNickname(target.userId)
+  const isSelf = target.userId === meId
+  const editNickname = (): void => {
+    if (!server || !member) return
+    close()
+    askNickname({
+      serverId: server.id,
+      userId: target.userId,
+      name: target.name,
+      nickname: member.nickname ?? null,
+      displayName: member.display_name || member.username || target.name,
+      self: isSelf
+    })
+  }
+  const nicknameItem = canNickname && (
+    <button role="menuitem" onClick={editNickname} className={itemClass}>
+      Alterar apelido
+    </button>
+  )
   const canAct = inServer && access.canActOnMember(target.userId)
   const givable = inServer
     ? assignableRoles(roles, {
@@ -294,6 +319,29 @@ function UserContextMenu(): React.JSX.Element | null {
     )
   }
 
+  // Você mesmo (lista de membros): só perfil, apelido e ID.
+  if (isSelf) {
+    return (
+      <div
+        ref={ref}
+        role="menu"
+        aria-label={`Opções de ${target.name}`}
+        style={{ left, top, width: MENU_WIDTH }}
+        className="fixed z-[60] flex flex-col gap-1 rounded-lg border border-white/10 bg-[#111214] p-2 text-sm text-gray-200 shadow-2xl"
+      >
+        <p className="truncate px-2 pb-1 pt-0.5 text-xs font-bold text-gray-400">{target.name}</p>
+        <button role="menuitem" onClick={openProfile} className={itemClass}>
+          Perfil
+        </button>
+        {nicknameItem}
+        <div className="my-1 h-px bg-white/10" />
+        <button role="menuitem" onClick={copyId} className={itemClass}>
+          Copiar ID do usuário
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div
       ref={ref}
@@ -390,6 +438,13 @@ function UserContextMenu(): React.JSX.Element | null {
       <button role="menuitem" onClick={copyId} className={itemClass}>
         Copiar ID do usuário
       </button>
+
+      {nicknameItem && (
+        <>
+          <div className="my-1 h-px bg-white/10" />
+          {nicknameItem}
+        </>
+      )}
 
       {givable.length > 0 && member && server && (
         <>

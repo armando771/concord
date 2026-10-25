@@ -35,13 +35,14 @@ import {
 import { loadAudioPrefs, resolveDeviceId, saveAudioPrefs } from '../lib/audioDevices'
 import { useChatStore } from './chatStore'
 import { useAuthStore } from './authStore'
+import { useServerStore } from './serverStore'
+import { serverDisplayName } from '../lib/serverNames'
 import { showToast } from './toastStore'
 
 import type { CallResume } from '../../../shared/callResume'
 
 import { useSoundboardStore } from './soundboardStore'
 import { stopAllSoundboardAudio } from '../lib/soundboardPlayer'
-
 
 export type CallStatus = 'idle' | 'ringing' | 'outgoing' | 'active'
 export type CallKind = 'dm' | 'channel'
@@ -100,6 +101,19 @@ export interface VoiceState {
 
 interface EndedPayload {
   call_id: string
+}
+
+/** Nome de quem está na call: numa call de canal, com o apelido daquele servidor. */
+function callName(
+  state: { type: CallKind | null; serverId: string | null },
+  user: { id: string; display_name?: string | null; username?: string | null } | undefined,
+  fallback?: string
+): string {
+  const nickname =
+    state.type === 'channel' && state.serverId && user
+      ? useServerStore.getState().nicknames?.[state.serverId]?.[user.id]
+      : undefined
+  return serverDisplayName({ nickname }, user, fallback)
 }
 
 function upsertParticipant(list: CallUserInfo[], user: CallUserInfo): CallUserInfo[] {
@@ -1224,7 +1238,7 @@ export const useCallStore = create<CallState>()((set, get) => {
             void resyncChannelCall()
             return
           }
-          showToast.info(`${p.user.display_name} saiu da chamada.`)
+          showToast.info(`${callName(get(), p.user)} saiu da chamada.`)
           if (get().type === 'channel') {
             playSound('userLeave')
             // A mídia do participante some sozinha quando ele sai da sala do LiveKit.
@@ -1277,7 +1291,7 @@ export const useCallStore = create<CallState>()((set, get) => {
               publishSpeaking()
               sendVoiceState()
               showToast.info(
-                `${p.moved_by.display_name || 'Um moderador'} moveu você para ${p.channel_name || 'outro canal'}.`
+                `${callName(get(), p.moved_by, 'Um moderador')} moveu você para ${p.channel_name || 'outro canal'}.`
               )
             })
           return
