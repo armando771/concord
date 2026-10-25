@@ -209,7 +209,11 @@ func (h *Handler) Token(c *gin.Context) {
 		return
 	}
 
-	token, err := h.tokens.Issue(callID, userID.(string), "")
+	// O nome vai no token para quem está só na mídia (fora da lista do
+	// backend, ex.: queda do WS) aparecer com nome e não como "Usuário".
+	name := h.service.mediaName(c.Request.Context(), userID.(string))
+
+	token, err := h.tokens.Issue(callID, userID.(string), name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to issue media token"})
 		return

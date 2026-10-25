@@ -1,4 +1,7 @@
+import { useMemo } from 'react'
 import { useAuthStore } from '../../store/authStore'
+import { useServerStore } from '../../store/serverStore'
+import { mergeCallPeople } from '../../lib/callParticipants'
 import { streamAudioKey, useUserAudioStore } from '../../store/userAudioStore'
 import { streamMenuHandler, userMenuHandler } from '../../store/userMenuStore'
 import { useCallStore } from '../../store/callStore'
@@ -25,7 +28,9 @@ function CallStage({
   speaking?: Set<string>
 }): React.JSX.Element {
   const me = useAuthStore((s) => s.user)
-  const participants = useCallStore((s) => s.participants)
+  const backendParticipants = useCallStore((s) => s.participants)
+  const mediaPeers = useCallStore((s) => s.mediaPeers)
+  const members = useServerStore((s) => s.currentMembers)
   const muted = useCallStore((s) => s.muted)
   const deafened = useCallStore((s) => s.deafened)
   const voiceStates = useCallStore((s) => s.voiceStates)
@@ -38,6 +43,15 @@ function CallStage({
   const videoStreams = useCallStore((s) => s.videoStreams)
 
   const meId = me?.id ?? 'me'
+  // Lista do backend + quem está na sala de mídia (o backend pode ter perdido alguém).
+  const participants = useMemo(
+    () =>
+      mergeCallPeople(backendParticipants, mediaPeers, meId, (id) => {
+        const m = members.find((x) => x.user_id === id)
+        return m?.display_name || m?.username
+      }),
+    [backendParticipants, mediaPeers, meId, members]
+  )
   const meSpeaking = !muted && (speaking?.has(meId) ?? false)
   const meInfo: CallUserInfo = {
     id: meId,

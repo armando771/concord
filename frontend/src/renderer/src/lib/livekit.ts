@@ -20,6 +20,8 @@ export interface RemoteMedia {
   screenAudioStreams: Record<string, MediaStream>
   /** userId -> câmera */
   videoStreams: Record<string, MediaStream>
+  /** userId -> nome de quem está na sala de mídia (com ou sem tracks) */
+  mediaPeers: Record<string, string>
 }
 
 export interface CallMediaHandlers {
@@ -66,7 +68,9 @@ export class CallMedia {
       .on(RoomEvent.TrackUnsubscribed, refresh)
       .on(RoomEvent.TrackMuted, refresh)
       .on(RoomEvent.TrackUnmuted, refresh)
+      .on(RoomEvent.ParticipantConnected, refresh)
       .on(RoomEvent.ParticipantDisconnected, refresh)
+      .on(RoomEvent.ParticipantNameChanged, refresh)
       .on(RoomEvent.Reconnecting, () => this.handlers.onReconnecting())
       .on(RoomEvent.Reconnected, () => this.handlers.onReconnected())
       .on(RoomEvent.ActiveSpeakersChanged, (speakers) =>
@@ -152,7 +156,9 @@ export class CallMedia {
 
   private emitRemoteMedia(): void {
     const entries: TrackEntry[] = []
+    const mediaPeers: Record<string, string> = {}
     this.room.remoteParticipants.forEach((participant: RemoteParticipant) => {
+      mediaPeers[participant.identity] = participant.name ?? ''
       participant.trackPublications.forEach((publication) => {
         const track = publication.track
         if (!publication.isSubscribed || !track) return
@@ -182,7 +188,8 @@ export class CallMedia {
       streams: toStreams('voice'),
       screenStreams: toStreams('screen'),
       screenAudioStreams: toStreams('screenAudio'),
-      videoStreams: toStreams('camera')
+      videoStreams: toStreams('camera'),
+      mediaPeers
     }
     this.cache.prune(inUse)
     this.handlers.onRemoteMedia(media)

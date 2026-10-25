@@ -1,6 +1,7 @@
 package call
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -41,7 +42,9 @@ func serviceWithCall(callID string, participantIDs ...string) *Service {
 }
 
 func TestTokenForParticipantJoinsCallRoom(t *testing.T) {
-	router := tokenRouter(serviceWithCall("call-1", "user-1"), "user-1")
+	service := serviceWithCall("call-1", "user-1")
+	service.mediaName = func(context.Context, string) string { return "Ana" }
+	router := tokenRouter(service, "user-1")
 
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/calls/call-1/token", nil))
@@ -65,6 +68,10 @@ func TestTokenForParticipantJoinsCallRoom(t *testing.T) {
 	}
 	if grants.Identity != "user-1" || grants.Video.Room != "call-1" {
 		t.Fatalf("identity=%q room=%q, want user-1/call-1", grants.Identity, grants.Video.Room)
+	}
+	// Quem fica só na mídia (fora da lista do backend) aparece pelo nome do token.
+	if grants.Name != "Ana" {
+		t.Fatalf("name=%q, want Ana", grants.Name)
 	}
 }
 

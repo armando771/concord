@@ -27,6 +27,8 @@ interface WsClientConfig {
   getToken: () => string | null
   getUserId: () => string | null
   onEvent: (event: WsEvent) => void
+  /** Conexão (re)aberta, depois de reassinar as salas. */
+  onOpen?: () => void
 }
 
 const BACKOFF_BASE_MS = 1000
@@ -96,6 +98,7 @@ export class WsClient {
       for (const room of this.subscriptions) {
         this.send({ type: 'subscribe', payload: { room } })
       }
+      this.config.onOpen?.()
     }
 
     ws.onmessage = (event: MessageEvent) => {
