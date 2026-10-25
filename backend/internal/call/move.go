@@ -102,7 +102,8 @@ func (s *Service) MoveToChannel(ctx context.Context, actorID, targetID, channelI
 	if err := s.Leave(ctx, from.callID, targetID); err != nil {
 		return nil, err
 	}
-	call, err := s.StartChannel(ctx, targetID, dest.ID)
+	// Mover é ação de moderador: passa mesmo por sala trancada.
+	call, err := s.startChannel(ctx, targetID, dest.ID, true)
 	if err != nil {
 		log.Printf("[call] move %s to %s failed after leaving: %v", targetID, dest.ID, err)
 		return nil, err

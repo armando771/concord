@@ -82,7 +82,8 @@ func (c *Client) readPump(ctx context.Context) {
 			}
 
 			c.hub.Unsubscribe(c, p.Room)
-		case "call:invite", "call:accept", "call:decline", "call:leave", "call:screen", "call:voice", "call:soundboard":
+		case "call:invite", "call:accept", "call:decline", "call:leave", "call:screen", "call:voice", "call:soundboard",
+			"call:lock", "call:knock", "call:knock_cancel", "call:knock_respond":
 			if c.callRouter != nil {
 				c.callRouter.HandleCallMessage(c.userID, ev.Type, ev.Payload)
 			}

@@ -8,6 +8,7 @@ import CallOverlay from './call/CallOverlay'
 import BirthdayModal from './BirthdayModal'
 import ScreenMiniPlayer from './call/ScreenMiniPlayer'
 import ScreenSharePickerModal from './call/ScreenSharePickerModal'
+import JoinRequestsStack from './call/JoinRequestsStack'
 import LevelUpBanner from './level/LevelUpBanner'
 import LevelUpScreen from './level/LevelUpScreen'
 import { useAuthStore } from '../store/authStore'
@@ -36,6 +37,7 @@ function AppShell(): React.JSX.Element {
         <Outlet />
       </main>
       <IncomingCallModal />
+      <JoinRequestsStack />
       <CallOverlay />
       <BirthdayModal />
       <ScreenMiniPlayer />

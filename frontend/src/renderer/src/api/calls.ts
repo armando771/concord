@@ -13,6 +13,8 @@ export interface CallInfo {
   status: CallStatus
   started_at: string
   ended_at?: string | null
+  /** sala de voz trancada: entrar exige aprovação de quem está dentro */
+  locked?: boolean
 }
 
 export interface CallParticipant {
@@ -33,7 +35,12 @@ export interface CallStateResponse {
   participants: CallParticipant[]
   /** user_ids compartilhando tela neste momento (transitório) */
   screen_sharing?: string[]
+  /** pedidos para entrar na sala trancada (só no estado visto por participantes) */
+  join_requests?: { id: string; username: string; display_name: string; avatar_url?: string | null }[]
 }
+
+/** Resposta 423 do POST /calls: a sala do canal está trancada. */
+export const CALL_LOCKED = 'call_locked'
 
 export interface StartCallInput {
   type: CallType

@@ -59,6 +59,11 @@ func (h *Handler) Create(c *gin.Context) {
 			return
 		}
 		call, err := h.service.StartChannel(ctx, userID.(string), input.ChannelID)
+		if errors.Is(err, ErrLocked) && call != nil {
+			// Sala trancada: o cliente usa o call_id para pedir para entrar.
+			c.JSON(http.StatusLocked, gin.H{"error": ErrLocked.Error(), "call_id": call.ID})
+			return
+		}
 		if err != nil {
 			c.JSON(mapStartError(err), gin.H{"error": err.Error()})
 			return
@@ -165,6 +170,7 @@ func (h *Handler) State(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": ErrNotAllowed.Error()})
 		return
 	}
+	state.JoinRequests = h.service.joinRequestsOf(callID)
 
 	c.JSON(http.StatusOK, state)
 }
@@ -264,6 +270,8 @@ func mapStartError(err error) int {
 	switch {
 	case errors.Is(err, ErrNotFound):
 		return http.StatusNotFound
+	case errors.Is(err, ErrLocked):
+		return http.StatusLocked
 	case errors.Is(err, ErrBusy),
 		errors.Is(err, ErrCalleeOffline),
 		errors.Is(err, ErrNotParticipant),

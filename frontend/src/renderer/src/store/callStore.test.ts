@@ -117,7 +117,7 @@ vi.mock('./chatStore', () => ({ useChatStore: { getState: () => chat } }))
 vi.mock('./authStore', () => ({
   useAuthStore: { getState: () => ({ user: { id: 'eu' } }) }
 }))
-vi.mock('./toastStore', () => ({ showToast: { error: vi.fn(), info: vi.fn() } }))
+vi.mock('./toastStore', () => ({ showToast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
 const sounds = vi.hoisted(() => ({ playSound: vi.fn(), setSoundOutput: vi.fn() }))
 vi.mock('../lib/sounds', () => sounds)
 
@@ -913,3 +913,91 @@ describe('callStore — movido de canal por um moderador', () => {
     expect(s.focusedScreenUserId).toBeNull()
   })
 })
+
+describe('callStore — salas trancadas e pedidos de entrada', () => {
+  it('toggleLock envia evento call:lock com inversão do estado atual', async () => {
+    await joinChannel()
+    expect(useCallStore.getState().locked).toBe(false)
+
+    useCallStore.getState().toggleLock()
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:lock', {
+      call_id: 'call-1',
+      locked: true
+    })
+  })
+
+  it('evento call:lock atualiza o estado local e serverCalls', () => {
+    useCallStore.getState().setServerCalls({
+      'canal-1': {
+        call: { id: 'call-1', type: 'channel', channel_id: 'canal-1', initiator_id: 'ana', status: 'active', started_at: '', locked: false },
+        participants: []
+      }
+    })
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:lock',
+      payload: {
+        call_id: 'call-1',
+        channel_id: 'canal-1',
+        locked: true,
+        by: { id: 'ana', username: 'ana', display_name: 'Ana' }
+      }
+    })
+
+    expect(useCallStore.getState().serverCalls['canal-1']?.call?.locked).toBe(true)
+  })
+
+  it('receber call:knock adiciona participante aos joinRequests', async () => {
+    await joinChannel()
+    const joao = { id: 'joao', username: 'joao', display_name: 'João' }
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:knock',
+      payload: {
+        call_id: 'call-1',
+        user: joao
+      }
+    })
+
+    expect(useCallStore.getState().joinRequests).toEqual([joao])
+
+    // call:knock_resolved remove o usuário de joinRequests
+    useCallStore.getState().handleWsEvent({
+      type: 'call:knock_resolved',
+      payload: {
+        call_id: 'call-1',
+        user_id: 'joao',
+        accepted: true,
+        reason: 'accepted'
+      }
+    })
+
+    expect(useCallStore.getState().joinRequests).toEqual([])
+  })
+
+  it('call:knock_accepted conecta automaticamente ao canal', async () => {
+    useCallStore.setState({
+      knock: { channelId: 'canal-trancado', callId: 'call-x', status: 'pending' }
+    })
+    api.startCall.mockResolvedValue({ id: 'call-x', server_id: 'srv-1', locked: true })
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:knock_accepted',
+      payload: {
+        call_id: 'call-x',
+        channel_id: 'canal-trancado',
+        server_id: 'srv-1',
+        reason: 'accepted',
+        by: { id: 'mod', username: 'mod', display_name: 'Mod' }
+      }
+    })
+
+    await flush()
+    await flush()
+
+    expect(useCallStore.getState().knock).toBeNull()
+    expect(useCallStore.getState().callId).toBe('call-x')
+    expect(useCallStore.getState().admittedChannelId).toBe('canal-trancado')
+  })
+})
+

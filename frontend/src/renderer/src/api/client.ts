@@ -15,10 +15,13 @@ import {
 
 export class ApiError extends Error {
   status: number
+  /** Corpo JSON da resposta de erro (ex.: call_id do 423 de sala trancada). */
+  body: Record<string, unknown>
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, body: Record<string, unknown> = {}) {
     super(message)
     this.status = status
+    this.body = body
   }
 }
 
@@ -54,7 +57,7 @@ async function rawRequest<T>(path: string, options: RequestInit = {}, token?: st
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
     const message = (body as { error?: string }).error ?? 'Request failed'
-    throw new ApiError(response.status, message)
+    throw new ApiError(response.status, message, body as Record<string, unknown>)
   }
 
   if (response.status === 204) {

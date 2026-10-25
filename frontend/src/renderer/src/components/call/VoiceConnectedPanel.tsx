@@ -5,6 +5,8 @@ import { useNoiseSuppressionStore } from '../../store/noiseSuppressionStore'
 import {
   HeadsetIcon,
   HeadsetOffIcon,
+  LockIcon,
+  LockOpenIcon,
   MicIcon,
   MicOffIcon,
   NoiseSuppressionIcon,
@@ -27,6 +29,8 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   const peer = useCallStore((s) => s.participants[0] ?? null)
   const muted = useCallStore((s) => s.muted)
   const deafened = useCallStore((s) => s.deafened)
+  const locked = useCallStore((s) => s.locked)
+  const toggleLock = useCallStore((s) => s.toggleLock)
   const toggleMute = useCallStore((s) => s.toggleMute)
   const toggleDeafen = useCallStore((s) => s.toggleDeafen)
   const endCall = useCallStore((s) => s.endCall)
@@ -63,6 +67,20 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {type === 'channel' && status === 'active' && (
+            <button
+              onClick={toggleLock}
+              aria-label={locked ? 'Destrancar sala' : 'Trancar sala'}
+              title={locked ? 'Destrancar sala' : 'Trancar sala (pedir permissão para entrar)'}
+              className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors ${
+                locked
+                  ? 'bg-amber-500 text-black shadow-sm'
+                  : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              {locked ? <LockIcon className="h-4 w-4" /> : <LockOpenIcon className="h-4 w-4" />}
+            </button>
+          )}
           {type === 'channel' && status === 'active' && (
             <button
               onClick={(e) => {

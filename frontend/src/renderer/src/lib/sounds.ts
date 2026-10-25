@@ -52,6 +52,11 @@ export const SOUNDS = {
   unmute: [tone(390, 0, 0.06), tone(520, 0.07, 0.08)],
   deafen: [tone(440, 0, 0.07), tone(294, 0.08, 0.1)],
   undeafen: [tone(294, 0, 0.07), tone(440, 0.08, 0.1)],
+  // Sala trancada/destrancada: "clique" descendo/subindo.
+  lock: [tone(1047, 0, 0.05), tone(784, 0.06, 0.07)],
+  unlock: [tone(784, 0, 0.05), tone(1047, 0.06, 0.07)],
+  // Alguém batendo na porta da sala trancada: "toc-toc".
+  knock: [tone(392, 0, 0.06), tone(392, 0.12, 0.06), tone(523, 0.26, 0.12)],
   // DM recebida: dois toques curtos subindo, mais graves que a menção.
   message: [tone(784, 0, 0.08), tone(1047, 0.09, 0.12)],
   mention: [tone(988, 0, 0.12), tone(1319, 0.13, 0.22)],

@@ -5,6 +5,8 @@ import {
   CameraOffIcon,
   HeadsetIcon,
   HeadsetOffIcon,
+  LockIcon,
+  LockOpenIcon,
   MicIcon,
   MicOffIcon,
   MonitorIcon,
@@ -20,6 +22,8 @@ function VoiceControls(): React.JSX.Element {
   const connected = useCallStore((s) => s.status === 'active')
   const callType = useCallStore((s) => s.type)
   const cameraOn = useCallStore((s) => s.localCameraStream !== null)
+  const locked = useCallStore((s) => s.locked)
+  const toggleLock = useCallStore((s) => s.toggleLock)
   const toggleMute = useCallStore((s) => s.toggleMute)
   const toggleDeafen = useCallStore((s) => s.toggleDeafen)
   const toggleCamera = useCallStore((s) => s.toggleCamera)
@@ -91,6 +95,23 @@ function VoiceControls(): React.JSX.Element {
       >
         <MonitorIcon className="h-5 w-5" />
       </button>
+      {callType === 'channel' && (
+        <button
+          onClick={toggleLock}
+          disabled={!connected}
+          aria-label={locked ? 'Destrancar sala' : 'Trancar sala'}
+          title={locked ? 'Destrancar sala' : 'Trancar sala (pedir permissão para entrar)'}
+          className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+            !connected
+              ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
+              : locked
+                ? 'cursor-pointer bg-amber-500 text-black shadow-sm hover:bg-amber-400'
+                : 'cursor-pointer bg-white/5 text-gray-200 hover:bg-white/10'
+          }`}
+        >
+          {locked ? <LockIcon className="h-5 w-5" /> : <LockOpenIcon className="h-5 w-5" />}
+        </button>
+      )}
       {callType === 'channel' && (
         <button
           onClick={(e) => {
