@@ -23,11 +23,11 @@ type editStore interface {
 // editedMentionEveryone decide o mention_everyone depois de uma edição. Editar
 // nunca pinga ninguém de novo (o aviso já saiu, ou não saiu, quando a mensagem
 // foi criada): sem ping antes, continua sem (@all incluído na edição é texto
-// puro); com ping antes, fica o mesmo enquanto o texto ainda marcar @all/@here
-// e vira nil se a marcação sumiu (o destaque some junto). Nunca troca @here
-// por @all, e não passa pelo anti-spam porque não avisa ninguém.
+// puro); com ping antes, fica o mesmo enquanto o texto ainda marcar aquele
+// mesmo @all/@here e vira nil se ele sumiu (o destaque some junto). Nunca
+// troca @here por @all, e não passa pelo anti-spam porque não avisa ninguém.
 func editedMentionEveryone(original *string, content string) *string {
-	if original == nil || DetectEveryoneMention(content) == "" {
+	if original == nil || !containsEveryone(content, *original) {
 		return nil
 	}
 	kept := *original

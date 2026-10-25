@@ -269,8 +269,11 @@ func TestEditedMentionEveryone(t *testing.T) {
 		{"não pingava e ganhou @all: continua sem pingar", nil, "@all bora", nil},
 		{"pingou @all e manteve: continua", all, "@all bora, gente", all},
 		{"pingou @all e tirou: para de destacar", all, "bora, gente", nil},
-		{"pingou @here e trocou por @all: não sobe para @all", here, "@all bora", here},
-		{"pingou @all e trocou por @here: fica o que pingou", all, "@here bora", all},
+		{"pingou @here e trocou por @all: não sobe para @all e o @here sumiu", here, "@all bora", nil},
+		{"pingou @all e trocou por @here: o @all sumiu", all, "@here bora", nil},
+		{"pingou @here e tem os dois: fica @here", here, "@all e @here bora", here},
+		{"pingou @all e tem os dois: fica @all", all, "@here e @all bora", all},
+		{"pingou @all e só sobrou @allan: não marca mais", all, "@allan bora", nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
