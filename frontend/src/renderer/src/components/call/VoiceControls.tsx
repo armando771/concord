@@ -1,6 +1,8 @@
 import { useCallback, useState } from 'react'
 import { useCallStore } from '../../store/callStore'
+import { useActivityStore } from '../../store/activityStore'
 import {
+  ActivityIcon,
   CameraIcon,
   CameraOffIcon,
   HeadsetIcon,
@@ -12,6 +14,7 @@ import {
   SoundboardIcon
 } from '../icons'
 import SoundboardPopover from './SoundboardPopover'
+import ActivityPickerPopover from './ActivityPickerPopover'
 
 function VoiceControls(): React.JSX.Element {
   const muted = useCallStore((s) => s.muted)
@@ -32,6 +35,10 @@ function VoiceControls(): React.JSX.Element {
   const [soundboardAnchor, setSoundboardAnchor] = useState<HTMLElement | null>(null)
   const soundboardOpen = soundboardAnchor !== null
   const closeSoundboard = useCallback(() => setSoundboardAnchor(null), [])
+  const [activityAnchor, setActivityAnchor] = useState<HTMLElement | null>(null)
+  const activityOpen = activityAnchor !== null
+  const closeActivities = useCallback(() => setActivityAnchor(null), [])
+  const activityRunning = useActivityStore((s) => s.shared !== null || s.local !== null)
 
   const handleToggleScreen = (): void => {
     if (sharing) {
@@ -133,6 +140,27 @@ function VoiceControls(): React.JSX.Element {
         </button>
       )}
       <button
+        onClick={(e) => {
+          const button = e.currentTarget
+          setActivityAnchor((open) => (open ? null : button))
+        }}
+        disabled={!connected}
+        aria-label="Atividades"
+        aria-expanded={activityOpen}
+        title="Atividades"
+        className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+          !connected
+            ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
+            : activityOpen
+              ? 'cursor-pointer bg-[#5865f2] text-white'
+              : activityRunning
+                ? 'cursor-pointer bg-[#5865f2]/25 text-white hover:bg-[#5865f2]/40'
+                : 'cursor-pointer bg-white/5 text-gray-200 hover:bg-white/10'
+        }`}
+      >
+        <ActivityIcon className="h-5 w-5" />
+      </button>
+      <button
         onClick={endCall}
         aria-label="Desconectar"
         title="Desconectar"
@@ -140,7 +168,12 @@ function VoiceControls(): React.JSX.Element {
       >
         <PhoneOffIcon className="h-5 w-5" />
       </button>
-      {soundboardAnchor && <SoundboardPopover anchor={soundboardAnchor} onClose={closeSoundboard} />}
+      {soundboardAnchor && (
+        <SoundboardPopover anchor={soundboardAnchor} onClose={closeSoundboard} />
+      )}
+      {activityAnchor && (
+        <ActivityPickerPopover anchor={activityAnchor} onClose={closeActivities} />
+      )}
     </div>
   )
 }

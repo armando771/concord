@@ -7,6 +7,7 @@ import { PendingDisplayRequest } from './displayPicker'
 import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './background'
 import { setupUpdater } from './updater'
 import { setupOverlay } from './overlay'
+import { closeActivity, setupActivities } from './activityWindow'
 import { APP_USER_MODEL_ID } from './toastPolicy'
 import { setupToasts } from './toasts'
 import { TITLE_BAR_COLOR, titleBarOptions } from './windowPolicy'
@@ -164,6 +165,7 @@ function createWindow(): void {
 
   mainWindow.on('closed', () => {
     pendingDisplay.deny()
+    closeActivity()
     mainWindow = null
   })
 
@@ -204,6 +206,7 @@ app.whenReady().then(() => {
   registerScreenAudio()
   setupBackground(() => mainWindow, icon)
   setupOverlay(() => mainWindow)
+  setupActivities(() => mainWindow)
   setupUpdater(() => mainWindow, {
     feedUrl: __CONCORD_UPDATE_URL__,
     publicKeyPem: __CONCORD_UPDATE_PUBKEY__

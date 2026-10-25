@@ -40,6 +40,7 @@ import { showToast } from './toastStore'
 import type { CallResume } from '../../../shared/callResume'
 
 import { useSoundboardStore } from './soundboardStore'
+import { useActivityStore } from './activityStore'
 import { stopAllSoundboardAudio } from '../lib/soundboardPlayer'
 
 
@@ -455,6 +456,7 @@ export const useCallStore = create<CallState>()((set, get) => {
           avatar_url: p.avatar_url ?? null
         }))
       const sharing = state.screen_sharing ?? []
+      useActivityStore.getState().hydrate(callId, state.activity ?? null)
       set((s) => ({
         screenSharers: sharing,
         voiceStates: {
@@ -1394,6 +1396,11 @@ export const useCallStore = create<CallState>()((set, get) => {
       }
     }
   }
+})
+
+// Atividades seguem a chamada atual: sair/trocar de chamada fecha o jogo aqui.
+useCallStore.subscribe((s) => {
+  useActivityStore.getState().setCall(s.status === 'idle' ? null : s.callId)
 })
 
 // Os efeitos sonoros saem no mesmo dispositivo escolhido para as vozes.
