@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useLevelStore } from '../../store/levelStore'
 import { levelUpEffects } from '../../lib/levels'
 
@@ -13,6 +14,11 @@ const BASE_AVATAR = 32
  * órbita, e o conjunto cresce com o nível (levelUpEffects) — é o que os
  * outros veem de você, sempre menor que a sua celebração na janela.
  * O pai precisa ser `relative` com o tamanho do avatar (`size`, em px).
+ *
+ * O efeito em si vai num portal no <body>, `fixed` em cima do avatar: os
+ * raios e o burst dos níveis altos são maiores que o tile da chamada e que
+ * o painel de membros (ambos com overflow escondido) e seriam cortados.
+ * Continua click-through (pointer-events: none).
  */
 function LevelUpBurst({
   userId,
@@ -22,6 +28,25 @@ function LevelUpBurst({
   size?: number
 }): React.JSX.Element | null {
   const celebration = useLevelStore((s) => s.celebrations[userId])
+  const anchorRef = useRef<HTMLSpanElement | null>(null)
+  const [frame, setFrame] = useState<DOMRect | null>(null)
+
+  // Acompanha o avatar enquanto a animação toca (rolagem e redimensionamento).
+  const active = celebration?.key
+  useLayoutEffect(() => {
+    if (active === undefined) return
+    const measure = (): void => {
+      const el = anchorRef.current
+      if (el) setFrame(el.getBoundingClientRect())
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    window.addEventListener('scroll', measure, true)
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('scroll', measure, true)
+    }
+  }, [active])
 
   const fx = useMemo(
     () => (celebration ? levelUpEffects(celebration.level, celebration.previous) : null),
@@ -50,12 +75,16 @@ function LevelUpBurst({
     '--level-accent': tier.accent
   } as React.CSSProperties
 
-  return (
+  const burst = (
     <span
       key={celebration.key}
       aria-live="polite"
-      className="level-anim pointer-events-none absolute inset-0 z-10"
-      style={vars}
+      className="level-anim pointer-events-none fixed z-30"
+      style={
+        frame
+          ? { ...vars, left: frame.left, top: frame.top, width: frame.width, height: frame.height }
+          : vars
+      }
     >
       <span className="sr-only">Subiu para o nível {celebration.level}</span>
 
@@ -130,6 +159,12 @@ function LevelUpBurst({
           }
         />
       ))}
+    </span>
+  )
+
+  return (
+    <span ref={anchorRef} aria-hidden="true" className="pointer-events-none absolute inset-0">
+      {frame && frame.width > 0 && createPortal(burst, document.body)}
     </span>
   )
 }
