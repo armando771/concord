@@ -7,6 +7,19 @@ export interface MessageAuthor {
   avatar_url?: string | null
 }
 
+export interface ReplyPreview {
+  id: string
+  author_id: string
+  author?: MessageAuthor
+  content: string
+}
+
+export interface ReactionSummary {
+  emoji: string
+  count: number
+  user_ids: string[]
+}
+
 export interface PollAnswer {
   answer_id: number
   text: string
@@ -44,6 +57,9 @@ export interface Message {
   author?: MessageAuthor
   channel_id?: string | null
   conversation_id?: string | null
+  reply_to_id?: string | null
+  reply_to?: ReplyPreview | null
+  reactions?: ReactionSummary[]
   content: string
   poll?: Poll | null
   attachments?: Attachment[] | null
@@ -74,16 +90,44 @@ export function listChannelMessages(channelId: string, before?: string): Promise
 export function sendChannelMessage(
   channelId: string,
   content: string,
-  attachmentIds: string[] = []
+  attachmentIds: string[] = [],
+  replyToId?: string | null
 ): Promise<Message> {
   return request<Message>(`/channels/${channelId}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ content, attachment_ids: attachmentIds })
+    body: JSON.stringify({
+      content,
+      attachment_ids: attachmentIds,
+      ...(replyToId ? { reply_to_id: replyToId } : {})
+    })
   })
 }
 
 export function deleteChannelMessage(channelId: string, messageId: string): Promise<void> {
   return request<void>(`/channels/${channelId}/messages/${messageId}`, { method: 'DELETE' })
+}
+
+export function addChannelReaction(
+  channelId: string,
+  messageId: string,
+  emoji: string
+): Promise<void> {
+  return request<void>(`/channels/${channelId}/messages/${messageId}/reactions`, {
+    method: 'POST',
+    body: JSON.stringify({ emoji })
+  })
+}
+
+export function removeChannelReaction(
+  channelId: string,
+  messageId: string,
+  emoji: string
+): Promise<void> {
+  const query = new URLSearchParams({ emoji })
+  return request<void>(
+    `/channels/${channelId}/messages/${messageId}/reactions?${query.toString()}`,
+    { method: 'DELETE' }
+  )
 }
 
 export function listConversationMessages(
@@ -98,11 +142,16 @@ export function listConversationMessages(
 export function sendConversationMessage(
   conversationId: string,
   content: string,
-  attachmentIds: string[] = []
+  attachmentIds: string[] = [],
+  replyToId?: string | null
 ): Promise<Message> {
   return request<Message>(`/conversations/${conversationId}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ content, attachment_ids: attachmentIds })
+    body: JSON.stringify({
+      content,
+      attachment_ids: attachmentIds,
+      ...(replyToId ? { reply_to_id: replyToId } : {})
+    })
   })
 }
 
@@ -113,6 +162,29 @@ export function deleteConversationMessage(
   return request<void>(`/conversations/${conversationId}/messages/${messageId}`, {
     method: 'DELETE'
   })
+}
+
+export function addConversationReaction(
+  conversationId: string,
+  messageId: string,
+  emoji: string
+): Promise<void> {
+  return request<void>(`/conversations/${conversationId}/messages/${messageId}/reactions`, {
+    method: 'POST',
+    body: JSON.stringify({ emoji })
+  })
+}
+
+export function removeConversationReaction(
+  conversationId: string,
+  messageId: string,
+  emoji: string
+): Promise<void> {
+  const query = new URLSearchParams({ emoji })
+  return request<void>(
+    `/conversations/${conversationId}/messages/${messageId}/reactions?${query.toString()}`,
+    { method: 'DELETE' }
+  )
 }
 
 /** Base da rota da sala: `/channels/:id` ou `/conversations/:id`. */

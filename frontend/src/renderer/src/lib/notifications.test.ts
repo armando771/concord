@@ -71,6 +71,30 @@ describe('mentionNotification', () => {
     })
   })
 
+  it('resposta a uma mensagem minha em canal vira notificação que abre o canal', () => {
+    expect(
+      mentionNotification(
+        inChannel({
+          content: 'fechado!',
+          reply_to_id: 'm0',
+          reply_to: {
+            id: 'm0',
+            author_id: 'eu',
+            author: { id: 'eu', username: 'fulano', display_name: 'Fulano' },
+            content: 'alguém aí?'
+          }
+        }),
+        me,
+        'srv1'
+      )
+    ).toEqual({
+      kind: 'mention',
+      title: 'Ana respondeu você',
+      body: 'fechado!',
+      route: '/servers/srv1/channels/ch1'
+    })
+  })
+
   it('sem menção, ou mensagem minha, não notifica', () => {
     expect(mentionNotification(inChannel({ content: 'bora jogar?' }), me, 'srv1')).toBeNull()
     expect(mentionNotification(inChannel({ author_id: 'eu' }), me, 'srv1')).toBeNull()

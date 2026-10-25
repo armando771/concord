@@ -3,11 +3,11 @@ import type { ReactNode } from 'react'
 import { useStreamLayoutStore } from '../../store/streamLayoutStore'
 import {
   adaptToSize,
+  featuredLeaf,
   GUTTER,
   leafIds,
   minExtent,
   syncLayout,
-  type DropSide,
   type LayoutNode,
   type LayoutPreset
 } from '../../lib/streamLayout'
@@ -50,102 +50,86 @@ function PresetGlyph({
   )
 }
 
-/** Lado em que o ponteiro está sobre um bloco: bordas (25%) ou centro. */
-function dropSideAt(e: React.DragEvent<HTMLElement>): DropSide {
-  const rect = e.currentTarget.getBoundingClientRect()
-  const x = (e.clientX - rect.left) / rect.width
-  const y = (e.clientY - rect.top) / rect.height
-  const edges: [DropSide, number][] = [
-    ['left', x],
-    ['right', 1 - x],
-    ['top', y],
-    ['bottom', 1 - y]
-  ]
-  const [side, distance] = edges.reduce((best, cur) => (cur[1] < best[1] ? cur : best))
-  return distance < 0.25 ? side : 'center'
-}
-
-const DROP_HIGHLIGHT: Record<DropSide, string> = {
-  center: 'inset-0',
-  left: 'inset-y-0 left-0 w-1/2',
-  right: 'inset-y-0 right-0 w-1/2',
-  top: 'inset-x-0 top-0 h-1/2',
-  bottom: 'inset-x-0 bottom-0 h-1/2'
-}
-
-const DROP_LABEL: Record<DropSide, string> = {
-  center: 'Trocar de lugar',
-  left: 'Colocar à esquerda',
-  right: 'Colocar à direita',
-  top: 'Colocar acima',
-  bottom: 'Colocar abaixo'
-}
+/**
+ * Como se reorganiza cada formato: no Destaque, clicar numa transmissão a
+ * leva para o bloco grande; nos demais, arrastar uma sobre a outra troca as
+ * duas de lugar. Com uma transmissão só não há o que reorganizar.
+ */
+export type TileInteraction = 'swap' | 'feature' | 'none'
 
 function Leaf({
   id,
   renderTile,
-  name
+  name,
+  interaction,
+  featured
 }: {
   id: string
   renderTile: (id: string) => ReactNode
   name: string
+  interaction: TileInteraction
+  /** Está no bloco grande do Destaque. */
+  featured: boolean
 }): React.JSX.Element {
-  const move = useStreamLayoutStore((s) => s.move)
-  const [drop, setDrop] = useState<DropSide | null>(null)
+  const swap = useStreamLayoutStore((s) => s.swap)
+  const feature = useStreamLayoutStore((s) => s.feature)
+  const [over, setOver] = useState(false)
+  const [dragging, setDragging] = useState(false)
+  const canDrag = interaction === 'swap'
+  const clickToFeature = interaction === 'feature' && !featured
 
   return (
     <div
-      className="group relative flex h-full w-full items-center justify-center [container-type:size]"
+      draggable={canDrag}
+      onDragStart={(e) => {
+        e.dataTransfer.setData(DRAG_TYPE, id)
+        e.dataTransfer.effectAllowed = 'move'
+        setDragging(true)
+      }}
+      onDragEnd={() => setDragging(false)}
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes(DRAG_TYPE)) return
+        if (!canDrag || dragging || !e.dataTransfer.types.includes(DRAG_TYPE)) return
         e.preventDefault()
         e.dataTransfer.dropEffect = 'move'
-        setDrop(dropSideAt(e))
+        setOver(true)
       }}
       onDragLeave={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDrop(null)
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false)
       }}
       onDrop={(e) => {
         const dragged = e.dataTransfer.getData(DRAG_TYPE)
-        const side = dropSideAt(e)
-        setDrop(null)
+        setOver(false)
         if (dragged && dragged !== id) {
           e.preventDefault()
-          move(dragged, id, side)
+          swap(dragged, id)
         }
       }}
+      // No Destaque, o clique numa transmissão pequena a põe em destaque em
+      // vez de abrir o modo foco (botões dentro do bloco continuam valendo).
+      onClickCapture={(e) => {
+        if (!clickToFeature) return
+        if ((e.target as HTMLElement).closest('button')) return
+        e.stopPropagation()
+        feature(id)
+      }}
+      title={
+        canDrag
+          ? 'Arraste sobre outra transmissão para trocar de lugar'
+          : clickToFeature
+            ? 'Clique para pôr em destaque'
+            : undefined
+      }
+      className={`relative flex h-full w-full items-center justify-center transition-opacity [container-type:size] ${
+        canDrag ? 'cursor-grab active:cursor-grabbing' : clickToFeature ? 'cursor-pointer' : ''
+      } ${dragging ? 'opacity-40' : ''}`}
     >
       {renderTile(id)}
 
-      <button
-        type="button"
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData(DRAG_TYPE, id)
-          e.dataTransfer.effectAllowed = 'move'
-        }}
-        onClick={(e) => e.stopPropagation()}
-        title="Arraste para mover esta transmissão"
-        aria-label={`Mover a transmissão de ${name}`}
-        className="absolute left-2 top-2 z-20 flex h-7 cursor-grab items-center gap-1 rounded-md bg-black/60 px-1.5 text-gray-200 opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/80 hover:text-white focus-visible:opacity-100 active:cursor-grabbing group-hover:opacity-100"
-      >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
-          {[2, 6, 10].flatMap((y) =>
-            [4, 8].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.1" />)
-          )}
-        </svg>
-        <span className="text-[10px] font-semibold">Mover</span>
-      </button>
-
-      {drop && (
-        <div className="pointer-events-none absolute inset-0 z-30 rounded-2xl ring-2 ring-[#5865f2]/60">
-          <div
-            className={`absolute flex items-center justify-center rounded-2xl bg-[#5865f2]/30 transition-all ${DROP_HIGHLIGHT[drop]}`}
-          >
-            <span className="rounded-md bg-black/70 px-2 py-1 text-xs font-semibold text-white">
-              {DROP_LABEL[drop]}
-            </span>
-          </div>
+      {over && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-2xl bg-[#5865f2]/30 ring-2 ring-[#5865f2]">
+          <span className="rounded-md bg-black/70 px-2 py-1 text-xs font-semibold text-white">
+            Trocar com {name}
+          </span>
         </div>
       )}
     </div>
@@ -209,7 +193,9 @@ function NodeView({
   width,
   height,
   renderTile,
-  nameOf
+  nameOf,
+  interaction,
+  featuredId
 }: {
   node: LayoutNode
   path: number[]
@@ -217,12 +203,23 @@ function NodeView({
   height: number
   renderTile: (id: string) => ReactNode
   nameOf: (id: string) => string
+  interaction: TileInteraction
+  /** Quem está no bloco grande do Destaque. */
+  featuredId: string | null
 }): React.JSX.Element {
   const resize = useStreamLayoutStore((s) => s.resize)
   const equalize = useStreamLayoutStore((s) => s.equalize)
 
   if (node.type === 'leaf') {
-    return <Leaf id={node.id} renderTile={renderTile} name={nameOf(node.id)} />
+    return (
+      <Leaf
+        id={node.id}
+        renderTile={renderTile}
+        name={nameOf(node.id)}
+        interaction={interaction}
+        featured={node.id === featuredId}
+      />
+    )
   }
 
   const horizontal = node.direction === 'row'
@@ -249,6 +246,8 @@ function NodeView({
               height={horizontal ? height : usable * node.sizes[i]}
               renderTile={renderTile}
               nameOf={nameOf}
+              interaction={interaction}
+              featuredId={featuredId}
             />
           </div>
         </div>
@@ -258,10 +257,12 @@ function NodeView({
 }
 
 /**
- * Mosaico das transmissões (multistream): cada tela compartilhada ocupa um
- * bloco; dá para redimensionar pelas divisórias, arrastar para outro lugar
- * e escolher um formato pronto. Os blocos nunca passam das bordas nem ficam
- * menores que o mínimo, e o arranjo se adapta ao tamanho da janela.
+ * Mosaico das transmissões (multistream): cada tela/câmera ocupa um bloco.
+ * O formato vem dos botões (Grade, Lado a lado, Empilhado, Destaque). No
+ * Destaque, clicar numa transmissão a leva para o bloco grande; nos demais,
+ * arrastar uma sobre a outra troca as duas de lugar. As divisórias
+ * redimensionam. Os blocos nunca passam das bordas
+ * nem ficam menores que o mínimo, e o arranjo se adapta ao tamanho da janela.
  */
 function StreamMosaic({ ids, renderTile, nameOf }: StreamMosaicProps): React.JSX.Element {
   const stored = useStreamLayoutStore((s) => s.layout)
@@ -299,10 +300,7 @@ function StreamMosaic({ ids, renderTile, nameOf }: StreamMosaicProps): React.JSX
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col gap-2">
       {ids.length > 1 && (
-        <div className="flex shrink-0 items-center justify-end gap-2">
-          <span className="hidden text-[11px] text-gray-500 md:inline">
-            Arraste as divisórias para redimensionar · use “Mover” para reorganizar
-          </span>
+        <div className="flex shrink-0 items-center justify-start gap-2">
           <div
             role="group"
             aria-label="Formato das transmissões"
@@ -338,6 +336,8 @@ function StreamMosaic({ ids, renderTile, nameOf }: StreamMosaicProps): React.JSX
             height={size.height}
             renderTile={renderTile}
             nameOf={nameOf}
+            interaction={ids.length < 2 ? 'none' : preset === 'focus' ? 'feature' : 'swap'}
+            featuredId={preset === 'focus' ? featuredLeaf(layout) : null}
           />
         )}
       </div>

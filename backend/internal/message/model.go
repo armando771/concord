@@ -9,16 +9,38 @@ type Author struct {
 	AvatarURL   *string `json:"avatar_url,omitempty"`
 }
 
+type ReplyPreview struct {
+	ID       string  `json:"id"`
+	AuthorID string  `json:"author_id"`
+	Author   *Author `json:"author,omitempty"`
+	Content  string  `json:"content"`
+}
+
+type ReactionSummary struct {
+	Emoji   string   `json:"emoji"`
+	Count   int      `json:"count"`
+	UserIDs []string `json:"user_ids"`
+}
+
+type ReactionRow struct {
+	MessageID string
+	UserID    string
+	Emoji     string
+}
+
 type Message struct {
-	ID             string       `json:"id"`
-	AuthorID       string       `json:"author_id"`
-	Author         *Author      `json:"author,omitempty"`
-	ChannelID      *string      `json:"channel_id,omitempty"`
-	ConversationID *string      `json:"conversation_id,omitempty"`
-	Content        string       `json:"content"`
-	Poll           *Poll        `json:"poll,omitempty"`
-	Attachments    []Attachment `json:"attachments,omitempty"`
-	CreatedAt      time.Time    `json:"created_at"`
+	ID             string            `json:"id"`
+	AuthorID       string            `json:"author_id"`
+	Author         *Author           `json:"author,omitempty"`
+	ChannelID      *string           `json:"channel_id,omitempty"`
+	ConversationID *string           `json:"conversation_id,omitempty"`
+	ReplyToID      *string           `json:"reply_to_id,omitempty"`
+	ReplyTo        *ReplyPreview     `json:"reply_to,omitempty"`
+	Reactions      []ReactionSummary `json:"reactions,omitempty"`
+	Content        string            `json:"content"`
+	Poll           *Poll             `json:"poll,omitempty"`
+	Attachments    []Attachment      `json:"attachments,omitempty"`
+	CreatedAt      time.Time         `json:"created_at"`
 }
 
 type CreateEvent struct {
@@ -35,4 +57,12 @@ type DeleteEvent struct {
 	ServerID       string   `json:"server_id,omitempty"`
 	UserIDs        []string `json:"user_ids,omitempty"`
 	MessageID      string   `json:"message_id"`
+}
+
+type ReactionEvent struct {
+	ChannelID      *string `json:"channel_id,omitempty"`
+	ConversationID *string `json:"conversation_id,omitempty"`
+	MessageID      string  `json:"message_id"`
+	UserID         string  `json:"user_id"`
+	Emoji          string  `json:"emoji"`
 }

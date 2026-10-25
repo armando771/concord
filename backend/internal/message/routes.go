@@ -11,6 +11,8 @@ func MessageRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin
 		channels.GET("", handler.ListChannelMessages)
 		channels.GET("/", handler.ListChannelMessages)
 		channels.DELETE("/:messageId", handler.DeleteChannelMessage)
+		channels.POST("/:messageId/reactions", handler.AddChannelReaction)
+		channels.DELETE("/:messageId/reactions", handler.RemoveChannelReaction)
 		channels.PUT("/:messageId/poll/votes", handler.VoteChannelPoll)
 		channels.POST("/:messageId/poll/end", handler.EndChannelPoll)
 	}
@@ -30,6 +32,11 @@ func MessageRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin
 		conversations.GET("", handler.ListConversationMessages)
 		conversations.GET("/", handler.ListConversationMessages)
 		conversations.DELETE("/:messageId", handler.DeleteConversationMessage)
+		channelsReactions := conversations.Group("/:messageId/reactions")
+		{
+			channelsReactions.POST("", handler.AddConversationReaction)
+			channelsReactions.DELETE("", handler.RemoveConversationReaction)
+		}
 		conversations.PUT("/:messageId/poll/votes", handler.VoteConversationPoll)
 		conversations.POST("/:messageId/poll/end", handler.EndConversationPoll)
 	}

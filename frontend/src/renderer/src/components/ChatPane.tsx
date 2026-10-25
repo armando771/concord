@@ -4,6 +4,8 @@ import { useChatStore } from '../store/chatStore'
 import type { Message } from '../api/messages'
 import { showToast } from '../store/toastStore'
 import { applyMention, mentionQuery, mentionsUser, splitMentions } from '../lib/mentions'
+import { filterEmoteCategories, QUICK_EMOTES } from '../lib/emotes'
+import { messagePreview } from '../lib/polls'
 import PollCard from './poll/PollCard'
 import CreatePollModal from './poll/CreatePollModal'
 import MessageAttachments from './chat/MessageAttachments'
@@ -39,13 +41,94 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
 
+function EmotePickerPopover({
+  onSelect,
+  onClose
+}: {
+  onSelect: (emoji: string) => void
+  onClose: () => void
+}): React.JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  const [search, setSearch] = useState('')
+  const categories = filterEmoteCategories(search)
+
+  useEffect(() => {
+    const handleMouseDown = (e: MouseEvent): void => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose()
+      }
+    }
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('mousedown', handleMouseDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [onClose])
+
+  return (
+    <div
+      ref={ref}
+      onClick={(e) => e.stopPropagation()}
+      className="absolute right-4 top-8 z-30 w-64 rounded-xl border border-white/10 bg-[#18191c] p-3 shadow-2xl"
+    >
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Buscar emote..."
+        className="mb-2 w-full rounded-md border border-white/10 bg-black/40 px-2.5 py-1 text-xs text-white placeholder:text-gray-500 outline-none focus:border-violet-500/50"
+      />
+      <div className="max-h-56 overflow-y-auto pr-1">
+        {categories.map((category) => (
+          <div key={category.id} className="mb-2 last:mb-0">
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+              {category.name}
+            </div>
+            <div className="grid grid-cols-6 gap-1">
+              {category.items.map((item) => (
+                <button
+                  key={item.emoji}
+                  type="button"
+                  title={item.label}
+                  onClick={() => {
+                    onSelect(item.emoji)
+                    onClose()
+                  }}
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-lg transition-transform hover:scale-110 hover:bg-white/10"
+                >
+                  {item.emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        {categories.length === 0 && (
+          <div className="py-4 text-center text-xs text-gray-500">Nenhum emote encontrado</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function MessageItem({
   message,
+  isHighlighted,
+  onReply,
+  onReact,
+  onJumpToMessage,
   onDelete,
   onVote,
   onEndPoll
 }: {
   message: Message
+  isHighlighted: boolean
+  onReply: () => void
+  onReact: (emoji: string) => void
+  onJumpToMessage: (messageId: string) => void
   onDelete: () => void
   onVote: (answerIds: number[]) => Promise<void>
   onEndPoll: () => Promise<void>
@@ -57,54 +140,157 @@ function MessageItem({
     author?.display_name ?? author?.username ?? (isMine ? me?.display_name : 'Desconhecido')
   const initial = (name ?? '?').charAt(0).toUpperCase()
   const [hover, setHover] = useState(false)
-  const mentionsMe = !isMine && mentionsUser(message.content, me?.username ?? '')
+  const [pickerOpen, setPickerOpen] = useState(false)
+
+  const isReplyToMe = !isMine && message.reply_to?.author_id === me?.id
+  const mentionsMe = !isMine && (mentionsUser(message.content, me?.username ?? '') || isReplyToMe)
+  const reactions = message.reactions ?? []
+  const hasReplyReference = Boolean(message.reply_to_id || message.reply_to)
+  const replyAuthorName =
+    message.reply_to?.author?.display_name ?? message.reply_to?.author?.username ?? 'Usuário'
 
   return (
     <div
-      className={`group flex gap-3 rounded-md px-4 py-1.5 transition-colors ${
-        mentionsMe
-          ? 'border-l-2 border-[#f0b232] bg-[#f0b232]/10 hover:bg-[#f0b232]/15'
-          : 'hover:bg-white/[0.03]'
+      id={`msg-${message.id}`}
+      className={`group relative flex flex-col gap-1 rounded-md px-4 py-1.5 transition-colors ${
+        isHighlighted
+          ? 'bg-[#5865f2]/20 ring-1 ring-[#5865f2]/50'
+          : mentionsMe
+            ? 'border-l-2 border-[#f0b232] bg-[#f0b232]/10 hover:bg-[#f0b232]/15'
+            : 'hover:bg-white/[0.03]'
       }`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-600 text-sm font-bold text-white shadow-md">
-        {initial}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className="text-sm font-semibold text-white">{name}</span>
-          <span className="text-[10px] text-gray-500">{formatTime(message.created_at)}</span>
+      {hasReplyReference && (
+        <div className="flex items-center gap-1.5 pl-4 text-xs text-gray-400">
+          <span className="h-2.5 w-5 shrink-0 rounded-tl-md border-l-2 border-t-2 border-gray-600" />
+          {message.reply_to ? (
+            <button
+              type="button"
+              onClick={() => onJumpToMessage(message.reply_to!.id)}
+              className="flex min-w-0 cursor-pointer items-center gap-1.5 text-left transition-colors hover:text-gray-200"
+            >
+              <span className="shrink-0 font-semibold text-gray-300">@{replyAuthorName}</span>
+              <span className="truncate text-gray-400">
+                {message.reply_to.content || '📊 Enquete / Anexo'}
+              </span>
+            </button>
+          ) : (
+            <span className="italic text-gray-500">Mensagem original foi excluída</span>
+          )}
         </div>
-        {message.content && (
-          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">
-            {splitMentions(message.content).map((part, i) =>
-              part.mention ? (
-                <span key={i} className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]">
-                  {part.text}
-                </span>
-              ) : (
-                part.text
-              )
+      )}
+
+      <div className="flex gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-600 text-sm font-bold text-white shadow-md">
+          {initial}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <span className="text-sm font-semibold text-white">{name}</span>
+            <span className="text-[10px] text-gray-500">{formatTime(message.created_at)}</span>
+          </div>
+          {message.content && (
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">
+              {splitMentions(message.content).map((part, i) =>
+                part.mention ? (
+                  <span key={i} className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]">
+                    {part.text}
+                  </span>
+                ) : (
+                  part.text
+                )
+              )}
+            </p>
+          )}
+          {message.attachments?.length ? (
+            <MessageAttachments attachments={message.attachments} />
+          ) : null}
+          {message.poll && (
+            <PollCard poll={message.poll} isAuthor={isMine} onVote={onVote} onEnd={onEndPoll} />
+          )}
+
+          {reactions.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1">
+              {reactions.map((reaction) => {
+                const meReacted = me?.id ? reaction.user_ids.includes(me.id) : false
+                return (
+                  <button
+                    key={reaction.emoji}
+                    type="button"
+                    onClick={() => onReact(reaction.emoji)}
+                    className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors ${
+                      meReacted
+                        ? 'border-[#5865f2] bg-[#5865f2]/25 text-white'
+                        : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'
+                    }`}
+                  >
+                    <span>{reaction.emoji}</span>
+                    <span className="font-semibold">{reaction.count}</span>
+                  </button>
+                )
+              })}
+              <button
+                type="button"
+                onClick={() => setPickerOpen((v) => !v)}
+                title="Adicionar reação"
+                className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                +
+              </button>
+            </div>
+          )}
+        </div>
+
+        {(hover || pickerOpen) && (
+          <div className="absolute -top-3 right-4 z-20 flex items-center gap-0.5 rounded-lg border border-white/10 bg-[#18191c] px-1 py-0.5 shadow-lg">
+            {QUICK_EMOTES.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => onReact(emoji)}
+                title={`Reagir com ${emoji}`}
+                className="flex h-6 w-6 cursor-pointer items-center justify-center rounded text-sm transition-transform hover:scale-110 hover:bg-white/10"
+              >
+                {emoji}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setPickerOpen((v) => !v)}
+              title="Mais reações"
+              className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              😀+
+            </button>
+            <button
+              type="button"
+              onClick={onReply}
+              title="Responder"
+              className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              Responder
+            </button>
+            {isMine && (
+              <button
+                type="button"
+                onClick={onDelete}
+                title="Excluir mensagem"
+                className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs font-semibold text-gray-400 transition-colors hover:bg-red-500/15 hover:text-red-400"
+              >
+                Excluir
+              </button>
             )}
-          </p>
-        )}
-        {message.attachments?.length ? (
-          <MessageAttachments attachments={message.attachments} />
-        ) : null}
-        {message.poll && (
-          <PollCard poll={message.poll} isAuthor={isMine} onVote={onVote} onEnd={onEndPoll} />
+          </div>
         )}
       </div>
-      {isMine && hover && (
-        <button
-          onClick={onDelete}
-          title="Excluir mensagem"
-          className="shrink-0 cursor-pointer text-xs font-semibold text-gray-500 transition-colors hover:text-red-400"
-        >
-          Excluir
-        </button>
+
+      {pickerOpen && (
+        <EmotePickerPopover
+          onSelect={(emoji) => onReact(emoji)}
+          onClose={() => setPickerOpen(false)}
+        />
       )}
     </div>
   )
@@ -125,6 +311,7 @@ function ChatPane({
   const loadOlder = useChatStore((s) => s.loadOlder)
   const sendToRoom = useChatStore((s) => s.sendToRoom)
   const deleteFromRoom = useChatStore((s) => s.deleteFromRoom)
+  const toggleReaction = useChatStore((s) => s.toggleReaction)
   const createPollInRoom = useChatStore((s) => s.createPollInRoom)
   const votePollInRoom = useChatStore((s) => s.votePollInRoom)
   const endPollInRoom = useChatStore((s) => s.endPollInRoom)
@@ -132,6 +319,9 @@ function ChatPane({
 
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [replyState, setReplyState] = useState<{ room: string; message: Message } | null>(null)
+  const replyingTo = replyState?.room === room ? replyState.message : null
+  const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { drafts, addFiles, remove: removeAttachment } = useAttachmentDraft(room)
@@ -174,16 +364,21 @@ function ChatPane({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
-    if (suggestions.length === 0) return
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault()
-      const step = e.key === 'ArrowDown' ? 1 : -1
-      setHighlight((h) => (h + step + suggestions.length) % suggestions.length)
-    } else if (e.key === 'Enter' || e.key === 'Tab') {
-      e.preventDefault()
-      pickMention(suggestions[highlight].username)
-    } else if (e.key === 'Escape') {
-      setMention(null)
+    if (suggestions.length > 0) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        const step = e.key === 'ArrowDown' ? 1 : -1
+        setHighlight((h) => (h + step + suggestions.length) % suggestions.length)
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        pickMention(suggestions[highlight].username)
+      } else if (e.key === 'Escape') {
+        setMention(null)
+      }
+      return
+    }
+    if (e.key === 'Escape' && replyingTo) {
+      setReplyState(null)
     }
   }
   const [loadingOlder, setLoadingOlder] = useState(false)
@@ -230,9 +425,10 @@ function ChatPane({
     // Só sai do rascunho o que foi enviado: arquivo adicionado durante o envio fica.
     const sentDrafts = drafts.filter((d) => d.status === 'done').map((d) => d.localId)
     try {
-      await sendToRoom(room, draft.trim(), attachmentState.readyIds)
+      await sendToRoom(room, draft.trim(), attachmentState.readyIds, replyingTo?.id ?? null)
       if (roomRef.current === sentRoom) {
         setDraft('')
+        setReplyState(null)
         sentDrafts.forEach(removeAttachment)
       }
     } catch (err) {
@@ -265,6 +461,9 @@ function ChatPane({
   const handleDelete = async (messageId: string): Promise<void> => {
     try {
       await deleteFromRoom(room, messageId)
+      if (replyingTo?.id === messageId) {
+        setReplyState(null)
+      }
     } catch (err) {
       showToast.error(err instanceof Error ? err.message : 'Falha ao excluir mensagem.')
     }
@@ -300,6 +499,35 @@ function ChatPane({
     addFiles(Array.from(e.clipboardData.files))
   }
 
+  const handleReact = async (messageId: string, emoji: string): Promise<void> => {
+    try {
+      await toggleReaction(room, messageId, emoji)
+    } catch (err) {
+      showToast.error(err instanceof Error ? err.message : 'Falha ao reagir à mensagem.')
+    }
+  }
+
+  const handleStartReply = (message: Message): void => {
+    setReplyState({ room, message })
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  const handleJumpToMessage = (messageId: string): void => {
+    const el = document.getElementById(`msg-${messageId}`)
+    if (!el) {
+      showToast.info('A mensagem original é mais antiga e não está carregada na tela.')
+      return
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setHighlightedId(messageId)
+    window.setTimeout(() => {
+      setHighlightedId((current) => (current === messageId ? null : current))
+    }, 1600)
+  }
+
+  const replyTargetAuthor =
+    replyingTo?.author?.display_name ?? replyingTo?.author?.username ?? 'Usuário'
+
   return (
     <div
       className="relative flex min-h-0 flex-1 flex-col"
@@ -321,7 +549,7 @@ function ChatPane({
             Carregando mensagens...
           </div>
         ) : (
-          <div className="flex flex-col justify-end min-h-full py-4">
+          <div className="flex min-h-full flex-col justify-end py-4">
             {hasMore && (
               <div className="flex justify-center py-2">
                 <button
@@ -342,6 +570,10 @@ function ChatPane({
               <MessageItem
                 key={m.id}
                 message={m}
+                isHighlighted={highlightedId === m.id}
+                onReply={() => handleStartReply(m)}
+                onReact={(emoji) => void handleReact(m.id, emoji)}
+                onJumpToMessage={handleJumpToMessage}
                 onDelete={() => handleDelete(m.id)}
                 onVote={(answerIds) => votePollInRoom(room, m.id, answerIds)}
                 onEndPoll={() => endPollInRoom(room, m.id)}
@@ -380,6 +612,22 @@ function ChatPane({
           </ul>
         )}
         <ComposerAttachments drafts={drafts} onRemove={removeAttachment} />
+        {replyingTo && (
+          <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#18191c] px-3 py-1.5 text-xs text-gray-300">
+            <div className="min-w-0 truncate">
+              Respondendo a <span className="font-semibold text-white">@{replyTargetAuthor}</span>
+              <span className="ml-2 text-gray-400">{messagePreview(replyingTo)}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyState(null)}
+              title="Cancelar resposta (Esc)"
+              className="shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         <form
           onSubmit={handleSubmit}
           className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
@@ -424,7 +672,7 @@ function ChatPane({
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             onBlur={() => setMention(null)}
-            placeholder={placeholder}
+            placeholder={replyingTo ? `Responder a @${replyTargetAuthor}...` : placeholder}
             maxLength={2000}
             className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 outline-none"
           />

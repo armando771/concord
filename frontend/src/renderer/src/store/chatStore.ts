@@ -16,13 +16,18 @@ import {
   listChannelMessages,
   sendChannelMessage,
   deleteChannelMessage,
+  addChannelReaction,
+  removeChannelReaction,
   listConversationMessages,
   sendConversationMessage,
   deleteConversationMessage,
+  addConversationReaction,
+  removeConversationReaction,
   createPoll,
   votePoll,
   endPoll
 } from '../api/messages'
+import { applyReactionAdd, applyReactionRemove } from '../lib/emotes'
 import { applyPollUpdate, messagePreview, type PollUpdate } from '../lib/polls'
 import type { ConversationSummary } from '../api/conversations'
 import { listConversations } from '../api/conversations'
@@ -58,8 +63,14 @@ interface ChatState {
   openServer: (serverId: string) => void
   closeServer: (serverId: string) => void
   loadOlder: (room: RoomKey) => Promise<void>
-  sendToRoom: (room: RoomKey, content: string, attachmentIds?: string[]) => Promise<void>
+  sendToRoom: (
+    room: RoomKey,
+    content: string,
+    attachmentIds?: string[],
+    replyToId?: string | null
+  ) => Promise<void>
   deleteFromRoom: (room: RoomKey, messageId: string) => Promise<void>
+  toggleReaction: (room: RoomKey, messageId: string, emoji: string) => Promise<void>
   createPollInRoom: (room: RoomKey, input: CreatePollInput) => Promise<void>
   votePollInRoom: (room: RoomKey, messageId: string, answerIds: number[]) => Promise<void>
   endPollInRoom: (room: RoomKey, messageId: string) => Promise<void>
@@ -95,6 +106,11 @@ const appendUnique = (messages: Message[], incoming: Message[]): Message[] => {
   }
   return merged
 }
+
+const clearDeletedReplyTarget = (messages: Message[], deletedId: string): Message[] =>
+  messages
+    .filter((m) => m.id !== deletedId)
+    .map((m) => (m.reply_to_id === deletedId ? { ...m, reply_to: null } : m))
 
 /** Troca a enquete de uma mensagem carregada na sala (sem efeito se não estiver). */
 const replacePoll = (
@@ -228,15 +244,20 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
-  sendToRoom: async (room, content, attachmentIds = []) => {
+  sendToRoom: async (room, content, attachmentIds = [], replyToId) => {
     const trimmed = content.trim()
     // Mensagem pode ter só anexo, sem texto.
     if (!trimmed && attachmentIds.length === 0) return
 
     if (room.startsWith('channel:')) {
-      await sendChannelMessage(room.slice('channel:'.length), trimmed, attachmentIds)
+      await sendChannelMessage(room.slice('channel:'.length), trimmed, attachmentIds, replyToId)
     } else {
-      await sendConversationMessage(room.slice('conversation:'.length), trimmed, attachmentIds)
+      await sendConversationMessage(
+        room.slice('conversation:'.length),
+        trimmed,
+        attachmentIds,
+        replyToId
+      )
     }
 
     if (!client.isConnected()) {
@@ -254,9 +275,70 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set((state) => ({
       messagesByRoom: {
         ...state.messagesByRoom,
-        [room]: (state.messagesByRoom[room] ?? []).filter((m) => m.id !== messageId)
+        [room]: clearDeletedReplyTarget(state.messagesByRoom[room] ?? [], messageId)
       }
     }))
+  },
+
+  toggleReaction: async (room, messageId, emoji) => {
+    const meId = useAuthStore.getState().user?.id
+    if (!meId) return
+
+    const messages = get().messagesByRoom[room] ?? []
+    const target = messages.find((m) => m.id === messageId)
+    const alreadyReacted =
+      target?.reactions?.some((r) => r.emoji === emoji && r.user_ids.includes(meId)) ?? false
+
+    set((state) => ({
+      messagesByRoom: {
+        ...state.messagesByRoom,
+        [room]: (state.messagesByRoom[room] ?? []).map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                reactions: alreadyReacted
+                  ? applyReactionRemove(m.reactions, emoji, meId)
+                  : applyReactionAdd(m.reactions, emoji, meId)
+              }
+            : m
+        )
+      }
+    }))
+
+    try {
+      if (room.startsWith('channel:')) {
+        const channelId = room.slice('channel:'.length)
+        if (alreadyReacted) {
+          await removeChannelReaction(channelId, messageId, emoji)
+        } else {
+          await addChannelReaction(channelId, messageId, emoji)
+        }
+      } else {
+        const convId = room.slice('conversation:'.length)
+        if (alreadyReacted) {
+          await removeConversationReaction(convId, messageId, emoji)
+        } else {
+          await addConversationReaction(convId, messageId, emoji)
+        }
+      }
+    } catch (err) {
+      set((state) => ({
+        messagesByRoom: {
+          ...state.messagesByRoom,
+          [room]: (state.messagesByRoom[room] ?? []).map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  reactions: alreadyReacted
+                    ? applyReactionAdd(m.reactions, emoji, meId)
+                    : applyReactionRemove(m.reactions, emoji, meId)
+                }
+              : m
+          )
+        }
+      }))
+      throw err
+    }
   },
 
   createPollInRoom: async (room, input) => {
@@ -474,12 +556,40 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         return {
           messagesByRoom: {
             ...state.messagesByRoom,
-            [room]: (state.messagesByRoom[room] ?? []).filter((m) => m.id !== messageId)
+            [room]: clearDeletedReplyTarget(state.messagesByRoom[room] ?? [], messageId)
           },
           unreadByRoom: nextUnread,
           unreadByServer: nextServerUnread
         }
       })
+      return
+    }
+
+    if (event.type === 'message:reaction:add' || event.type === 'message:reaction:remove') {
+      const messageId = payload.message_id as string
+      const userId = payload.user_id as string
+      const emoji = payload.emoji as string
+      const channelId = payload.channel_id as string | undefined
+      const conversationId = payload.conversation_id as string | undefined
+      const room = channelId ? `channel:${channelId}` : `conversation:${conversationId}`
+      if (!room.endsWith(':') && messageId && userId && emoji) {
+        const isAdd = event.type === 'message:reaction:add'
+        set((state) => ({
+          messagesByRoom: {
+            ...state.messagesByRoom,
+            [room]: (state.messagesByRoom[room] ?? []).map((m) =>
+              m.id === messageId
+                ? {
+                    ...m,
+                    reactions: isAdd
+                      ? applyReactionAdd(m.reactions, emoji, userId)
+                      : applyReactionRemove(m.reactions, emoji, userId)
+                  }
+                : m
+            )
+          }
+        }))
+      }
       return
     }
 
@@ -611,7 +721,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
 
     const friendUser = payload.user as
-      { id: string; username: string; display_name: string } | undefined
+      | { id: string; username: string; display_name: string }
+      | undefined
 
     if (event.type === 'friend:request') {
       useFriendStore.getState().loadAll()

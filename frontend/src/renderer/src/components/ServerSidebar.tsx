@@ -11,8 +11,6 @@ import VoiceStateIcons from './call/VoiceStateIcons'
 import VoiceChannelTimer from './call/VoiceChannelTimer'
 import LiveBadge from './call/LiveBadge'
 import { liveUserIds } from '../lib/liveBadge'
-import LevelBadge from './level/LevelBadge'
-import VoiceRowShimmer from './level/VoiceRowShimmer'
 import { useUserAudioStore } from '../store/userAudioStore'
 import { userMenuHandler } from '../store/userMenuStore'
 import { logout } from '../api/auth'
@@ -476,7 +474,12 @@ export function ServerSidebar(): React.JSX.Element {
                             : 'text-gray-400 hover:bg-white/6 hover:text-gray-200'
                       }`}
                     >
-                      <VolumeIcon className="h-4 w-4 shrink-0 text-[#23a55a]" />
+                      {/* Verde só nos canais com gente (pode ser em vários ao mesmo tempo). */}
+                      <VolumeIcon
+                        className={`h-4 w-4 shrink-0 transition-colors ${
+                          participants.length > 0 ? 'text-[#23a55a]' : 'text-gray-500'
+                        }`}
+                      />
                       <span className="truncate">{ch.name}</span>
                       {participants.length > 0 && callState?.call?.started_at && (
                         <VoiceChannelTimer startedAt={callState.call.started_at} />
@@ -509,7 +512,6 @@ export function ServerSidebar(): React.JSX.Element {
                                 isMe ? 'bg-white/5 hover:bg-white/10' : 'hover:bg-white/[0.06]'
                               } ${canMove(p.user_id) ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
                             >
-                              <VoiceRowShimmer userId={p.user_id} />
                               <div
                                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[9px] font-bold text-white transition-shadow ${
                                   talking ? 'ring-2 ring-[#23a55a]' : ''
@@ -521,7 +523,6 @@ export function ServerSidebar(): React.JSX.Element {
                                 {name}
                                 {isMe ? ' (você)' : ''}
                               </span>
-                              <LevelBadge userId={p.user_id} />
                               <span className="ml-auto flex items-center gap-0.5 pr-1">
                                 {live.has(p.user_id) && <LiveBadge />}
                                 {!isMe && locallyMuted[p.user_id]?.muted && (
