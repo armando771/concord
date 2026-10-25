@@ -1,0 +1,102 @@
+package music
+
+import (
+	"context"
+	"io"
+	"math"
+	"os/exec"
+	"strings"
+	"testing"
+)
+
+const sampleAnalysis = `[silencedetect @ 0x1] silence_start: 0
+[silencedetect @ 0x1] silence_end: 1.25 | silence_duration: 1.25
+[silencedetect @ 0x1] silence_start: 90.5
+[silencedetect @ 0x1] silence_end: 91.0 | silence_duration: 0.5
+[silencedetect @ 0x1] silence_start: 210.75
+[Parsed_ebur128_0 @ 0x2] Summary:
+
+  Integrated loudness:
+    I:          -9.6 LUFS
+    Threshold: -19.8 LUFS
+
+  Loudness range:
+    LRA:         6.1 LU
+
+  True peak:
+    Peak:        0.4 dBFS
+`
+
+func TestParseAnalysis(t *testing.T) {
+	a, err := ParseAnalysis(sampleAnalysis)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.IntegratedLUFS != -9.6 || a.TruePeakDB != 0.4 || a.StartSec != 1.25 || a.EndSec != 210.75 {
+		t.Fatalf("a = %+v", a)
+	}
+}
+
+func TestParseAnalysisNoSilence(t *testing.T) {
+	a, err := ParseAnalysis("Summary:\n I: -14.0 LUFS\n Peak: -1.5 dBFS\n")
+	if err != nil || a.StartSec != 0 || a.EndSec != 0 {
+		t.Fatalf("a=%+v err=%v", a, err)
+	}
+	if _, err := ParseAnalysis("nada aqui"); err == nil {
+		t.Fatal("sem Summary deve falhar")
+	}
+}
+
+func TestGainDB(t *testing.T) {
+	// Música alta (-9.6 LUFS): baixa para -14 (-4.4 dB).
+	if g := GainDB(Analysis{IntegratedLUFS: -9.6, TruePeakDB: 0.4}); math.Abs(g-(-4.4)) > 1e-9 {
+		t.Fatalf("g = %v", g)
+	}
+	// Música baixa com pico alto: sobe só até o pico ficar em -1 dBTP.
+	if g := GainDB(Analysis{IntegratedLUFS: -20, TruePeakDB: -3}); math.Abs(g-2) > 1e-9 {
+		t.Fatalf("g = %v", g)
+	}
+	// Quase silêncio: nunca mais que +12 dB.
+	if g := GainDB(Analysis{IntegratedLUFS: -70, TruePeakDB: -60}); g != 12 {
+		t.Fatalf("g = %v", g)
+	}
+}
+
+func TestDecodeArgs(t *testing.T) {
+	args := strings.Join(DecodeArgs("/c/a.webm", Analysis{IntegratedLUFS: -9.6, TruePeakDB: 0.4, StartSec: 1.25, EndSec: 210.75}), " ")
+	for _, want := range []string{"-ss 1.250", "-to 210.750", "-i /c/a.webm", "volume=-4.40dB", "-f f32le", "-ar 48000", "-ac 2", "pipe:1"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("faltou %q em %q", want, args)
+		}
+	}
+	plain := strings.Join(DecodeArgs("/c/a.webm", Analysis{IntegratedLUFS: -14, TruePeakDB: -2}), " ")
+	if strings.Contains(plain, "-ss") || strings.Contains(plain, "-to") {
+		t.Errorf("sem silêncio não corta: %q", plain)
+	}
+}
+
+// Integração com o ffmpeg real (pula se não estiver instalado).
+func TestPrepareWithFFmpeg(t *testing.T) {
+	ff, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg não instalado")
+	}
+	dir := t.TempDir()
+	src := dir + "/tom.opus"
+	if out, err := exec.Command(ff, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=2", "-ac", "2", "-c:a", "libopus", src).CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	r, err := NewPreparer(ff, ExecRunner).Prepare(context.Background(), src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	data, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// ~2 s de f32le estéreo 48 kHz = 2*48000*2*4 bytes (com folga do encoder).
+	if len(data) < 600_000 || len(data)%8 != 0 {
+		t.Fatalf("bytes = %d", len(data))
+	}
+}
