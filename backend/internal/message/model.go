@@ -46,9 +46,21 @@ type Message struct {
 	Poll            *Poll        `json:"poll,omitempty"`
 	Attachments     []Attachment `json:"attachments,omitempty"`
 	CreatedAt       time.Time    `json:"created_at"`
+	// Quando o autor editou o texto pela última vez; nil = nunca editada.
+	EditedAt *time.Time `json:"edited_at,omitempty"`
 }
 
 type CreateEvent struct {
+	ChannelID      *string  `json:"channel_id,omitempty"`
+	ConversationID *string  `json:"conversation_id,omitempty"`
+	ServerID       string   `json:"server_id,omitempty"`
+	UserIDs        []string `json:"user_ids,omitempty"`
+	Message        Message  `json:"message"`
+}
+
+// UpdateEvent é o message:update (mensagem editada). Vai para as mesmas salas
+// do message:create.
+type UpdateEvent struct {
 	ChannelID      *string  `json:"channel_id,omitempty"`
 	ConversationID *string  `json:"conversation_id,omitempty"`
 	ServerID       string   `json:"server_id,omitempty"`
