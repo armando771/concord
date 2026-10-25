@@ -69,3 +69,22 @@ func TestDatabasePingedAtMostOncePerInterval(t *testing.T) {
 		t.Fatalf("pings = %d, want 1 dentro de pingEvery", pings)
 	}
 }
+
+// Um cliente que desiste da requisição no meio não pode deixar "banco fora"
+// guardado: o próximo /healthz tem que ver o banco de verdade.
+func TestCanceledRequestDoesNotCacheDatabaseFailure(t *testing.T) {
+	r := New(func(ctx context.Context) error { return ctx.Err() })
+	r.SetReady()
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/healthz", r.Handler)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil).WithContext(ctx))
+
+	if code := get(t, r); code != http.StatusOK {
+		t.Fatalf("status = %d depois de uma requisição cancelada, want 200", code)
+	}
+}

@@ -61,7 +61,7 @@ func (r *Readiness) Handler(c *gin.Context) {
 		return
 	}
 
-	if err := r.pingDatabase(c.Request.Context()); err != nil {
+	if err := r.pingDatabase(); err != nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "database unavailable"})
 		return
 	}
@@ -69,14 +69,16 @@ func (r *Readiness) Handler(c *gin.Context) {
 }
 
 // pingDatabase consulta o banco ou devolve o resultado de menos de pingEvery
-// atrás.
-func (r *Readiness) pingDatabase(ctx context.Context) error {
+// atrás. O ping não usa o contexto da requisição: um cliente que desiste no
+// meio (context.Canceled) não pode deixar "banco fora" guardado para os
+// outros, nem fazer o deploy voltar atrás.
+func (r *Readiness) pingDatabase() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if !r.checkedAt.IsZero() && time.Since(r.checkedAt) < pingEvery {
 		return r.lastErr
 	}
-	ctx, cancel := context.WithTimeout(ctx, pingTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 	defer cancel()
 	r.lastErr = r.ping(ctx)
 	r.checkedAt = time.Now()
