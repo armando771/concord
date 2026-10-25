@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mergeMissedMessages } from './missedMessages'
+import { mergeMissedMessages, newestTime } from './missedMessages'
 
 interface Msg {
   id: string
@@ -119,6 +119,19 @@ describe('mergeMissedMessages', () => {
     const result = mergeMissedMessages(current, page)
 
     expect(result.unseen.map((m) => m.id)).toEqual(['depois'])
+  })
+
+  it('não lidas contam a partir do que se conhecia quando a busca começou', () => {
+    // Antes da busca a sala tinha só "a"; enquanto buscava, "c" chegou pelo
+    // WS. "b" se perdeu na queda e é mais velha que "c", mas é não lida.
+    const before = [msg('a', 1)]
+    const current = [msg('a', 1), msg('c', 5)]
+    const page = newestFirst(msg('a', 1), msg('b', 3))
+
+    const result = mergeMissedMessages(current, page, newestTime(before))
+
+    expect(result.unseen.map((m) => m.id)).toEqual(['b'])
+    expect(result.messages.map((m) => m.id)).toEqual(['a', 'b', 'c'])
   })
 
   it('sala carregada vazia: tudo que chegou é não lido', () => {

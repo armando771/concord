@@ -32,9 +32,20 @@ const time = (m: TimedMessage): number => Date.parse(m.created_at)
  * Mensagens com o mesmo horário da borda (o Date.parse corta microssegundos)
  * ficam, para nada sumir por engano.
  */
+/** Horário da mensagem mais nova (-Infinity numa sala vazia). */
+export function newestTime(messages: TimedMessage[]): number {
+  return messages.length > 0 ? Math.max(...messages.map(time)) : -Infinity
+}
+
+/**
+ * `knownBefore`: horário da mensagem mais nova que a sala tinha quando a busca
+ * começou (o padrão é o de `current`). Uma mensagem que chegou pelo WS durante
+ * a busca não pode fazer as perdidas, mais velhas que ela, deixarem de contar.
+ */
 export function mergeMissedMessages<T extends TimedMessage>(
   current: T[],
-  latest: T[]
+  latest: T[],
+  knownBefore: number = newestTime(current)
 ): MergedMessages<T> {
   // Página vazia: nada a acrescentar, e não dá para saber o que apagar.
   if (latest.length === 0) return { messages: current, added: [], unseen: [], reset: false }
@@ -42,8 +53,7 @@ export function mergeMissedMessages<T extends TimedMessage>(
   const page = [...latest].reverse()
   const known = new Set(current.map((m) => m.id))
   const added = page.filter((m) => !known.has(m.id))
-  const newestKnown = current.length > 0 ? Math.max(...current.map(time)) : -Infinity
-  const unseen = added.filter((m) => time(m) > newestKnown)
+  const unseen = added.filter((m) => time(m) > knownBefore)
 
   const pageIds = new Set(page.map((m) => m.id))
   const oldest = time(page[0])

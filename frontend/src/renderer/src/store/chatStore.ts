@@ -29,7 +29,7 @@ import {
 } from '../api/messages'
 import { applyReactionAdd, applyReactionRemove } from '../lib/emotes'
 import { applyPollUpdate, messagePreview, type PollUpdate } from '../lib/polls'
-import { mergeMissedMessages } from '../lib/missedMessages'
+import { mergeMissedMessages, newestTime } from '../lib/missedMessages'
 import type { ConversationSummary } from '../api/conversations'
 import { listConversations } from '../api/conversations'
 import type { PresenceMap } from '../api/presence'
@@ -477,13 +477,20 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       .filter((room) => messagesByRoom[room])
       .sort((a, b) => Number(b === activeRoom) - Number(a === activeRoom))
     const resyncRoom = async (room: RoomKey): Promise<void> => {
+      // O que já se conhecia antes da busca: o que chegar pelo WS enquanto ela
+      // roda não entra na conta das não lidas.
+      const knownBefore = newestTime(get().messagesByRoom[room] ?? [])
       try {
         const latest = await getRoomFetch(room)()
         if (useAuthStore.getState().accessToken !== token) return
         set((state) => {
           const current = state.messagesByRoom[room]
           if (!current) return {} // sala fechada enquanto buscava
-          const { messages, added, unseen, reset } = mergeMissedMessages(current, latest)
+          const { messages, added, unseen, reset } = mergeMissedMessages(
+            current,
+            latest,
+            knownBefore
+          )
           // Já estão na tela: um evento atrasado da mesma mensagem não notifica.
           for (const m of added) notifiedMessages.add(m.id)
           // Só o que chegou depois da última mensagem conhecida é não lido.
