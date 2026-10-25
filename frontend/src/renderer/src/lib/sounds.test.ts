@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
+import { MILESTONE_KINDS, milestoneFor } from './levels'
 import {
   BASE_VOLUME,
   LEVEL_SOUNDS,
+  MILESTONE_SOUNDS,
   noteVolume,
   oncePerKey,
   peakVolume,
   SOUNDS,
+  type Note,
   type SoundName
 } from './sounds'
 
@@ -83,7 +86,9 @@ describe('sons de subir de nível', () => {
     Math.max(...SOUNDS[name].map((n) => n.at + n.duration))
 
   it('sobem e ficam mais ricos conforme a faixa', () => {
-    for (const name of LEVEL_SOUNDS) expect(last(name)).toBeGreaterThan(first(name))
+    for (const name of ['levelChime', 'levelChimeRich', 'levelFanfare'] as const) {
+      expect(last(name)).toBeGreaterThan(first(name))
+    }
     expect(SOUNDS.levelChimeRich.length).toBeGreaterThan(SOUNDS.levelChime.length)
     expect(SOUNDS.levelFanfare.length).toBeGreaterThan(SOUNDS.levelChimeRich.length)
     expect(end('levelFanfare')).toBeGreaterThan(end('levelChimeRich'))
@@ -111,6 +116,48 @@ describe('sons de subir de nível', () => {
         { freq: 3, at: 2, duration: 1, volume: 0.6 }
       ])
     ).toBeCloseTo(0.7)
+  })
+})
+
+describe('jingles dos marcos', () => {
+  const end = (name: SoundName): number => Math.max(...SOUNDS[name].map((n) => n.at + n.duration))
+
+  it('um jingle por marco, todos diferentes entre si', () => {
+    expect(MILESTONE_SOUNDS).toHaveLength(MILESTONE_KINDS.length)
+    for (const kind of MILESTONE_KINDS) expect(MILESTONE_SOUNDS).toContain(`milestone-${kind}`)
+    const shapes = MILESTONE_SOUNDS.map((name) => JSON.stringify(SOUNDS[name]))
+    expect(new Set(shapes).size).toBe(MILESTONE_SOUNDS.length)
+    for (const name of MILESTONE_SOUNDS) expect(LEVEL_SOUNDS).toContain(name)
+  })
+
+  it('curtos, mas mais ricos que o chime de um nível comum', () => {
+    for (const name of MILESTONE_SOUNDS) {
+      expect(SOUNDS[name].length).toBeGreaterThan(SOUNDS.levelChime.length)
+      expect(end(name)).toBeGreaterThanOrEqual(1)
+      expect(end(name)).toBeLessThanOrEqual(3)
+    }
+  })
+
+  it('acabam antes da animação do marco', () => {
+    for (let level = 10; level <= 100; level += 10) {
+      const m = milestoneFor(level)!
+      expect(end(`milestone-${m.kind}`) * 1000).toBeLessThan(m.durationMs)
+    }
+  })
+
+  it('ficam abaixo das vozes: nem somando notas passam de 0,8 do volume base', () => {
+    for (const name of MILESTONE_SOUNDS) {
+      expect(peakVolume(SOUNDS[name]), name).toBeLessThanOrEqual(0.8 * BASE_VOLUME)
+    }
+  })
+
+  it('glissando (slide) só em frequências audíveis e positivas', () => {
+    for (const name of MILESTONE_SOUNDS) {
+      for (const note of SOUNDS[name] as Note[]) {
+        expect(note.freq).toBeGreaterThanOrEqual(30)
+        if (note.slide !== undefined) expect(note.slide).toBeGreaterThanOrEqual(30)
+      }
+    }
   })
 })
 

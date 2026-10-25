@@ -51,11 +51,11 @@ function LevelUpBanner(): React.JSX.Element | null {
   )
 
   // O som toca mesmo com prefers-reduced-motion (só a animação some).
-  const chime = fx?.chime
+  const sound = fx?.sound
   const key = celebration?.key
   useEffect(() => {
-    if (key !== undefined && chime && firstPlay(key)) playSound(chime)
-  }, [key, chime])
+    if (key !== undefined && sound && firstPlay(key)) playSound(sound)
+  }, [key, sound])
 
   const confetti = useMemo(() => {
     if (!fx) return []

@@ -40,6 +40,19 @@ describe('levelStore: celebração', () => {
     expect(useLevelStore.getState().levels.eu).toBe(12)
   })
 
+  it('prévia do próximo marco: parte do seu nível de verdade', () => {
+    useLevelStore.setState({ levels: { eu: 37 } })
+    useLevelStore.getState().previewNextMilestone()
+    expect(useLevelStore.getState().celebrations.eu).toMatchObject({ level: 40, previous: 39 })
+    vi.advanceTimersByTime(levelUpEffects(40).durationMs + 100)
+    expect(useLevelStore.getState().levels.eu).toBe(37)
+  })
+
+  it('prévia do próximo marco sem nível carregado começa no 10', () => {
+    useLevelStore.getState().previewNextMilestone()
+    expect(useLevelStore.getState().celebrations.eu?.level).toBe(10)
+  })
+
   it('prévia ignora nível inválido', () => {
     useLevelStore.getState().previewLevelUp(0)
     useLevelStore.getState().previewLevelUp(Number.NaN)

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { WsEvent } from '../api/ws'
 import { fetchLevels, fetchMyLevel, type LevelProgress } from '../api/levels'
 import { useAuthStore } from './authStore'
-import { levelUpEffects } from '../lib/levels'
+import { levelUpEffects, nextMilestone } from '../lib/levels'
 
 export interface Celebration {
   level: number
@@ -26,6 +26,8 @@ interface LevelState {
    * verdade (o nível real volta quando ela acaba).
    */
   previewLevelUp: (level: number) => void
+  /** Só em dev: prévia do próximo marco (10, 20…) depois do seu nível. */
+  previewNextMilestone: () => void
   reset: () => void
 }
 
@@ -130,6 +132,13 @@ export const useLevelStore = create<LevelState>()((set, get) => {
         },
         levelUpEffects(target).durationMs + 50
       )
+    },
+
+    previewNextMilestone: () => {
+      const meId = useAuthStore.getState().user?.id
+      if (!meId) return
+      const real = get().me?.level ?? get().levels[meId] ?? 0
+      get().previewLevelUp(nextMilestone(real))
     },
 
     reset: () => {
