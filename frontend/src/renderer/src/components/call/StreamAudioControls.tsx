@@ -1,12 +1,8 @@
 import { streamAudioKey, useUserAudioStore } from '../../store/userAudioStore'
-import { VolumeIcon, VolumeOffIcon } from '../icons'
+import { FullscreenIcon, VolumeIcon, VolumeOffIcon } from '../icons'
 
-/**
- * Barra que aparece ao passar o mouse na live de alguém: mutar e volume da
- * transmissão só para você (os outros continuam ouvindo normalmente). O pai
- * precisa da classe `group/tile`.
- */
-function StreamAudioControls({ userId }: { userId: string }): React.JSX.Element {
+/** Mutar + volume da transmissão só para você (compartilhado com a tela cheia). */
+export function StreamVolume({ userId }: { userId: string }): React.JSX.Element {
   const key = streamAudioKey(userId)
   const audio = useUserAudioStore((s) => s.get(key))
   const setVolume = useUserAudioStore((s) => s.setVolume)
@@ -14,18 +10,7 @@ function StreamAudioControls({ userId }: { userId: string }): React.JSX.Element 
   const volume = Math.round(audio.volume * 100)
 
   return (
-    <div
-      // Arrastar aqui (o volume) não pode arrastar a live no mosaico nem
-      // clicar abre o modo foco.
-      draggable
-      onDragStart={(e) => {
-        e.preventDefault()
-        e.stopPropagation()
-      }}
-      onClick={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => e.stopPropagation()}
-      className="absolute bottom-2 right-2 z-20 flex items-center gap-2 rounded-lg bg-black/70 px-2 py-1 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover/tile:opacity-100"
-    >
+    <>
       <button
         type="button"
         onClick={() => toggleMuted(key)}
@@ -51,6 +36,48 @@ function StreamAudioControls({ userId }: { userId: string }): React.JSX.Element 
         title={`Volume: ${audio.muted ? 0 : volume}%`}
         className="h-1 w-20 cursor-pointer accent-[#5865f2]"
       />
+    </>
+  )
+}
+
+/**
+ * Barra que aparece ao passar o mouse na live de alguém: mutar e volume da
+ * transmissão só para você (os outros continuam ouvindo normalmente) e, no
+ * canto, o botão de tela cheia. O pai precisa da classe `group/tile`.
+ */
+function StreamAudioControls({
+  userId,
+  onToggleFullscreen
+}: {
+  userId: string
+  /** Presente = mostra o botão "Tela cheia" no canto inferior direito. */
+  onToggleFullscreen?: () => void
+}): React.JSX.Element {
+  return (
+    <div
+      // Arrastar aqui (o volume) não pode arrastar a live no mosaico nem
+      // clicar abre o modo foco.
+      draggable
+      onDragStart={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      className="absolute bottom-2 right-2 z-20 flex items-center gap-2 rounded-lg bg-black/70 px-2 py-1 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover/tile:opacity-100"
+    >
+      <StreamVolume userId={userId} />
+      {onToggleFullscreen && (
+        <button
+          type="button"
+          onClick={onToggleFullscreen}
+          aria-label="Tela cheia"
+          title="Tela cheia"
+          className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-gray-100 transition-colors hover:bg-white/10"
+        >
+          <FullscreenIcon className="h-4 w-4" />
+        </button>
+      )}
     </div>
   )
 }

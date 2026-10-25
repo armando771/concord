@@ -157,6 +157,7 @@ function CallStage({
         onClick={() => setFocused(entry.userId)}
         onClose={entry.local ? undefined : () => stopWatchingScreen(entry.userId)}
         streamAudioUserId={entry.local ? undefined : entry.userId}
+        fullscreenable={!entry.local}
       />
     )
   }
@@ -295,7 +296,7 @@ function CallStage({
           <button
             onClick={() => setFocused(null)}
             aria-label="Sair do modo foco"
-            title="Sair da tela cheia"
+            title="Sair do modo foco"
             className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
           >
             <ChevronDownIcon className="h-4 w-4" />
@@ -323,6 +324,7 @@ function CallStage({
           )}
           locallyMuted={localAudio[streamAudioKey(focused.userId)]?.muted ?? false}
           streamAudioUserId={focused.local ? undefined : focused.userId}
+          fullscreenable={!focused.local}
         />
       </div>
       <div className="flex shrink-0 flex-wrap items-center justify-center gap-3">
