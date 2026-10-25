@@ -3,6 +3,9 @@
 //! Escreve "ready" em stderr quando a captura começa; erros também em stderr.
 
 mod args;
+// Regra pura (testada no Linux); só o laço do Windows a usa.
+#[cfg_attr(not(windows), allow(dead_code))]
+mod fullscreen;
 #[cfg(windows)]
 mod capture;
 
