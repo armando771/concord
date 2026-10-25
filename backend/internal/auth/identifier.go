@@ -10,6 +10,9 @@ const (
 	IdentifierUsername
 )
 
+// maxIdentifierBytes é o maior identificador aceito no login.
+const maxIdentifierBytes = 320
+
 // LoginIdentifier é o que a pessoa digitou no campo "E-mail ou nome de usuário".
 type LoginIdentifier struct {
 	Kind  IdentifierKind
@@ -26,6 +29,12 @@ func ParseLoginIdentifier(login, email string) (LoginIdentifier, bool) {
 	raw := strings.TrimSpace(login)
 	if raw == "" {
 		raw = strings.TrimSpace(email)
+	}
+
+	// Maior que qualquer e-mail válido (RFC 5321): nem vale procurar, e não
+	// vira chave grande no limitador.
+	if len(raw) > maxIdentifierBytes {
+		return LoginIdentifier{}, false
 	}
 
 	if rest, found := strings.CutPrefix(raw, "@"); found && !strings.Contains(rest, "@") {

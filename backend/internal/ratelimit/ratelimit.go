@@ -56,6 +56,29 @@ func (l *Limiter) Allow(key string) (time.Duration, bool) {
 	return 0, true
 }
 
+// Reserve é o Allow para limites de falhas: conta a tentativa já na
+// entrada, no mesmo passo travado que confere o limite, para pedidos
+// simultâneos não passarem todos antes de alguém contar. Quem não falhou
+// devolve com Reset (sucesso) ou Undo (erro interno).
+func (l *Limiter) Reserve(key string) (time.Duration, bool) {
+	return l.Allow(key)
+}
+
+// Undo devolve uma reserva de key (ex.: o banco falhou e a tentativa não
+// deve contar). Sem contagem, não faz nada.
+func (l *Limiter) Undo(key string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	e, ok := l.entries[key]
+	if !ok {
+		return
+	}
+	e.count--
+	if e.count <= 0 {
+		delete(l.entries, key)
+	}
+}
+
 // Blocked diz se key está no limite (sem contar nada) e quanto falta.
 func (l *Limiter) Blocked(key string) (time.Duration, bool) {
 	l.mu.Lock()

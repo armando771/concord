@@ -1,6 +1,9 @@
 package auth
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseLoginIdentifier(t *testing.T) {
 	cases := []struct {
@@ -45,5 +48,17 @@ func TestParseLoginIdentifierRejectsEmpty(t *testing.T) {
 		if got, ok := ParseLoginIdentifier(c.login, c.email); ok {
 			t.Errorf("ParseLoginIdentifier(%q, %q) = %+v, want ok = false", c.login, c.email, got)
 		}
+	}
+}
+
+func TestParseLoginIdentifierRejectsTooLong(t *testing.T) {
+	if _, ok := ParseLoginIdentifier(strings.Repeat("a", maxIdentifierBytes), ""); !ok {
+		t.Error("no limite deveria valer")
+	}
+	if _, ok := ParseLoginIdentifier(strings.Repeat("a", maxIdentifierBytes+1), ""); ok {
+		t.Error("acima do limite deveria ser inválido")
+	}
+	if _, ok := ParseLoginIdentifier("", strings.Repeat("b", 400)+"@x.com"); ok {
+		t.Error("campo antigo também tem limite")
 	}
 }

@@ -2,6 +2,8 @@ package ratelimit
 
 import (
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -114,5 +116,48 @@ func TestRetryAfterSeconds(t *testing.T) {
 		if got := RetryAfterSeconds(d); got != want {
 			t.Errorf("RetryAfterSeconds(%v) = %q, want %q", d, got, want)
 		}
+	}
+}
+
+func TestReserveIsAtomicUnderConcurrency(t *testing.T) {
+	l, _ := newTest(10, 15*time.Minute, 100)
+	var granted atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < 200; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, ok := l.Reserve("conta"); ok {
+				granted.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if got := granted.Load(); got != 10 {
+		t.Fatalf("Reserve liberou %d de 200 concorrentes, want exatamente 10", got)
+	}
+}
+
+func TestUndoGivesTheReservationBack(t *testing.T) {
+	l, _ := newTest(2, time.Minute, 100)
+	l.Reserve("k")
+	l.Reserve("k")
+	if _, ok := l.Reserve("k"); ok {
+		t.Fatal("3ª reserva liberada, want bloqueada")
+	}
+	l.Undo("k")
+	if _, ok := l.Reserve("k"); !ok {
+		t.Fatal("depois do Undo deveria liberar uma")
+	}
+	// Undo numa chave sem contagem não quebra nem fica negativo.
+	l.Undo("nova")
+	l.Undo("nova")
+	if n := l.Len(); n != 1 {
+		t.Errorf("Undo criou entradas: Len = %d, want 1", n)
+	}
+	l.Undo("k")
+	l.Undo("k")
+	if n := l.Len(); n != 0 {
+		t.Errorf("contagem zerada deveria sair do mapa: Len = %d", n)
 	}
 }

@@ -43,6 +43,8 @@ type Handler struct {
 	accounts accountCreator
 	logins   loginUsers
 	guard    *loginGuard
+	// compareHash é o bcrypt do login (trocável nos testes).
+	compareHash func(hash, password []byte) error
 }
 
 func AuthHandler(service *Service, userService *user.Service) *Handler {
@@ -51,6 +53,30 @@ func AuthHandler(service *Service, userService *user.Service) *Handler {
 		accounts: userService,
 		logins:   userService,
 		guard:    newLoginGuard(),
+
+		compareHash: bcrypt.CompareHashAndPassword,
+	}
+}
+
+// bindJSON lê o corpo; corpo acima do limite (ver limitBody) vira 413.
+func bindJSON(c *gin.Context, dst any) bool {
+	if err := c.ShouldBindJSON(dst); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "request too large"})
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		}
+		return false
+	}
+	return true
+}
+
+// limitBody corta o corpo do pedido em n bytes, antes de qualquer leitura.
+func limitBody(n int64) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, n)
+		c.Next()
 	}
 }
 
@@ -78,8 +104,7 @@ func (h *Handler) Register(c *gin.Context) {
 		BirthdayYear  *int `json:"birthday_year"`
 	}
 
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+	if !bindJSON(c, &input) {
 		return
 	}
 
@@ -161,8 +186,7 @@ func (h *Handler) Login(c *gin.Context) {
 		Password string `json:"password"`
 	}
 
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+	if !bindJSON(c, &input) {
 		return
 	}
 
@@ -171,10 +195,10 @@ func (h *Handler) Login(c *gin.Context) {
 	if ok {
 		limited = &identifier
 	}
-	// Antes de qualquer busca ou bcrypt: por IP (todas as tentativas) e por
-	// identificador (falhas). c.ClientIP() só confia nos proxies configurados
+	// Antes de qualquer busca ou bcrypt: conta o IP e já reserva a tentativa
+	// do identificador. c.ClientIP() só confia nos proxies configurados
 	// (internal/clientip).
-	if retry, allowed := h.guard.allow(c.ClientIP(), limited); !allowed {
+	if retry, allowed := h.guard.begin(c.ClientIP(), limited); !allowed {
 		tooManyAttempts(c, retry)
 		return
 	}
@@ -190,22 +214,29 @@ func (h *Handler) Login(c *gin.Context) {
 	} else {
 		foundUser, err = h.logins.FindLoginByUsername(c.Request.Context(), identifier.Value)
 	}
-	if err != nil {
-		// Gasta o mesmo bcrypt de uma senha errada, para o tempo de resposta
-		// também não denunciar que a conta não existe.
-		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(input.Password))
-		if errors.Is(err, user.ErrLoginNotFound) {
-			h.guard.failed(identifier)
-		} else {
-			// Banco fora do ar: responde igual, mas fica no log.
-			log.Printf("[auth] login lookup: %v", err)
-		}
+	if err != nil && !errors.Is(err, user.ErrLoginNotFound) {
+		// Banco fora do ar: responde igual, fica no log e não conta.
+		log.Printf("[auth] login lookup: %v", err)
+		h.guard.undo(identifier)
 		invalidCredentials(c)
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(foundUser.PasswordHash), []byte(input.Password)); err != nil {
-		h.guard.failed(identifier)
+	// Conta inexistente gasta o mesmo bcrypt de uma senha errada, para o
+	// tempo de resposta também não denunciar que ela não existe.
+	hash := dummyPasswordHash
+	if foundUser != nil {
+		hash = []byte(foundUser.PasswordHash)
+	}
+	if !h.guard.acquireBcrypt(c.Request.Context()) {
+		h.guard.undo(identifier)
+		tooManyAttempts(c, h.guard.bcryptWait)
+		return
+	}
+	err = h.compareHash(hash, []byte(input.Password))
+	h.guard.releaseBcrypt()
+	if foundUser == nil || err != nil {
+		// A reserva feita em begin fica: é a falha contada.
 		invalidCredentials(c)
 		return
 	}
