@@ -73,15 +73,23 @@ function BoostBanner(): React.JSX.Element | null {
         className="boost-anim absolute left-0 top-[calc(var(--titlebar-height,0px)+5rem)]"
         style={{ animation: `boost-banner ${rank.durationMs}ms ease-in-out both` }}
       >
-        <div
-          className="relative flex items-center gap-4 py-2 pl-6 pr-12"
-          style={{
-            background: `linear-gradient(90deg, ${rank.accent}f2, #0b0b10f2 70%)`,
-            borderBottom: `3px solid ${rank.color}`,
-            clipPath: 'polygon(0 0, 100% 0, calc(100% - 22px) 100%, 0 100%)',
-            boxShadow: `0 0 30px ${rank.color}88`
-          }}
-        >
+        <div className="relative flex items-center gap-4 py-2 pl-6 pr-12">
+          {/* Fundo recortado numa camada própria: o clip-path cortaria o anel e as faíscas. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
+            style={{ filter: `drop-shadow(0 0 15px ${rank.color}88)` }}
+          >
+            <div
+              className="absolute inset-0"
+              style={{
+                background: `linear-gradient(90deg, ${rank.accent}f2, #0b0b10f2 70%)`,
+                borderBottom: `3px solid ${rank.color}`,
+                clipPath: 'polygon(0 0, 100% 0, calc(100% - 22px) 100%, 0 100%)'
+              }}
+            />
+          </div>
+
           <span className="relative flex items-center justify-center">
             {rank.ring && (
               <span
@@ -95,7 +103,7 @@ function BoostBanner(): React.JSX.Element | null {
             </span>
           </span>
 
-          <div className="leading-tight">
+          <div className="relative leading-tight">
             <p className="boost-text text-lg">{rank.text}</p>
             <p className="text-xs font-bold text-gray-200">
               XP {rank.label}
