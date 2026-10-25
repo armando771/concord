@@ -56,6 +56,14 @@ export interface BackgroundApi {
   onNavigate(cb: (route: string) => void): () => void
 }
 
+export interface ActivitiesApi {
+  /** Abre o jogo numa janela própria; false = link recusado pelo main. */
+  open(activityId: string, url: string): Promise<boolean>
+  close(): void
+  /** A janela do jogo fechou (pelo usuário ou pelo app). Retorna unsubscribe. */
+  onClosed(cb: (activityId: string) => void): () => void
+}
+
 /** Atalho do modo de edição e se outro programa já tem ele. */
 export interface OverlayShortcutStatus {
   accelerator: string
@@ -103,6 +111,7 @@ declare global {
       updates?: UpdatesApi
       screenAudio?: ScreenAudioApi
       overlay?: OverlayApi
+      activities?: ActivitiesApi
     }
   }
 }

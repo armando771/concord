@@ -1,4 +1,5 @@
 import { request } from './client'
+import type { RawCallActivity } from '../lib/activityState'
 
 export type CallType = 'dm' | 'channel'
 export type CallStatus = 'ringing' | 'active' | 'ended'
@@ -36,6 +37,8 @@ export interface CallStateResponse {
   participants: CallParticipant[]
   /** user_ids compartilhando tela neste momento (transitório) */
   screen_sharing?: string[]
+  /** Atividade aberta na chamada (só vem para quem está nela). */
+  activity?: RawCallActivity | null
 }
 
 export interface StartCallInput {

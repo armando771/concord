@@ -44,6 +44,7 @@ import { useFriendStore } from './friendStore'
 import { useCallStore } from './callStore'
 import { useLevelStore } from './levelStore'
 import { useSoundboardStore } from './soundboardStore'
+import { useActivityStore } from './activityStore'
 import { useTypingStore } from './typingStore'
 import { showToast } from './toastStore'
 import { router } from '../router'
@@ -510,6 +511,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     if (event.type === 'call:soundboard' || event.type.startsWith('soundboard:')) {
       useSoundboardStore.getState().handleWsEvent(event)
+      return
+    }
+
+    if (event.type.startsWith('call:activity')) {
+      useActivityStore.getState().handleWsEvent(event)
       return
     }
 

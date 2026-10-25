@@ -128,6 +128,21 @@ const api = {
       return () => ipcRenderer.removeListener('navigate', listener)
     }
   },
+  activities: {
+    /** Abre o jogo numa janela própria; false = link recusado pelo main. */
+    open(activityId: string, url: string): Promise<boolean> {
+      return ipcRenderer.invoke('activity:open', activityId, url)
+    },
+    close(): void {
+      ipcRenderer.send('activity:close')
+    },
+    /** A janela do jogo fechou (pelo usuário ou pelo app). */
+    onClosed(cb: (activityId: string) => void): () => void {
+      const listener = (_e: unknown, activityId: string): void => cb(activityId)
+      ipcRenderer.on('activity:closed', listener)
+      return () => ipcRenderer.removeListener('activity:closed', listener)
+    }
+  },
   overlay: {
     /** Overlay de jogo existe nesta plataforma (só Windows). */
     supported: process.platform === 'win32',
