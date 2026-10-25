@@ -74,6 +74,8 @@ export interface Message {
   poll?: Poll | null
   attachments?: Attachment[] | null
   created_at: string
+  /** Quando o autor editou o texto pela última vez; ausente = nunca editada. */
+  edited_at?: string | null
 }
 
 export interface PollAnswerInput {
@@ -110,6 +112,14 @@ export function sendChannelMessage(
       attachment_ids: attachmentIds,
       ...(replyToId ? { reply_to_id: replyToId } : {})
     })
+  })
+}
+
+/** Edita o texto de uma mensagem sua (canal ou DM, pela sala). */
+export function editMessage(room: string, messageId: string, content: string): Promise<Message> {
+  return request<Message>(`${roomPath(room)}/messages/${messageId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ content })
   })
 }
 

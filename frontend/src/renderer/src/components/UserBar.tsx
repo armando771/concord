@@ -1,34 +1,134 @@
+import { useCallback, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
+import { useCallStore } from '../store/callStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { STATUS_META } from '../lib/presenceStatus'
 import Avatar from './Avatar'
-import { GearIcon } from './icons'
+import AudioDeviceMenu, { type AudioDeviceKind } from './call/AudioDeviceMenu'
+import { showVoicePanel, userBarSpeaking, userBarSubtitle } from './call/voicePanel'
+import {
+  ChevronDownIcon,
+  GearIcon,
+  HeadsetIcon,
+  HeadsetOffIcon,
+  MicIcon,
+  MicOffIcon
+} from './icons'
 
 const BAR_BG = '#07080b'
 
 /**
+ * Microfone ou fone com a setinha do lado (como no Discord): o botão liga e
+ * desliga; a setinha abre o menu do dispositivo. Vermelho quando desligado.
+ * Com a sidebar no mínimo a setinha some (o menu segue em Configurações → Voz).
+ */
+function AudioToggle({
+  kind,
+  off,
+  dimmed = false,
+  label,
+  title,
+  onToggle,
+  menuOpen,
+  onMenu,
+  children
+}: {
+  kind: AudioDeviceKind
+  off: boolean
+  dimmed?: boolean
+  label: string
+  title: string
+  onToggle: () => void
+  menuOpen: boolean
+  onMenu: (anchor: HTMLElement) => void
+  children: React.ReactNode
+}): React.JSX.Element {
+  const tone = off
+    ? 'bg-[#f23f43]/15 text-[#f23f43] hover:bg-[#f23f43]/25'
+    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+  const menuLabel = kind === 'input' ? 'Opções de entrada' : 'Opções de saída'
+  return (
+    <div className="flex shrink-0 items-center">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={label}
+        title={title}
+        className={`flex h-8 w-7 cursor-pointer items-center justify-center rounded-l-md transition-colors @max-[239px]:rounded-md ${tone} ${
+          dimmed ? 'opacity-50' : ''
+        }`}
+      >
+        {children}
+      </button>
+      <button
+        type="button"
+        onClick={(e) => onMenu(e.currentTarget)}
+        aria-label={menuLabel}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        title={menuLabel}
+        className={`flex h-8 w-4 cursor-pointer items-center justify-center rounded-r-md transition-colors @max-[239px]:hidden ${
+          menuOpen ? 'bg-white/15 text-white' : tone
+        }`}
+      >
+        <ChevronDownIcon className="h-3 w-3" />
+      </button>
+    </div>
+  )
+}
+
+/**
  * Barra de baixo (como no Discord): clicar na foto ou no nome abre o próprio
- * cartão de perfil (de lá, Editar perfil e Status); a engrenagem abre as
- * Configurações.
+ * cartão de perfil (de lá, Editar perfil e Status); na chamada, microfone e
+ * fone com o menu de dispositivo; a engrenagem abre as Configurações.
  */
 function UserBar(): React.JSX.Element {
   const user = useAuthStore((s) => s.user)
   const openSettings = useSettingsStore((s) => s.openSettings)
+  const inCall = useCallStore((s) => showVoicePanel(s.status))
+  const muted = useCallStore((s) => s.muted)
+  const deafened = useCallStore((s) => s.deafened)
+  const canSpeak = useCallStore((s) => s.canSpeak)
+  const toggleMute = useCallStore((s) => s.toggleMute)
+  const toggleDeafen = useCallStore((s) => s.toggleDeafen)
+  // Mesmo anel verde da lista de voz e dos tiles da chamada enquanto eu falo.
+  const speaking = useCallStore((s) =>
+    userBarSpeaking({
+      inCall: showVoicePanel(s.status),
+      muted: s.muted,
+      userId: user?.id,
+      speakingIds: s.speakingIds
+    })
+  )
+
+  /** Menu de dispositivo aberto e a setinha em que ele fica (null = fechado). */
+  const [menu, setMenu] = useState<{ kind: AudioDeviceKind; anchor: HTMLElement } | null>(null)
+  const closeMenu = useCallback(() => setMenu(null), [])
+  const toggleMenu = (kind: AudioDeviceKind) => (anchor: HTMLElement) =>
+    setMenu((open) => (open?.kind === kind ? null : { kind, anchor }))
+
   const status = user?.status ?? 'online'
   const name = user?.display_name || user?.username || ''
-  const note = user?.status_text?.trim()
+  const subtitle = userBarSubtitle({
+    inCall,
+    note: user?.status_text,
+    statusLabel: STATUS_META[status].label
+  })
+
+  const micLabel = muted ? 'Ativar Microfone' : 'Silenciar Microfone'
+  const deafenLabel = deafened ? 'Ativar Audio' : 'Silenciar Audio'
 
   return (
     <div
-      className="flex shrink-0 items-center justify-between border-t border-white/6 px-2 py-2"
+      className="flex shrink-0 items-center gap-1 border-t border-white/6 px-2 py-1.5 @max-[239px]:gap-0"
       style={{ background: `${BAR_BG}e6` }}
     >
       <button
         type="button"
         onClick={user ? profileCardHandler(user.id, name, user.username, 'top') : undefined}
         aria-label="Abrir meu perfil"
-        className="group flex min-w-0 cursor-pointer items-center gap-2 rounded-md p-1 text-left transition-colors hover:bg-white/5"
+        className="group flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md p-1 text-left transition-colors hover:bg-white/5"
       >
         <Avatar
           userId={user?.id}
@@ -38,12 +138,17 @@ function UserBar(): React.JSX.Element {
           animate="always"
           status={status}
           cutoutColor={BAR_BG}
+          className={`rounded-full transition-shadow ${speaking ? 'ring-2 ring-[#23a55a]' : ''}`}
         />
         <div className="min-w-0">
           <p className="truncate text-ds-md leading-[18px] font-medium text-white">{name}</p>
-          {/* Como no Discord: a nota (ou o status) e, com o mouse, o @. */}
-          <p className="truncate text-ds-xs leading-[13px] font-medium text-gray-400 group-hover:hidden">
-            {note || STATUS_META[status].label}
+          {/* Como no Discord: "Em call", a nota (ou o status) e, com o mouse, o @. */}
+          <p
+            className={`truncate text-ds-xs leading-[13px] font-medium group-hover:hidden ${
+              inCall ? 'text-[#23a55a]' : 'text-gray-400'
+            }`}
+          >
+            {subtitle}
           </p>
           <p className="hidden truncate text-ds-xs leading-[13px] font-medium text-gray-400 group-hover:block">
             @{user?.username}
@@ -51,15 +156,55 @@ function UserBar(): React.JSX.Element {
         </div>
       </button>
 
+      {inCall && (
+        <>
+          <AudioToggle
+            kind="input"
+            off={muted}
+            dimmed={!canSpeak}
+            label={micLabel}
+            title={canSpeak ? micLabel : 'Você não pode falar neste canal'}
+            onToggle={toggleMute}
+            menuOpen={menu?.kind === 'input'}
+            onMenu={toggleMenu('input')}
+          >
+            {muted ? (
+              <MicOffIcon className="h-[18px] w-[18px]" />
+            ) : (
+              <MicIcon className="h-[18px] w-[18px]" />
+            )}
+          </AudioToggle>
+          <AudioToggle
+            kind="output"
+            off={deafened}
+            label={deafenLabel}
+            title={deafenLabel}
+            onToggle={toggleDeafen}
+            menuOpen={menu?.kind === 'output'}
+            onMenu={toggleMenu('output')}
+          >
+            {deafened ? (
+              <HeadsetOffIcon className="h-[18px] w-[18px]" />
+            ) : (
+              <HeadsetIcon className="h-[18px] w-[18px]" />
+            )}
+          </AudioToggle>
+        </>
+      )}
+
       <button
         type="button"
         onClick={() => openSettings('account')}
         aria-label="Configurações do usuário"
         title="Configurações do usuário"
-        className="cursor-pointer rounded-md p-1.5 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+        className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
       >
-        <GearIcon className="h-4 w-4" />
+        <GearIcon className="h-[18px] w-[18px]" />
       </button>
+
+      {menu && inCall && (
+        <AudioDeviceMenu kind={menu.kind} anchor={menu.anchor} onClose={closeMenu} />
+      )}
     </div>
   )
 }

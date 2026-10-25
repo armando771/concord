@@ -73,6 +73,13 @@ func (r *Repository) FindPoll(ctx context.Context, messageID string, viewerID st
 	return poll, nil
 }
 
+// HasPoll diz se a mensagem é uma enquete.
+func (r *Repository) HasPoll(ctx context.Context, messageID string) (bool, error) {
+	var exists bool
+	err := r.db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM polls WHERE message_id = $1)`, messageID).Scan(&exists)
+	return exists, err
+}
+
 // AttachPolls preenche Poll nas mensagens que têm enquete.
 func (r *Repository) AttachPolls(ctx context.Context, messages []Message, viewerID string) error {
 	if len(messages) == 0 {
