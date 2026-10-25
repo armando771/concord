@@ -206,133 +206,221 @@ Numa VPS com IP público não precisa de playit, e dá para ter HTTPS de graça.
    - `UPLOADS_MIN_FREE_GB` (opcional; padrão 5): abaixo desse espaço livre no
      disco o servidor recusa uploads novos.
 4. **Endereço com HTTPS sem comprar domínio:** use `<ip-com-hífens>.sslip.io`
-   (ex.: `1-2-3-4.sslip.io` aponta para `1.2.3.4`). O `/etc/caddy/Caddyfile`
-   é o [`deploy/Caddyfile`](../deploy/Caddyfile) do repositório, com o seu
-   endereço no lugar de `1-2-3-4.sslip.io` (veja
-   [Caddyfile](#caddyfile-sinalização-das-chamadas-direto-no-livekit)).
-   O Caddy tira o certificado sozinho. Precisa do Caddy **2.7 ou mais novo**
-   (`caddy version`; se o `apt` da distribuição trouxer um mais velho, instale
-   pelo repositório oficial do Caddy). O arquivo precisa ser legível pelo
-   usuário `caddy` (`chmod 644`).
+   (ex.: `74-0-5-252.sslip.io` aponta para `74.0.5.252`). O `/etc/caddy/Caddyfile`
+   é o [`deploy/Caddyfile`](../deploy/Caddyfile) do repositório (veja
+   [Caddyfile](#caddyfile-todos-os-endereços-da-vps)). O Caddy tira o
+   certificado sozinho. Serve o Caddy **2.6.2 do `apt` do Debian**. O arquivo
+   precisa ser legível pelo usuário `caddy` (`chmod 644`).
 5. **Serviço do backend:** `/etc/systemd/system/concord-server.service`, com
    `WorkingDirectory=/opt/concord`, `ExecStart=/opt/concord/concord-server` e
-   `Restart=always`, mais o complemento
-   [`deploy/concord-server.service.d/zero-downtime.conf`](../deploy/concord-server.service.d/zero-downtime.conf)
-   em `/etc/systemd/system/concord-server.service.d/` (`KillSignal=SIGTERM`,
-   `TimeoutStopSec=20`, `RestartSec=1`; veja
-   [Reinício sem queda](#reinício-do-backend-sem-queda)). Depois
-   `systemctl daemon-reload && systemctl enable --now concord-server`.
+   `Restart=always`, mais:
+   - o complemento
+     [`deploy/concord-server.service.d/zero-downtime.conf`](../deploy/concord-server.service.d/zero-downtime.conf)
+     em `/etc/systemd/system/concord-server.service.d/`;
+   - o socket [`deploy/concord-server.socket`](../deploy/concord-server.socket)
+     em `/etc/systemd/system/` (a porta fica com o systemd e não fecha no
+     reinício).
+
+   Numa VPS nova: `systemctl daemon-reload && systemctl enable --now
+   concord-server.socket concord-server`. Numa VPS que já roda, siga
+   [Ordem dos passos na VPS](#ordem-dos-passos-na-vps).
 6. **Do seu PC:** `scripts/deploy-vps.sh root@IP` envia o backend, as
    migrations, o compose, a página de download (`site/`), o app web
    (`frontend/dist-web`, se existir) e as atualizações do app, e reinicia.
-   Reiniciar não derruba quem está em chamada e, com o Caddyfile do
-   repositório, nem trava a voz/tela (a sinalização vai direto para o LiveKit).
+   Reiniciar não derruba quem está em chamada, não trava a voz/tela e não
+   perde requisição (veja [Reinício sem queda](#reinício-do-backend-sem-queda)).
 7. **Publicar versão do app:** `scripts/release-win.sh`, `scripts/release-linux.sh` e depois
    `scripts/deploy-vps.sh root@IP`.
 
-### Caddyfile: sinalização das chamadas direto no LiveKit
+### Caddyfile: todos os endereços da VPS
 
 O [`deploy/Caddyfile`](../deploy/Caddyfile) é a cópia versionada do
-`/etc/caddy/Caddyfile` da VPS. O deploy **não** envia esse arquivo: mudar o
-Caddy é sempre um passo manual.
+`/etc/caddy/Caddyfile` da VPS, com os blocos que estão no ar:
+
+| Bloco | Para quê |
+|---|---|
+| `74-0-5-252.sslip.io` | `PUBLIC_URL` dos apps desktop: `/rtc*`, `/updates/*` e o backend |
+| `:8080` | repasse antigo (apps que falam com o endereço do playit): igual ao de cima |
+| `salinha.bhrx.com.br` | página de download (`/opt/concord/site`) e `/updates/*` |
+| `concord.bhrx.com.br` | redireciona para `salinha.bhrx.com.br` |
+| `app-salinha.bhrx.com.br` | app no navegador (`/opt/concord/web`), `/rtc*`, `/api`, `/ws` |
+
+Os dois `bhrx.com.br` estão atrás do proxy do Cloudflare (nuvem laranja) e
+funcionam assim, inclusive os WebSockets e o `/rtc` do app web.
 
 - **`/rtc*` vai direto para o LiveKit** (`127.0.0.1:7880`, o `LIVEKIT_PORT`),
   sem passar pelo backend. Antes, a sinalização do LiveKit passava pelo
   backend: cada deploy cortava essa conexão, o cliente fazia um "ICE restart"
-  e a voz e a tela de todo mundo travavam por 0,3–1 s ao mesmo tempo.
-- O app já pede `/rtc` no mesmo endereço da API (`wss://<endereço>/rtc/v1`),
-  então os apps instalados passam a usar a rota nova **sem atualizar**.
-- **Todo bloco de site que serve o app precisa da rota `/rtc*`**: o endereço
-  da API (`PUBLIC_URL`), a versão web (ex.: `app-salinha.bhrx.com.br`) e
-  qualquer repasse antigo (ex.: o bloco `:8080` da migração). Basta pôr
-  `import salinha_rtc` no começo do bloco, antes dos outros `handle`, e
-  `import salinha_backend` onde o bloco repassa ao backend. Um bloco
-  sem ela continua funcionando pelo proxy `/rtc` do backend, mas volta a travar
-  a voz a cada deploy.
-- `stream_close_delay 12h`: recarregar o Caddy (`systemctl reload caddy`) não
-  corta mais os WebSockets abertos (chat e chamadas).
-- O proxy `/rtc` do backend continua existindo para o PC de casa com playit
-  (um túnel TCP só, sem Caddy) e para blocos sem a rota. Lá, reiniciar o
-  backend ainda trava a voz por um instante.
+  e a voz e a tela de todo mundo travavam por 0,3–1 s ao mesmo tempo. O app já
+  pede `/rtc` no mesmo endereço da API, então funciona **sem atualizar o app**.
+  Está no bloco do `PUBLIC_URL`, no `:8080` e no app web (`import salinha_rtc`);
+  um bloco novo que sirva o app precisa do mesmo `import`.
+- **`/updates/*` vem direto do disco** (`/opt/concord/updates`): um download
+  de instalador (~120 MB) não segura o reinício do backend nem cai no deploy.
+- **Sem health check ativo:** com o socket do systemd, a porta do backend não
+  fecha no reinício; o Caddy conecta na hora e a requisição espera na fila até
+  o processo novo atender. `lb_try_duration 15s` só entra com o backend parado
+  de verdade.
+- **`keepalive off`** com o backend: no desligamento ele fecha as conexões
+  ociosas, e um POST mandado numa conexão reaproveitada daria 502.
+- O proxy `/rtc` do backend continua para o PC de casa com playit (um túnel
+  TCP só, sem Caddy). Lá, reiniciar o backend ainda trava a voz por um instante.
 
-**Aplicar o Caddyfile (uma vez, com ninguém em chamada):** o
-`stream_close_delay` só protege conexões abertas por uma configuração que já o
-tem. O reload que aplica este arquivo pela primeira vez **fecha todos os
-WebSockets uma vez**: o chat reconecta sozinho, mas quem estiver em chamada
-perde a sinalização e a chamada reconecta (ou cai). Faça quando ninguém estiver
-em chamada, e **só depois de um deploy deste backend** (que tem o `/healthz`):
-sem ele, o health check do Caddy marca o backend como fora e toda requisição
-espera 15 s e dá 502.
+**Caddy 2.6 e o reload.** O `stream_close_delay`, que faria o reload do Caddy
+não fechar os WebSockets, só existe a partir do 2.7. No 2.6.2 **todo
+`systemctl reload caddy` fecha todos os WebSockets**: o chat reconecta sozinho
+em instantes, e quem está em chamada perde a sinalização (a chamada reconecta
+com uma travada de ~1 s). Como o Caddyfile quase nunca muda, ficamos no 2.6.2
+e só recarregamos com ninguém em chamada (o script abaixo confere).
+
+Para não depender disso, atualize para o Caddy do repositório oficial
+(Cloudsmith) num passo à parte, com ninguém em chamada:
 
 ```bash
-curl -s http://127.0.0.1:8090/healthz   # tem que responder {"status":"ok"} antes
-cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak
-# edite /etc/caddy/Caddyfile a partir do deploy/Caddyfile (endereços e portas)
+apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' > /etc/apt/sources.list.d/caddy-stable.list
+apt update && apt install -y caddy        # reinicia o Caddy: os WebSockets caem uma vez
+caddy version                             # v2.7 ou mais novo
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-systemctl reload caddy
-curl -s -o /dev/null -w '%{http_code}\n' https://<endereço>/rtc/validate   # 401 (é o LiveKit)
+curl -s -o /dev/null -w '%{http_code}\n' https://74-0-5-252.sslip.io/rtc/validate   # 401
 ```
 
-Depois disso, reloads do Caddy não derrubam ninguém.
+Depois acrescente `stream_close_delay 12h` aos `reverse_proxy` de
+`salinha_rtc` e `salinha_backend` e aplique com o script: o primeiro reload
+ainda fecha os WebSockets; os seguintes, não.
+
+**Aplicar o Caddyfile:** use o script, que roda na VPS, nesta ordem: valida o
+arquivo; confere que o backend responde `/healthz`; confere no banco que
+ninguém está em chamada (senão para, a não ser com `--force`); guarda backup
+do atual; recarrega; testa `/rtc/validate` = 401 (o LiveKit), `/healthz` e
+`/updates/latest.yml` pelo `PUBLIC_URL` e `/rtc/validate` nos endereços de
+`--also`; se algo falhar, volta o backup.
+
+```bash
+scripts/apply-caddyfile.sh --also https://app-salinha.bhrx.com.br root@IP deploy/Caddyfile
+```
+
+### Porta do backend com o systemd
+
+Sem o socket, o backend fecha a porta ao reiniciar e o Caddy repete a conexão
+até o processo novo abrir. Repetir funciona para GET, mas o Caddy não consegue
+repetir um POST cujo corpo já leu (testado no 2.6.2 e no 2.10.2): uma mensagem
+mandada no meio do deploy dava 502. Com o
+[`deploy/concord-server.socket`](../deploy/concord-server.socket), o systemd
+segura a porta `127.0.0.1:8090` e a passa ao backend a cada subida
+(`LISTEN_FDS`): a porta nunca fecha, as conexões esperam na fila do kernel e o
+processo novo atende quando fica pronto. O backend ignora `HOST`/`PORT` do
+`.env` quando recebe o socket, então o `ListenStream` tem que ser o endereço
+que o Caddy usa. Sem o socket (PC de casa, `go run`), ele escuta sozinho como
+antes.
+
+Ativar numa VPS que já roda (uma vez, com ninguém em chamada: a porta fica
+fechada por ~1 s):
+
+```bash
+cp concord-server.socket /etc/systemd/system/                                   # deploy/concord-server.socket
+cp zero-downtime.conf /etc/systemd/system/concord-server.service.d/             # deploy/concord-server.service.d/
+systemctl daemon-reload
+systemctl stop concord-server
+systemctl enable --now concord-server.socket
+systemctl start concord-server
+journalctl -u concord-server -n 5 | grep "socket do systemd"                    # "servidor pronto em … (socket do systemd)"
+curl -s http://127.0.0.1:8090/healthz                                           # {"status":"ok"}
+```
+
+O backend precisa ser desta versão ou mais nova: um binário antigo não sabe
+usar o socket e não sobe (porta ocupada). Por isso o socket entra **depois** de
+um deploy desta versão, e o `concord-server.prev`/`.good` do rollback já são
+binários novos.
 
 ### Reinício do backend sem queda
 
 O deploy reinicia o backend (`systemctl restart concord-server`). Com o
 SIGTERM, o backend:
 
-1. para de aceitar conexões (as novas esperam no Caddy pelo processo novo);
+1. para de aceitar conexões (com o socket, as novas esperam na fila do kernel);
 2. fecha o WebSocket do chat de cada app com o código **1012** ("servidor
-   reiniciando"), sem tirar ninguém da chamada nem marcar ninguém offline;
-3. termina as requisições em andamento (uploads inclusive) em até 10 s e sai.
+   reiniciando"), sem tirar ninguém da chamada nem marcar ninguém offline. O
+   1012 sai na hora; espera no máximo 500 ms o "ok" de cada app (um notebook que
+   dormiu nunca responde);
+3. corta na hora os downloads longos (atualização pelo backend, vídeo/áudio do
+   chat em `/api/media`), que o app retoma com Range;
+4. dá até 3 s para as requisições comuns em andamento (API, uploads) e fecha à
+   força o que sobrar. Um upload grande que esteja no meio nessa hora falha e o
+   app mostra o erro.
 
-O processo novo recarrega as chamadas do banco, com o mudo/ensurdecido e quem
-está transmitindo de cada participante (ficam salvos em `call_participants`),
-e só então abre a porta: os ícones de mudo e o selo LIVE não piscam. O app,
-ao receber o 1012, reconecta em 100–300 ms (em vez de 1 s, 2 s, 4 s…) e não
-mostra aviso. "Reconectando ao servidor…" só aparece se a conexão ficar fora
-por mais de 3 s.
+O processo novo só sobe depois que o antigo sai, então essa espera é o tempo
+sem backend: no E2E, ~0,55 s com um download travado e um WebSocket morto
+(antes: 10 s). O processo novo espera o banco por até 30 s, recarrega as
+chamadas do banco, com o mudo/ensurdecido e quem está transmitindo de cada
+participante (ficam salvos em `call_participants`), e só então atende: os
+ícones de mudo e o selo LIVE não piscam. Se não conseguir ler as chamadas, não
+fica pronto (nada é encerrado por causa de um erro de leitura): tenta de novo
+por até 30 s e então sai com erro.
 
-Ao reconectar, o app recupera o que se perdeu na queda, sem som, notificação
-nem reconexão da mídia: mensagens novas das salas abertas (sem duplicar),
-presença, conversas, servidores e canais, amigos, a lista dos canais de voz e
-o estado da chamada (canal ou DM). Ele também reenvia o próprio mudo/ensurdecido
-e se está transmitindo a tela.
+O app, ao receber o 1012, reconecta em 100–300 ms e não mostra aviso;
+"Reconectando ao servidor…" só aparece se a conexão ficar fora por mais de
+3 s. Ao reconectar, recupera o que se perdeu na queda, sem som, notificação nem
+reconexão da mídia: mensagens novas das salas que estavam carregadas (sem
+duplicar; só o que é mais novo que a última mensagem conhecida conta como não
+lido), presença, conversas, servidores e canais, amigos (3 s depois, quando os
+outros apps também voltaram), a lista dos canais de voz e o estado da chamada
+(canal ou DM). Reenvia o próprio mudo/ensurdecido e se está transmitindo. Um
+404 ao ler a chamada só fecha a DM ou troca a sala do canal se repetir por
+~4 s e não houver mais ninguém na sala de mídia.
 
 `GET /healthz` responde `200` só com o servidor pronto (banco respondendo e
-chamadas recarregadas) e `503` enquanto sobe ou desliga. Não aparece no log.
+chamadas recarregadas) e `503` enquanto desliga. Não aparece no log.
 
-**As requisições esperam em vez de falhar.** No Caddy (`salinha_backend` do
-[`deploy/Caddyfile`](../deploy/Caddyfile)):
+**O deploy** (`scripts/deploy-vps.sh`), depois de enviar os arquivos:
 
-- `lb_try_duration 15s` e `lb_try_interval 100ms`: enquanto a porta do backend
-  está fechada, o Caddy tenta de novo a cada 100 ms por até 15 s, em vez de
-  devolver 502. Vale para qualquer método (POST e uploads inclusive), porque só
-  repete o que nem chegou a conectar;
-- `request_buffers 1MB`: para repetir um POST, o Caddy precisa ter guardado o
-  corpo. 1 MB cobre toda a API (JSON); um upload de arquivo maior que isso que
-  comece bem na janela do reinício (~0,1–0,5 s) ainda falha e o app mostra o
-  erro;
-- `transport http { keepalive off }`: no desligamento o backend fecha as
-  conexões ociosas, e um POST mandado numa conexão reaproveitada daria 502 (o
-  Caddy só repete GET depois que a conexão abriu). Sem reaproveitar, a porta
-  fechada sempre cai na nova tentativa;
-- `health_uri /healthz` (a cada 500 ms, duas falhas seguidas): só manda tráfego
-  para um backend pronto.
+1. aplica as migrations com o binário novo (`concord-server.new migrate`, até
+   120 s) com o antigo ainda no ar; se falharem, para sem tocar em nada;
+2. guarda o último binário que passou no `/healthz` em `concord-server.prev`,
+   troca, roda `systemctl reset-failed` e reinicia;
+3. espera o `/healthz` (até 30 s). Passou: o binário vira `concord-server.good`.
+   Não passou: guarda o novo em `concord-server.failed`, **volta sozinho para o
+   `.prev`**, reinicia e sai com erro;
+4. só com o backend novo no ar publica o app web e os manifestos
+   (`latest*.yml`): nenhum app baixa uma versão cujo backend falhou.
 
-O deploy espera o `/healthz` responder (até 30 s) em vez de um `sleep` fixo e,
-se o backend não subir, mostra o fim do `journalctl` e falha.
+**systemd** ([`zero-downtime.conf`](../deploy/concord-server.service.d/zero-downtime.conf)):
+`KillSignal=SIGTERM`, `TimeoutStopSec=10` (o backend leva ~3,5 s no pior caso),
+`RestartSec=1` com `StartLimitIntervalSec=0` (sem isso, cinco falhas em 10 s
+fariam o systemd desistir de vez), `After=`/`Wants=docker.service` e
+`Requires=`/`After=concord-server.socket`. No PC de casa,
+`scripts/install-services.sh` gera o serviço com o mesmo desligamento e sem
+limite de reinícios (sem socket).
 
-O systemd precisa esperar esse desligamento: `TimeoutStopSec` maior que os
-10 s do backend. Na VPS, instale o complemento uma vez (não reinicia nada):
+### Ordem dos passos na VPS
 
-```bash
-mkdir -p /etc/systemd/system/concord-server.service.d
-cp zero-downtime.conf /etc/systemd/system/concord-server.service.d/   # deploy/concord-server.service.d/
-systemctl daemon-reload
-systemctl show concord-server -p KillSignal -p TimeoutStopUSec -p RestartUSec
-```
+Para uma VPS que já roda a versão anterior. Cada passo diz quando pode ser
+feito.
 
-No PC de casa, `scripts/install-services.sh` já gera o serviço com isso.
+1. **Deploy desta versão** (qualquer hora; CI ou `scripts/deploy-vps.sh`). A
+   migration `000022` entra antes do reinício. Esse deploy ainda trava a voz
+   uma vez, como antes (o Caddy ainda manda `/rtc` pelo backend). O aviso
+   `docker-compose.yml/.env mudou: postgres … --infra` é esperado (versão fixa
+   do Postgres) e se repete até o passo 5.
+2. **Conferir:** `curl -s http://127.0.0.1:8090/healthz` → `{"status":"ok"}`.
+3. **Socket e complemento do systemd** (com ninguém em chamada; a porta fecha
+   por ~1 s): [Porta do backend com o systemd](#porta-do-backend-com-o-systemd).
+4. **Caddyfile** (com ninguém em chamada; o script confere):
+   `scripts/apply-caddyfile.sh --also https://app-salinha.bhrx.com.br root@IP deploy/Caddyfile`.
+   Antes, confira que `/opt/concord` e `/opt/concord/updates` são legíveis pelo
+   usuário `caddy` (`chmod o+x /opt/concord; chmod -R o+rX /opt/concord/updates`).
+5. **Opcional, num horário calmo:** `scripts/deploy-vps.sh --infra root@IP`
+   aplica o `postgres:17.11` (recria só o Postgres; as chamadas seguem, o
+   backend espera o banco). Antes: `docker exec concord-postgres postgres
+   --version` (de qual versão sai), as notas das versões puladas (procure
+   "REINDEX") e um `pg_dump` na hora.
+6. **Opcional:** Caddy ≥ 2.7 pelo repositório oficial e `stream_close_delay`
+   (seção do Caddyfile acima).
+
+Para voltar atrás: `cp concord-server.prev concord-server && systemctl
+restart concord-server` (o deploy já faz isso sozinho quando o novo não sobe);
+o Caddyfile anterior fica em `/etc/caddy/Caddyfile.bak-<data>`.
 
 ### Conferir que o deploy não foi percebido
 
@@ -344,14 +432,15 @@ Durante um deploy, com alguém em chamada:
   `signal disconnected`, `resuming signal connection` nem
   `triggering ICE restart` (é o que travava a voz);
 - o selo LIVE e os ícones de mudo na lista do canal de voz não piscam;
-- uma mensagem mandada no meio do deploy aparece uma vez para todo mundo;
+- uma mensagem mandada no meio do deploy aparece uma vez para todo mundo, e
+  as não lidas das outras salas não pulam;
 - na VPS: `journalctl -u concord-server -n 20` mostra `servidor desligado` e,
-  logo depois, `servidor pronto`, e `curl -s https://<endereço>/healthz`
-  responde `{"status":"ok"}`.
+  logo depois, `servidor pronto em … (socket do systemd)`; a saída do deploy
+  termina com `backend no ar (/healthz ok)`.
 
-O teste automático disso é o `scripts/e2e-restart-call.mjs` (Caddy com o
-`deploy/Caddyfile`, backend, LiveKit e dois navegadores; o cabeçalho do script
-explica como subir).
+O teste automático disso é o `scripts/e2e-restart-call.mjs` (Caddy 2.6.2 com
+os trechos do `deploy/Caddyfile`, a porta segurada como pelo socket, backend,
+LiveKit e dois navegadores; o cabeçalho do script explica como subir).
 
 ### Migrations: expandir e contrair
 
@@ -382,9 +471,11 @@ que não desfaz migration nenhuma). Por isso:
    existe" como aplicada.
 7. Escreva o `.down.sql`, mas não conte com ele num rollback: quem volta é o
    binário, e ele tem que aguentar o schema novo (regra 1).
-8. Números de migration são únicos: com duas branches usando a mesma versão
-   (`000018_…`), uma das duas nunca roda (o migrador guarda só a última versão
-   aplicada). Renumere ao juntar.
+8. Números de migration são únicos e **crescem na ordem em que chegam à
+   VPS**: o migrador guarda só a última versão aplicada, então com duas
+   branches usando o mesmo número uma nunca roda, e uma migration com número
+   menor que a última aplicada (ex.: `000021` mesclada depois de um deploy da
+   `000022`) também nunca roda. Renumere ao juntar.
 
 ### Postgres e LiveKit não são recriados no deploy
 
@@ -412,15 +503,9 @@ do `LIVEKIT_CONFIG` (comentários inclusive) vira variável do container e conta
 `/updates/latest.yml` (Windows) e `/updates/latest-linux.yml` (Linux) e aponta
 cada botão para o artefato correspondente. A falha de um manifesto não bloqueia
 o download da outra plataforma. O deploy mantém os três instaladores Windows
-e três AppImages mais recentes. No Caddyfile, um domínio próprio serve a
-página e repassa `/updates/` ao backend (bloco `salinha.exemplo.com` do
-[`deploy/Caddyfile`](../deploy/Caddyfile)). Ele não serve o app, então não
-precisa da rota `/rtc*`.
-Para um endereço antigo continuar funcionando, um bloco
-`antigo.exemplo.com { redir https://salinha.exemplo.com{uri} permanent }`
-basta. O domínio precisa de um registro DNS `A` apontando para o IP da VPS (no
-Cloudflare, com o proxy desligado — nuvem cinza — por causa do tamanho do
-instalador).
+e três AppImages mais recentes. No Caddyfile, `salinha.bhrx.com.br` serve a
+página e o `/updates/` direto do disco; `concord.bhrx.com.br` redireciona para
+ele. Os dois estão atrás do proxy do Cloudflare (nuvem laranja).
 
 **App no navegador:** a mesma Salinha, sem instalar, em
 `https://app-salinha.bhrx.com.br`. Usa as mesmas contas e o mesmo backend; o
@@ -437,49 +522,16 @@ ficam como estão).
 > sem o domínio no ar, o botão leva a um erro. Confira com
 > `curl -sI https://app-salinha.bhrx.com.br/` antes do merge.
 
-1. **DNS:** no Cloudflare, registro `A` `app-salinha` → IP da VPS, com o
-   proxy **desligado** (nuvem cinza). Com o proxy ligado o Caddy não consegue
-   tirar o certificado sozinho e os uploads grandes do chat esbarram no limite
-   do Cloudflare. Confira com `dig +short app-salinha.bhrx.com.br`.
-2. **Caddy:** acrescente o bloco abaixo ao `/etc/caddy/Caddyfile` e rode
-   `systemctl reload caddy`:
-   ```
-   app-salinha.bhrx.com.br {
-   	encode zstd gzip
-   	header {
-   		Strict-Transport-Security "max-age=31536000"
-   		X-Content-Type-Options nosniff
-   		X-Frame-Options DENY
-   		Referrer-Policy strict-origin-when-cross-origin
-   	}
-
-   	# Backend: API (inclui os arquivos do chat em /api/media), WebSocket do
-   	# chat e sinalização do LiveKit. O reverse_proxy repassa o upgrade de WS.
-   	@backend path /api /api/* /ws /rtc /rtc/*
-   	handle @backend {
-   		reverse_proxy 127.0.0.1:8090
-   	}
-
-   	# Arquivos com hash no nome: cache longo. Arquivo que não existe é 404
-   	# (não cai no index.html).
-   	handle /assets/* {
-   		root * /opt/concord/web
-   		@exists file
-   		header @exists Cache-Control "public, max-age=31536000, immutable"
-   		file_server
-   	}
-
-   	# O resto é o app: qualquer rota (/servers/…, /dm/…) devolve o index.html,
-   	# sempre revalidado para pegar a versão nova logo depois do deploy.
-   	handle {
-   		root * /opt/concord/web
-   		header Cache-Control "no-cache"
-   		try_files {path} /index.html
-   		file_server
-   	}
-   }
-   ```
-   O `/updates/` não entra: só o app desktop se atualiza por ele.
+1. **DNS:** no Cloudflare, registro `A` `app-salinha` → IP da VPS. Hoje está
+   com o proxy ligado (nuvem laranja) e funciona, inclusive WebSocket e `/rtc`;
+   o limite de upload do Cloudflare (100 MB no plano grátis) fica acima dos
+   25 MB do chat. Confira com `dig +short app-salinha.bhrx.com.br`.
+2. **Caddy:** o bloco `app-salinha.bhrx.com.br` está no
+   [`deploy/Caddyfile`](../deploy/Caddyfile): `/rtc*` direto no LiveKit,
+   `/api`, `/api/*` e `/ws` no backend, `/assets/*` com cache longo e o resto
+   devolve o `index.html`. Aplique com `scripts/apply-caddyfile.sh` (seção
+   "Caddyfile" acima). O `/updates/` não entra: só o app desktop se atualiza
+   por ele.
 3. **Publicar:** `cd frontend && yarn build:web`, depois
    `scripts/deploy-vps.sh root@IP` (o deploy automático já faz os dois).
 4. **Conferir:** `curl -sI https://app-salinha.bhrx.com.br/friends` responde
