@@ -1,4 +1,5 @@
 import type { InvitePreview } from '../../api/invites'
+import { serverIconSrc } from '../../lib/serverIcon'
 import { formatInviteCount } from '../../lib/invitePreview'
 
 /** Ícone do servidor (ou a inicial), como na barra de servidores. */
@@ -17,7 +18,7 @@ export function InviteServerIcon({
       style={{ width: size, height: size, fontSize: size * 0.4 }}
     >
       {iconUrl ? (
-        <img src={iconUrl} alt="" className="h-full w-full object-cover" />
+        <img src={serverIconSrc(iconUrl)} alt="" className="h-full w-full object-cover" />
       ) : (
         <span aria-hidden>{name.charAt(0).toUpperCase()}</span>
       )}
@@ -59,7 +60,7 @@ export function InviteBackdrop({
       {iconUrl ? (
         <>
           <img
-            src={iconUrl}
+            src={serverIconSrc(iconUrl)}
             alt=""
             className="absolute inset-0 h-full w-full scale-125 object-cover opacity-70 blur-2xl"
           />

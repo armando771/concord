@@ -18,6 +18,8 @@ func ServerRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware, req
 		servers.GET("/:id", handler.GetByID)
 		servers.PUT("/:id", handler.Update)
 		servers.DELETE("/:id", handler.Delete)
+		servers.POST("/:id/icon", handler.UploadIcon)
+		servers.DELETE("/:id/icon", handler.DeleteIcon)
 		servers.POST("/:id/invite", requireVerified, handler.InviteMember)
 		servers.GET("/:id/invites", handler.ListServerInvites)
 		servers.GET("/:id/invite-code", handler.InviteCode)

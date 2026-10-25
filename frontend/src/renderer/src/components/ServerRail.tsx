@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { serverIconSrc } from '../lib/serverIcon'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { PlusIcon, InboxIcon, SalinhaMarkIcon } from './icons'
 import { useServerStore } from '../store/serverStore'
@@ -201,7 +202,11 @@ function ServerRail(): React.JSX.Element {
                   }`}
                 >
                   {srv.icon_url ? (
-                    <img src={srv.icon_url} alt={srv.name} className="h-full w-full object-cover" />
+                    <img
+                      src={serverIconSrc(srv.icon_url)}
+                      alt={srv.name}
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
                     <span>{initialChar}</span>
                   )}

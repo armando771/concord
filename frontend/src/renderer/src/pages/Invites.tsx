@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { serverIconSrc } from '../lib/serverIcon'
 import Button from '../components/Button'
 import { InboxIcon } from '../components/icons'
 import { useInviteStore } from '../store/inviteStore'
@@ -87,7 +88,7 @@ function Invites(): React.JSX.Element {
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-linear-to-br from-violet-600 to-indigo-600 font-bold text-white text-base shadow-md">
                         {invite.server_icon_url ? (
                           <img
-                            src={invite.server_icon_url}
+                            src={serverIconSrc(invite.server_icon_url)}
                             alt={invite.server_name ?? ''}
                             className="h-full w-full object-cover"
                           />

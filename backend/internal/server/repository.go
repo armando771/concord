@@ -186,6 +186,23 @@ func (r *Repository) Update(ctx context.Context, id string, name string, iconURL
 	return err
 }
 
+// SetIcon troca o ícone (nil tira) e devolve o antigo (para apagar o arquivo).
+func (r *Repository) SetIcon(ctx context.Context, id string, url *string) (*string, error) {
+	var old *string
+	err := r.db.QueryRow(
+		ctx,
+		`
+		UPDATE servers s SET icon_url = COALESCE($2, ''), updated_at = NOW()
+		FROM (SELECT icon_url FROM servers WHERE id = $1 FOR UPDATE) prev
+		WHERE s.id = $1
+		RETURNING prev.icon_url
+		`,
+		id,
+		url,
+	).Scan(&old)
+	return old, err
+}
+
 func (r *Repository) Delete(ctx context.Context, id string) error {
 	_, err := r.db.Exec(ctx, `DELETE FROM servers WHERE id = $1`, id)
 	return err
