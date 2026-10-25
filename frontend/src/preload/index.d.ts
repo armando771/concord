@@ -27,6 +27,7 @@ export interface UpdatesApi {
   setCallSnapshot(snapshot: CallResume | null): void
   takeCallResume(): Promise<PendingCallResume | null>
   status(): Promise<{ version: string; ready: boolean } | null>
+  autoUpdateUnavailable(): Promise<boolean>
   onAvailable(cb: (version: string) => void): () => void
   onReady(cb: (version: string) => void): () => void
   onProgress(cb: (percent: number) => void): () => void

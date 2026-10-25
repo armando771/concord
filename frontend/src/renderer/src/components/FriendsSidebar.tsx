@@ -125,7 +125,9 @@ function ConversationRow({
         {typing ? (
           <p className="truncate text-xs italic text-violet-300">digitando…</p>
         ) : (
-          isGroup && <p className="truncate text-xs text-gray-500">{conv.members.length} membros</p>
+          isGroup && (
+            <p className="truncate text-xs text-gray-500">{(conv.members ?? []).length} membros</p>
+          )
         )}
       </div>
       {unread > 0 && (

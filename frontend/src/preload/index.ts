@@ -54,6 +54,10 @@ const api = {
     status(): Promise<{ version: string; ready: boolean } | null> {
       return ipcRenderer.invoke('update:status')
     },
+    /** true = esta instalação não se atualiza sozinha (Linux sem AppImage). */
+    autoUpdateUnavailable(): Promise<boolean> {
+      return ipcRenderer.invoke('update:unavailable')
+    },
     /** Existe versão nova (pode ainda estar baixando). */
     onAvailable(cb: (version: string) => void): () => void {
       const listener = (_e: unknown, version: string): void => cb(version)

@@ -7,7 +7,10 @@ export const DEFAULT_SERVER_URL = 'http://localhost:8080'
 export interface ServerUrls {
   apiBaseUrl: string
   wsUrl: string
-  /** O livekit-client acrescenta /rtc sozinho; o backend repassa para o LiveKit. */
+  /**
+   * O livekit-client acrescenta /rtc sozinho. Na VPS o Caddy manda /rtc direto
+   * para o LiveKit; sem Caddy (PC de casa), o backend repassa.
+   */
   liveKitUrl: string
 }
 

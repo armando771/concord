@@ -36,6 +36,8 @@ type Client struct {
 	validator  subscribeValidator
 	callRouter CallRouter
 	typing     TypingRouter
+	// Cancela a leitura (e com isso fecha a conexão); usado no desligamento.
+	cancel context.CancelFunc
 }
 
 func (c *Client) readPump(ctx context.Context) {
