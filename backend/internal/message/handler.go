@@ -54,7 +54,8 @@ func (h *Handler) CreateChannelMessage(c *gin.Context) {
 	channelID := c.Param("channelId")
 
 	var input struct {
-		Content string `json:"content"`
+		Content       string   `json:"content"`
+		AttachmentIDs []string `json:"attachment_ids"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -79,7 +80,7 @@ func (h *Handler) CreateChannelMessage(c *gin.Context) {
 		return
 	}
 
-	msg, err := h.service.CreateChannelMessage(c.Request.Context(), channelID, userID, input.Content)
+	msg, err := h.service.CreateChannelMessage(c.Request.Context(), channelID, userID, input.Content, input.AttachmentIDs)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -140,7 +141,8 @@ func (h *Handler) CreateConversationMessage(c *gin.Context) {
 	conversationID := c.Param("id")
 
 	var input struct {
-		Content string `json:"content"`
+		Content       string   `json:"content"`
+		AttachmentIDs []string `json:"attachment_ids"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -157,7 +159,7 @@ func (h *Handler) CreateConversationMessage(c *gin.Context) {
 		return
 	}
 
-	msg, err := h.service.CreateConversationMessage(c.Request.Context(), conversationID, userID, input.Content)
+	msg, err := h.service.CreateConversationMessage(c.Request.Context(), conversationID, userID, input.Content, input.AttachmentIDs)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

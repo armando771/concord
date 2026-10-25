@@ -136,8 +136,24 @@ func (r *Repository) ListByUserID(ctx context.Context, userID string) ([]Summary
 			ELSE c.user_a_id
 		END
 		LEFT JOIN LATERAL (
-			-- Mensagem só com enquete: a prévia mostra a pergunta.
-			SELECT m.id, m.author_id, COALESCE(NULLIF(m.content, ''), '📊 ' || p.question, '') AS content, m.created_at
+			-- Mensagem só com enquete: a prévia mostra a pergunta. Só com
+			-- anexos: o mesmo rótulo do attachmentLabel do app.
+			SELECT m.id, m.author_id, COALESCE(
+				NULLIF(m.content, ''),
+				'📊 ' || p.question,
+				(
+					SELECT CASE
+						WHEN COUNT(*) = 0 THEN NULL
+						WHEN COUNT(*) > 1 THEN '📎 ' || COUNT(*) || ' anexos'
+						WHEN MIN(a.kind) = 'image' THEN '🖼️ Imagem'
+						WHEN MIN(a.kind) = 'video' THEN '🎬 Vídeo'
+						ELSE '🎤 Áudio'
+					END
+					FROM message_attachments a
+					WHERE a.message_id = m.id
+				),
+				''
+			) AS content, m.created_at
 			FROM messages m
 			LEFT JOIN polls p ON p.message_id = m.id
 			WHERE m.conversation_id = c.id

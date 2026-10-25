@@ -14,6 +14,7 @@ import (
 	"gin-quickstart/backend/internal/friendship"
 	"gin-quickstart/backend/internal/level"
 	"gin-quickstart/backend/internal/livekit"
+	"gin-quickstart/backend/internal/media"
 	"gin-quickstart/backend/internal/message"
 	"gin-quickstart/backend/internal/server"
 	"gin-quickstart/backend/internal/updates"
@@ -108,9 +109,19 @@ func main() {
 	conversationService := conversation.ConversationService(conversationRepository)
 	conversationHandler := conversation.ConversationHandler(conversationService, friendshipService, serverService, userService)
 
+	// Mídia do chat (arquivos no disco, fora do binário e do deploy)
+	uploadsDir := os.Getenv("UPLOADS_DIR")
+	if uploadsDir == "" {
+		uploadsDir = "uploads"
+	}
+	uploads, err := media.NewStore(uploadsDir)
+	if err != nil {
+		log.Fatalf("failed to open uploads dir: %v", err)
+	}
+
 	// Message
 	messageRepository := message.MessageRepository(db)
-	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository)
+	messageService := message.MessageService(messageRepository, hub, channelRepository, conversationRepository, uploads)
 	messageHandler := message.MessageHandler(messageService, channelService, conversationService, friendshipService, serverService)
 
 	// LiveKit (mídia das chamadas)
