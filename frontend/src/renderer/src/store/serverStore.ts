@@ -16,6 +16,7 @@ import {
   listChannels as apiListChannels,
   createChannel as apiCreateChannel,
   updateChannel as apiUpdateChannel,
+  reorderChannels as apiReorderChannels,
   deleteChannel as apiDeleteChannel
 } from '../api/channels'
 
@@ -34,6 +35,8 @@ interface ServerState {
   inviteUser: (serverId: string, userId: string) => Promise<void>
   createChannel: (serverId: string, name: string, type?: ChannelType) => Promise<void>
   updateChannel: (serverId: string, channelId: string, name: string) => Promise<void>
+  reorderChannels: (serverId: string, nextChannels: Channel[], sectionIds: string[]) => Promise<void>
+  setChannels: (serverId: string, channels: Channel[]) => void
   deleteChannel: (serverId: string, channelId: string) => Promise<void>
   updateServer: (serverId: string, name: string, iconUrl?: string) => Promise<void>
   deleteServer: (serverId: string) => Promise<void>
@@ -126,6 +129,26 @@ export const useServerStore = create<ServerState>()((set, get) => ({
   deleteChannel: async (serverId: string, channelId: string) => {
     await apiDeleteChannel(serverId, channelId)
     await get().fetchChannels(serverId)
+  },
+  reorderChannels: async (serverId: string, nextChannels: Channel[], sectionIds: string[]) => {
+    const previous = get().channels
+    set({ channels: nextChannels })
+    try {
+      const updated = await apiReorderChannels(serverId, sectionIds)
+      if (get().currentServer?.id === serverId && Array.isArray(updated)) {
+        set({ channels: updated })
+      }
+    } catch (err) {
+      if (get().currentServer?.id === serverId) {
+        set({ channels: previous })
+      }
+      throw err
+    }
+  },
+  setChannels: (serverId: string, channels: Channel[]) => {
+    if (get().currentServer?.id === serverId) {
+      set({ channels })
+    }
   },
   updateServer: async (serverId: string, name: string, iconUrl?: string) => {
     const updated = await apiUpdateServer(serverId, { name, icon_url: iconUrl ?? '' })

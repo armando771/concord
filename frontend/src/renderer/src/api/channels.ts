@@ -7,6 +7,7 @@ export interface Channel {
   server_id: string
   name: string
   type: ChannelType
+  position?: number
   created_by: string
   created_at: string
   updated_at: string
@@ -31,6 +32,13 @@ export function updateChannel(serverId: string, channelId: string, name: string)
   return request<Channel>(`/servers/${serverId}/channels/${channelId}`, {
     method: 'PUT',
     body: JSON.stringify({ name })
+  })
+}
+
+export function reorderChannels(serverId: string, channelIds: string[]): Promise<Channel[]> {
+  return request<Channel[]>(`/servers/${serverId}/channels`, {
+    method: 'PUT',
+    body: JSON.stringify({ channel_ids: channelIds })
   })
 }
 

@@ -225,6 +225,10 @@ func (h *Hub) PublishChannelDelete(event channel.DeleteEvent) {
 	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("channel:delete", event))
 }
 
+func (h *Hub) PublishChannelReorder(event channel.ReorderEvent) {
+	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("channel:reorder", event))
+}
+
 func (h *Hub) PublishServerUpdate(event server.UpdateEvent) {
 	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:update", event))
 }

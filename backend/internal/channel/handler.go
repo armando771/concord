@@ -2,6 +2,7 @@ package channel
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -132,6 +133,42 @@ func (h *Handler) Update(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, updated)
+}
+
+func (h *Handler) Reorder(c *gin.Context) {
+	serverID := c.Param("id")
+
+	var input struct {
+		ChannelIDs []string `json:"channel_ids"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil || len(input.ChannelIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.requireAdmin(c.Request.Context(), serverID, userID.(string)); err != nil {
+		c.JSON(err.Status, gin.H{"error": err.Message})
+		return
+	}
+
+	channels, err := h.service.Reorder(c.Request.Context(), serverID, input.ChannelIDs)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, ErrChannelNotFound) || errors.Is(err, ErrInvalidChannelOrder) {
+			status = http.StatusBadRequest
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, channels)
 }
 
 func (h *Handler) Delete(c *gin.Context) {
