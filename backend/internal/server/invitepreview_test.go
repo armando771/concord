@@ -8,10 +8,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
 	"gin-quickstart/backend/internal/database"
+	"gin-quickstart/backend/internal/permission"
 	"gin-quickstart/backend/internal/ratelimit"
 
 	"github.com/gin-gonic/gin"
@@ -22,6 +24,7 @@ type fakePreviewer struct {
 	preview *InvitePreview
 	err     error
 	codes   []string
+	members map[string]bool
 }
 
 func (f *fakePreviewer) InvitePreview(_ context.Context, code string) (*InvitePreview, error) {
@@ -29,20 +32,54 @@ func (f *fakePreviewer) InvitePreview(_ context.Context, code string) (*InvitePr
 	return f.preview, f.err
 }
 
+func (f *fakePreviewer) IsMember(_ context.Context, serverID, userID string) (bool, error) {
+	return f.members[serverID+"/"+userID], nil
+}
+
+// asUser faz o papel do OptionalAuthMiddleware nos testes: o cabeçalho
+// X-Test-User vira o userID.
+func asUser(c *gin.Context) {
+	if id := c.GetHeader("X-Test-User"); id != "" {
+		c.Set("userID", id)
+	}
+	c.Next()
+}
+
 func previewRouter(previewer InvitePreviewer, limiter *ratelimit.Limiter) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	h := &Handler{previews: previewer}
 	router := gin.New()
-	router.GET("/invites/:id/preview", limitByIP(limiter, "too many requests"), h.InvitePreview)
+	router.GET("/invites/:id/preview", limitByIP(limiter, "too many requests"), asUser, h.InvitePreview)
 	return router
 }
 
 func getPreview(router *gin.Engine, code, ip string) *httptest.ResponseRecorder {
+	return getPreviewAs(router, code, ip, "")
+}
+
+func getPreviewAs(router *gin.Engine, code, ip, userID string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/invites/"+code+"/preview", nil)
 	req.RemoteAddr = ip + ":1234"
+	if userID != "" {
+		req.Header.Set("X-Test-User", userID)
+	}
 	router.ServeHTTP(w, req)
 	return w
+}
+
+func jsonKeys(t *testing.T, body []byte) []string {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		t.Fatal(err)
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func TestInvitePreviewReturnsOnlyPublicFields(t *testing.T) {
@@ -71,7 +108,8 @@ func TestInvitePreviewReturnsOnlyPublicFields(t *testing.T) {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	want := []string{"icon_url", "member_count", "name", "online_count", "server_id"}
+	// Sem login, nem o id do servidor: a página do navegador não precisa dele.
+	want := []string{"icon_url", "member_count", "name", "online_count"}
 	if len(keys) != len(want) {
 		t.Fatalf("campos = %v, want %v", keys, want)
 	}
@@ -240,7 +278,7 @@ func TestInvitePreviewRouteSkipsAuth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	denyAll := func(c *gin.Context) { c.AbortWithStatus(http.StatusUnauthorized) }
-	ServerRoutes(router.Group("/api"), &Handler{previews: &fakePreviewer{err: ErrInvalidCode}}, denyAll, denyAll)
+	ServerRoutes(router.Group("/api"), &Handler{previews: &fakePreviewer{err: ErrInvalidCode}}, denyAll, denyAll, func(c *gin.Context) { c.Next() })
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/invites/ABCD2345/preview", nil))
@@ -251,5 +289,187 @@ func TestInvitePreviewRouteSkipsAuth(t *testing.T) {
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/invites", nil))
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("lista de convites: status = %d, want 401", w.Code)
+	}
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/servers/s1/invite-code/reset", nil))
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("gerar novo link: status = %d, want 401", w.Code)
+	}
+}
+
+// Logado (o modal dentro do app): vem o id do servidor e se a pessoa já é
+// membro, para "Você já está neste servidor" / "Abrir servidor".
+func TestInvitePreviewLoggedInAddsServerAndMembership(t *testing.T) {
+	fake := &fakePreviewer{
+		preview: &InvitePreview{ServerID: "srv-1", Name: "Turma", MemberCount: 2},
+		members: map[string]bool{"srv-1/ana": true},
+	}
+	router := previewRouter(fake, ratelimit.New(10, time.Minute, 100))
+
+	w := getPreviewAs(router, "ABCD2345", "203.0.113.1", "ana")
+	want := []string{"is_member", "member_count", "name", "online_count", "server_id"}
+	if got := jsonKeys(t, w.Body.Bytes()); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("campos = %v, want %v", got, want)
+	}
+	var body struct {
+		ServerID string `json:"server_id"`
+		IsMember bool   `json:"is_member"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &body)
+	if body.ServerID != "srv-1" || !body.IsMember {
+		t.Errorf("ana: %+v, want srv-1 e membro", body)
+	}
+
+	w = getPreviewAs(router, "ABCD2345", "203.0.113.1", "bia")
+	_ = json.Unmarshal(w.Body.Bytes(), &body)
+	if body.ServerID != "srv-1" || body.IsMember {
+		t.Errorf("bia: %+v, want srv-1 e não membro", body)
+	}
+}
+
+func TestPreviewCacheExpiresAndForgetsServer(t *testing.T) {
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	cache := newPreviewCache(45*time.Second, 3)
+	cache.now = func() time.Time { return now }
+
+	a := &InvitePreview{ServerID: "s1", Name: "A"}
+	cache.put("AAAA2222", a)
+	if got := cache.get("AAAA2222"); got != a {
+		t.Fatalf("get = %v, want o guardado", got)
+	}
+	// Quem pega não mexe no guardado.
+	if got := cache.get("AAAA2222"); got == nil || got.Name != "A" {
+		t.Fatalf("get de novo = %v", got)
+	}
+	now = now.Add(44 * time.Second)
+	if cache.get("AAAA2222") == nil {
+		t.Fatal("expirou antes da hora")
+	}
+	now = now.Add(2 * time.Second)
+	if cache.get("AAAA2222") != nil {
+		t.Fatal("não expirou")
+	}
+
+	cache.put("AAAA2222", a)
+	cache.put("BBBB3333", &InvitePreview{ServerID: "s2"})
+	cache.forgetServer("s1")
+	if cache.get("AAAA2222") != nil || cache.get("BBBB3333") == nil {
+		t.Fatal("forgetServer tem que tirar só o servidor dado")
+	}
+
+	// Cheio: não cresce além do teto.
+	for _, code := range []string{"CCCC4444", "DDDD5555", "EEEE6666", "FFFF7777"} {
+		cache.put(code, &InvitePreview{ServerID: code})
+	}
+	if n := cache.len(); n > 3 {
+		t.Fatalf("cache com %d entradas, teto 3", n)
+	}
+}
+
+type denyPerms struct{ err error }
+
+func (d denyPerms) Require(context.Context, string, string, int64) error { return d.err }
+
+// Gerar novo link: só quem tem CREATE_INVITE (sem permissão, nem chega ao banco).
+func TestRotateInviteCodeNeedsCreateInvite(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, err := range []error{permission.ErrMissingPermission, permission.ErrNotMember} {
+		h := &Handler{perms: denyPerms{err: err}}
+		router := gin.New()
+		router.POST("/servers/:id/invite-code/reset", func(c *gin.Context) { c.Set("userID", "u1"); c.Next() }, h.RotateInviteCode)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/servers/s1/invite-code/reset", nil))
+		if w.Code != http.StatusForbidden {
+			t.Errorf("%v: status = %d, want 403", err, w.Code)
+		}
+	}
+}
+
+type recordingPublisher struct {
+	codes map[string]string
+}
+
+func (*recordingPublisher) PublishServerUpdate(UpdateEvent)     {}
+func (*recordingPublisher) PublishServerDelete(DeleteEvent)     {}
+func (*recordingPublisher) PublishMemberJoin(MemberJoinEvent)   {}
+func (*recordingPublisher) PublishMemberLeave(MemberLeaveEvent) {}
+func (*recordingPublisher) PublishMemberUpdate(MemberJoinEvent) {}
+
+func (r *recordingPublisher) PublishInviteCode(serverID, code string) {
+	if r.codes == nil {
+		r.codes = map[string]string{}
+	}
+	r.codes[serverID] = code
+}
+
+// Num Postgres de verdade: o código novo vale, o antigo morre na hora (sem
+// esperar o cache da prévia) e quem pode convidar recebe o novo.
+func TestRotateInviteCodeDB(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL não definido")
+	}
+	ctx := context.Background()
+	db, err := database.Connect(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := database.Migrate(db, "../../migrations"); err != nil {
+		t.Fatal(err)
+	}
+
+	owner, joiner, serverID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := db.Exec(ctx, sql, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, id := range []string{owner, joiner} {
+		name := "u" + id[:8]
+		exec(`INSERT INTO users (id, username, display_name, email, password_hash) VALUES ($1, $2::text, $2::text, $2::text || '@ex.com', 'x')`, id, name)
+	}
+	t.Cleanup(func() {
+		db.Exec(ctx, `DELETE FROM servers WHERE id = $1`, serverID)
+		db.Exec(ctx, `DELETE FROM users WHERE id IN ($1, $2)`, owner, joiner)
+	})
+	oldCode := newInviteCode()
+	exec(`INSERT INTO servers (id, name, icon_url, owner_id, invite_code) VALUES ($1, 'Turma', '', $2, $3)`, serverID, owner, oldCode)
+	exec(`INSERT INTO server_members (server_id, user_id) VALUES ($1, $2)`, serverID, owner)
+
+	pub := &recordingPublisher{}
+	s := ServerService(ServerRepository(db), pub, nil)
+
+	// A prévia fica no cache; entrar pelo código atualiza a contagem na hora.
+	p, err := s.InvitePreview(ctx, oldCode)
+	if err != nil || p.MemberCount != 1 {
+		t.Fatalf("prévia = %+v, %v", p, err)
+	}
+	if _, err := s.JoinByCode(ctx, oldCode, joiner); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := s.InvitePreview(ctx, oldCode); p == nil || p.MemberCount != 2 {
+		t.Fatalf("depois de entrar: %+v, want 2 membros", p)
+	}
+
+	newCode, err := s.RotateInviteCode(ctx, serverID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newCode == oldCode || !validInviteCode(newCode) || len(newCode) != inviteCodeLength {
+		t.Fatalf("código novo %q (antigo %q)", newCode, oldCode)
+	}
+	if _, err := s.InvitePreview(ctx, oldCode); !errors.Is(err, ErrInvalidCode) {
+		t.Errorf("código antigo depois de gerar outro: err = %v, want ErrInvalidCode", err)
+	}
+	if p, err := s.InvitePreview(ctx, newCode); err != nil || p.ServerID != serverID {
+		t.Errorf("código novo: %+v, %v", p, err)
+	}
+	if got, _ := s.InviteCode(ctx, serverID, owner); got != newCode {
+		t.Errorf("InviteCode = %q, want %q", got, newCode)
+	}
+	if pub.codes[serverID] != newCode {
+		t.Errorf("aviso do código novo = %q, want %q", pub.codes[serverID], newCode)
 	}
 }

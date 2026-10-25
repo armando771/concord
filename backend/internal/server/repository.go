@@ -586,6 +586,12 @@ func (r *Repository) SetInviteCodeIfMissing(ctx context.Context, serverID string
 	return err
 }
 
+// SetInviteCode troca o código do servidor ("Gerar novo link").
+func (r *Repository) SetInviteCode(ctx context.Context, serverID string, code string) error {
+	_, err := r.db.Exec(ctx, `UPDATE servers SET invite_code = $2 WHERE id = $1`, serverID, code)
+	return err
+}
+
 func (r *Repository) FindIDByInviteCode(ctx context.Context, code string) (string, error) {
 	var id string
 	err := r.db.QueryRow(ctx, `SELECT id FROM servers WHERE invite_code = $1`, code).Scan(&id)

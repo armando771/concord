@@ -373,7 +373,7 @@ func main() {
 		}
 		return u.EmailVerifiedAt != nil, nil
 	})
-	server.ServerRoutes(api, serverHandler, authMiddleware, requireVerified)
+	server.ServerRoutes(api, serverHandler, authMiddleware, requireVerified, auth.OptionalAuthMiddleware(authService))
 	channel.ChannelRoutes(api, channelHandler, authMiddleware)
 	role.RoleRoutes(api, roleHandler, authMiddleware)
 	conversation.ConversationRoutes(api, conversationHandler, authMiddleware)
