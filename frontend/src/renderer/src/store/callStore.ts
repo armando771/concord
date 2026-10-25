@@ -103,6 +103,8 @@ interface CallState {
   isScreenSharing: boolean
   /** userId -> stream de câmera remota (Fase 4, DM) */
   videoStreams: Record<string, MediaStream>
+  /** userId -> nome de quem está na sala de mídia (LiveKit), mesmo fora da lista do backend */
+  mediaPeers: Record<string, string>
   /** stream da câmera local enquanto ligada (reativo p/ preview espelhado) */
   localCameraStream: MediaStream | null
   /** quem está compartilhando tela segundo o backend (registry) */
@@ -139,12 +141,16 @@ interface CallState {
   setFocusedScreenUser: (userId: string | null) => void
   setServerCalls: (map: Record<string, CallStateResponse>) => void
   joinVoiceChannel: (channelId: string) => Promise<void>
+  /** WS de chat reconectou: volta a se registrar na chamada de canal, se houver. */
+  handleWsReconnect: () => void
   handleWsEvent: (event: WsEvent) => void
 }
 
 /** Microfone da chamada (o stream processado + o que precisa ser fechado). */
 let localMic: MicHandle | null = null
 let transitioning = false
+/** Reentrada na chamada de canal em andamento (ver resyncChannelCall). */
+let resyncing = false
 /** Conexão com o servidor de mídia (LiveKit) da chamada atual. */
 let media: CallMedia | null = null
 
@@ -183,7 +189,8 @@ const EMPTY_MEDIA: RemoteMedia = {
   streams: {},
   screenStreams: {},
   screenAudioStreams: {},
-  videoStreams: {}
+  videoStreams: {},
+  mediaPeers: {}
 }
 
 export const useCallStore = create<CallState>()((set, get) => {
@@ -207,7 +214,7 @@ export const useCallStore = create<CallState>()((set, get) => {
         focusedScreenUserId =
           Object.keys(remote.screenStreams).find((id) => !s.screenStreams[id]) ?? null
       }
-      return { ...remote, focusedScreenUserId }
+      return { ...remote, mediaPeers: remote.mediaPeers ?? {}, focusedScreenUserId }
     })
   }
 
@@ -284,6 +291,84 @@ export const useCallStore = create<CallState>()((set, get) => {
         showToast.error('Não foi possível transmitir a câmera.')
         if (localCameraStream === camera) void get().toggleCamera()
       }
+    }
+  }
+
+  /**
+   * Lê o estado da chamada no backend. `replace` troca a lista inteira (usado
+   * ao reentrar, quando a lista local pode ter ficado velha); senão só soma
+   * quem faltava (eventos call:joined podem ter chegado antes).
+   */
+  const loadCallState = async (callId: string, replace: boolean): Promise<void> => {
+    const meId = useAuthStore.getState().user?.id
+    if (!meId) return
+    try {
+      const state = await getCallState(callId)
+      if (get().callId !== callId) return
+      const others = state.participants
+        .filter((p) => p.user_id && p.user_id !== meId)
+        .map((p) => ({
+          id: p.user_id,
+          username: p.username ?? '',
+          display_name: p.display_name ?? p.username ?? 'Usuário',
+          avatar_url: p.avatar_url ?? null
+        }))
+      const sharing = state.screen_sharing ?? []
+      set((s) => ({
+        screenSharers: sharing,
+        voiceStates: {
+          ...Object.fromEntries(
+            state.participants.map((p) => [
+              p.user_id,
+              { muted: p.muted ?? false, deafened: p.deafened ?? false }
+            ])
+          ),
+          ...(replace ? {} : s.voiceStates)
+        },
+        focusedScreenUserId: s.focusedScreenUserId ?? sharing[0] ?? null,
+        participants: replace
+          ? others
+          : [...s.participants, ...others.filter((p) => !s.participants.some((q) => q.id === p.id))]
+      }))
+    } catch {
+      // estado indisponível: a lista se forma pelos eventos call:joined
+    }
+  }
+
+  /**
+   * O backend tira da chamada quem fica com o WS de chat caído além da
+   * tolerância, mas a mídia (LiveKit) segue conectada — a pessoa continua
+   * falando/transmitindo e some da lista de todo mundo. Ao reconectar (ou ao
+   * saber que foi tirado), volta a se registrar na chamada do canal.
+   */
+  const resyncChannelCall = async (): Promise<void> => {
+    const { status, type, channelId, callId } = get()
+    if (status !== 'active' || type !== 'channel' || !channelId || !callId || resyncing) return
+    resyncing = true
+    try {
+      // Idempotente: se ainda estou na chamada, nada muda no backend.
+      const call = await startCallApi({ type: 'channel', channel_id: channelId })
+      if (get().callId !== callId) return
+      if (call.id !== callId) {
+        // A chamada antiga acabou enquanto eu estava fora: segue na nova.
+        useChatStore.getState().unsubscribeRoom(`call:${callId}`)
+        useChatStore.getState().subscribeRoom(`call:${call.id}`)
+        media?.disconnect()
+        media = null
+        set({ callId: call.id, participants: [], ...EMPTY_MEDIA })
+        void connectMedia(call.id)
+      }
+      await loadCallState(call.id, true)
+      if (get().callId !== call.id) return
+      sendVoiceState()
+      if (localScreenStream) {
+        useChatStore.getState().sendEvent('call:screen', { call_id: call.id, active: true })
+      }
+      bumpList()
+    } catch {
+      // segue com a mídia; a próxima reconexão tenta de novo
+    } finally {
+      resyncing = false
     }
   }
 
@@ -450,40 +535,7 @@ export const useCallStore = create<CallState>()((set, get) => {
         // pode conectar em paralelo à leitura do estado da chamada.
         void connectMedia(call.id)
 
-        const meId = useAuthStore.getState().user?.id
-        if (meId) {
-          try {
-            const state = await getCallState(call.id)
-            const others = state.participants.filter((p) => p.user_id !== meId)
-            const sharing = state.screen_sharing ?? []
-            set((s) => ({
-              screenSharers: sharing,
-              voiceStates: {
-                ...Object.fromEntries(
-                  others.map((p) => [
-                    p.user_id,
-                    { muted: p.muted ?? false, deafened: p.deafened ?? false }
-                  ])
-                ),
-                ...s.voiceStates
-              },
-              focusedScreenUserId: s.focusedScreenUserId ?? sharing[0] ?? null,
-              participants: [
-                ...s.participants,
-                ...others
-                  .filter((p) => p.user_id && !s.participants.some((q) => q.id === p.user_id))
-                  .map((p) => ({
-                    id: p.user_id,
-                    username: p.username ?? '',
-                    display_name: p.display_name ?? p.username ?? 'Usuário',
-                    avatar_url: p.avatar_url ?? null
-                  }))
-              ]
-            }))
-          } catch {
-            // estado indisponível: a lista se forma pelos eventos call:joined
-          }
-        }
+        await loadCallState(call.id, false)
         bumpList()
       } catch (err) {
         stopLocalStream()
@@ -760,6 +812,10 @@ export const useCallStore = create<CallState>()((set, get) => {
       await get().startChannelCall(channelId)
     },
 
+    handleWsReconnect: () => {
+      void resyncChannelCall()
+    },
+
     handleWsEvent: (event) => {
       const payload = event.payload as Record<string, unknown>
       const meId = useAuthStore.getState().user?.id
@@ -879,7 +935,12 @@ export const useCallStore = create<CallState>()((set, get) => {
         case 'call:left': {
           const p = payload as unknown as StatePayload
           if (get().callId !== p.call_id) return
-          if (p.user.id === meId) return
+          if (p.user.id === meId) {
+            // Ainda estou na chamada (quem sai de propósito já limpou o callId):
+            // o backend me tirou por queda do WS — volta a entrar.
+            void resyncChannelCall()
+            return
+          }
           showToast.info(`${p.user.display_name} saiu da chamada.`)
           if (get().type === 'channel') {
             playSound('userLeave')

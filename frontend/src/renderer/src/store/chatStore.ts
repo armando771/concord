@@ -91,7 +91,8 @@ const appendUnique = (messages: Message[], incoming: Message[]): Message[] => {
 const client = new WsClient({
   getToken: () => useAuthStore.getState().accessToken,
   getUserId: () => useAuthStore.getState().user?.id ?? null,
-  onEvent: (event) => useChatStore.getState().handleWsEvent(event)
+  onEvent: (event) => useChatStore.getState().handleWsEvent(event),
+  onOpen: () => useCallStore.getState().handleWsReconnect()
 })
 
 /** Mensagens que já geraram notificação (chegam por mais de uma sala). */
