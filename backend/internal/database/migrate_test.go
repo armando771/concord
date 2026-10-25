@@ -53,17 +53,17 @@ func TestLoadMigrationsSortsUniqueNumbers(t *testing.T) {
 // depois de outra maior já aplicada): o migrador a pularia em silêncio.
 func TestNeverAppliedFindsSkippedMigrations(t *testing.T) {
 	files := []migrationFile{
-		{version: 24, fileName: "000024_add_message_mention_everyone.up.sql"},
-		{version: 25, fileName: "000025_add_login_username.up.sql"},
-		{version: 26, fileName: "000026_add_call_participant_state.up.sql"},
-		{version: 27, fileName: "000027_outra.up.sql"},
+		{version: 28, fileName: "000028_add_user_privacy.up.sql"},
+		{version: 29, fileName: "000029_add_roles_permissions.up.sql"},
+		{version: 30, fileName: "000030_add_call_participant_state.up.sql"},
+		{version: 31, fileName: "000031_outra.up.sql"},
 	}
-	applied := map[int]bool{24: true, 26: true}
+	applied := map[int]bool{28: true, 30: true}
 
-	got := neverApplied(files, 26, applied)
+	got := neverApplied(files, 30, applied)
 
-	if len(got) != 1 || got[0].version != 25 {
-		t.Fatalf("neverApplied = %+v, want só a 000025 (a 000027 ainda vai rodar)", got)
+	if len(got) != 1 || got[0].version != 29 {
+		t.Fatalf("neverApplied = %+v, want só a 000029 (a 000031 ainda vai rodar)", got)
 	}
 }
 

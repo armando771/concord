@@ -451,11 +451,10 @@ Para uma VPS que já roda a versão anterior. Cada passo diz quando pode ser
 feito.
 
 1. **Deploy desta versão** (qualquer hora; o CI ao chegar na `main` — ele só
-   faz deploy da `main` — ou `scripts/deploy-vps.sh root@IP` do PC). As
-   migrations `000022`, `000024`, `000025` e `000026` entram, nessa ordem,
-   antes do reinício, com o binário antigo no ar. Se houver nomes de usuário
-   que só diferem na caixa, a `000025` cria um índice comum em vez do único (não
-   falha; aparece um `NOTICE` no log do migrate). Esse deploy ainda trava a voz
+   faz deploy da `main` — ou `scripts/deploy-vps.sh root@IP` do PC). A
+   produção está na versão 29, então só a migration `000030` (estado de
+   voz/tela de quem está na chamada, só de expandir) entra, antes do
+   reinício, com o binário antigo no ar. Esse deploy ainda trava a voz
    uma vez, como antes (o Caddy ainda manda `/rtc` pelo backend). O aviso
    `docker-compose.yml/.env mudou: postgres … --infra` é esperado (versão fixa
    do Postgres) e se repete até o passo 5.
@@ -576,8 +575,8 @@ que não desfaz migration nenhuma). Por isso:
 8. Números de migration são únicos e **crescem na ordem em que chegam à
    VPS**: o migrador guarda só a última versão aplicada, então com duas
    branches usando o mesmo número uma nunca roda, e uma migration com número
-   menor que a última aplicada (ex.: `000025` mesclada depois de um deploy da
-   `000026`) também nunca roda. Renumere ao juntar. Proteções: o backend não
+   menor que a última aplicada (ex.: `000029` mesclada depois de um deploy da
+   `000030`) também nunca roda. Renumere ao juntar. Proteções: o backend não
    sobe com dois arquivos de mesmo número e avisa alto no log quando uma
    migration de número menor que a versão do banco nunca rodou; no CI,
    `scripts/check-migrations.mjs` reprova o PR com número repetido ou com
