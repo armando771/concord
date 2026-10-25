@@ -161,6 +161,15 @@ if (typeof window !== 'undefined') {
   window.addEventListener('focus', refetchOnFocus)
 }
 
+/** Troca o apelido no mapa do servidor (null tira); sem mudança, não mexe no store. */
+function putNickname(serverId: string, userId: string, nickname: string | null): void {
+  const all = useServerStore.getState().nicknames
+  const current = all[serverId]
+  if (!current && !nickname) return
+  const next = withNickname(current ?? {}, userId, nickname)
+  if (next !== current) useServerStore.setState({ nicknames: { ...all, [serverId]: next } })
+}
+
 export const useServerStore = create<ServerState>()((set, get) => ({
   servers: [],
   currentServer: null,
@@ -327,16 +336,23 @@ export const useServerStore = create<ServerState>()((set, get) => ({
     })
   },
   removeLocalServer: (serverId) => {
+    const nicknames = { ...get().nicknames }
+    delete nicknames[serverId]
     set({
       servers: get().servers.filter((s) => s.id !== serverId),
       currentServer: get().currentServer?.id === serverId ? null : get().currentServer,
       currentMembers: get().currentServer?.id === serverId ? [] : get().currentMembers,
       roles: get().currentServer?.id === serverId ? [] : get().roles,
       channels: get().currentServer?.id === serverId ? [] : get().channels,
-      serverInvites: get().currentServer?.id === serverId ? [] : get().serverInvites
+      serverInvites: get().currentServer?.id === serverId ? [] : get().serverInvites,
+      nicknames
     })
   },
+  // Entrar, sair, ser expulso ou atualizar também acertam o mapa de apelidos
+  // (de qualquer servidor, não só o aberto): o chat, o "digitando", a voz e o
+  // overlay leem dele, e o apelido some do banco junto com o membro.
   addMember: (serverId, member) => {
+    putNickname(serverId, member.user_id, member.nickname ?? null)
     if (get().currentServer?.id === serverId) {
       const exists = get().currentMembers.some((m) => m.user_id === member.user_id)
       if (!exists) {
@@ -345,6 +361,7 @@ export const useServerStore = create<ServerState>()((set, get) => ({
     }
   },
   updateMember: (serverId, member) => {
+    if ('nickname' in member) putNickname(serverId, member.user_id, member.nickname ?? null)
     if (get().currentServer?.id === serverId) {
       set({
         currentMembers: get().currentMembers.map((m) =>
@@ -354,6 +371,7 @@ export const useServerStore = create<ServerState>()((set, get) => ({
     }
   },
   removeMember: (serverId, userId) => {
+    putNickname(serverId, userId, null)
     if (get().currentServer?.id === serverId) {
       set({ currentMembers: get().currentMembers.filter((m) => m.user_id !== userId) })
     }
@@ -367,9 +385,7 @@ export const useServerStore = create<ServerState>()((set, get) => ({
     })
   },
   setMemberNickname: (serverId, userId, nickname) => {
-    const current = get().nicknames[serverId] ?? {}
-    const next = withNickname(current, userId, nickname)
-    if (next !== current) set({ nicknames: { ...get().nicknames, [serverId]: next } })
+    putNickname(serverId, userId, nickname)
     if (get().currentServer?.id !== serverId) return
     set({
       currentMembers: get().currentMembers.map((m) =>

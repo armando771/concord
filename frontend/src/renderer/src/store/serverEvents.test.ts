@@ -165,3 +165,51 @@ describe('server:member:nickname', () => {
     expect(useServerStore.getState().nicknames.s1).toEqual({ bia: 'Bibi' })
   })
 })
+
+describe('apelidos ao sair, ser expulso e voltar', () => {
+  const store = (): ReturnType<typeof useServerStore.getState> => useServerStore.getState()
+
+  it('sair (ou ser expulso) tira o apelido do mapa; voltar sem apelido não traz o antigo', () => {
+    store().removeMember('s1', 'bia')
+    expect(store().nicknames.s1).toEqual({})
+    store().addMember('s1', { server_id: 's1', user_id: 'bia', role: 'member', nickname: null })
+    expect(store().nicknames.s1).toEqual({})
+    expect(store().currentMembers.find((m) => m.user_id === 'bia')?.nickname).toBeNull()
+  })
+
+  it('vale também para o servidor que não está aberto (call de lá)', () => {
+    useServerStore.setState({ nicknames: { s1: {}, outro: { ana: 'Ana de lá' } } })
+    store().removeMember('outro', 'ana')
+    expect(store().nicknames.outro).toEqual({})
+    store().addMember('outro', {
+      server_id: 'outro',
+      user_id: 'ana',
+      role: 'member',
+      nickname: 'Volta'
+    })
+    expect(store().nicknames.outro).toEqual({ ana: 'Volta' })
+  })
+
+  it('server:member:update com apelido atualiza o mapa junto', () => {
+    store().updateMember('s1', {
+      server_id: 's1',
+      user_id: 'ana',
+      role: 'member',
+      nickname: 'Aninha'
+    })
+    expect(store().nicknames.s1).toEqual({ ana: 'Aninha', bia: 'Bibi' })
+    store().updateMember('s1', { server_id: 's1', user_id: 'bia', role: 'member', nickname: null })
+    expect(store().nicknames.s1).toEqual({ ana: 'Aninha' })
+  })
+
+  it('update sem o campo nickname não mexe no apelido', () => {
+    store().updateMember('s1', { server_id: 's1', user_id: 'bia', role: 'admin' })
+    expect(store().nicknames.s1).toEqual({ bia: 'Bibi' })
+  })
+
+  it('perder o servidor (saiu, expulso, banido) esquece os apelidos dele', () => {
+    useServerStore.setState({ servers: [{ id: 's1', name: 's', owner_id: 'x' }] })
+    store().removeLocalServer('s1')
+    expect(store().nicknames.s1).toBeUndefined()
+  })
+})
