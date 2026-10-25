@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 interface ModalProps {
   open: boolean
@@ -8,19 +9,34 @@ interface ModalProps {
 }
 
 function Modal({ open, title, onClose, children }: ModalProps): React.JSX.Element | null {
+  const titleId = useId()
+
   if (!open) return null
 
-  return (
+  // Fora dos painéis com blur/transform, para que o viewport seja sempre a janela.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      className="app-no-drag fixed inset-x-0 bottom-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      style={{ top: 'var(--titlebar-height, 0px)' }}
       onClick={onClose}
     >
-      <div className="glass-card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
-          {title && <h2 className="text-lg font-semibold text-white">{title}</h2>}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        className="glass-card flex max-h-full min-h-0 w-full max-w-md flex-col overflow-hidden p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex shrink-0 items-center justify-between gap-4">
+          {title && (
+            <h2 id={titleId} className="min-w-0 break-words text-lg font-semibold text-white">
+              {title}
+            </h2>
+          )}
           {onClose && (
             <button
-              className="cursor-pointer text-white/60 transition-colors hover:text-white"
+              type="button"
+              className="app-no-drag ml-auto flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-violet-400"
               onClick={onClose}
               aria-label="Fechar"
             >
@@ -28,9 +44,10 @@ function Modal({ open, title, onClose, children }: ModalProps): React.JSX.Elemen
             </button>
           )}
         </div>
-        {children}
+        <div className="min-h-0 overflow-y-auto overscroll-contain">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
