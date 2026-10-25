@@ -8,6 +8,8 @@ import { useUIStore } from '../store/uiStore'
 import { useChatStore } from '../store/chatStore'
 import { useCallStore } from '../store/callStore'
 import VoiceStateIcons from './call/VoiceStateIcons'
+import LevelBadge from './level/LevelBadge'
+import VoiceRowShimmer from './level/VoiceRowShimmer'
 import { useUserAudioStore } from '../store/userAudioStore'
 import { userMenuHandler } from '../store/userMenuStore'
 import { logout } from '../api/auth'
@@ -495,10 +497,11 @@ export function ServerSidebar(): React.JSX.Element {
                               }}
                               onDragEnd={() => setVoiceDropTarget(null)}
                               title={canMove(p.user_id) ? 'Arraste para outro canal de voz' : undefined}
-                              className={`flex items-center gap-2 rounded-md px-2 py-1 ${
+                              className={`relative flex items-center gap-2 overflow-hidden rounded-md px-2 py-1 ${
                                 isMe ? 'bg-white/5' : ''
                               }`}
                             >
+                              <VoiceRowShimmer userId={p.user_id} />
                               <div
                                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[9px] font-bold text-white transition-shadow ${
                                   talking ? 'ring-2 ring-[#23a55a]' : ''
@@ -510,6 +513,7 @@ export function ServerSidebar(): React.JSX.Element {
                                 {name}
                                 {isMe ? ' (você)' : ''}
                               </span>
+                              <LevelBadge userId={p.user_id} />
                               <span className="ml-auto flex items-center gap-0.5 pr-1">
                                 {!isMe && locallyMuted[p.user_id]?.muted && (
                                   <span title="Silenciado por você" className="text-gray-400">

@@ -398,9 +398,7 @@ describe('callStore — mídia via LiveKit', () => {
   })
 
   it('depois de trocar o microfone, reaplica o mute na sala (o SDK pode ter mutado sozinho)', async () => {
-    rtc.getAudioStream
-      .mockResolvedValueOnce(fakeMic())
-      .mockResolvedValueOnce(fakeMic())
+    rtc.getAudioStream.mockResolvedValueOnce(fakeMic()).mockResolvedValueOnce(fakeMic())
     await joinChannel()
     const connection = media.instances[0]
     connection.setMicMuted.mockClear()
@@ -505,5 +503,68 @@ describe('callStore — mídia via LiveKit', () => {
       payload: { call_id: 'call-1', user: { id: 'eu', username: 'eu', display_name: 'Eu' } }
     })
     expect(sounds.playSound).not.toHaveBeenCalled()
+  })
+})
+
+describe('callStore — reentrada após queda do WS', () => {
+  const participant = (id: string): Record<string, unknown> => ({
+    user_id: id,
+    username: id,
+    display_name: id.toUpperCase()
+  })
+
+  it('volta a entrar e recarrega a lista quando o backend me tira da chamada', async () => {
+    await joinChannel()
+    api.startCall.mockClear()
+    api.getCallState.mockResolvedValueOnce({
+      call: null,
+      participants: [participant('eu'), participant('ana'), participant('bia')]
+    } as never)
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:left',
+      payload: { call_id: 'call-1', user: { id: 'eu', username: 'eu', display_name: 'Eu' } }
+    })
+    await flush()
+    await flush()
+
+    expect(api.startCall).toHaveBeenCalledWith({ type: 'channel', channel_id: 'canal-1' })
+    expect(useCallStore.getState().status).toBe('active')
+    expect(useCallStore.getState().participants.map((p) => p.id)).toEqual(['ana', 'bia'])
+  })
+
+  it('reentra ao reconectar o WS e reanuncia a tela compartilhada', async () => {
+    await joinChannel()
+    rtc.getDisplayStream.mockResolvedValue(fakeStream('video'))
+    await useCallStore.getState().startScreenShare()
+    api.startCall.mockClear()
+    chat.sendEvent.mockClear()
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(api.startCall).toHaveBeenCalledTimes(1)
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'call-1', active: true })
+  })
+
+  it('não faz nada ao reconectar o WS fora de chamada', async () => {
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    expect(api.startCall).not.toHaveBeenCalled()
+  })
+
+  it('guarda quem está na sala de mídia mesmo fora da lista do backend', async () => {
+    await joinChannel()
+    const onRemoteMedia = (media.instances[0].handlers as { onRemoteMedia: (m: unknown) => void })
+      .onRemoteMedia
+    onRemoteMedia({
+      streams: {},
+      screenStreams: {},
+      screenAudioStreams: {},
+      videoStreams: {},
+      mediaPeers: { caio: 'Caio' }
+    })
+    expect(useCallStore.getState().mediaPeers).toEqual({ caio: 'Caio' })
   })
 })

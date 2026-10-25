@@ -35,3 +35,4 @@ backend/.release-key
 # ─── Helper nativo (gerado no build) ────────────────────────────
 frontend/resources/win/
 native/concord-audio/target/
+.superpowers/

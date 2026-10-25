@@ -32,6 +32,7 @@ import { listChannels } from '../api/channels'
 import { useServerStore } from './serverStore'
 import { useFriendStore } from './friendStore'
 import { useCallStore } from './callStore'
+import { useLevelStore } from './levelStore'
 import { showToast } from './toastStore'
 import { router } from '../router'
 import { MESSAGE_LIMIT } from '../api/messages'
@@ -113,7 +114,8 @@ const replacePoll = (
 const client = new WsClient({
   getToken: () => useAuthStore.getState().accessToken,
   getUserId: () => useAuthStore.getState().user?.id ?? null,
-  onEvent: (event) => useChatStore.getState().handleWsEvent(event)
+  onEvent: (event) => useChatStore.getState().handleWsEvent(event),
+  onOpen: () => useCallStore.getState().handleWsReconnect()
 })
 
 /** Mensagens que já geraram notificação (chegam por mais de uma sala). */
@@ -134,10 +136,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   connect: () => {
     client.connect()
     get().fetchConversations()
+    void useLevelStore.getState().loadMe()
   },
   disconnect: () => {
     client.disconnect()
     get().reset()
+    useLevelStore.getState().reset()
   },
   isWsConnected: () => client.isConnected(),
 
@@ -339,6 +343,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     if (event.type.startsWith('call:')) {
       useCallStore.getState().handleWsEvent(event)
+      return
+    }
+
+    if (event.type.startsWith('level:')) {
+      useLevelStore.getState().handleWsEvent(event)
       return
     }
 

@@ -11,6 +11,7 @@ import {
   PhoneOffIcon
 } from '../icons'
 import NoiseSuppressionPopover from './NoiseSuppressionPopover'
+import VoiceXPBar from '../level/VoiceXPBar'
 
 /**
  * Painel "Voz conectada" (estilo Discord) exibido acima do card do usuário
@@ -108,6 +109,7 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
           </button>
         </div>
       </div>
+      <VoiceXPBar paused={muted || deafened} />
       {noiseAnchor && <NoiseSuppressionPopover anchor={noiseAnchor} onClose={closeNoise} />}
     </div>
   )

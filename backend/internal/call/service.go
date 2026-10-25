@@ -81,6 +81,8 @@ type Service struct {
 	// desse prazo — a mídia (LiveKit) aguenta quedas curtas sozinha.
 	disconnectGrace      time.Duration
 	leaveAfterDisconnect func(ctx context.Context, callID string, userID string) error
+	// Nome exibido no token do LiveKit (ver Handler.Token).
+	mediaName func(ctx context.Context, userID string) string
 }
 
 const defaultDisconnectGrace = 15 * time.Second
@@ -108,6 +110,13 @@ func CallService(
 		disconnectGrace:     defaultDisconnectGrace,
 	}
 	s.leaveAfterDisconnect = s.Leave
+	s.mediaName = func(ctx context.Context, userID string) string {
+		info, err := s.userInfo(ctx, userID)
+		if err != nil {
+			return ""
+		}
+		return info.DisplayName
+	}
 	return s
 }
 
