@@ -1,3 +1,4 @@
+import { useCallback, useState } from 'react'
 import { useCallStore } from '../../store/callStore'
 import {
   CameraIcon,
@@ -7,14 +8,17 @@ import {
   MicIcon,
   MicOffIcon,
   MonitorIcon,
-  PhoneOffIcon
+  PhoneOffIcon,
+  SoundboardIcon
 } from '../icons'
+import SoundboardPopover from './SoundboardPopover'
 
 function VoiceControls(): React.JSX.Element {
   const muted = useCallStore((s) => s.muted)
   const deafened = useCallStore((s) => s.deafened)
   const sharing = useCallStore((s) => s.isScreenSharing)
   const connected = useCallStore((s) => s.status === 'active')
+  const callType = useCallStore((s) => s.type)
   const cameraOn = useCallStore((s) => s.localCameraStream !== null)
   const toggleMute = useCallStore((s) => s.toggleMute)
   const toggleDeafen = useCallStore((s) => s.toggleDeafen)
@@ -22,6 +26,10 @@ function VoiceControls(): React.JSX.Element {
   const startScreenShare = useCallStore((s) => s.startScreenShare)
   const stopScreenShare = useCallStore((s) => s.stopScreenShare)
   const endCall = useCallStore((s) => s.endCall)
+
+  const [soundboardAnchor, setSoundboardAnchor] = useState<HTMLElement | null>(null)
+  const soundboardOpen = soundboardAnchor !== null
+  const closeSoundboard = useCallback(() => setSoundboardAnchor(null), [])
 
   const handleToggleScreen = (): void => {
     if (sharing) {
@@ -83,6 +91,27 @@ function VoiceControls(): React.JSX.Element {
       >
         <MonitorIcon className="h-5 w-5" />
       </button>
+      {callType === 'channel' && (
+        <button
+          onClick={(e) => {
+            const button = e.currentTarget
+            setSoundboardAnchor((open) => (open ? null : button))
+          }}
+          disabled={!connected}
+          aria-label="Mesa de Áudio"
+          aria-expanded={soundboardOpen}
+          title="Mesa de Áudio"
+          className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+            !connected
+              ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
+              : soundboardOpen
+                ? 'cursor-pointer bg-[#5865f2] text-white'
+                : 'cursor-pointer bg-white/5 text-gray-200 hover:bg-white/10'
+          }`}
+        >
+          <SoundboardIcon className="h-5 w-5" />
+        </button>
+      )}
       <button
         onClick={endCall}
         aria-label="Desconectar"
@@ -91,6 +120,7 @@ function VoiceControls(): React.JSX.Element {
       >
         <PhoneOffIcon className="h-5 w-5" />
       </button>
+      {soundboardAnchor && <SoundboardPopover anchor={soundboardAnchor} onClose={closeSoundboard} />}
     </div>
   )
 }

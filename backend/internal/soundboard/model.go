@@ -1,0 +1,100 @@
+package soundboard
+
+import (
+	"encoding/json"
+	"errors"
+	"strings"
+	"time"
+	"unicode"
+)
+
+const (
+	// MaxSoundBytes é o limite de tamanho por som da mesa de áudio (5 MB).
+	MaxSoundBytes int64 = 5 << 20
+
+	// MinSoundDurationMs e MaxSoundDurationMs limitam a duração do clipe (0.1s a 15s).
+	MinSoundDurationMs = 100
+	MaxSoundDurationMs = 15_000
+
+	// MaxSoundsPerServer limita quantos sons um servidor pode guardar.
+	MaxSoundsPerServer = 50
+
+	MaxNameRunes  = 32
+	MaxEmojiRunes = 16
+)
+
+var (
+	ErrSoundNotFound     = errors.New("sound not found")
+	ErrServerFull        = errors.New("server soundboard limit reached")
+	ErrInvalidName       = errors.New("sound name is required (max 32 characters)")
+	ErrInvalidDuration   = errors.New("sound duration must be between 0.1s and 15s")
+	ErrNotServerMember   = errors.New("you are not a member of this server")
+	ErrCannotDeleteSound = errors.New("only the uploader, moderators or server owner can delete this sound")
+)
+
+type Sound struct {
+	ID           string    `json:"id"`
+	ServerID     string    `json:"server_id"`
+	UploaderID   string    `json:"uploader_id"`
+	UploaderName string    `json:"uploader_name"`
+	Name         string    `json:"name"`
+	Emoji        *string   `json:"emoji,omitempty"`
+	ContentType  string    `json:"content_type"`
+	SizeBytes    int64     `json:"size_bytes"`
+	DurationMs   int       `json:"duration_ms"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+type CreatedEvent struct {
+	ServerID string `json:"server_id"`
+	Sound    Sound  `json:"sound"`
+}
+
+type DeletedEvent struct {
+	ServerID string `json:"server_id"`
+	SoundID  string `json:"sound_id"`
+}
+
+func sanitizeName(raw string) (string, error) {
+	clean := strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, raw)
+	clean = strings.TrimSpace(clean)
+	runes := []rune(clean)
+	if len(runes) == 0 || len(runes) > MaxNameRunes {
+		return "", ErrInvalidName
+	}
+	return clean, nil
+}
+
+func sanitizeEmoji(raw string) *string {
+	clean := strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, raw)
+	clean = strings.TrimSpace(clean)
+	if clean == "" {
+		return nil
+	}
+	runes := []rune(clean)
+	if len(runes) > MaxEmojiRunes {
+		clean = string(runes[:MaxEmojiRunes])
+	}
+	return &clean
+}
+
+func marshalEvent(typ string, payload interface{}) []byte {
+	data, err := json.Marshal(map[string]interface{}{
+		"type":    typ,
+		"payload": payload,
+	})
+	if err != nil {
+		return nil
+	}
+	return data
+}

@@ -38,6 +38,7 @@ import { useServerStore } from './serverStore'
 import { useFriendStore } from './friendStore'
 import { useCallStore } from './callStore'
 import { useLevelStore } from './levelStore'
+import { useSoundboardStore } from './soundboardStore'
 import { showToast } from './toastStore'
 import { router } from '../router'
 import { MESSAGE_LIMIT } from '../api/messages'
@@ -423,6 +424,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   handleWsEvent: (event) => {
     const payload = event.payload as Record<string, unknown>
+
+    if (event.type === 'call:soundboard' || event.type.startsWith('soundboard:')) {
+      useSoundboardStore.getState().handleWsEvent(event)
+      return
+    }
 
     if (event.type.startsWith('call:')) {
       useCallStore.getState().handleWsEvent(event)
