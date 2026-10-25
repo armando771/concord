@@ -145,6 +145,51 @@ func (h *Handler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "server deleted"})
 }
 
+// SetPrimaryChannel: dono ou moderador escolhe o canal principal.
+func (h *Handler) SetPrimaryChannel(c *gin.Context) {
+	serverID := c.Param("id")
+
+	var input struct {
+		ChannelID string `json:"channel_id"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil || input.ChannelID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "channel_id is required"})
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	srv, err := h.service.FindByID(c.Request.Context(), serverID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
+		return
+	}
+
+	if srv.OwnerID != userID.(string) {
+		isAdmin, err := h.isAdmin(c.Request.Context(), serverID, userID.(string))
+		if err != nil || !isAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can change the primary channel"})
+			return
+		}
+	}
+
+	updated, err := h.service.SetPrimaryChannel(c.Request.Context(), serverID, input.ChannelID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, ErrInvalidPrimaryChannel) {
+			status = http.StatusBadRequest
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, updated)
+}
+
 func (h *Handler) isAdmin(ctx context.Context, serverID string, userID string) (bool, error) {
 	members, err := h.service.ListMembers(ctx, serverID)
 	if err != nil {

@@ -7,8 +7,11 @@ type Server struct {
 	Name      string    `json:"name"`
 	IconURL   string    `json:"icon_url"`
 	OwnerID   string    `json:"owner_id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	// Canal de texto onde vão os avisos do servidor (aniversários…). Se o
+	// escolhido não existe mais, é o primeiro canal de texto.
+	PrimaryChannelID *string   `json:"primary_channel_id,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type ServerMember struct {

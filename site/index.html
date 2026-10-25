@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Salinha — chat, voz e tela com os amigos</title>
-  <meta name="description" content="Salinha: servidores, canais de texto e voz, vídeo e compartilhamento de tela com som. Baixe o app para Windows.">
+  <meta name="description" content="Salinha: servidores, canais de texto e voz, vídeo e compartilhamento de tela. Baixe para Windows ou Linux (AppImage).">
   <meta name="theme-color" content="#050508">
   <meta property="og:title" content="Salinha">
   <meta property="og:description" content="Chat, voz, vídeo e compartilhamento de tela com os amigos.">
@@ -105,7 +105,9 @@
     .btn-primary svg { width: 22px; height: 22px; flex: none; }
     .btn-primary .lbl { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; }
     .btn-primary .lbl small { font-weight: 500; font-size: 12px; opacity: .8; }
-    .btn-primary[aria-disabled="true"] { filter: grayscale(.7); opacity: .6; pointer-events: none; }
+    .btn[aria-disabled="true"] { filter: grayscale(.7); opacity: .6; pointer-events: none; }
+    .btn-ghost .lbl { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.3; }
+    .btn-ghost .lbl small { font-size: 12px; color: var(--muted); }
     .btn-ghost { padding: 16px 22px; font-size: 15px; color: var(--text); border: 1px solid var(--border-light); background: rgba(255,255,255,.03); }
     .btn-ghost:hover { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.22); }
 
@@ -293,7 +295,7 @@
       <div class="nav-links">
         <a href="#recursos">Recursos</a>
         <a href="#instalar">Como instalar</a>
-        <a class="btn btn-sm" data-download href="#instalar">Baixar</a>
+        <a class="btn btn-sm" href="#downloads">Baixar</a>
       </div>
     </div>
   </nav>
@@ -305,10 +307,13 @@
           <span class="pill"><span class="dot"></span><span data-version-pill>Versão mais recente</span></span>
           <h1>O lugar da <span class="grad">resenha</span> com os amigos.</h1>
           <p class="lead">Servidores, canais de texto e voz, chamadas de vídeo e compartilhamento de tela com som — num app leve, escuro e só nosso.</p>
-          <div class="cta">
-            <a class="btn btn-primary" data-download href="#instalar">
+          <div class="cta" id="downloads">
+            <a class="btn btn-primary" data-download="windows" aria-disabled="true" tabindex="-1">
               <svg><use href="#i-windows"/></svg>
-              <span class="lbl">Baixar para Windows<small data-version-meta>buscando versão…</small></span>
+              <span class="lbl">Baixar para Windows<small data-version-meta="windows">buscando versão…</small></span>
+            </a>
+            <a class="btn btn-ghost" data-download="linux" aria-disabled="true" tabindex="-1">
+              <span class="lbl">Baixar para Linux<small data-version-meta="linux">AppImage x64 · buscando versão…</small></span>
             </a>
             <a class="btn btn-ghost" href="#instalar">Como instalar</a>
           </div>
@@ -316,7 +321,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
             Instale uma vez — o app se atualiza sozinho.
           </div>
-          <p class="os-note" data-os-note>Por enquanto a Salinha só roda no Windows 10 ou 11.</p>
+          <p>Windows 10/11 ou Linux x64 (AppImage).</p>
         </div>
 
         <div class="shot-wrap reveal">
@@ -340,7 +345,7 @@
             <div class="txt">
               <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
               <h3>Várias telas ao mesmo tempo, com som</h3>
-              <p>Todo mundo pode compartilhar a tela junto. Compartilhe uma janela e vai só o som dela; a tela inteira leva o som do PC (sem eco da própria Salinha).</p>
+              <p>Todo mundo pode compartilhar a tela junto. No Windows, compartilhe uma janela com o som dela ou a tela inteira com o som do PC, sem eco da própria Salinha. No Linux, o compartilhamento é sem áudio.</p>
             </div>
             <div class="eq" aria-hidden="true">
               <span style="animation-delay:-.1s"></span><span style="animation-delay:-.5s"></span><span style="animation-delay:-.9s"></span>
@@ -371,7 +376,7 @@
           <article class="card reveal">
             <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 15h18M8 18.5h.01"/></svg></div>
             <h3>Fica na bandeja</h3>
-            <p>Fechar a janela deixa o app quietinho perto do relógio, e ele abre junto com o Windows.</p>
+            <p>No Windows, fechar a janela deixa o app quietinho perto do relógio, e ele abre junto com o sistema.</p>
           </article>
           <article class="card wide reveal">
             <div class="txt">
@@ -400,12 +405,13 @@
           <div class="step reveal">
             <div class="n"></div>
             <h3>Baixe o instalador</h3>
-            <p>Clique em <strong>Baixar para Windows</strong>. O arquivo tem cerca de <span data-size>120 MB</span>.</p>
+            <p>Escolha <strong>Windows</strong> ou <strong>Linux (AppImage x64)</strong>. O tamanho de cada arquivo aparece no botão de download.</p>
           </div>
           <div class="step reveal">
             <div class="n"></div>
             <h3>Abra o arquivo</h3>
-            <p>Execute o <kbd data-filename>Salinha-setup.exe</kbd> que foi baixado e siga a instalação.</p>
+            <p>No Windows, execute o <kbd data-filename="windows">Salinha-setup.exe</kbd> e siga a instalação.</p>
+            <p>No Linux, nas propriedades do AppImage, permita executar como programa e abra o arquivo. Guarde-o numa pasta sua com permissão de escrita para receber atualizações.</p>
           </div>
           <div class="step reveal">
             <div class="n"></div>
@@ -417,6 +423,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
           <div>Se aparecer <strong>"O Windows protegeu o computador"</strong>, é normal: o app não tem certificado pago. Clique em <kbd>Mais informações</kbd> e depois em <kbd>Executar assim mesmo</kbd>.</div>
         </div>
+        <p>No Linux, o AppImage pode precisar do FUSE 2 instalado na sua distribuição. Execute como usuário normal; não use <kbd>sudo</kbd> nem desative o sandbox. A captura de tela depende do ambiente gráfico e, no Wayland, do portal de compartilhamento do sistema.</p>
       </div>
     </section>
 
@@ -425,10 +432,15 @@
         <div class="final reveal">
           <h2>Bora pra call?</h2>
           <p>Baixe a Salinha e chama a galera.</p>
-          <a class="btn btn-primary" data-download href="#instalar">
+          <div class="cta">
+          <a class="btn btn-primary" data-download="windows" aria-disabled="true" tabindex="-1">
             <svg><use href="#i-download"/></svg>
-            <span class="lbl">Baixar para Windows<small data-version-meta>buscando versão…</small></span>
+            <span class="lbl">Baixar para Windows<small data-version-meta="windows">buscando versão…</small></span>
           </a>
+          <a class="btn btn-ghost" data-download="linux" aria-disabled="true" tabindex="-1">
+            <span class="lbl">Baixar para Linux<small data-version-meta="linux">AppImage x64 · buscando versão…</small></span>
+          </a>
+          </div>
         </div>
       </div>
     </section>
@@ -441,42 +453,8 @@
     </div>
   </footer>
 
+  <script src="downloads.js" defer></script>
   <script>
-    // Versão mais recente: o mesmo latest.yml que o app usa para se atualizar.
-    (async () => {
-      const $$ = (sel) => document.querySelectorAll(sel);
-      const fail = () => $$('[data-version-meta]').forEach((el) => (el.textContent = 'indisponível no momento'));
-      try {
-        const res = await fetch('/updates/latest.yml', { cache: 'no-store' });
-        if (!res.ok) throw new Error(res.status);
-        const yml = await res.text();
-        const field = (re) => (yml.match(re) || [])[1]?.trim().replace(/^['"]|['"]$/g, '');
-        const version = field(/^version:\s*(.+)$/m);
-        const path = field(/^path:\s*(.+)$/m);
-        const size = Number(field(/^\s*size:\s*(\d+)/m));
-        const date = field(/^releaseDate:\s*(.+)$/m);
-        if (!version || !path) throw new Error('latest.yml incompleto');
-
-        const href = '/updates/' + encodeURIComponent(path);
-        const mb = size ? Math.round(size / 1024 / 1024) + ' MB' : '';
-        const when = date ? new Date(date).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }) : '';
-
-        $$('[data-download]').forEach((a) => { a.href = href; a.setAttribute('download', path); });
-        $$('[data-version-meta]').forEach((el) => (el.textContent = ['v' + version, mb].filter(Boolean).join(' · ')));
-        $$('[data-version-pill]').forEach((el) => (el.textContent = 'v' + version + (when ? ' · atualizado em ' + when : '')));
-        $$('[data-version-foot]').forEach((el) => (el.textContent = 'v' + version));
-        $$('[data-version-toast]').forEach((el) => (el.textContent = 'Salinha v' + version));
-        $$('[data-filename]').forEach((el) => (el.textContent = path));
-        if (mb) $$('[data-size]').forEach((el) => (el.textContent = mb));
-      } catch {
-        fail();
-      }
-    })();
-
-    if (!/Windows/i.test(navigator.userAgent)) {
-      document.querySelector('[data-os-note]').style.display = 'block';
-    }
-
     // Entrada suave das seções.
     const io = new IntersectionObserver((entries) => {
       entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });

@@ -54,6 +54,10 @@ type participantState struct {
 	joinedAt time.Time
 	muted    bool
 	deafened bool
+	// Voz captada agora (o cliente avisa pelo detector de fala do LiveKit) e
+	// a última vez que parou de falar — o XP de voz só conta com voz.
+	speaking    bool
+	lastSpokeAt time.Time
 }
 
 type activeCall struct {
@@ -587,6 +591,9 @@ func (s *Service) SetVoiceState(callID string, userID string, muted bool, deafen
 	}
 	p.muted = muted
 	p.deafened = deafened
+	if muted || deafened {
+		p.speaking = false
+	}
 	var serverID string
 	if ac.info.ServerID != nil {
 		serverID = *ac.info.ServerID
@@ -806,6 +813,14 @@ func (s *Service) HandleCallMessage(userID string, evType string, payload json.R
 		if err := s.SetVoiceState(p.CallID, userID, p.Muted, p.Deafened); err != nil {
 			s.sendError(userID, p.CallID, err.Error())
 		}
+	case "call:speaking":
+		var p SpeakingPayload
+		if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" {
+			s.sendError(userID, "", "invalid call:speaking payload")
+			return
+		}
+		// Sem resposta de erro: é um aviso frequente e sem efeito visível.
+		_ = s.SetSpeaking(p.CallID, userID, p.Speaking, time.Now())
 	case "call:screen":
 		var p ScreenPayload
 		if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" {

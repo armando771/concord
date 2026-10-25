@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { userMenuHandler } from '../store/userMenuStore'
+import { profileCardHandler } from '../store/profileCardStore'
 import InviteCodeBox from '../components/InviteCodeBox'
 import { Navigate, useParams } from 'react-router-dom'
 import { useServerStore } from '../store/serverStore'
@@ -41,7 +42,8 @@ function MemberRow({
     <div
       key={userId}
       onContextMenu={userMenuHandler(userId, displayName, meId, handle)}
-      className="relative flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-white/5"
+      onClick={profileCardHandler(userId, displayName, handle, 'left')}
+      className="relative flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-white/5"
     >
       <LevelRowShimmer userId={userId} />
       <div className="relative shrink-0">

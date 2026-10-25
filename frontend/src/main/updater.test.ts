@@ -27,7 +27,8 @@ const h = vi.hoisted(() => {
       for (const k of Object.keys(listeners)) delete listeners[k]
     }
   }
-  return { state, autoUpdater }
+  const fetch = vi.fn(async () => ({ ok: true, text: async () => 'assinatura' }))
+  return { state, autoUpdater, fetch }
 })
 
 vi.mock('electron', () => ({
@@ -36,7 +37,7 @@ vi.mock('electron', () => ({
     handle: (ch: string, fn: (...a: unknown[]) => unknown) => (h.state.handlers[ch] = fn),
     on: (ch: string, fn: (...a: unknown[]) => unknown) => (h.state.handlers[ch] = fn)
   },
-  net: { fetch: async () => ({ ok: true, text: async () => 'assinatura' }) }
+  net: { fetch: h.fetch }
 }))
 vi.mock('electron-updater', () => ({ autoUpdater: h.autoUpdater }))
 vi.mock('fs/promises', () => ({
@@ -122,6 +123,32 @@ describe('updater', () => {
     expect(h.state.sent.some(([channel]) => channel === 'update:error')).toBe(true)
   })
 
+  it('verifica a assinatura do AppImage pelo nome no cache antes de instalar', async () => {
+    await startUpdater()
+    await h.autoUpdater.emit('update-available', { version: '0.7.0' })
+    await h.autoUpdater.emit('update-downloaded', {
+      version: '0.7.0',
+      downloadedFile: '/home/user/.cache/salinha-updater/pending/Salinha-0.7.0-x64.AppImage'
+    })
+    expect(h.fetch).toHaveBeenCalledWith('http://srv/updates/Salinha-0.7.0-x64.AppImage.sig')
+    expect(h.state.sent).toContainEqual(['update:ready', '0.7.0'])
+    h.state.handlers['update:install']()
+    expect(h.autoUpdater.quitAndInstall).toHaveBeenCalledWith(true, true)
+  })
+
+  it('recusa AppImage com assinatura inválida', async () => {
+    h.state.validSignature = false
+    await startUpdater()
+    await h.autoUpdater.emit('update-available', { version: '0.7.0' })
+    h.state.handlers['update:install']()
+    await h.autoUpdater.emit('update-downloaded', {
+      version: '0.7.0',
+      downloadedFile: '/cache/Salinha-0.7.0-x64.AppImage'
+    })
+    expect(h.autoUpdater.quitAndInstall).not.toHaveBeenCalled()
+    expect(h.state.sent.some(([channel]) => channel === 'update:error')).toBe(true)
+  })
+
   it('limpa a retomada quando o instalador falha', async () => {
     await startUpdater()
     const { clearCallResume } = await import('./callResume')
@@ -157,6 +184,18 @@ describe('updater', () => {
     expect(vi.mocked(saveCallResume).mock.invocationCallOrder[0]).toBeLessThan(
       h.autoUpdater.quitAndInstall.mock.invocationCallOrder[0]
     )
+  })
+
+  it('recusa AppImage se a assinatura não estiver publicada', async () => {
+    h.fetch.mockResolvedValueOnce({ ok: false, text: async () => '' })
+    await startUpdater()
+    await h.autoUpdater.emit('update-available', { version: '0.7.0' })
+    await h.autoUpdater.emit('update-downloaded', {
+      version: '0.7.0',
+      downloadedFile: '/cache/Salinha-0.7.0-x64.AppImage'
+    })
+    expect(h.autoUpdater.quitAndInstall).not.toHaveBeenCalled()
+    expect(h.state.sent.some(([channel]) => channel === 'update:error')).toBe(true)
   })
 
   it('avisa assim que existe versão nova, mesmo em chamada (sem baixar ainda)', async () => {

@@ -103,7 +103,7 @@ concord/
 │   │                 # conversation, call, websocket, database
 │   └── migrations/   # SQL versionado
 ├── native/           # concord-audio: helper Rust do som da janela (Windows)
-├── scripts/          # server-up, build-win, release-win, install-services, playit-*, e2e-voice
+├── scripts/          # server-up, build/release-win, build/release-linux, deploy-vps, e2e-*
 └── frontend/         # cliente Electron + React
     └── src/
         ├── main/     # processo principal do Electron
@@ -113,8 +113,27 @@ concord/
 
 ## 🚀 Como rodar
 
-> **Hospedar para os amigos** (este PC como servidor, amigos só baixam o `.exe`):
+> **Hospedar para os amigos** (este PC como servidor, amigos baixam o `.exe` ou AppImage Linux x64):
 > veja **[docs/HOSPEDAGEM.md](docs/HOSPEDAGEM.md)**.
+
+### Distribuição desktop
+
+A landing page (`site/`) oferece o instalador Windows e o AppImage Linux x64.
+No deploy automático, ambos usam a mesma versão e recebem atualizações
+verificadas com assinatura Ed25519.
+
+Para preparar um release local das duas plataformas (requer Docker):
+
+```bash
+scripts/release-win.sh 0.7.0
+scripts/release-linux.sh 0.7.0
+```
+
+Defina `PUBLIC_URL` no ambiente ou em `backend/.env`. Os artefatos ficam em
+`frontend/dist/` e os arquivos para publicação em `backend/updates/`.
+No Linux, permita a execução do AppImage e mantenha-o numa pasta sua com
+permissão de escrita. Compartilhamento de tela com áudio e inicialização
+automática com o sistema continuam exclusivos do Windows.
 
 ### Pré-requisitos
 - Go 1.26+

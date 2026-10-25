@@ -42,17 +42,16 @@ mac:
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
+  icon: resources/icon.png
   target:
     - AppImage
-    - snap
-    - deb
-  maintainer: electronjs.org
-  category: Utility
+  category: Network
 appImage:
-  artifactName: ${name}-${version}.${ext}
+  # Distribuímos apenas x64; o macro arch do AppImage expande para x86_64.
+  artifactName: Salinha-${version}-x64.${ext}
 npmRebuild: false
 # Atualização automática: latest.yml + instalador servidos pelo próprio
-# servidor da Salinha (<servidor>/updates/). A URL vem do build-win.sh.
+# servidor da Salinha (<servidor>/updates/). A URL vem dos scripts de build.
 publish:
   provider: generic
   url: ${env.CONCORD_UPDATE_URL}
