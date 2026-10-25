@@ -1,11 +1,11 @@
 import { create } from 'zustand'
 import {
+  featuredLeaf,
   moveLeaf,
   presetLayout,
   resizeSizes,
   syncLayout,
   updateSplitAt,
-  type DropSide,
   type LayoutNode,
   type LayoutPreset
 } from '../lib/streamLayout'
@@ -38,7 +38,10 @@ interface StreamLayoutState {
   /** Acompanha quem está transmitindo, preservando o arranjo. */
   sync: (ids: string[]) => void
   applyPreset: (preset: LayoutPreset, ids: string[], focusId?: string | null) => void
-  move: (draggedId: string, targetId: string, side: DropSide) => void
+  /** Troca duas transmissões de lugar, mantendo o formato. */
+  swap: (a: string, b: string) => void
+  /** Formato Destaque: põe a transmissão no bloco grande. */
+  feature: (id: string) => void
   /** Arrasta a divisória `divider` da divisão em `path`. */
   resize: (path: number[], divider: number, delta: number, mins: number[]) => void
   /** Duplo clique na divisória: deixa os blocos daquela divisão iguais. */
@@ -59,8 +62,16 @@ export const useStreamLayoutStore = create<StreamLayoutState>()((set, get) => ({
     set({ preset, layout: presetLayout(preset, ids, focusId) })
   },
 
-  move: (draggedId, targetId, side) => {
-    set((state) => ({ layout: moveLeaf(state.layout, draggedId, targetId, side) }))
+  swap: (a, b) => {
+    set((state) => ({ layout: moveLeaf(state.layout, a, b, 'center') }))
+  },
+
+  feature: (id) => {
+    set((state) => {
+      const current = featuredLeaf(state.layout)
+      if (!current || current === id) return {}
+      return { layout: moveLeaf(state.layout, id, current, 'center') }
+    })
   },
 
   resize: (path, divider, delta, mins) => {
