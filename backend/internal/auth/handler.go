@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -27,10 +28,18 @@ func (h *Handler) Register(c *gin.Context) {
 		DisplayName string `json:"display_name"`
 		Email       string `json:"email"`
 		Password    string `json:"password"`
+		// Aniversário opcional (só dia e mês).
+		BirthdayDay   *int `json:"birthday_day"`
+		BirthdayMonth *int `json:"birthday_month"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if err := user.ValidateBirthday(input.BirthdayDay, input.BirthdayMonth); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -51,6 +60,13 @@ func (h *Handler) Register(c *gin.Context) {
 	if err := h.userService.Create(c.Request.Context(), newUser); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	if input.BirthdayDay != nil {
+		birthday := user.Birthday{Day: input.BirthdayDay, Month: input.BirthdayMonth, Announce: true}
+		if err := h.userService.SetBirthday(c.Request.Context(), newUser.ID, birthday); err != nil {
+			log.Printf("[auth] save birthday for %s: %v", newUser.ID, err)
+		}
 	}
 
 	accessToken, err := h.service.GenerateAccessToken(newUser.ID)
