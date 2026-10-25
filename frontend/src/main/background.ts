@@ -136,7 +136,7 @@ function rebuildTrayMenu(getWindow: () => BrowserWindow | null): void {
       ...(callState.inCall
         ? [
             {
-              label: callState.muted ? 'Ativar microfone' : 'Silenciar microfone',
+              label: callState.muted ? 'Ativar Microfone' : 'Silenciar Microfone',
               click: () => getWindow()?.webContents.send('tray:toggle-mute')
             }
           ]

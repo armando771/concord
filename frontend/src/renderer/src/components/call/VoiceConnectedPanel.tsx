@@ -101,8 +101,8 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
           </button>
           <button
             onClick={toggleMute}
-            aria-label={muted ? 'Ativar microfone' : 'Silenciar microfone'}
-            title={muted ? 'Ativar microfone' : 'Silenciar microfone'}
+            aria-label={muted ? 'Ativar Microfone' : 'Silenciar Microfone'}
+            title={muted ? 'Ativar Microfone' : 'Silenciar Microfone'}
             className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors ${
               muted
                 ? 'bg-white text-[#07080b]'
@@ -113,8 +113,8 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
           </button>
           <button
             onClick={toggleDeafen}
-            aria-label={deafened ? 'Desativar surdez' : 'Ficar surdo'}
-            title={deafened ? 'Desativar surdez' : 'Ficar surdo'}
+            aria-label={deafened ? 'Ativar Audio' : 'Silenciar Audio'}
+            title={deafened ? 'Ativar Audio' : 'Silenciar Audio'}
             className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors ${
               deafened
                 ? 'bg-white text-[#07080b]'
