@@ -3,6 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useServerStore } from '../store/serverStore'
 import { useUIStore } from '../store/uiStore'
+import { useServerAccess } from '../store/useServerAccess'
+import { useServerSettingsStore } from '../store/serverSettingsStore'
+import { Perm } from '../lib/permissions'
+import { canOpenServerSettings } from '../lib/serverSettingsNav'
+import { actionErrorMessage } from '../lib/permissionErrors'
 import { useChatStore } from '../store/chatStore'
 import { useCallStore } from '../store/callStore'
 import VoiceStateIcons from './call/VoiceStateIcons'
@@ -30,10 +35,15 @@ import Button from './Button'
 import Input from './Input'
 import VoiceConnectedPanel from './call/VoiceConnectedPanel'
 import UserBar from './UserBar'
+import ChannelPermissionsModal from './ChannelPermissionsModal'
+import ConfirmModal from './friends/ConfirmModal'
+import Switch from './Switch'
 import Avatar from './Avatar'
 import {
   ChevronDownIcon,
   ChevronUpIcon,
+  GearIcon,
+  LockIcon,
   UserPlusIcon,
   PlusIcon,
   PencilIcon,
@@ -59,12 +69,11 @@ export function ServerSidebar(): React.JSX.Element {
 
   const user = useAuthStore((s) => s.user)
   const currentServer = useServerStore((s) => s.currentServer)
-  const currentMembers = useServerStore((s) => s.currentMembers)
+  const roles = useServerStore((s) => s.roles)
   const channels = useServerStore((s) => s.channels)
   const createChannel = useServerStore((s) => s.createChannel)
   const updateChannel = useServerStore((s) => s.updateChannel)
   const deleteChannel = useServerStore((s) => s.deleteChannel)
-  const updateServer = useServerStore((s) => s.updateServer)
   const deleteServer = useServerStore((s) => s.deleteServer)
   const unreadByRoom = useChatStore((s) => s.unreadByRoom)
   const openInviteModal = useUIStore((s) => s.openServerInviteModal)
@@ -96,35 +105,40 @@ export function ServerSidebar(): React.JSX.Element {
   const [channelMenuFor, setChannelMenuFor] = useState<string | null>(null)
   const [deletingChannel, setDeletingChannel] = useState<Channel | null>(null)
   const [deletingChannelId, setDeletingChannelId] = useState<string | null>(null)
-  const [editServerOpen, setEditServerOpen] = useState(false)
   const [deleteServerOpen, setDeleteServerOpen] = useState(false)
-  const [serverNameInput, setServerNameInput] = useState('')
-  const [serverIconInput, setServerIconInput] = useState('')
-  const [savingServer, setSavingServer] = useState(false)
+  const [leaveServerOpen, setLeaveServerOpen] = useState(false)
   const [deletingServer, setDeletingServer] = useState(false)
+  /** Canal novo privado: só estes cargos (e quem criou) veem. */
+  const [channelPrivate, setChannelPrivate] = useState(false)
+  const [channelRoleIds, setChannelRoleIds] = useState<string[]>([])
+  /** Canal cujas permissões estão abertas no editor. */
+  const [permissionsFor, setPermissionsFor] = useState<Channel | null>(null)
 
   const textChannels = channels.filter((ch) => (ch.type ?? 'text') === 'text')
   const primaryId = primaryChannelId(currentServer, channels)
   const voiceChannels = channels.filter((ch) => ch.type === 'voice')
 
-  const isAdmin =
-    currentServer?.owner_id === user?.id ||
-    currentMembers.some((m) => m.user_id === user?.id && m.role === 'admin')
-  const isOwner = currentServer?.owner_id === user?.id
+  // Quem pode o quê vem dos cargos; o servidor confere de novo a cada ação.
+  const access = useServerAccess()
+  const canManageChannels = access.can(Perm.MANAGE_CHANNELS)
+  const isOwner = access.isOwner
+  /** Abre o menu do canal: gerencia canais ou as permissões deste canal. */
+  const canOpenChannelMenu = (ch: Channel): boolean =>
+    canManageChannels || access.canInChannel(ch.id, Perm.MANAGE_ROLES)
   /** Canal de voz sobre o qual alguém está sendo arrastado (moderadores). */
   const [voiceDropTarget, setVoiceDropTarget] = useState<string | null>(null)
-  const canMove = (targetId: string): boolean =>
+  const canMove = (targetId: string, fromChannelId: string): boolean =>
     canMoveVoiceUser({
       meId: user?.id,
-      ownerId: currentServer?.owner_id,
-      isModerator: isAdmin,
-      targetId
+      targetId,
+      canMoveMembers: access.canInChannel(fromChannelId, Perm.MOVE_MEMBERS),
+      canActOnTarget: access.canActOnMember(targetId)
     })
   const moveUser = async (userId: string, channelId: string): Promise<void> => {
     try {
       await moveToVoiceChannel(userId, channelId)
     } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Não foi possível mover.')
+      showToast.error(actionErrorMessage(err, 'Não foi possível mover.'))
     }
   }
 
@@ -159,7 +173,7 @@ export function ServerSidebar(): React.JSX.Element {
     ch: Channel,
     type: ChannelType
   ): React.HTMLAttributes<HTMLDivElement> & { draggable?: boolean } =>
-    isAdmin
+    canManageChannels
       ? {
           draggable: true,
           onDragStart: (e) => {
@@ -190,7 +204,7 @@ export function ServerSidebar(): React.JSX.Element {
     onDrop: (e: React.DragEvent<HTMLElement>) => void
   } => ({
     onDragOver: (e) => {
-      if (!isAdmin || !e.dataTransfer.types.includes(channelDragType(type))) return
+      if (!canManageChannels || !e.dataTransfer.types.includes(channelDragType(type))) return
       e.preventDefault()
       e.dataTransfer.dropEffect = 'move'
       const insertion = insertionAt(e, index)
@@ -202,7 +216,7 @@ export function ServerSidebar(): React.JSX.Element {
     },
     onDrop: (e) => {
       const id = e.dataTransfer.getData(channelDragType(type))
-      if (!isAdmin || !id) return
+      if (!canManageChannels || !id) return
       e.preventDefault()
       const insertion = insertionAt(e, index)
       const from = sectionOf(type).findIndex((c) => c.id === id)
@@ -274,6 +288,10 @@ export function ServerSidebar(): React.JSX.Element {
   }, [voiceUserIdsKey, ensureLevels])
 
   const handleVoiceClick = (ch: Channel): void => {
+    if (!access.canInChannel(ch.id, Perm.CONNECT)) {
+      showToast.error('Você não tem permissão para entrar neste canal de voz.')
+      return
+    }
     // Estilo Discord: conectar ao canal e exibir a view de voz na área principal.
     joinVoiceChannel(ch.id)
       .then(() => {
@@ -298,16 +316,21 @@ export function ServerSidebar(): React.JSX.Element {
         setEditingChannel(null)
         showToast.success('Canal atualizado!')
       } else {
-        await createChannel(currentServer.id, name, channelType)
+        await createChannel(currentServer.id, name, channelType, {
+          private: channelPrivate,
+          roleIds: channelRoleIds
+        })
         useChatStore.getState().fetchChannelsForServers([currentServer.id])
         closeCreateChannelModal()
         setChannelName('')
+        setChannelPrivate(false)
+        setChannelRoleIds([])
         showToast.success(
           channelType === 'voice' ? `Canal de voz ${name} criado!` : `Canal #${name} criado!`
         )
       }
     } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Falha ao salvar canal.')
+      showToast.error(actionErrorMessage(err, 'Falha ao salvar canal.'))
     } finally {
       setCreatingChannel(false)
     }
@@ -325,28 +348,6 @@ export function ServerSidebar(): React.JSX.Element {
       showToast.error(err instanceof Error ? err.message : 'Falha ao deletar canal.')
     } finally {
       setDeletingChannelId(null)
-    }
-  }
-
-  const openEditServer = (): void => {
-    setServerNameInput(currentServer?.name ?? '')
-    setServerIconInput(currentServer?.icon_url ?? '')
-    setEditServerOpen(true)
-  }
-
-  const handleSaveServer = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault()
-    const name = serverNameInput.trim()
-    if (!name || savingServer || !currentServer) return
-    setSavingServer(true)
-    try {
-      await updateServer(currentServer.id, name, serverIconInput.trim())
-      setEditServerOpen(false)
-      showToast.success('Servidor atualizado!')
-    } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Falha ao salvar servidor.')
-    } finally {
-      setSavingServer(false)
     }
   }
 
@@ -370,7 +371,7 @@ export function ServerSidebar(): React.JSX.Element {
 
   /** Botão direito no canal abre o mesmo menu do "•••" (moderadores). */
   const channelContextMenu = (ch: Channel): ((e: React.MouseEvent) => void) | undefined =>
-    isAdmin
+    canOpenChannelMenu(ch)
       ? (e) => {
           e.preventDefault()
           setChannelMenuFor(ch.id)
@@ -420,7 +421,7 @@ export function ServerSidebar(): React.JSX.Element {
         <div className="fixed inset-0 z-20" onClick={() => setChannelMenuFor(null)} />
         <div className="absolute right-1.5 top-full z-30 mt-1 flex w-48 flex-col rounded-xl border border-white/10 bg-[#0d0e15]/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in">
           {/* Alternativa ao arrastar (teclado/leitor de tela). */}
-          {index > 0 && (
+          {canManageChannels && index > 0 && (
             <button
               onClick={move(index - 1)}
               className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
@@ -429,7 +430,7 @@ export function ServerSidebar(): React.JSX.Element {
               <ChevronUpIcon className="h-3.5 w-3.5" />
             </button>
           )}
-          {index >= 0 && index < section.length - 1 && (
+          {canManageChannels && index >= 0 && index < section.length - 1 && (
             <button
               onClick={move(index + 1)}
               className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
@@ -438,37 +439,55 @@ export function ServerSidebar(): React.JSX.Element {
               <ChevronDownIcon className="h-3.5 w-3.5" />
             </button>
           )}
-          {(ch.type ?? 'text') === 'text' && ch.id !== primaryId && (
+          {access.can(Perm.MANAGE_SERVER) &&
+            (ch.type ?? 'text') === 'text' &&
+            ch.id !== primaryId && (
+              <button
+                onClick={() => void makePrimary(ch)}
+                className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+              >
+                <span>Definir como principal</span>
+                <StarIcon className="h-3.5 w-3.5 text-amber-400" />
+              </button>
+            )}
+          {canManageChannels && (
             <button
-              onClick={() => void makePrimary(ch)}
+              onClick={() => {
+                setChannelMenuFor(null)
+                setChannelName(ch.name)
+                setEditingChannel(ch)
+                openCreateChannelModal()
+              }}
               className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
             >
-              <span>Definir como principal</span>
-              <StarIcon className="h-3.5 w-3.5 text-amber-400" />
+              <span>Editar canal</span>
+              <PencilIcon className="h-3.5 w-3.5" />
             </button>
           )}
-          <button
-            onClick={() => {
-              setChannelMenuFor(null)
-              setChannelName(ch.name)
-              setEditingChannel(ch)
-              openCreateChannelModal()
-            }}
-            className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
-          >
-            <span>Editar canal</span>
-            <PencilIcon className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={() => {
-              setChannelMenuFor(null)
-              setDeletingChannel(ch)
-            }}
-            className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/15 cursor-pointer"
-          >
-            <span>Deletar canal</span>
-            <TrashIcon className="h-3.5 w-3.5" />
-          </button>
+          {access.canInChannel(ch.id, Perm.MANAGE_ROLES) && (
+            <button
+              onClick={() => {
+                setChannelMenuFor(null)
+                setPermissionsFor(ch)
+              }}
+              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
+            >
+              <span>Permissões</span>
+              <LockIcon className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {canManageChannels && (
+            <button
+              onClick={() => {
+                setChannelMenuFor(null)
+                setDeletingChannel(ch)
+              }}
+              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/15 cursor-pointer"
+            >
+              <span>Deletar canal</span>
+              <TrashIcon className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       </>
     )
@@ -497,27 +516,41 @@ export function ServerSidebar(): React.JSX.Element {
           {/* Dropdown Menu */}
           {dropdownOpen && (
             <div className="absolute top-14 left-3 right-3 z-30 flex flex-col rounded-xl border border-white/10 bg-[#0d0e15]/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2">
-              {/* Qualquer membro pode convidar */}
-              <button
-                onClick={() => {
-                  setDropdownOpen(false)
-                  openInviteModal()
-                }}
-                className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-violet-300 hover:bg-violet-600/20 hover:text-violet-200 cursor-pointer"
-              >
-                <span>Convidar pessoas</span>
-                <UserPlusIcon className="h-4 w-4" />
-              </button>
-              {isAdmin && (
+              {/* Quem tem CREATE_INVITE convida (por padrão, todo membro). */}
+              {access.can(Perm.CREATE_INVITE) && (
                 <button
                   onClick={() => {
                     setDropdownOpen(false)
-                    openEditServer()
+                    openInviteModal()
+                  }}
+                  className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-violet-300 hover:bg-violet-600/20 hover:text-violet-200 cursor-pointer"
+                >
+                  <span>Convidar pessoas</span>
+                  <UserPlusIcon className="h-4 w-4" />
+                </button>
+              )}
+              {canOpenServerSettings(access.perms) && (
+                <button
+                  onClick={() => {
+                    setDropdownOpen(false)
+                    useServerSettingsStore.getState().openSettings()
                   }}
                   className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10 cursor-pointer"
                 >
-                  <span>Editar servidor</span>
-                  <PencilIcon className="h-3.5 w-3.5" />
+                  <span>Configurações do servidor</span>
+                  <GearIcon className="h-3.5 w-3.5" />
+                </button>
+              )}
+              {!isOwner && (
+                <button
+                  onClick={() => {
+                    setDropdownOpen(false)
+                    setLeaveServerOpen(true)
+                  }}
+                  className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/15 cursor-pointer"
+                >
+                  <span>Sair do servidor</span>
+                  <TrashIcon className="h-3.5 w-3.5" />
                 </button>
               )}
               {isOwner && (
@@ -544,12 +577,14 @@ export function ServerSidebar(): React.JSX.Element {
               <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
                 Canais de texto
               </p>
-              {isAdmin && (
+              {canManageChannels && (
                 <button
                   onClick={() => {
                     setEditingChannel(null)
                     setChannelName('')
                     setChannelType('text')
+                    setChannelPrivate(false)
+                    setChannelRoleIds([])
                     openCreateChannelModal()
                   }}
                   title="Criar canal de texto"
@@ -582,7 +617,7 @@ export function ServerSidebar(): React.JSX.Element {
                       onContextMenu={channelContextMenu(ch)}
                       title={ch.name}
                       className={`flex w-full items-start gap-2 rounded-lg py-1.5 pl-2.5 text-left text-sm font-medium transition-all cursor-pointer ${
-                        isAdmin ? 'pr-7' : 'pr-2.5'
+                        canOpenChannelMenu(ch) ? 'pr-7' : 'pr-2.5'
                       } ${
                         active
                           ? 'bg-white/10 text-white shadow-sm'
@@ -595,6 +630,15 @@ export function ServerSidebar(): React.JSX.Element {
                       {/* Nome inteiro, quebrando linha; a estrela segue o texto. */}
                       <span className={`min-w-0 flex-1 leading-5 ${WRAP_NAME}`}>
                         {ch.name}
+                        {access.isPrivate(ch.id) && (
+                          <span
+                            title="Canal privado"
+                            className="ml-1.5 inline-flex align-[-1px] text-gray-500"
+                          >
+                            <LockIcon className="h-3 w-3" />
+                            <span className="sr-only">(canal privado)</span>
+                          </span>
+                        )}
                         {ch.id === primaryId && (
                           <span
                             title="Canal principal: avisos do servidor são enviados aqui"
@@ -613,7 +657,7 @@ export function ServerSidebar(): React.JSX.Element {
                         </span>
                       )}
                     </button>
-                    {isAdmin && channelMenuButton(ch)}
+                    {canOpenChannelMenu(ch) && channelMenuButton(ch)}
                     {channelMenuFor === ch.id && channelMenu(ch)}
                   </div>
                 )
@@ -627,12 +671,14 @@ export function ServerSidebar(): React.JSX.Element {
               <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
                 Canais de voz
               </p>
-              {isAdmin && (
+              {canManageChannels && (
                 <button
                   onClick={() => {
                     setEditingChannel(null)
                     setChannelName('')
                     setChannelType('voice')
+                    setChannelPrivate(false)
+                    setChannelRoleIds([])
                     openCreateChannelModal()
                   }}
                   title="Criar canal de voz"
@@ -670,7 +716,7 @@ export function ServerSidebar(): React.JSX.Element {
                     onDragOver={(e) => {
                       // Arrastando um canal de voz (reordenar) ou uma pessoa (mover).
                       channelDropTarget('voice', index).onDragOver(e)
-                      if (!isAdmin || !e.dataTransfer.types.includes(VOICE_USER_DRAG)) return
+                      if (!e.dataTransfer.types.includes(VOICE_USER_DRAG)) return
                       e.preventDefault()
                       e.dataTransfer.dropEffect = 'move'
                       setVoiceDropTarget(ch.id)
@@ -696,10 +742,18 @@ export function ServerSidebar(): React.JSX.Element {
                       <button
                         onClick={() => handleVoiceClick(ch)}
                         onContextMenu={channelContextMenu(ch)}
-                        title={connectedHere ? 'Desconectar' : 'Conectar ao canal de voz'}
+                        title={
+                          connectedHere
+                            ? 'Desconectar'
+                            : access.canInChannel(ch.id, Perm.CONNECT)
+                              ? 'Conectar ao canal de voz'
+                              : 'Você não tem permissão para entrar neste canal'
+                        }
                         className={`flex w-full items-start gap-2 rounded-lg py-1.5 pl-2.5 text-left text-sm font-medium transition-all cursor-pointer ${
+                          access.canInChannel(ch.id, Perm.CONNECT) ? '' : 'opacity-60'
+                        } ${
                           // Sem gente, o "•••" fica sempre à direita: guarda o espaço dele.
-                          isAdmin && participants.length === 0 ? 'pr-7' : 'pr-2.5'
+                          canOpenChannelMenu(ch) && participants.length === 0 ? 'pr-7' : 'pr-2.5'
                         } ${
                           voiceDropTarget === ch.id
                             ? 'bg-[#5865f2]/25 text-white ring-2 ring-[#5865f2]'
@@ -720,6 +774,20 @@ export function ServerSidebar(): React.JSX.Element {
                             altura da primeira linha. */}
                         <span title={ch.name} className={`min-w-0 flex-1 leading-5 ${WRAP_NAME}`}>
                           {ch.name}
+                          {(access.isPrivate(ch.id) ||
+                            !access.canInChannel(ch.id, Perm.CONNECT)) && (
+                            <span
+                              title={
+                                access.isPrivate(ch.id)
+                                  ? 'Canal privado'
+                                  : 'Sem permissão para entrar'
+                              }
+                              className="ml-1.5 inline-flex align-[-1px] text-gray-500"
+                            >
+                              <LockIcon className="h-3 w-3" />
+                              <span className="sr-only">(restrito)</span>
+                            </span>
+                          )}
                         </span>
                         {participants.length > 0 && callState?.call?.started_at && (
                           <span className="flex h-5 shrink-0 items-center">
@@ -729,7 +797,7 @@ export function ServerSidebar(): React.JSX.Element {
                         {participants.length > 0 && (
                           <span
                             className={`flex h-5 shrink-0 items-center transition-opacity ${
-                              isAdmin ? 'group-hover/voicech:opacity-0' : ''
+                              canOpenChannelMenu(ch) ? 'group-hover/voicech:opacity-0' : ''
                             }`}
                           >
                             <span className="rounded-full bg-white/10 px-1.5 py-0.2 text-[10px] font-bold text-gray-300">
@@ -739,7 +807,7 @@ export function ServerSidebar(): React.JSX.Element {
                         )}
                       </button>
                       {/* Com gente no canal, o "•••" troca de lugar com a contagem no hover. */}
-                      {isAdmin && channelMenuButton(ch, participants.length > 0)}
+                      {canOpenChannelMenu(ch) && channelMenuButton(ch, participants.length > 0)}
                       {channelMenuFor === ch.id && channelMenu(ch)}
                     </div>
                     {participants.length > 0 && (
@@ -754,18 +822,20 @@ export function ServerSidebar(): React.JSX.Element {
                               key={p.user_id}
                               onContextMenu={userMenuHandler(p.user_id, name, user?.id, p.username)}
                               onClick={profileCardHandler(p.user_id, name, p.username, 'right')}
-                              draggable={canMove(p.user_id)}
+                              draggable={canMove(p.user_id, ch.id)}
                               onDragStart={(e) => {
                                 e.dataTransfer.setData(VOICE_USER_DRAG, p.user_id)
                                 e.dataTransfer.effectAllowed = 'move'
                               }}
                               onDragEnd={() => setVoiceDropTarget(null)}
                               title={
-                                canMove(p.user_id) ? 'Arraste para outro canal de voz' : undefined
+                                canMove(p.user_id, ch.id)
+                                  ? 'Arraste para outro canal de voz'
+                                  : undefined
                               }
                               className={`group/voiceuser relative flex items-center gap-2 overflow-hidden rounded-md px-2 py-1 transition-colors ${
                                 isMe ? 'bg-white/5 hover:bg-white/10' : 'hover:bg-white/[0.06]'
-                              } ${canMove(p.user_id) ? 'cursor-pointer active:cursor-grabbing' : 'cursor-pointer'}`}
+                              } ${canMove(p.user_id, ch.id) ? 'cursor-pointer active:cursor-grabbing' : 'cursor-pointer'}`}
                             >
                               <Avatar
                                 userId={p.user_id}
@@ -796,6 +866,8 @@ export function ServerSidebar(): React.JSX.Element {
                                 <VoiceStateIcons
                                   muted={isMe && connectedHere ? selfMuted : p.muted}
                                   deafened={isMe && connectedHere ? selfDeafened : p.deafened}
+                                  serverMuted={p.server_muted}
+                                  serverDeafened={p.server_deafened}
                                 />
                               </span>
                             </div>
@@ -874,6 +946,59 @@ export function ServerSidebar(): React.JSX.Element {
               </div>
             </div>
           )}
+          {!editingChannel && (
+            <div className="rounded-lg border border-white/8 bg-white/3 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">Canal privado</p>
+                  <p className="text-xs text-gray-400">
+                    {channelType === 'voice'
+                      ? 'Só os cargos escolhidos (e você) veem e entram neste canal.'
+                      : 'Só os cargos escolhidos (e você) veem este canal.'}
+                  </p>
+                </div>
+                <Switch
+                  checked={channelPrivate}
+                  label="Canal privado"
+                  onChange={setChannelPrivate}
+                />
+              </div>
+              {channelPrivate && (
+                <div className="mt-3 border-t border-white/8 pt-3">
+                  <p className="mb-2 text-xs font-semibold text-gray-400">Quem pode ver</p>
+                  {roles.filter((r) => !r.is_default).length === 0 ? (
+                    <p className="text-xs text-gray-500">
+                      Nenhum cargo ainda: só você e o dono vão ver. Crie cargos em Configurações do
+                      servidor.
+                    </p>
+                  ) : (
+                    <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto">
+                      {roles
+                        .filter((r) => !r.is_default)
+                        .map((r) => (
+                          <li key={r.id}>
+                            <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm text-gray-200 hover:bg-white/5">
+                              <input
+                                type="checkbox"
+                                checked={channelRoleIds.includes(r.id)}
+                                onChange={(e) =>
+                                  setChannelRoleIds((cur) =>
+                                    e.target.checked
+                                      ? [...cur, r.id]
+                                      : cur.filter((id) => id !== r.id)
+                                  )
+                                }
+                              />
+                              <span className="truncate">{r.name}</span>
+                            </label>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex justify-end gap-2">
             <Button
               type="button"
@@ -922,49 +1047,6 @@ export function ServerSidebar(): React.JSX.Element {
         </div>
       </Modal>
 
-      {/* Edit Server Modal */}
-      <Modal open={editServerOpen} title="Editar servidor" onClose={() => setEditServerOpen(false)}>
-        <form onSubmit={handleSaveServer} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-400" htmlFor="server-name">
-              Nome do servidor
-            </label>
-            <Input
-              id="server-name"
-              placeholder="ex.: Meu Servidor"
-              value={serverNameInput}
-              onChange={(e) => setServerNameInput(e.target.value)}
-              autoFocus
-              maxLength={32}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-400" htmlFor="server-icon">
-              URL do ícone (opcional)
-            </label>
-            <Input
-              id="server-icon"
-              placeholder="https://..."
-              value={serverIconInput}
-              onChange={(e) => setServerIconInput(e.target.value)}
-              maxLength={500}
-            />
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => setEditServerOpen(false)}>
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={savingServer || !serverNameInput.trim()}
-            >
-              {savingServer ? 'Salvando...' : 'Salvar'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
       {/* Delete Server Confirm Modal */}
       <Modal
         open={deleteServerOpen}
@@ -989,6 +1071,29 @@ export function ServerSidebar(): React.JSX.Element {
           </Button>
         </div>
       </Modal>
+
+      <ChannelPermissionsModal channel={permissionsFor} onClose={() => setPermissionsFor(null)} />
+
+      <ConfirmModal
+        open={leaveServerOpen}
+        title={`Sair de ${serverName}`}
+        confirmLabel="Sair do servidor"
+        onClose={() => setLeaveServerOpen(false)}
+        onConfirm={async () => {
+          if (!currentServer) return
+          try {
+            await useServerStore.getState().leaveServer(currentServer.id)
+            useChatStore.getState().handleServerDeleted(currentServer.id)
+            navigate('/friends')
+          } catch (err) {
+            showToast.error(actionErrorMessage(err, 'Não foi possível sair do servidor.'))
+          }
+        }}
+      >
+        <p>
+          Você sai de <b className="text-white">{serverName}</b> e só volta com um novo convite.
+        </p>
+      </ConfirmModal>
     </>
   )
 }

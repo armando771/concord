@@ -5,15 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	"gin-quickstart/backend/internal/permission"
 )
 
 const soundboardCooldown = 500 * time.Millisecond
 
 var (
-	ErrSoundboardMuted       = errors.New("desative o mudo para tocar áudios na mesa")
-	ErrSoundboardCooldown    = errors.New("aguarde um instante antes de tocar outro áudio")
-	ErrSoundboardUnavailable = errors.New("mesa de áudio indisponível nesta chamada")
-	ErrSoundNotFound         = errors.New("áudio não encontrado neste servidor")
+	ErrSoundboardMuted        = errors.New("desative o mudo para tocar áudios na mesa")
+	ErrSoundboardCooldown     = errors.New("aguarde um instante antes de tocar outro áudio")
+	ErrSoundboardUnavailable  = errors.New("mesa de áudio indisponível nesta chamada")
+	ErrSoundNotFound          = errors.New("áudio não encontrado neste servidor")
+	ErrSoundboardNoPermission = errors.New("você não tem permissão para usar a mesa de áudio neste canal")
 )
 
 type SoundInfo struct {
@@ -64,7 +67,7 @@ func (s *Service) TriggerSoundboard(ctx context.Context, callID, userID, soundID
 		s.mu.Unlock()
 		return ErrNotAllowed
 	}
-	if p.muted || p.deafened {
+	if p.muted || p.deafened || p.serverMuted || p.serverDeafened {
 		s.mu.Unlock()
 		return ErrSoundboardMuted
 	}
@@ -73,8 +76,20 @@ func (s *Service) TriggerSoundboard(ctx context.Context, callID, userID, soundID
 		return ErrSoundboardCooldown
 	}
 	serverID := *ac.info.ServerID
+	var channelID string
+	if ac.info.ChannelID != nil {
+		channelID = *ac.info.ChannelID
+	}
+	perms := s.perms
 	p.lastSoundAt = now
 	s.mu.Unlock()
+
+	if perms != nil {
+		got, err := perms.ChannelPerms(ctx, channelID, userID)
+		if err != nil || !permission.Has(got, permission.UseSoundboard) {
+			return ErrSoundboardNoPermission
+		}
+	}
 
 	sound, err := lookup.FindSound(ctx, soundID)
 	if err != nil || sound.ServerID != serverID {

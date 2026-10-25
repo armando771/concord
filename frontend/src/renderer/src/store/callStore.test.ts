@@ -89,6 +89,7 @@ vi.mock('../lib/livekit', () => ({
     })
     unpublish = vi.fn(async () => {})
     replaceMic = vi.fn(async () => {})
+    ensureMic = vi.fn(async () => {})
     disconnect = vi.fn()
     constructor(handlers: unknown) {
       this.handlers = handlers
@@ -137,6 +138,7 @@ vi.mock('../lib/localSpeaking', () => ({
 }))
 
 import { useCallStore } from './callStore'
+import { showToast } from './toastStore'
 
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0))
 
@@ -380,10 +382,47 @@ describe('callStore — mídia via LiveKit', () => {
       payload: { call_id: 'call-1', user_id: 'ana', muted: true, deafened: true }
     })
 
-    expect(useCallStore.getState().voiceStates.ana).toEqual({ muted: true, deafened: true })
+    expect(useCallStore.getState().voiceStates.ana).toEqual({
+      muted: true,
+      deafened: true,
+      serverMuted: false,
+      serverDeafened: false
+    })
     expect(useCallStore.getState().serverCalls['canal-1'].participants[0]).toMatchObject({
       muted: true,
       deafened: true
+    })
+  })
+
+  it('mostra o que um moderador impôs (silenciar/ensurdecer no servidor)', async () => {
+    await joinChannel()
+    useCallStore.getState().setServerCalls({
+      'canal-1': {
+        call: { id: 'call-1' } as never,
+        participants: [{ call_id: 'call-1', user_id: 'ana', role: 'member', joined_at: '' }]
+      }
+    })
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:voice',
+      payload: {
+        call_id: 'call-1',
+        user_id: 'ana',
+        muted: false,
+        deafened: false,
+        server_muted: true,
+        server_deafened: false
+      }
+    })
+
+    expect(useCallStore.getState().voiceStates.ana).toMatchObject({
+      muted: false,
+      serverMuted: true,
+      serverDeafened: false
+    })
+    expect(useCallStore.getState().serverCalls['canal-1'].participants[0]).toMatchObject({
+      server_muted: true,
+      server_deafened: false
     })
   })
 
@@ -1104,5 +1143,109 @@ describe('callStore — detecção local da própria fala', () => {
     await flush()
     expect(useCallStore.getState().muted).toBe(true)
     expect(useCallStore.getState().speakingIds).toEqual([])
+  })
+})
+
+// ─── Permissões de voz (cargos) ─────────────────────────────────────────────
+
+const mediaHandlers = (): {
+  onPublishPermissions: (allowed: { microphone: boolean; stream: boolean }) => void
+} => media.instances[0].handlers as never
+
+describe('callStore — permissões de voz', () => {
+  it('começa podendo falar e transmitir', async () => {
+    await joinChannel()
+    expect(useCallStore.getState()).toMatchObject({ canSpeak: true, canStream: true })
+  })
+
+  it('perder a permissão de falar muda para mudo e avisa a chamada', async () => {
+    await joinChannel()
+    chat.sendEvent.mockClear()
+
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+
+    expect(useCallStore.getState()).toMatchObject({ canSpeak: false, muted: true, canStream: true })
+    expect(chat.sendEvent).toHaveBeenLastCalledWith('call:voice', {
+      call_id: 'call-1',
+      muted: true,
+      deafened: false
+    })
+  })
+
+  it('sem permissão de falar não dá para desmutar', async () => {
+    await joinChannel()
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+    vi.mocked(showToast.error).mockClear()
+
+    useCallStore.getState().toggleMute()
+
+    expect(useCallStore.getState().muted).toBe(true)
+    expect(showToast.error).toHaveBeenCalledWith(expect.stringMatching(/permissão para falar/))
+  })
+
+  it('silenciado por moderador explica o motivo certo', async () => {
+    await joinChannel()
+    useCallStore.getState().handleWsEvent({
+      type: 'call:voice',
+      payload: {
+        call_id: 'call-1',
+        user_id: 'eu',
+        muted: true,
+        deafened: false,
+        server_muted: true,
+        server_deafened: false
+      }
+    })
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+    vi.mocked(showToast.error).mockClear()
+
+    useCallStore.getState().toggleMute()
+
+    expect(showToast.error).toHaveBeenCalledWith(expect.stringMatching(/moderador/))
+  })
+
+  it('ganhar a permissão publica o microfone, mas não desmuta sozinho', async () => {
+    await joinChannel()
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+
+    mediaHandlers().onPublishPermissions({ microphone: true, stream: true })
+
+    expect(useCallStore.getState()).toMatchObject({ canSpeak: true, muted: true })
+    expect(media.instances[0].ensureMic).toHaveBeenCalledWith(true)
+    useCallStore.getState().toggleMute()
+    expect(useCallStore.getState().muted).toBe(false)
+  })
+
+  it('sem permissão de transmitir, tela e câmera nem abrem', async () => {
+    await joinChannel()
+    mediaHandlers().onPublishPermissions({ microphone: true, stream: false })
+    vi.mocked(showToast.error).mockClear()
+
+    await useCallStore.getState().startScreenShare()
+    await useCallStore.getState().toggleCamera()
+
+    expect(rtc.getDisplayStream).not.toHaveBeenCalled()
+    expect(rtc.getCameraStream).not.toHaveBeenCalled()
+    expect(showToast.error).toHaveBeenCalledTimes(2)
+    expect(showToast.error).toHaveBeenCalledWith(expect.stringMatching(/transmitir/))
+  })
+
+  it('desconectado por um moderador: avisa e encerra a chamada', async () => {
+    await joinChannel()
+    const handlers = media.instances[0].handlers as { onRemovedByModerator: () => void }
+
+    handlers.onRemovedByModerator()
+
+    expect(showToast.info).toHaveBeenCalledWith(expect.stringMatching(/moderador desconectou/))
+    expect(useCallStore.getState().status).toBe('idle')
+  })
+
+  it('sair da chamada devolve as permissões ao padrão', async () => {
+    await joinChannel()
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: false })
+
+    useCallStore.getState().endCall()
+
+    expect(useCallStore.getState()).toMatchObject({ canSpeak: true, canStream: true })
   })
 })

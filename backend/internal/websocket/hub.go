@@ -8,6 +8,8 @@ import (
 
 	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/message"
+	"gin-quickstart/backend/internal/permission"
+	"gin-quickstart/backend/internal/role"
 	"gin-quickstart/backend/internal/server"
 	"gin-quickstart/backend/internal/user"
 )
@@ -20,6 +22,16 @@ type Hub struct {
 	statuses     map[string]string // status escolhido (online, idle, dnd, invisible)
 	statusLookup StatusLookup
 	onDisconnect func(userID string)
+
+	visibility     VisibilityProvider
+	onPermsChanged func(serverID string)
+}
+
+// VisibilityProvider dá o estado de permissões do servidor (permission.Service):
+// o hub usa para decidir quem recebe eventos de um canal e quem continua nas
+// salas depois de uma mudança de cargos.
+type VisibilityProvider interface {
+	Snapshot(ctx context.Context, serverID string) (*permission.Snapshot, error)
 }
 
 // StatusLookup lê do banco o status escolhido por quem acabou de conectar.
@@ -32,6 +44,22 @@ func NewHub() *Hub {
 		presence: make(map[string]int),
 		statuses: make(map[string]string),
 	}
+}
+
+// SetVisibility liga o filtro de eventos por permissão. Sem ele, eventos de
+// canal de servidor não são entregues na sala do servidor (falha fechada).
+func (h *Hub) SetVisibility(v VisibilityProvider) {
+	h.mu.Lock()
+	h.visibility = v
+	h.mu.Unlock()
+}
+
+// SetPermissionsChangedHook registra o que mais fazer quando as permissões de
+// um servidor mudam (ex.: reaplicar nas chamadas de voz). Roda em goroutine.
+func (h *Hub) SetPermissionsChangedHook(fn func(serverID string)) {
+	h.mu.Lock()
+	h.onPermsChanged = fn
+	h.mu.Unlock()
 }
 
 func (h *Hub) SetStatusLookup(fn StatusLookup) {
@@ -193,6 +221,79 @@ func (h *Hub) BroadcastToRoom(room string, event []byte) {
 	}
 }
 
+// BroadcastToRoomFiltered entrega só a quem allow(userID) aceita.
+func (h *Hub) BroadcastToRoomFiltered(room string, event []byte, allow func(userID string) bool) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for client := range h.rooms[room] {
+		if !allow(client.userID) {
+			continue
+		}
+		select {
+		case client.send <- event:
+		default:
+			// client is slow; drop event for it
+		}
+	}
+}
+
+// snapshot lê as permissões do servidor (nil se não der: quem chama não
+// entrega nada, em vez de vazar).
+func (h *Hub) snapshot(serverID string) *permission.Snapshot {
+	h.mu.RLock()
+	v := h.visibility
+	h.mu.RUnlock()
+	if v == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	snap, err := v.Snapshot(ctx, serverID)
+	if err != nil {
+		log.Printf("[ws] permissions of server %s: %v", serverID, err)
+		return nil
+	}
+	return snap
+}
+
+// BroadcastToServerChannel manda para a sala do servidor só a quem vê o canal
+// (mensagens e canais privados não vazam para o resto do servidor).
+func (h *Hub) BroadcastToServerChannel(serverID, channelID string, event []byte) {
+	snap := h.snapshot(serverID)
+	if snap == nil {
+		return
+	}
+	h.BroadcastToRoomFiltered("server:"+serverID, event, func(userID string) bool {
+		return snap.CanView(channelID, userID)
+	})
+}
+
+// RevalidateServer tira das salas do servidor e dos canais quem deixou de ter
+// acesso (mudança de cargo, canal virou privado, expulsão, banimento).
+func (h *Hub) RevalidateServer(serverID string) {
+	snap := h.snapshot(serverID)
+	if snap == nil {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	serverRoom := "server:" + serverID
+	for client := range h.rooms[serverRoom] {
+		if !snap.IsMember(client.userID) {
+			h.removeFromRoomLocked(client, serverRoom)
+		}
+	}
+	for channelID := range snap.Channels {
+		room := "channel:" + channelID
+		for client := range h.rooms[room] {
+			if !snap.CanView(channelID, client.userID) {
+				h.removeFromRoomLocked(client, room)
+			}
+		}
+	}
+}
+
 func (h *Hub) BroadcastAll(event []byte) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -239,7 +340,7 @@ func (h *Hub) PublishMessageCreate(event message.CreateEvent) {
 	if event.ChannelID != nil {
 		h.BroadcastToRoom("channel:"+*event.ChannelID, writeEvent("message:create", event))
 		if event.ServerID != "" {
-			h.BroadcastToRoom("server:"+event.ServerID, writeEvent("message:create", event))
+			h.BroadcastToServerChannel(event.ServerID, *event.ChannelID, writeEvent("message:create", event))
 		}
 		return
 	}
@@ -257,7 +358,7 @@ func (h *Hub) PublishMessageDelete(event message.DeleteEvent) {
 	if event.ChannelID != nil {
 		h.BroadcastToRoom("channel:"+*event.ChannelID, writeEvent("message:delete", event))
 		if event.ServerID != "" {
-			h.BroadcastToRoom("server:"+event.ServerID, writeEvent("message:delete", event))
+			h.BroadcastToServerChannel(event.ServerID, *event.ChannelID, writeEvent("message:delete", event))
 		}
 		return
 	}
@@ -303,12 +404,13 @@ func (h *Hub) PublishReactionRemove(event message.ReactionEvent) {
 	}
 }
 
+// Canal novo ou alterado só aparece para quem o vê.
 func (h *Hub) PublishChannelCreate(event channel.CreateEvent) {
-	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("channel:create", event))
+	h.BroadcastToServerChannel(event.ServerID, event.Channel.ID, writeEvent("channel:create", event))
 }
 
 func (h *Hub) PublishChannelUpdate(event channel.CreateEvent) {
-	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("channel:update", event))
+	h.BroadcastToServerChannel(event.ServerID, event.Channel.ID, writeEvent("channel:update", event))
 }
 
 func (h *Hub) PublishChannelDelete(event channel.DeleteEvent) {
@@ -337,6 +439,54 @@ func (h *Hub) PublishMemberJoin(event server.MemberJoinEvent) {
 
 func (h *Hub) PublishMemberLeave(event server.MemberLeaveEvent) {
 	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:leave", event))
+}
+
+// PublishMemberRemoved: saiu, foi expulso ou banido. Os outros veem o membro
+// sair; quem saiu recebe server:removed e perde as salas do servidor.
+func (h *Hub) PublishMemberRemoved(event server.MemberRemovedEvent) {
+	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:leave", server.MemberLeaveEvent{
+		ServerID: event.ServerID,
+		UserID:   event.UserID,
+	}))
+	h.SendToUser(event.UserID, writeEvent("server:removed", event))
+	h.RevalidateServer(event.ServerID)
+}
+
+func (h *Hub) PublishRoleCreate(event role.RoleEvent) {
+	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("role:create", event))
+}
+
+func (h *Hub) PublishRoleUpdate(event role.RoleEvent) {
+	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("role:update", event))
+}
+
+func (h *Hub) PublishRoleDelete(event role.DeleteEvent) {
+	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("role:delete", event))
+}
+
+func (h *Hub) PublishRoleReorder(event role.ReorderEvent) {
+	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("role:reorder", event))
+}
+
+func (h *Hub) PublishMemberRoles(event role.MemberRolesEvent) {
+	h.BroadcastToRoom("server:"+event.ServerID, writeEvent("server:member:roles", event))
+}
+
+// PublishPermissionsChanged: cargos, cargos de membros ou sobrescritas de
+// canal mudaram. O app busca os canais de novo; quem perdeu acesso sai das
+// salas; as chamadas de voz são reajustadas (hook).
+func (h *Hub) PublishPermissionsChanged(serverID string) {
+	h.RevalidateServer(serverID)
+	h.BroadcastToRoom("server:"+serverID, writeEvent("server:permissions:invalidate", map[string]string{
+		"server_id": serverID,
+	}))
+
+	h.mu.RLock()
+	hook := h.onPermsChanged
+	h.mu.RUnlock()
+	if hook != nil {
+		go hook(serverID)
+	}
 }
 
 // SendToUser delivers an event directly to every connection of a user

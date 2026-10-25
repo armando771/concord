@@ -64,6 +64,8 @@ function ParticipantTile({
   speaking = false,
   selfMuted = false,
   deafened = false,
+  serverMuted = false,
+  serverDeafened = false,
   videoStream = null,
   size = 'lg',
   isScreen = false,
@@ -79,6 +81,9 @@ function ParticipantTile({
   speaking?: boolean
   selfMuted?: boolean
   deafened?: boolean
+  /** Impostos por um moderador (silenciar/ensurdecer no servidor). */
+  serverMuted?: boolean
+  serverDeafened?: boolean
   /** Stream de vídeo (tela/câmera) exibido dentro do tile. */
   videoStream?: MediaStream | null
   size?: 'md' | 'lg' | 'fill'
@@ -209,7 +214,13 @@ function ParticipantTile({
             <VolumeOffIcon className="h-3 w-3" />
           </span>
         )}
-        <VoiceStateIcons muted={selfMuted} deafened={deafened} className="h-3 w-3" />
+        <VoiceStateIcons
+          muted={selfMuted}
+          deafened={deafened}
+          serverMuted={serverMuted}
+          serverDeafened={serverDeafened}
+          className="h-3 w-3"
+        />
         <span className="truncate text-xs font-semibold text-white">{user.display_name}</span>
       </div>
     </div>

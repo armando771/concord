@@ -35,6 +35,14 @@ import VoiceRecordButton from './chat/VoiceRecordButton'
 import ComposerAttachments from './chat/ComposerAttachments'
 import { useAttachmentDraft } from './chat/useAttachmentDraft'
 import {
+  ATTACH_DENIED,
+  DIRECT_CHAT_PERMISSIONS,
+  sendDeniedReason,
+  type ChatPermissions
+} from '../lib/chatPermissions'
+import { actionErrorMessage } from '../lib/permissionErrors'
+import { permissionError } from '../lib/permissions'
+import {
   anchoredScrollTop,
   measureOffset,
   olderPagePrepended,
@@ -56,6 +64,8 @@ interface ChatPaneProps {
   canMentionEveryone?: boolean
   /** Troca o campo de mensagem por este aviso (ex.: DM com alguém bloqueado). */
   disabledReason?: string
+  /** O que a pessoa pode neste canal (cargos). Sem isso (DM), vale o padrão do chat. */
+  permissions?: ChatPermissions
 }
 
 const MAX_SUGGESTIONS = 6
@@ -147,7 +157,9 @@ function MessageItem({
   onJumpToMessage,
   onDelete,
   onVote,
-  onEndPoll
+  onEndPoll,
+  canReact,
+  canModerate
 }: {
   message: Message
   isHighlighted: boolean
@@ -157,6 +169,10 @@ function MessageItem({
   onDelete: () => void
   onVote: (answerIds: number[]) => Promise<void>
   onEndPoll: () => Promise<void>
+  /** ADD_REACTIONS no canal. */
+  canReact: boolean
+  /** MANAGE_MESSAGES no canal: apaga mensagem de outros e encerra enquete. */
+  canModerate: boolean
 }): React.JSX.Element {
   const me = useAuthStore((s) => s.user)
   const isMine = message.author_id === me?.id
@@ -277,7 +293,12 @@ function MessageItem({
             <MessageAttachments attachments={message.attachments} />
           ) : null}
           {message.poll && (
-            <PollCard poll={message.poll} isAuthor={isMine} onVote={onVote} onEnd={onEndPoll} />
+            <PollCard
+              poll={message.poll}
+              isAuthor={isMine || canModerate}
+              onVote={onVote}
+              onEnd={onEndPoll}
+            />
           )}
 
           {reactions.length > 0 && (
@@ -289,7 +310,9 @@ function MessageItem({
                     key={reaction.emoji}
                     type="button"
                     onClick={() => onReact(reaction.emoji)}
-                    className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors ${
+                    // Sem ADD_REACTIONS ainda dá para tirar a própria reação.
+                    disabled={!canReact && !meReacted}
+                    className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                       meReacted
                         ? 'border-[#5865f2] bg-[#5865f2]/25 text-white'
                         : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'
@@ -300,39 +323,44 @@ function MessageItem({
                   </button>
                 )
               })}
-              <button
-                type="button"
-                onClick={() => setPickerOpen((v) => !v)}
-                title="Adicionar reação"
-                className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
-              >
-                +
-              </button>
+              {canReact && (
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen((v) => !v)}
+                  title="Adicionar reação"
+                  className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+                >
+                  +
+                </button>
+              )}
             </div>
           )}
         </div>
 
         {(hover || pickerOpen) && (
           <div className="absolute -top-3 right-4 z-20 flex items-center gap-0.5 rounded-lg border border-white/10 bg-[#18191c] px-1 py-0.5 shadow-lg">
-            {QUICK_EMOTES.map((emoji) => (
+            {canReact &&
+              QUICK_EMOTES.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => onReact(emoji)}
+                  title={`Reagir com ${emoji}`}
+                  className="flex h-6 w-6 cursor-pointer items-center justify-center rounded text-sm transition-transform hover:scale-110 hover:bg-white/10"
+                >
+                  {emoji}
+                </button>
+              ))}
+            {canReact && (
               <button
-                key={emoji}
                 type="button"
-                onClick={() => onReact(emoji)}
-                title={`Reagir com ${emoji}`}
-                className="flex h-6 w-6 cursor-pointer items-center justify-center rounded text-sm transition-transform hover:scale-110 hover:bg-white/10"
+                onClick={() => setPickerOpen((v) => !v)}
+                title="Mais reações"
+                className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
               >
-                {emoji}
+                😀+
               </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setPickerOpen((v) => !v)}
-              title="Mais reações"
-              className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              😀+
-            </button>
+            )}
             <button
               type="button"
               onClick={onReply}
@@ -341,11 +369,11 @@ function MessageItem({
             >
               Responder
             </button>
-            {isMine && (
+            {(isMine || canModerate) && (
               <button
                 type="button"
                 onClick={onDelete}
-                title="Excluir mensagem"
+                title={isMine ? 'Excluir mensagem' : 'Excluir mensagem (moderação)'}
                 className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs font-semibold text-gray-400 transition-colors hover:bg-red-500/15 hover:text-red-400"
               >
                 Excluir
@@ -355,7 +383,7 @@ function MessageItem({
         )}
       </div>
 
-      {pickerOpen && (
+      {pickerOpen && canReact && (
         <EmotePickerPopover
           onSelect={(emoji) => onReact(emoji)}
           onClose={() => setPickerOpen(false)}
@@ -370,8 +398,11 @@ function ChatPane({
   placeholder = 'Digite sua mensagem',
   mentionable = [],
   canMentionEveryone = false,
-  disabledReason
+  disabledReason: disabledReasonProp,
+  permissions = DIRECT_CHAT_PERMISSIONS
 }: ChatPaneProps): React.JSX.Element {
+  // Sem SEND_MESSAGES o campo de mensagem dá lugar ao aviso.
+  const disabledReason = disabledReasonProp ?? sendDeniedReason(permissions)
   const messagesByRoom = useChatStore((s) => s.messagesByRoom)
   const hasMoreByRoom = useChatStore((s) => s.hasMoreByRoom)
   const loadingByRoom = useChatStore((s) => s.loadingByRoom)
@@ -395,7 +426,16 @@ function ChatPane({
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { drafts, addFiles, remove: removeAttachment } = useAttachmentDraft(room)
+  const { drafts, addFiles: addDraftFiles, remove: removeAttachment } = useAttachmentDraft(room)
+  /** Sem ATTACH_FILES, arrastar, colar ou escolher arquivos só avisa. */
+  const addFiles = (files: File[]): void => {
+    if (files.length === 0) return
+    if (!permissions.canAttach) {
+      showToast.error(ATTACH_DENIED)
+      return
+    }
+    addDraftFiles(files)
+  }
   const attachmentState = draftStatus(drafts)
   const submittable = canSubmit(draft, drafts)
   // dragenter/dragleave disparam a cada filho; o contador evita piscar.
@@ -563,7 +603,7 @@ function ChatPane({
     } catch (err) {
       showToast.error(
         err instanceof ApiError
-          ? sendErrorMessage(err.status, err.message)
+          ? permissionError(err.code, '') || sendErrorMessage(err.status, err.message)
           : 'Falha ao enviar mensagem.'
       )
     } finally {
@@ -594,7 +634,7 @@ function ChatPane({
         setReplyState(null)
       }
     } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Falha ao excluir mensagem.')
+      showToast.error(actionErrorMessage(err, 'Falha ao excluir mensagem.'))
     }
   }
 
@@ -632,7 +672,7 @@ function ChatPane({
     try {
       await toggleReaction(room, messageId, emoji)
     } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Falha ao reagir à mensagem.')
+      showToast.error(actionErrorMessage(err, 'Falha ao reagir à mensagem.'))
     }
   }
 
@@ -711,6 +751,8 @@ function ChatPane({
                 onDelete={() => handleDelete(m.id)}
                 onVote={(answerIds) => votePollInRoom(room, m.id, answerIds)}
                 onEndPoll={() => endPollInRoom(room, m.id)}
+                canReact={permissions.canReact}
+                canModerate={permissions.canModerate}
               />
             ))}
             <div ref={bottomRef} />
@@ -780,15 +822,17 @@ function ChatPane({
             onSubmit={handleSubmit}
             className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
           >
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              title="Anexar arquivo"
-              aria-label="Anexar arquivo"
-              className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              <PaperclipIcon className="h-5 w-5" />
-            </button>
+            {permissions.canAttach && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                title="Anexar arquivo"
+                aria-label="Anexar arquivo"
+                className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <PaperclipIcon className="h-5 w-5" />
+              </button>
+            )}
             <input
               ref={fileInputRef}
               type="file"
@@ -824,7 +868,9 @@ function ChatPane({
               maxLength={2000}
               className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 outline-none"
             />
-            <VoiceRecordButton key={room} disabled={sendingVoice} onRecorded={handleRecorded} />
+            {permissions.canAttach && (
+              <VoiceRecordButton key={room} disabled={sendingVoice} onRecorded={handleRecorded} />
+            )}
             <button
               type="submit"
               disabled={sending || !submittable}

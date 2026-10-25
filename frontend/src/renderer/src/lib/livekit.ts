@@ -17,6 +17,7 @@ import {
   type TrackEntry
 } from './callMedia'
 import { pruneWatched } from './screenWatch'
+import { canPublishSource, type PublishSource } from './mediaPermissions'
 
 // Mídia das chamadas via SFU (LiveKit): cada pessoa envia uma cópia de cada
 // track para o servidor, que distribui para os demais. Substitui o mesh P2P.
@@ -49,6 +50,13 @@ export interface CallMediaHandlers {
   onReconnected: () => void
   /** Quem está falando agora (identity = userId), incluindo o próprio usuário. */
   onActiveSpeakers: (userIds: string[]) => void
+  /**
+   * As permissões de publicação do próprio usuário mudaram (cargo novo, canal
+   * mudou, "silenciar no servidor"). Também chamado depois de conectar.
+   */
+  onPublishPermissions?: (allowed: { microphone: boolean; stream: boolean }) => void
+  /** Um moderador tirou o usuário da sala (Desconectar da chamada). */
+  onRemovedByModerator?: () => void
 }
 
 const SCREEN_MAX_BITRATE = 4_000_000
@@ -63,6 +71,8 @@ export class CallMedia {
   /** De quem baixar a tela: transmissão dos outros começa pausada (ver setWatchedScreens). */
   private watched = new Set<string>()
   private refreshQueued = false
+  /** Microfone da chamada, guardado para publicar quando a permissão de falar chegar. */
+  private micTrack: MediaStreamTrack | null = null
 
   constructor(private readonly handlers: CallMediaHandlers) {
     this.room = new Room({
@@ -107,6 +117,11 @@ export class CallMedia {
       .on(RoomEvent.ParticipantConnected, published)
       .on(RoomEvent.ParticipantDisconnected, refresh)
       .on(RoomEvent.ParticipantNameChanged, refresh)
+      .on(RoomEvent.ParticipantPermissionsChanged, (_prev: unknown, participant?: unknown) => {
+        // Só importam as permissões do próprio usuário.
+        if (participant && participant !== this.room.localParticipant) return
+        this.emitPublishPermissions()
+      })
       .on(RoomEvent.Reconnecting, () => this.handlers.onReconnecting())
       .on(RoomEvent.Reconnected, () => {
         // Assina de novo o que eu assistia e só então poda quem de fato parou.
@@ -119,6 +134,10 @@ export class CallMedia {
       )
       .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
         if (this.closing || reason === DisconnectReason.CLIENT_INITIATED) return
+        if (reason !== undefined && reason === DisconnectReason.PARTICIPANT_REMOVED) {
+          this.handlers.onRemovedByModerator?.()
+          return
+        }
         this.handlers.onConnectionLost()
       })
   }
@@ -128,13 +147,42 @@ export class CallMedia {
     await this.room.connect(url, token, { autoSubscribe: false })
     // TrackPublished não dispara para o que já estava publicado ao entrar.
     this.applySubscriptions()
+    this.micTrack = mic
+    // Sem permissão de falar o microfone nem é publicado: a pessoa entra e
+    // escuta. Se a permissão chegar depois, ensureMic publica.
+    if (this.canPublish('microphone')) {
+      await this.publishMic(mic, muted)
+    }
+    this.connected = true
+    this.emitRemoteMedia()
+    this.emitPublishPermissions()
+  }
+
+  /** Pode publicar essa fonte, segundo as permissões que o servidor deu. */
+  canPublish(source: PublishSource): boolean {
+    return canPublishSource(this.room.localParticipant.permissions, source)
+  }
+
+  private emitPublishPermissions(): void {
+    this.handlers.onPublishPermissions?.({
+      microphone: this.canPublish('microphone'),
+      stream: this.canPublish('screen_share')
+    })
+  }
+
+  private async publishMic(mic: MediaStreamTrack, muted: boolean): Promise<void> {
     const publication = await this.room.localParticipant.publishTrack(mic, {
       source: Track.Source.Microphone,
       name: 'microphone'
     })
     if (muted) await publication.mute()
-    this.connected = true
-    this.emitRemoteMedia()
+  }
+
+  /** Publica o microfone se agora pode e ainda não está publicado. */
+  async ensureMic(muted: boolean): Promise<void> {
+    if (!this.connected || !this.micTrack || !this.canPublish('microphone')) return
+    if (this.room.localParticipant.getTrackPublication(Track.Source.Microphone)) return
+    await this.publishMic(this.micTrack, muted)
   }
 
   async setMicMuted(muted: boolean): Promise<void> {
@@ -146,6 +194,7 @@ export class CallMedia {
 
   /** Troca o microfone publicado (outro dispositivo) sem sair da sala. */
   async replaceMic(track: MediaStreamTrack): Promise<void> {
+    this.micTrack = track
     const publication = this.room.localParticipant.getTrackPublication(Track.Source.Microphone)
     if (!publication?.track) return
     // userProvidedTrack: o SDK não para nem recria a track — o store é o dono.
@@ -154,6 +203,7 @@ export class CallMedia {
 
   async publishScreen(stream: MediaStream): Promise<void> {
     if (!this.connected) return
+    if (!this.canPublish('screen_share')) throw new Error('no_stream_permission')
     const [video] = stream.getVideoTracks()
     if (video) {
       await this.room.localParticipant.publishTrack(video, {
@@ -177,6 +227,7 @@ export class CallMedia {
 
   async publishCamera(stream: MediaStream): Promise<void> {
     if (!this.connected) return
+    if (!this.canPublish('camera')) throw new Error('no_stream_permission')
     const [video] = stream.getVideoTracks()
     if (!video) return
     await this.room.localParticipant.publishTrack(video, {

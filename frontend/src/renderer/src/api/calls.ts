@@ -22,6 +22,9 @@ export interface CallParticipant {
   joined_at: string
   muted?: boolean
   deafened?: boolean
+  /** Impostos por um moderador (silenciar/ensurdecer no servidor). */
+  server_muted?: boolean
+  server_deafened?: boolean
   id?: string
   username?: string
   display_name?: string
@@ -74,4 +77,25 @@ export function moveToVoiceChannel(userId: string, channelId: string): Promise<C
     method: 'POST',
     body: JSON.stringify({ user_id: userId, channel_id: channelId })
   })
+}
+
+/** Silencia (ou libera) alguém no servidor: ele não consegue falar até liberarem. */
+export function setServerMute(callId: string, userId: string, muted: boolean): Promise<void> {
+  return request<void>(`/calls/${callId}/participants/${userId}/server-mute`, {
+    method: 'POST',
+    body: JSON.stringify({ muted })
+  })
+}
+
+/** Ensurdece (ou libera) alguém no servidor: ele não ouve ninguém. */
+export function setServerDeafen(callId: string, userId: string, deafened: boolean): Promise<void> {
+  return request<void>(`/calls/${callId}/participants/${userId}/server-deafen`, {
+    method: 'POST',
+    body: JSON.stringify({ deafened })
+  })
+}
+
+/** Tira alguém da chamada (MOVE_MEMBERS). */
+export function disconnectParticipant(callId: string, userId: string): Promise<void> {
+  return request<void>(`/calls/${callId}/participants/${userId}`, { method: 'DELETE' })
 }

@@ -8,11 +8,13 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"gin-quickstart/backend/internal/permission"
 )
 
 // Menções em massa num canal de servidor: @all avisa todo mundo do canal,
-// @here só quem está online. Só dono e moderadores pingam; de qualquer outro
-// (ou numa DM) o texto fica como está e ninguém é avisado.
+// @here só quem está online. Só pinga quem tem MENTION_EVERYONE no canal; de
+// qualquer outro (ou numa DM) o texto fica como está e ninguém é avisado.
 const (
 	MentionAll  = "all"
 	MentionHere = "here"
@@ -20,12 +22,6 @@ const (
 
 // Janela do anti-spam: um @all/@here que pinga por autor, por canal.
 const mentionEveryoneCooldown = 30 * time.Second
-
-// ModeratorChecker diz se a pessoa é dona ou moderadora do servidor (a mesma
-// regra de quem gerencia canais).
-type ModeratorChecker interface {
-	IsAdminOrOwner(ctx context.Context, serverID string, userID string) (bool, error)
-}
 
 func isNickByte(b byte) bool {
 	return b == '_' || (b >= '0' && b <= '9') || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
@@ -154,19 +150,19 @@ func (l *mentionLimiter) Release(authorID string, channelID string) {
 }
 
 // resolveMentionEveryone decide o mention_everyone de uma mensagem nova num
-// canal: "all"/"here" se o texto marca e o autor pode (dono ou moderador,
-// dentro do anti-spam); senão nil — a mensagem sai igual, só não pinga.
+// canal: "all"/"here" se o texto marca e o autor pode (MENTION_EVERYONE no
+// canal, dentro do anti-spam); senão nil — a mensagem sai igual, só não pinga.
 func (s *Service) resolveMentionEveryone(ctx context.Context, serverID string, channelID string, authorID string, content string) *string {
 	kind := DetectEveryoneMention(content)
-	if kind == "" || serverID == "" || channelID == "" || s.moderators == nil {
+	if kind == "" || serverID == "" || channelID == "" || s.perms == nil {
 		return nil
 	}
-	allowed, err := s.moderators.IsAdminOrOwner(ctx, serverID, authorID)
+	perms, err := s.perms.ChannelPerms(ctx, channelID, authorID)
 	if err != nil {
-		log.Printf("mention_everyone: failed to check role of %s in %s: %v", authorID, serverID, err)
+		log.Printf("mention_everyone: failed to check permissions of %s in %s: %v", authorID, channelID, err)
 		return nil
 	}
-	if !allowed || !s.mentionLimiter.Allow(authorID, channelID) {
+	if !permission.Has(perms, permission.MentionEveryone) || !s.mentionLimiter.Allow(authorID, channelID) {
 		return nil
 	}
 	return &kind

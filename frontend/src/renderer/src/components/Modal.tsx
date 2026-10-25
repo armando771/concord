@@ -5,10 +5,18 @@ interface ModalProps {
   open: boolean
   title?: string
   onClose?: () => void
+  /** Janela larga (editores com lista e painel lado a lado). */
+  wide?: boolean
   children?: ReactNode
 }
 
-function Modal({ open, title, onClose, children }: ModalProps): React.JSX.Element | null {
+function Modal({
+  open,
+  title,
+  onClose,
+  wide = false,
+  children
+}: ModalProps): React.JSX.Element | null {
   const titleId = useId()
 
   if (!open) return null
@@ -24,7 +32,9 @@ function Modal({ open, title, onClose, children }: ModalProps): React.JSX.Elemen
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
-        className="glass-card flex max-h-full min-h-0 w-full max-w-md flex-col overflow-hidden p-6"
+        className={`glass-card flex max-h-full min-h-0 w-full flex-col overflow-hidden p-6 ${
+          wide ? 'max-w-3xl' : 'max-w-md'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex shrink-0 items-center justify-between gap-4">
