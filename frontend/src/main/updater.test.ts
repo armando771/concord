@@ -1,3 +1,4 @@
+import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // ─── Mocks do Electron / electron-updater (estado compartilhado por teste) ──
@@ -144,6 +145,18 @@ afterEach(() => {
   vi.clearAllTimers()
   vi.useRealTimers()
 })
+
+// O código só registra em update.log/avisa do sandbox no Linux; força a
+// plataforma nos blocos que testam isso (senão falham ao rodar no Windows).
+const realPlatform = process.platform
+function forceLinux(): void {
+  beforeEach(() => {
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+  })
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: realPlatform })
+  })
+}
 
 describe('updater', () => {
   it('entrega a retomada uma única vez e somente à janela principal', async () => {
@@ -449,6 +462,7 @@ describe('updater', () => {
     })
   })
   describe('Linux sem AppImage (instalação por usuário)', () => {
+    forceLinux()
     beforeEach(() => {
       h.linux.kind = 'linux-managed'
     })
@@ -515,6 +529,7 @@ describe('updater', () => {
     })
   })
   describe('falhas e recusas não viram download em loop', () => {
+    forceLinux()
     const offer = { version: '0.7.0', path: 'Salinha-0.7.0-x64.tar.gz', sha512: 'aa' }
     const downloaded = {
       version: '0.7.0',
@@ -623,7 +638,7 @@ describe('updater', () => {
     })
 
     it('não instala sozinho ao abrir o que o updater do Linux bloqueia (migração, versão ruim)', async () => {
-      h.state.files['/tmp/concord-teste/update-verified.json'] = JSON.stringify({
+      h.state.files[join('/tmp/concord-teste', 'update-verified.json')] = JSON.stringify({
         version: '0.7.0'
       })
       h.linux.canAutoInstall.mockReturnValue(false)
@@ -637,7 +652,7 @@ describe('updater', () => {
     })
 
     it('versão já verificada antes instala sozinha ao abrir quando o updater deixa', async () => {
-      h.state.files['/tmp/concord-teste/update-verified.json'] = JSON.stringify({
+      h.state.files[join('/tmp/concord-teste', 'update-verified.json')] = JSON.stringify({
         version: '0.7.0'
       })
       await startUpdater()
@@ -649,6 +664,7 @@ describe('updater', () => {
   })
 
   describe('aviso de sandbox desligado (Linux)', () => {
+    forceLinux()
     afterEach(() => {
       delete process.env.SALINHA_SANDBOX_OFF
     })
