@@ -11,6 +11,8 @@ import {
   CameraIcon,
   CameraOffIcon,
   MonitorIcon,
+  LockIcon,
+  LockOpenIcon,
   NoiseSuppressionIcon,
   HangUpIcon,
   SignalIcon,
@@ -107,6 +109,8 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   const toggleCamera = useCallStore((s) => s.toggleCamera)
   const startScreenShare = useCallStore((s) => s.startScreenShare)
   const stopScreenShare = useCallStore((s) => s.stopScreenShare)
+  const locked = useCallStore((s) => s.locked)
+  const toggleLock = useCallStore((s) => s.toggleLock)
   const endCall = useCallStore((s) => s.endCall)
 
   const serverName = useServerStore((s) =>
@@ -182,6 +186,21 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
             </p>
           )}
         </div>
+        {type === 'channel' && status === 'active' && (
+          <button
+            type="button"
+            onClick={toggleLock}
+            aria-label={locked ? 'Destrancar sala' : 'Trancar sala'}
+            title={locked ? 'Destrancar sala' : 'Trancar sala (pedir permissão para entrar)'}
+            className={`${ICON_BUTTON} ${
+              locked
+                ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
+                : 'text-gray-300 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            {locked ? <LockIcon className="h-5 w-5 text-amber-400" /> : <LockOpenIcon className="h-5 w-5" />}
+          </button>
+        )}
         <button
           type="button"
           onClick={(e) => {

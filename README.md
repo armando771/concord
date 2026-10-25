@@ -160,7 +160,9 @@ concord/
 
 ### Distribuição desktop
 
-A landing page (`site/`) oferece o instalador Windows e o AppImage Linux x64.
+A landing page (`site/`) oferece o instalador Windows e, para Linux x64, a
+instalação de um comando (`curl -fsSL <site>/install.sh | sh`, sem FUSE nem
+root, ver [docs/HOSPEDAGEM.md](docs/HOSPEDAGEM.md)) ou o AppImage.
 No deploy automático, ambos usam a mesma versão e recebem atualizações
 verificadas com assinatura Ed25519.
 
@@ -173,11 +175,9 @@ scripts/release-linux.sh 0.7.0
 
 Defina `PUBLIC_URL` no ambiente ou em `backend/.env`. Os artefatos ficam em
 `frontend/dist/` e os arquivos para publicação em `backend/updates/`.
-No Linux, permita a execução do AppImage e mantenha-o numa pasta sua com
-permissão de escrita. O AppImage (e a atualização automática) precisa do FUSE 2:
-`sudo pacman -S fuse2` no Arch, `libfuse2` no Debian/Ubuntu (`libfuse2t64` no
-Ubuntu 24.04+). Não extraia o AppImage: a cópia extraída não se atualiza
-(detalhes em [docs/HOSPEDAGEM.md](docs/HOSPEDAGEM.md)). Compartilhamento de tela com áudio e inicialização
+No Linux, a instalação por comando se atualiza sozinha (sem FUSE nem root); o
+AppImage precisa do `fusermount3` (FUSE 3) e de ficar numa pasta sua com permissão
+de escrita. Compartilhamento de tela com áudio e inicialização
 automática com o sistema continuam exclusivos do Windows.
 
 ### Pré-requisitos

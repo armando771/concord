@@ -123,30 +123,98 @@ O script faz quatro coisas:
 Como o app não é assinado, o Windows mostra "O Windows protegeu o
 computador". Basta clicar em **Mais informações → Executar assim mesmo**.
 
-**Linux x64:** mande `frontend/dist/Salinha-<versão>-x64.AppImage` ou o link da
-landing page. Nas propriedades do arquivo, permita executar como programa
-(ou use `chmod +x Salinha-<versão>-x64.AppImage`) e abra-o como usuário normal.
-O AppImage precisa do **FUSE 2**, que várias distribuições não instalam por
-padrão:
+**Linux x64 (recomendado):** mande o link da landing page ou o comando, que
+roda no terminal como usuário normal (sem `sudo`):
 
 ```bash
-sudo pacman -S fuse2          # Arch / Manjaro / EndeavourOS
-sudo apt install libfuse2     # Debian / Ubuntu até 23.10
-sudo apt install libfuse2t64  # Ubuntu 24.04+
-sudo dnf install fuse-libs    # Fedora
+curl -fsSL https://salinha.bhrx.com.br/install.sh | sh
 ```
 
-Sem ele o AppImage não abre ("dlopen(): error loading libfuse.so.2"). **Não
-extraia** o AppImage (`--appimage-extract`) para contornar: a cópia extraída
-abre, mas nunca se atualiza sozinha (o atualizador só troca o próprio
-AppImage, pela variável `APPIMAGE`) e fica para trás até quebrar com o
-servidor novo. O app avisa "Atualização automática indisponível nesta
-instalação" quando roda assim. Não use `sudo` para abrir o app nem desative o
-sandbox. Guarde o AppImage numa pasta sua com permissão de escrita: o
-atualizador substitui o arquivo nessa pasta.
+Ele instala em `~/.local/share/salinha/versions/<versão>/` (um `.tar.gz` por
+versão), aponta `~/.local/share/salinha/current` para ela e cria o comando
+`~/.local/bin/salinha` e o atalho `~/.local/share/applications/salinha.desktop`.
+Não precisa de FUSE, root nem pacote nenhum (só `tar`, `sha512sum` e `curl` ou
+`wget`, que toda distribuição traz). O instalador confere tamanho, sha512 e,
+com OpenSSL 3, a **assinatura Ed25519** do pacote com a chave pública que o
+`deploy-vps.sh` embute nele (`scripts/embed-pubkey.sh`; o CI confere que é a
+mesma chave das atualizações). Sem OpenSSL 3 ele só aceita HTTPS; por HTTP
+puro, só com a assinatura conferida. O script inteiro fica numa função chamada
+na última linha: um download cortado no meio não executa nada.
 
-O release Linux usa a mesma chave Ed25519 do Windows e publica o AppImage,
-seu `.sig` e `latest-linux.yml`. O Windows continua usando `latest.yml`.
+Daí em diante o próprio app se atualiza: busca o `.sig` primeiro, baixa o
+`.tar.gz`, confere sha512 e a assinatura, extrai numa pasta nova (dos mesmos
+bytes conferidos) e troca o `current` de uma vez, guardando a versão anterior.
+Atualização recusada (assinatura ou pacote inválido) fica anotada com o sha512
+e não é baixada de novo; falhas de rede esperam cada vez mais (1 min, 5 min,
+30 min, 2 h, até 6 h) em vez de baixar ~140 MB a cada checagem.
+
+**Volta automática:** se a versão nova não confirmar que abriu (o app confirma
+após 10 s aberto) em 2 partidas, a 3ª partida volta para a anterior. A versão
+ruim vai para `~/.local/share/salinha/bad-versions` e os arquivos dela são
+apagados; o app não a oferece de novo, só uma versão estritamente mais nova
+(que limpa a lista). Partidas com a Salinha já aberta não contam. Migração (a
+mesma versão, vinda do AppImage extraído) e versões ruins nunca instalam
+sozinhas ao abrir, só com o clique em Atualizar.
+
+Para outro servidor (só HTTPS): `curl -fsSL https://<endereço>/install.sh | SALINHA_URL=https://<endereço> sh`.
+Para remover: `rm -rf ~/.local/share/salinha ~/.local/bin/salinha
+~/.local/share/applications/salinha.desktop` (e `sudo rm -f
+/etc/apparmor.d/salinha`, se instalou o perfil). Login e configurações ficam em
+`~/.config/Concord`. Erros de atualização: `~/.config/Concord/logs/update.log`.
+
+**Sandbox:** sem root não existe o `chrome-sandbox` SUID, então o Chromium usa o
+sandbox de user namespaces do kernel, ligado na maioria das distribuições. Dois
+casos não deixam:
+
+- **Ubuntu 24.04+ (AppArmor restringe user namespaces):** o instalador
+  pergunta *"Instalar perfil do AppArmor para manter a proteção (sandbox)?
+  Precisa de sudo. [s/N]"*. Com **s**, grava `/etc/apparmor.d/salinha` (perfil
+  mínimo, só para `~/.local/share/salinha/versions/*/salinha`) e o recarrega:
+
+  ```
+  abi <abi/4.0>,
+  include <tunables/global>
+
+  profile salinha "/home/<você>/.local/share/salinha/versions/*/salinha" flags=(unconfined) {
+    userns,
+
+    include if exists <local/salinha>
+  }
+  ```
+
+  Para fazer depois: rode o instalador de novo e responda **s** (ou
+  `SALINHA_APPARMOR=s` sem terminal), ou grave o arquivo acima à mão e rode
+  `sudo apparmor_parser -r /etc/apparmor.d/salinha`.
+- **Sem o perfil, ou com user namespaces desligados**
+  (`kernel.unprivileged_userns_clone=0`, `user.max_user_namespaces=0`): o
+  lançador abre com `--no-sandbox` como último recurso, registra em
+  `~/.local/share/salinha/launcher.log` e o app mostra **uma vez** o aviso
+  *"Proteção do navegador (sandbox) desativada neste sistema — veja como
+  ativar"*, com link para a página de download (`#sandbox`). No Debian, os
+  user namespaces voltam com `sudo sysctl -w kernel.unprivileged_userns_clone=1`.
+
+`SALINHA_SANDBOX=1` ou `0` força. O lançador também descarta `APPIMAGE`/`APPDIR`
+herdados (terminal aberto dentro de outro AppImage), e o app só usa o
+electron-updater quando roda de dentro do próprio AppImage montado.
+
+**Quem usa o AppImage extraído** (por exemplo em `~/.local/opt/salinha`, com o
+lançador `~/.local/bin/salinha`): rode o mesmo comando uma vez. Ele guarda o
+lançador e o atalho antigos em `~/.local/share/salinha/legacy/` e avisa a pasta
+antiga, que pode ser apagada. A partir desta versão, um AppImage extraído
+também migra sozinho: ele oferece "Atualizar" para a mesma versão, que instala
+no layout novo e reabre por ele.
+
+**Linux x64 (AppImage):** `frontend/dist/Salinha-<versão>-x64.AppImage`, ou o
+botão da landing page. Nas propriedades do arquivo, permita executar como
+programa (ou use `chmod +x`) e abra-o como usuário normal. O AppImage usa o
+runtime estático (AppImage/type2-runtime): só precisa do `fusermount3` (FUSE 3),
+não da libfuse2. Guarde-o numa pasta sua com permissão de escrita: o
+atualizador (electron-updater) substitui o arquivo nessa pasta.
+
+O release Linux usa a mesma chave Ed25519 do Windows e publica o AppImage, o
+`.tar.gz`, os `.sig` de cada um, `latest-linux-tar.yml` (o do `.tar.gz`) e
+`latest-linux.yml` (o do AppImage), nessa ordem. O Windows continua usando
+`latest.yml`.
 Para manter versões iguais, execute o release Windows e depois o Linux,
 ou passe explicitamente a mesma versão aos dois scripts. Ambos precisam
 terminar com sucesso antes de executar o deploy. No CI isso é obrigatório.
@@ -164,7 +232,7 @@ terminar com sucesso antes de executar o deploy. No CI isso é obrigatório.
 
 > `scripts/build-win.sh <endereço>` ainda gera um `.exe` avulso (portable +
 > instalador), mas sem atualização automática.
-> Para um AppImage avulso: `scripts/build-linux.sh <endereço>`.
+> Para um AppImage e um `.tar.gz` avulsos: `scripts/build-linux.sh <endereço>`.
 
 ### No app (Linux)
 
@@ -172,10 +240,11 @@ terminar com sucesso antes de executar o deploy. No CI isso é obrigatório.
 - Compartilhamento de tela é **sem áudio**; o helper de áudio é exclusivo do Windows.
 - No Wayland, a captura depende do portal de compartilhamento do ambiente gráfico.
 - Não há promessa de fechar para a bandeja nem de iniciar com o sistema no Linux.
-- Para validar um release: abrir o AppImage, entrar na conta, enviar mensagem,
-  testar microfone/câmera e compartilhar tela. Depois publicar uma segunda
-  versão e conferir download, assinatura e substituição do AppImage, inclusive
-  adiamento do download durante chamadas. Conferir também uma sessão X11 e Wayland.
+- Para validar um release: abrir o app (instalação por comando e AppImage),
+  entrar na conta, enviar mensagem, testar microfone/câmera e compartilhar tela.
+  Depois publicar uma segunda versão e conferir download, assinatura e troca
+  (do `current` e do AppImage), inclusive adiamento do download durante
+  chamadas. Conferir também uma sessão X11 e Wayland.
 
 ### No app (Windows)
 
@@ -623,7 +692,7 @@ do `LIVEKIT_CONFIG` (comentários inclusive) vira variável do container e conta
 `/updates/latest.yml` (Windows) e `/updates/latest-linux.yml` (Linux) e aponta
 cada botão para o artefato correspondente. A falha de um manifesto não bloqueia
 o download da outra plataforma. O deploy mantém os três instaladores Windows
-e três AppImages mais recentes. No Caddyfile, `salinha.bhrx.com.br` serve a
+e três AppImages e `.tar.gz` mais recentes. No Caddyfile, `salinha.bhrx.com.br` serve a
 página e o `/updates/` direto do disco; `concord.bhrx.com.br` redireciona para
 ele. Os dois estão atrás do proxy do Cloudflare (nuvem laranja).
 

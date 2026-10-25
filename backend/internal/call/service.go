@@ -53,6 +53,9 @@ type StateResponse struct {
 	ScreenSharing []string          `json:"screen_sharing,omitempty"`
 	// Atividade aberta na chamada. Só vai para quem está nela (ver Handler.State).
 	Activity *ActivityEvent `json:"activity,omitempty"`
+	// Pedidos para entrar na sala trancada. Só vai para participantes (rota
+	// de estado da chamada), nunca na lista do servidor.
+	JoinRequests []UserInfo `json:"join_requests,omitempty"`
 }
 
 type participantState struct {
@@ -74,6 +77,11 @@ type activeCall struct {
 	info         *Call
 	participants map[string]*participantState
 	inviteeID    string
+
+	// Sala trancada (ver lock.go). Mapas criados sob demanda.
+	joinRequests map[string]*joinRequest // userID -> pedido pendente
+	admitted     map[string]time.Time    // userID -> até quando pode entrar sem pedir
+	declinedAt   map[string]time.Time    // userID -> última recusa (anti-spam)
 }
 
 type Service struct {
@@ -332,6 +340,12 @@ func (s *Service) StartDM(ctx context.Context, initiatorID string, conversationI
 }
 
 func (s *Service) StartChannel(ctx context.Context, initiatorID string, channelID string) (*Call, error) {
+	return s.startChannel(ctx, initiatorID, channelID, false)
+}
+
+// startChannel entra (ou cria) a chamada do canal. bypassLock deixa passar
+// por sala trancada (moderador movendo alguém).
+func (s *Service) startChannel(ctx context.Context, initiatorID string, channelID string, bypassLock bool) (*Call, error) {
 	ch, err := s.channelService.FindByID(ctx, channelID)
 	if err != nil {
 		return nil, ErrNotFound
@@ -353,6 +367,10 @@ func (s *Service) StartChannel(ctx context.Context, initiatorID string, channelI
 	}
 	if existing := s.findActiveByScopeLocked(TypeChannel, channelID); existing != nil {
 		ac := existing
+		if !bypassLock && !canEnterLockedLocked(ac, initiatorID, time.Now()) {
+			s.mu.Unlock()
+			return ac.info, ErrLocked
+		}
 		s.mu.Unlock()
 		return s.joinLocked(ctx, ac, initiatorID, RoleMember)
 	}
@@ -494,6 +512,10 @@ func (s *Service) Join(ctx context.Context, callID string, userID string) error 
 	}
 
 	s.mu.Lock()
+	if isChannel && !canEnterLockedLocked(ac, userID, time.Now()) {
+		s.mu.Unlock()
+		return ErrLocked
+	}
 	_, err := s.joinLocked(ctx, ac, userID, RoleMember)
 	s.mu.Unlock()
 	return err
@@ -611,6 +633,8 @@ func (s *Service) closeCall(callID string) error {
 		serverID = *ac.info.ServerID
 	}
 	channelID := ac.info.ChannelID
+	srvID := ac.info.ServerID
+	knockers := pendingRequestersLocked(ac)
 	delete(s.calls, callID)
 	delete(s.screenSharers, callID)
 	delete(s.activities, callID)
@@ -618,6 +642,13 @@ func (s *Service) closeCall(callID string) error {
 
 	for userID := range sharers {
 		s.publishLive(serverID, LiveEvent{CallID: callID, ChannelID: channelID, UserID: userID, Active: false})
+	}
+	// Sala esvaziou: quem esperava na porta já pode entrar (a próxima chamada
+	// nasce destrancada).
+	for _, uid := range knockers {
+		s.publisher.SendToUser(uid, marshalEvent("call:knock_declined", KnockAnswerEvent{
+			CallID: callID, ChannelID: channelID, ServerID: srvID, Reason: KnockEnded,
+		}))
 	}
 	return nil
 }
@@ -878,6 +909,7 @@ func (s *Service) HandleDisconnect(userID string) {
 		if s.isOnline != nil && s.isOnline(userID) {
 			return
 		}
+		s.cancelKnocksBy(userID)
 		s.leaveAllCalls(userID)
 	})
 }
@@ -885,14 +917,18 @@ func (s *Service) HandleDisconnect(userID string) {
 func (s *Service) leaveAllCalls(userID string) {
 	ctx := context.Background()
 
-	s.mu.RLock()
+	s.mu.Lock()
 	callIDs := make([]string, 0)
+	rejoinUntil := time.Now().Add(rejoinTTL)
 	for id, ac := range s.calls {
 		if _, ok := ac.participants[userID]; ok {
 			callIDs = append(callIDs, id)
+			// Caiu sem querer (rede, atualização do app): volta sem bater na
+			// porta se a sala estiver trancada.
+			admitLocked(ac, userID, rejoinUntil)
 		}
 	}
-	s.mu.RUnlock()
+	s.mu.Unlock()
 
 	for _, callID := range callIDs {
 		if err := s.leaveAfterDisconnect(ctx, callID, userID); err != nil {
@@ -974,6 +1010,39 @@ func (s *Service) HandleCallMessage(userID string, evType string, payload json.R
 		s.handleActivityMessage(ctx, userID, payload)
 	case "call:activity:stop":
 		s.handleActivityStopMessage(userID, payload)
+	case "call:lock":
+		var p LockPayload
+		if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" {
+			s.sendError(userID, "", "invalid call:lock payload")
+			return
+		}
+		if err := s.SetLocked(ctx, p.CallID, userID, p.Locked); err != nil {
+			s.sendKnockError(userID, p.CallID, err)
+		}
+	case "call:knock":
+		var p LeavePayload
+		if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" {
+			s.sendError(userID, "", "invalid call:knock payload")
+			return
+		}
+		if err := s.RequestJoin(ctx, p.CallID, userID); err != nil {
+			s.sendKnockError(userID, p.CallID, err)
+		}
+	case "call:knock_cancel":
+		var p LeavePayload
+		if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" {
+			return
+		}
+		_ = s.CancelJoinRequest(p.CallID, userID)
+	case "call:knock_respond":
+		var p KnockRespondPayload
+		if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" || p.UserID == "" {
+			s.sendError(userID, "", "invalid call:knock_respond payload")
+			return
+		}
+		if err := s.RespondJoinRequest(ctx, p.CallID, userID, p.UserID, p.Accept); err != nil {
+			s.sendKnockError(userID, p.CallID, err)
+		}
 	default:
 		log.Printf("[call] unhandled ws event %q from user %s", evType, userID)
 	}

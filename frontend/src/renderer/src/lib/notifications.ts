@@ -126,6 +126,20 @@ export function callNotification(caller: {
   }
 }
 
+/** Alguém pediu para entrar na sala trancada em que estou (som próprio no callStore). */
+export function knockNotification(
+  requester: { display_name: string; username: string },
+  serverId: string | null,
+  channelId: string | null
+): AppNotification {
+  return {
+    kind: 'call',
+    title: `${requester.display_name || requester.username} quer entrar na sala`,
+    body: 'A sala está trancada — clique para aceitar ou recusar',
+    route: serverId && channelId ? `/servers/${serverId}/channels/${channelId}` : '/'
+  }
+}
+
 /** Som do aviso (null = sem som). Chamada tem toque próprio no callStore. */
 export function notificationSound(
   kind: NotificationKind,

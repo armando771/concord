@@ -39,6 +39,8 @@ export interface UpdatesApi {
   onError(cb: (message: string) => void): () => void
   install(): void
   checkNow(): void
+  /** Linux: motivo de o app ter aberto sem o sandbox (só a 1ª vez), senão null. */
+  sandboxNotice(): Promise<string | null>
 }
 
 export interface BackgroundApi {

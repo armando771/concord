@@ -98,6 +98,13 @@ const api = {
     /** Checa atualização agora (servidor avisou de versão nova / WS reconectou). */
     checkNow(): void {
       ipcRenderer.send('update:check-now')
+    },
+    /**
+     * Linux: o app abriu sem o sandbox do Chromium (motivo) — só na primeira
+     * vez; depois null.
+     */
+    sandboxNotice(): Promise<string | null> {
+      return ipcRenderer.invoke('update:sandbox-notice')
     }
   },
   background: {
