@@ -118,6 +118,10 @@ function AppSettings(): React.JSX.Element | null {
   const setOverlayEnabled = useOverlayPrefsStore((s) => s.setEnabled)
   const overlayOpacity = useOverlayPrefsStore((s) => s.opacity)
   const setOverlayOpacity = useOverlayPrefsStore((s) => s.setOpacity)
+  const overlayMoved = useOverlayPrefsStore(
+    (s) => s.layout.position !== null || s.layout.scale !== 1
+  )
+  const resetOverlayLayout = useOverlayPrefsStore((s) => s.resetLayout)
 
   useEffect(() => {
     void background?.getAutostart().then(setAutostart)
@@ -162,6 +166,20 @@ function AppSettings(): React.JSX.Element | null {
             checked={overlayEnabled}
             onChange={() => setOverlayEnabled(!overlayEnabled)}
           />
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <span className="text-xs text-gray-400">
+              Atalho: <kbd className="font-semibold text-gray-200">Shift+Tab</kbd> para mover e
+              redimensionar o overlay durante o jogo
+            </span>
+            <button
+              type="button"
+              onClick={resetOverlayLayout}
+              disabled={!overlayMoved}
+              className="shrink-0 cursor-pointer rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/15 disabled:cursor-default disabled:opacity-50"
+            >
+              Restaurar posição
+            </button>
+          </div>
           <label className="mt-4 flex flex-col gap-2">
             <span className="flex items-center justify-between text-sm font-semibold text-white">
               Opacidade do overlay (quem fala fica mais visível)

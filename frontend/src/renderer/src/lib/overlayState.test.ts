@@ -7,6 +7,7 @@ import {
   overlayRowOpacity,
   type OverlayInput
 } from './overlayState'
+import { OVERLAY_DEFAULT_LAYOUT } from './overlayLayout'
 
 const ana = { id: 'ana', username: 'ana', display_name: 'Ana' }
 const bia = { id: 'bia', username: 'bia', display_name: 'Bia' }
@@ -22,6 +23,7 @@ function input(over: Partial<OverlayInput> = {}): OverlayInput {
     muted: false,
     deafened: false,
     opacity: OVERLAY_OPACITY_DEFAULT,
+    layout: OVERLAY_DEFAULT_LAYOUT,
     ...over
   }
 }
@@ -140,6 +142,23 @@ describe('opacidade do overlay', () => {
     expect(buildOverlaySnapshot(input({ opacity: 3 })).opacity).toBe(10)
     expect(buildOverlaySnapshot(input({ opacity: 90 })).opacity).toBe(60)
     expect(buildOverlaySnapshot(input({ status: 'idle', opacity: 45 })).opacity).toBe(45)
+  })
+})
+
+describe('posição/tamanho do overlay no estado', () => {
+  it('vai junto, também fora da call', () => {
+    const layout = { position: { x: 0.4, y: 0.6 }, scale: 1.3 }
+    expect(buildOverlaySnapshot(input({ layout })).layout).toEqual(layout)
+    expect(buildOverlaySnapshot(input({ status: 'idle', layout })).layout).toEqual(layout)
+  })
+
+  it('valor salvo estragado vira o padrão', () => {
+    expect(
+      buildOverlaySnapshot(input({ layout: { position: { x: 3, y: -1 }, scale: 9 } })).layout
+    ).toEqual({ position: { x: 1, y: 0 }, scale: 1.6 })
+    expect(buildOverlaySnapshot(input({ layout: undefined as never })).layout).toEqual(
+      OVERLAY_DEFAULT_LAYOUT
+    )
   })
 })
 

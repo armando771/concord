@@ -2,6 +2,8 @@
 // mandado ao main por IPC. Auto-contido (sem store nem livekit): o main também
 // lê estes tipos.
 
+import { normalizeOverlayLayout, type OverlayLayout } from './overlayLayout'
+
 export interface OverlayMember {
   id: string
   name: string
@@ -20,6 +22,8 @@ export interface OverlaySnapshot {
   more: number
   /** Opacidade das pílulas em repouso, em % (OVERLAY_OPACITY_MIN–MAX). */
   opacity: number
+  /** Posição e tamanho da lista (Shift+Tab para editar no jogo). */
+  layout: OverlayLayout
 }
 
 export interface OverlayPerson {
@@ -40,6 +44,7 @@ export interface OverlayInput {
   deafened: boolean
   /** "Opacidade do overlay" (Configurações → App), em %. */
   opacity: number
+  layout: OverlayLayout
 }
 
 /** Pílulas no máximo (contando a do "+N"). */
@@ -89,8 +94,9 @@ export function buildOverlaySnapshot(
 ): OverlaySnapshot {
   const { me } = input
   const opacity = clampOverlayOpacity(input.opacity)
+  const layout = normalizeOverlayLayout(input.layout)
   if (input.status !== 'active' || me === null) {
-    return { enabled: input.enabled, inCall: false, members: [], more: 0, opacity }
+    return { enabled: input.enabled, inCall: false, members: [], more: 0, opacity, layout }
   }
 
   const member = (
@@ -122,7 +128,7 @@ export function buildOverlaySnapshot(
   ]
 
   if (all.length <= maxRows) {
-    return { enabled: input.enabled, inCall: true, members: all, more: 0, opacity }
+    return { enabled: input.enabled, inCall: true, members: all, more: 0, opacity, layout }
   }
   const shown = all.slice(0, maxRows - 1)
   return {
@@ -130,6 +136,7 @@ export function buildOverlaySnapshot(
     inCall: true,
     members: shown,
     more: all.length - shown.length,
-    opacity
+    opacity,
+    layout
   }
 }

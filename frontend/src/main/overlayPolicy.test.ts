@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   overlayBounds,
+  overlayShortcuts,
   parseForegroundLine,
   shouldShowOverlay,
   shouldWatchForeground
@@ -72,12 +73,43 @@ describe('shouldShowOverlay', () => {
 })
 
 describe('overlayBounds', () => {
-  it('faixa na borda esquerda com a altura do monitor', () => {
-    expect(overlayBounds({ x: -1920, y: 0, width: 1920, height: 1080 })).toEqual({
-      x: -1920,
-      y: 0,
-      width: 280,
-      height: 1080
+  it('cobre a área de trabalho inteira do monitor do jogo (a lista é posicionada pelo CSS)', () => {
+    const workArea = { x: -1920, y: 0, width: 1920, height: 1040 }
+    expect(overlayBounds(workArea)).toEqual(workArea)
+    expect(overlayBounds(workArea)).not.toBe(workArea)
+  })
+})
+
+describe('overlayShortcuts', () => {
+  it('Shift+Tab só com o overlay à vista', () => {
+    expect(overlayShortcuts({ visible: true, editing: false, quitting: false })).toEqual({
+      toggleEdit: true,
+      exitEdit: false
+    })
+    expect(overlayShortcuts({ visible: false, editing: false, quitting: false })).toEqual({
+      toggleEdit: false,
+      exitEdit: false
+    })
+  })
+
+  it('Esc só no modo de edição', () => {
+    expect(overlayShortcuts({ visible: true, editing: true, quitting: false })).toEqual({
+      toggleEdit: true,
+      exitEdit: true
+    })
+  })
+
+  it('overlay escondido nunca segura atalho, nem com edição pendurada', () => {
+    expect(overlayShortcuts({ visible: false, editing: true, quitting: false })).toEqual({
+      toggleEdit: false,
+      exitEdit: false
+    })
+  })
+
+  it('saindo do app, nada', () => {
+    expect(overlayShortcuts({ visible: true, editing: true, quitting: true })).toEqual({
+      toggleEdit: false,
+      exitEdit: false
     })
   })
 })

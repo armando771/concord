@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
+import type { OverlayLayout } from '../renderer/src/lib/overlayLayout'
 import type { CallResume, PendingCallResume } from '../shared/callResume'
 
 interface ScreenSourceInfo {
@@ -139,6 +140,22 @@ const api = {
       const listener = (_e: unknown, snapshot: OverlaySnapshot): void => cb(snapshot)
       ipcRenderer.on('overlay:update', listener)
       return () => ipcRenderer.removeListener('overlay:update', listener)
+    },
+    /** Página do overlay: modo de edição (Shift+Tab) ligado/desligado. */
+    onEditing(cb: (editing: boolean) => void): () => void {
+      const listener = (_e: unknown, editing: boolean): void => cb(editing)
+      ipcRenderer.on('overlay:editing', listener)
+      return () => ipcRenderer.removeListener('overlay:editing', listener)
+    },
+    /** Página do overlay: posição/tamanho novos, ao soltar o mouse. */
+    saveLayout(layout: OverlayLayout): void {
+      ipcRenderer.send('overlay:layout', layout)
+    },
+    /** Renderer principal: posição/tamanho editados no jogo, para salvar. */
+    onLayout(cb: (layout: OverlayLayout) => void): () => void {
+      const listener = (_e: unknown, layout: OverlayLayout): void => cb(layout)
+      ipcRenderer.on('overlay:layout', listener)
+      return () => ipcRenderer.removeListener('overlay:layout', listener)
     }
   }
 }

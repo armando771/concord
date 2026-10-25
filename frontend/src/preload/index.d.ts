@@ -1,5 +1,6 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
+import type { OverlayLayout } from '../renderer/src/lib/overlayLayout'
 import type { CallResume, PendingCallResume } from '../shared/callResume'
 
 export interface ScreenSourceInfo {
@@ -63,6 +64,12 @@ export interface OverlayApi {
   current(): Promise<OverlaySnapshot | null>
   /** Página do overlay: novos estados. Retorna unsubscribe. */
   onUpdate(cb: (snapshot: OverlaySnapshot) => void): () => void
+  /** Página do overlay: modo de edição (Shift+Tab) ligado/desligado. Retorna unsubscribe. */
+  onEditing(cb: (editing: boolean) => void): () => void
+  /** Página do overlay: posição/tamanho novos, ao soltar o mouse. */
+  saveLayout(layout: OverlayLayout): void
+  /** Renderer principal: posição/tamanho editados no jogo, para salvar. Retorna unsubscribe. */
+  onLayout(cb: (layout: OverlayLayout) => void): () => void
 }
 
 declare global {

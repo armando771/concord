@@ -12,8 +12,6 @@ export interface Rect {
 /** Outra janela cobrindo um monitor (pid dono + monitor em pixels físicos), ou null. Rect tem o formato do Rectangle do Electron. */
 export type Foreground = { pid: number; monitor: Rect } | null
 
-export const OVERLAY_WIDTH = 280
-
 type CallFlags = Pick<OverlaySnapshot, 'enabled' | 'inCall'> | null
 
 /** Linha do helper → Foreground; undefined = linha que não entendemos (ignorar). */
@@ -44,7 +42,36 @@ export function shouldShowOverlay(
   )
 }
 
-/** Janela do overlay: faixa de OVERLAY_WIDTH na borda esquerda, altura toda do monitor (o CSS centraliza a lista na vertical). */
-export function overlayBounds(display: Rect): Rect {
-  return { x: display.x, y: display.y, width: OVERLAY_WIDTH, height: display.height }
+/**
+ * Janela do overlay: a área de trabalho inteira do monitor do jogo, em DIP.
+ * A lista é uma caixa posicionada pelo CSS lá dentro (lib/overlayLayout), então
+ * mover/redimensionar não mexe na janela.
+ */
+export function overlayBounds(workArea: Rect): Rect {
+  return { x: workArea.x, y: workArea.y, width: workArea.width, height: workArea.height }
+}
+
+/** Atalho para mover/redimensionar o overlay. Ver overlayShortcuts. */
+export const OVERLAY_EDIT_SHORTCUT = 'Shift+Tab'
+export const OVERLAY_EXIT_SHORTCUT = 'Escape'
+
+export interface OverlayShortcutState {
+  /** Janela do overlay à vista (em call, jogo em tela cheia na frente). */
+  visible: boolean
+  /** Modo de edição (mover/redimensionar) ligado. */
+  editing: boolean
+  quitting: boolean
+}
+
+/**
+ * Atalhos globais que o overlay segura agora. Só com ele à vista: Shift+Tab
+ * nunca é roubado de outros apps nem da área de trabalho. Esc só no modo de
+ * edição.
+ */
+export function overlayShortcuts(state: OverlayShortcutState): {
+  toggleEdit: boolean
+  exitEdit: boolean
+} {
+  const toggleEdit = state.visible && !state.quitting
+  return { toggleEdit, exitEdit: toggleEdit && state.editing }
 }
