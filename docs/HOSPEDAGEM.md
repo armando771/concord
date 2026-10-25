@@ -259,6 +259,14 @@ sem mensagem vão para `/opt/concord/uploads/.trash` e só são apagados depois 
 7 dias; com o banco sem nenhum anexo (banco novo ou restore pendente) a limpeza
 não mexe nos arquivos. Restaure o banco antes de 7 dias para não perder mídia.
 
+**Restaurar o banco de um backup:**
+1. Pare o backend: `systemctl stop concord-server`.
+2. Restaure o dump com `psql` no banco do Postgres.
+3. Devolva a mídia que a limpeza tenha mandado para a lixeira enquanto o banco
+   estava errado: `mv /opt/concord/uploads/.trash/* /opt/concord/uploads/`.
+   É seguro: o que for órfão de verdade volta para a lixeira na próxima limpeza.
+4. Suba o backend: `systemctl start concord-server`.
+
 ## Segurança
 
 Com o playit, login e mensagens trafegam **sem criptografia** (HTTP). Na VPS

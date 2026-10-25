@@ -33,6 +33,15 @@ func TestSniff(t *testing.T) {
 		{"heic não é vídeo", "image/heic", []byte("\x00\x00\x00\x18ftypheic\x00\x00\x00\x00"), "", "", false},
 		{"mov não", "video/quicktime", []byte("\x00\x00\x00\x14ftypqt  \x00\x00\x00\x00"), "", "", false},
 		{"3gp não", "video/3gpp", []byte("\x00\x00\x00\x18ftyp3gp4\x00\x00\x00\x00"), "", "", false},
+		// Marca principal fora da lista, mas mp4 compatível na lista do ftyp.
+		{"xavc com mp42", "video/mp4", []byte("\x00\x00\x00\x1cftypXAVC\x00\x00\x00\x00XAVCmp42iso2"), KindVideo, "video/mp4", true},
+		{"msnv com mp42", "video/mp4", []byte("\x00\x00\x00\x18ftypMSNV\x01\x29\x00\x46MSNVmp42"), KindVideo, "video/mp4", true},
+		{"3gp5 com isom", "video/3gpp", []byte("\x00\x00\x00\x18ftyp3gp5\x00\x00\x00\x00isom3gp5"), KindVideo, "video/mp4", true},
+		{"heic com mif1/heic não", "image/heic", []byte("\x00\x00\x00\x18ftypheic\x00\x00\x00\x00mif1heic"), "", "", false},
+		{"mov com qt não", "video/quicktime", []byte("\x00\x00\x00\x14ftypqt  \x00\x00\x02\x00qt  "), "", "", false},
+		{"3gp só 3gp não", "video/3gpp", []byte("\x00\x00\x00\x14ftyp3gp4\x00\x00\x02\x003gp4"), "", "", false},
+		// "isom" depois do fim da caixa ftyp não conta.
+		{"marca fora da caixa não conta", "image/heic", []byte("\x00\x00\x00\x18ftypheic\x00\x00\x00\x00mif1heicisom"), "", "", false},
 		{"ogg", "audio/ogg", []byte("OggS\x00\x02...."), KindAudio, "audio/ogg", true},
 		{"mp3 id3", "audio/mpeg", []byte("ID3\x04\x00...."), KindAudio, "audio/mpeg", true},
 		{"mp3 sem id3", "", []byte("\xff\xfb\x90\x64...."), KindAudio, "audio/mpeg", true},

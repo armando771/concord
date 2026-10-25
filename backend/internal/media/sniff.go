@@ -4,6 +4,7 @@ package media
 
 import (
 	"bytes"
+	"encoding/binary"
 	"strings"
 )
 
@@ -29,6 +30,24 @@ var mp4Brands = map[string]bool{
 	"M4A ": true, "M4B ": true,
 }
 
+// isMP4 aceita a caixa ftyp quando a marca principal (bytes 8–12) ou alguma
+// marca compatível (de 16 até o fim da caixa) é de mp4/m4a. Câmeras gravam mp4
+// com marca principal própria (XAVC, MSNV, 3gp5...) e mp42/isom como
+// compatível; HEIC, MOV e 3GP puro não listam nenhuma e são recusados.
+func isMP4(head []byte) bool {
+	if mp4Brands[string(head[8:12])] {
+		return true
+	}
+	size := int(binary.BigEndian.Uint32(head[0:4]))
+	end := min(size, len(head))
+	for i := 16; i+4 <= end; i += 4 {
+		if mp4Brands[string(head[i:i+4])] {
+			return true
+		}
+	}
+	return false
+}
+
 // Sniff descobre o tipo pelos primeiros bytes. declared (o Content-Type da
 // parte do multipart) só desempata mp4/webm entre vídeo e áudio.
 func Sniff(head []byte, declared string) (kind Kind, contentType string, ok bool) {
@@ -47,7 +66,7 @@ func Sniff(head []byte, declared string) (kind Kind, contentType string, ok bool
 		return KindAudio, "audio/wav", true
 	case len(head) >= 12 && string(head[4:8]) == "ftyp":
 		brand := string(head[8:12])
-		if !mp4Brands[brand] {
+		if !isMP4(head) {
 			return "", "", false
 		}
 		if brand == "M4A " || brand == "M4B " || declaredAudio {
