@@ -48,12 +48,12 @@ func TestPrimaryChannelFallbackDB(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	exec(`INSERT INTO users (id, username, display_name, email, password_hash) VALUES ($1, $2, $2, $2 || '@ex.com', 'x')`, owner, name)
+	exec(`INSERT INTO users (id, username, display_name, email, password_hash) VALUES ($1, $2::text, $2::text, $2::text || '@ex.com', 'x')`, owner, name)
 	t.Cleanup(func() {
 		db.Exec(ctx, `DELETE FROM servers WHERE id = $1`, serverID)
 		db.Exec(ctx, `DELETE FROM users WHERE id = $1`, owner)
 	})
-	exec(`INSERT INTO servers (id, name, owner_id) VALUES ($1, 's', $2)`, serverID, owner)
+	exec(`INSERT INTO servers (id, name, icon_url, owner_id) VALUES ($1, 's', '', $2)`, serverID, owner)
 	t0 := time.Now().Add(-time.Hour)
 	exec(`INSERT INTO channels (id, server_id, name, type, created_by, created_at, position) VALUES ($1, $2, 'antigo', 'text', $3, $4, 0)`, oldest, serverID, owner, t0)
 	exec(`INSERT INTO channels (id, server_id, name, type, created_by, created_at, position) VALUES ($1, $2, 'novo', 'text', $3, $4, 1)`, newer, serverID, owner, t0.Add(time.Minute))
@@ -65,7 +65,10 @@ func TestPrimaryChannelFallbackDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.PrimaryChannelID == nil || *s.PrimaryChannelID != oldest {
-		t.Fatalf("canal principal = %v, want o mais antigo (%s)", s.PrimaryChannelID, oldest)
+	if s.PrimaryChannelID == nil {
+		t.Fatalf("canal principal = nil, want o mais antigo (%s)", oldest)
+	}
+	if *s.PrimaryChannelID != oldest {
+		t.Fatalf("canal principal = %s (o primeiro da barra?), want o mais antigo (%s)", *s.PrimaryChannelID, oldest)
 	}
 }
