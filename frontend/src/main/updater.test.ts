@@ -55,6 +55,11 @@ vi.mock('./background', () => ({
   onCallStateChange: (fn: (s: { inCall: boolean }) => void) => h.state.callListeners.push(fn)
 }))
 vi.mock('./updateSignature', () => ({ verifyInstaller: () => h.state.validSignature }))
+vi.mock('./callResume', () => ({
+  takeCallResume: vi.fn(() => null),
+  saveCallResume: vi.fn(),
+  clearCallResume: vi.fn()
+}))
 
 const win = { webContents: { send: (ch: string, v: unknown) => h.state.sent.push([ch, v]) } }
 
@@ -83,6 +88,77 @@ afterEach(() => {
 })
 
 describe('updater', () => {
+  it('entrega a retomada uma única vez e somente à janela principal', async () => {
+    const { takeCallResume } = await import('./callResume')
+    const pending = {
+      userId: 'u',
+      backendUrl: 'api',
+      serverId: 's',
+      channelId: 'c',
+      muted: false,
+      deafened: false,
+      mutedBeforeDeafen: false,
+      savedAt: Date.now()
+    }
+    vi.mocked(takeCallResume).mockReturnValueOnce(pending)
+    await startUpdater()
+    expect(h.state.handlers['update:take-call-resume']({ sender: {} })).toBeNull()
+    expect(h.state.handlers['update:take-call-resume']({ sender: win.webContents })).toEqual(
+      pending
+    )
+    expect(h.state.handlers['update:take-call-resume']({ sender: win.webContents })).toBeNull()
+  })
+
+  it('não instala quando falha ao gravar a retomada', async () => {
+    await startUpdater()
+    const { saveCallResume } = await import('./callResume')
+    vi.mocked(saveCallResume).mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+    await h.autoUpdater.emit('update-available', { version: '0.6.1' })
+    await h.autoUpdater.emit('update-downloaded', { version: '0.6.1', downloadedFile: 'setup.exe' })
+    h.state.handlers['update:install']()
+    expect(h.autoUpdater.quitAndInstall).not.toHaveBeenCalled()
+    expect(h.state.sent.some(([channel]) => channel === 'update:error')).toBe(true)
+  })
+
+  it('limpa a retomada quando o instalador falha', async () => {
+    await startUpdater()
+    const { clearCallResume } = await import('./callResume')
+    await h.autoUpdater.emit('update-available', { version: '0.6.1' })
+    await h.autoUpdater.emit('update-downloaded', { version: '0.6.1', downloadedFile: 'setup.exe' })
+    h.state.handlers['update:install']()
+    await h.autoUpdater.emit('error', new Error('installer failed'))
+    expect(clearCallResume).toHaveBeenCalled()
+  })
+
+  it('salva o estado mais recente antes de instalar e ignora IPC de outra janela', async () => {
+    await startUpdater()
+    const { saveCallResume } = await import('./callResume')
+    const snapshot = {
+      userId: 'u',
+      backendUrl: 'api',
+      serverId: 's',
+      channelId: 'c',
+      muted: true,
+      deafened: false,
+      mutedBeforeDeafen: false
+    }
+    await h.autoUpdater.emit('update-available', { version: '0.6.1' })
+    await h.autoUpdater.emit('update-downloaded', {
+      version: '0.6.1',
+      downloadedFile: 'setup.exe'
+    })
+    expect(saveCallResume).not.toHaveBeenCalled()
+    h.state.handlers['update:call-snapshot']({ sender: win.webContents }, snapshot)
+    h.state.handlers['update:call-snapshot']({ sender: {} }, null)
+    h.state.handlers['update:install']()
+    expect(saveCallResume).toHaveBeenCalledWith(snapshot)
+    expect(vi.mocked(saveCallResume).mock.invocationCallOrder[0]).toBeLessThan(
+      h.autoUpdater.quitAndInstall.mock.invocationCallOrder[0]
+    )
+  })
+
   it('avisa assim que existe versão nova, mesmo em chamada (sem baixar ainda)', async () => {
     h.state.inCall = true
     await startUpdater()
