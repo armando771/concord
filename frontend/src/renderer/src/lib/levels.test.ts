@@ -82,7 +82,8 @@ describe('levelIntensity (escala contínua)', () => {
     for (let level = 1; level < 2000; level++) {
       const cur = levelIntensity(level)
       const next = levelIntensity(level + 1)
-      for (const key of NUMERIC) expect(next[key], `${key} no ${level + 1}`).toBeGreaterThanOrEqual(cur[key])
+      for (const key of NUMERIC)
+        expect(next[key], `${key} no ${level + 1}`).toBeGreaterThanOrEqual(cur[key])
     }
   })
 
@@ -258,7 +259,7 @@ describe('levelUpEffects', () => {
   })
 
   it('efeitos que entram por faixa continuam somando', () => {
-    const at = (level: number) => levelUpEffects(level)
+    const at = (level: number): ReturnType<typeof levelUpEffects> => levelUpEffects(level)
     expect(at(5).rays).toBe(false)
     expect(at(25).rays).toBe(true)
     expect(at(25).rollNumber).toBe(true)

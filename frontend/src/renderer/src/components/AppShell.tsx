@@ -10,6 +10,7 @@ import ScreenMiniPlayer from './call/ScreenMiniPlayer'
 import ScreenSharePickerModal from './call/ScreenSharePickerModal'
 import LevelUpBanner from './level/LevelUpBanner'
 import LevelUpScreen from './level/LevelUpScreen'
+import LevelUpMilestone from './level/LevelUpMilestone'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { IS_WEB } from '../lib/config'
@@ -42,6 +43,7 @@ function AppShell(): React.JSX.Element {
       {/* No navegador o seletor de tela é o do próprio navegador. */}
       {!IS_WEB && <ScreenSharePickerModal />}
       <LevelUpScreen />
+      <LevelUpMilestone />
 
       <LevelUpBanner />
     </div>

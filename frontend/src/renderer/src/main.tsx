@@ -10,11 +10,15 @@ import { useLevelStore } from './store/levelStore'
 window.addEventListener('dragover', (e) => e.preventDefault())
 window.addEventListener('drop', (e) => e.preventDefault())
 
-// Dev: `__salinhaLevelUp(85)` no console toca a animação de subir de nível.
+// Dev: `__salinhaLevelUp(85)` no console toca a animação de subir de nível;
+// `__salinhaLevelUp('marco')` toca o próximo marco depois do seu nível.
 if (import.meta.env.DEV) {
-  ;(window as unknown as { __salinhaLevelUp: (level: number) => void }).__salinhaLevelUp = (
-    level
-  ) => useLevelStore.getState().previewLevelUp(level)
+  ;(window as unknown as { __salinhaLevelUp: (level: number | 'marco') => void }).__salinhaLevelUp =
+    (level) => {
+      const store = useLevelStore.getState()
+      if (level === 'marco') store.previewNextMilestone()
+      else store.previewLevelUp(level)
+    }
 }
 
 createRoot(document.getElementById('root')!).render(

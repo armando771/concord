@@ -259,6 +259,8 @@ export interface LevelUpEffects {
   sound: LevelSound | null
 
   // Escala contínua (levelIntensity)
+  /** Força do nível: 0 no 1, 1 no 100 (quase 1,25 lá no alto). */
+  power: number
   /** Até onde o confete se espalha, em px. */
   radius: number
   /** Força do brilho (0–1). */
@@ -321,6 +323,7 @@ export function levelUpEffects(level: number, previous = level - 1): LevelUpEffe
     milestone,
     milestoneParticles,
     sound: milestone ? `milestone-${milestone.kind}` : CHIMES[stage],
+    power: intensity.power,
     radius: intensity.radius,
     glow: intensity.glow,
     shake: intensity.shake,

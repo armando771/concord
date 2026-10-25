@@ -549,6 +549,244 @@
   }
 }
 
+/* --- Escala contínua e marcos (levelIntensity / milestoneFor) --- */
+
+/* Tremida curta da faixa ou do overlay (nunca do app): --shake = amplitude. */
+@keyframes level-shake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  8% {
+    transform: translate(calc(var(--shake) * -1), calc(var(--shake) * 0.6));
+  }
+  16% {
+    transform: translate(var(--shake), calc(var(--shake) * -0.5));
+  }
+  26% {
+    transform: translate(calc(var(--shake) * -0.7), calc(var(--shake) * -0.4));
+  }
+  38% {
+    transform: translate(calc(var(--shake) * 0.5), calc(var(--shake) * 0.4));
+  }
+  52% {
+    transform: translate(calc(var(--shake) * -0.3), calc(var(--shake) * 0.2));
+  }
+  70% {
+    transform: translate(calc(var(--shake) * 0.15), 0);
+  }
+}
+
+/* Marco: número e nome entram grandes e somem subindo. */
+@keyframes level-ms-title {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  12% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  22% {
+    transform: scale(1);
+  }
+  82% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-16px) scale(1.06);
+    opacity: 0;
+  }
+}
+
+/* Brilho redondo atrás do avatar (a força vem do pai, em opacity). */
+@keyframes level-glow {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 0;
+  }
+  25% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  60% {
+    opacity: 0.7;
+  }
+}
+
+/* Marco no avatar (o que os outros veem): partículas no tema da faixa. */
+.level-shape-coin {
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 35%, #fff, var(--level-color) 45%, var(--level-accent));
+}
+.level-shape-leaf {
+  border-radius: 0 100% 0 100%;
+  background: linear-gradient(135deg, var(--level-color), var(--level-accent));
+}
+.level-shape-shard {
+  clip-path: polygon(50% 0, 100% 60%, 50% 100%, 0 40%);
+  background: linear-gradient(160deg, #fff, var(--level-color) 50%, var(--level-accent));
+}
+.level-shape-flame {
+  border-radius: 50% 0 50% 50%;
+  background: linear-gradient(200deg, #fff3b0, #f97316 45%, var(--level-color));
+}
+.level-shape-beam {
+  border-radius: 9999px;
+  background: linear-gradient(0deg, transparent, var(--beam, var(--level-color)));
+  transform-origin: 50% 100%;
+}
+.level-shape-star {
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+}
+.level-shape-bubble {
+  border-radius: 9999px;
+  border: 1.5px solid var(--level-color);
+  background: radial-gradient(circle at 35% 35%, #ffffffcc 0 20%, transparent 25%);
+}
+
+/* Moeda: pula para fora e cai girando. */
+@keyframes level-mini-fall {
+  0% {
+    transform: translate(-50%, -50%) scale(0.4) rotateY(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  35% {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) - 8px)) scale(1)
+      rotateY(200deg);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--dx) * 1.2), calc(-50% + var(--dy) + var(--fall)))
+      scale(0.8) rotateY(620deg);
+    opacity: 0;
+  }
+}
+
+/* Folha: sai girando e o vento leva para o lado. */
+@keyframes level-mini-swirl {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg) scale(0.3);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(160deg) scale(1);
+  }
+  100% {
+    transform: translate(calc(-50% + var(--dx) * 1.4 + 24px), calc(-50% + var(--dy) * 1.2 + 14px))
+      rotate(420deg) scale(0.7);
+    opacity: 0;
+  }
+}
+
+/* Labareda/bolha: sobe balançando. */
+@keyframes level-mini-rise {
+  0% {
+    transform: translate(calc(-50% + var(--dx) * 0.3), -50%) scale(0.4);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate(calc(-50% + var(--dx) * 0.6 + 4px), calc(-50% - var(--dist) * 0.55))
+      scale(1);
+  }
+  100% {
+    transform: translate(calc(-50% + var(--dx) * 0.5 - 4px), calc(-50% - var(--dist) * 1.1))
+      scale(0.3);
+    opacity: 0;
+  }
+}
+
+/* Cristal: vem de fora e se junta no avatar. */
+@keyframes level-mini-implode {
+  0% {
+    transform: translate(calc(-50% + var(--dx) * 1.6), calc(-50% + var(--dy) * 1.6)) rotate(0deg)
+      scale(1.2);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  65% {
+    transform: translate(calc(-50% + var(--dx) * 0.45), calc(-50% + var(--dy) * 0.45))
+      rotate(200deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--dx) * 0.4), calc(-50% + var(--dy) * 0.4))
+      rotate(240deg) scale(0.2);
+    opacity: 0;
+  }
+}
+
+/* Buraco negro: é sugado para o centro e explode para fora. */
+@keyframes level-mini-implode-explode {
+  0% {
+    transform: translate(calc(-50% + var(--dx) * 1.5), calc(-50% + var(--dy) * 1.5)) rotate(0deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate(-50%, -50%) rotate(300deg) scale(0.2);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--dx) * 2), calc(-50% + var(--dy) * 2)) rotate(360deg)
+      scale(1);
+    opacity: 0;
+  }
+}
+
+/* Estrela: acende no lugar e pisca. */
+@keyframes level-mini-twinkle {
+  0%,
+  100% {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0);
+    opacity: 0;
+  }
+  20% {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.3);
+    opacity: 1;
+  }
+  40% {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.6);
+  }
+  60% {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.1);
+    opacity: 1;
+  }
+}
+
+/* Feixe de luz: cresce do avatar e gira. */
+@keyframes level-mini-beam {
+  0% {
+    transform: translate(-50%, -100%) rotate(var(--angle)) scaleY(0);
+    opacity: 0;
+  }
+  30% {
+    transform: translate(-50%, -100%) rotate(calc(var(--angle) + 10deg)) scaleY(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -100%) rotate(calc(var(--angle) + 50deg)) scaleY(0.2);
+    opacity: 0;
+  }
+}
+
 /* prefers-reduced-motion: os efeitos grandes viram só um fade. */
 @keyframes level-fade {
   0%,
