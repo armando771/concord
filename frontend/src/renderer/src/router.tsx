@@ -7,6 +7,9 @@ import GroupChat from './pages/GroupChat'
 import Invites from './pages/Invites'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
+import VerifyEmail from './pages/VerifyEmail'
 import RequireAuth from './components/RequireAuth'
 import RedirectIfAuthed from './components/RedirectIfAuthed'
 import AppShell from './components/AppShell'
@@ -51,6 +54,17 @@ export const router = createRouter([
       </RedirectIfAuthed>
     )
   },
+  {
+    path: '/forgot-password',
+    element: (
+      <RedirectIfAuthed>
+        <ForgotPassword />
+      </RedirectIfAuthed>
+    )
+  },
+  // Links dos e-mails: valem com ou sem sessão neste navegador.
+  { path: '/reset-password', element: <ResetPassword /> },
+  { path: '/verify-email', element: <VerifyEmail /> },
   {
     path: '*',
     element: <Navigate to="/" replace />
