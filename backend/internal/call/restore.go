@@ -7,8 +7,9 @@ import (
 
 // RestoreActive recoloca em memória as chamadas que estavam ativas quando o
 // servidor reiniciou (o estado das chamadas vive em memória; o banco guarda o
-// histórico). A mídia segue no LiveKit, então quem reconectar o WebSocket
-// dentro da tolerância continua na chamada sem perceber; quem não voltar sai.
+// histórico e o mudo/ensurdecido/tela de cada um). A mídia segue no LiveKit,
+// então quem reconectar o WebSocket dentro da tolerância continua na chamada
+// sem perceber; quem não voltar sai.
 func (s *Service) RestoreActive(ctx context.Context) {
 	calls, err := s.repository.ListUnended(ctx)
 	if err != nil {
@@ -65,6 +66,8 @@ func (s *Service) restore(calls []*Call, participants map[string][]CallParticipa
 				userID:   p.UserID,
 				role:     p.Role,
 				joinedAt: p.JoinedAt,
+				muted:    p.Muted,
+				deafened: p.Deafened,
 			}
 		}
 		if len(ac.participants) == 0 {
@@ -72,6 +75,17 @@ func (s *Service) restore(calls []*Call, participants map[string][]CallParticipa
 			continue
 		}
 		s.calls[c.ID] = ac
+		// Selo LIVE continua no ar: quem transmitia segue transmitindo (a mídia
+		// nem passou pelo backend). O app reenvia o estado real ao reconectar.
+		for _, p := range participants[c.ID] {
+			if p.LeftAt != nil || !p.ScreenSharing {
+				continue
+			}
+			if s.screenSharers[c.ID] == nil {
+				s.screenSharers[c.ID] = make(map[string]struct{})
+			}
+			s.screenSharers[c.ID][p.UserID] = struct{}{}
+		}
 		for userID := range ac.participants {
 			s.busy[userID] = c.ID
 		}

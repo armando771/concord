@@ -89,6 +89,40 @@ type Service struct {
 	mediaName func(ctx context.Context, userID string) string
 	// Dados do usuário nos eventos de tela (trocável nos testes).
 	lookupUser func(ctx context.Context, userID string) (UserInfo, error)
+	// Onde o mudo/ensurdecido e a tela ficam salvos para o reinício (o banco).
+	stateStore participantStateStore
+}
+
+// participantStateStore guarda o estado de voz/tela de quem está na chamada,
+// que RestoreActive lê de volta quando o backend reinicia.
+type participantStateStore interface {
+	SaveVoiceState(ctx context.Context, callID string, userID string, muted bool, deafened bool) error
+	SaveScreenSharing(ctx context.Context, callID string, userID string, active bool) error
+}
+
+// Gravar o estado não pode travar o WebSocket de quem mutou.
+const saveStateTimeout = 2 * time.Second
+
+func (s *Service) saveVoiceState(callID, userID string, muted, deafened bool) {
+	if s.stateStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), saveStateTimeout)
+	defer cancel()
+	if err := s.stateStore.SaveVoiceState(ctx, callID, userID, muted, deafened); err != nil {
+		log.Printf("[call] persist voice state %s failed: %v", userID, err)
+	}
+}
+
+func (s *Service) saveScreenSharing(callID, userID string, active bool) {
+	if s.stateStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), saveStateTimeout)
+	defer cancel()
+	if err := s.stateStore.SaveScreenSharing(ctx, callID, userID, active); err != nil {
+		log.Printf("[call] persist screen share %s failed: %v", userID, err)
+	}
 }
 
 const defaultDisconnectGrace = 15 * time.Second
@@ -114,6 +148,9 @@ func CallService(
 		busy:                make(map[string]string),
 		screenSharers:       make(map[string]map[string]struct{}),
 		disconnectGrace:     defaultDisconnectGrace,
+	}
+	if repository != nil {
+		s.stateStore = repository
 	}
 	s.leaveAfterDisconnect = s.Leave
 	s.lookupUser = s.userInfo
@@ -539,6 +576,12 @@ func (s *Service) SetScreenShare(ctx context.Context, callID string, userID stri
 		sharers = make(map[string]struct{})
 		s.screenSharers[callID] = sharers
 	}
+	// O app reenvia o estado ao reconectar: sem mudança, ninguém é avisado
+	// (o selo LIVE não pisca).
+	if _, sharing := sharers[userID]; sharing == active {
+		s.mu.Unlock()
+		return nil
+	}
 	if active {
 		sharers[userID] = struct{}{}
 	} else {
@@ -558,6 +601,7 @@ func (s *Service) SetScreenShare(ctx context.Context, callID string, userID stri
 	channelID := ac.info.ChannelID
 	s.mu.Unlock()
 
+	s.saveScreenSharing(callID, userID, active)
 	s.publishLive(serverID, LiveEvent{CallID: callID, ChannelID: channelID, UserID: userID, Active: active})
 
 	userInfo, err := s.lookupUser(ctx, userID)
@@ -589,6 +633,11 @@ func (s *Service) SetVoiceState(callID string, userID string, muted bool, deafen
 		s.mu.Unlock()
 		return ErrNotAllowed
 	}
+	// O app reenvia o estado ao reconectar: sem mudança, ninguém é avisado.
+	if p.muted == muted && p.deafened == deafened {
+		s.mu.Unlock()
+		return nil
+	}
 	p.muted = muted
 	p.deafened = deafened
 	if muted || deafened {
@@ -607,6 +656,7 @@ func (s *Service) SetVoiceState(callID string, userID string, muted bool, deafen
 	})
 	s.mu.Unlock()
 
+	s.saveVoiceState(callID, userID, muted, deafened)
 	s.publisher.BroadcastToCall(callID, event)
 	if serverID != "" {
 		s.publisher.BroadcastToRoom("server:"+serverID, event)

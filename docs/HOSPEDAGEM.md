@@ -281,7 +281,9 @@ SIGTERM, o backend:
    reiniciando"), sem tirar ninguém da chamada nem marcar ninguém offline;
 3. termina as requisições em andamento (uploads inclusive) em até 10 s e sai.
 
-O processo novo recarrega as chamadas do banco e só então abre a porta. O app,
+O processo novo recarrega as chamadas do banco, com o mudo/ensurdecido e quem
+está transmitindo de cada participante (ficam salvos em `call_participants`),
+e só então abre a porta: os ícones de mudo e o selo LIVE não piscam. O app,
 ao receber o 1012, reconecta em 100–300 ms (em vez de 1 s, 2 s, 4 s…) e não
 mostra aviso. "Reconectando ao servidor…" só aparece se a conexão ficar fora
 por mais de 3 s.
