@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"gin-quickstart/backend/internal/auth"
@@ -19,6 +20,7 @@ import (
 	"gin-quickstart/backend/internal/media"
 	"gin-quickstart/backend/internal/message"
 	"gin-quickstart/backend/internal/server"
+	"gin-quickstart/backend/internal/soundboard"
 	"gin-quickstart/backend/internal/updates"
 	"gin-quickstart/backend/internal/user"
 	"gin-quickstart/backend/internal/websocket"
@@ -133,6 +135,14 @@ func main() {
 	roomAccess := message.NewServiceRoomAccess(channelService, serverService, conversationService, friendshipService)
 	attachmentHandler := message.NewAttachmentHandler(messageRepository, uploads, uploadSpace, roomAccess, authService)
 
+	// Mesa de áudio (Soundboard) compartilhada por servidor
+	soundboardUploads, err := media.NewStore(filepath.Join(uploadsDir, "soundboard"))
+	if err != nil {
+		log.Fatalf("failed to open soundboard uploads dir: %v", err)
+	}
+	soundboardRepository := soundboard.NewRepository(db)
+	soundboardHandler := soundboard.NewHandler(soundboardRepository, soundboardUploads, uploadSpace, serverService, channelService, authService, hub)
+
 	// LiveKit (mídia das chamadas)
 	liveKitKey, liveKitSecret := os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET")
 	if liveKitKey == "" || liveKitSecret == "" {
@@ -151,6 +161,7 @@ func main() {
 	// Call (ciclo de vida da chamada; mídia via LiveKit)
 	callRepository := call.CallRepository(db)
 	callService := call.CallService(callRepository, hub, conversationService, serverService, channelService, userService, hub.IsOnline)
+	callService.SetSoundLookup(soundboard.NewCallLookup(soundboardRepository))
 	callHandler := call.CallHandler(callService, liveKitTokens)
 	// Reinício do servidor não derruba quem está em chamada.
 	callService.RestoreActive(context.Background())
@@ -190,6 +201,7 @@ func main() {
 	message.MessageRoutes(api, messageHandler, authMiddleware)
 	message.AttachmentRoutes(api, attachmentHandler, authMiddleware)
 	call.CallRoutes(api, callHandler, authMiddleware)
+	soundboard.Routes(api, soundboardHandler, authMiddleware)
 	level.LevelRoutes(api, levelHandler, authMiddleware)
 	birthday.BirthdayRoutes(api, birthdayHandler, authMiddleware)
 

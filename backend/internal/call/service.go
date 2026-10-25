@@ -54,7 +54,8 @@ type participantState struct {
 	role     string
 	joinedAt time.Time
 	muted    bool
-	deafened bool
+	deafened    bool
+	lastSoundAt time.Time
 }
 
 type activeCall struct {
@@ -85,7 +86,8 @@ type Service struct {
 	// Nome exibido no token do LiveKit (ver Handler.Token).
 	mediaName func(ctx context.Context, userID string) string
 	// Dados do usuário nos eventos de tela (trocável nos testes).
-	lookupUser func(ctx context.Context, userID string) (UserInfo, error)
+	lookupUser  func(ctx context.Context, userID string) (UserInfo, error)
+	soundLookup SoundLookup
 }
 
 const defaultDisconnectGrace = 15 * time.Second
@@ -826,6 +828,8 @@ func (s *Service) HandleCallMessage(userID string, evType string, payload json.R
 		if err := s.SetScreenShare(ctx, p.CallID, userID, p.Active); err != nil {
 			s.sendError(userID, p.CallID, err.Error())
 		}
+	case "call:soundboard":
+		s.handleSoundboardMessage(ctx, userID, payload)
 	default:
 		log.Printf("[call] unhandled ws event %q from user %s", evType, userID)
 	}
