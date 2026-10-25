@@ -31,3 +31,26 @@ export function liveUserIds(
 ): Set<string> {
   return new Set([...(entry?.screen_sharing ?? []), ...localSharers])
 }
+
+/** call:live recebido há pouco (ver reapplyRecentLive). */
+export interface LiveRecord {
+  payload: LivePayload
+  at: number
+}
+
+/** Quanto tempo um call:live vale por cima do polling (uma ida e volta folgada). */
+export const LIVE_GRACE_MS = 5000
+
+/**
+ * Reaplica sobre o resultado do polling os call:live recentes, na ordem: um
+ * polling que saiu antes do evento e voltou depois traria o selo velho.
+ */
+export function reapplyRecentLive(
+  serverCalls: Record<string, CallStateResponse>,
+  recent: LiveRecord[],
+  now: number
+): Record<string, CallStateResponse> {
+  return recent
+    .filter((r) => now - r.at < LIVE_GRACE_MS)
+    .reduce((map, r) => applyLiveEvent(map, r.payload), serverCalls)
+}

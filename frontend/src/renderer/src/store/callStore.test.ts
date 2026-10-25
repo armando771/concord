@@ -802,3 +802,34 @@ describe('callStore — selo LIVE', () => {
     expect(useCallStore.getState().serverCalls['canal-1'].screen_sharing).toEqual([])
   })
 })
+
+describe('callStore — selo LIVE em dia', () => {
+  it('polling atrasado não apaga um call:live recém-chegado', () => {
+    useCallStore.getState().setServerCalls({
+      'canal-2': { call: { id: 'call-7' } as never, participants: [] }
+    })
+    useCallStore.getState().handleWsEvent({
+      type: 'call:live',
+      payload: { call_id: 'call-7', user_id: 'bia', active: true }
+    })
+
+    // Resposta de um polling que saiu antes do evento.
+    useCallStore.getState().setServerCalls({
+      'canal-2': { call: { id: 'call-7' } as never, participants: [], screen_sharing: [] }
+    })
+
+    expect(useCallStore.getState().serverCalls['canal-2'].screen_sharing).toEqual(['bia'])
+  })
+
+  it('call:live de chamada que a lista ainda não conhece recarrega a lista', () => {
+    useCallStore.getState().setServerCalls({})
+    const before = useCallStore.getState().listVersion
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:live',
+      payload: { call_id: 'call-nova', user_id: 'ana', active: true }
+    })
+
+    expect(useCallStore.getState().listVersion).toBe(before + 1)
+  })
+})

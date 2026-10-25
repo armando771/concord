@@ -14,7 +14,13 @@ import { CallMedia, type RemoteMedia } from '../lib/livekit'
 import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
 import { addWatched, miniPlayerOnly, pruneWatched, resolveFocus } from '../lib/screenWatch'
-import { applyLiveEvent, type LivePayload } from '../lib/liveBadge'
+import {
+  applyLiveEvent,
+  LIVE_GRACE_MS,
+  reapplyRecentLive,
+  type LivePayload,
+  type LiveRecord
+} from '../lib/liveBadge'
 import { callNotification, notifyDesktop } from '../lib/notifications'
 import { playSound, setSoundOutput } from '../lib/sounds'
 import {
@@ -180,6 +186,9 @@ let localScreenStream: MediaStream | null = null
 let windowAudio: WindowAudio | null = null
 // Câmera local (não-reativa; o estado reativo é localCameraStream)
 let localCameraStream: MediaStream | null = null
+
+/** call:live recentes, reaplicados sobre o polling da lista do servidor. */
+let recentLive: LiveRecord[] = []
 
 /** Mute de antes de ensurdecer — volta a ele ao desensurdecer (como no Discord). */
 let mutedBeforeDeafen = false
@@ -880,7 +889,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     },
 
     setServerCalls: (map) => {
-      set({ serverCalls: map })
+      set({ serverCalls: reapplyRecentLive(map, recentLive, Date.now()) })
     },
 
     joinVoiceChannel: async (channelId) => {
@@ -1002,7 +1011,15 @@ export const useCallStore = create<CallState>()((set, get) => {
         case 'call:live': {
           // Selo LIVE na lista do servidor (inclusive de chamadas em que não estou).
           const p = payload as unknown as LivePayload
+          const now = Date.now()
+          recentLive = [
+            ...recentLive.filter((r) => now - r.at < LIVE_GRACE_MS),
+            { payload: p, at: now }
+          ]
+          const known = Object.values(get().serverCalls).some((e) => e.call?.id === p.call_id)
           set((s) => ({ serverCalls: applyLiveEvent(s.serverCalls, p) }))
+          // Chamada que começou depois do último polling: busca a lista agora.
+          if (!known) bumpList()
           return
         }
 
