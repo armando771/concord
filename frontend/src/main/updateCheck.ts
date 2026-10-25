@@ -1,7 +1,9 @@
 // Quando checar atualização. Além da checagem periódica, o renderer pede uma
 // na hora quando o backend avisa de versão nova (WS app:update) e quando o WS
 // reconecta (deploy reinicia o backend). Pedidos em rajada viram um só, e
-// nada se empilha sobre uma checagem que ainda não terminou.
+// nada se empilha sobre uma checagem que ainda não terminou: um pedido que
+// chega durante ela vira uma checagem só, logo depois (a em andamento pode ter
+// lido o manifesto antigo).
 
 /** Agrupa pedidos próximos (ex.: manifestos do Windows e do Linux juntos). */
 export const ON_DEMAND_DEBOUNCE_MS = 1_000
@@ -18,6 +20,8 @@ export function createUpdateCheckGate(
   debounceMs = ON_DEMAND_DEBOUNCE_MS
 ): UpdateCheckGate {
   let inFlight = false
+  /** Pedido de fora chegou durante a checagem em andamento. */
+  let again = false
   let timer: ReturnType<typeof setTimeout> | null = null
 
   const run = (): void => {
@@ -28,15 +32,19 @@ export function createUpdateCheckGate(
       .catch(() => {})
       .finally(() => {
         inFlight = false
+        if (again) {
+          again = false
+          run()
+        }
       })
   }
 
   const request = (): void => {
-    if (inFlight) return
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
       timer = null
-      run()
+      if (inFlight) again = true
+      else run()
     }, debounceMs)
   }
 

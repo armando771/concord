@@ -50,29 +50,44 @@ describe('createUpdateCheckGate', () => {
     expect(check).toHaveBeenCalledTimes(1)
   })
 
-  it('com uma checagem em andamento, pedido novo não faz nada', async () => {
+  it('pedido durante uma checagem em andamento vira uma só, logo depois dela', async () => {
     const { check, finish } = pendingCheck()
     const gate = createUpdateCheckGate(check, 1000)
     gate.run()
     gate.request()
-    vi.advanceTimersByTime(5000)
-    gate.run()
-    expect(check).toHaveBeenCalledTimes(1)
-
-    // Terminou: volta a aceitar.
-    await finish()
+    vi.advanceTimersByTime(1000)
     gate.request()
     vi.advanceTimersByTime(1000)
+    gate.run() // periódica no meio: não empilha
+    expect(check).toHaveBeenCalledTimes(1)
+
+    // Terminou: os pedidos que chegaram no meio viram uma checagem só.
+    await finish()
+    expect(check).toHaveBeenCalledTimes(2)
+    await finish()
+    vi.advanceTimersByTime(5000)
     expect(check).toHaveBeenCalledTimes(2)
   })
 
-  it('debounce que vence durante uma checagem em andamento não empilha outra', async () => {
+  it('periódica durante a checagem em andamento não agenda outra depois', async () => {
+    const { check, finish } = pendingCheck()
+    const gate = createUpdateCheckGate(check, 1000)
+    gate.run()
+    gate.run()
+    await finish()
+    vi.advanceTimersByTime(5000)
+    expect(check).toHaveBeenCalledTimes(1)
+  })
+
+  it('debounce que vence durante uma checagem em andamento não roda junto', async () => {
     const { check, finish } = pendingCheck()
     const gate = createUpdateCheckGate(check, 1000)
     gate.request()
     gate.run() // periódica começou antes do debounce vencer
     vi.advanceTimersByTime(1000)
     expect(check).toHaveBeenCalledTimes(1)
+    await finish()
+    expect(check).toHaveBeenCalledTimes(2)
     await finish()
   })
 
