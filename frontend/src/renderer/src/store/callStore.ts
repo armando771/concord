@@ -195,6 +195,10 @@ let localCameraStream: MediaStream | null = null
 /** call:live recentes, reaplicados sobre o polling da lista do servidor. */
 let recentLive: LiveRecord[] = []
 
+/** Ao reconectar, um 404 só fecha/troca a chamada se repetir (ver confirmGone). */
+const GONE_CHECKS = 3
+const GONE_CHECK_INTERVAL_MS = 2000
+
 const TOKEN_ATTEMPTS = 10
 const TOKEN_RETRY_DELAY_MS = 400
 
@@ -403,16 +407,57 @@ export const useCallStore = create<CallState>()((set, get) => {
   }
 
   /**
+   * A chamada ainda existe no servidor? 'gone' só com 404; 403 (não sou mais
+   * participante) quer dizer que ela existe. Erro de rede: 'unknown'.
+   */
+  const probeCall = async (callId: string): Promise<'exists' | 'gone' | 'unknown'> => {
+    try {
+      await getCallState(callId)
+      return 'exists'
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return 'gone'
+      if (err instanceof ApiError && err.status === 403) return 'exists'
+      return 'unknown'
+    }
+  }
+
+  /**
+   * 404 ao reconectar só vale como "a chamada acabou" se repetir: um servidor
+   * que acabou de subir não pode derrubar a mídia de ninguém por engano.
+   */
+  const confirmGone = async (callId: string): Promise<boolean> => {
+    for (let i = 1; i < GONE_CHECKS; i++) {
+      await new Promise((r) => setTimeout(r, GONE_CHECK_INTERVAL_MS))
+      if (get().callId !== callId) return false
+      if ((await probeCall(callId)) !== 'gone') return false
+    }
+    return get().callId === callId
+  }
+
+  /**
    * O backend tira da chamada quem fica com o WS de chat caído além da
    * tolerância, mas a mídia (LiveKit) segue conectada — a pessoa continua
    * falando/transmitindo e some da lista de todo mundo. Ao reconectar (ou ao
    * saber que foi tirado), volta a se registrar na chamada do canal.
+   *
+   * Nunca troca de sala por engano: se o servidor diz que a chamada não existe,
+   * só entra numa nova (desconectando a mídia) depois de confirmar o 404 e se
+   * ninguém mais estiver na sala de mídia — senão separaria quem ainda conversa.
    */
   const resyncChannelCall = async (): Promise<void> => {
     const { status, type, channelId, callId } = get()
     if (status !== 'active' || type !== 'channel' || !channelId || !callId || resyncing) return
     resyncing = true
     try {
+      const probe = await probeCall(callId)
+      if (probe === 'unknown') return // servidor indisponível: a próxima reconexão tenta
+      if (probe === 'gone') {
+        const gone = await confirmGone(callId)
+        if (get().callId !== callId) return
+        // Confirmado, mas ainda há gente na sala de mídia: não separa ninguém.
+        if (gone && Object.keys(get().mediaPeers).length > 0) return
+        // Não confirmado: a chamada existe de novo, segue o caminho normal.
+      }
       // Idempotente: se ainda estou na chamada, nada muda no backend.
       const call = await startCallApi({ type: 'channel', channel_id: channelId })
       if (get().callId !== callId) return
@@ -440,19 +485,29 @@ export const useCallStore = create<CallState>()((set, get) => {
   /**
    * DM depois de o WS de chat reconectar (ex.: deploy do servidor): eventos da
    * queda se perderam. Atualiza o estado (mudo, tela) sem mexer na mídia e
-   * reenvia o meu; se a chamada acabou nesse meio-tempo, fecha a tela dela.
+   * reenvia o meu. Só fecha a chamada se o servidor confirmar que ela acabou
+   * (404 repetido) e a outra pessoa já tiver saído da sala de mídia; o sinal
+   * normal de fim continua sendo o call:ended.
    */
   const resyncDmCall = async (): Promise<void> => {
     const { status, type, callId } = get()
     if (type !== 'dm' || !callId || status === 'idle') return
     // Tocando, ainda não sou participante: o servidor responde 403 (nada muda)
     // ou 404 se a chamada acabou (o reinício encerra as que só tocavam).
-    const result = await loadCallState(callId, true)
+    let result = await loadCallState(callId, true)
     if (get().callId !== callId) return
     if (result === 'gone') {
-      cleanup()
-      bumpList()
-      return
+      if (await confirmGone(callId)) {
+        const peerInMedia = get().participants.some((p) => p.id in get().mediaPeers)
+        if (get().status === 'active' && peerInMedia) return
+        cleanup()
+        bumpList()
+        return
+      }
+      if (get().callId !== callId) return
+      // O 404 passou (servidor acabando de subir): lê o estado de novo.
+      result = await loadCallState(callId, true)
+      if (get().callId !== callId) return
     }
     if (result !== 'ok' || get().status !== 'active') return
     sendVoiceState()
