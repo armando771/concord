@@ -18,6 +18,8 @@ files:
   - '!**/*.test.ts'
 asarUnpack:
   - resources/**
+  # Atalhos globais com botão do mouse: o binário nativo precisa ficar fora do asar.
+  - node_modules/uiohook-napi/**
 # Licença da fonte Outfit (OFL-1.1): legível fora do asar. O renderer também
 # leva uma cópia em out/renderer/assets/OFL.txt (vite.renderer.shared.ts).
 extraResources:

@@ -16,11 +16,18 @@ import InviteConfirmModal from './invite/InviteConfirmModal'
 import LevelUpMilestone from './level/LevelUpMilestone'
 import BadgesModal from './badges/BadgesModal'
 import BadgeUnlockToast from './badges/BadgeUnlockToast'
+import QuickSwitcherModal from './friends/QuickSwitcherModal'
+import ShortcutsModal from './ShortcutsModal'
+import { useGlobalShortcuts } from './useGlobalShortcuts'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
+import { useUIStore } from '../store/uiStore'
 import { IS_WEB } from '../lib/config'
 
 function AppShell(): React.JSX.Element {
+  useGlobalShortcuts()
+  const quickSwitcherOpen = useUIStore((s) => s.quickSwitcherOpen)
+  const setQuickSwitcherOpen = useUIStore((s) => s.setQuickSwitcherOpen)
   const location = useLocation()
   const isServerPage = location.pathname.startsWith('/servers/')
   const hasToken = Boolean(useAuthStore((s) => s.accessToken))
@@ -58,6 +65,8 @@ function AppShell(): React.JSX.Element {
       <LevelUpBanner />
       <BadgeUnlockToast />
       <BadgesModal />
+      {quickSwitcherOpen && <QuickSwitcherModal open onClose={() => setQuickSwitcherOpen(false)} />}
+      <ShortcutsModal />
     </div>
   )
 }

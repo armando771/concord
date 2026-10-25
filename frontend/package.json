@@ -18,7 +18,6 @@
     "dev:web": "vite --config vite.web.config.ts",
     "build:web": "vite build --config vite.web.config.ts",
     "preview:web": "vite preview --config vite.web.config.ts",
-    "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
@@ -35,6 +34,7 @@
     "react-router-dom": "^7.18.2",
     "simple-icons": "13.21.0",
     "tailwindcss": "^4.3.3",
+    "uiohook-napi": "^1.5.5",
     "zustand": "^5.0.15"
   },
   "devDependencies": {

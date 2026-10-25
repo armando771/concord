@@ -17,7 +17,6 @@ import ResizeHandle from './ResizeHandle'
 import { useResizableWidth } from './useResizableWidth'
 import GroupIcon from './friends/GroupIcon'
 import CreateGroupModal from './friends/CreateGroupModal'
-import QuickSwitcherModal from './friends/QuickSwitcherModal'
 import { conversationRoute, conversationTitle } from '../lib/conversations'
 import { hideConversation, leaveGroup, type ConversationSummary } from '../api/conversations'
 import ConfirmModal from './friends/ConfirmModal'
@@ -174,7 +173,7 @@ export function FriendsSidebar(): React.JSX.Element {
   const conversationsLoading = useChatStore((s) => s.conversationsLoading)
   const unreadByRoom = useChatStore((s) => s.unreadByRoom)
   const fetchConversations = useChatStore((s) => s.fetchConversations)
-  const [switcherOpen, setSwitcherOpen] = useState(false)
+  const setQuickSwitcherOpen = useUIStore((s) => s.setQuickSwitcherOpen)
   const [groupOpen, setGroupOpen] = useState(false)
   const [leaving, setLeaving] = useState<ConversationSummary | null>(null)
 
@@ -218,7 +217,7 @@ export function FriendsSidebar(): React.JSX.Element {
         <div className="flex h-12 shrink-0 items-center border-b border-white/6 px-2.5">
           <button
             type="button"
-            onClick={() => setSwitcherOpen(true)}
+            onClick={() => setQuickSwitcherOpen(true)}
             className="w-full cursor-pointer truncate rounded-md bg-[#111214] px-2 py-1.5 text-left text-ds-sm text-gray-400 transition-colors hover:text-gray-200"
           >
             Encontre ou comece uma conversa
@@ -292,7 +291,6 @@ export function FriendsSidebar(): React.JSX.Element {
         <SidebarFooter />
       </aside>
 
-      {switcherOpen && <QuickSwitcherModal open onClose={() => setSwitcherOpen(false)} />}
       {groupOpen && <CreateGroupModal open onClose={() => setGroupOpen(false)} />}
       <ConfirmModal
         open={leaving !== null}
