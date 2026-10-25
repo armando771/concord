@@ -51,6 +51,7 @@ import { useCallStore } from './callStore'
 import { useBoostStore } from './boostStore'
 import { useLevelStore } from './levelStore'
 import { useBadgeStore } from './badgeStore'
+import { useProposalStore } from './proposalStore'
 import { useSoundboardStore } from './soundboardStore'
 import { useActivityStore } from './activityStore'
 import { useTypingStore } from './typingStore'
@@ -278,6 +279,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     useLevelStore.getState().reset()
     useBoostStore.getState().reset()
     useBadgeStore.getState().reset()
+    useProposalStore.getState().reset()
   },
   isWsConnected: () => client.isConnected(),
 
@@ -724,6 +726,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     if (event.type.startsWith('badge:')) {
       useBadgeStore.getState().handleWsEvent(event)
+      return
+    }
+
+    if (event.type.startsWith('proposal:')) {
+      useProposalStore.getState().handleWsEvent(event)
       return
     }
 

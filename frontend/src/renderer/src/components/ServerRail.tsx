@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { serverIconSrc } from '../lib/serverIcon'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { PlusIcon, InboxIcon, SalinhaMarkIcon } from './icons'
+import { PlusIcon, InboxIcon, DiamondIcon, SalinhaMarkIcon } from './icons'
 import { useServerStore } from '../store/serverStore'
 import { useInviteStore } from '../store/inviteStore'
+import { useProposalStore } from '../store/proposalStore'
+import { pendingVoteCount } from '../lib/proposals'
 import { useChatStore } from '../store/chatStore'
 import { useFriendStore } from '../store/friendStore'
 import { showToast } from '../store/toastStore'
@@ -28,6 +30,11 @@ function ServerRail(): React.JSX.Element {
   const invites = useInviteStore((s) => s.invites)
   const fetchInvites = useInviteStore((s) => s.fetchInvites)
 
+  const proposals = useProposalStore((s) => s.proposals)
+  const fetchProposals = useProposalStore((s) => s.fetchProposals)
+  const proposalsToVote = pendingVoteCount(proposals)
+  const onProposals = location.pathname === '/proposals'
+
   const unreadByRoom = useChatStore((s) => s.unreadByRoom)
   const unreadByServer = useChatStore((s) => s.unreadByServer)
   const conversations = useChatStore((s) => s.conversations)
@@ -50,6 +57,10 @@ function ServerRail(): React.JSX.Element {
   useEffect(() => {
     fetchInvites()
   }, [fetchInvites])
+
+  useEffect(() => {
+    fetchProposals()
+  }, [fetchProposals])
 
   useEffect(() => {
     if (servers.length > 0) {
@@ -188,6 +199,30 @@ function ServerRail(): React.JSX.Element {
           {invites.length > 0 && (
             <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-md">
               {invites.length}
+            </span>
+          )}
+        </div>
+
+        {/* Quadro de propostas (kanban com votação) */}
+        <div className="relative flex items-center justify-center">
+          <button
+            onClick={() => {
+              clearCurrentServer()
+              navigate('/proposals')
+            }}
+            title="Propostas de melhoria"
+            aria-label="Propostas de melhoria"
+            className={`relative flex h-12 w-12 cursor-pointer items-center justify-center transition-all duration-200 ${
+              onProposals
+                ? 'rounded-2xl bg-violet-600 shadow-md shadow-violet-500/30'
+                : 'rounded-3xl border border-white/6 bg-[#12141d]/80 hover:rounded-2xl hover:bg-violet-600 hover:shadow-md hover:shadow-violet-500/30'
+            }`}
+          >
+            <DiamondIcon className={`h-6 w-6 ${onProposals ? 'text-white' : 'text-violet-400'}`} />
+          </button>
+          {proposalsToVote > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-md">
+              {proposalsToVote > 99 ? '99+' : proposalsToVote}
             </span>
           )}
         </div>
