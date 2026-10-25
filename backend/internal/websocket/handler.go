@@ -21,9 +21,10 @@ type Handler struct {
 	serverService       *server.Service
 	conversationService *conversation.Service
 	callRouter          CallRouter
+	typing              TypingRouter
 }
 
-func WsHandler(hub *Hub, authService *auth.Service, channelService *channel.Service, serverService *server.Service, conversationService *conversation.Service, callRouter CallRouter) *Handler {
+func WsHandler(hub *Hub, authService *auth.Service, channelService *channel.Service, serverService *server.Service, conversationService *conversation.Service, callRouter CallRouter, typing TypingRouter) *Handler {
 	return &Handler{
 		hub:                 hub,
 		authService:         authService,
@@ -31,6 +32,7 @@ func WsHandler(hub *Hub, authService *auth.Service, channelService *channel.Serv
 		serverService:       serverService,
 		conversationService: conversationService,
 		callRouter:          callRouter,
+		typing:              typing,
 	}
 }
 
@@ -102,6 +104,7 @@ func (h *Handler) ServeWS(c *gin.Context) {
 		rooms:      make(map[string]struct{}),
 		validator:  h.validator,
 		callRouter: h.callRouter,
+		typing:     h.typing,
 	}
 
 	h.hub.Register(client)

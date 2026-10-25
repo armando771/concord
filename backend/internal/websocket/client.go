@@ -22,6 +22,11 @@ type CallRouter interface {
 	IsParticipant(callID string, userID string) bool
 }
 
+// TypingRouter trata "typing" e "typing:stop" (Typing).
+type TypingRouter interface {
+	Handle(ctx context.Context, userID string, evType string, payload json.RawMessage)
+}
+
 type Client struct {
 	hub        *Hub
 	conn       *websocket.Conn
@@ -30,6 +35,7 @@ type Client struct {
 	rooms      map[string]struct{}
 	validator  subscribeValidator
 	callRouter CallRouter
+	typing     TypingRouter
 }
 
 func (c *Client) readPump(ctx context.Context) {
@@ -82,6 +88,10 @@ func (c *Client) readPump(ctx context.Context) {
 			}
 
 			c.hub.Unsubscribe(c, p.Room)
+		case "typing", "typing:stop":
+			if c.typing != nil {
+				c.typing.Handle(ctx, c.userID, ev.Type, ev.Payload)
+			}
 		case "call:invite", "call:accept", "call:decline", "call:leave", "call:screen", "call:voice", "call:soundboard":
 			if c.callRouter != nil {
 				c.callRouter.HandleCallMessage(c.userID, ev.Type, ev.Payload)
