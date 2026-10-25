@@ -119,11 +119,27 @@ export function desktopPayload(
   }
 }
 
-/** Pede ao processo main uma notificação nativa (no-op fora do Electron). */
+type DesktopNotifier = (payload: DesktopPayload) => void
+
+/** No navegador quem mostra o aviso é o WebNotificationBridge. */
+let webNotifier: DesktopNotifier | null = null
+
+/** Liga (ou desliga, com null) o aviso do build web. */
+export function setWebNotifier(notifier: DesktopNotifier | null): void {
+  webNotifier = notifier
+}
+
+/**
+ * Pede ao processo main uma notificação nativa. Fora do Electron, vai para o
+ * aviso do navegador, se o build web ligou um (senão é no-op).
+ */
 export function notifyDesktop(
   notification: AppNotification,
   prefs: NotificationPrefs = DEFAULT_NOTIFICATION_PREFS
 ): void {
   if (typeof window === 'undefined') return
-  window.api?.background?.notify(desktopPayload(notification, prefs))
+  const payload = desktopPayload(notification, prefs)
+  const background = window.api?.background
+  if (background) background.notify(payload)
+  else webNotifier?.(payload)
 }
