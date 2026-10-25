@@ -1,32 +1,26 @@
-import { useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { useUIStore, type FriendsTab } from '../store/uiStore'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useUIStore } from '../store/uiStore'
 import { useFriendStore } from '../store/friendStore'
+import { useAuthStore } from '../store/authStore'
 import { useChatStore, usePresenceStatus } from '../store/chatStore'
 import { useUserLook } from '../store/profileStore'
+import { useUserMenuStore } from '../store/userMenuStore'
+import { showToast } from '../store/toastStore'
 import Avatar from './Avatar'
 import VoiceConnectedPanel from './call/VoiceConnectedPanel'
 import UserBar from './UserBar'
-import { FriendsIcon, ClockIcon, UserPlusIcon, ChatBubbleIcon } from './icons'
+import { FriendsIcon, PlusIcon, XIcon } from './icons'
 import ResizeHandle from './ResizeHandle'
 import { useResizableWidth } from './useResizableWidth'
+import GroupIcon from './friends/GroupIcon'
+import CreateGroupModal from './friends/CreateGroupModal'
+import QuickSwitcherModal from './friends/QuickSwitcherModal'
+import { conversationRoute, conversationTitle } from '../lib/conversations'
+import { hideConversation, leaveGroup, type ConversationSummary } from '../api/conversations'
+import ConfirmModal from './friends/ConfirmModal'
 
-interface NavItem {
-  id: FriendsTab
-  label: string
-  icon: (props: { className?: string }) => React.JSX.Element
-}
-
-const navItems: NavItem[] = [
-  { id: 'all', label: 'Todos', icon: FriendsIcon },
-  { id: 'pending', label: 'Pendentes', icon: ClockIcon },
-  { id: 'add', label: 'Adicionar', icon: UserPlusIcon }
-]
-
-function formatLastMessageTime(iso?: string): string | null {
-  if (!iso) return null
-  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-}
+const SIDEBAR_BG = '#0b0c10'
 
 function DmAvatar({
   userId,
@@ -45,7 +39,7 @@ function DmAvatar({
       avatarUrl={avatarUrl}
       size={32}
       status={status}
-      cutoutColor="#0b0c10"
+      cutoutColor={SIDEBAR_BG}
     />
   )
 }
@@ -55,17 +49,113 @@ function DmName({ userId, name }: { userId: string; name: string }): React.JSX.E
   return <>{useUserLook(userId, { name }).name}</>
 }
 
+function ConversationRow({
+  conv,
+  active,
+  unread,
+  meId,
+  onClose
+}: {
+  conv: ConversationSummary
+  active: boolean
+  unread: number
+  meId: string | undefined
+  onClose: (conv: ConversationSummary) => void
+}): React.JSX.Element {
+  const navigate = useNavigate()
+  const other = conv.other_user
+  const isGroup = conv.type === 'group'
+  const title = conversationTitle(conv, meId)
+
+  const onContextMenu = (e: React.MouseEvent): void => {
+    if (!other) return
+    e.preventDefault()
+    useUserMenuStore.getState().open({
+      userId: other.id,
+      name: other.display_name || other.username,
+      username: other.username,
+      conversationId: conv.id,
+      x: e.clientX,
+      y: e.clientY
+    })
+  }
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => navigate(conversationRoute(conv, meId))}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') navigate(conversationRoute(conv, meId))
+      }}
+      onContextMenu={onContextMenu}
+      className={`group flex w-full cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors ${
+        active ? 'bg-white/10' : 'hover:bg-white/6'
+      }`}
+    >
+      {isGroup || !other ? (
+        <GroupIcon id={conv.id} iconUrl={conv.icon_url} />
+      ) : (
+        <DmAvatar
+          userId={other.id}
+          name={other.display_name || other.username}
+          avatarUrl={other.avatar_url}
+        />
+      )}
+      <div className="min-w-0 flex-1">
+        <p
+          className={`truncate text-[15px] ${
+            active || unread > 0
+              ? 'font-semibold text-white'
+              : 'font-medium text-gray-400 group-hover:text-gray-200'
+          }`}
+        >
+          {!isGroup && other ? (
+            <DmName userId={other.id} name={other.display_name || other.username} />
+          ) : (
+            title
+          )}
+        </p>
+        {isGroup && <p className="truncate text-xs text-gray-500">{conv.members.length} membros</p>}
+      </div>
+      {unread > 0 && (
+        <span className="shrink-0 rounded-full bg-[#f23f43] px-1.5 text-[11px] font-bold text-white group-hover:hidden">
+          {unread > 99 ? '99+' : unread}
+        </span>
+      )}
+      <button
+        type="button"
+        aria-label={isGroup ? 'Sair do grupo' : 'Fechar DM'}
+        title={isGroup ? 'Sair do grupo' : 'Fechar DM'}
+        onClick={(e) => {
+          e.stopPropagation()
+          onClose(conv)
+        }}
+        className="hidden shrink-0 cursor-pointer text-gray-400 hover:text-white group-hover:block"
+      >
+        <XIcon className="h-4 w-4" />
+      </button>
+    </div>
+  )
+}
+
 export function FriendsSidebar(): React.JSX.Element {
   const navigate = useNavigate()
-  const { userId } = useParams<{ userId: string }>()
-  const pending = useFriendStore((s) => s.pending)
+  const location = useLocation()
+  const { userId, conversationId } = useParams<{ userId: string; conversationId: string }>()
+  const meId = useAuthStore((s) => s.user?.id)
+  const incomingCount = useFriendStore(
+    (s) => s.pending.filter((p) => p.direction === 'incoming').length
+  )
   const loadAll = useFriendStore((s) => s.loadAll)
-  const friendsTab = useUIStore((s) => s.friendsTab)
   const setFriendsTab = useUIStore((s) => s.setFriendsTab)
   const conversations = useChatStore((s) => s.conversations)
   const conversationsLoading = useChatStore((s) => s.conversationsLoading)
   const unreadByRoom = useChatStore((s) => s.unreadByRoom)
   const fetchConversations = useChatStore((s) => s.fetchConversations)
+  const [switcherOpen, setSwitcherOpen] = useState(false)
+  const [groupOpen, setGroupOpen] = useState(false)
+  const [leaving, setLeaving] = useState<ConversationSummary | null>(null)
 
   // Mesma preferência de largura na barra de canais e na de DMs/amigos.
   const sidebar = useResizableWidth('channels')
@@ -75,6 +165,27 @@ export function FriendsSidebar(): React.JSX.Element {
     fetchConversations()
   }, [loadAll, fetchConversations])
 
+  const onFriendsPage = location.pathname === '/' || location.pathname === '/friends'
+
+  const isActive = (conv: ConversationSummary): boolean =>
+    conv.type === 'group' ? conv.id === conversationId : conv.other_user?.id === userId
+
+  const closeConversation = async (conv: ConversationSummary): Promise<void> => {
+    if (conv.type === 'group') {
+      setLeaving(conv)
+      return
+    }
+    try {
+      await hideConversation(conv.id)
+      useChatStore.setState((s) => ({
+        conversations: s.conversations.filter((c) => c.id !== conv.id)
+      }))
+      if (isActive(conv)) navigate('/friends')
+    } catch (err) {
+      showToast.error(err instanceof Error ? err.message : 'Não foi possível fechar a DM.')
+    }
+  }
+
   return (
     <>
       {/* z-10: a alça de redimensionar passa um pouco da borda, sobre o conteúdo. */}
@@ -83,106 +194,74 @@ export function FriendsSidebar(): React.JSX.Element {
         className="relative z-10 flex h-full shrink-0 flex-col border-r border-white/6 bg-[#0b0c10]/80 backdrop-blur-2xl"
       >
         <ResizeHandle {...sidebar.handleProps} />
-        {/* Scrollable Navigation Area */}
-        <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
-          {/* Main Navigation Links */}
+        <div className="flex h-12 shrink-0 items-center border-b border-white/6 px-2.5">
+          <button
+            type="button"
+            onClick={() => setSwitcherOpen(true)}
+            className="w-full cursor-pointer truncate rounded-md bg-[#111214] px-2 py-1.5 text-left text-[13px] text-gray-400 transition-colors hover:text-gray-200"
+          >
+            Encontre ou comece uma conversa
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto px-2 py-2">
           <nav className="flex flex-col gap-0.5">
-            {navItems.map((item) => {
-              const active = friendsTab === item.id
-              const Icon = item.icon
-              const isPending = item.id === 'pending'
-              const pendingCount = pending.length
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setFriendsTab(item.id)
-                    navigate('/friends')
-                  }}
-                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                    active
-                      ? 'bg-white/10 text-white shadow-sm'
-                      : 'text-gray-400 hover:bg-white/6 hover:text-gray-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Icon
-                      className={`h-5 w-5 shrink-0 ${active ? 'text-white' : 'text-gray-400'}`}
-                    />
-                    <span className="truncate">{item.label}</span>
-                  </div>
-                  {isPending && pendingCount > 0 && (
-                    <span className="rounded-full bg-red-500 px-1.5 py-0.2 text-[11px] font-bold text-white">
-                      {pendingCount}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
+            <button
+              type="button"
+              onClick={() => {
+                setFriendsTab('online')
+                navigate('/friends')
+              }}
+              className={`flex w-full cursor-pointer items-center justify-between rounded-md px-3 py-2 text-[15px] font-medium transition-colors ${
+                onFriendsPage
+                  ? 'bg-white/10 text-white'
+                  : 'text-gray-400 hover:bg-white/6 hover:text-gray-200'
+              }`}
+            >
+              <span className="flex items-center gap-3">
+                <FriendsIcon className="h-5 w-5" />
+                Amigos
+              </span>
+              {incomingCount > 0 && (
+                <span className="rounded-full bg-[#f23f43] px-1.5 text-[11px] font-bold text-white">
+                  {incomingCount}
+                </span>
+              )}
+            </button>
           </nav>
 
-          {/* Mensagens Section */}
           <div>
-            <div className="flex items-center justify-between px-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                Mensagens
+            <div className="group flex items-center justify-between px-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 group-hover:text-gray-200">
+                Mensagens diretas
               </p>
-              <ChatBubbleIcon className="h-3.5 w-3.5 text-gray-500" />
+              <button
+                type="button"
+                title="Criar DM"
+                aria-label="Criar DM"
+                onClick={() => setGroupOpen(true)}
+                className="cursor-pointer text-gray-400 hover:text-white"
+              >
+                <PlusIcon className="h-4 w-4" />
+              </button>
             </div>
             <div className="mt-1 flex flex-col gap-0.5">
               {conversationsLoading && conversations.length === 0 && (
-                <p className="px-2 py-1 text-xs text-gray-500 italic">Carregando...</p>
+                <p className="px-2 py-1 text-xs italic text-gray-500">Carregando...</p>
               )}
               {!conversationsLoading && conversations.length === 0 && (
-                <p className="px-2 py-1 text-xs text-gray-500 italic">Nenhuma conversa ainda.</p>
+                <p className="px-2 py-1 text-xs italic text-gray-500">Nenhuma conversa ainda.</p>
               )}
-              {conversations.map((conv) => {
-                const active = conv.other_user.id === userId
-                const unread = unreadByRoom[`conversation:${conv.id}`] ?? 0
-                const lastPreview = conv.last_message?.content ?? 'Inicie uma conversa!'
-                const lastTime = formatLastMessageTime(conv.last_message?.created_at)
-                return (
-                  <button
-                    key={conv.id}
-                    onClick={() => navigate(`/dm/${conv.other_user.id}`)}
-                    className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-all cursor-pointer ${
-                      active ? 'bg-white/10 shadow-sm' : 'hover:bg-white/6'
-                    }`}
-                  >
-                    <DmAvatar
-                      userId={conv.other_user.id}
-                      name={conv.other_user.display_name ?? conv.other_user.username}
-                      avatarUrl={conv.other_user.avatar_url}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <p className="truncate text-sm font-semibold text-white">
-                          <DmName
-                            userId={conv.other_user.id}
-                            name={conv.other_user.display_name ?? conv.other_user.username}
-                          />
-                        </p>
-                        {unread > 0 ? (
-                          <span className="shrink-0 rounded-full bg-red-500 px-1.5 py-0.2 text-[10px] font-bold text-white">
-                            {unread > 99 ? '99+' : unread}
-                          </span>
-                        ) : (
-                          lastTime && (
-                            <span className="shrink-0 text-[10px] text-gray-500">{lastTime}</span>
-                          )
-                        )}
-                      </div>
-                      <p
-                        className={`truncate text-xs ${
-                          unread > 0 ? 'font-medium text-gray-200' : 'text-gray-400'
-                        }`}
-                      >
-                        {lastPreview}
-                      </p>
-                    </div>
-                  </button>
-                )
-              })}
+              {conversations.map((conv) => (
+                <ConversationRow
+                  key={conv.id}
+                  conv={conv}
+                  active={isActive(conv)}
+                  unread={unreadByRoom[`conversation:${conv.id}`] ?? 0}
+                  meId={meId}
+                  onClose={closeConversation}
+                />
+              ))}
             </div>
           </div>
         </div>
@@ -192,6 +271,29 @@ export function FriendsSidebar(): React.JSX.Element {
 
         <UserBar />
       </aside>
+
+      {switcherOpen && <QuickSwitcherModal open onClose={() => setSwitcherOpen(false)} />}
+      {groupOpen && <CreateGroupModal open onClose={() => setGroupOpen(false)} />}
+      <ConfirmModal
+        open={leaving !== null}
+        title={`Sair de '${leaving ? conversationTitle(leaving, meId) : ''}'`}
+        confirmLabel="Sair do grupo"
+        onClose={() => setLeaving(null)}
+        onConfirm={async () => {
+          if (!leaving) return
+          try {
+            await leaveGroup(leaving.id)
+            useChatStore.setState((s) => ({
+              conversations: s.conversations.filter((c) => c.id !== leaving.id)
+            }))
+            if (isActive(leaving)) navigate('/friends')
+          } catch (err) {
+            showToast.error(err instanceof Error ? err.message : 'Não foi possível sair do grupo.')
+          }
+        }}
+      >
+        Tem certeza que quer sair do grupo? Você só volta se alguém te adicionar de novo.
+      </ConfirmModal>
     </>
   )
 }

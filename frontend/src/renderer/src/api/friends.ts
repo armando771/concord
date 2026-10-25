@@ -10,8 +10,13 @@ export interface PendingRequest {
   created_at: string
 }
 
-export function sendFriendRequest(username: string): Promise<{ message: string }> {
-  return request<{ message: string }>('/friends/request', {
+/** "accepted" quando a outra pessoa já tinha mandado pedido (vira amizade). */
+export type SendRequestResult = 'sent' | 'accepted'
+
+export function sendFriendRequest(
+  username: string
+): Promise<{ message: string; result: SendRequestResult }> {
+  return request<{ message: string; result: SendRequestResult }>('/friends/request', {
     method: 'POST',
     body: JSON.stringify({ username })
   })
@@ -47,4 +52,35 @@ export function removeFriend(username: string): Promise<{ message: string }> {
   return request<{ message: string }>(`/friends/${encodeURIComponent(username)}`, {
     method: 'DELETE'
   })
+}
+
+export function listBlocked(): Promise<PublicUser[]> {
+  return request<PublicUser[]>('/friends/blocked')
+}
+
+export function blockUser(userId: string): Promise<{ message: string }> {
+  return request<{ message: string }>(`/users/${userId}/block`, { method: 'PUT' })
+}
+
+export function unblockUser(userId: string): Promise<{ message: string }> {
+  return request<{ message: string }>(`/users/${userId}/block`, { method: 'DELETE' })
+}
+
+/** Relação com outra pessoa; quem foi bloqueado vê "none". */
+export type RelationshipType = 'none' | 'friend' | 'incoming' | 'outgoing' | 'blocked'
+
+export interface MutualServer {
+  id: string
+  name: string
+  icon_url?: string | null
+}
+
+export interface Relationship {
+  type: RelationshipType
+  mutual_friends: PublicUser[]
+  mutual_servers: MutualServer[]
+}
+
+export function getRelationship(userId: string): Promise<Relationship> {
+  return request<Relationship>(`/users/${userId}/relationship`)
 }

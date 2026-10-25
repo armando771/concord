@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
-import { useFriendStore } from '../store/friendStore'
+import { useFriendStore, useRelationship } from '../store/friendStore'
+import { useUserMenuStore } from '../store/userMenuStore'
 import { useChatStore, usePresenceStatus } from '../store/chatStore'
 import { useUserLook } from '../store/profileStore'
 import { profileCardHandler } from '../store/profileCardStore'
@@ -64,7 +65,7 @@ function DmChat(): React.JSX.Element {
 
   const other =
     friends.find((f) => f.id === userId) ??
-    conversations.find((c) => c.other_user.id === userId)?.other_user
+    conversations.find((c) => c.other_user?.id === userId)?.other_user
 
   const otherName =
     other?.display_name ??
@@ -76,14 +77,38 @@ function DmChat(): React.JSX.Element {
   const online = Boolean(userId && presence[userId])
   const status = usePresenceStatus(userId)
   const look = useUserLook(userId, { name: otherName, avatarUrl: other?.avatar_url })
+  const blocked = useRelationship(userId) === 'blocked'
+  const blockedReason = blocked
+    ? 'Você bloqueou esta pessoa. Desbloqueie para mandar mensagens.'
+    : undefined
+
+  const openMenu = (e: React.MouseEvent): void => {
+    if (!userId || userId === me?.id) return
+    e.preventDefault()
+    useUserMenuStore.getState().open({
+      userId,
+      name: look.name,
+      username: otherHandle || undefined,
+      conversationId: conversationId ?? undefined,
+      x: e.clientX,
+      y: e.clientY
+    })
+  }
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-[#07080b]/90 backdrop-blur-2xl text-gray-100">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-white/6 px-4">
+      <header
+        onContextMenu={openMenu}
+        className="flex h-14 shrink-0 items-center gap-3 border-b border-white/6 px-4"
+      >
         <div className="flex items-center gap-2.5 min-w-0">
           <button
             type="button"
-            onClick={userId ? profileCardHandler(userId, look.name, otherHandle || undefined, 'right') : undefined}
+            onClick={
+              userId
+                ? profileCardHandler(userId, look.name, otherHandle || undefined, 'right')
+                : undefined
+            }
             aria-label={`Perfil de ${look.name}`}
             className="cursor-pointer rounded-full"
           >
@@ -102,10 +127,7 @@ function DmChat(): React.JSX.Element {
             {otherHandle && <p className="truncate text-[11px] text-gray-400">@{otherHandle}</p>}
           </div>
         </div>
-        <span
-          className="text-[11px] font-semibold"
-          style={{ color: STATUS_META[status].color }}
-        >
+        <span className="text-[11px] font-semibold" style={{ color: STATUS_META[status].color }}>
           {STATUS_META[status].label}
         </span>
         <div className="ml-auto">
@@ -129,7 +151,7 @@ function DmChat(): React.JSX.Element {
                   display_name: otherName
                 })
               }}
-              disabled={!online || !conversationId || callStatus !== 'idle'}
+              disabled={!online || !conversationId || callStatus !== 'idle' || blocked}
               aria-label="Iniciar chamada de voz"
               title={
                 callStatus !== 'idle'
@@ -156,6 +178,7 @@ function DmChat(): React.JSX.Element {
               room={`conversation:${conversationId}`}
               placeholder={`Mensagem para @${otherHandle || otherName}`}
               mentionable={dmMentionable}
+              disabledReason={blockedReason}
             />
           </DmCallView>
         ) : (
@@ -163,6 +186,7 @@ function DmChat(): React.JSX.Element {
             room={`conversation:${conversationId}`}
             placeholder={`Mensagem para @${otherHandle || otherName}`}
             mentionable={dmMentionable}
+            disabledReason={blockedReason}
           />
         )
       ) : (

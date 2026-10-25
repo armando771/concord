@@ -7,6 +7,8 @@ import SystemMessage from './SystemMessage'
 import Avatar from './Avatar'
 import { useUserLook } from '../store/profileStore'
 import { profileCardHandler } from '../store/profileCardStore'
+import { userMenuHandler } from '../store/userMenuStore'
+import { useFriendStore } from '../store/friendStore'
 import {
   applyMention,
   mentionQuery,
@@ -45,6 +47,8 @@ interface ChatPaneProps {
   mentionable?: Mentionable[]
   /** Sugere @all/@here (canal de servidor, só dono e moderadores). */
   canMentionEveryone?: boolean
+  /** Troca o campo de mensagem por este aviso (ex.: DM com alguém bloqueado). */
+  disabledReason?: string
 }
 
 const MAX_SUGGESTIONS = 6
@@ -149,13 +153,22 @@ function MessageItem({
   const isMine = message.author_id === me?.id
   const author = message.author
   const look = useUserLook(message.author_id, {
-    name: author?.display_name ?? author?.username ?? (isMine ? me?.display_name : null) ?? 'Desconhecido',
+    name:
+      author?.display_name ??
+      author?.username ??
+      (isMine ? me?.display_name : null) ??
+      'Desconhecido',
     avatarUrl: author?.avatar_url
   })
   const name = look.name
   const openProfile = profileCardHandler(message.author_id, name, author?.username, 'right')
   const [hover, setHover] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const authorBlocked = useFriendStore(
+    (s) => !isMine && s.blocked.some((u) => u.id === message.author_id)
+  )
+  const [revealBlocked, setRevealBlocked] = useState(false)
+  const onAuthorMenu = userMenuHandler(message.author_id, name, me?.id, author?.username)
 
   const mentionsMe = messageMentionsMe(message, me)
   const reactions = message.reactions ?? []
@@ -164,6 +177,22 @@ function MessageItem({
     message.reply_to?.author?.display_name ?? message.reply_to?.author?.username ?? 'Usuário'
 
   if (message.system_kind) return <SystemMessage message={message} />
+
+  // Mensagem de quem você bloqueou: escondida, como no Discord.
+  if (authorBlocked && !revealBlocked) {
+    return (
+      <div id={`msg-${message.id}`} className="px-4 py-1 text-xs text-gray-500">
+        1 mensagem bloqueada —{' '}
+        <button
+          type="button"
+          onClick={() => setRevealBlocked(true)}
+          className="cursor-pointer text-[#00a8fc] hover:underline"
+        >
+          Mostrar
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -177,6 +206,7 @@ function MessageItem({
       }`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      onContextMenu={onAuthorMenu}
     >
       {hasReplyReference && (
         <div className="flex items-center gap-1.5 pl-4 text-xs text-gray-400">
@@ -330,7 +360,8 @@ function ChatPane({
   room,
   placeholder = 'Digite sua mensagem',
   mentionable = [],
-  canMentionEveryone = false
+  canMentionEveryone = false,
+  disabledReason
 }: ChatPaneProps): React.JSX.Element {
   const messagesByRoom = useChatStore((s) => s.messagesByRoom)
   const hasMoreByRoom = useChatStore((s) => s.hasMoreByRoom)
@@ -674,67 +705,73 @@ function ChatPane({
             </button>
           </div>
         )}
-        <form
-          onSubmit={handleSubmit}
-          className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
-        >
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            title="Anexar arquivo"
-            aria-label="Anexar arquivo"
-            className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+        {disabledReason ? (
+          <div className="rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-center text-sm text-gray-400">
+            {disabledReason}
+          </div>
+        ) : (
+          <form
+            onSubmit={handleSubmit}
+            className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
           >
-            <PaperclipIcon className="h-5 w-5" />
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept={ACCEPT_ATTRIBUTE}
-            hidden
-            onChange={(e) => {
-              addFiles(Array.from(e.target.files ?? []))
-              e.target.value = ''
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => setPollOpen(true)}
-            title="Criar enquete"
-            aria-label="Criar enquete"
-            className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
-          >
-            <PollIcon className="h-5 w-5" />
-          </button>
-          <input
-            ref={inputRef}
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value)
-              setMention(mentionQuery(e.target.value, e.target.selectionStart ?? 0))
-              setHighlight(null)
-            }}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            onBlur={() => setMention(null)}
-            placeholder={replyingTo ? `Responder a @${replyTargetAuthor}...` : placeholder}
-            maxLength={2000}
-            className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 outline-none"
-          />
-          <VoiceRecordButton key={room} disabled={sendingVoice} onRecorded={handleRecorded} />
-          <button
-            type="submit"
-            disabled={sending || !submittable}
-            className="cursor-pointer rounded-lg bg-[#5865f2] px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {attachmentState.uploading
-              ? 'Enviando arquivos...'
-              : sending
-                ? 'Enviando...'
-                : 'Enviar'}
-          </button>
-        </form>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              title="Anexar arquivo"
+              aria-label="Anexar arquivo"
+              className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <PaperclipIcon className="h-5 w-5" />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept={ACCEPT_ATTRIBUTE}
+              hidden
+              onChange={(e) => {
+                addFiles(Array.from(e.target.files ?? []))
+                e.target.value = ''
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setPollOpen(true)}
+              title="Criar enquete"
+              aria-label="Criar enquete"
+              className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <PollIcon className="h-5 w-5" />
+            </button>
+            <input
+              ref={inputRef}
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value)
+                setMention(mentionQuery(e.target.value, e.target.selectionStart ?? 0))
+                setHighlight(null)
+              }}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              onBlur={() => setMention(null)}
+              placeholder={replyingTo ? `Responder a @${replyTargetAuthor}...` : placeholder}
+              maxLength={2000}
+              className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 outline-none"
+            />
+            <VoiceRecordButton key={room} disabled={sendingVoice} onRecorded={handleRecorded} />
+            <button
+              type="submit"
+              disabled={sending || !submittable}
+              className="cursor-pointer rounded-lg bg-[#5865f2] px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {attachmentState.uploading
+                ? 'Enviando arquivos...'
+                : sending
+                  ? 'Enviando...'
+                  : 'Enviar'}
+            </button>
+          </form>
+        )}
       </div>
       <CreatePollModal
         open={pollOpen}

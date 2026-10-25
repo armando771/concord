@@ -34,6 +34,8 @@ type ChannelResolver interface {
 
 type ConversationResolver interface {
 	ConversationParticipantIDs(ctx context.Context, conversationID string) ([]string, error)
+	// RevealConversation reabre a DM para quem tinha fechado.
+	RevealConversation(ctx context.Context, conversationID string) error
 }
 
 // FileRemover apaga o arquivo de um anexo do disco (media.Store).
@@ -126,6 +128,10 @@ func (s *Service) CreateConversationMessage(ctx context.Context, conversationID 
 
 	var userIDs []string
 	if s.convResolver != nil {
+		// Mensagem nova reabre a DM para quem tinha fechado (como no Discord).
+		if err := s.convResolver.RevealConversation(ctx, conversationID); err != nil {
+			log.Printf("[message] reveal conversation %s: %v", conversationID, err)
+		}
 		userIDs, _ = s.convResolver.ConversationParticipantIDs(ctx, conversationID)
 	}
 
