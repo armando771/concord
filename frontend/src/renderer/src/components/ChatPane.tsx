@@ -21,7 +21,11 @@ import {
 } from '../lib/messageEdit'
 import MessageText from './chat/MessageText'
 import MessageEditor from './chat/MessageEditor'
-import { filterEmoteCategories, QUICK_EMOTES } from '../lib/emotes'
+import EmotePickerPopover from './chat/EmotePickerPopover'
+import MessageActionsBar from './chat/MessageActionsBar'
+import ReactionChips from './chat/ReactionChips'
+import ReplyReference from './chat/ReplyReference'
+import { copyText } from '../lib/clipboard'
 import { messagePreview } from '../lib/polls'
 import PollCard from './poll/PollCard'
 import CreatePollModal from './poll/CreatePollModal'
@@ -111,79 +115,6 @@ function formatEditedAt(iso: string): string {
     minute: '2-digit'
   })
   return `Editada em ${when}`
-}
-
-function EmotePickerPopover({
-  onSelect,
-  onClose
-}: {
-  onSelect: (emoji: string) => void
-  onClose: () => void
-}): React.JSX.Element {
-  const ref = useRef<HTMLDivElement>(null)
-  const [search, setSearch] = useState('')
-  const categories = filterEmoteCategories(search)
-
-  useEffect(() => {
-    const handleMouseDown = (e: MouseEvent): void => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose()
-      }
-    }
-    const handleKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('mousedown', handleMouseDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handleMouseDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [onClose])
-
-  return (
-    <div
-      ref={ref}
-      onClick={(e) => e.stopPropagation()}
-      className="absolute right-4 top-8 z-30 w-64 rounded-xl border border-white/10 bg-[#18191c] p-3 shadow-2xl"
-    >
-      <input
-        type="text"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Buscar emote..."
-        className="mb-2 w-full rounded-md border border-white/10 bg-black/40 px-2.5 py-1 text-xs text-white placeholder:text-gray-500 outline-none focus:border-violet-500/50"
-      />
-      <div className="max-h-56 overflow-y-auto pr-1">
-        {categories.map((category) => (
-          <div key={category.id} className="mb-2 last:mb-0">
-            <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-              {category.name}
-            </div>
-            <div className="grid grid-cols-6 gap-1">
-              {category.items.map((item) => (
-                <button
-                  key={item.emoji}
-                  type="button"
-                  title={item.label}
-                  onClick={() => {
-                    onSelect(item.emoji)
-                    onClose()
-                  }}
-                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-lg transition-transform hover:scale-110 hover:bg-white/10"
-                >
-                  {item.emoji}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-        {categories.length === 0 && (
-          <div className="py-4 text-center text-xs text-gray-500">Nenhum emote encontrado</div>
-        )}
-      </div>
-    </div>
-  )
 }
 
 function MessageItem({
@@ -294,23 +225,11 @@ function MessageItem({
       }}
     >
       {hasReplyReference && (
-        <div className="flex items-center gap-1.5 pl-4 text-ds-sm text-gray-400">
-          <span className="h-2.5 w-5 shrink-0 rounded-tl-md border-l-2 border-t-2 border-gray-600" />
-          {message.reply_to ? (
-            <button
-              type="button"
-              onClick={() => onJumpToMessage(message.reply_to!.id)}
-              className="flex min-w-0 cursor-pointer items-center gap-1.5 text-left transition-colors hover:text-gray-200"
-            >
-              <span className="shrink-0 font-semibold text-gray-300">@{replyAuthorName}</span>
-              <span className="truncate text-gray-400">
-                {message.reply_to.content || '📊 Enquete / Anexo'}
-              </span>
-            </button>
-          ) : (
-            <span className="italic text-gray-500">Mensagem original foi excluída</span>
-          )}
-        </div>
+        <ReplyReference
+          authorName={message.reply_to ? replyAuthorName : null}
+          content={message.reply_to?.content ?? ''}
+          onJump={() => message.reply_to && onJumpToMessage(message.reply_to.id)}
+        />
       )}
 
       <div className="flex gap-3">
@@ -364,105 +283,26 @@ function MessageItem({
             />
           )}
 
-          {reactions.length > 0 && (
-            <div className="mt-1.5 flex flex-wrap items-center gap-1">
-              {reactions.map((reaction) => {
-                const meReacted = me?.id ? reaction.user_ids.includes(me.id) : false
-                return (
-                  <button
-                    key={reaction.emoji}
-                    type="button"
-                    onClick={() => onReact(reaction.emoji)}
-                    // Sem ADD_REACTIONS ainda dá para tirar a própria reação.
-                    disabled={!canReact && !meReacted}
-                    className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                      meReacted
-                        ? 'border-[#5865f2] bg-[#5865f2]/25 text-white'
-                        : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'
-                    }`}
-                  >
-                    <span>{reaction.emoji}</span>
-                    <span className="font-semibold">{reaction.count}</span>
-                  </button>
-                )
-              })}
-              {canReact && (
-                <button
-                  type="button"
-                  onClick={() => setPickerOpen((v) => !v)}
-                  title="Adicionar reação"
-                  className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
-                >
-                  +
-                </button>
-              )}
-            </div>
-          )}
+          <ReactionChips
+            reactions={reactions}
+            meId={me?.id}
+            canReact={canReact}
+            onReact={onReact}
+            onOpenPicker={() => setPickerOpen((v) => !v)}
+          />
         </div>
 
         {(hover || pickerOpen) && (
-          <div className="absolute -top-3 right-4 z-20 flex items-center gap-0.5 rounded-lg border border-white/10 bg-[#18191c] px-1 py-0.5 shadow-lg">
-            {canReact &&
-              QUICK_EMOTES.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => onReact(emoji)}
-                  title={`Reagir com ${emoji}`}
-                  className="flex h-6 w-6 cursor-pointer items-center justify-center rounded text-sm transition-transform hover:scale-110 hover:bg-white/10"
-                >
-                  {emoji}
-                </button>
-              ))}
-            {canReact && (
-              <button
-                type="button"
-                onClick={() => setPickerOpen((v) => !v)}
-                title="Mais reações"
-                className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
-              >
-                😀+
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onReply}
-              title="Responder"
-              className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              Responder
-            </button>
-            {message.content && (
-              <button
-                type="button"
-                onClick={onCopy}
-                title="Copiar texto"
-                className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
-              >
-                Copiar texto
-              </button>
-            )}
-            {editable && !isEditing && (
-              <button
-                type="button"
-                onClick={onStartEdit}
-                title="Editar mensagem"
-                className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
-              >
-                Editar
-              </button>
-            )}
-            {(isMine || canModerate) && (
-              <button
-                type="button"
-                onClick={onDelete}
-                title={isMine ? 'Excluir mensagem' : 'Excluir mensagem (moderação)'}
-                className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs font-semibold text-gray-400 transition-colors hover:bg-red-500/15 hover:text-red-400"
-              >
-                Excluir
-              </button>
-            )}
-          </div>
+          <MessageActionsBar
+            canReact={canReact}
+            onReact={onReact}
+            onTogglePicker={() => setPickerOpen((v) => !v)}
+            onReply={onReply}
+            onCopy={message.content ? onCopy : undefined}
+            onEdit={editable && !isEditing ? onStartEdit : undefined}
+            onDelete={isMine || canModerate ? onDelete : undefined}
+            deleteTitle={isMine ? 'Excluir mensagem' : 'Excluir mensagem (moderação)'}
+          />
         )}
       </div>
 
@@ -659,16 +499,6 @@ function ChatPane({
     }
   }
 
-  const handleCopy = (text: string): void => {
-    if (!navigator.clipboard) {
-      showToast.error('Não deu para copiar.')
-      return
-    }
-    navigator.clipboard.writeText(text).then(
-      () => showToast.success('Copiado'),
-      () => showToast.error('Não deu para copiar.')
-    )
-  }
   // Por sala: o ServerView reaproveita o ChatPane entre canais, e o
   // carregamento de um canal não pode travar (nem destravar) o botão do outro.
   const [loadingOlderRooms, setLoadingOlderRooms] = useState<ReadonlySet<string>>(new Set())
@@ -983,7 +813,7 @@ function ChatPane({
                 onDelete={() => handleDelete(m.id)}
                 onVote={(answerIds) => votePollInRoom(room, m.id, answerIds)}
                 onEndPoll={() => endPollInRoom(room, m.id)}
-                onCopy={() => handleCopy(m.content)}
+                onCopy={() => copyText(m.content)}
                 onStartEdit={() => startEdit(m.id)}
                 onSaveEdit={(text) => void handleSaveEdit(m, text)}
                 onCancelEdit={closeEdit}
