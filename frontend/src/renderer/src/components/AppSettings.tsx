@@ -164,7 +164,7 @@ function AppSettings(): React.JSX.Element | null {
           />
           <label className="mt-4 flex flex-col gap-2">
             <span className="flex items-center justify-between text-sm font-semibold text-white">
-              Opacidade do overlay
+              Opacidade do overlay (quem fala fica mais visível)
               <span className="text-xs font-medium text-gray-400">{overlayOpacity}%</span>
             </span>
             <input
@@ -178,6 +178,10 @@ function AppSettings(): React.JSX.Element | null {
               aria-label="Opacidade do overlay"
               className="accent-[#23a55a] disabled:opacity-40"
             />
+            <span className="text-xs text-gray-400">
+              Bem fraquinho em repouso para não atrapalhar o jogo; quem está falando aparece mais
+              forte.
+            </span>
           </label>
         </div>
       )}

@@ -18,7 +18,7 @@ export interface OverlaySnapshot {
   members: OverlayMember[]
   /** Quantos ficaram de fora ("+N"); 0 = todos aparecem. */
   more: number
-  /** Opacidade da lista, em % (OVERLAY_OPACITY_MIN–100). */
+  /** Opacidade das pílulas em repouso, em % (OVERLAY_OPACITY_MIN–MAX). */
   opacity: number
 }
 
@@ -45,17 +45,38 @@ export interface OverlayInput {
 /** Pílulas no máximo (contando a do "+N"). */
 export const OVERLAY_MAX_ROWS = 8
 
-/** "Opacidade do overlay": 20% a 100% em passos de 5%, padrão 70%. */
-export const OVERLAY_OPACITY_MIN = 20
-export const OVERLAY_OPACITY_MAX = 100
+/**
+ * "Opacidade do overlay" = opacidade de cada pílula em repouso: 10% a 60% em
+ * passos de 5%, padrão 30%. Quem fala ganha +40, até 85% (nunca 100%).
+ */
+export const OVERLAY_OPACITY_MIN = 10
+export const OVERLAY_OPACITY_MAX = 60
 export const OVERLAY_OPACITY_STEP = 5
-export const OVERLAY_OPACITY_DEFAULT = 70
+export const OVERLAY_OPACITY_DEFAULT = 30
+export const OVERLAY_SPEAKING_BOOST = 40
+export const OVERLAY_SPEAKING_MAX = 85
 
 /** Encaixa no intervalo e no passo; valor estragado volta ao padrão. */
 export function clampOverlayOpacity(value: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return OVERLAY_OPACITY_DEFAULT
   const stepped = Math.round(value / OVERLAY_OPACITY_STEP) * OVERLAY_OPACITY_STEP
   return Math.min(OVERLAY_OPACITY_MAX, Math.max(OVERLAY_OPACITY_MIN, stepped))
+}
+
+/** Opacidade (em %) de uma pílula: repouso, ou mais forte para quem está falando. */
+export function overlayRowOpacity(resting: number, speaking: boolean): number {
+  const base = clampOverlayOpacity(resting)
+  return speaking ? Math.min(base + OVERLAY_SPEAKING_BOOST, OVERLAY_SPEAKING_MAX) : base
+}
+
+/**
+ * Preferências salvas antes da opacidade em repouso (20–100%, padrão 70%):
+ * encaixa na faixa nova e mantém o resto.
+ */
+export function migrateOverlayPrefs(persisted: unknown): Record<string, unknown> {
+  const saved =
+    persisted && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {}
+  return { ...saved, opacity: clampOverlayOpacity(saved.opacity as number) }
 }
 
 function nameOf(person: OverlayPerson): string {

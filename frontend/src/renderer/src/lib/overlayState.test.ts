@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   buildOverlaySnapshot,
   clampOverlayOpacity,
+  migrateOverlayPrefs,
   OVERLAY_OPACITY_DEFAULT,
+  overlayRowOpacity,
   type OverlayInput
 } from './overlayState'
 
@@ -115,16 +117,17 @@ describe('buildOverlaySnapshot', () => {
 })
 
 describe('opacidade do overlay', () => {
-  it('padrão de 70%', () => {
-    expect(OVERLAY_OPACITY_DEFAULT).toBe(70)
+  it('padrão de 30% em repouso', () => {
+    expect(OVERLAY_OPACITY_DEFAULT).toBe(30)
   })
 
-  it('fica entre 20% e 100%, em passos de 5%', () => {
-    expect(clampOverlayOpacity(70)).toBe(70)
-    expect(clampOverlayOpacity(5)).toBe(20)
-    expect(clampOverlayOpacity(150)).toBe(100)
-    expect(clampOverlayOpacity(72)).toBe(70)
-    expect(clampOverlayOpacity(73)).toBe(75)
+  it('repouso fica entre 10% e 60%, em passos de 5%', () => {
+    expect(clampOverlayOpacity(30)).toBe(30)
+    expect(clampOverlayOpacity(5)).toBe(10)
+    expect(clampOverlayOpacity(0)).toBe(10)
+    expect(clampOverlayOpacity(150)).toBe(60)
+    expect(clampOverlayOpacity(32)).toBe(30)
+    expect(clampOverlayOpacity(33)).toBe(35)
   })
 
   it('valor salvo estragado volta ao padrão', () => {
@@ -134,7 +137,59 @@ describe('opacidade do overlay', () => {
 
   it('vai junto no estado mandado ao overlay, também fora da call', () => {
     expect(buildOverlaySnapshot(input({ opacity: 45 })).opacity).toBe(45)
-    expect(buildOverlaySnapshot(input({ opacity: 3 })).opacity).toBe(20)
+    expect(buildOverlaySnapshot(input({ opacity: 3 })).opacity).toBe(10)
+    expect(buildOverlaySnapshot(input({ opacity: 90 })).opacity).toBe(60)
     expect(buildOverlaySnapshot(input({ status: 'idle', opacity: 45 })).opacity).toBe(45)
+  })
+})
+
+describe('overlayRowOpacity', () => {
+  it('quem não fala fica na opacidade de repouso', () => {
+    expect(overlayRowOpacity(30, false)).toBe(30)
+    expect(overlayRowOpacity(10, false)).toBe(10)
+  })
+
+  it('quem fala ganha +40', () => {
+    expect(overlayRowOpacity(30, true)).toBe(70)
+    expect(overlayRowOpacity(10, true)).toBe(50)
+  })
+
+  it('quem fala para em 85%, nunca 100%', () => {
+    expect(overlayRowOpacity(45, true)).toBe(85)
+    expect(overlayRowOpacity(60, true)).toBe(85)
+    expect(overlayRowOpacity(100, true)).toBe(85)
+    expect(overlayRowOpacity(100, false)).toBe(60)
+  })
+
+  it('valor estragado usa o padrão', () => {
+    expect(overlayRowOpacity(Number.NaN, false)).toBe(OVERLAY_OPACITY_DEFAULT)
+    expect(overlayRowOpacity(Number.NaN, true)).toBe(OVERLAY_OPACITY_DEFAULT + 40)
+  })
+})
+
+describe('migrateOverlayPrefs', () => {
+  it('opacidade antiga (20–100%) é encaixada na faixa nova', () => {
+    expect(migrateOverlayPrefs({ enabled: true, opacity: 70 })).toEqual({
+      enabled: true,
+      opacity: 60
+    })
+    expect(migrateOverlayPrefs({ enabled: false, opacity: 20 })).toEqual({
+      enabled: false,
+      opacity: 20
+    })
+    expect(migrateOverlayPrefs({ enabled: true, opacity: 100 }).opacity).toBe(60)
+  })
+
+  it('sem opacidade salva (ou estragada) fica com o padrão; o resto é mantido', () => {
+    expect(migrateOverlayPrefs({ enabled: false })).toEqual({
+      enabled: false,
+      opacity: OVERLAY_OPACITY_DEFAULT
+    })
+    expect(migrateOverlayPrefs({ opacity: 'x' }).opacity).toBe(OVERLAY_OPACITY_DEFAULT)
+  })
+
+  it('nada salvo não quebra', () => {
+    expect(migrateOverlayPrefs(undefined)).toEqual({ opacity: OVERLAY_OPACITY_DEFAULT })
+    expect(migrateOverlayPrefs(null)).toEqual({ opacity: OVERLAY_OPACITY_DEFAULT })
   })
 })

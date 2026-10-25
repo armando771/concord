@@ -1,10 +1,14 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { clampOverlayOpacity, OVERLAY_OPACITY_DEFAULT } from '../lib/overlayState'
+import {
+  clampOverlayOpacity,
+  migrateOverlayPrefs,
+  OVERLAY_OPACITY_DEFAULT
+} from '../lib/overlayState'
 
 interface OverlayPrefsState {
   enabled: boolean
-  /** Opacidade da lista no jogo, em %. */
+  /** Opacidade das pílulas em repouso no jogo, em % (quem fala fica mais forte). */
   opacity: number
   setEnabled: (enabled: boolean) => void
   setOpacity: (opacity: number) => void
@@ -19,6 +23,11 @@ export const useOverlayPrefsStore = create<OverlayPrefsState>()(
       setEnabled: (enabled) => set({ enabled }),
       setOpacity: (opacity) => set({ opacity: clampOverlayOpacity(opacity) })
     }),
-    { name: 'concord-overlay-prefs' }
+    {
+      name: 'concord-overlay-prefs',
+      // v1: opacidade virou "em repouso" (10–60%); a salva antes é encaixada.
+      version: 1,
+      migrate: (persisted) => migrateOverlayPrefs(persisted) as unknown as OverlayPrefsState
+    }
   )
 )
