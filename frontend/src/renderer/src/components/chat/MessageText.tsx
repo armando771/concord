@@ -38,6 +38,10 @@ function MessageText({
             target="_blank"
             rel="noopener noreferrer"
             title={hostOf(part.href)}
+            // Isolado e sempre da esquerda para a direita: um U+202E antes do
+            // link não inverte o endereço na tela.
+            dir="ltr"
+            style={{ unicodeBidi: 'isolate' }}
             className="text-[#00a8fc] hover:underline"
           >
             {part.text}

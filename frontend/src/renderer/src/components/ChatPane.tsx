@@ -86,6 +86,12 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
 
+/** Tem texto selecionado que pega (ao menos em parte) este elemento? */
+function selectionTouches(el: Element): boolean {
+  const selection = window.getSelection()
+  return Boolean(selection && !selection.isCollapsed && selection.containsNode(el, true))
+}
+
 function formatEditedAt(iso: string): string {
   const when = new Date(iso).toLocaleString('pt-BR', {
     day: '2-digit',
@@ -267,9 +273,9 @@ function MessageItem({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onContextMenu={(e) => {
-        // Sobre texto selecionado ou link fica o menu do navegador (copiar,
-        // copiar endereço do link); no resto da linha, o menu do autor.
-        if (window.getSelection()?.toString() || (e.target as Element).closest('a')) return
+        // Sobre texto selecionado desta linha ou link fica o menu do
+        // navegador/app (copiar, copiar link); no resto da linha, o do autor.
+        if (selectionTouches(e.currentTarget) || (e.target as Element).closest('a')) return
         onAuthorMenu?.(e)
       }}
     >
