@@ -9,6 +9,7 @@ import {
 } from '../components/invite/InviteServerInfo'
 import { useInvitePreview } from '../components/invite/useInvitePreview'
 import { IS_WEB } from '../lib/config'
+import { watchAppLaunch } from '../lib/appLaunch'
 import {
   authPathWithInvite,
   DOWNLOAD_URL,
@@ -61,20 +62,20 @@ function InviteCard({ code }: { code: string }): React.JSX.Element {
   const state = useInvitePreview(code)
   const continueInApp = useContinueInApp(code)
   const [showDownload, setShowDownload] = useState(false)
-  const downloadTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const stopWatching = useRef<(() => void) | undefined>(undefined)
 
-  useEffect(() => () => clearTimeout(downloadTimer.current), [])
+  useEffect(() => () => stopWatching.current?.(), [])
 
   const openApp = (): void => {
     setShowDownload(false)
-    clearTimeout(downloadTimer.current)
+    stopWatching.current?.()
+    // Sem o app instalado o navegador não faz nada: se a página não perder o
+    // foco (o app abrindo na frente) em ~1,5 s, oferece o download.
+    stopWatching.current = watchAppLaunch(window, document, APP_OPEN_TIMEOUT_MS, () =>
+      setShowDownload(true)
+    )
     // Mesmo efeito de clicar num link salinha:// (o navegador pergunta antes).
-    // Sem o app instalado, nada acontece: aí oferece o download.
     window.location.href = inviteDeepLink(code)
-    downloadTimer.current = setTimeout(() => {
-      // O app abriu e a aba saiu de vista: não precisa do aviso.
-      if (document.visibilityState !== 'hidden') setShowDownload(true)
-    }, APP_OPEN_TIMEOUT_MS)
   }
 
   const preview = state.status === 'ready' ? state.preview : null
