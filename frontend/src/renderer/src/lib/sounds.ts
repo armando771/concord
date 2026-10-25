@@ -5,14 +5,34 @@ export interface Note {
   /** início, em segundos */
   at: number
   duration: number
+  /** ganho no pico; sem valor, BASE_VOLUME */
+  volume?: number
 }
 
-const tone = (freq: number, at: number, duration = 0.09): Note => ({ freq, at, duration })
+/** Volume de todos os sons, menos os que pedem outro. */
+export const BASE_VOLUME = 0.12
+
+/** Alguém entrando na call que estou: ~3× mais alto, para não passar batido. */
+const USER_JOIN_VOLUME = 0.36
+
+const tone = (freq: number, at: number, duration = 0.09, volume?: number): Note => ({
+  freq,
+  at,
+  duration,
+  ...(volume === undefined ? {} : { volume })
+})
+
+export const noteVolume = (note: Note): number => note.volume ?? BASE_VOLUME
 
 export const SOUNDS = {
   join: [tone(587, 0), tone(880, 0.1, 0.14)],
   leave: [tone(880, 0), tone(587, 0.1, 0.14)],
-  userJoin: [tone(660, 0, 0.07), tone(880, 0.08, 0.1)],
+  // Três notas subindo (sem sobrepor, para a soma não passar de 0,36).
+  userJoin: [
+    tone(660, 0, 0.07, USER_JOIN_VOLUME),
+    tone(880, 0.08, 0.08, USER_JOIN_VOLUME),
+    tone(1109, 0.17, 0.12, USER_JOIN_VOLUME)
+  ],
   userLeave: [tone(880, 0, 0.07), tone(660, 0.08, 0.1)],
   mute: [tone(520, 0, 0.06), tone(390, 0.07, 0.08)],
   unmute: [tone(390, 0, 0.06), tone(520, 0.07, 0.08)],
@@ -24,8 +44,6 @@ export const SOUNDS = {
 } satisfies Record<string, Note[]>
 
 export type SoundName = keyof typeof SOUNDS
-
-const VOLUME = 0.12
 
 let ctx: AudioContext | null = null
 let outputId = ''
@@ -54,7 +72,7 @@ export function playSound(name: SoundName): void {
     const t0 = start + note.at
     const t1 = t0 + note.duration
     gain.gain.setValueAtTime(0, t0)
-    gain.gain.linearRampToValueAtTime(VOLUME, t0 + 0.01)
+    gain.gain.linearRampToValueAtTime(noteVolume(note), t0 + 0.01)
     gain.gain.exponentialRampToValueAtTime(0.0001, t1)
     osc.connect(gain).connect(ctx.destination)
     osc.start(t0)

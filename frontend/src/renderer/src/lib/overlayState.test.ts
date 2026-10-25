@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildOverlaySnapshot, type OverlayInput } from './overlayState'
+import {
+  buildOverlaySnapshot,
+  clampOverlayOpacity,
+  OVERLAY_OPACITY_DEFAULT,
+  type OverlayInput
+} from './overlayState'
 
 const ana = { id: 'ana', username: 'ana', display_name: 'Ana' }
 const bia = { id: 'bia', username: 'bia', display_name: 'Bia' }
@@ -14,6 +19,7 @@ function input(over: Partial<OverlayInput> = {}): OverlayInput {
     speakingIds: [],
     muted: false,
     deafened: false,
+    opacity: OVERLAY_OPACITY_DEFAULT,
     ...over
   }
 }
@@ -105,5 +111,30 @@ describe('buildOverlaySnapshot', () => {
 
   it('leva junto a preferência de ligado/desligado', () => {
     expect(buildOverlaySnapshot(input({ enabled: false })).enabled).toBe(false)
+  })
+})
+
+describe('opacidade do overlay', () => {
+  it('padrão de 70%', () => {
+    expect(OVERLAY_OPACITY_DEFAULT).toBe(70)
+  })
+
+  it('fica entre 20% e 100%, em passos de 5%', () => {
+    expect(clampOverlayOpacity(70)).toBe(70)
+    expect(clampOverlayOpacity(5)).toBe(20)
+    expect(clampOverlayOpacity(150)).toBe(100)
+    expect(clampOverlayOpacity(72)).toBe(70)
+    expect(clampOverlayOpacity(73)).toBe(75)
+  })
+
+  it('valor salvo estragado volta ao padrão', () => {
+    expect(clampOverlayOpacity(Number.NaN)).toBe(OVERLAY_OPACITY_DEFAULT)
+    expect(clampOverlayOpacity(undefined as unknown as number)).toBe(OVERLAY_OPACITY_DEFAULT)
+  })
+
+  it('vai junto no estado mandado ao overlay, também fora da call', () => {
+    expect(buildOverlaySnapshot(input({ opacity: 45 })).opacity).toBe(45)
+    expect(buildOverlaySnapshot(input({ opacity: 3 })).opacity).toBe(20)
+    expect(buildOverlaySnapshot(input({ status: 'idle', opacity: 45 })).opacity).toBe(45)
   })
 })

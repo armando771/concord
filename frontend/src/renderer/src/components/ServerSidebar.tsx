@@ -557,7 +557,7 @@ export function ServerSidebar(): React.JSX.Element {
                               title={canMove(p.user_id) ? 'Arraste para outro canal de voz' : undefined}
                               className={`group/voiceuser relative flex items-center gap-2 overflow-hidden rounded-md px-2 py-1 transition-colors ${
                                 isMe ? 'bg-white/5 hover:bg-white/10' : 'hover:bg-white/[0.06]'
-                              } ${canMove(p.user_id) ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+                              } ${canMove(p.user_id) ? 'cursor-pointer active:cursor-grabbing' : 'cursor-pointer'}`}
                             >
                               <div
                                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[9px] font-bold text-white transition-shadow ${
@@ -566,9 +566,12 @@ export function ServerSidebar(): React.JSX.Element {
                               >
                                 {name.charAt(0).toUpperCase()}
                               </div>
-                              <span className="truncate text-xs font-medium text-gray-300 transition-colors group-hover/voiceuser:text-white">
+                              <span
+                                className={`truncate text-xs transition-colors group-hover/voiceuser:text-white ${
+                                  isMe ? 'font-bold text-white' : 'font-medium text-gray-300'
+                                }`}
+                              >
                                 {name}
-                                {isMe ? ' (você)' : ''}
                               </span>
                               <span className="ml-auto flex items-center gap-0.5 pr-1">
                                 {live.has(p.user_id) && <LiveBadge />}

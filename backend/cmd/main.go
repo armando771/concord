@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"gin-quickstart/backend/internal/auth"
+	"gin-quickstart/backend/internal/birthday"
 	"gin-quickstart/backend/internal/call"
 	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/conversation"
@@ -180,6 +181,12 @@ func main() {
 	// Reinício do servidor não derruba quem está em chamada.
 	callService.RestoreActive(ctx)
 
+	// Aniversários (mensagem do servidor às 9h + modal para o aniversariante)
+	birthdayRepository := birthday.BirthdayRepository(db)
+	birthdayService := birthday.BirthdayService(birthdayRepository, messageService)
+	birthdayHandler := birthday.BirthdayHandler(birthdayService)
+	go birthdayService.Run(context.Background())
+
 	// Level (XP por tempo em call, sem mute)
 	levelRepository := level.LevelRepository(db)
 	levelService := level.LevelService(levelRepository, hub, callService)
@@ -210,6 +217,7 @@ func main() {
 	message.AttachmentRoutes(api, attachmentHandler, authMiddleware)
 	call.CallRoutes(api, callHandler, authMiddleware)
 	level.LevelRoutes(api, levelHandler, authMiddleware)
+	birthday.BirthdayRoutes(api, birthdayHandler, authMiddleware)
 
 	// Presence (protected)
 	presence := api.Group("/presence")
