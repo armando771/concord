@@ -131,6 +131,10 @@ const replacePoll = (
   }
 }
 
+/** Releitura de presença e listas depois de reconectar (ver resyncAfterReconnect). */
+const LISTS_RESYNC_DELAY_MS = 3000
+let listsResyncTimer: ReturnType<typeof setTimeout> | null = null
+
 /** Aviso "Reconectando…" só se o servidor demorar (um deploy leva menos de 3 s). */
 let reconnectToastId: string | null = null
 const dismissReconnectToast = (): void => {
@@ -183,6 +187,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   disconnect: () => {
     client.disconnect()
     reconnectNotice.cancel()
+    if (listsResyncTimer) clearTimeout(listsResyncTimer)
+    listsResyncTimer = null
     get().reset()
     useLevelStore.getState().reset()
   },
@@ -467,18 +473,29 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }
     }
 
-    const servers = useServerStore.getState()
-    const currentServerId = servers.currentServer?.id
-    await Promise.all([
-      ...rooms.map(resyncRoom),
-      get().fetchConversations(),
-      get().fetchPresenceFor(Object.keys(get().presence)),
-      get().fetchChannelsForServers(Object.keys(get().channelsByServer)),
-      servers.fetchServers(),
-      currentServerId ? servers.fetchChannels(currentServerId) : Promise.resolve(),
-      useFriendStore.getState().loadAll(),
-      useLevelStore.getState().loadMe()
-    ])
+    const refreshLists = async (): Promise<void> => {
+      if (useAuthStore.getState().accessToken !== token) return
+      const servers = useServerStore.getState()
+      const currentServerId = servers.currentServer?.id
+      await Promise.all([
+        get().fetchConversations(),
+        get().fetchPresenceFor(Object.keys(get().presence)),
+        get().fetchChannelsForServers(Object.keys(get().channelsByServer)),
+        servers.fetchServers(),
+        currentServerId ? servers.fetchChannels(currentServerId) : Promise.resolve(),
+        useFriendStore.getState().loadAll(),
+        useLevelStore.getState().loadMe()
+      ])
+    }
+    // Presença e listas esperam os outros apps reconectarem também (no deploy
+    // todos caem juntos): lida cedo demais, a presença mostraria todo mundo
+    // offline por um instante.
+    if (listsResyncTimer) clearTimeout(listsResyncTimer)
+    listsResyncTimer = setTimeout(() => {
+      listsResyncTimer = null
+      void refreshLists()
+    }, LISTS_RESYNC_DELAY_MS)
+    await Promise.all(rooms.map(resyncRoom))
   },
 
   sendEvent: (type, payload) => {
