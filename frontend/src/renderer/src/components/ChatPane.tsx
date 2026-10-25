@@ -34,6 +34,7 @@ import ComposerAttachments from './chat/ComposerAttachments'
 import { useAttachmentDraft } from './chat/useAttachmentDraft'
 import { useTypingSender } from './chat/useTypingSender'
 import TypingIndicator from './chat/TypingIndicator'
+import { draftAfterSendFailure } from '../lib/composerDraft'
 
 export interface Mentionable {
   username: string
@@ -458,22 +459,43 @@ function ChatPane({
     setLoadingOlder(false)
   }
 
+  // Texto atual do campo, para um envio que falhou não apagar o que foi
+  // digitado enquanto ele ia.
+  const draftRef = useRef(draft)
+  useEffect(() => {
+    draftRef.current = draft
+  }, [draft])
+
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
     if (!submittable || sending) return
     setSending(true)
     const sentRoom = room
+    const sentText = draft
+    const sentReply = replyingTo
     // Só sai do rascunho o que foi enviado: arquivo adicionado durante o envio fica.
     const sentDrafts = drafts.filter((d) => d.status === 'done').map((d) => d.localId)
+    // O texto sai do campo na hora: dá para começar a próxima mensagem sem
+    // esperar o servidor. Os anexos só saem quando o envio dá certo.
+    typing.onSent()
+    setDraft('')
+    draftRef.current = ''
+    setReplyState(null)
     try {
-      await sendToRoom(room, draft.trim(), attachmentState.readyIds, replyingTo?.id ?? null)
+      await sendToRoom(room, sentText.trim(), attachmentState.readyIds, sentReply?.id ?? null)
       if (roomRef.current === sentRoom) {
-        typing.onSent()
-        setDraft('')
-        setReplyState(null)
         sentDrafts.forEach(removeAttachment)
       }
     } catch (err) {
+      // Volta o texto (e a resposta) se a pessoa não começou outra mensagem.
+      const restored =
+        roomRef.current === sentRoom ? draftAfterSendFailure(sentText, draftRef.current) : null
+      if (restored !== null) {
+        setDraft(restored)
+        if (sentReply) {
+          setReplyState((current) => current ?? { room: sentRoom, message: sentReply })
+        }
+      }
       showToast.error(
         err instanceof ApiError
           ? sendErrorMessage(err.status, err.message)
