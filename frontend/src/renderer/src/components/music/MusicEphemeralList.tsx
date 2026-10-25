@@ -3,6 +3,7 @@ import { ApiError } from '../../api/client'
 import { pickSearchResult } from '../../api/music'
 import { formatDuration, MAESTRO_NAME, T14_DISMISS, T14_LABEL, T16_TITLE } from '../../lib/music'
 import { useMusicStore, type MusicEphemeral } from '../../store/musicStore'
+import { showToast } from '../../store/toastStore'
 import MaestroAvatar from './MaestroAvatar'
 import { MaestroText } from './MusicMessage'
 
@@ -31,6 +32,7 @@ function SearchPicker({ e, serverId }: { e: MusicEphemeral; serverId: string }):
       dismiss(e.id)
     } catch (err) {
       if (err instanceof ApiError && err.status === 410) markExpired(e.id)
+      else showToast.error(err instanceof Error ? err.message : 'Falha na operação.')
     } finally {
       setBusy(false)
     }
