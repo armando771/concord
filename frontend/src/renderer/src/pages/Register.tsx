@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import GlassCard from '../components/GlassCard'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -10,11 +10,15 @@ import { registerErrorMessage } from '../lib/loginError'
 import { PASSWORD_TOO_LONG, passwordTooLong } from '../lib/password'
 import { getMe } from '../api/users'
 import { useAuthStore } from '../store/authStore'
+import { useInviteLinkStore } from '../store/inviteLinkStore'
+import { authPathWithInvite, inviteCodeFromSearch } from '../lib/inviteLink'
 
 const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,32}$/
 
 function Register(): React.JSX.Element {
   const navigate = useNavigate()
+  // Veio de um link de convite: depois de entrar, abre a confirmação.
+  const inviteCode = inviteCodeFromSearch(useLocation().search)
   const setTokens = useAuthStore((s) => s.setTokens)
   const setUser = useAuthStore((s) => s.setUser)
 
@@ -74,6 +78,7 @@ function Register(): React.JSX.Element {
             }
           : {})
       })
+      if (inviteCode) useInviteLinkStore.getState().open(inviteCode)
       setTokens(tokens.access_token, tokens.refresh_token)
       const me = await getMe()
       setUser(me)
@@ -89,6 +94,11 @@ function Register(): React.JSX.Element {
     <div className="flex h-full items-center justify-center p-8">
       <GlassCard className="w-full max-w-md p-8">
         <h1 className="mb-6 text-2xl font-semibold text-gray-50">Criar conta</h1>
+        {inviteCode && (
+          <p className="-mt-3 mb-5 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-200">
+            Crie sua conta para aceitar o convite.
+          </p>
+        )}
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           <Input
             label="Nome de usuário"
@@ -136,7 +146,10 @@ function Register(): React.JSX.Element {
         </form>
         <p className="mt-4 text-sm text-gray-400">
           Já tem conta?{' '}
-          <Link to="/login" className="font-medium text-violet-400 hover:underline">
+          <Link
+            to={authPathWithInvite('/login', inviteCode)}
+            className="font-medium text-violet-400 hover:underline"
+          >
             Entrar
           </Link>
         </p>

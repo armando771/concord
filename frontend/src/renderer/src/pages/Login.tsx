@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import GlassCard from '../components/GlassCard'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -8,9 +8,13 @@ import { buildLoginInput, loginIdentifierError } from '../lib/loginIdentifier'
 import { loginErrorMessage } from '../lib/loginError'
 import { getMe } from '../api/users'
 import { useAuthStore } from '../store/authStore'
+import { useInviteLinkStore } from '../store/inviteLinkStore'
+import { authPathWithInvite, inviteCodeFromSearch } from '../lib/inviteLink'
 
 function Login(): React.JSX.Element {
   const navigate = useNavigate()
+  // Veio de um link de convite: depois de entrar, abre a confirmação.
+  const inviteCode = inviteCodeFromSearch(useLocation().search)
   const setTokens = useAuthStore((s) => s.setTokens)
   const setUser = useAuthStore((s) => s.setUser)
 
@@ -36,6 +40,7 @@ function Login(): React.JSX.Element {
     setLoading(true)
     try {
       const tokens = await login(buildLoginInput(identifier, password))
+      if (inviteCode) useInviteLinkStore.getState().open(inviteCode)
       setTokens(tokens.access_token, tokens.refresh_token)
       const me = await getMe()
       setUser(me)
@@ -51,6 +56,11 @@ function Login(): React.JSX.Element {
     <div className="flex h-full items-center justify-center p-8">
       <GlassCard className="w-full max-w-md p-8">
         <h1 className="mb-6 text-2xl font-semibold text-gray-50">Entrar na Salinha</h1>
+        {inviteCode && (
+          <p className="-mt-3 mb-5 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-200">
+            Entre na sua conta para aceitar o convite.
+          </p>
+        )}
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           <Input
             label="E-mail ou nome de usuário"
@@ -83,7 +93,10 @@ function Login(): React.JSX.Element {
         </form>
         <p className="mt-4 text-sm text-gray-400">
           Não tem conta?{' '}
-          <Link to="/register" className="font-medium text-violet-400 hover:underline">
+          <Link
+            to={authPathWithInvite('/register', inviteCode)}
+            className="font-medium text-violet-400 hover:underline"
+          >
             Crie uma
           </Link>
         </p>

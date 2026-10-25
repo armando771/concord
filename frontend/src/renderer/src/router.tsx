@@ -7,6 +7,7 @@ import GroupChat from './pages/GroupChat'
 import Invites from './pages/Invites'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import InviteLanding from './pages/InviteLanding'
 import RequireAuth from './components/RequireAuth'
 import RedirectIfAuthed from './components/RedirectIfAuthed'
 import AppShell from './components/AppShell'
@@ -50,6 +51,11 @@ export const router = createRouter([
         <Register />
       </RedirectIfAuthed>
     )
+  },
+  {
+    // Link de convite: abre sem login (o cartão mostra o servidor antes).
+    path: '/convite/:code',
+    element: <InviteLanding />
   },
   {
     path: '*',

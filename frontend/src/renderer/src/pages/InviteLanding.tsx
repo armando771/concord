@@ -1,0 +1,137 @@
+import { useEffect, useRef, useState } from 'react'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import Button from '../components/Button'
+import {
+  InviteBackdrop,
+  InviteServerIcon,
+  InviteServerInfo,
+  InviteSpinner
+} from '../components/invite/InviteServerInfo'
+import { useInvitePreview } from '../components/invite/useInvitePreview'
+import { IS_WEB } from '../lib/config'
+import {
+  authPathWithInvite,
+  DOWNLOAD_URL,
+  inviteDeepLink,
+  normalizeInviteCode
+} from '../lib/inviteLink'
+import { useAuthStore } from '../store/authStore'
+import { useInviteLinkStore } from '../store/inviteLinkStore'
+
+/** Sem o app instalado o navegador não faz nada: depois disso, oferece o download. */
+const APP_OPEN_TIMEOUT_MS = 1500
+
+/**
+ * /convite/<código>. No navegador: cartão do convite com "Abrir aplicativo"
+ * (salinha://) e "Continuar no Navegador". No desktop (link salinha://) vai
+ * direto para a confirmação.
+ */
+function InviteLanding(): React.JSX.Element {
+  const params = useParams()
+  const code = normalizeInviteCode(params.code ?? '')
+  if (!code) return <Navigate to="/" replace />
+  return IS_WEB ? <InviteCard code={code} /> : <ContinueInApp code={code} />
+}
+
+/** Segue para a confirmação no app (logando antes, se precisar, sem perder o código). */
+function useContinueInApp(code: string): () => void {
+  const navigate = useNavigate()
+  return () => {
+    if (useAuthStore.getState().accessToken) {
+      useInviteLinkStore.getState().open(code)
+      navigate('/', { replace: true })
+    } else {
+      navigate(authPathWithInvite('/login', code), { replace: true })
+    }
+  }
+}
+
+function ContinueInApp({ code }: { code: string }): React.JSX.Element | null {
+  const continueInApp = useContinueInApp(code)
+  const done = useRef(false)
+  useEffect(() => {
+    if (done.current) return
+    done.current = true
+    continueInApp()
+  })
+  return null
+}
+
+function InviteCard({ code }: { code: string }): React.JSX.Element {
+  const state = useInvitePreview(code)
+  const continueInApp = useContinueInApp(code)
+  const [showDownload, setShowDownload] = useState(false)
+  const downloadTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  useEffect(() => () => clearTimeout(downloadTimer.current), [])
+
+  const openApp = (): void => {
+    setShowDownload(false)
+    clearTimeout(downloadTimer.current)
+    // Mesmo efeito de clicar num link salinha:// (o navegador pergunta antes).
+    // Sem o app instalado, nada acontece: aí oferece o download.
+    window.location.href = inviteDeepLink(code)
+    downloadTimer.current = setTimeout(() => {
+      // O app abriu e a aba saiu de vista: não precisa do aviso.
+      if (document.visibilityState !== 'hidden') setShowDownload(true)
+    }, APP_OPEN_TIMEOUT_MS)
+  }
+
+  const preview = state.status === 'ready' ? state.preview : null
+
+  return (
+    <div className="fixed inset-0 z-10 flex items-center justify-center overflow-y-auto bg-[#050508] p-4">
+      <InviteBackdrop iconUrl={preview?.icon_url} className="fixed inset-0" />
+      <div className="relative w-full max-w-[480px] rounded-2xl border border-white/10 bg-[#1e1f24]/95 p-8 shadow-2xl shadow-black/60 backdrop-blur">
+        {state.status === 'loading' && (
+          <div className="flex justify-center py-16">
+            <InviteSpinner />
+          </div>
+        )}
+
+        {state.status === 'error' && (
+          <div className="flex flex-col items-center text-center">
+            <InviteServerIcon name="?" />
+            <h1 className="mt-4 text-xl font-bold text-white">Convite indisponível</h1>
+            <p className="mt-2 text-sm text-gray-300">{state.message}</p>
+            <Link
+              to="/"
+              className="mt-8 w-full rounded-lg bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/15"
+            >
+              Ir para a Salinha
+            </Link>
+          </div>
+        )}
+
+        {preview && (
+          <>
+            <InviteServerInfo preview={preview} />
+            <div className="mt-8 flex flex-col gap-3">
+              <Button className="w-full py-2.5" onClick={openApp}>
+                Abrir aplicativo
+              </Button>
+              <Button variant="secondary" className="w-full py-2.5" onClick={continueInApp}>
+                Continuar no Navegador
+              </Button>
+            </div>
+            {showDownload && (
+              <p className="mt-4 text-center text-sm text-gray-300">
+                Não abriu?{' '}
+                <a
+                  href={DOWNLOAD_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-violet-400 hover:underline"
+                >
+                  Baixe o app
+                </a>
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default InviteLanding

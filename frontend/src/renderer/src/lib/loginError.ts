@@ -5,7 +5,7 @@
  */
 
 /** Status do ApiError; null quando nem chegou ao servidor (fetch rejeitou). */
-function statusOf(err: unknown): number | null | undefined {
+export function statusOf(err: unknown): number | null | undefined {
   if (
     typeof err === 'object' &&
     err !== null &&
@@ -17,7 +17,7 @@ function statusOf(err: unknown): number | null | undefined {
   return err instanceof TypeError ? null : undefined
 }
 
-function commonMessage(status: number | null | undefined): string | null {
+export function commonMessage(status: number | null | undefined): string | null {
   if (status === null || status === 0) return 'Sem conexão com o servidor.'
   if (status === undefined) return null
   if (status === 429) return 'Muitas tentativas. Espere um pouco e tente de novo.'
