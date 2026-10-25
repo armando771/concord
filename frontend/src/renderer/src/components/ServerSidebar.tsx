@@ -13,6 +13,7 @@ import LiveBadge from './call/LiveBadge'
 import { liveUserIds } from '../lib/liveBadge'
 import { useUserAudioStore } from '../store/userAudioStore'
 import { userMenuHandler } from '../store/userMenuStore'
+import { profileCardHandler } from '../store/profileCardStore'
 import { logout } from '../api/auth'
 import type { Channel, ChannelType } from '../api/channels'
 import {
@@ -501,6 +502,7 @@ export function ServerSidebar(): React.JSX.Element {
                             <div
                               key={p.user_id}
                               onContextMenu={userMenuHandler(p.user_id, name, user?.id, p.username)}
+                              onClick={profileCardHandler(p.user_id, name, p.username, 'right')}
                               draggable={canMove(p.user_id)}
                               onDragStart={(e) => {
                                 e.dataTransfer.setData(VOICE_USER_DRAG, p.user_id)
