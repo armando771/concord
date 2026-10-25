@@ -9,7 +9,7 @@ import { showToast } from '../../store/toastStore'
 import {
   PlusIcon,
   SearchIcon,
-  StarIcon,
+  FavoriteStarIcon,
   TrashIcon,
   VolumeIcon,
   VolumeOffIcon
@@ -99,7 +99,7 @@ function SoundPad({
                 : 'text-gray-400 hover:bg-white/10 hover:text-gray-200'
             }`}
           >
-            <StarIcon className="h-3.5 w-3.5" filled={isFavorite} />
+            <FavoriteStarIcon className="h-3.5 w-3.5" filled={isFavorite} />
           </button>
           {canDelete && (
             <button
