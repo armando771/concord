@@ -27,6 +27,8 @@ cat > "$UNITS/concord-server.service" <<UNIT
 [Unit]
 Description=Concord backend (API + proxy LiveKit)
 After=network-online.target
+# Sem limite de reinícios (com RestartSec=1 o systemd desistiria após 5 falhas em 10 s).
+StartLimitIntervalSec=0
 
 [Service]
 WorkingDirectory=$ROOT/backend
@@ -34,9 +36,9 @@ ExecStart=$ROOT/backend/concord-server
 Restart=always
 RestartSec=1
 # SIGTERM desliga com calma (fecha o chat com 1012 e termina as requisições em
-# até 10 s); só depois disso o systemd mata à força.
+# até 3 s); só depois disso o systemd mata à força.
 KillSignal=SIGTERM
-TimeoutStopSec=20
+TimeoutStopSec=10
 
 [Install]
 WantedBy=default.target

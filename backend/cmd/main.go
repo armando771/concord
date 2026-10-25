@@ -91,7 +91,8 @@ func main() {
 
 	databaseURL := os.Getenv("DATABASE_URL")
 
-	db, err := database.Connect(databaseURL)
+	// Depois de um boot da VPS o Postgres pode subir depois do backend.
+	db, err := database.ConnectWithRetry(databaseURL, 30*time.Second)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -44,17 +44,10 @@ rsync -az --delete "$ROOT/backend/migrations/" "$HOST:/opt/concord/migrations/"
 # O compose novo só substitui o atual se não recriar nada (ver abaixo).
 rsync -az "$ROOT/backend/docker-compose.yml" "$HOST:/opt/concord/docker-compose.yml.new"
 rsync -az --delete --chmod=D755,F644 "$ROOT/site/" "$HOST:/opt/concord/site/"
-# Manifestos por último: cada app só vê a versão nova com binário e assinatura no ar.
-rsync -az --exclude latest.yml --exclude latest-linux.yml "$ROOT/backend/updates/" "$HOST:/opt/concord/updates/"
-for manifest in latest.yml latest-linux.yml; do
-  if [[ -f "$ROOT/backend/updates/$manifest" ]]; then
-    rsync -az "$ROOT/backend/updates/$manifest" "$HOST:/opt/concord/updates/"
-  fi
-done
-# Guarda só os 3 instaladores mais recentes (cada um tem ~120 MB). Concord-* é
-# o nome antigo do app.
-ssh "$HOST" 'cd /opt/concord/updates && ls -t Salinha-*-setup.exe Concord-*-setup.exe 2>/dev/null | tail -n +4 | while read -r f; do rm -f "$f" "$f.blockmap" "$f.sig"; done'
-ssh "$HOST" 'cd /opt/concord/updates && ls -t Salinha-*-x64.AppImage 2>/dev/null | tail -n +4 | while read -r f; do rm -f "$f" "$f.sig"; done'
+# Instaladores e assinaturas já; os manifestos (latest*.yml) só depois que o
+# backend novo estiver no ar (fim do script). O Caddy serve /updates direto do
+# disco, então os arquivos precisam ser legíveis por ele.
+rsync -az --chmod=D755,F644 --exclude latest.yml --exclude latest-linux.yml "$ROOT/backend/updates/" "$HOST:/opt/concord/updates/"
 
 # Postgres/LiveKit: compara o hash da configuração nova de cada serviço (o que
 # o Compose usa para decidir recriar) com o dos containers rodando.
@@ -95,28 +88,73 @@ REMOTE
 # ainda no ar (por isso as migrations precisam ser compatíveis com ele — veja
 # "Migrations" em docs/HOSPEDAGEM.md). Se falharem, nada é reiniciado. Depois
 # reinicia e espera o /healthz (banco no ar e chamadas recarregadas); durante o
-# reinício o Caddy segura as requisições (deploy/Caddyfile). O binário anterior
-# fica em concord-server.prev para voltar atrás.
+# reinício o Caddy segura as requisições (deploy/Caddyfile).
+#
+# Se o binário novo não ficar saudável em 30 s, volta sozinho para o último
+# que ficou (concord-server.good), reinicia e sai com erro — os manifestos do
+# app não são publicados. concord-server.prev é sempre um binário que já passou
+# no /healthz; o que falhou fica em concord-server.failed.
 ssh "$HOST" bash -s <<'REMOTE'
 set -euo pipefail
 cd /opt/concord
+port=$(sed -n -E 's/^(export[[:space:]]+)?PORT=//p' .env | tail -n 1 | sed -E 's/[[:space:]]+#.*$//' | tr -d "\"' \r")
+port="${port:-8080}" # mesmo padrão do backend
+healthy() {
+  for _ in $(seq 1 60); do
+    if curl -fs -o /dev/null "http://127.0.0.1:$port/healthz"; then return 0; fi
+    sleep 0.5
+  done
+  return 1
+}
+restart() {
+  # Um crash loop anterior pode ter deixado o serviço em start-limit-hit.
+  systemctl reset-failed concord-server 2>/dev/null || true
+  systemctl restart concord-server
+}
+
 chmod +x concord-server.new
-if ! ./concord-server.new migrate; then
+if ! timeout 120 ./concord-server.new migrate; then
   echo "migrations falharam: o backend no ar não foi tocado" >&2
   exit 1
 fi
-if [[ -f concord-server ]]; then cp -f concord-server concord-server.prev; fi
+# O que está no ar agora só vira o "anterior" se já tiver passado no /healthz.
+if [[ -f concord-server.good ]]; then
+  cp -f concord-server.good concord-server.prev
+elif [[ -f concord-server ]]; then
+  cp -f concord-server concord-server.prev # primeiro deploy com este script
+fi
 mv concord-server.new concord-server
-systemctl restart concord-server
-port=$(sed -n 's/^PORT=//p' .env | tail -n 1 | tr -d "\"' \r")
-for _ in $(seq 1 60); do
-  if curl -fs -o /dev/null "http://127.0.0.1:${port:-8080}/healthz"; then
-    echo "backend no ar (/healthz ok)"
-    exit 0
-  fi
-  sleep 0.5
-done
-echo "backend não respondeu /healthz em 30 s" >&2
+restart
+if healthy; then
+  cp -f concord-server concord-server.good
+  echo "backend no ar (/healthz ok)"
+  exit 0
+fi
+
+echo "ERRO: o backend novo não respondeu /healthz em 30 s:" >&2
 journalctl -u concord-server -n 30 --no-pager >&2 || true
+mv -f concord-server concord-server.failed
+if [[ ! -f concord-server.prev ]]; then
+  echo "ERRO: não há binário anterior para voltar; o backend está fora do ar" >&2
+  exit 1
+fi
+cp -f concord-server.prev concord-server
+restart
+if healthy; then
+  echo "ERRO: voltei para o binário anterior, que está no ar. O novo ficou em /opt/concord/concord-server.failed." >&2
+else
+  echo "ERRO: nem o binário anterior respondeu /healthz; veja journalctl -u concord-server" >&2
+fi
 exit 1
 REMOTE
+
+# Backend novo no ar: só agora os apps passam a ver a versão nova.
+for manifest in latest.yml latest-linux.yml; do
+  if [[ -f "$ROOT/backend/updates/$manifest" ]]; then
+    rsync -az --chmod=F644 "$ROOT/backend/updates/$manifest" "$HOST:/opt/concord/updates/"
+  fi
+done
+# Guarda só os 3 instaladores mais recentes (cada um tem ~120 MB). Concord-* é
+# o nome antigo do app.
+ssh "$HOST" 'cd /opt/concord/updates && ls -t Salinha-*-setup.exe Concord-*-setup.exe 2>/dev/null | tail -n +4 | while read -r f; do rm -f "$f" "$f.blockmap" "$f.sig"; done'
+ssh "$HOST" 'cd /opt/concord/updates && ls -t Salinha-*-x64.AppImage 2>/dev/null | tail -n +4 | while read -r f; do rm -f "$f" "$f.sig"; done'
