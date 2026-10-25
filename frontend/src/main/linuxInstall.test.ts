@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  badVersionCheck,
   compareVersions,
+  parseBadVersions,
+  sandboxNoticeReason,
   defaultInstallRoot,
   downloadsToPrune,
   managedRootOf,
@@ -14,16 +17,80 @@ import {
 const SHA = 'ab'.repeat(64)
 
 describe('updateBackendKind', () => {
+  const managed = '/home/a/.local/share/salinha/versions/0.7.1/salinha'
+
   it('Windows e AppImage montado continuam no electron-updater', () => {
-    expect(updateBackendKind('win32', {})).toBe('electron-updater')
-    expect(updateBackendKind('linux', { APPIMAGE: '/home/a/Salinha.AppImage' })).toBe(
-      'electron-updater'
-    )
+    expect(updateBackendKind('win32', {}, 'C:/Salinha/Salinha.exe')).toBe('electron-updater')
+    expect(
+      updateBackendKind(
+        'linux',
+        { APPIMAGE: '/home/a/Salinha.AppImage', APPDIR: '/tmp/.mount_Salinh1' },
+        '/tmp/.mount_Salinh1/salinha'
+      )
+    ).toBe('electron-updater')
   })
 
   it('Linux sem AppImage (extraído ou instalação por usuário) usa o updater próprio', () => {
-    expect(updateBackendKind('linux', {})).toBe('linux-managed')
-    expect(updateBackendKind('linux', { APPIMAGE: '' })).toBe('linux-managed')
+    expect(updateBackendKind('linux', {}, managed)).toBe('linux-managed')
+    expect(updateBackendKind('linux', { APPIMAGE: '' }, '/opt/x/salinha')).toBe('linux-managed')
+  })
+
+  it('APPIMAGE herdado de outro app (terminal de um AppImage) não engana', () => {
+    // Instalação por usuário: sempre o updater próprio.
+    expect(
+      updateBackendKind(
+        'linux',
+        { APPIMAGE: '/home/a/Editor.AppImage', APPDIR: '/tmp/.mount_Editor' },
+        managed
+      )
+    ).toBe('linux-managed')
+    // Executável fora do APPDIR (ou sem APPDIR): não é este AppImage montado.
+    expect(
+      updateBackendKind(
+        'linux',
+        { APPIMAGE: '/home/a/Editor.AppImage', APPDIR: '/tmp/.mount_Editor' },
+        '/home/a/.local/opt/salinha/salinha'
+      )
+    ).toBe('linux-managed')
+    expect(updateBackendKind('linux', { APPIMAGE: '/home/a/Editor.AppImage' }, '/x/salinha')).toBe(
+      'linux-managed'
+    )
+    // APPDIR "/tmp/.mount_Ed" não contém "/tmp/.mount_Editor/salinha" por prefixo de texto.
+    expect(
+      updateBackendKind(
+        'linux',
+        { APPIMAGE: '/a.AppImage', APPDIR: '/tmp/.mount_Ed' },
+        '/tmp/.mount_Editor/salinha'
+      )
+    ).toBe('linux-managed')
+  })
+})
+
+describe('versões que voltaram atrás (bad-versions)', () => {
+  it('lê uma versão por linha, ignorando lixo', () => {
+    expect(parseBadVersions('0.7.1\n\nlixo\n0.7.2\r\n')).toEqual(['0.7.1', '0.7.2'])
+  })
+
+  it('não oferece versão que já voltou atrás', () => {
+    expect(badVersionCheck(['0.7.1'], '0.7.1')).toEqual({ skip: true, clear: false })
+  })
+
+  it('versão estritamente mais nova que todas as ruins é oferecida e limpa a lista', () => {
+    expect(badVersionCheck(['0.7.1'], '0.7.2')).toEqual({ skip: false, clear: true })
+    expect(badVersionCheck(['0.7.1', '0.7.3'], '0.7.2')).toEqual({ skip: false, clear: false })
+    expect(badVersionCheck([], '0.7.2')).toEqual({ skip: false, clear: false })
+  })
+})
+
+describe('sandboxNoticeReason', () => {
+  it('avisa no Linux quando o lançador abriu sem o sandbox', () => {
+    expect(sandboxNoticeReason('linux', { SALINHA_SANDBOX_OFF: 'apparmor' })).toBe('apparmor')
+  })
+
+  it('sem o aviso do lançador, ou fora do Linux, nada', () => {
+    expect(sandboxNoticeReason('linux', {})).toBeNull()
+    expect(sandboxNoticeReason('linux', { SALINHA_SANDBOX_OFF: '' })).toBeNull()
+    expect(sandboxNoticeReason('win32', { SALINHA_SANDBOX_OFF: 'apparmor' })).toBeNull()
   })
 })
 
@@ -101,6 +168,7 @@ describe('parseLinuxManifest', () => {
 
   it('recusa caminho externo, hash ou tamanho inválidos, versão divergente', () => {
     const bad = [
+      valid.replace('size: 123456', `size: ${2 * 1024 ** 3}`),
       valid.replace('path: Salinha-0.7.1-x64.tar.gz', 'path: ../Salinha-0.7.1-x64.tar.gz'),
       valid.replace('path: Salinha-0.7.1-x64.tar.gz', 'path: https://evil.test/a.tar.gz'),
       valid.replace('path: Salinha-0.7.1-x64.tar.gz', 'path: Salinha-0.7.0-x64.tar.gz'),

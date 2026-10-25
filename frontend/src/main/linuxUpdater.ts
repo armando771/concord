@@ -32,14 +32,18 @@ import { Readable, Transform } from 'stream'
 import { pipeline } from 'stream/promises'
 import { createGunzip } from 'zlib'
 import {
+  BAD_VERSIONS_FILE,
   LINUX_EXECUTABLE,
   LINUX_LAUNCHER,
   LINUX_MANIFEST,
   LINUX_VERSION_FILE,
   STAGING_PREFIX,
+  badVersionCheck,
+  compareVersions,
   defaultInstallRoot,
   downloadsToPrune,
   managedRootOf,
+  parseBadVersions,
   parseLinuxManifest,
   relaunchArgs,
   shouldOfferLinuxUpdate,
@@ -101,8 +105,10 @@ function defaultIntegrate(launcher: string): void {
 }
 
 /** Extrai o .tar.gz (gunzip aqui; o tar do sistema só desempacota). */
-async function extractTarGz(file: string, dest: string): Promise<void> {
-  const tar = spawn('tar', ['-x', '-f', '-', '-C', dest], { stdio: ['pipe', 'ignore', 'pipe'] })
+async function extractTarGz(source: Readable, dest: string): Promise<void> {
+  const tar = spawn('tar', ['-x', '--no-same-owner', '-f', '-', '-C', dest], {
+    stdio: ['pipe', 'ignore', 'pipe']
+  })
   let stderr = ''
   tar.stderr.on('data', (chunk) => (stderr += chunk))
   const exited = new Promise<void>((resolve, reject) => {
@@ -112,7 +118,7 @@ async function extractTarGz(file: string, dest: string): Promise<void> {
     )
   })
   // Erro no gunzip derruba o pipe; espera o tar sair para não deixar processo.
-  const piped = pipeline(createReadStream(file), createGunzip(), tar.stdin)
+  const piped = pipeline(source, createGunzip(), tar.stdin)
   const results = await Promise.allSettled([piped, exited])
   const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
   if (failed) throw failed.reason
@@ -148,16 +154,46 @@ export class LinuxUpdater extends EventEmitter {
     if (!response.ok) throw new Error(`${LINUX_MANIFEST}: HTTP ${response.status}`)
     const release = parseLinuxManifest(await response.text())
     if (!release) throw new Error(`${LINUX_MANIFEST}: manifesto inválido`)
+    // Versão que o lançador desfez (não abriu): só uma estritamente mais nova.
+    const bad = this.badVersions()
+    const { skip, clear } = badVersionCheck(bad, release.version)
+    if (skip) return null
     const offer = shouldOfferLinuxUpdate({
       current: this.opts.currentVersion,
       latest: release.version,
       managed: this.managedRoot !== null
     })
     if (!offer) return null
-    if (this.latest?.version !== release.version) this.staged = null
+    if (clear) rmSync(join(this.root, BAD_VERSIONS_FILE), { force: true })
+    if (this.latest?.version !== release.version || this.latest.sha512 !== release.sha512) {
+      this.staged = null
+    }
     this.latest = release
-    this.emit('update-available', { version: release.version })
+    this.emit('update-available', {
+      version: release.version,
+      path: release.path,
+      sha512: release.sha512
+    })
     return release
+  }
+
+  private badVersions(): string[] {
+    try {
+      return parseBadVersions(readFileSync(join(this.root, BAD_VERSIONS_FILE), 'utf8'))
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Instalar sozinho ao abrir: nunca a mesma versão (migração do AppImage
+   * extraído é só com clique) nem uma que já voltou atrás.
+   */
+  canAutoInstall(version: string): boolean {
+    return (
+      compareVersions(version, this.opts.currentVersion) > 0 &&
+      !this.badVersions().includes(version)
+    )
   }
 
   async downloadUpdate(): Promise<string> {
@@ -234,8 +270,10 @@ export class LinuxUpdater extends EventEmitter {
    * Depois da assinatura conferida (updater.ts): extrai numa pasta nova de
    * versions/ e confere a versão gravada dentro do pacote — o manifesto não é
    * assinado, então é ela que impede servir um pacote antigo como "novo".
+   * Uma pasta versions/<v> que já existe e passa em valid() é reaproveitada sem
+   * reverificar: só o próprio usuário escreve ali.
    */
-  async stage(event: LinuxDownloaded): Promise<void> {
+  async stage(event: LinuxDownloaded, data?: Buffer): Promise<void> {
     const { version, downloadedFile } = event
     if (!this.latest || this.latest.version !== version) {
       throw new Error(`versão ${version} não foi a anunciada`)
@@ -251,7 +289,8 @@ export class LinuxUpdater extends EventEmitter {
     rmSync(tmp, { recursive: true, force: true })
     mkdirSync(tmp)
     try {
-      await extractTarGz(downloadedFile, tmp)
+      // Dos bytes que passaram na assinatura (data), não do arquivo relido.
+      await extractTarGz(data ? Readable.from([data]) : createReadStream(downloadedFile), tmp)
       if (!this.valid(tmp, version)) {
         throw new Error(`pacote não é a versão ${version} completa`)
       }

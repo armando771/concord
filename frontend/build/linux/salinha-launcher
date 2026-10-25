@@ -4,6 +4,8 @@
 #   <raiz>/versions/<versão>/   app (um .tar.gz assinado por versão)
 #   <raiz>/current  -> versions/<versão>   (troca atômica a cada atualização)
 #   <raiz>/previous -> versions/<anterior> (volta automática, ver abaixo)
+#   <raiz>/bad-versions                    versões que não abriram (o app não
+#                                          as oferece de novo)
 #
 # A raiz (padrão ~/.local/share/salinha) é deduzida do próprio caminho deste
 # arquivo, que fica dentro de cada versão.
@@ -14,15 +16,25 @@
 #
 # Sandbox do Chromium: sem root não há o chrome-sandbox SUID, então o app usa
 # o sandbox de user namespaces do kernel. Onde eles estão desligados (sysctl)
-# ou restritos (AppArmor do Ubuntu 24.04+), abre com --no-sandbox como último
-# recurso e registra em <raiz>/launcher.log. SALINHA_SANDBOX=0/1 força.
+# ou restritos pelo AppArmor (Ubuntu 24.04+) sem o perfil da Salinha
+# (/etc/apparmor.d/salinha, oferecido pelo install.sh), abre com --no-sandbox
+# como último recurso, registra em <raiz>/launcher.log e exporta
+# SALINHA_SANDBOX_OFF=<motivo> para o app avisar uma vez. SALINHA_SANDBOX=0/1
+# força.
 set -u
 
 HERE=$(cd "$(dirname "$0")" && pwd -P) || exit 1
 ROOT=$(dirname "$(dirname "$HERE")")
 PROC_SYS="${SALINHA_PROC_SYS:-/proc/sys}"
-# Partidas sem o app confirmar que abriu (ver boot-pending) antes de voltar.
-MAX_TRIES=3
+APPARMOR_D="${SALINHA_APPARMOR_D:-/etc/apparmor.d}"
+# Partidas da versão nova sem ela confirmar que abriu (o app apaga
+# boot-pending após alguns segundos aberto). Depois de 2, a 3ª volta para a
+# versão anterior.
+FAILED_BOOTS=2
+
+# Variáveis de um AppImage (terminal aberto dentro de outro AppImage) não são
+# desta instalação: o app as usaria para escolher o updater errado.
+unset APPIMAGE APPDIR ARGV0 OWD SALINHA_SANDBOX_OFF
 
 log() {
   printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" "$*" >>"$ROOT/launcher.log" 2>/dev/null || true
@@ -31,6 +43,26 @@ log() {
 # Aspas simples para shell: 'a'\''b'.
 shquote() {
   printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+# Argumento entre aspas no Exec do .desktop: \ " ` $ escapados (e \ de novo,
+# pelo escape de strings do arquivo); % vira %%.
+desktop_quote() {
+  printf '"%s"' "$(printf '%s' "$1" | sed -e 's/\\/\\\\\\\\/g' -e 's/[$`"]/\\\\&/g' -e 's/%/%%/g')"
+}
+
+abs_or() { # abs_or <valor> <padrão>: valor só se for caminho absoluto
+  case "$1" in /*) printf '%s' "$1" ;; *) printf '%s' "$2" ;; esac
+}
+
+# Troca um link de forma atômica (mv -T por cima); sem -T, ln -sfn.
+relink() { # relink <alvo> <link>
+  tmp="$2.new.$$"
+  if ln -s "$1" "$tmp" 2>/dev/null && mv -Tf "$tmp" "$2" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$tmp"
+  ln -sfn "$1" "$2"
 }
 
 # Guarda um arquivo que não é nosso (ex.: lançador do AppImage extraído) em
@@ -44,7 +76,7 @@ backup_foreign() {
 }
 
 integrate() {
-  data="${XDG_DATA_HOME:-$HOME/.local/share}"
+  data=$(abs_or "${XDG_DATA_HOME:-}" "$HOME/.local/share")
   bin="$HOME/.local/bin"
   apps="$data/applications"
   launcher="$ROOT/current/salinha-launcher"
@@ -66,7 +98,7 @@ integrate() {
     echo 'Type=Application'
     echo 'Name=Salinha'
     echo 'Comment=Servidores, canais de texto e voz'
-    echo "Exec=\"$launcher\" %U"
+    echo "Exec=$(desktop_quote "$launcher") %U"
     echo "Icon=$ROOT/icon.png"
     echo 'Terminal=false'
     echo 'StartupWMClass=Salinha'
@@ -78,32 +110,70 @@ integrate() {
   return 0
 }
 
-# A atualização grava boot-pending; o app novo apaga ao abrir. Se o app novo
-# não abriu em MAX_TRIES partidas, volta para a versão anterior.
+# Já há uma Salinha aberta (trava de instância única do Electron, em
+# ~/.config/Concord)? Então esta partida não é uma tentativa de abrir a
+# versão nova: só traz a janela existente.
+already_running() {
+  config=$(abs_or "${XDG_CONFIG_HOME:-}" "$HOME/.config")
+  lock=$(readlink "$config/Concord/SingletonLock" 2>/dev/null) || return 1
+  pid=${lock##*-}
+  case "$pid" in '' | *[!0-9]*) return 1 ;; esac
+  kill -0 "$pid" 2>/dev/null
+}
+
+# A atualização grava boot-pending; o app novo apaga ao abrir. Se a versão
+# nova não abriu em FAILED_BOOTS partidas, volta para a anterior, anota a
+# versão em bad-versions e apaga os arquivos dela (pasta e download) para o
+# app não reinstalá-la sozinho.
 rollback_if_stuck() {
   pending="$ROOT/boot-pending"
   [ -f "$pending" ] || return 0
+  already_running && return 0
   echo x >>"$pending" 2>/dev/null || return 0
   tries=$(($(wc -l <"$pending") - 1))
-  [ "$tries" -ge "$MAX_TRIES" ] || return 0
+  [ "$tries" -gt "$FAILED_BOOTS" ] || return 0
+  bad=$(head -n 1 "$pending")
   prev=$(readlink "$ROOT/previous" 2>/dev/null) || prev=''
-  if [ -n "$prev" ] && [ -x "$ROOT/$prev/salinha" ]; then
-    log "versão $(head -n 1 "$pending") não abriu em $tries tentativas: voltando para $prev"
-    ln -sfn "$prev" "$ROOT/current"
+  if [ -n "$prev" ] && [ -x "$ROOT/$prev/salinha" ] && [ "$prev" != "versions/$bad" ]; then
+    log "versão $bad não abriu em $((tries - 1)) tentativas: voltando para $prev"
+    relink "$prev" "$ROOT/current"
+    rm -f "$ROOT/previous"
+    case "$bad" in
+    *[!0-9.]* | '') ;;
+    *)
+      printf '%s\n' "$bad" >>"$ROOT/bad-versions"
+      rm -rf "$ROOT/versions/$bad" "$ROOT/downloads/Salinha-$bad-x64.tar.gz" \
+        "$ROOT/downloads/Salinha-$bad-x64.tar.gz.part"
+      ;;
+    esac
   fi
   rm -f "$pending"
 }
 
+# Pode usar o sandbox de user namespaces? Senão, SANDBOX_OFF diz o motivo.
+SANDBOX_OFF=''
 userns_available() {
   case "${SALINHA_SANDBOX:-auto}" in
-  0 | no | off) return 1 ;;
+  0 | no | off)
+    SANDBOX_OFF=forced
+    return 1
+    ;;
   1 | yes | on) return 0 ;;
   esac
-  v=$(cat "$PROC_SYS/kernel/unprivileged_userns_clone" 2>/dev/null) && [ "$v" = 0 ] && return 1
-  v=$(cat "$PROC_SYS/user/max_user_namespaces" 2>/dev/null) && [ "$v" = 0 ] && return 1
-  v=$(cat "$PROC_SYS/kernel/apparmor_restrict_unprivileged_userns" 2>/dev/null) && [ "$v" = 1 ] && return 1
+  v=$(cat "$PROC_SYS/kernel/unprivileged_userns_clone" 2>/dev/null) && [ "$v" = 0 ] && SANDBOX_OFF=userns-off && return 1
+  v=$(cat "$PROC_SYS/user/max_user_namespaces" 2>/dev/null) && [ "$v" = 0 ] && SANDBOX_OFF=userns-off && return 1
+  v=$(cat "$PROC_SYS/kernel/apparmor_restrict_unprivileged_userns" 2>/dev/null) && [ "$v" = 1 ] && {
+    # Perfil da Salinha instalado: vale para o binário dela, não para este
+    # shell (então nada de testar com unshare aqui).
+    grep -qF "\"$ROOT/versions/*/salinha\"" "$APPARMOR_D/salinha" 2>/dev/null && return 0
+    SANDBOX_OFF=apparmor
+    return 1
+  }
   if command -v unshare >/dev/null 2>&1; then
-    unshare -Ur true >/dev/null 2>&1 || return 1
+    unshare -Ur true >/dev/null 2>&1 || {
+      SANDBOX_OFF=userns-blocked
+      return 1
+    }
   fi
   return 0
 }
@@ -121,7 +191,9 @@ if [ ! -x "$APP" ]; then
 fi
 set -- --ozone-platform-hint=auto "$@"
 if ! userns_available; then
-  log "user namespaces indisponíveis: abrindo sem o sandbox do Chromium"
+  log "user namespaces indisponíveis ($SANDBOX_OFF): abrindo sem o sandbox do Chromium"
+  SALINHA_SANDBOX_OFF=$SANDBOX_OFF
+  export SALINHA_SANDBOX_OFF
   set -- --no-sandbox "$@"
 fi
 exec "$APP" "$@"

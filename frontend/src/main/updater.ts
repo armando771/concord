@@ -1,17 +1,24 @@
 import { app, BrowserWindow, ipcMain, net } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { homedir } from 'os'
-import { readFile, rm, writeFile } from 'fs/promises'
-import { readFileSync } from 'fs'
+import { readFile, rename, rm, stat, writeFile } from 'fs/promises'
+import { readFileSync, realpathSync } from 'fs'
 import { basename, join } from 'path'
 import { isInCall, markQuitting, onCallStateChange } from './background'
-import { backgroundDownloadDelayMs, canDownloadUpdate, installOnStartup } from './updatePolicy'
+import {
+  backgroundDownloadDelayMs,
+  canDownloadUpdate,
+  installOnStartup,
+  isRefusedRelease,
+  retryDelayMs,
+  type ReleaseId
+} from './updatePolicy'
 import { createUpdateCheckGate } from './updateCheck'
 import { verifyInstaller } from './updateSignature'
 import { clearCallResume, saveCallResume, takeCallResume } from './callResume'
 import { validCallResume, type CallResume } from '../shared/callResume'
-import { appendLog } from './appLog'
-import { updateBackendKind } from './linuxInstall'
+import { appendLog, logPath } from './appLog'
+import { sandboxNoticeReason, updateBackendKind } from './linuxInstall'
 import { LinuxUpdater } from './linuxUpdater'
 
 // Atualização automática servida pelo próprio servidor da Salinha
@@ -35,6 +42,15 @@ interface DownloadedUpdate {
   downloadedFile: string
 }
 
+/** O que o electron-updater (UpdateInfo) e o LinuxUpdater mandam em update-available. */
+interface AvailableUpdate {
+  version: string
+  /** arquivo, relativo ao endereço das atualizações */
+  path?: string
+  sha512?: string
+  files?: Array<{ url?: string; sha512?: string }>
+}
+
 /** O que o updater usa do autoUpdater (e o LinuxUpdater também oferece). */
 interface UpdateBackend {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,8 +58,10 @@ interface UpdateBackend {
   checkForUpdates(): Promise<unknown>
   downloadUpdate(): Promise<unknown>
   quitAndInstall(isSilent: boolean, isForceRunAfter: boolean): void
-  /** Linux: extrai e confere o pacote (já com a assinatura válida). */
-  stage?(event: DownloadedUpdate): Promise<void>
+  /** Linux: extrai e confere o pacote (os bytes já com a assinatura válida). */
+  stage?(event: DownloadedUpdate, data: Buffer): Promise<void>
+  /** Linux: false = só com clique (migração, versão que já voltou atrás). */
+  canAutoInstall?(version: string): boolean
 }
 
 let backend: UpdateBackend = autoUpdater
@@ -56,10 +74,18 @@ interface UpdaterConfig {
 
 const startedAt = Date.now()
 
+const LOG_MAX_BYTES = 512 * 1024
+
 /** Console e, no Linux, ~/.config/Concord/logs/update.log (o app abre sem terminal). */
 function logUpdate(message: string, error: unknown): void {
   console.error(`[update] ${message}:`, error)
-  if (process.platform === 'linux') appendLog('update.log', `${message}: ${String(error)}`)
+  if (process.platform !== 'linux') return
+  appendLog('update.log', `${message}: ${String(error)}`)
+  // Um arquivo antigo só (update.log.1): não cresce para sempre.
+  const path = logPath('update.log')
+  void stat(path)
+    .then((info) => (info.size > LOG_MAX_BYTES ? rename(path, `${path}.1`) : undefined))
+    .catch(() => {})
 }
 
 // Versão já baixada e verificada (sobrevive ao reinício do app): só ela pode
@@ -79,8 +105,66 @@ function readVerifiedVersion(): string | null {
 function saveVerifiedVersion(version: string): void {
   void writeFile(verifiedPath(), JSON.stringify({ version })).catch(() => {})
 }
+
+const sandboxNoticePath = (): string => join(app.getPath('userData'), 'sandbox-notice.json')
+
+function readSandboxNoticeShown(): boolean {
+  try {
+    readFileSync(sandboxNoticePath())
+    return true
+  } catch {
+    return false
+  }
+}
+
+function saveSandboxNoticeShown(): void {
+  void writeFile(sandboxNoticePath(), JSON.stringify({ shown: true })).catch(() => {})
+}
+
+// Atualização recusada (assinatura ou pacote inválido): o mesmo par versão +
+// sha512 nunca é baixado de novo, nem depois de reiniciar.
+const refusedPath = (): string => join(app.getPath('userData'), 'update-refused.json')
+
+function readRefused(): ReleaseId | null {
+  try {
+    const value = JSON.parse(readFileSync(refusedPath(), 'utf8')) as Partial<ReleaseId>
+    return typeof value.version === 'string'
+      ? { version: value.version, sha512: typeof value.sha512 === 'string' ? value.sha512 : '' }
+      : null
+  } catch {
+    return null
+  }
+}
+
+function saveRefused(release: ReleaseId | null): void {
+  refused = release
+  const write = release
+    ? writeFile(refusedPath(), JSON.stringify(release))
+    : rm(refusedPath(), { force: true })
+  void write.catch(() => {})
+}
+
+function releaseId(info: AvailableUpdate): ReleaseId {
+  return { version: info.version, sha512: info.sha512 ?? info.files?.[0]?.sha512 ?? '' }
+}
+
+function releaseFile(info: AvailableUpdate): string | null {
+  const file = info.path ?? info.files?.[0]?.url
+  return file && !file.includes('/') ? file : null
+}
 /** Versão nova encontrada (ainda baixando ou já pronta). */
 let availableVersion: string | null = null
+/** O que o manifesto oferece agora (versão + sha512) e o arquivo dele. */
+let availableRelease: ReleaseId | null = null
+let availableFile: string | null = null
+let refused: ReleaseId | null = null
+/** Falhas seguidas de download/verificação desta oferta, e quando tentar de novo. */
+let failures = 0
+let retryAt = 0
+/** .sig já baixado (antes do pacote) para o arquivo oferecido. */
+let signatureCache: { file: string; signature: string } | null = null
+let feedUrl = ''
+let sendToWindow: (channel: string, value: unknown) => void = () => {}
 /** Versão baixada e com assinatura válida — pronta para instalar. */
 let readyVersion: string | null = null
 let downloading = false
@@ -126,9 +210,30 @@ async function fetchSignature(feedUrl: string, file: string): Promise<string> {
   return response.text()
 }
 
+/** Falhou (rede, assinatura indisponível): espera cada vez mais antes de tentar. */
+function noteFailure(message: string, error: unknown): void {
+  failures += 1
+  retryAt = Date.now() + retryDelayMs(failures)
+  logUpdate(
+    `${message} (nova tentativa em ${Math.round(retryDelayMs(failures) / 60_000)} min)`,
+    error
+  )
+}
+
+const REFUSED_MESSAGE = 'A atualização baixada não passou na verificação de segurança.'
+
 /** Baixa a versão disponível. Em chamada, só se a pessoa pediu (force). */
 function startDownload(force = false): void {
   if (downloading || readyVersion || !availableVersion) return
+  if (availableRelease && isRefusedRelease(refused, availableRelease)) {
+    if (force) {
+      installRequested = false
+      sendToWindow('update:error', REFUSED_MESSAGE)
+    }
+    return
+  }
+  // Depois de falhas, só o clique em Atualizar fura a espera.
+  if (!force && Date.now() < retryAt) return
   if (!force && !canDownloadUpdate(isInCall())) {
     pendingDownload = true
     return
@@ -163,15 +268,45 @@ function startDownloadNow(force: boolean): void {
   }
   pendingDownload = false
   downloading = true
-  backend.downloadUpdate().catch((err) => {
+  void downloadWithSignature()
+}
+
+/**
+ * Primeiro o .sig (poucos bytes): sem ele publicado não adianta baixar o
+ * pacote (~140 MB). Depois o pacote.
+ */
+async function downloadWithSignature(): Promise<void> {
+  const file = availableFile
+  if (file && signatureCache?.file !== file) {
+    try {
+      signatureCache = { file, signature: await fetchSignature(feedUrl, file) }
+    } catch (err) {
+      downloading = false
+      noteFailure('assinatura indisponível', err)
+      if (installRequested) {
+        installRequested = false
+        sendToWindow(
+          'update:error',
+          'Não foi possível conferir a atualização agora. Tente mais tarde.'
+        )
+      }
+      return
+    }
+  }
+  try {
+    await backend.downloadUpdate()
+  } catch (err) {
     downloading = false
-    logUpdate('download falhou', err)
-  })
+    noteFailure('download falhou', err)
+  }
 }
 
 export function setupUpdater(getWindow: () => BrowserWindow | null, config: UpdaterConfig): void {
   const send = (channel: string, value: unknown): void =>
     getWindow()?.webContents.send(channel, value)
+  sendToWindow = send
+  feedUrl = config.feedUrl
+  refused = readRefused()
   const installUpdate = (): void => install((message) => send('update:error', message))
 
   let pendingResume = takeCallResume()
@@ -202,10 +337,27 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
     startDownload(true)
   })
 
+  // Linux: o lançador abriu sem o sandbox do Chromium — avisa uma vez.
+  let sandboxNotice = sandboxNoticeReason(process.platform, process.env)
+  ipcMain.handle('update:sandbox-notice', (event) => {
+    if (event.sender !== getWindow()?.webContents || !sandboxNotice) return null
+    const reason = sandboxNotice
+    sandboxNotice = null
+    if (readSandboxNoticeShown()) return null
+    saveSandboxNoticeShown()
+    return reason
+  })
+
   // Sem endereço ou sem chave (build de desenvolvimento): não atualiza.
   if (!app.isPackaged || !config.feedUrl || !config.publicKeyPem) return
 
-  if (updateBackendKind(process.platform, process.env) === 'linux-managed') {
+  let realExecPath = process.execPath
+  try {
+    realExecPath = realpathSync(process.execPath)
+  } catch {
+    // fica o caminho como veio
+  }
+  if (updateBackendKind(process.platform, process.env, realExecPath) === 'linux-managed') {
     const linux = new LinuxUpdater({
       feedUrl: config.feedUrl,
       currentVersion: app.getVersion(),
@@ -229,7 +381,18 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
 
   // Aviso assim que existe versão nova (antes de baixar); versão mais nova
   // substitui a que já estava pronta.
-  backend.on('update-available', (info: { version: string }) => {
+  backend.on('update-available', (info: AvailableUpdate) => {
+    const offer = releaseId(info)
+    if (offer.version !== availableRelease?.version || offer.sha512 !== availableRelease?.sha512) {
+      // Manifesto novo: zera a espera entre tentativas.
+      availableRelease = offer
+      availableFile = releaseFile(info)
+      failures = 0
+      retryAt = 0
+      signatureCache = null
+    }
+    if (isRefusedRelease(refused, offer)) return
+    if (refused) saveRefused(null)
     if (info.version !== availableVersion) {
       availableVersion = info.version
       readyVersion = null
@@ -254,33 +417,54 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
   })
   backend.on('update-downloaded', async (event: DownloadedUpdate) => {
     downloading = false
+    const file = basename(event.downloadedFile)
+    let signature: string
     try {
-      const [data, signature] = await Promise.all([
-        readFile(event.downloadedFile),
-        fetchSignature(config.feedUrl, basename(event.downloadedFile))
-      ])
+      signature =
+        signatureCache?.file === file
+          ? signatureCache.signature
+          : await fetchSignature(config.feedUrl, file)
+    } catch (err) {
+      // Falha passageira (rede, .sig no meio do deploy): o download fica.
+      noteFailure('assinatura indisponível', err)
+      installRequested = false
+      send('update:error', 'Não foi possível conferir a atualização agora. Tente mais tarde.')
+      return
+    }
+    try {
+      const data = await readFile(event.downloadedFile)
       if (!verifyInstaller(data, signature, config.publicKeyPem)) {
         throw new Error('assinatura inválida')
       }
-      // Só depois da assinatura: extrai e confere a versão dentro do pacote.
-      if (backend.stage) await backend.stage(event)
+      // Só depois da assinatura: extrai (dos mesmos bytes conferidos) e
+      // confere a versão dentro do pacote.
+      if (backend.stage) await backend.stage(event, data)
     } catch (err) {
       logUpdate('instalador recusado', err)
       await rm(event.downloadedFile, { force: true }).catch(() => {})
+      signatureCache = null
+      saveRefused(
+        availableRelease?.version === event.version
+          ? availableRelease
+          : { version: event.version, sha512: '' }
+      )
       installRequested = false
-      send('update:error', 'A atualização baixada não passou na verificação de segurança.')
+      send('update:error', REFUSED_MESSAGE)
       return
     }
+    failures = 0
+    retryAt = 0
 
     readyVersion = event.version
     const verifiedBefore = readVerifiedVersion()
     saveVerifiedVersion(event.version)
-    const startup = installOnStartup({
-      version: event.version,
-      verifiedBefore,
-      msSinceStart: Date.now() - startedAt,
-      inCall: isInCall()
-    })
+    const startup =
+      installOnStartup({
+        version: event.version,
+        verifiedBefore,
+        msSinceStart: Date.now() - startedAt,
+        inCall: isInCall()
+      }) && backend.canAutoInstall?.(event.version) !== false
     if (installRequested || startup) {
       installUpdate()
       return

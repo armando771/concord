@@ -35,7 +35,11 @@ function writeExec(path: string, content: string): void {
 function addVersion(version: string): void {
   const v = join(root, 'versions', version)
   mkdirSync(v, { recursive: true })
-  writeExec(join(v, 'salinha'), `#!/bin/sh\necho "${version} $*" >> "${out}"\n`)
+  writeExec(
+    join(v, 'salinha'),
+    `#!/bin/sh\necho "${version} $*" >> "${out}"\n` +
+      `echo "\${APPIMAGE-unset}|\${APPDIR-unset}|\${SALINHA_SANDBOX_OFF-unset}" >> "${out}.env"\n`
+  )
   copyFileSync(LAUNCHER, join(v, 'salinha-launcher'))
   chmodSync(join(v, 'salinha-launcher'), 0o755)
   writeFileSync(join(v, 'salinha.png'), 'png')
@@ -65,6 +69,8 @@ function run(args: string[] = [], env: Record<string, string> = {}): string {
   })
 }
 
+const envs = (): string[] => readFileSync(`${out}.env`, 'utf8').trim().split('\n')
+
 const launches = (): string[] =>
   existsSync(out) ? readFileSync(out, 'utf8').trim().split('\n') : []
 
@@ -90,6 +96,25 @@ describe('sandbox', () => {
   it('com user namespaces abre com o sandbox (sem --no-sandbox)', () => {
     run(['--hidden'])
     expect(launches()).toEqual(['1.0.0 --ozone-platform-hint=auto --hidden'])
+    expect(envs()).toEqual(['unset|unset|unset'])
+  })
+
+  it('não repassa APPIMAGE/APPDIR herdados de outro AppImage nem um aviso velho', () => {
+    run([], { APPIMAGE: '/a/Editor.AppImage', APPDIR: '/tmp/.mount_Ed', SALINHA_SANDBOX_OFF: 'x' })
+    expect(envs()).toEqual(['unset|unset|unset'])
+  })
+
+  it('AppArmor restringe, mas o perfil da Salinha está instalado: sandbox ligado', () => {
+    const apparmor = join(dir, 'apparmor.d')
+    mkdirSync(apparmor)
+    writeFileSync(
+      join(apparmor, 'salinha'),
+      `profile salinha "${root}/versions/*/salinha" flags=(unconfined) {\n  userns,\n}\n`
+    )
+    setProc({ 'kernel/apparmor_restrict_unprivileged_userns': '1' })
+    setUnshare(false) // o shell não tem o perfil: o teste com unshare falharia
+    run([], { SALINHA_APPARMOR_D: apparmor })
+    expect(launches()).toEqual(['1.0.0 --ozone-platform-hint=auto'])
   })
 
   it.each([
@@ -103,6 +128,8 @@ describe('sandbox', () => {
     run()
     expect(launches()).toEqual(['1.0.0 --no-sandbox --ozone-platform-hint=auto'])
     expect(readFileSync(join(root, 'launcher.log'), 'utf8')).toMatch(/sem o sandbox/)
+    // O app recebe o motivo para avisar a pessoa uma vez.
+    expect(envs()[0]).toMatch(/^unset\|unset\|(userns-off|apparmor|userns-blocked)$/)
   })
 
   it('SALINHA_SANDBOX força os dois lados', () => {
@@ -124,13 +151,34 @@ describe('volta automática', () => {
     writeFileSync(join(root, 'boot-pending'), '1.0.0\n')
   })
 
-  it('versão nova que não abre 3 vezes volta para a anterior', () => {
+  it('versão nova que não abre em 2 partidas: a 3ª volta para a anterior e anota a ruim', () => {
+    mkdirSync(join(root, 'downloads'))
+    writeFileSync(join(root, 'downloads', 'Salinha-1.0.0-x64.tar.gz'), 'x')
     run()
     run()
     run()
     expect(launches().map((l) => l.split(' ')[0])).toEqual(['1.0.0', '1.0.0', '0.9.0'])
     expect(readlinkSync(join(root, 'current'))).toBe('versions/0.9.0')
     expect(existsSync(join(root, 'boot-pending'))).toBe(false)
+    // A volta é definitiva: versão anotada e arquivos dela apagados.
+    expect(readFileSync(join(root, 'bad-versions'), 'utf8')).toBe('1.0.0\n')
+    expect(existsSync(join(root, 'versions', '1.0.0'))).toBe(false)
+    expect(existsSync(join(root, 'downloads', 'Salinha-1.0.0-x64.tar.gz'))).toBe(false)
+    expect(existsSync(join(root, 'previous'))).toBe(false)
+    // Próximas partidas seguem na anterior.
+    run()
+    expect(launches().at(-1)?.split(' ')[0]).toBe('0.9.0')
+  })
+
+  it('partidas com a Salinha já aberta (instância única) não contam como falha', () => {
+    const config = join(home, '.config', 'Concord')
+    mkdirSync(config, { recursive: true })
+    symlinkSync(`host-name-${process.pid}`, join(config, 'SingletonLock'))
+    run()
+    run()
+    run()
+    expect(readFileSync(join(root, 'boot-pending'), 'utf8')).toBe('1.0.0\n')
+    expect(readlinkSync(join(root, 'current'))).toBe('versions/1.0.0')
   })
 
   it('versão que confirmou a abertura (apagou boot-pending) fica', () => {
@@ -158,6 +206,21 @@ describe('--integrate', () => {
       env: { PATH: `${fakeBin}:/usr/bin:/bin`, HOME: home, SALINHA_PROC_SYS: procSys }
     })
     expect(launches()).toEqual(['1.0.0 --ozone-platform-hint=auto x'])
+  })
+
+  it('escapa o caminho no Exec do atalho (espaço, $, aspas)', () => {
+    const odd = join(dir, 'casa $x "y"', '.local', 'share', 'salinha')
+    mkdirSync(join(odd, 'versions'), { recursive: true })
+    execFileSync('cp', ['-a', join(root, 'versions', '1.0.0'), join(odd, 'versions')])
+    symlinkSync('versions/1.0.0', join(odd, 'current'))
+    execFileSync(join(odd, 'current', 'salinha-launcher'), ['--integrate'], {
+      env: { PATH: '/usr/bin:/bin', HOME: home }
+    })
+    const desktop = readFileSync(join(home, '.local/share/applications/salinha.desktop'), 'utf8')
+    const exec = desktop.split('\n').find((l) => l.startsWith('Exec='))
+    expect(exec).toBe(
+      `Exec="${odd.replace('$x', '\\\\$x').replace(/"/g, '\\\\"')}/current/salinha-launcher" %U`
+    )
   })
 
   it('guarda o lançador e o atalho do AppImage extraído em legacy/', () => {

@@ -54,3 +54,29 @@ export function backgroundDownloadDelayMs(
   const r = Math.min(Math.max(state.random, 0), 1)
   return Math.floor(r * maxMs)
 }
+
+/** Espera depois de N falhas seguidas de download/verificação: 1 min … 6 h. */
+const RETRY_STEPS_MS = [60_000, 5 * 60_000, 30 * 60_000, 2 * 3_600_000, 6 * 3_600_000]
+
+/**
+ * Download ou verificação que falhou não é repetido a cada checagem (60 s):
+ * cada tentativa são ~140 MB saindo do mesmo upload que leva a voz.
+ */
+export function retryDelayMs(failures: number): number {
+  if (failures <= 0) return 0
+  return RETRY_STEPS_MS[Math.min(failures, RETRY_STEPS_MS.length) - 1]
+}
+
+export interface ReleaseId {
+  version: string
+  /** sha512 do manifesto ('' se desconhecido) */
+  sha512: string
+}
+
+/**
+ * Atualização recusada (assinatura ou pacote inválido) não é baixada de novo
+ * enquanto o manifesto oferecer o mesmo par versão + sha512.
+ */
+export function isRefusedRelease(refused: ReleaseId | null, offer: ReleaseId): boolean {
+  return !!refused && refused.version === offer.version && refused.sha512 === offer.sha512
+}

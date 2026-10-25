@@ -3,7 +3,9 @@ import {
   backgroundDownloadDelayMs,
   canDownloadUpdate,
   DOWNLOAD_JITTER_MAX_MS,
-  installOnStartup
+  installOnStartup,
+  isRefusedRelease,
+  retryDelayMs
 } from './updatePolicy'
 
 describe('updatePolicy', () => {
@@ -101,5 +103,37 @@ describe('backgroundDownloadDelayMs', () => {
     expect(
       backgroundDownloadDelayMs({ force: false, msSinceStart: later, random: 0.5 }, 1000)
     ).toBe(500)
+  })
+})
+
+describe('retryDelayMs', () => {
+  it('espera cada vez mais depois de falhas (1 min, 5 min, 30 min, 2 h) até 6 h', () => {
+    expect(retryDelayMs(0)).toBe(0)
+    expect(retryDelayMs(1)).toBe(60_000)
+    expect(retryDelayMs(2)).toBe(5 * 60_000)
+    expect(retryDelayMs(3)).toBe(30 * 60_000)
+    expect(retryDelayMs(4)).toBe(2 * 3_600_000)
+    expect(retryDelayMs(5)).toBe(6 * 3_600_000)
+    expect(retryDelayMs(50)).toBe(6 * 3_600_000)
+  })
+})
+
+describe('isRefusedRelease', () => {
+  const refused = { version: '0.7.0', sha512: 'abc' }
+
+  it('mesmo par versão + sha512 já recusado: não baixa de novo', () => {
+    expect(isRefusedRelease(refused, { version: '0.7.0', sha512: 'abc' })).toBe(true)
+  })
+
+  it('sha512 novo (republicado) ou outra versão: tenta', () => {
+    expect(isRefusedRelease(refused, { version: '0.7.0', sha512: 'def' })).toBe(false)
+    expect(isRefusedRelease(refused, { version: '0.7.1', sha512: 'abc' })).toBe(false)
+    expect(isRefusedRelease(null, { version: '0.7.0', sha512: 'abc' })).toBe(false)
+  })
+
+  it('sem sha512 conhecido compara só a versão', () => {
+    expect(
+      isRefusedRelease({ version: '0.7.0', sha512: '' }, { version: '0.7.0', sha512: '' })
+    ).toBe(true)
   })
 })

@@ -8,7 +8,8 @@ const h = vi.hoisted(() => {
     validSignature: true,
     handlers: {} as Record<string, (...a: unknown[]) => unknown>,
     sent: [] as Array<[string, unknown]>,
-    callListeners: [] as Array<(s: { inCall: boolean }) => void>
+    callListeners: [] as Array<(s: { inCall: boolean }) => void>,
+    files: {} as Record<string, string>
   }
   const autoUpdater = {
     autoDownload: true,
@@ -27,7 +28,12 @@ const h = vi.hoisted(() => {
       for (const k of Object.keys(listeners)) delete listeners[k]
     }
   }
-  const fetch = vi.fn(async () => ({ ok: true, text: async () => 'assinatura' }))
+  const fetch = vi.fn<(url?: string) => Promise<{ ok: boolean; text: () => Promise<string> }>>(
+    async () => ({ ok: true, text: async () => 'assinatura' })
+  )
+  const rm = vi.fn(async (path: string) => {
+    delete state.files[path]
+  })
   // Updater próprio do Linux (linuxUpdater.ts): mesmo formato + stage.
   const linuxListeners: Record<string, Array<(...a: unknown[]) => unknown>> = {}
   const linux = {
@@ -36,7 +42,8 @@ const h = vi.hoisted(() => {
     checkForUpdates: vi.fn(async () => null),
     downloadUpdate: vi.fn(async () => ''),
     quitAndInstall: vi.fn(),
-    stage: vi.fn(async () => {}),
+    stage: vi.fn<(event?: unknown, data?: Buffer) => Promise<void>>(async () => {}),
+    canAutoInstall: vi.fn<(version?: string) => boolean>(() => true),
     confirmStartup: vi.fn(),
     on: (event: string, fn: (...a: unknown[]) => unknown) => {
       ;(linuxListeners[event] ??= []).push(fn)
@@ -50,7 +57,7 @@ const h = vi.hoisted(() => {
       linux.options = null
     }
   }
-  return { state, autoUpdater, fetch, linux }
+  return { state, autoUpdater, fetch, linux, rm }
 })
 
 vi.mock('electron', () => ({
@@ -80,22 +87,29 @@ vi.mock('./linuxUpdater', () => ({
     }
   }
 }))
+// userData em memória: sobrevive a "reiniciar" o updater (vi.resetModules).
 vi.mock('fs/promises', () => ({
   readFile: async () => Buffer.from('instalador'),
-  rm: async () => {},
-  writeFile: async () => {}
+  rm: h.rm,
+  rename: async () => {},
+  stat: async () => ({ size: 0 }),
+  writeFile: async (path: string, data: string) => {
+    h.state.files[path] = data
+  }
 }))
 vi.mock('fs', () => ({
-  readFileSync: () => {
-    throw new Error('sem arquivo')
-  }
+  readFileSync: (path: string) => {
+    if (!(path in h.state.files)) throw new Error('sem arquivo')
+    return h.state.files[path]
+  },
+  realpathSync: (path: string) => path
 }))
 vi.mock('./background', () => ({
   isInCall: () => h.state.inCall,
   markQuitting: vi.fn(),
   onCallStateChange: (fn: (s: { inCall: boolean }) => void) => h.state.callListeners.push(fn)
 }))
-vi.mock('./appLog', () => ({ appendLog: vi.fn() }))
+vi.mock('./appLog', () => ({ appendLog: vi.fn(), logPath: (n: string) => `/logs/${n}` }))
 vi.mock('./updateSignature', () => ({ verifyInstaller: () => h.state.validSignature }))
 vi.mock('./callResume', () => ({
   takeCallResume: vi.fn(() => null),
@@ -122,6 +136,7 @@ beforeEach(() => {
   h.state.validSignature = true
   h.state.handlers = {}
   h.state.sent = []
+  h.state.files = {}
   h.state.callListeners = []
 })
 
@@ -458,7 +473,7 @@ describe('updater', () => {
       }
       await h.linux.emit('update-downloaded', event)
       expect(h.fetch).toHaveBeenCalledWith('http://srv/updates/Salinha-0.7.0-x64.tar.gz.sig')
-      expect(h.linux.stage).toHaveBeenCalledWith(event)
+      expect(h.linux.stage).toHaveBeenCalledWith(event, Buffer.from('instalador'))
       expect(h.state.sent).toContainEqual(['update:ready', '0.7.0'])
       h.state.handlers['update:install']()
       expect(h.linux.quitAndInstall).toHaveBeenCalledWith(true, true)
@@ -497,6 +512,163 @@ describe('updater', () => {
       expect(h.linux.confirmStartup).not.toHaveBeenCalled()
       vi.advanceTimersByTime(10_000)
       expect(h.linux.confirmStartup).toHaveBeenCalledOnce()
+    })
+  })
+  describe('falhas e recusas não viram download em loop', () => {
+    const offer = { version: '0.7.0', path: 'Salinha-0.7.0-x64.tar.gz', sha512: 'aa' }
+    const downloaded = {
+      version: '0.7.0',
+      downloadedFile: '/d/downloads/Salinha-0.7.0-x64.tar.gz'
+    }
+
+    // setTimeout falso: promessas resolvidas na mão.
+    const settle = async (): Promise<void> => {
+      for (let i = 0; i < 20; i++) await Promise.resolve()
+    }
+
+    beforeEach(() => {
+      h.linux.kind = 'linux-managed'
+      vi.useRealTimers()
+      vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout', 'Date'] })
+      vi.spyOn(Math, 'random').mockReturnValue(0)
+    })
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('busca o .sig antes do pacote; sem ele não baixa e espera cada vez mais', async () => {
+      h.fetch.mockResolvedValue({ ok: false, text: async () => '' })
+      await startUpdater()
+      await h.linux.emit('update-available', offer)
+      await settle()
+      expect(h.fetch).toHaveBeenCalledWith('http://srv/updates/Salinha-0.7.0-x64.tar.gz.sig')
+      expect(h.linux.downloadUpdate).not.toHaveBeenCalled()
+
+      // Checagem seguinte (60 s depois) ainda dentro da espera de 1 min: nada.
+      vi.advanceTimersByTime(50_000)
+      await h.linux.emit('update-available', offer)
+      await settle()
+      expect(h.fetch).toHaveBeenCalledTimes(1)
+
+      // Passou 1 min: tenta de novo; falhou outra vez → espera 5 min.
+      vi.advanceTimersByTime(15_000)
+      await h.linux.emit('update-available', offer)
+      await settle()
+      expect(h.fetch).toHaveBeenCalledTimes(2)
+      vi.advanceTimersByTime(4 * 60_000)
+      await h.linux.emit('update-available', offer)
+      await settle()
+      expect(h.fetch).toHaveBeenCalledTimes(2)
+
+      // .sig publicado: baixa o pacote.
+      h.fetch.mockResolvedValue({ ok: true, text: async () => 'assinatura' })
+      vi.advanceTimersByTime(60_000 + 1)
+      await h.linux.emit('update-available', offer)
+      await settle()
+      expect(h.linux.downloadUpdate).toHaveBeenCalledTimes(1)
+    })
+
+    it('recusada (assinatura) não é baixada de novo, nem depois de reiniciar; sha512 novo sim', async () => {
+      h.state.validSignature = false
+      await startUpdater()
+      await h.linux.emit('update-available', offer)
+      await settle()
+      await h.linux.emit('update-downloaded', downloaded)
+      expect(h.linux.downloadUpdate).toHaveBeenCalledTimes(1)
+      expect(h.state.sent).toContainEqual(['update:error', expect.stringMatching(/segurança/)])
+
+      vi.advanceTimersByTime(7 * 3_600_000)
+      await h.linux.emit('update-available', offer)
+      await settle()
+      expect(h.linux.downloadUpdate).toHaveBeenCalledTimes(1)
+
+      // Reinicia o app: a recusa está gravada em userData.
+      vi.resetModules()
+      h.linux.reset()
+      h.linux.kind = 'linux-managed'
+      await startUpdater()
+      await h.linux.emit('update-available', offer)
+      await settle()
+      expect(h.linux.downloadUpdate).toHaveBeenCalledTimes(1)
+      // Clicar Atualizar também não baixa o mesmo par.
+      h.state.handlers['update:install']()
+      await settle()
+      expect(h.linux.downloadUpdate).toHaveBeenCalledTimes(1)
+
+      // Republicado (sha512 novo): tenta.
+      h.state.validSignature = true
+      await h.linux.emit('update-available', { ...offer, sha512: 'bb' })
+      await settle()
+      expect(h.linux.downloadUpdate).toHaveBeenCalledTimes(2)
+    })
+
+    it('falha passageira ao buscar o .sig depois do download não apaga o pacote', async () => {
+      await startUpdater()
+      // Sem path no aviso (electron-updater antigo): o .sig vem depois do download.
+      await h.linux.emit('update-available', { version: '0.7.0' })
+      await settle()
+      h.fetch.mockRejectedValueOnce(new Error('rede caiu'))
+      await h.linux.emit('update-downloaded', downloaded)
+      expect(h.rm).not.toHaveBeenCalled()
+      expect(h.linux.stage).not.toHaveBeenCalled()
+      expect(h.state.sent).not.toContainEqual(['update:ready', '0.7.0'])
+
+      // Mais tarde: o mesmo arquivo (cache) passa e fica pronto.
+      vi.advanceTimersByTime(61_000)
+      await h.linux.emit('update-available', { version: '0.7.0' })
+      await settle()
+      await h.linux.emit('update-downloaded', downloaded)
+      expect(h.state.sent).toContainEqual(['update:ready', '0.7.0'])
+    })
+
+    it('não instala sozinho ao abrir o que o updater do Linux bloqueia (migração, versão ruim)', async () => {
+      h.state.files['/tmp/concord-teste/update-verified.json'] = JSON.stringify({
+        version: '0.7.0'
+      })
+      h.linux.canAutoInstall.mockReturnValue(false)
+      await startUpdater()
+      await h.linux.emit('update-available', offer)
+      await settle()
+      await h.linux.emit('update-downloaded', downloaded)
+      expect(h.linux.canAutoInstall).toHaveBeenCalledWith('0.7.0')
+      expect(h.linux.quitAndInstall).not.toHaveBeenCalled()
+      expect(h.state.sent).toContainEqual(['update:ready', '0.7.0'])
+    })
+
+    it('versão já verificada antes instala sozinha ao abrir quando o updater deixa', async () => {
+      h.state.files['/tmp/concord-teste/update-verified.json'] = JSON.stringify({
+        version: '0.7.0'
+      })
+      await startUpdater()
+      await h.linux.emit('update-available', offer)
+      await settle()
+      await h.linux.emit('update-downloaded', downloaded)
+      expect(h.linux.quitAndInstall).toHaveBeenCalledWith(true, true)
+    })
+  })
+
+  describe('aviso de sandbox desligado (Linux)', () => {
+    afterEach(() => {
+      delete process.env.SALINHA_SANDBOX_OFF
+    })
+
+    it('mostra uma vez só, mesmo reiniciando', async () => {
+      process.env.SALINHA_SANDBOX_OFF = 'apparmor'
+      await startUpdater()
+      const take = (): unknown =>
+        h.state.handlers['update:sandbox-notice']({ sender: win.webContents })
+      expect(h.state.handlers['update:sandbox-notice']({ sender: {} })).toBeNull()
+      expect(take()).toBe('apparmor')
+      expect(take()).toBeNull()
+      vi.resetModules()
+      await startUpdater()
+      expect(take()).toBeNull()
+    })
+
+    it('com o sandbox ligado não avisa', async () => {
+      await startUpdater()
+      expect(h.state.handlers['update:sandbox-notice']({ sender: win.webContents })).toBeNull()
     })
   })
 })

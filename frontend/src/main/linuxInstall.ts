@@ -6,7 +6,7 @@
 //
 // Lançador, atalho e volta automática: build/linux/salinha-launcher.
 // Download, verificação e troca: linuxUpdater.ts.
-import { basename, dirname, isAbsolute, join } from 'path'
+import { basename, dirname, isAbsolute, join, relative } from 'path'
 
 export type UpdateBackendKind = 'electron-updater' | 'linux-managed'
 
@@ -21,16 +21,33 @@ export const STAGING_PREFIX = '.staging-'
 
 const VERSION_RE = /^\d+\.\d+\.\d+$/
 
+/** Maior pacote aceito: o manifesto não é assinado e não pode encher o disco. */
+export const MAX_PACKAGE_BYTES = 1024 ** 3
+
+function isInside(path: string, dir: string): boolean {
+  const rel = relative(dir, path)
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+}
+
 /**
- * Windows e AppImage montado (APPIMAGE definido) ficam no electron-updater.
- * Linux sem AppImage — AppImage extraído (sem libfuse2) ou a instalação por
- * usuário — usa o updater próprio, que não depende de nada do sistema.
+ * Windows e AppImage montado ficam no electron-updater. Linux fora disso —
+ * AppImage extraído (sem libfuse2) ou a instalação por usuário — usa o
+ * updater próprio, que não depende de nada do sistema.
+ *
+ * APPIMAGE/APPDIR vazam para processos filhos (terminal aberto dentro de outro
+ * AppImage): só conta como AppImage montado se o executável está dentro do
+ * APPDIR, e a instalação por usuário (versions/) nunca conta. Senão o
+ * electron-updater apagaria o AppImage de outro app ao instalar.
  */
 export function updateBackendKind(
   platform: NodeJS.Platform,
-  env: Record<string, string | undefined>
+  env: Record<string, string | undefined>,
+  realExecPath: string
 ): UpdateBackendKind {
-  return platform === 'linux' && !env.APPIMAGE ? 'linux-managed' : 'electron-updater'
+  if (platform !== 'linux') return 'electron-updater'
+  if (managedRootOf(realExecPath)) return 'linux-managed'
+  const mounted = !!env.APPIMAGE && !!env.APPDIR && isInside(realExecPath, env.APPDIR)
+  return mounted ? 'electron-updater' : 'linux-managed'
 }
 
 export function defaultInstallRoot(env: Record<string, string | undefined>, home: string): string {
@@ -100,7 +117,7 @@ export function parseLinuxManifest(text: string): LinuxRelease | null {
   // O nome amarra o arquivo à versão; nada de caminho nem URL.
   if (path !== `Salinha-${version}-x64.tar.gz`) return null
   if (!sha512 || !/^[0-9a-f]{128}$/.test(sha512)) return null
-  if (!Number.isSafeInteger(size) || size <= 0) return null
+  if (!Number.isSafeInteger(size) || size <= 0 || size > MAX_PACKAGE_BYTES) return null
   return { version, path, sha512, size }
 }
 
@@ -131,4 +148,38 @@ export function downloadsToPrune(entries: string[], current: string): string[] {
     const m = /^Salinha-(\d+\.\d+\.\d+)-x64\.tar\.gz(\.part)?$/.exec(e)
     return m !== null && compareVersions(m[1], current) <= 0
   })
+}
+
+/**
+ * Versões que o lançador desfez (não abriram): <raiz>/bad-versions, uma por
+ * linha. Gravado por build/linux/salinha-launcher.
+ */
+export const BAD_VERSIONS_FILE = 'bad-versions'
+
+export function parseBadVersions(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => VERSION_RE.test(l))
+}
+
+/**
+ * Versão que voltou atrás não é oferecida de novo (senão a volta automática
+ * reinstalaria a versão quebrada no próximo início). Só uma estritamente mais
+ * nova que todas as ruins é oferecida — e aí a lista pode ser esquecida.
+ */
+export function badVersionCheck(bad: string[], latest: string): { skip: boolean; clear: boolean } {
+  if (bad.includes(latest)) return { skip: true, clear: false }
+  return { skip: false, clear: bad.length > 0 && bad.every((b) => compareVersions(latest, b) > 0) }
+}
+
+/**
+ * O lançador abriu sem o sandbox do Chromium (SALINHA_SANDBOX_OFF=<motivo>):
+ * o app mostra um aviso uma vez. null = nada a avisar.
+ */
+export function sandboxNoticeReason(
+  platform: NodeJS.Platform,
+  env: Record<string, string | undefined>
+): string | null {
+  return platform === 'linux' && env.SALINHA_SANDBOX_OFF ? env.SALINHA_SANDBOX_OFF : null
 }

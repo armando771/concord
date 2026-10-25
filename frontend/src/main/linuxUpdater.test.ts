@@ -115,7 +115,16 @@ describe('checkForUpdates', () => {
     const u = makeUpdater()
     const seen = await events(u)
     await u.checkForUpdates()
-    expect(seen).toEqual([['update-available', { version: '1.0.1' }]])
+    expect(seen).toEqual([
+      [
+        'update-available',
+        {
+          version: '1.0.1',
+          path: 'Salinha-1.0.1-x64.tar.gz',
+          sha512: expect.stringMatching(/^[0-9a-f]{128}$/)
+        }
+      ]
+    ])
   })
 
   it('não avisa a mesma versão na instalação por usuário', async () => {
@@ -131,7 +140,7 @@ describe('checkForUpdates', () => {
     const u = makeUpdater({ execPath: join(home, '.local/opt/salinha/salinha') })
     const seen = await events(u)
     await u.checkForUpdates()
-    expect(seen).toEqual([['update-available', { version: '1.0.0' }]])
+    expect(seen).toEqual([['update-available', expect.objectContaining({ version: '1.0.0' })]])
   })
 
   it('manifesto ausente ou inválido falha a checagem', async () => {
@@ -212,6 +221,14 @@ describe('stage', () => {
     expect(readdirSync(join(root, 'versions'))).toEqual(['1.0.0'])
   })
 
+  it('extrai dos bytes já conferidos, não do arquivo relido do disco', async () => {
+    const data = tarball('1.0.1')
+    const [u, file] = await downloaded(data)
+    writeFileSync(file, 'trocado depois da verificação')
+    await u.stage({ version: '1.0.1', downloadedFile: file }, data)
+    expect(readFileSync(join(root, 'versions/1.0.1/resources/app.asar'), 'utf8')).toBe('app 1.0.1')
+  })
+
   it('arquivo corrompido não deixa nada para trás', async () => {
     const [u, file] = await downloaded(tarball('1.0.1'))
     writeFileSync(file, 'não é gzip')
@@ -287,5 +304,63 @@ describe('confirmStartup', () => {
     writeFileSync(join(root, 'boot-pending'), '1.0.0\n')
     makeUpdater({ execPath: join(home, '.local/opt/salinha/salinha') }).confirmStartup()
     expect(existsSync(join(root, 'boot-pending'))).toBe(true)
+  })
+})
+
+describe('versão que voltou atrás (C1)', () => {
+  const LAUNCHER = join(__dirname, '../../build/linux/salinha-launcher')
+
+  function fakeVersion(version: string): void {
+    const v = join(root, 'versions', version)
+    mkdirSync(v, { recursive: true })
+    writeFileSync(join(v, 'salinha'), `#!/bin/sh\nexit ${version === '1.0.1' ? 1 : 0}\n`)
+    chmodSync(join(v, 'salinha'), 0o755)
+    writeFileSync(join(v, 'salinha-launcher'), readFileSync(LAUNCHER))
+    chmodSync(join(v, 'salinha-launcher'), 0o755)
+    writeFileSync(join(v, 'salinha-version'), `${version}\n`)
+  }
+
+  it('depois da volta automática a versão ruim não é oferecida nem instalada de novo', async () => {
+    // 1.0.1 instalada por cima da 1.0.0 e não abre.
+    rmSync(join(root, 'current'))
+    fakeVersion('1.0.1')
+    writeFileSync(join(root, 'versions/1.0.0/salinha'), '#!/bin/sh\nexit 0\n')
+    chmodSync(join(root, 'versions/1.0.0/salinha'), 0o755)
+    symlinkSync('versions/1.0.1', join(root, 'current'))
+    symlinkSync('versions/1.0.0', join(root, 'previous'))
+    writeFileSync(join(root, 'boot-pending'), '1.0.1\n')
+    mkdirSync(join(root, 'downloads'))
+    const data = tarball('1.0.1')
+    writeFileSync(join(root, 'downloads', 'Salinha-1.0.1-x64.tar.gz'), data)
+    for (let i = 0; i < 3; i++) {
+      try {
+        execFileSync(join(root, 'current', 'salinha-launcher'), [], {
+          env: { PATH: '/usr/bin:/bin', HOME: home, SALINHA_SANDBOX: '1' }
+        })
+      } catch {
+        // a 1.0.1 sai com erro
+      }
+    }
+    expect(readlinkSync(join(root, 'current'))).toBe('versions/1.0.0')
+
+    // A 1.0.0 abre e checa: o servidor ainda oferece a 1.0.1.
+    publish('1.0.1', data)
+    const u = makeUpdater()
+    const seen = await events(u)
+    expect(await u.checkForUpdates()).toBeNull()
+    expect(seen).toEqual([])
+    expect(u.canAutoInstall('1.0.1')).toBe(false)
+    expect(existsSync(join(root, 'versions', '1.0.1'))).toBe(false)
+    expect(existsSync(join(root, 'downloads', 'Salinha-1.0.1-x64.tar.gz'))).toBe(false)
+
+    // Uma correção (1.0.2) é oferecida e a lista de versões ruins é esquecida.
+    publish('1.0.2', tarball('1.0.2'))
+    expect((await u.checkForUpdates())?.version).toBe('1.0.2')
+    expect(existsSync(join(root, 'bad-versions'))).toBe(false)
+    expect(u.canAutoInstall('1.0.2')).toBe(true)
+  })
+
+  it('a mesma versão (migração) só instala com clique', () => {
+    expect(makeUpdater().canAutoInstall('1.0.0')).toBe(false)
   })
 })
