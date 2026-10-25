@@ -40,3 +40,21 @@ export function resolveDeviceId(
   if (!id) return ''
   return devices.some((d) => d.kind === kind && d.deviceId === id) ? id : ''
 }
+
+export interface DeviceOption {
+  /** '' = padrão do sistema. */
+  id: string
+  label: string
+}
+
+/**
+ * Opções de um seletor de dispositivo (Configurações → Voz e o menu da setinha
+ * do microfone/fone): "Padrão do sistema" primeiro, depois os daquele tipo.
+ * Sem permissão os nomes vêm vazios, então numera.
+ */
+export function deviceOptions(devices: MediaDeviceInfo[], kind: MediaDeviceKind): DeviceOption[] {
+  const listed = devices
+    .filter((d) => d.kind === kind && d.deviceId && d.deviceId !== 'default')
+    .map((d, i) => ({ id: d.deviceId, label: d.label || `Dispositivo ${i + 1}` }))
+  return [{ id: '', label: 'Padrão do sistema' }, ...listed]
+}
