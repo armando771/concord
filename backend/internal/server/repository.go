@@ -93,14 +93,15 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Server, error) {
 		ctx,
 		`
 		SELECT
-			id,
-			name,
-			icon_url,
-			owner_id,
-			created_at,
-			updated_at
-		FROM servers
-		WHERE id = $1
+			s.id,
+			s.name,
+			s.icon_url,
+			s.owner_id,
+			`+primaryChannelColumn+`,
+			s.created_at,
+			s.updated_at
+		FROM servers s
+		WHERE s.id = $1
 		`,
 		id,
 	).Scan(
@@ -108,6 +109,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Server, error) {
 		&s.Name,
 		&s.IconURL,
 		&s.OwnerID,
+		&s.PrimaryChannelID,
 		&s.CreatedAt,
 		&s.UpdatedAt,
 	)
@@ -115,6 +117,38 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Server, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+// primaryChannelColumn: o canal principal escolhido ou, sem escolha (ou se ele
+// foi apagado), o primeiro canal de texto do servidor. Precisa do alias "s".
+const primaryChannelColumn = `COALESCE(
+			s.primary_channel_id,
+			(SELECT c.id FROM channels c WHERE c.server_id = s.id AND c.type = 'text' ORDER BY c.created_at, c.id LIMIT 1)
+		)`
+
+// SetPrimaryChannel escolhe o canal principal; o canal tem que ser de texto e
+// deste servidor.
+func (r *Repository) SetPrimaryChannel(ctx context.Context, serverID string, channelID string) error {
+	tag, err := r.db.Exec(
+		ctx,
+		`
+		UPDATE servers
+		SET primary_channel_id = $2, updated_at = NOW()
+		WHERE id = $1
+		AND EXISTS (
+			SELECT 1 FROM channels WHERE id = $2 AND server_id = $1 AND type = 'text'
+		)
+		`,
+		serverID,
+		channelID,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrInvalidPrimaryChannel
+	}
+	return nil
 }
 
 func (r *Repository) Update(ctx context.Context, id string, name string, iconURL string) error {
@@ -142,6 +176,7 @@ func (r *Repository) ListByUserID(ctx context.Context, userID string) ([]Server,
 			s.name,
 			s.icon_url,
 			s.owner_id,
+			`+primaryChannelColumn+`,
 			s.created_at,
 			s.updated_at
 		FROM servers s
@@ -164,6 +199,7 @@ func (r *Repository) ListByUserID(ctx context.Context, userID string) ([]Server,
 			&s.Name,
 			&s.IconURL,
 			&s.OwnerID,
+			&s.PrimaryChannelID,
 			&s.CreatedAt,
 			&s.UpdatedAt,
 		); err != nil {

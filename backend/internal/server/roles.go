@@ -13,6 +13,8 @@ var (
 	ErrOnlyOwner   = errors.New("só o dono do servidor muda cargos")
 	ErrOwnerRole   = errors.New("o cargo do dono não muda")
 	ErrInvalidRole = errors.New("cargo inválido")
+
+	ErrInvalidPrimaryChannel = errors.New("o canal principal precisa ser um canal de texto deste servidor")
 )
 
 func validateRoleChange(actorID, ownerID, targetID, role string) error {

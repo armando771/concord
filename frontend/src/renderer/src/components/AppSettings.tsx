@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { NotificationPrefs } from '../lib/notifications'
+import { getBirthday, setBirthday, type Birthday } from '../api/birthdays'
+import { birthdayError } from '../lib/birthday'
+import { showToast } from '../store/toastStore'
+import BirthdayFields from './BirthdayFields'
 import { useNotificationPrefsStore } from '../store/notificationPrefsStore'
 import { useOverlayPrefsStore } from '../store/overlayPrefsStore'
 import { IS_WEB } from '../lib/config'
@@ -104,9 +108,62 @@ function BrowserPermission(): React.JSX.Element {
   )
 }
 
+/** Perfil: aniversário (opcional) e se os servidores podem anunciar. */
+function ProfileSettings(): React.JSX.Element {
+  const [birthday, setLocal] = useState<Birthday | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    getBirthday()
+      .then(setLocal)
+      .catch(() => setLocal({ day: null, month: null, year: null, announce: true }))
+  }, [])
+
+  const save = async (next: Birthday): Promise<void> => {
+    setLocal(next)
+    // Só salva quando dá: os dois vazios ou dia e mês escolhidos.
+    if (birthdayError(next)) return
+    setSaving(true)
+    try {
+      setLocal(await setBirthday(next))
+    } catch (err) {
+      showToast.error(err instanceof Error ? err.message : 'Não foi possível salvar o aniversário.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!birthday) return <div className="rounded-xl border border-white/10 bg-white/5 p-4" />
+
+  const error = birthdayError(birthday)
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-400">Perfil</h3>
+      <div className="flex flex-col gap-3">
+        <BirthdayFields
+          value={birthday}
+          onChange={(value) => void save({ ...birthday, ...value })}
+        />
+        {error && <p className="text-xs text-amber-300">{error}</p>}
+        <p className="text-[11px] text-gray-500">
+          Sua idade aparece só para você, no recado de feliz aniversário.
+        </p>
+        <Toggle
+          title="Anunciar meu aniversário nos servidores"
+          description="No seu dia, os servidores mandam uma mensagem de parabéns no canal principal e você vê um recado ao abrir o app."
+          checked={birthday.announce}
+          onChange={() => void save({ ...birthday, announce: !birthday.announce })}
+        />
+        {saving && <p className="text-[11px] text-gray-500">Salvando…</p>}
+      </div>
+    </div>
+  )
+}
+
 /**
  * Preferências do app: no desktop, onde há suporte (ex.: Windows); no
- * navegador, só as notificações (sem iniciar com o sistema nem overlay).
+ * navegador, perfil e notificações (sem iniciar com o sistema nem overlay).
  */
 function AppSettings(): React.JSX.Element | null {
   const background = window.api?.background
@@ -120,7 +177,13 @@ function AppSettings(): React.JSX.Element | null {
     void background?.getAutostart().then(setAutostart)
   }, [background])
 
-  if (!background && !IS_WEB) return null
+  if (!background && !IS_WEB) {
+    return (
+      <div className="flex flex-col gap-4">
+        <ProfileSettings />
+      </div>
+    )
+  }
 
   const toggleAutostart = (): void => {
     void background?.setAutostart(!autostart).then((value) => {
@@ -130,6 +193,7 @@ function AppSettings(): React.JSX.Element | null {
 
   return (
     <div className="flex flex-col gap-4">
+      <ProfileSettings />
       {typeof autostart === 'boolean' && (
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <Toggle

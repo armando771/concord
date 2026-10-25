@@ -61,6 +61,8 @@ export interface Message {
   reply_to?: ReplyPreview | null
   reactions?: ReactionSummary[]
   content: string
+  /** Mensagem do próprio servidor (ex.: "birthday"). */
+  system_kind?: string | null
   poll?: Poll | null
   attachments?: Attachment[] | null
   created_at: string

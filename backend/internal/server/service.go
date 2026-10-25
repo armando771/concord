@@ -74,6 +74,27 @@ func (s *Service) FindByID(ctx context.Context, id string) (*Server, error) {
 	return s.repository.FindByID(ctx, id)
 }
 
+// SetPrimaryChannel troca o canal principal e avisa o servidor.
+func (s *Service) SetPrimaryChannel(ctx context.Context, serverID string, channelID string) (*Server, error) {
+	if err := s.repository.SetPrimaryChannel(ctx, serverID, channelID); err != nil {
+		return nil, err
+	}
+
+	updated, err := s.repository.FindByID(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.publisher != nil {
+		s.publisher.PublishServerUpdate(UpdateEvent{
+			ServerID: updated.ID,
+			Server:   *updated,
+		})
+	}
+
+	return updated, nil
+}
+
 func (s *Service) Update(ctx context.Context, id string, name string, iconURL string) (*Server, error) {
 	if name == "" {
 		return nil, errors.New("name is required")

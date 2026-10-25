@@ -35,6 +35,33 @@ func TestServesReleaseFiles(t *testing.T) {
 	}
 }
 
+func TestServesLinuxRelease(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"latest-linux.yml":               "version: 0.7.0\npath: Salinha-0.7.0-x64.AppImage\n",
+		"Salinha-0.7.0-x64.AppImage":     "appimage",
+		"Salinha-0.7.0-x64.AppImage.sig": "assinatura",
+	}
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	Routes(router, dir)
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		for _, method := range []string{http.MethodGet, http.MethodHead} {
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, httptest.NewRequest(method, "/updates/"+name, nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("%s %s: status=%d", method, name, rec.Code)
+			}
+			if method == http.MethodGet && rec.Body.String() != content {
+				t.Fatalf("%s: body=%q", name, rec.Body.String())
+			}
+		}
+	}
+}
+
 func TestDoesNotListDirectory(t *testing.T) {
 	dir := t.TempDir()
 	_ = os.WriteFile(filepath.Join(dir, "latest.yml"), []byte("x"), 0o644)
