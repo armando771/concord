@@ -8,7 +8,10 @@ import PollCard from './poll/PollCard'
 import CreatePollModal from './poll/CreatePollModal'
 import MessageAttachments from './chat/MessageAttachments'
 import { PaperclipIcon, PollIcon } from './icons'
-import { ACCEPT_ATTRIBUTE, canSubmit, draftStatus } from '../lib/attachments'
+import { ACCEPT_ATTRIBUTE, canSubmit, draftStatus, uploadErrorMessage } from '../lib/attachments'
+import { uploadAttachment } from '../api/attachments'
+import { ApiError } from '../api/client'
+import VoiceRecordButton from './chat/VoiceRecordButton'
 import ComposerAttachments from './chat/ComposerAttachments'
 import { useAttachmentDraft } from './chat/useAttachmentDraft'
 
@@ -136,6 +139,7 @@ function ChatPane({
   // dragenter/dragleave disparam a cada filho; o contador evita piscar.
   const dragDepth = useRef(0)
   const [dragging, setDragging] = useState(false)
+  const [sendingVoice, setSendingVoice] = useState(false)
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
   const [highlight, setHighlight] = useState(0)
   const meUsername = useAuthStore((s) => s.user?.username)
@@ -223,6 +227,22 @@ function ChatPane({
       showToast.error(err instanceof Error ? err.message : 'Falha ao enviar mensagem.')
     } finally {
       setSending(false)
+    }
+  }
+
+  // Áudio gravado vai sozinho; o texto digitado continua no campo.
+  const handleRecorded = async (blob: Blob, durationMs: number): Promise<void> => {
+    setSendingVoice(true)
+    try {
+      const attachment = await uploadAttachment(room, blob, {
+        filename: 'gravacao.webm',
+        duration_ms: durationMs
+      })
+      await sendToRoom(room, '', [attachment.id])
+    } catch (err) {
+      showToast.error(uploadErrorMessage(err instanceof ApiError ? err.status : 0))
+    } finally {
+      setSendingVoice(false)
     }
   }
 
@@ -346,7 +366,7 @@ function ChatPane({
         <ComposerAttachments drafts={drafts} onRemove={removeAttachment} />
         <form
           onSubmit={handleSubmit}
-          className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
+          className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
         >
           <button
             type="button"
@@ -392,6 +412,7 @@ function ChatPane({
             maxLength={2000}
             className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 outline-none"
           />
+          <VoiceRecordButton key={room} disabled={sendingVoice} onRecorded={handleRecorded} />
           <button
             type="submit"
             disabled={sending || !submittable}
