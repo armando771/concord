@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  overlayBounds,
+  overlayFrame,
+  overlayWindowRect,
+  OVERLAY_WINDOW_MARGIN,
   overlayShortcuts,
   parseForegroundLine,
   shouldShowOverlay,
@@ -72,11 +74,65 @@ describe('shouldShowOverlay', () => {
   })
 })
 
-describe('overlayBounds', () => {
-  it('cobre a área de trabalho inteira do monitor do jogo (a lista é posicionada pelo CSS)', () => {
+describe('overlayWindowRect', () => {
+  const workArea = { x: -1920, y: 0, width: 1920, height: 1040 }
+  const box = { width: 200, height: 120 }
+  const m = OVERLAY_WINDOW_MARGIN
+  const centered = { position: null, scale: 1 }
+
+  it('fora da edição: só a caixa da lista, com margem, na posição padrão', () => {
+    // Padrão: borda esquerda (margem de 8 do CSS), no meio da altura.
+    expect(overlayWindowRect(workArea, centered, box, false)).toEqual({
+      x: -1920 + 8 - m,
+      y: 460 - m,
+      width: 200 + 2 * m,
+      height: 120 + 2 * m
+    })
+  })
+
+  it('posição salva (fração da área) dá o mesmo lugar que o CSS', () => {
+    expect(
+      overlayWindowRect(workArea, { position: { x: 0.5, y: 0.25 }, scale: 1.2 }, box, false)
+    ).toEqual({ x: -1920 + 960 - m, y: 260 - m, width: 216, height: 136 })
+  })
+
+  it('caixa na borda: a margem é cortada, a janela não sai da área de trabalho', () => {
+    expect(overlayWindowRect(workArea, { position: { x: 1, y: 1 }, scale: 1 }, box, false)).toEqual(
+      { x: -1920 + 1720 - m, y: 920 - m, width: 200 + m, height: 120 + m }
+    )
+    expect(overlayWindowRect(workArea, { position: { x: 0, y: 0 }, scale: 1 }, box, false)).toEqual(
+      { x: -1920, y: 0, width: 200 + m, height: 120 + m }
+    )
+  })
+
+  it('editando: a área de trabalho inteira (para arrastar a qualquer lugar)', () => {
+    expect(overlayWindowRect(workArea, centered, box, true)).toEqual(workArea)
+    expect(overlayWindowRect(workArea, centered, box, true)).not.toBe(workArea)
+  })
+
+  it('caixa ainda não medida: área inteira, para a página poder medir', () => {
+    expect(overlayWindowRect(workArea, centered, null, false)).toEqual(workArea)
+    expect(overlayWindowRect(workArea, centered, { width: 0, height: 0 }, false)).toEqual(workArea)
+  })
+
+  it('caixa maior que a área: fica na área', () => {
+    expect(overlayWindowRect({ x: 0, y: 0, width: 100, height: 80 }, centered, box, false)).toEqual(
+      { x: 0, y: 0, width: 100, height: 80 }
+    )
+  })
+})
+
+describe('overlayFrame', () => {
+  it('diz à página o tamanho da área e onde a janela está dentro dela', () => {
     const workArea = { x: -1920, y: 0, width: 1920, height: 1040 }
-    expect(overlayBounds(workArea)).toEqual(workArea)
-    expect(overlayBounds(workArea)).not.toBe(workArea)
+    expect(overlayFrame(workArea, { x: -1920, y: 452, width: 216, height: 136 })).toEqual({
+      area: { width: 1920, height: 1040 },
+      origin: { x: 0, y: 452 }
+    })
+    expect(overlayFrame(workArea, workArea)).toEqual({
+      area: { width: 1920, height: 1040 },
+      origin: { x: 0, y: 0 }
+    })
   })
 })
 

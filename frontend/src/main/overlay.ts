@@ -2,17 +2,26 @@ import { app, BrowserWindow, globalShortcut, ipcMain, screen } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
-import { normalizeOverlayLayout } from '../renderer/src/lib/overlayLayout'
+import {
+  normalizeOverlayLayout,
+  settleOverlayDraft,
+  shownOverlayLayout,
+  type OverlayDraft,
+  type OverlayLayout,
+  type OverlaySize
+} from '../renderer/src/lib/overlayLayout'
 import { appendLog } from './appLog'
 import { startForegroundWatch, stopForegroundWatch } from './foregroundWatch'
 import {
   OVERLAY_EDIT_SHORTCUT,
   OVERLAY_EXIT_SHORTCUT,
-  overlayBounds,
+  overlayFrame,
   overlayShortcuts,
+  overlayWindowRect,
   shouldShowOverlay,
   shouldWatchForeground,
   type Foreground,
+  type OverlayFrame,
   type Rect
 } from './overlayPolicy'
 
@@ -20,8 +29,9 @@ import {
 // jogo em tela cheia em janela (nada é injetado no jogo). O renderer principal
 // manda o estado da call; o helper diz qual janela está na frente.
 //
-// A janela cobre a área de trabalho do monitor do jogo e a lista é uma caixa lá
-// dentro. Shift+Tab (só com o overlay à vista) liga o modo de edição: a janela
+// A lista é uma caixa posicionada pelo CSS dentro da área de trabalho do
+// monitor do jogo. A janela fica só em volta dela (a página mede e avisa o
+// tamanho) e cresce para a área inteira só no modo de edição. Shift+Tab (só com o overlay à vista) liga o modo de edição: a janela
 // passa a aceitar o mouse para arrastar/redimensionar a caixa. Continua sem foco
 // (focusable: false = WS_EX_NOACTIVATE no Windows: recebe clique e arraste sem
 // tirar o foco do jogo); por isso o Esc é um atalho global, não um keydown.
@@ -38,6 +48,13 @@ let editing = false
 // disso o atalho não liga a edição: seria uma tela inteira pegando cliques sem
 // moldura nem dica.
 let pageReady = false
+// Área de trabalho do monitor do jogo (DIP), tamanho da lista medido pela página,
+// último arraste vindo da página (até o salvo chegar) e o que já foi aplicado.
+let workArea: Rect | null = null
+let box: OverlaySize | null = null
+let pageDraft: OverlayDraft | null = null
+let placed: Rect | null = null
+let frame: OverlayFrame | null = null
 // Atalhos globais pedidos agora → se o registro deu certo. Um que falhou
 // (outro app segurando) só é tentado de novo depois de soltar.
 const held = new Map<string, boolean>()
@@ -81,7 +98,9 @@ function createOverlayWindow(): BrowserWindow {
   overlay.webContents.on('did-start-loading', () => {
     if (win !== overlay) return
     pageReady = false
+    box = null
     setEditing(false)
+    placeWindow()
     applyShortcuts()
   })
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -92,12 +111,60 @@ function createOverlayWindow(): BrowserWindow {
   return overlay
 }
 
-/** Liga/desliga o modo de edição: fora dele, a janela sempre ignora o mouse. */
+function savedLayout(): OverlayLayout {
+  return normalizeOverlayLayout(snapshot?.layout)
+}
+
+function sameRect(a: Rect, b: Rect): boolean {
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+}
+
+/**
+ * Janela no lugar da lista (ou na área inteira, editando). Só mexe quando o
+ * retângulo muda: o estado chega a cada fala, e cada setBounds custa um
+ * SetWindowPos e um relayout da página.
+ */
+function placeWindow(): void {
+  if (!win || !workArea) return
+  const rect = overlayWindowRect(
+    workArea,
+    shownOverlayLayout(savedLayout(), pageDraft),
+    box,
+    editing
+  )
+  if (!placed || !sameRect(placed, rect)) {
+    win.setBounds(rect)
+    // Monitores com escalas diferentes: o primeiro setBounds pode sair com a
+    // escala do monitor antigo; o segundo acerta.
+    const got = win.getBounds()
+    if (got && !sameRect(got, rect)) win.setBounds(rect)
+    placed = rect
+  }
+  const next = overlayFrame(workArea, rect)
+  if (
+    !frame ||
+    frame.area.width !== next.area.width ||
+    frame.area.height !== next.area.height ||
+    frame.origin.x !== next.origin.x ||
+    frame.origin.y !== next.origin.y
+  ) {
+    frame = next
+    win.webContents.send('overlay:frame', next)
+  }
+}
+
+/**
+ * Liga/desliga o modo de edição: fora dele, a janela sempre ignora o mouse.
+ * Entrando, a janela cresce antes de pegar o mouse; saindo, solta o mouse antes
+ * de encolher.
+ */
 function setEditing(next: boolean): void {
   if (editing === next) return
   editing = next
+  if (!next) win?.setIgnoreMouseEvents(true)
+  placeWindow()
   if (win) {
-    win.setIgnoreMouseEvents(!next)
+    if (next) win.setIgnoreMouseEvents(false)
     win.webContents.send('overlay:editing', next)
   }
 }
@@ -129,10 +196,6 @@ function applyShortcuts(): void {
   })
 }
 
-function sameRect(a: Rect, b: Rect): boolean {
-  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
-}
-
 function sync(): void {
   if (quitting) return
   if (shouldWatchForeground(process.platform, snapshot)) {
@@ -153,17 +216,15 @@ function sync(): void {
     if (!win) {
       editing = false
       pageReady = false
+      box = null
+      placed = null
+      frame = null
       win = createOverlayWindow()
     }
-    // O helper fala em pixels físicos; o Electron posiciona em DIP. A janela
-    // cobre a área de trabalho desse monitor; a lista é posicionada pelo CSS.
+    // O helper fala em pixels físicos; o Electron posiciona em DIP.
     const display = screen.getDisplayMatching(screen.screenToDipRect(null, foreground.monitor))
-    const bounds = overlayBounds(display.workArea)
-    win.setBounds(bounds)
-    // Monitores com escalas diferentes: o primeiro setBounds pode sair com a
-    // escala do monitor antigo; o segundo acerta.
-    const got = win.getBounds()
-    if (got && !sameRect(got, bounds)) win.setBounds(bounds)
+    workArea = display.workArea
+    placeWindow()
     win.setAlwaysOnTop(true, 'screen-saver')
     if (!win.isVisible()) win.showInactive()
     win.moveTop()
@@ -182,19 +243,33 @@ function sync(): void {
 export function setupOverlay(getMainWindow: () => BrowserWindow | null): void {
   ipcMain.on('overlay:state', (_event, next: OverlaySnapshot) => {
     snapshot = next
+    pageDraft = settleOverlayDraft(savedLayout(), pageDraft)
     sync()
   })
   // Página do overlay carregou (já ouvindo os eventos): último estado e se está
   // editando. Só a partir daqui o atalho liga a edição.
   ipcMain.handle('overlay:ready', (event) => {
     if (win && !quitting && event.sender === win.webContents) pageReady = true
-    return { snapshot, editing }
+    return { snapshot, editing, frame }
+  })
+  // Página do overlay → tamanho da lista (muda com a escala e com quem entra/sai).
+  ipcMain.on('overlay:box', (event, raw: unknown) => {
+    if (quitting || !win || event.sender !== win.webContents) return
+    const size = raw as { width?: unknown; height?: unknown } | null
+    const ok = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
+    if (!size || !ok(size.width) || !ok(size.height)) return
+    box = { width: Math.ceil(size.width), height: Math.ceil(size.height) }
+    placeWindow()
   })
   // Página do overlay → posição/tamanho novos (fim do arraste). Quem salva é o
   // renderer principal (preferências do overlay), que manda de volta no estado.
   ipcMain.on('overlay:layout', (event, raw: unknown) => {
     if (quitting || !win || event.sender !== win.webContents) return
-    getMainWindow()?.webContents.send('overlay:layout', normalizeOverlayLayout(raw))
+    const layout = normalizeOverlayLayout(raw)
+    // A janela já vai para o lugar novo; o salvo chega depois pelo estado.
+    pageDraft = { layout, base: savedLayout() }
+    placeWindow()
+    getMainWindow()?.webContents.send('overlay:layout', layout)
   })
   app.on('render-process-gone', (_event, contents) => {
     // Renderer principal caiu: sem estado da call, o overlay some.

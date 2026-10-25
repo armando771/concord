@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
-import type { OverlayLayout } from '../renderer/src/lib/overlayLayout'
+import type { OverlayFrame, OverlayLayout } from '../renderer/src/lib/overlayLayout'
 import type { CallResume, PendingCallResume } from '../shared/callResume'
 
 interface ScreenSourceInfo {
@@ -135,8 +135,22 @@ const api = {
      * Página do overlay: avisa que carregou (chamar depois de assinar onUpdate e
      * onEditing) e recebe o último estado e se está no modo de edição.
      */
-    ready(): Promise<{ snapshot: OverlaySnapshot | null; editing: boolean }> {
+    ready(): Promise<{
+      snapshot: OverlaySnapshot | null
+      editing: boolean
+      frame: OverlayFrame | null
+    }> {
       return ipcRenderer.invoke('overlay:ready')
+    },
+    /** Página do overlay: onde a janela está na área de trabalho (muda ao mover/editar). */
+    onFrame(cb: (frame: OverlayFrame) => void): () => void {
+      const listener = (_e: unknown, frame: OverlayFrame): void => cb(frame)
+      ipcRenderer.on('overlay:frame', listener)
+      return () => ipcRenderer.removeListener('overlay:frame', listener)
+    },
+    /** Página do overlay: tamanho medido da lista, para a janela ficar só em volta dela. */
+    reportBox(size: { width: number; height: number }): void {
+      ipcRenderer.send('overlay:box', size)
     },
     /** Página do overlay: novos estados. */
     onUpdate(cb: (snapshot: OverlaySnapshot) => void): () => void {

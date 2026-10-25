@@ -11,6 +11,7 @@ import {
   placeOverlayBox,
   resizeOverlayScale,
   sameOverlayLayout,
+  settleOverlayDraft,
   shownOverlayLayout
 } from './overlayLayout'
 
@@ -187,5 +188,27 @@ describe('shownOverlayLayout', () => {
     expect(shownOverlayLayout(OVERLAY_DEFAULT_LAYOUT, { layout: dragged, base: old })).toBe(
       OVERLAY_DEFAULT_LAYOUT
     )
+  })
+})
+
+describe('settleOverlayDraft', () => {
+  const old = { position: { x: 0.1, y: 0.1 }, scale: 1 }
+  const dragged = { position: { x: 0.5, y: 0.5 }, scale: 1.2 }
+
+  it('salvo ainda o de antes do arraste: continua valendo o arraste', () => {
+    const draft = { layout: dragged, base: old }
+    expect(settleOverlayDraft(old, draft)).toBe(draft)
+  })
+
+  it('o salvo mudou: o arraste acabou (e não volta se o salvo voltar ao de antes)', () => {
+    const draft = { layout: dragged, base: old }
+    const settled = settleOverlayDraft(dragged, draft)
+    expect(settled).toBeNull()
+    // "Restaurar posição" para exatamente o de antes do arraste: vale o salvo.
+    expect(shownOverlayLayout(old, settled)).toBe(old)
+  })
+
+  it('sem arraste, nada', () => {
+    expect(settleOverlayDraft(old, null)).toBeNull()
   })
 })

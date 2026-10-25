@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
       sent: [string, unknown][]
       webContents: unknown
       contentsHandlers: Record<string, () => void>
+      setBoundsCalls: number
     }[],
     shortcuts: {} as Record<string, () => void>,
     shortcutsTaken: [] as string[],
@@ -51,7 +52,9 @@ vi.mock('electron', () => {
     on = vi.fn()
     loadFile = vi.fn()
     loadURL = vi.fn()
+    setBoundsCalls = 0
     setBounds(bounds: unknown): void {
+      this.setBoundsCalls++
       this.bounds = bounds
     }
     getBounds(): unknown {
@@ -139,6 +142,13 @@ const sendState = (s: unknown): unknown => h.state.handlers['overlay:state']({},
 /** Página do overlay avisa que carregou (e pergunta o estado atual). */
 const ready = (w = h.state.windows.at(-1)): unknown =>
   h.state.handlers['overlay:ready']({ sender: w?.webContents })
+const reportBox = (size: unknown, w = h.state.windows.at(-1)): unknown =>
+  h.state.handlers['overlay:box']({ sender: w?.webContents }, size)
+const lastFrame = (w: (typeof h.state.windows)[number]): unknown =>
+  w.sent.filter(([ch]) => ch === 'overlay:frame').at(-1)?.[1]
+const workArea = { x: 0, y: 0, width: 1920, height: 1040 }
+/** Caixa 200×120 na posição padrão (esquerda, meio): janela só em volta dela. */
+const boxRect = { x: 0, y: 452, width: 216, height: 136 }
 /** Jogo na frente e página do overlay pronta. */
 const showGame = (): void => {
   h.state.onChange?.(game)
@@ -177,11 +187,95 @@ describe('overlay', () => {
     })
   })
 
-  it('a janela cobre a área de trabalho do monitor do jogo', async () => {
+  it('antes de a página medir a lista, a janela cobre a área de trabalho', async () => {
     await setup()
     sendState(inCall)
     showGame()
-    expect(h.state.windows[0].bounds).toEqual({ x: 0, y: 0, width: 1920, height: 1040 })
+    expect(h.state.windows[0].bounds).toEqual(workArea)
+  })
+
+  it('com a lista medida, a janela fica só em volta dela; a página sabe onde ela está', async () => {
+    await setup()
+    sendState(inCall)
+    showGame()
+    const w = h.state.windows[0]
+    reportBox({ width: 200, height: 120 })
+    expect(w.bounds).toEqual(boxRect)
+    expect(lastFrame(w)).toEqual({
+      area: { width: 1920, height: 1040 },
+      origin: { x: 0, y: 452 }
+    })
+    expect(ready()).toMatchObject({
+      frame: { area: { width: 1920, height: 1040 }, origin: { x: 0, y: 452 } }
+    })
+  })
+
+  it('editando, a janela cresce para a área inteira; ao sair, volta para a lista', async () => {
+    await setup()
+    sendState(inCall)
+    showGame()
+    const w = h.state.windows[0]
+    reportBox({ width: 200, height: 120 })
+    press('Shift+Tab')
+    expect(w.bounds).toEqual(workArea)
+    expect(lastFrame(w)).toEqual({ area: { width: 1920, height: 1040 }, origin: { x: 0, y: 0 } })
+    press('Escape')
+    expect(w.bounds).toEqual(boxRect)
+  })
+
+  it('posição nova da página move a janela na hora (sem esperar o renderer principal)', async () => {
+    await setup()
+    sendState(inCall)
+    showGame()
+    const w = h.state.windows[0]
+    reportBox({ width: 200, height: 120 })
+    press('Shift+Tab')
+    h.state.handlers['overlay:layout'](
+      { sender: w.webContents },
+      { position: { x: 0.5, y: 0.25 }, scale: 1 }
+    )
+    press('Shift+Tab')
+    expect(w.bounds).toEqual({ x: 952, y: 252, width: 216, height: 136 })
+    // O estado salvo chega com a mesma posição: nada muda.
+    sendState({ ...inCall, layout: { position: { x: 0.5, y: 0.25 }, scale: 1 } })
+    expect(w.bounds).toEqual({ x: 952, y: 252, width: 216, height: 136 })
+    // "Restaurar posição" nas configurações vence.
+    sendState({ ...inCall, layout: { position: null, scale: 1 } })
+    expect(w.bounds).toEqual(boxRect)
+  })
+
+  it('não mexe na janela a cada estado novo (ex.: alguém falando)', async () => {
+    await setup()
+    sendState(inCall)
+    showGame()
+    const w = h.state.windows[0]
+    reportBox({ width: 200, height: 120 })
+    const calls = w.setBoundsCalls
+    sendState({ ...inCall })
+    sendState({ ...inCall })
+    reportBox({ width: 200, height: 120 })
+    expect(w.setBoundsCalls).toBe(calls)
+  })
+
+  it('tamanho da lista de outra página ou estragado é ignorado', async () => {
+    await setup()
+    sendState(inCall)
+    showGame()
+    const w = h.state.windows[0]
+    h.state.handlers['overlay:box']({ sender: {} }, { width: 200, height: 120 })
+    reportBox({ width: 'x', height: 120 })
+    reportBox(null)
+    expect(w.bounds).toEqual(workArea)
+  })
+
+  it('recarregar a página volta para a área inteira até ela medir de novo', async () => {
+    await setup()
+    sendState(inCall)
+    showGame()
+    const w = h.state.windows[0]
+    reportBox({ width: 200, height: 120 })
+    w.contentsHandlers['did-start-loading']()
+    expect(w.bounds).toEqual(workArea)
   })
 
   it('Shift+Tab só fica registrado com o overlay à vista', async () => {
@@ -283,7 +377,7 @@ describe('overlay', () => {
     expect(shortcuts()).toEqual([])
     expect(h.state.watching).toBe(false)
     expect(h.state.windows[0].destroyed).toBe(true)
-    expect(ready()).toEqual({ snapshot: null, editing: false })
+    expect(ready()).toMatchObject({ snapshot: null, editing: false })
 
     sendState(inCall)
     showGame()
@@ -300,7 +394,7 @@ describe('overlay', () => {
     press('Shift+Tab')
     expect(w.ignoreMouse).toBe(true)
     expect(lastEditing(w)).toBeUndefined()
-    expect(ready()).toEqual({ snapshot: inCall, editing: false })
+    expect(ready()).toMatchObject({ snapshot: inCall, editing: false })
     press('Shift+Tab')
     expect(w.ignoreMouse).toBe(false)
     expect(lastEditing(w)).toBe(true)
@@ -311,7 +405,7 @@ describe('overlay', () => {
     sendState(inCall)
     showGame()
     press('Shift+Tab')
-    expect(ready()).toEqual({ snapshot: inCall, editing: true })
+    expect(ready()).toMatchObject({ snapshot: inCall, editing: true })
   })
 
   it('"pronto" de outra página não libera o atalho', async () => {
@@ -335,7 +429,7 @@ describe('overlay', () => {
     // Até a página nova avisar que carregou, o atalho não faz nada.
     press('Shift+Tab')
     expect(w.ignoreMouse).toBe(true)
-    expect(ready()).toEqual({ snapshot: inCall, editing: false })
+    expect(ready()).toMatchObject({ snapshot: inCall, editing: false })
   })
 
   it('página do overlay caiu no meio da edição: janela nova, sem edição, até ficar pronta', async () => {

@@ -1,4 +1,12 @@
 import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
+import {
+  placeOverlayBox,
+  type OverlayFrame,
+  type OverlayLayout,
+  type OverlaySize
+} from '../renderer/src/lib/overlayLayout'
+
+export type { OverlayFrame }
 
 // Regras do overlay de jogo. Puras para poder testar.
 
@@ -42,13 +50,40 @@ export function shouldShowOverlay(
   )
 }
 
+/** Folga em volta da caixa da lista na janela do overlay (anel de quem fala, sombra). */
+export const OVERLAY_WINDOW_MARGIN = 8
+
 /**
- * Janela do overlay: a área de trabalho inteira do monitor do jogo, em DIP.
- * A lista é uma caixa posicionada pelo CSS lá dentro (lib/overlayLayout), então
- * mover/redimensionar não mexe na janela.
+ * Janela do overlay, em DIP. Fora da edição, só a caixa da lista (no mesmo
+ * lugar que o CSS da página calcula, a partir das mesmas frações) com uma
+ * margem, cortada na área de trabalho: uma janela transparente pequena por cima
+ * do jogo custa menos para o compositor. Editando (ou com a caixa ainda sem
+ * medida), a área de trabalho inteira, para arrastar a qualquer lugar.
  */
-export function overlayBounds(workArea: Rect): Rect {
-  return { x: workArea.x, y: workArea.y, width: workArea.width, height: workArea.height }
+export function overlayWindowRect(
+  workArea: Rect,
+  layout: OverlayLayout,
+  box: OverlaySize | null,
+  editing: boolean
+): Rect {
+  if (editing || !box || box.width <= 0 || box.height <= 0) {
+    return { x: workArea.x, y: workArea.y, width: workArea.width, height: workArea.height }
+  }
+  const area = { width: workArea.width, height: workArea.height }
+  const pos = placeOverlayBox(layout.position, area, box)
+  const m = OVERLAY_WINDOW_MARGIN
+  const left = Math.max(0, Math.round(pos.left - m))
+  const top = Math.max(0, Math.round(pos.top - m))
+  const right = Math.min(area.width, Math.round(pos.left + box.width + m))
+  const bottom = Math.min(area.height, Math.round(pos.top + box.height + m))
+  return { x: workArea.x + left, y: workArea.y + top, width: right - left, height: bottom - top }
+}
+
+export function overlayFrame(workArea: Rect, rect: Rect): OverlayFrame {
+  return {
+    area: { width: workArea.width, height: workArea.height },
+    origin: { x: rect.x - workArea.x, y: rect.y - workArea.y }
+  }
 }
 
 /** Atalho para mover/redimensionar o overlay. Ver overlayShortcuts. */

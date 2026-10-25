@@ -7,9 +7,11 @@ import {
   pixelsToFraction,
   placeOverlayBox,
   resizeOverlayScale,
+  settleOverlayDraft,
   shownOverlayLayout,
   type OverlayBoxPx,
   type OverlayDraft,
+  type OverlayFrame,
   type OverlayLayout,
   type OverlaySize
 } from '../lib/overlayLayout'
@@ -55,16 +57,12 @@ function OverlayPill({
   )
 }
 
-/** Tamanho da janela = área de trabalho do monitor do jogo (px do CSS = DIP). */
-function useAreaSize(): OverlaySize {
-  const read = (): OverlaySize => ({ width: window.innerWidth, height: window.innerHeight })
-  const [area, setArea] = useState(read)
-  useEffect(() => {
-    const onResize = (): void => setArea(read())
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
-  return area
+/**
+ * Área de trabalho do monitor do jogo e onde a janela começa nela (DIP = px do
+ * CSS). Até o main dizer, a janela é a área inteira.
+ */
+function initialFrame(): OverlayFrame {
+  return { area: { width: window.innerWidth, height: window.innerHeight }, origin: { x: 0, y: 0 } }
 }
 
 interface Drag {
@@ -80,17 +78,19 @@ interface Drag {
 }
 
 /**
- * Overlay de jogo: lista de quem está na call, por cima do jogo. A janela cobre
- * a área de trabalho e ignora o mouse; a lista é uma caixa posicionada aqui.
- * No modo de edição (Shift+Tab, controlado pelo main) a caixa ganha moldura e
- * dá para arrastar e redimensionar. O estado vem do main.
+ * Overlay de jogo: lista de quem está na call, por cima do jogo. A lista é uma
+ * caixa posicionada aqui em coordenadas da área de trabalho; a janela (que
+ * ignora o mouse) fica só em volta dela, e o main diz onde ela começa (frame).
+ * No modo de edição (atalho, controlado pelo main) a janela vira a área inteira
+ * e a caixa ganha moldura para arrastar e redimensionar. O estado vem do main.
  */
 function OverlayApp(): React.JSX.Element | null {
   const [snapshot, setSnapshot] = useState<OverlaySnapshot | null>(null)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<OverlayDraft | null>(null)
   const [box, setBox] = useState<OverlaySize>({ width: 0, height: 0 })
-  const area = useAreaSize()
+  const [frame, setFrame] = useState<OverlayFrame>(initialFrame)
+  const { area, origin } = frame
   const boxRef = useRef<HTMLDivElement | null>(null)
   const drag = useRef<Drag | null>(null)
   const draftRef = useRef<OverlayDraft | null>(null)
@@ -99,18 +99,25 @@ function OverlayApp(): React.JSX.Element | null {
     const overlay = window.api?.overlay
     if (!overlay) return
     let alive = true
-    const offUpdate = overlay.onUpdate(setSnapshot)
+    const offUpdate = overlay.onUpdate((next) => {
+      setSnapshot(next)
+      // Salvo novo: o arraste que esperava por ele acabou.
+      setDraft((prev) => settleOverlayDraft(normalizeOverlayLayout(next.layout), prev))
+    })
     const offEditing = overlay.onEditing(setEditing)
+    const offFrame = overlay.onFrame(setFrame)
     // Depois de assinar: o main só liga a edição com a página ouvindo.
     overlay.ready().then((state) => {
       if (!alive) return
       if (state.snapshot) setSnapshot((prev) => prev ?? state.snapshot)
+      if (state.frame) setFrame(state.frame)
       setEditing(state.editing)
     })
     return () => {
       alive = false
       offUpdate()
       offEditing()
+      offFrame()
     }
   }, [])
 
@@ -132,18 +139,17 @@ function OverlayApp(): React.JSX.Element | null {
     if (!editing && drag.current) commit()
   }, [editing, commit])
 
-  // Tamanho da caixa (muda com a escala e com quem entra/sai), para mantê-la na tela.
+  // Tamanho da caixa (muda com a escala e com quem entra/sai): para mantê-la na
+  // tela e para o main deixar a janela só em volta dela.
   const hasMembers = !!snapshot && snapshot.members.length > 0
   useEffect(() => {
     const el = boxRef.current
     if (!el) return
-    const observer = new ResizeObserver(() =>
-      setBox((prev) =>
-        prev.width === el.offsetWidth && prev.height === el.offsetHeight
-          ? prev
-          : { width: el.offsetWidth, height: el.offsetHeight }
-      )
-    )
+    const observer = new ResizeObserver(() => {
+      const size = { width: el.offsetWidth, height: el.offsetHeight }
+      window.api?.overlay?.reportBox(size)
+      setBox((prev) => (prev.width === size.width && prev.height === size.height ? prev : size))
+    })
     observer.observe(el)
     return () => observer.disconnect()
   }, [hasMembers])
@@ -197,11 +203,16 @@ function OverlayApp(): React.JSX.Element | null {
     <div className="relative h-full w-full">
       <div
         ref={boxRef}
-        className={`absolute rounded-xl border-2 p-2 ${
+        // w-max: a largura não depende da janela (que é do tamanho da caixa).
+        className={`absolute w-max rounded-xl border-2 p-2 ${
           editing ? 'cursor-move border-dashed border-[#23a55a] bg-black/20' : 'border-transparent'
         }`}
         // Escondida até medir: sem o tamanho, não dá para centralizar nem encaixar.
-        style={{ left: pos.left, top: pos.top, visibility: box.width ? 'visible' : 'hidden' }}
+        style={{
+          left: pos.left - origin.x,
+          top: pos.top - origin.y,
+          visibility: box.width ? 'visible' : 'hidden'
+        }}
         onPointerDown={(e) => begin('move', e)}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

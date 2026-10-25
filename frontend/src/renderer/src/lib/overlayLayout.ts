@@ -28,6 +28,15 @@ export interface OverlayBoxPx {
   top: number
 }
 
+/**
+ * Para a página do overlay: tamanho da área de trabalho e onde a janela começa
+ * dentro dela (a janela fica só em volta da lista fora da edição).
+ */
+export interface OverlayFrame {
+  area: OverlaySize
+  origin: { x: number; y: number }
+}
+
 export const OVERLAY_SCALE_MIN = 0.7
 export const OVERLAY_SCALE_MAX = 1.6
 export const OVERLAY_SCALE_STEP = 0.05
@@ -154,4 +163,16 @@ export function shownOverlayLayout(
   draft: OverlayDraft | null
 ): OverlayLayout {
   return draft && sameOverlayLayout(saved, draft.base) ? draft.layout : saved
+}
+
+/**
+ * A cada salvo novo: se ele já não é o de quando o arraste começou, o arraste
+ * acabou (chegou o salvo dele, ou "Restaurar posição") e é largado, para não
+ * voltar se o salvo depois voltar ao de antes.
+ */
+export function settleOverlayDraft(
+  saved: OverlayLayout,
+  draft: OverlayDraft | null
+): OverlayDraft | null {
+  return draft && sameOverlayLayout(saved, draft.base) ? draft : null
 }
