@@ -122,6 +122,7 @@ const sounds = vi.hoisted(() => ({ playSound: vi.fn(), setSoundOutput: vi.fn() }
 vi.mock('../lib/sounds', () => sounds)
 
 import { useCallStore } from './callStore'
+import { ApiError } from '../api/client'
 
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0))
 
@@ -579,6 +580,56 @@ describe('callStore — reentrada após queda do WS', () => {
     expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'call-1', active: true })
   })
 
+  it('reconectar o WS (deploy) não toca som nem reconecta a mídia', async () => {
+    await joinChannel()
+    sounds.playSound.mockClear()
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(sounds.playSound).not.toHaveBeenCalled()
+    expect(media.instances).toHaveLength(1)
+    expect(media.instances[0].disconnect).not.toHaveBeenCalled()
+    expect(useCallStore.getState().status).toBe('active')
+  })
+
+  it('ao reconectar, reenvia o mudo e que não estou transmitindo (o servidor pode ter ficado velho)', async () => {
+    await joinChannel()
+    useCallStore.getState().toggleMute()
+    chat.sendEvent.mockClear()
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:voice', {
+      call_id: 'call-1',
+      muted: true,
+      deafened: false
+    })
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'call-1', active: false })
+  })
+
+  it('ao reconectar, o mudo dos outros vem do servidor', async () => {
+    await joinChannel()
+    useCallStore.getState().handleWsEvent({
+      type: 'call:voice',
+      payload: { call_id: 'call-1', user_id: 'ana', muted: false, deafened: false }
+    })
+    // Na queda, a ana mutou e o evento se perdeu.
+    api.getCallState.mockResolvedValueOnce({
+      call: null,
+      participants: [participant('eu'), { ...participant('ana'), muted: true }]
+    } as never)
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(useCallStore.getState().voiceStates.ana).toEqual({ muted: true, deafened: false })
+  })
+
   it('não faz nada ao reconectar o WS fora de chamada', async () => {
     useCallStore.getState().handleWsReconnect()
     await flush()
@@ -597,6 +648,73 @@ describe('callStore — reentrada após queda do WS', () => {
       mediaPeers: { caio: 'Caio' }
     })
     expect(useCallStore.getState().mediaPeers).toEqual({ caio: 'Caio' })
+  })
+})
+
+describe('callStore — DM após queda do WS', () => {
+  const ana = { id: 'ana', username: 'ana', display_name: 'Ana' }
+
+  async function inDmWithAna(): Promise<void> {
+    api.startCall.mockResolvedValue({ id: 'dm-1' })
+    await useCallStore.getState().startDMCall('conversa-1', ana)
+    useCallStore.getState().handleWsEvent({
+      type: 'call:accept',
+      payload: { call_id: 'dm-1', user: ana }
+    })
+    await flush()
+    await flush()
+  }
+
+  it('reenvia mudo e tela e lê o estado, sem reconectar a mídia nem tirar a outra pessoa', async () => {
+    await inDmWithAna()
+    expect(useCallStore.getState().status).toBe('active')
+    useCallStore.getState().toggleMute()
+    chat.sendEvent.mockClear()
+    api.getCallState.mockClear()
+    api.getCallState.mockResolvedValueOnce({
+      call: null,
+      participants: [{ user_id: 'eu' }, { user_id: 'ana', username: 'ana', deafened: true }]
+    } as never)
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(api.getCallState).toHaveBeenCalledWith('dm-1')
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:voice', {
+      call_id: 'dm-1',
+      muted: true,
+      deafened: false
+    })
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'dm-1', active: false })
+    expect(useCallStore.getState().voiceStates.ana).toEqual({ muted: false, deafened: true })
+    expect(useCallStore.getState().participants.map((p) => p.id)).toEqual(['ana'])
+    expect(media.instances).toHaveLength(1)
+    expect(api.startCall).toHaveBeenCalledTimes(1)
+  })
+
+  it('DM que acabou durante a queda fecha a chamada', async () => {
+    await inDmWithAna()
+    const gone = Object.assign(new ApiError(404, 'call not found'), { status: 404 })
+    api.getCallState.mockRejectedValueOnce(gone as never)
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(useCallStore.getState().status).toBe('idle')
+    expect(useCallStore.getState().callId).toBeNull()
+  })
+
+  it('erro passageiro ao ler o estado mantém a DM', async () => {
+    await inDmWithAna()
+    api.getCallState.mockRejectedValueOnce(new Error('rede') as never)
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(useCallStore.getState().status).toBe('active')
   })
 })
 

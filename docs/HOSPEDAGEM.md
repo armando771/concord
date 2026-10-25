@@ -286,6 +286,12 @@ ao receber o 1012, reconecta em 100–300 ms (em vez de 1 s, 2 s, 4 s…) e não
 mostra aviso. "Reconectando ao servidor…" só aparece se a conexão ficar fora
 por mais de 3 s.
 
+Ao reconectar, o app recupera o que se perdeu na queda, sem som, notificação
+nem reconexão da mídia: mensagens novas das salas abertas (sem duplicar),
+presença, conversas, servidores e canais, amigos, a lista dos canais de voz e
+o estado da chamada (canal ou DM). Ele também reenvia o próprio mudo/ensurdecido
+e se está transmitindo a tela.
+
 `GET /healthz` responde `200` só com o servidor pronto (banco respondendo e
 chamadas recarregadas) e `503` enquanto sobe ou desliga. Não aparece no log.
 

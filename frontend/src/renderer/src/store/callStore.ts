@@ -171,7 +171,7 @@ interface CallState {
   focusWatchedScreen: (userId: string) => void
   setServerCalls: (map: Record<string, CallStateResponse>) => void
   joinVoiceChannel: (channelId: string) => Promise<void>
-  /** WS de chat reconectou: volta a se registrar na chamada de canal, se houver. */
+  /** WS de chat (re)conectou: ressincroniza a chamada (canal ou DM) e as listas de voz. */
   handleWsReconnect: () => void
   handleWsEvent: (event: WsEvent) => void
 }
@@ -343,16 +343,22 @@ export const useCallStore = create<CallState>()((set, get) => {
   }
 
   /**
-   * Lê o estado da chamada no backend. `replace` troca a lista inteira (usado
-   * ao reentrar, quando a lista local pode ter ficado velha); senão só soma
-   * quem faltava (eventos call:joined podem ter chegado antes).
+   * Lê o estado da chamada no backend. `replace` (ao reentrar ou reconectar,
+   * quando o local pode ter ficado velho) faz o servidor valer: troca a lista
+   * de quem está no canal e o mudo/ensurdecido de todos; senão só soma quem
+   * faltava (eventos call:joined/call:voice podem ter chegado antes). Na DM a
+   * lista nunca encolhe: o outro lado é a própria chamada.
+   * 'gone': a chamada não existe mais no servidor.
    */
-  const loadCallState = async (callId: string, replace: boolean): Promise<void> => {
+  const loadCallState = async (
+    callId: string,
+    replace: boolean
+  ): Promise<'ok' | 'gone' | 'error'> => {
     const meId = useAuthStore.getState().user?.id
-    if (!meId) return
+    if (!meId) return 'error'
     try {
       const state = await getCallState(callId)
-      if (get().callId !== callId) return
+      if (get().callId !== callId) return 'error'
       const others = state.participants
         .filter((p) => p.user_id && p.user_id !== meId)
         .map((p) => ({
@@ -374,13 +380,26 @@ export const useCallStore = create<CallState>()((set, get) => {
           ...(replace ? {} : s.voiceStates)
         },
         focusedScreenUserId: s.focusedScreenUserId,
-        participants: replace
-          ? others
-          : [...s.participants, ...others.filter((p) => !s.participants.some((q) => q.id === p.id))]
+        participants:
+          replace && s.type === 'channel'
+            ? others
+            : [
+                ...s.participants,
+                ...others.filter((p) => !s.participants.some((q) => q.id === p.id))
+              ]
       }))
-    } catch {
+      return 'ok'
+    } catch (err) {
       // estado indisponível: a lista se forma pelos eventos call:joined
+      return err instanceof ApiError && err.status === 404 ? 'gone' : 'error'
     }
+  }
+
+  /** Reenvia ao servidor se estou transmitindo (ou não) — corrige o que se perdeu na queda. */
+  const sendScreenState = (callId: string): void => {
+    useChatStore
+      .getState()
+      .sendEvent('call:screen', { call_id: callId, active: localScreenStream !== null })
   }
 
   /**
@@ -409,15 +428,35 @@ export const useCallStore = create<CallState>()((set, get) => {
       await loadCallState(call.id, true)
       if (get().callId !== call.id) return
       sendVoiceState()
-      if (localScreenStream) {
-        useChatStore.getState().sendEvent('call:screen', { call_id: call.id, active: true })
-      }
+      sendScreenState(call.id)
       bumpList()
     } catch {
       // segue com a mídia; a próxima reconexão tenta de novo
     } finally {
       resyncing = false
     }
+  }
+
+  /**
+   * DM depois de o WS de chat reconectar (ex.: deploy do servidor): eventos da
+   * queda se perderam. Atualiza o estado (mudo, tela) sem mexer na mídia e
+   * reenvia o meu; se a chamada acabou nesse meio-tempo, fecha a tela dela.
+   */
+  const resyncDmCall = async (): Promise<void> => {
+    const { status, type, callId } = get()
+    if (type !== 'dm' || !callId || status === 'idle') return
+    // Tocando, ainda não sou participante: o servidor responde 403 (nada muda)
+    // ou 404 se a chamada acabou (o reinício encerra as que só tocavam).
+    const result = await loadCallState(callId, true)
+    if (get().callId !== callId) return
+    if (result === 'gone') {
+      cleanup()
+      bumpList()
+      return
+    }
+    if (result !== 'ok' || get().status !== 'active') return
+    sendVoiceState()
+    sendScreenState(callId)
   }
 
   const cleanup = (): void => {
@@ -948,6 +987,9 @@ export const useCallStore = create<CallState>()((set, get) => {
 
     handleWsReconnect: () => {
       void resyncChannelCall()
+      void resyncDmCall()
+      // Listas dos canais de voz (quem está em cada um, LIVE) voltam a valer.
+      bumpList()
     },
 
     handleWsEvent: (event) => {

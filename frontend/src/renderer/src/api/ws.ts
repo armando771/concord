@@ -30,8 +30,11 @@ interface WsClientConfig {
   getToken: () => string | null
   getUserId: () => string | null
   onEvent: (event: WsEvent) => void
-  /** Conexão (re)aberta, depois de reassinar as salas. */
-  onOpen?: () => void
+  /**
+   * Conexão (re)aberta, depois de reassinar as salas. `reconnected`: já tinha
+   * aberto antes desde o connect() — eventos da queda podem ter se perdido.
+   */
+  onOpen?: (reconnected: boolean) => void
   /** Conexão caiu (ou uma tentativa de reconectar falhou) sem ser por disconnect(). */
   onLost?: () => void
 }
@@ -45,6 +48,8 @@ export class WsClient {
   private attempt = 0
   /** O servidor avisou que estava reiniciando (1012): reconecta logo. */
   private serverRestarting = false
+  /** Já abriu alguma vez desde o connect(). */
+  private everOpened = false
   private retryTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(config: WsClientConfig) {
@@ -53,6 +58,7 @@ export class WsClient {
 
   connect(): void {
     this.closedByUser = false
+    this.everOpened = false
     this.open()
   }
 
@@ -104,7 +110,9 @@ export class WsClient {
       for (const room of this.subscriptions) {
         this.send({ type: 'subscribe', payload: { room } })
       }
-      this.config.onOpen?.()
+      const reconnected = this.everOpened
+      this.everOpened = true
+      this.config.onOpen?.(reconnected)
     }
 
     ws.onmessage = (event: MessageEvent) => {

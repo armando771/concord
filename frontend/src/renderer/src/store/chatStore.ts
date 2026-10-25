@@ -29,6 +29,7 @@ import {
 } from '../api/messages'
 import { applyReactionAdd, applyReactionRemove } from '../lib/emotes'
 import { applyPollUpdate, messagePreview, type PollUpdate } from '../lib/polls'
+import { mergeMissedMessages } from '../lib/missedMessages'
 import type { ConversationSummary } from '../api/conversations'
 import { listConversations } from '../api/conversations'
 import type { PresenceMap } from '../api/presence'
@@ -82,6 +83,8 @@ interface ChatState {
   subscribeRoom: (room: RoomKey) => void
   unsubscribeRoom: (room: RoomKey) => void
   handleWsEvent: (event: WsEvent) => void
+  /** WS voltou (ex.: deploy): busca o que se perdeu na queda, sem som nem notificação. */
+  resyncAfterReconnect: () => Promise<void>
   handleFriendRemoved: (userId: string) => void
   handleServerDeleted: (serverId: string) => void
   reset: () => void
@@ -149,9 +152,10 @@ const client = new WsClient({
   getToken: () => useAuthStore.getState().accessToken,
   getUserId: () => useAuthStore.getState().user?.id ?? null,
   onEvent: (event) => useChatStore.getState().handleWsEvent(event),
-  onOpen: () => {
+  onOpen: (reconnected) => {
     reconnectNotice.restored()
     useCallStore.getState().handleWsReconnect()
+    if (reconnected) void useChatStore.getState().resyncAfterReconnect()
   },
   onLost: () => reconnectNotice.lost()
 })
@@ -430,6 +434,51 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     } catch (err) {
       console.error('[chatStore] fetchChannelsForServers error:', err)
     }
+  },
+
+  resyncAfterReconnect: async () => {
+    const token = useAuthStore.getState().accessToken
+    if (!token) return
+    const rooms = Object.keys(get().messagesByRoom)
+    const resyncRoom = async (room: RoomKey): Promise<void> => {
+      try {
+        const latest = await getRoomFetch(room)()
+        if (useAuthStore.getState().accessToken !== token) return
+        set((state) => {
+          const current = state.messagesByRoom[room]
+          if (!current) return {} // sala fechada enquanto buscava
+          const { messages, added, reset } = mergeMissedMessages(current, latest)
+          // Já estão na tela: um evento atrasado da mesma mensagem não notifica.
+          for (const m of added) notifiedMessages.add(m.id)
+          const unread =
+            room !== state.activeRoom && added.length > 0
+              ? { ...state.unreadByRoom, [room]: (state.unreadByRoom[room] ?? 0) + added.length }
+              : state.unreadByRoom
+          return {
+            messagesByRoom: { ...state.messagesByRoom, [room]: messages },
+            unreadByRoom: unread,
+            hasMoreByRoom: reset
+              ? { ...state.hasMoreByRoom, [room]: latest.length >= MESSAGE_LIMIT }
+              : state.hasMoreByRoom
+          }
+        })
+      } catch (err) {
+        console.error(`[chatStore] resync ${room} failed:`, err)
+      }
+    }
+
+    const servers = useServerStore.getState()
+    const currentServerId = servers.currentServer?.id
+    await Promise.all([
+      ...rooms.map(resyncRoom),
+      get().fetchConversations(),
+      get().fetchPresenceFor(Object.keys(get().presence)),
+      get().fetchChannelsForServers(Object.keys(get().channelsByServer)),
+      servers.fetchServers(),
+      currentServerId ? servers.fetchChannels(currentServerId) : Promise.resolve(),
+      useFriendStore.getState().loadAll(),
+      useLevelStore.getState().loadMe()
+    ])
   },
 
   sendEvent: (type, payload) => {
@@ -744,8 +793,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
 
     const friendUser = payload.user as
-      | { id: string; username: string; display_name: string }
-      | undefined
+      { id: string; username: string; display_name: string } | undefined
 
     if (event.type === 'friend:request') {
       useFriendStore.getState().loadAll()
