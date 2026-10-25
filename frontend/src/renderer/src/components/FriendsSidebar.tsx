@@ -6,6 +6,7 @@ import { useFriendStore } from '../store/friendStore'
 import { useInviteStore } from '../store/inviteStore'
 import { useChatStore } from '../store/chatStore'
 import { logout } from '../api/auth'
+import { clearSession } from '../api/client'
 import Modal from './Modal'
 import Button from './Button'
 import VoiceConnectedPanel from './call/VoiceConnectedPanel'
@@ -34,7 +35,6 @@ export function FriendsSidebar(): React.JSX.Element {
   const navigate = useNavigate()
   const { userId } = useParams<{ userId: string }>()
   const user = useAuthStore((s) => s.user)
-  const clear = useAuthStore((s) => s.clear)
   const pending = useFriendStore((s) => s.pending)
   const loadAll = useFriendStore((s) => s.loadAll)
   const friendsTab = useUIStore((s) => s.friendsTab)
@@ -63,7 +63,7 @@ export function FriendsSidebar(): React.JSX.Element {
       useFriendStore.getState().reset()
       useInviteStore.getState().reset()
       useChatStore.getState().disconnect()
-      clear()
+      await clearSession()
       setSettingsOpen(false)
       navigate('/login')
     }

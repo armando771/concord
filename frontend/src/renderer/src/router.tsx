@@ -1,4 +1,4 @@
-import { createHashRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter, createHashRouter, Navigate } from 'react-router-dom'
 import Home from './pages/Home'
 import Friends from './pages/Friends'
 import ServerView from './pages/ServerView'
@@ -9,8 +9,14 @@ import Register from './pages/Register'
 import RequireAuth from './components/RequireAuth'
 import RedirectIfAuthed from './components/RedirectIfAuthed'
 import AppShell from './components/AppShell'
+import { IS_WEB } from './lib/config'
 
-export const router = createHashRouter([
+// Desktop carrega de file:// e precisa do hash (#/rota). No navegador as rotas
+// são caminhos de verdade: o Caddy devolve o index.html para qualquer rota
+// (try_files), então recarregar em /servers/… continua no mesmo lugar.
+const createRouter = IS_WEB ? createBrowserRouter : createHashRouter
+
+export const router = createRouter([
   {
     path: '/',
     element: (

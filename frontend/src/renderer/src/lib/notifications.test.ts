@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   type AppNotification,
   callNotification,
@@ -6,7 +6,9 @@ import {
   desktopPayload,
   mentionNotification,
   messageNotification,
-  notificationSound
+  notificationSound,
+  notifyDesktop,
+  setWebNotifier
 } from './notifications'
 import type { Message } from '../api/messages'
 
@@ -143,5 +145,38 @@ describe('desktopPayload', () => {
   it('chamada recebida sempre avisa, mesmo com tudo desligado', () => {
     const prefs = { desktop: false, taskbar: false, sound: false }
     expect(desktopPayload(call, prefs)).toMatchObject({ urgent: true, toast: true, taskbar: true })
+  })
+})
+
+describe('notifyDesktop', () => {
+  const dm: AppNotification = { kind: 'message', title: 'Ana', body: 'oi', route: '/dm/1' }
+  const prefs = { desktop: true, taskbar: false, sound: true }
+
+  afterEach(() => {
+    setWebNotifier(null)
+    vi.unstubAllGlobals()
+  })
+
+  it('no Electron vai para o processo main, nunca para o aviso do navegador', () => {
+    const notify = vi.fn()
+    const web = vi.fn()
+    vi.stubGlobal('window', { api: { background: { notify } } })
+    setWebNotifier(web)
+    notifyDesktop(dm, prefs)
+    expect(notify).toHaveBeenCalledWith(desktopPayload(dm, prefs))
+    expect(web).not.toHaveBeenCalled()
+  })
+
+  it('no navegador entrega o mesmo payload ao aviso do build web', () => {
+    const web = vi.fn()
+    vi.stubGlobal('window', {})
+    setWebNotifier(web)
+    notifyDesktop(dm, prefs)
+    expect(web).toHaveBeenCalledWith(desktopPayload(dm, prefs))
+  })
+
+  it('sem Electron e sem aviso ligado, não faz nada', () => {
+    vi.stubGlobal('window', {})
+    expect(() => notifyDesktop(dm, prefs)).not.toThrow()
   })
 })

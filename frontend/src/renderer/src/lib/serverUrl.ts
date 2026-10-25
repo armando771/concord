@@ -41,3 +41,55 @@ export function buildConnectSrc(serverUrl: string | undefined): string {
 export function buildMediaSrc(serverUrl: string | undefined): string {
   return `'self' blob: ${normalize(serverUrl).origin}`
 }
+
+export interface ResolveOptions {
+  /** Build web (navegador): o backend está na mesma origem da página. */
+  web: boolean
+  /** VITE_SERVER_URL do build desktop (ignorado no web). */
+  serverUrl?: string
+  /** location.origin da página (só usado no web). */
+  pageOrigin?: string
+}
+
+/**
+ * Endereços que o app usa. Desktop: o servidor embutido no build. Navegador:
+ * a mesma origem da página — API relativa e WebSocket/LiveKit em ws(s) do
+ * mesmo host (https → wss, sem conteúdo misto).
+ */
+export function resolveServerUrls({ web, serverUrl, pageOrigin }: ResolveOptions): ServerUrls {
+  if (!web) return deriveServerUrls(serverUrl)
+  const wsOrigin = toWsOrigin(normalize(pageOrigin))
+  return {
+    apiBaseUrl: '/api',
+    wsUrl: `${wsOrigin}/ws`,
+    liveKitUrl: wsOrigin
+  }
+}
+
+/**
+ * `connect-src` do build web. `'self'` já cobre o ws(s) da mesma origem nos
+ * navegadores atuais; o wss do endereço público entra explícito para os que
+ * ainda não tratam assim.
+ */
+export function buildWebConnectSrc(publicUrl: string | undefined): string {
+  const url = publicUrl?.trim()
+  return url ? `'self' ${toWsOrigin(new URL(url))}` : "'self'"
+}
+
+/** `media-src` do build web: arquivos do chat na própria origem e prévias `blob:`. */
+export function buildWebMediaSrc(): string {
+  return "'self' blob:"
+}
+
+/** Diretivas que só o build web acrescenta à CSP (o desktop fica como está). */
+export const WEB_EXTRA_CSP = "base-uri 'self'"
+
+/** Preenche os marcadores da CSP do index.html; `extra` vem depois do connect-src. */
+export function fillCsp(
+  html: string,
+  { connectSrc, mediaSrc, extra }: { connectSrc: string; mediaSrc: string; extra?: string }
+): string {
+  return html
+    .replace('%CONCORD_CONNECT_SRC%', extra ? `${connectSrc}; ${extra}` : connectSrc)
+    .replaceAll('%CONCORD_MEDIA_SRC%', mediaSrc)
+}

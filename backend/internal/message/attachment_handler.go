@@ -301,6 +301,10 @@ func (h *AttachmentHandler) ServeFile(c *gin.Context) {
 	header := c.Writer.Header()
 	header.Set("Content-Type", a.ContentType)
 	header.Set("X-Content-Type-Options", "nosniff")
+	// O app web roda na mesma origem da mídia (e dos tokens no localStorage):
+	// aberto direto, o arquivo não roda script nem carrega nada. Imagem,
+	// vídeo e áudio dentro do app não são afetados.
+	header.Set("Content-Security-Policy", "default-src 'none'; sandbox")
 	header.Set("Cache-Control", "private, max-age=3600")
 	header.Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": a.Filename}))
 	// ServeContent responde Range (seek de vídeo/áudio) e If-Modified-Since.

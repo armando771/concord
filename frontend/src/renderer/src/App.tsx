@@ -9,6 +9,9 @@ import UpdateCallBridge from './components/UpdateCallBridge'
 import UserContextMenu from './components/UserContextMenu'
 import UserProfileCard from './components/UserProfileCard'
 import TitleBar from './components/TitleBar'
+import WebNotificationBridge from './components/WebNotificationBridge'
+import WebLeaveGuard from './components/WebLeaveGuard'
+import { IS_WEB } from './lib/config'
 import { currentPlatform, hasCustomTitleBar } from './lib/titleBar'
 
 const customTitleBar = hasCustomTitleBar(currentPlatform())
@@ -18,10 +21,20 @@ function App(): React.JSX.Element {
     <>
       <Background />
       <ToastContainer />
-      <BackgroundBridge />
-      <OverlayBridge />
-      <UpdateNotice />
-      <UpdateCallBridge />
+      {IS_WEB ? (
+        <>
+          <WebNotificationBridge />
+          <WebLeaveGuard />
+        </>
+      ) : (
+        <>
+          {/* Só no Electron: bandeja, overlay de jogo e atualizações. */}
+          <BackgroundBridge />
+          <OverlayBridge />
+          <UpdateNotice />
+          <UpdateCallBridge />
+        </>
+      )}
       <UserContextMenu />
       <UserProfileCard />
       {customTitleBar ? (
