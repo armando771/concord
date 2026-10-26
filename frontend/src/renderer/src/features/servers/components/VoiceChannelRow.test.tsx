@@ -1,0 +1,193 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router-dom'
+
+// O callStore de verdade puxa o áudio (AudioWorklet) que não existe no vitest.
+const call = vi.hoisted(() => ({ state: {} as Record<string, unknown> }))
+vi.mock('../../call/store/callStore', () => ({
+  useCallStore: Object.assign((sel: (s: unknown) => unknown) => sel(call.state), {
+    getState: () => call.state
+  })
+}))
+
+// Puxa a atividade da chamada (e com ela o áudio); aqui basta um selo vazio.
+vi.mock('../../call/components/CallActivityBadge', () => ({
+  default: () => <span data-atividade="" />
+}))
+
+vi.mock('../../activity/components/ActivityLine', () => ({ GameBadge: () => null }))
+
+// SSR lê o estado atual do zustand (mesmo truque do ImageContextMenu.test).
+vi.spyOn(React, 'useSyncExternalStore').mockImplementation((_subscribe, getSnapshot) =>
+  getSnapshot()
+)
+
+import type { Channel } from '../api/channels'
+import type { CallParticipant } from '../../call/api/calls'
+import type { ServerAccess } from '../lib/serverAccess'
+import { Perm } from '../lib/permissions'
+import { useAuthStore } from '../../auth/store/authStore'
+import { useMusicStore } from '../../music/store/musicStore'
+import { useServerStore } from '../store/serverStore'
+import VoiceChannelRow, { type VoiceChannelRowProps } from './VoiceChannelRow'
+
+const channel: Channel = {
+  id: 'v1',
+  server_id: 's1',
+  name: 'papo-de-voz',
+  type: 'voice',
+  created_by: 'dono',
+  created_at: '',
+  updated_at: ''
+}
+
+function fakeAccess(perms: number, opts: { isPrivate?: boolean } = {}): ServerAccess {
+  return {
+    isOwner: false,
+    perms,
+    highest: 0,
+    myRoles: [],
+    can: (want) => (perms & want) === want,
+    channelPerms: () => perms,
+    canInChannel: (_id, want) => (perms & want) === want,
+    highestOf: () => 0,
+    canActOnMember: () => true,
+    canChangeNickname: () => false,
+    canManage: () => false,
+    isPrivate: () => Boolean(opts.isPrivate)
+  }
+}
+
+const participant = (user_id: string, extra: Partial<CallParticipant> = {}): CallParticipant => ({
+  call_id: 'c1',
+  user_id,
+  role: 'member',
+  joined_at: '2026-01-01T00:00:00Z',
+  username: user_id,
+  display_name: user_id.toUpperCase(),
+  ...extra
+})
+
+function setCall(patch: Record<string, unknown>): void {
+  call.state = { ...call.state, ...patch }
+}
+
+function render(props: Partial<VoiceChannelRowProps> = {}): string {
+  return renderToStaticMarkup(
+    <MemoryRouter>
+      <VoiceChannelRow
+        channel={channel}
+        access={fakeAccess(Perm.VIEW_CHANNEL | Perm.CONNECT)}
+        dragging={false}
+        dropLine={null}
+        dropTarget={{ onDragOver: () => {}, onDrop: () => {} }}
+        dragSource={{}}
+        onJoin={() => {}}
+        {...props}
+      />
+    </MemoryRouter>
+  )
+}
+
+function inCall(participants: CallParticipant[], call: { locked?: boolean } = {}): void {
+  setCall({
+    serverCalls: {
+      v1: {
+        call: {
+          id: 'c1',
+          type: 'channel',
+          channel_id: 'v1',
+          initiator_id: 'ana',
+          status: 'active',
+          started_at: '2026-01-01T00:00:00Z',
+          ...call
+        },
+        participants
+      }
+    }
+  })
+}
+
+describe('VoiceChannelRow', () => {
+  beforeEach(() => {
+    useAuthStore.setState({ user: { id: 'eu', username: 'eu', display_name: 'Eu' } as never })
+    useServerStore.setState({ currentServer: { id: 's1' } as never, currentMembers: [] })
+    call.state = {
+      cancelJoinRequest: () => {},
+      muted: false,
+      deafened: false
+    }
+    setCall({
+      serverCalls: {},
+      status: 'idle',
+      type: null,
+      channelId: null,
+      knock: null,
+      speakingIds: [],
+      screenSharers: []
+    })
+    useMusicStore.setState({ presence: {} })
+  })
+
+  it('canal vazio: só o nome e o convite para conectar', () => {
+    const html = render()
+    expect(html).toContain('papo-de-voz')
+    expect(html).toContain('title="Conectar ao canal de voz"')
+    expect(html).toContain('pr-2.5')
+    expect(html).not.toContain('(restrito)')
+    expect(html).not.toContain('mb-1 ml-4')
+  })
+
+  it('sem permissão de entrar: cadeado de restrito e botão apagado', () => {
+    const html = render({ access: fakeAccess(Perm.VIEW_CHANNEL) })
+    expect(html).toContain('Sem permissão para entrar')
+    expect(html).toContain('opacity-60')
+  })
+
+  it('canal privado mostra o cadeado de privado', () => {
+    const html = render({
+      access: fakeAccess(Perm.VIEW_CHANNEL | Perm.CONNECT, { isPrivate: true })
+    })
+    expect(html).toContain('title="Canal privado"')
+  })
+
+  it('com gente: contagem, tempo, pessoas e o "•••" que troca com a contagem', () => {
+    inCall([participant('ana'), participant('eu', { muted: true })])
+    setCall({ status: 'active', type: 'channel', channelId: 'v1', muted: false })
+    const html = render({
+      access: fakeAccess(Perm.VIEW_CHANNEL | Perm.CONNECT | Perm.MOVE_MEMBERS),
+      renderMenuButton: (onHover) => <span data-menu={onHover ? 'hover' : 'fixo'} />,
+      menu: <div data-menu-aberto="" />
+    })
+    expect(html).toContain('title="Desconectar"')
+    expect(html).toContain('ANA')
+    expect(html).toContain('EU')
+    expect(html).toContain('data-menu="hover"')
+    expect(html).toContain('data-menu-aberto')
+    expect(html).toContain('group-hover/voicech:opacity-0')
+    expect(html).toContain('text-success')
+    expect(html).toContain('Arraste para outro canal de voz')
+  })
+
+  it('sala trancada, eu fora: pedir permissão', () => {
+    inCall([participant('ana')], { locked: true })
+    const html = render({ dragging: true })
+    expect(html).toContain('(trancada)')
+    expect(html).toContain('Sala trancada · Pedir permissão')
+    expect(html).toContain('opacity-40')
+  })
+
+  it('sala trancada: pedido enviado e pedido recusado', () => {
+    inCall([participant('ana')], { locked: true })
+    setCall({ knock: { channelId: 'v1', callId: 'c1', status: 'pending' } })
+    expect(render()).toContain('Pedido enviado...')
+    setCall({ knock: { channelId: 'v1', callId: 'c1', status: 'declined' } })
+    expect(render()).toContain('Pedido recusado')
+  })
+
+  it('o Maestro aparece como mais alguém no canal', () => {
+    useMusicStore.setState({ presence: { s1: ['v1'] } })
+    expect(render()).toContain('data-maestro-tile')
+  })
+})

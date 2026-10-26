@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuthStore } from '../../auth/store/authStore'
-import { useServerNicknames } from '../hooks/useServerNames'
 import { serverDisplayName } from '../lib/serverNames'
 import { useServerStore } from '../store/serverStore'
 import { useUIStore } from '../../../shared/store/uiStore'
@@ -16,20 +15,9 @@ import { useNotifySettingsStore } from '../../notifications/store/notifySettings
 import { resolveScope } from '../../notifications/lib/notificationMute'
 import { useNow } from '../../../shared/hooks/useNow'
 import { useCallStore } from '../../call/store/callStore'
-import VoiceStateIcons from '../../call/components/VoiceStateIcons'
-import VoiceChannelTimer from '../../call/components/VoiceChannelTimer'
-import LiveBadge from '../../call/components/LiveBadge'
-import { GameBadge } from '../../activity/components/ActivityLine'
-import CallActivityBadge from '../../call/components/CallActivityBadge'
-import { liveUserIds } from '../../call/lib/liveBadge'
-import { useUserAudioStore } from '../../call/store/userAudioStore'
 import { useLevelStore } from '../../levels/store/levelStore'
-import { sortVoiceMembers } from '../../call/lib/voiceOrder'
-import { userMenuHandler } from '../../profile/store/userMenuStore'
-import { profileCardHandler } from '../../profile/store/profileCardStore'
 import type { Channel, ChannelType } from '../api/channels'
-import { listActiveServerCalls, moveToVoiceChannel, type CallStateResponse } from '../../call/api/calls'
-import { canMoveVoiceUser, VOICE_USER_DRAG } from '../../call/lib/voiceMove'
+import { listActiveServerCalls, type CallStateResponse } from '../../call/api/calls'
 import {
   channelDragType,
   dropInsertionIndex,
@@ -45,11 +33,6 @@ import SidebarFooter from '../../../app/SidebarFooter'
 import ChannelPermissionsModal from './ChannelPermissionsModal'
 import ConfirmModal from '../../friends/components/ConfirmModal'
 import Switch from '../../../shared/ui/Switch'
-// Na lista do canal de voz o GIF anima sempre, como na chamada (ver CallAvatar).
-import Avatar from '../../call/components/CallAvatar'
-import MaestroAvatar from '../../music/components/MaestroAvatar'
-import { MAESTRO_NAME, maestroIdentity, T18 } from '../../music/lib/music'
-import { useMusicStore } from '../../music/store/musicStore'
 import {
   ChevronDownIcon,
   ChevronUpIcon,
@@ -60,24 +43,16 @@ import {
   PencilIcon,
   StarIcon,
   TrashIcon,
-  VolumeIcon,
-  VolumeOffIcon,
-  XIcon
+  VolumeIcon
 } from '../../../shared/ui/icons'
 import { setPrimaryChannel } from '../api/servers'
 import { primaryChannelId } from '../lib/primaryChannel'
 import ResizeHandle from '../../../shared/ui/ResizeHandle'
 import { useResizableWidth } from '../../../shared/hooks/useResizableWidth'
-import StyledName from '../../profile/components/StyledName'
 import { ChannelListSkeleton } from '../../../shared/ui/skeleton/layouts'
+import { WRAP_NAME } from '../lib/voiceChannelRow'
+import VoiceChannelRow from './VoiceChannelRow'
 import { Skeleton } from '../../../shared/ui/skeleton/Skeleton'
-
-/**
- * Nomes longos quebram linha em vez de cortar com "…" (o canal "predador-🐺-vs…"
- * aparecia pela metade). `anywhere` também quebra palavra gigante sem hífen.
- */
-const WRAP_NAME = 'break-words [overflow-wrap:anywhere]'
-const NO_CHANNELS: string[] = []
 
 export function ServerSidebar(): React.JSX.Element {
   const navigate = useNavigate()
@@ -85,12 +60,6 @@ export function ServerSidebar(): React.JSX.Element {
 
   const user = useAuthStore((s) => s.user)
   const currentServer = useServerStore((s) => s.currentServer)
-  const nicknames = useServerNicknames(currentServer?.id)
-  // Canais de voz em que o Maestro está tocando (aparece na lista do canal).
-  const maestroChannels = useMusicStore(
-    (s) => (currentServer ? s.presence[currentServer.id] : undefined) ?? NO_CHANNELS
-  )
-  const toggleMusicPanel = useMusicStore((s) => s.togglePanel)
   const roles = useServerStore((s) => s.roles)
   const channels = useServerStore((s) => s.channels)
   const channelsLoadedFor = useServerStore((s) => s.channelsLoadedFor)
@@ -109,22 +78,11 @@ export function ServerSidebar(): React.JSX.Element {
   const openCreateChannelModal = useUIStore((s) => s.openCreateChannelModal)
   const closeCreateChannelModal = useUIStore((s) => s.closeCreateChannelModal)
 
-  const callStatus = useCallStore((s) => s.status)
-  const activeCallType = useCallStore((s) => s.type)
-  const activeCallChannelId = useCallStore((s) => s.channelId)
   const callListVersion = useCallStore((s) => s.listVersion)
-  const speakingIds = useCallStore((s) => s.speakingIds)
-  const selfMuted = useCallStore((s) => s.muted)
-  const selfDeafened = useCallStore((s) => s.deafened)
-  const locallyMuted = useUserAudioStore((s) => s.settings)
   const serverCalls = useCallStore((s) => s.serverCalls)
-  const screenSharers = useCallStore((s) => s.screenSharers)
   const joinVoiceChannel = useCallStore((s) => s.joinVoiceChannel)
-  const knock = useCallStore((s) => s.knock)
-  const cancelJoinRequest = useCallStore((s) => s.cancelJoinRequest)
   const admittedChannelId = useCallStore((s) => s.admittedChannelId)
   const clearAdmittedChannel = useCallStore((s) => s.clearAdmittedChannel)
-  const levels = useLevelStore((s) => s.levels)
   const ensureLevels = useLevelStore((s) => s.ensureLevels)
 
   // Mesma preferência de largura na barra de canais e na de DMs/amigos.
@@ -193,22 +151,6 @@ export function ServerSidebar(): React.JSX.Element {
     (ch.type ?? 'text') === 'text' ||
     canManageChannels ||
     access.canInChannel(ch.id, Perm.MANAGE_ROLES)
-  /** Canal de voz sobre o qual alguém está sendo arrastado (moderadores). */
-  const [voiceDropTarget, setVoiceDropTarget] = useState<string | null>(null)
-  const canMove = (targetId: string, fromChannelId: string): boolean =>
-    canMoveVoiceUser({
-      meId: user?.id,
-      targetId,
-      canMoveMembers: access.canInChannel(fromChannelId, Perm.MOVE_MEMBERS),
-      canActOnTarget: access.canActOnMember(targetId)
-    })
-  const moveUser = async (userId: string, channelId: string): Promise<void> => {
-    try {
-      await moveToVoiceChannel(userId, channelId)
-    } catch (err) {
-      showToast.error(actionErrorMessage(err, 'Não foi possível mover.'))
-    }
-  }
 
   // Reordenar canais arrastando (dono/moderadores), cada um na sua seção.
   /** Canal sendo arrastado. */
@@ -835,278 +777,23 @@ export function ServerSidebar(): React.JSX.Element {
               {channelsReady && voiceChannels.length === 0 && (
                 <p className="px-2 text-ds-sm text-gray-500 italic">Nenhum canal de voz ainda.</p>
               )}
-              {voiceChannels.map((ch, index) => {
-                const callState = serverCalls[ch.id]
-                // O backend manda em ordem de entrada; aqui vale nível (ver voiceOrder).
-                const participants = sortVoiceMembers(callState?.participants ?? [], (p) => ({
-                  id: p.user_id,
-                  name: serverDisplayName({ nickname: nicknames?.[p.user_id] }, p),
-                  level: levels[p.user_id],
-                  joinedAt: p.joined_at
-                }))
-                const connectedHere =
-                  callStatus !== 'idle' &&
-                  activeCallType === 'channel' &&
-                  activeCallChannelId === ch.id
-                const live = liveUserIds(callState, connectedHere ? screenSharers : [])
-                const isLocked = Boolean(callState?.call?.locked)
-                const isPendingKnock = knock?.channelId === ch.id && knock.status === 'pending'
-                const isDeclinedKnock = knock?.channelId === ch.id && knock.status === 'declined'
-                return (
-                  <div
-                    key={ch.id}
-                    className={`relative transition-opacity ${
-                      channelDrag?.id === ch.id ? 'opacity-40' : ''
-                    }`}
-                    onDragOver={(e) => {
-                      // Arrastando um canal de voz (reordenar) ou uma pessoa (mover).
-                      channelDropTarget('voice', index).onDragOver(e)
-                      if (!e.dataTransfer.types.includes(VOICE_USER_DRAG)) return
-                      e.preventDefault()
-                      e.dataTransfer.dropEffect = 'move'
-                      setVoiceDropTarget(ch.id)
-                    }}
-                    onDragLeave={(e) => {
-                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-                        setVoiceDropTarget((cur) => (cur === ch.id ? null : cur))
-                      }
-                    }}
-                    onDrop={(e) => {
-                      channelDropTarget('voice', index).onDrop(e)
-                      const userId = e.dataTransfer.getData(VOICE_USER_DRAG)
-                      setVoiceDropTarget(null)
-                      if (!userId || participants.some((p) => p.user_id === userId)) return
-                      e.preventDefault()
-                      void moveUser(userId, ch.id)
-                    }}
-                  >
-                    {/* O "•••" é absoluto, alinhado à primeira linha do nome: precisa ficar
-                        preso à linha do canal, não ao bloco todo (que cresce com a lista). */}
-                    {dropLine('voice', index, index === voiceChannels.length - 1)}
-                    <div className="group/voicech relative" {...channelDragSource(ch, 'voice')}>
-                      <button
-                        onClick={() => handleVoiceClick(ch)}
-                        onContextMenu={channelContextMenu(ch)}
-                        title={
-                          connectedHere
-                            ? 'Desconectar'
-                            : access.canInChannel(ch.id, Perm.CONNECT)
-                              ? 'Conectar ao canal de voz'
-                              : 'Você não tem permissão para entrar neste canal'
-                        }
-                        className={`flex w-full items-start gap-2 rounded-lg py-1 pl-2.5 text-left text-ds-md font-medium transition-all cursor-pointer ${
-                          access.canInChannel(ch.id, Perm.CONNECT) ? '' : 'opacity-60'
-                        } ${
-                          // Sem gente, o "•••" fica sempre à direita: guarda o espaço dele.
-                          canOpenChannelMenu(ch) && participants.length === 0 ? 'pr-7' : 'pr-2.5'
-                        } ${
-                          voiceDropTarget === ch.id
-                            ? 'bg-brand/25 text-strong ring-2 ring-brand'
-                            : connectedHere
-                              ? 'text-strong hover:bg-fg/6'
-                              : 'text-gray-400 hover:bg-fg/6 hover:text-gray-200'
-                        }`}
-                      >
-                        {/* Verde só nos canais com gente (pode ser em vários ao mesmo tempo). */}
-                        <span className="flex h-6 shrink-0 items-center">
-                          <VolumeIcon
-                            className={`h-5 w-5 transition-colors ${
-                              participants.length > 0 ? 'text-success' : 'text-gray-500'
-                            }`}
-                          />
-                        </span>
-                        {/* Nome inteiro, quebrando linha; tempo e contagem ficam na
-                            altura da primeira linha. */}
-                        <span title={ch.name} className={`min-w-0 flex-1 leading-6 ${WRAP_NAME}`}>
-                          {ch.name}
-                          {isLocked && (
-                            <span
-                              title="Sala trancada"
-                              className="ml-1.5 inline-flex align-[-1px] text-amber-500/90"
-                            >
-                              <LockIcon className="h-3 w-3" />
-                              <span className="sr-only">(trancada)</span>
-                            </span>
-                          )}
-                          {(access.isPrivate(ch.id) ||
-                            !access.canInChannel(ch.id, Perm.CONNECT)) && (
-                            <span
-                              title={
-                                access.isPrivate(ch.id)
-                                  ? 'Canal privado'
-                                  : 'Sem permissão para entrar'
-                              }
-                              className="ml-1.5 inline-flex align-[-1px] text-gray-500"
-                            >
-                              <LockIcon className="h-3 w-3" />
-                              <span className="sr-only">(restrito)</span>
-                            </span>
-                          )}
-                        </span>
-                        {participants.length > 0 && callState?.call?.started_at && (
-                          <span className="flex h-6 shrink-0 items-center">
-                            <VoiceChannelTimer startedAt={callState.call.started_at} />
-                          </span>
-                        )}
-                        {participants.length > 0 && (
-                          <span
-                            className={`flex h-6 shrink-0 items-center transition-opacity ${
-                              canOpenChannelMenu(ch) ? 'group-hover/voicech:opacity-0' : ''
-                            }`}
-                          >
-                            <span className="rounded-full bg-fg/10 px-1.5 py-0.2 text-[10px] font-bold text-gray-300">
-                              {participants.length}
-                            </span>
-                          </span>
-                        )}
-                      </button>
-                      {/* Com gente no canal, o "•••" troca de lugar com a contagem no hover. */}
-                      {canOpenChannelMenu(ch) && channelMenuButton(ch, participants.length > 0)}
-                      {channelMenuFor === ch.id && channelMenu(ch)}
-
-                      {/* Overlay para salas trancadas quando o usuário não está conectado nela */}
-                      {isLocked &&
-                        !connectedHere &&
-                        (isPendingKnock ? (
-                          <div className="absolute inset-0 z-10 flex items-center justify-between rounded-lg bg-amber-950/80 px-2.5 backdrop-blur-sm border border-amber-500/40 animate-in fade-in duration-150">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="h-2 w-2 shrink-0 animate-ping rounded-full bg-amber-400" />
-                              <span className="truncate text-xs font-semibold text-amber-200">
-                                Pedido enviado...
-                              </span>
-                            </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                cancelJoinRequest()
-                              }}
-                              title="Cancelar pedido"
-                              className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-full bg-fg/10 text-gray-300 hover:bg-fg/20 hover:text-strong"
-                            >
-                              <XIcon className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ) : isDeclinedKnock ? (
-                          <div className="absolute inset-0 z-10 flex items-center gap-1.5 rounded-lg bg-red-950/80 px-2.5 backdrop-blur-sm border border-red-500/40 animate-in fade-in duration-150">
-                            <XIcon className="h-3.5 w-3.5 text-red-400 shrink-0" />
-                            <span className="truncate text-xs font-medium text-red-200">
-                              Pedido recusado
-                            </span>
-                          </div>
-                        ) : (
-                          <div
-                            onClick={() => handleVoiceClick(ch)}
-                            className="pointer-events-none group-hover/voicech:pointer-events-auto absolute inset-0 z-10 flex items-center justify-center gap-1.5 rounded-lg bg-black/80 px-2 opacity-0 backdrop-blur-xs transition-opacity group-hover/voicech:opacity-100 cursor-pointer border border-amber-500/20 on-media"
-                          >
-                            <LockIcon className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                            <span className="truncate text-xs font-semibold text-amber-200">
-                              Sala trancada · Pedir permissão
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                    {(participants.length > 0 || maestroChannels.includes(ch.id)) && (
-                      <div className="mb-1 ml-4 flex flex-col gap-0.5">
-                        {participants.map((p) => {
-                          const name = serverDisplayName({ nickname: nicknames?.[p.user_id] }, p)
-                          const isMe = p.user_id === user?.id
-                          // Só sabemos quem fala no canal em que estamos conectados.
-                          const talking = connectedHere && speakingIds.includes(p.user_id)
-                          return (
-                            <div
-                              key={p.user_id}
-                              onContextMenu={userMenuHandler(p.user_id, name, user?.id, p.username)}
-                              onClick={profileCardHandler(p.user_id, name, p.username, 'right')}
-                              draggable={canMove(p.user_id, ch.id)}
-                              onDragStart={(e) => {
-                                e.dataTransfer.setData(VOICE_USER_DRAG, p.user_id)
-                                e.dataTransfer.effectAllowed = 'move'
-                              }}
-                              onDragEnd={() => setVoiceDropTarget(null)}
-                              title={
-                                canMove(p.user_id, ch.id)
-                                  ? 'Arraste para outro canal de voz'
-                                  : undefined
-                              }
-                              className={`group/voiceuser relative flex items-center gap-2 overflow-hidden rounded-md px-2 py-1 transition-colors ${
-                                isMe ? 'bg-fg/5 hover:bg-fg/10' : 'hover:bg-fg/[0.06]'
-                              } ${canMove(p.user_id, ch.id) ? 'cursor-pointer active:cursor-grabbing' : 'cursor-pointer'}`}
-                            >
-                              <Avatar
-                                userId={p.user_id}
-                                name={name}
-                                avatarUrl={p.avatar_url}
-                                size={24}
-                                className={`rounded-full transition-shadow ${
-                                  talking ? 'ring-2 ring-success' : ''
-                                }`}
-                              />
-                              <span
-                                title={name}
-                                className={`min-w-0 truncate text-ds-sm transition-colors group-hover/voiceuser:text-strong ${
-                                  isMe ? 'font-bold text-strong' : 'font-medium text-gray-300'
-                                }`}
-                              >
-                                {nicknames?.[p.user_id] ? (
-                                  name
-                                ) : (
-                                  <StyledName name={name} userId={p.user_id} style={p.name_style} />
-                                )}
-                              </span>
-                              {/* Selo de nível só na lista de membros da direita; aqui o
-                                  nível só ordena a lista (ver voiceOrder). */}
-                              <span className="ml-auto flex items-center gap-0.5 pr-1">
-                                {/* Atividade da chamada: só sabemos de quem joga na nossa. */}
-                                {connectedHere && <CallActivityBadge userId={p.user_id} />}
-                                <GameBadge userId={p.user_id} />
-                                {live.has(p.user_id) && <LiveBadge />}
-                                {!isMe && locallyMuted[p.user_id]?.muted && (
-                                  <span title="Silenciado por você" className="text-gray-400">
-                                    <VolumeOffIcon className="h-3.5 w-3.5" />
-                                  </span>
-                                )}
-                                <VoiceStateIcons
-                                  muted={isMe && connectedHere ? selfMuted : p.muted}
-                                  deafened={isMe && connectedHere ? selfDeafened : p.deafened}
-                                  serverMuted={p.server_muted}
-                                  serverDeafened={p.server_deafened}
-                                />
-                              </span>
-                            </div>
-                          )
-                        })}
-                        {/* O Maestro aparece como mais alguém no canal; clicar nele
-                            abre o painel "Tocando agora" (não o perfil). */}
-                        {maestroChannels.includes(ch.id) && (
-                          <div
-                            data-maestro-tile=""
-                            onContextMenu={userMenuHandler(
-                              maestroIdentity(ch.id),
-                              MAESTRO_NAME,
-                              user?.id
-                            )}
-                            onClick={() => {
-                              toggleMusicPanel()
-                              if (currentServer?.id && channelId !== ch.id) {
-                                navigate(`/servers/${currentServer.id}/channels/${ch.id}`)
-                              }
-                            }}
-                            className="group/voiceuser relative flex cursor-pointer items-center gap-2 overflow-hidden rounded-md px-2 py-1 transition-colors hover:bg-fg/[0.06]"
-                          >
-                            <MaestroAvatar size={24} />
-                            <span className="min-w-0 truncate text-ds-sm font-medium text-gray-300 transition-colors group-hover/voiceuser:text-strong">
-                              {MAESTRO_NAME}
-                            </span>
-                            <span className="ml-auto mr-1 rounded bg-violet-400/30 px-1 text-[9px] font-bold uppercase text-violet-100">
-                              {T18.tag}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+              {voiceChannels.map((ch, index) => (
+                <VoiceChannelRow
+                  key={ch.id}
+                  channel={ch}
+                  access={access}
+                  dragging={channelDrag?.id === ch.id}
+                  dropLine={dropLine('voice', index, index === voiceChannels.length - 1)}
+                  dropTarget={channelDropTarget('voice', index)}
+                  dragSource={channelDragSource(ch, 'voice')}
+                  onJoin={() => handleVoiceClick(ch)}
+                  onContextMenu={channelContextMenu(ch)}
+                  renderMenuButton={
+                    canOpenChannelMenu(ch) ? (onHover) => channelMenuButton(ch, onHover) : undefined
+                  }
+                  menu={channelMenuFor === ch.id ? channelMenu(ch) : null}
+                />
+              ))}
             </div>
           </div>
         </div>
