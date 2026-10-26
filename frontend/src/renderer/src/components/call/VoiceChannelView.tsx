@@ -131,8 +131,8 @@ function VoiceChannelView({ channelId }: { channelId: string }): React.JSX.Eleme
             </div>
           )}
         </div>
-        {connectedHere && serverId && <MusicPanel serverId={serverId} />}
       </div>
+      {connectedHere && serverId && <MusicPanel serverId={serverId} />}
 
       {connectedHere && <CallControlsDock />}
     </div>
