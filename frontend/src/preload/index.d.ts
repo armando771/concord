@@ -3,6 +3,7 @@ import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
 import type { OverlayFrame, OverlayLayout } from '../renderer/src/lib/overlayLayout'
 import type { CallResume, PendingCallResume } from '../shared/callResume'
 import type { AppMetrics } from '../shared/appMetrics'
+import type { PortalStatus, ScreenShareFlow } from '../shared/screenShareFlow'
 
 export interface ScreenSourceInfo {
   id: string
@@ -25,6 +26,8 @@ export interface ScreenAudioApi {
 }
 
 export interface ScreenShareApi {
+  flow: ScreenShareFlow
+  portalStatus(): Promise<{ status: PortalStatus; message: string }>
   onWindowHidden(cb: () => void): () => void
   ended(): void
 }

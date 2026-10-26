@@ -15,6 +15,7 @@ function QualityDialog({
 }: {
   request: { resolve: (quality: ReturnType<typeof loadScreenQuality> | null) => void }
 }): React.JSX.Element {
+  const portal = window.api?.screenShare?.flow === 'portal'
   const [quality, setQuality] = useState(loadScreenQuality)
   const mounted = useRef(false)
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -50,6 +51,11 @@ function QualityDialog({
           Compartilhe sua tela
         </h2>
         <ScreenQualityControls value={quality} onChange={setQuality} />
+        {portal && (
+          <p className="mt-3 text-xs text-gray-400">
+            A tela é escolhida no seletor do sistema. No Linux, o som não vai junto — só o vídeo.
+          </p>
+        )}
         <div className="mt-5 flex justify-end gap-3">
           <Button variant="ghost" onClick={() => request.resolve(null)}>
             Cancelar

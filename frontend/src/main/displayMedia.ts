@@ -17,3 +17,21 @@ export function displayAudioMode(input: {
   if (input.sourceId.startsWith('window:')) return input.windowAudioOk ? 'window' : 'none'
   return 'system'
 }
+
+/**
+ * Avisa "sem som" só onde havia como isolar o som da janela (Windows). No
+ * Linux a tela nunca leva som: avisar a cada janela seria barulho.
+ */
+export function warnWindowAudioFallback(input: {
+  sourceId: string
+  audioRequested: boolean
+  platform: NodeJS.Platform
+  mode: DisplayAudioMode
+}): boolean {
+  return (
+    input.platform === 'win32' &&
+    input.audioRequested &&
+    input.mode === 'none' &&
+    input.sourceId.startsWith('window:')
+  )
+}

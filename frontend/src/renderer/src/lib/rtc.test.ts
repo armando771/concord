@@ -112,4 +112,58 @@ describe('captura de tela', () => {
     })
     await expect(getDisplayStream()).rejects.toMatchObject({ name: 'NotAllowedError' })
   })
+
+  describe('Linux/Wayland (portal)', () => {
+    const portalStatus = vi.fn()
+    beforeEach(() => {
+      portalStatus.mockResolvedValue({ status: 'available', message: '' })
+      vi.stubGlobal('window', { api: { screenShare: { ended, flow: 'portal', portalStatus } } })
+    })
+
+    it('escolhe a qualidade no app e só então abre o seletor do sistema, sem som', async () => {
+      const { stream, video } = fakeStream()
+      capture.mockResolvedValueOnce(stream)
+      const pending = getDisplayStream()
+      await vi.waitFor(() => expect(useScreenQualityStore.getState().request).not.toBeNull())
+      expect(capture).not.toHaveBeenCalled()
+      useScreenQualityStore.getState().request!.resolve({ resolution: '720p', frameRate: 60 })
+      expect(await pending).toBe(stream)
+      expect(capture).toHaveBeenCalledWith(
+        expect.objectContaining({ video: { frameRate: 60 }, audio: false })
+      )
+      expect(video.applyConstraints).toHaveBeenCalledWith({
+        width: { max: 1280 },
+        height: { max: 720 },
+        frameRate: { ideal: 60, max: 60 }
+      })
+    })
+
+    it('sem o portal: erro que diz o que instalar, sem abrir nada', async () => {
+      portalStatus.mockResolvedValueOnce({ status: 'missing', message: 'Instale o portal' })
+      await expect(getDisplayStream()).rejects.toMatchObject({
+        name: 'ScreenShareSetupError',
+        message: 'Instale o portal'
+      })
+      expect(useScreenQualityStore.getState().request).toBeNull()
+      expect(capture).not.toHaveBeenCalled()
+    })
+
+    it('não deu para saber se há portal: tenta assim mesmo', async () => {
+      portalStatus.mockResolvedValueOnce({ status: 'unknown', message: '' })
+      const { stream } = fakeStream()
+      capture.mockResolvedValueOnce(stream)
+      const pending = getDisplayStream()
+      await vi.waitFor(() => expect(useScreenQualityStore.getState().request).not.toBeNull())
+      useScreenQualityStore.getState().request!.resolve({ resolution: '1080p', frameRate: 30 })
+      expect(await pending).toBe(stream)
+    })
+
+    it('fechar o seletor do sistema é cancelamento (sem aviso de erro)', async () => {
+      capture.mockRejectedValueOnce(new DOMException('Invalid capture constraints', 'AbortError'))
+      const pending = getDisplayStream()
+      await vi.waitFor(() => expect(useScreenQualityStore.getState().request).not.toBeNull())
+      useScreenQualityStore.getState().request!.resolve({ resolution: '1080p', frameRate: 30 })
+      await expect(pending).rejects.toMatchObject({ name: 'NotAllowedError' })
+    })
+  })
 })

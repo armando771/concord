@@ -4,6 +4,7 @@ import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
 import type { OverlayFrame, OverlayLayout } from '../renderer/src/lib/overlayLayout'
 import type { CallResume, PendingCallResume } from '../shared/callResume'
 import type { AppMetrics } from '../shared/appMetrics'
+import { screenShareFlow, type PortalStatus } from '../shared/screenShareFlow'
 
 interface ScreenSourceInfo {
   id: string
@@ -44,6 +45,12 @@ const api = {
     }
   },
   screenShare: {
+    /** 'portal' = Linux/Wayland: o seletor é o do sistema, não o modal do app. */
+    flow: screenShareFlow(process.platform, process.env),
+    /** O portal de captura (xdg-desktop-portal ScreenCast) está instalado? */
+    portalStatus(): Promise<{ status: PortalStatus; message: string }> {
+      return ipcRenderer.invoke('screen-share:portal-status')
+    },
     /** A janela compartilhada sumiu da tela (minimizada): a live congela. */
     onWindowHidden(cb: () => void): () => void {
       const listener = (): void => cb()

@@ -10,6 +10,7 @@ import {
 } from '../api/calls'
 import { ApiError } from '../api/client'
 import { getAudioStream, getCameraStream, getDisplayStream } from '../lib/rtc'
+import { ScreenShareSetupError } from '../lib/displayMedia'
 import {
   rememberStreamQuality,
   saveScreenQuality,
@@ -198,6 +199,9 @@ export class CallLockedError extends Error {
 
 /** Quanto tempo o aviso "pedido recusado" fica no canal. */
 const KNOCK_DECLINED_MS = 4000
+// Aviso com instruções de instalação (portal de tela no Linux): dá tempo de ler.
+const SETUP_TOAST_MS = 20000
+
 function upsertParticipant(list: CallUserInfo[], user: CallUserInfo): CallUserInfo[] {
   return list.some((p) => p.id === user.id) ? list : [...list, user]
 }
@@ -1361,7 +1365,10 @@ export const useCallStore = create<CallState>()((set, get) => {
         } catch (err) {
           abortWindowAudio()
           // NotAllowedError: usuário cancelou o picker — sem toast.
-          if ((err as DOMException)?.name !== 'NotAllowedError') {
+          if (err instanceof ScreenShareSetupError) {
+            // Ex.: Linux sem o xdg-desktop-portal: diz o que instalar.
+            showToast.error(err.message, SETUP_TOAST_MS)
+          } else if ((err as DOMException)?.name !== 'NotAllowedError') {
             showToast.error('Não foi possível compartilhar a tela.')
           }
           return

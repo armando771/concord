@@ -13,6 +13,7 @@ import ScreenMiniPlayer from './call/ScreenMiniPlayer'
 import ActivityPanel from './call/ActivityPanel'
 import ScreenSharePickerModal from './call/ScreenSharePickerModal'
 import ScreenQualityModal from './call/ScreenQualityModal'
+import { usesNativePicker } from '../lib/displayMedia'
 import JoinRequestsStack from './call/JoinRequestsStack'
 import LevelUpBanner from './level/LevelUpBanner'
 import BoostBanner from './level/BoostBanner'
@@ -30,6 +31,12 @@ import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { useUIStore } from '../store/uiStore'
 import { IS_WEB } from '../lib/config'
+
+// Fixo durante a vida do app (a sessão Wayland/X11 não muda com ele aberto).
+const nativePicker = usesNativePicker(
+  IS_WEB,
+  typeof window !== 'undefined' ? window.api?.screenShare?.flow : undefined
+)
 
 function AppShell(): React.JSX.Element {
   useFlushPendingLevelUp()
@@ -67,9 +74,10 @@ function AppShell(): React.JSX.Element {
       <BirthdayModal />
       <ScreenMiniPlayer />
       <ActivityPanel />
-      {/* No navegador o seletor de tela é o do próprio navegador. */}
-      {!IS_WEB && <ScreenSharePickerModal />}
-      {IS_WEB && <ScreenQualityModal />}
+      {/* Navegador e Linux/Wayland: o seletor de tela é o do sistema; o app só
+          pergunta a qualidade antes. */}
+      {!nativePicker && <ScreenSharePickerModal />}
+      {nativePicker && <ScreenQualityModal />}
       <LevelUpScreen />
       <InviteConfirmModal />
       <LevelUpMilestone />
