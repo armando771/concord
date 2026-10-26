@@ -41,6 +41,8 @@ export interface CallStateResponse {
   screen_sharing?: string[]
   /** Atividade aberta na chamada (só vem para quem está nela). */
   activity?: RawCallActivity | null
+  /** Lista de quem assiste cada tela (sharer_id -> espectadores) */
+  screen_watchers?: Record<string, { id: string; username: string; display_name: string; avatar_url?: string | null }[]>
   /** pedidos para entrar na sala trancada (só no estado visto por participantes) */
   join_requests?: { id: string; username: string; display_name: string; avatar_url?: string | null }[]
 }

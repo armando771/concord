@@ -1662,4 +1662,70 @@ describe('callStore — salas trancadas e pedidos de entrada', () => {
     expect(useCallStore.getState().callId).toBe('call-x')
     expect(useCallStore.getState().admittedChannelId).toBe('canal-trancado')
   })
+
+  describe('espectadores da transmissão (screenWatchers)', () => {
+    it('watchScreen envia call:screen_watch e stopWatchingScreen cancela', async () => {
+      await joinChannel()
+      onRemoteMedia({ ...empty, availableScreens: ['ana'] })
+      chat.sendEvent.mockClear()
+
+      useCallStore.getState().watchScreen('ana')
+
+      expect(chat.sendEvent).toHaveBeenCalledWith('call:screen_watch', {
+        call_id: 'call-1',
+        sharer_id: 'ana',
+        watching: true
+      })
+
+      chat.sendEvent.mockClear()
+      useCallStore.getState().stopWatchingScreen('ana')
+
+      expect(chat.sendEvent).toHaveBeenCalledWith('call:screen_watch', {
+        call_id: 'call-1',
+        sharer_id: 'ana',
+        watching: false
+      })
+    })
+
+    it('recebe call:screen_watchers e atualiza os espectadores', async () => {
+      await joinChannel()
+
+      useCallStore.getState().handleWsEvent({
+        type: 'call:screen_watchers',
+        payload: {
+          call_id: 'call-1',
+          sharer_id: 'ana',
+          watchers: [
+            { id: 'bia', username: 'bia', display_name: 'Bia' },
+            { id: 'carlos', username: 'carlos', display_name: 'Carlos' }
+          ]
+        }
+      })
+
+      expect(useCallStore.getState().screenWatchers['ana']).toEqual([
+        { id: 'bia', username: 'bia', display_name: 'Bia' },
+        { id: 'carlos', username: 'carlos', display_name: 'Carlos' }
+      ])
+    })
+
+    it('quando sharer encerra tela (call:screen active:false), limpa seus espectadores', async () => {
+      await joinChannel()
+      useCallStore.setState({
+        screenWatchers: {
+          ana: [{ id: 'bia', username: 'bia', display_name: 'Bia' }]
+        }
+      })
+
+      useCallStore.getState().handleWsEvent({
+        type: 'call:screen',
+        payload: {
+          call_id: 'call-1',
+          active: false,
+          user: { id: 'ana', username: 'ana', display_name: 'Ana' }
+        }
+      })
+
+      expect(useCallStore.getState().screenWatchers['ana']).toBeUndefined()
+    })
+  })
 })

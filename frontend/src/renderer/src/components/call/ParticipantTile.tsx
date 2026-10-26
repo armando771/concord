@@ -14,6 +14,7 @@ import LevelUpBurst from '../level/LevelUpBurst'
 import Avatar from '../Avatar'
 import MaestroAvatar from '../music/MaestroAvatar'
 import { isMaestroIdentity, T18 } from '../../lib/music'
+import ScreenWatchersOverlay from './ScreenWatchersOverlay'
 
 export function VideoFill({
   stream,
@@ -84,7 +85,9 @@ function ParticipantTile({
   action,
   onClose,
   streamAudioUserId,
-  fullscreenable = false
+  fullscreenable = false,
+  watchers,
+  hasHeaderOffset = false
 }: {
   user: CallUserInfo
   speaking?: boolean
@@ -113,6 +116,10 @@ function ParticipantTile({
   streamAudioUserId?: string
   /** Transmissão assistida: botão e duplo clique de tela cheia (só com vídeo). */
   fullscreenable?: boolean
+  /** Espectadores assistindo à transmissão (ao vivo). */
+  watchers?: CallUserInfo[]
+  /** Espaço para não cobrir botões do cabeçalho da transmissão focada. */
+  hasHeaderOffset?: boolean
 }): React.JSX.Element {
   const activeSound = useSoundboardStore((s) => (isScreen ? undefined : s.activePlays[user.id]))
   const isPlayingSound = Boolean(activeSound)
@@ -240,6 +247,12 @@ function ParticipantTile({
           <XIcon className="h-3.5 w-3.5" />
         </button>
       )}
+      {isScreen && !inFullscreen && watchers && watchers.length > 0 && (
+        <ScreenWatchersOverlay
+          watchers={watchers}
+          className={`absolute top-2 ${hasHeaderOffset ? 'left-22' : 'left-2'}`}
+        />
+      )}
       {isScreen && !inFullscreen && (
         <div
           className={`absolute top-2 flex items-center gap-1.5 rounded-md bg-[#f23f43] px-1.5 py-0.5 ${
@@ -261,6 +274,7 @@ function ParticipantTile({
           name={user.display_name}
           userId={streamAudioUserId}
           onExit={toggleFullscreen}
+          watchers={watchers}
         />
       )}
       <div

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import type { CallUserInfo } from '../../store/callStore'
 import { AutoHide } from '../../lib/fullscreenControls'
 import { FullscreenExitIcon } from '../icons'
 import { StreamVolume } from './StreamAudioControls'
+import ScreenWatchersOverlay from './ScreenWatchersOverlay'
 
 /**
  * Camada por cima do vídeo em tela cheia: barra mínima (nome, volume, sair)
@@ -10,11 +12,13 @@ import { StreamVolume } from './StreamAudioControls'
 function FullscreenOverlay({
   name,
   userId,
-  onExit
+  onExit,
+  watchers
 }: {
   name: string
   userId: string
   onExit: () => void
+  watchers?: CallUserInfo[]
 }): React.JSX.Element {
   const [visible, setVisible] = useState(true)
   const [autoHide] = useState(() => new AutoHide(setVisible))
@@ -29,6 +33,16 @@ function FullscreenOverlay({
       onMouseMove={() => autoHide.show()}
       className={`absolute inset-0 z-30 ${visible ? '' : 'cursor-none'}`}
     >
+      {watchers && watchers.length > 0 && (
+        <div
+          className={`absolute left-5 top-5 z-40 transition-opacity duration-200 ${
+            visible ? 'opacity-100' : 'pointer-events-none opacity-0'
+          }`}
+        >
+          <ScreenWatchersOverlay watchers={watchers} />
+        </div>
+      )}
+
       <div
         onMouseEnter={() => autoHide.hold()}
         onMouseLeave={() => autoHide.release()}

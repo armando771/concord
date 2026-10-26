@@ -48,9 +48,10 @@ type ParticipantInfo struct {
 }
 
 type StateResponse struct {
-	Call          *Call             `json:"call"`
-	Participants  []ParticipantInfo `json:"participants"`
-	ScreenSharing []string          `json:"screen_sharing,omitempty"`
+	Call           *Call                 `json:"call"`
+	Participants   []ParticipantInfo     `json:"participants"`
+	ScreenSharing  []string              `json:"screen_sharing,omitempty"`
+	ScreenWatchers map[string][]UserInfo `json:"screen_watchers,omitempty"`
 	// Atividade aberta na chamada. Só vai para quem está nela (ver Handler.State).
 	Activity *ActivityEvent `json:"activity,omitempty"`
 	// Pedidos para entrar na sala trancada. Só vai para participantes (rota
@@ -82,6 +83,9 @@ type activeCall struct {
 	joinRequests map[string]*joinRequest // userID -> pedido pendente
 	admitted     map[string]time.Time    // userID -> até quando pode entrar sem pedir
 	declinedAt   map[string]time.Time    // userID -> última recusa (anti-spam)
+
+	// Espectadores de tela: sharerID -> set de watcherUserIDs
+	screenWatchers map[string]map[string]struct{}
 }
 
 type Service struct {
@@ -574,6 +578,11 @@ func (s *Service) detachParticipant(callID, userID string) (remaining int, remov
 		_, wasSharing = sharers[userID]
 		delete(sharers, userID)
 	}
+	affectedSharers := dropScreenWatcherLocked(ac, userID)
+	clearedSharer := false
+	if wasSharing {
+		clearedSharer = clearSharerWatchersLocked(ac, userID)
+	}
 	remaining = len(ac.participants)
 	var serverID string
 	if ac.info.ServerID != nil {
@@ -594,6 +603,21 @@ func (s *Service) detachParticipant(callID, userID string) (remaining int, remov
 	}
 	if wasSharing {
 		s.publishLive(serverID, LiveEvent{CallID: callID, ChannelID: channelID, UserID: userID, Active: false})
+	}
+	for sharerID, watcherIDs := range affectedSharers {
+		watchers := s.resolveWatchersInfo(context.Background(), watcherIDs)
+		s.publisher.BroadcastToCall(callID, marshalEvent("call:screen_watchers", ScreenWatchersEvent{
+			CallID:   callID,
+			SharerID: sharerID,
+			Watchers: watchers,
+		}))
+	}
+	if clearedSharer {
+		s.publisher.BroadcastToCall(callID, marshalEvent("call:screen_watchers", ScreenWatchersEvent{
+			CallID:   callID,
+			SharerID: userID,
+			Watchers: []UserInfo{},
+		}))
 	}
 	return remaining, true, nil
 }
@@ -708,10 +732,12 @@ func (s *Service) SetScreenShare(ctx context.Context, callID string, userID stri
 		s.mu.Unlock()
 		return nil
 	}
+	clearedWatchers := false
 	if active {
 		sharers[userID] = struct{}{}
 	} else {
 		delete(sharers, userID)
+		clearedWatchers = clearSharerWatchersLocked(ac, userID)
 	}
 
 	targets := make([]string, 0, len(ac.participants))
@@ -726,6 +752,14 @@ func (s *Service) SetScreenShare(ctx context.Context, callID string, userID stri
 	}
 	channelID := ac.info.ChannelID
 	s.mu.Unlock()
+
+	if clearedWatchers {
+		s.publisher.BroadcastToCall(callID, marshalEvent("call:screen_watchers", ScreenWatchersEvent{
+			CallID:   callID,
+			SharerID: userID,
+			Watchers: []UserInfo{},
+		}))
+	}
 
 	s.saveScreenSharing(callID, userID, active)
 	s.publishLive(serverID, LiveEvent{CallID: callID, ChannelID: channelID, UserID: userID, Active: active})
@@ -896,6 +930,7 @@ func (s *Service) GetState(ctx context.Context, callID string) (*StateResponse, 
 		}
 		sort.Strings(screenSharing)
 	}
+	watchersSnapshot := collectScreenWatchersSnapshotLocked(ac)
 	s.mu.RUnlock()
 
 	for i := range participants {
@@ -906,10 +941,19 @@ func (s *Service) GetState(ctx context.Context, callID string) (*StateResponse, 
 		participants[i].UserInfo = info
 	}
 
+	var screenWatchers map[string][]UserInfo
+	if len(watchersSnapshot) > 0 {
+		screenWatchers = make(map[string][]UserInfo, len(watchersSnapshot))
+		for sharerID, watcherIDs := range watchersSnapshot {
+			screenWatchers[sharerID] = s.resolveWatchersInfo(ctx, watcherIDs)
+		}
+	}
+
 	return &StateResponse{
-		Call:          &callCopy,
-		Participants:  participants,
-		ScreenSharing: screenSharing,
+		Call:           &callCopy,
+		Participants:   participants,
+		ScreenSharing:  screenSharing,
+		ScreenWatchers: screenWatchers,
 	}, nil
 }
 
@@ -1014,6 +1058,15 @@ func (s *Service) HandleCallMessage(userID string, evType string, payload json.R
 			return
 		}
 		if err := s.SetScreenShare(ctx, p.CallID, userID, p.Active); err != nil {
+			s.sendError(userID, p.CallID, err.Error())
+		}
+	case "call:screen_watch":
+		var p ScreenWatchPayload
+		if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" || p.SharerID == "" {
+			s.sendError(userID, "", "invalid call:screen_watch payload")
+			return
+		}
+		if err := s.SetScreenWatching(ctx, p.CallID, p.SharerID, userID, p.Watching); err != nil {
 			s.sendError(userID, p.CallID, err.Error())
 		}
 	case "call:soundboard":

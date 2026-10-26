@@ -89,6 +89,13 @@ type ScreenEvent struct {
 	Active bool     `json:"active"`
 }
 
+// ScreenWatchersEvent avisa a lista de quem está assistindo à transmissão de um usuário.
+type ScreenWatchersEvent struct {
+	CallID   string     `json:"call_id"`
+	SharerID string     `json:"sharer_id"`
+	Watchers []UserInfo `json:"watchers"`
+}
+
 type EndedEvent struct {
 	CallID string `json:"call_id"`
 }
@@ -141,6 +148,13 @@ type VoicePayload struct {
 type ScreenPayload struct {
 	CallID string `json:"call_id"`
 	Active bool   `json:"active"`
+}
+
+// ScreenWatchPayload sinaliza que o participante começou ou parou de assistir à transmissão de SharerID.
+type ScreenWatchPayload struct {
+	CallID   string `json:"call_id"`
+	SharerID string `json:"sharer_id"`
+	Watching bool   `json:"watching"`
 }
 
 type LeavePayload struct {
