@@ -19,8 +19,9 @@ func BadgeRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
 }
 
-// Stats junta os números da pessoa numa query só: contadores prontos e um
-// COUNT de servidores pelo índice de owner_id.
+// Stats junta os números da pessoa numa query só: contadores prontos, um
+// COUNT de servidores pelo índice de owner_id e se ela está em
+// dev_badge_users (Criador da Salinha).
 func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 	var s Stats
 	err := r.db.QueryRow(
@@ -37,7 +38,8 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			COALESCE(b.morning_seconds, 0),
 			COALESCE(b.peak_call_size, 0),
 			COALESCE(b.longest_session_seconds, 0),
-			(SELECT COUNT(*) FROM servers sv WHERE sv.owner_id = u.id)
+			(SELECT COUNT(*) FROM servers sv WHERE sv.owner_id = u.id),
+			EXISTS (SELECT 1 FROM dev_badge_users d WHERE d.user_id = u.id)
 		FROM users u
 		LEFT JOIN user_levels l ON l.user_id = u.id
 		LEFT JOIN user_badge_stats b ON b.user_id = u.id
@@ -56,6 +58,7 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 		&s.PeakCallSize,
 		&s.LongestSessionSeconds,
 		&s.OwnedServers,
+		&s.IsDev,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Stats{}, ErrUserNotFound

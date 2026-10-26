@@ -76,6 +76,26 @@ func TestRepositoryDB(t *testing.T) {
 	if s.StreamSeconds != 60 || s.NightSeconds != 10 || s.MorningSeconds != 5 || s.PeakCallSize != 6 || s.LongestSessionSeconds != 100 {
 		t.Fatalf("call stats = %+v", s)
 	}
+	if s.IsDev {
+		t.Fatal("new user is a dev before the grant")
+	}
+
+	// O SQL de docs/HOSPEDAGEM.md: concede pelo username (sem diferenciar
+	// maiúsculas), e rodar de novo não duplica.
+	grant := `INSERT INTO dev_badge_users (user_id) SELECT id FROM users WHERE lower(username) IN (lower($1)) ON CONFLICT DO NOTHING`
+	exec(grant, strings.ToUpper(name))
+	exec(grant, name)
+	if s, err = repo.Stats(ctx, userID); err != nil || !s.IsDev {
+		t.Fatalf("after grant IsDev = %v, %v", s.IsDev, err)
+	}
+	var grants int
+	if err := db.QueryRow(ctx, `SELECT COUNT(*) FROM dev_badge_users WHERE user_id = $1`, userID).Scan(&grants); err != nil || grants != 1 {
+		t.Fatalf("grants = %d, %v", grants, err)
+	}
+	exec(`DELETE FROM dev_badge_users WHERE user_id IN (SELECT id FROM users WHERE lower(username) IN (lower($1)))`, name)
+	if s, err = repo.Stats(ctx, userID); err != nil || s.IsDev {
+		t.Fatalf("after revoke IsDev = %v, %v", s.IsDev, err)
+	}
 
 	at := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
 	saved, err := repo.SaveUnlocks(ctx, userID, []Unlock{{"dono", 1, at}, {"fundador", 1, at}})

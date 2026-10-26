@@ -8,6 +8,8 @@ const (
 	RarityRare      = "raro"
 	RarityEpic      = "epico"
 	RarityLegendary = "lendario"
+	// Acima de lendário: só badges concedidos à mão (Criador da Salinha).
+	RarityMythic = "mitico"
 )
 
 // Unidade do valor de uma categoria (o app formata: horas, meses, ...).
@@ -20,6 +22,7 @@ const (
 	UnitPeople    = "people"
 	UnitServers   = "servers"
 	UnitFounder   = "founder"
+	UnitDev       = "dev"
 )
 
 // FounderCutoff: quem criou a conta antes desta data (horário de Brasília)
@@ -41,6 +44,10 @@ type Category struct {
 	Description string
 	Unit        string
 	Tiers       []Tier
+	// Exclusive: concedido à mão (tabela no banco), não por número. Só
+	// aparece para quem tem e some se a concessão for retirada, mesmo com o
+	// tier gravado em user_badges.
+	Exclusive bool
 }
 
 const hour = int64(60 * 60)
@@ -136,6 +143,16 @@ var Catalog = []Category{
 			{"Galo", 50 * hour, RarityEpic},
 			{"Sol Nascente", 150 * hour, RarityLegendary},
 		},
+	},
+	{
+		Key:         "criador",
+		Name:        "Criador da Salinha",
+		Description: "Faz parte do time que constrói o Salinha. Não dá para conquistar: é dos devs.",
+		Unit:        UnitDev,
+		Tiers: []Tier{
+			{"Criador da Salinha", 1, RarityMythic},
+		},
+		Exclusive: true,
 	},
 	{
 		Key:         "fundador",

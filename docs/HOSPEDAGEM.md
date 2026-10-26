@@ -829,6 +829,35 @@ maior aplicada antes dela faz a 000025 nunca rodar). Ela é idempotente: rode
 `psql "$DATABASE_URL" -f /opt/concord/migrations/000025_add_login_lower_indexes.up.sql`
 e reinicie o backend.
 
+## Badge Criador da Salinha (devs)
+
+O badge mítico **Criador da Salinha** é só dos devs. Quem ganha fica na
+tabela `dev_badge_users` (migration 000057), que começa vazia: não há id de
+usuário no código. O badge aparece no próximo carregamento dos badges da
+pessoa (abrir o perfil ou até 5 minutos online), com o aviso de badge novo.
+
+Conceder (troque os nomes; a comparação ignora maiúsculas e rodar de novo não
+duplica):
+```sql
+INSERT INTO dev_badge_users (user_id)
+SELECT id FROM users WHERE lower(username) IN ('fulano', 'ciclano')
+ON CONFLICT DO NOTHING;
+```
+
+Conferir quem tem:
+```sql
+SELECT u.username, d.granted_at FROM dev_badge_users d JOIN users u ON u.id = d.user_id;
+```
+
+Tirar (o badge some na hora, mesmo já gravado; a segunda linha apaga também a
+data de quando foi ganho, para começar do zero se voltar):
+```sql
+DELETE FROM dev_badge_users WHERE user_id IN (SELECT id FROM users WHERE lower(username) IN ('fulano'));
+DELETE FROM user_badges WHERE category = 'criador' AND user_id IN (SELECT id FROM users WHERE lower(username) IN ('fulano'));
+```
+
+Na VPS: `psql "$DATABASE_URL" -c "..."` com o SQL acima.
+
 ## Bot de música (Maestro)
 
 O Maestro toca música do YouTube nas chamadas de voz (`/play`, `/skip`...). Ele

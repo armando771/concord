@@ -1,9 +1,18 @@
 import { request } from './client'
 
-export type BadgeRarity = 'comum' | 'raro' | 'epico' | 'lendario'
+/** mitico: acima de lendário, só nos badges concedidos à mão (Criador da Salinha). */
+export type BadgeRarity = 'comum' | 'raro' | 'epico' | 'lendario' | 'mitico'
 
 export type BadgeUnit =
-  'seconds' | 'months' | 'messages' | 'reactions' | 'level' | 'people' | 'servers' | 'founder'
+  | 'seconds'
+  | 'months'
+  | 'messages'
+  | 'reactions'
+  | 'level'
+  | 'people'
+  | 'servers'
+  | 'founder'
+  | 'dev'
 
 export interface BadgeTier {
   tier: number
