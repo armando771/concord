@@ -31,6 +31,7 @@ import LinkIcon from '../../profile/LinkIcon'
 import { BirthdaySettings } from '../../AppSettings'
 import { PlusIcon, XIcon } from '../../icons'
 import ImageCropModal, { type ImageKind } from '../ImageCropModal'
+import NameStyleEditor from '../NameStyleEditor'
 
 const DEFAULT_BANNER = 'linear-gradient(135deg, #5865f2, #8b5cf6)'
 const inputClass =
@@ -231,6 +232,14 @@ function ProfilesSection(): React.JSX.Element | null {
               onChange={(e) => set('display_name', e.target.value)}
               className={inputClass}
               aria-label="Nome de exibição"
+            />
+          </Field>
+
+          <Field label="Estilo do nome" hint="Fonte e efeito do seu nome de exibição.">
+            <NameStyleEditor
+              value={draft.name_style}
+              previewName={draft.display_name.trim()}
+              onChange={(next) => set('name_style', next)}
             />
           </Field>
 

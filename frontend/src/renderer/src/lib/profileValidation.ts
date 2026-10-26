@@ -1,5 +1,6 @@
 import { MAX_LINKS, linkError, normalizeLink } from './profileLinks'
 import { NAME_CHARS_MESSAGE, nameCharsError } from './nameChars'
+import { resolveNameStyle, type NameStyle } from './nameStyle'
 
 // Rascunho do editor de perfil (Configurações → Perfis). Os limites são os do
 // backend (internal/user/profile.go) e do Discord.
@@ -25,6 +26,7 @@ export interface ProfileFields {
   status_text: string
   banner_color: string | null
   links: string[]
+  name_style: NameStyle
 }
 
 export interface ProfileDraft extends ProfileFields {
@@ -42,7 +44,10 @@ export const charCount = (text: string): number => Array.from(text).length
 
 /** Rascunho a partir do usuário salvo (links vêm do backend como {url}). */
 export function draftFromProfile(
-  profile: Partial<Omit<ProfileFields, 'links'>> & { links?: unknown }
+  profile: Partial<Omit<ProfileFields, 'links' | 'name_style'>> & {
+    links?: unknown
+    name_style?: Partial<NameStyle> | null
+  }
 ): ProfileDraft {
   const links = Array.isArray(profile.links)
     ? profile.links
@@ -56,6 +61,7 @@ export function draftFromProfile(
     status_text: profile.status_text ?? '',
     banner_color: profile.banner_color ?? null,
     links,
+    name_style: resolveNameStyle(profile.name_style),
     avatar: { kind: 'keep' },
     banner: { kind: 'keep' }
   }
@@ -104,7 +110,8 @@ export function profilePayload(draft: ProfileFields): ProfileFields {
     bio: draft.bio.trim(),
     status_text: draft.status_text.trim(),
     banner_color: draft.banner_color || null,
-    links: draft.links.map(normalizeLink)
+    links: draft.links.map(normalizeLink),
+    name_style: resolveNameStyle(draft.name_style)
   }
 }
 
@@ -119,7 +126,8 @@ export function fieldsChanged(draft: ProfileFields, saved: ProfileFields): boole
     a.status_text !== b.status_text ||
     (a.banner_color ?? '') !== (b.banner_color ?? '') ||
     a.links.length !== b.links.length ||
-    a.links.some((l, i) => l !== b.links[i])
+    a.links.some((l, i) => l !== b.links[i]) ||
+    JSON.stringify(a.name_style) !== JSON.stringify(b.name_style)
   )
 }
 
