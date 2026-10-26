@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { userMenuHandler } from '../store/userMenuStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import InviteCodeBox from '../components/InviteCodeBox'
@@ -214,6 +214,19 @@ export function ServerView(): React.JSX.Element {
     }
   }, [currentMembers, fetchPresenceFor])
 
+  // Estável entre renders: o ChatPane monta os nomes das menções a partir dele.
+  const mentionable = useMemo(
+    () =>
+      currentMembers
+        .filter((m) => m.username)
+        .map((m) => ({
+          username: m.username as string,
+          display_name: m.display_name || (m.username as string),
+          nickname: m.nickname
+        })),
+    [currentMembers]
+  )
+
   useEffect(() => {
     if (inviteModalOpen && id) {
       fetchServerInvites(id)
@@ -353,13 +366,7 @@ export function ServerView(): React.JSX.Element {
             canMentionEveryone={canMentionEveryone}
             permissions={chatPermissions}
             canDeleteMessages={!activeChannel?.is_system}
-            mentionable={currentMembers
-              .filter((m) => m.username)
-              .map((m) => ({
-                username: m.username as string,
-                display_name: m.display_name || (m.username as string),
-                nickname: m.nickname
-              }))}
+            mentionable={mentionable}
           />
         ) : (
           <div className="flex flex-1 flex-col justify-between overflow-y-auto p-6">

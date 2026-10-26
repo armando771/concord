@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useUIStore } from '../store/uiStore'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
@@ -21,7 +21,14 @@ import {
 } from '../store/useServerNames'
 import { serverDisplayName } from '../lib/serverNames'
 import { useFriendStore } from '../store/friendStore'
-import { applyMention, mentionQuery, mentionSuggestions, messageMentionsMe } from '../lib/mentions'
+import {
+  applyMention,
+  mentionLabels,
+  mentionQuery,
+  mentionSuggestions,
+  messageMentionsMe,
+  type MentionLabels
+} from '../lib/mentions'
 import {
   canEditMessage,
   editErrorMessage,
@@ -71,11 +78,15 @@ import { actionErrorMessage } from '../lib/permissionErrors'
 import { permissionError } from '../lib/permissions'
 import {
   anchoredScrollTop,
+  bottomScrollPlan,
+  JUMP_HIGHLIGHT_MS,
   measureOffset,
   olderPagePrepended,
   pickAnchor,
   type AnchorCandidate
 } from '../lib/scrollAnchor'
+
+const NO_MENTIONABLE: Mentionable[] = []
 
 export interface Mentionable {
   username: string
@@ -133,6 +144,7 @@ function MessageItem({
   message,
   serverId,
   isHighlighted,
+  mentionLabels,
   onReply,
   onReact,
   onJumpToMessage,
@@ -157,6 +169,8 @@ function MessageItem({
   /** Canal de servidor: autor e resposta com o apelido daquele servidor. */
   serverId?: string
   isHighlighted: boolean
+  /** Nome mostrado nos chips de menção (@nick -> apelido/nome). */
+  mentionLabels?: MentionLabels
   onReply: () => void
   onReact: (emoji: string) => void
   onJumpToMessage: (messageId: string) => void
@@ -231,12 +245,10 @@ function MessageItem({
     <div
       id={`msg-${message.id}`}
       className={`group relative flex flex-col gap-1 rounded-md px-4 py-1.5 transition-colors ${
-        isHighlighted
-          ? 'bg-[#5865f2]/20 ring-1 ring-[#5865f2]/50'
-          : mentionsMe
-            ? 'border-l-2 border-[#f0b232] bg-[#f0b232]/10 hover:bg-[#f0b232]/15'
-            : 'hover:bg-white/[0.03]'
-      }`}
+        mentionsMe
+          ? 'border-l-2 border-[#f0b232] bg-[#f0b232]/10 hover:bg-[#f0b232]/15'
+          : 'hover:bg-white/[0.03]'
+      } ${isHighlighted ? 'msg-jump-highlight' : ''}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onContextMenu={(e) => {
@@ -304,7 +316,11 @@ function MessageItem({
             />
           ) : (
             message.content && (
-              <MessageText content={message.content} everyone={message.mention_everyone ?? null} />
+              <MessageText
+                content={message.content}
+                everyone={message.mention_everyone ?? null}
+                mentionLabels={mentionLabels}
+              />
             )
           )}
           {message.attachments?.length ? (
@@ -360,7 +376,7 @@ function ChatPane({
   room,
   serverId,
   placeholder = 'Digite sua mensagem',
-  mentionable = [],
+  mentionable = NO_MENTIONABLE,
   canMentionEveryone = false,
   disabledReason: disabledReasonProp,
   permissions = DIRECT_CHAT_PERMISSIONS,
@@ -395,6 +411,8 @@ function ChatPane({
   const [replyState, setReplyState] = useState<{ room: string; message: Message } | null>(null)
   const replyingTo = replyState?.room === room ? replyState.message : null
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
+  const highlightTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(highlightTimer.current), [])
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { drafts, addFiles: addDraftFiles, remove: removeAttachment } = useAttachmentDraft(room)
@@ -440,6 +458,29 @@ function ChatPane({
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
   const [highlightChoice, setHighlight] = useState<number | null>(null)
   const meUsername = useAuthStore((s) => s.user?.username)
+  const meUser = useAuthStore((s) => s.user)
+  // Chips de menção: quem está no chat, eu e os autores da lista (que podem
+  // ter saído do servidor). Em servidor vale o apelido; em DM, o nome.
+  const roomMessages = messagesByRoom[room]
+  const labels = useMemo(
+    () =>
+      mentionLabels([
+        ...mentionable,
+        ...(meUser
+          ? [
+              {
+                username: meUser.username,
+                display_name: meUser.display_name,
+                nickname: nicknames?.[meUser.id]
+              }
+            ]
+          : []),
+        ...(roomMessages ?? []).flatMap((m) =>
+          m.author ? [{ ...m.author, nickname: nicknames?.[m.author_id] }] : []
+        )
+      ]),
+    [mentionable, meUser, roomMessages, nicknames]
+  )
   // Tab/Enter pegam o item padrão (sempre uma pessoa, se houver) até a
   // pessoa navegar com as setas.
   const { items: suggestions, defaultIndex } = mention
@@ -548,7 +589,7 @@ function ChatPane({
   const ephemeralCount = useMusicStore((s) => s.ephemeral.length)
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
-  const firstRender = useRef(true)
+  const contentRef = useRef<HTMLDivElement>(null)
   // loadOlder: a antiga primeira mensagem (e sua posição no conteúdo) fica
   // no mesmo lugar da tela quando a página antiga entra em cima dela. As
   // seguintes vão junto, de reserva, caso ela seja apagada durante a espera.
@@ -563,16 +604,46 @@ function ChatPane({
     }
   }, [room, openRoom])
 
-  useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false
-      bottomRef.current?.scrollIntoView()
-      return
-    }
-    if (stickToBottom.current) {
+  // Abrir a sala: a lista já nasce no fim, de uma vez e antes de pintar (sem
+  // rolar na frente da pessoa). Depois disso, mensagem nova rola suave.
+  const positionedRoom = useRef<string | null>(null)
+  const lastCount = useRef(0)
+  const settleUntil = useRef(0)
+  const total = messages.length + ephemeralCount
+  useLayoutEffect(() => {
+    const plan = bottomScrollPlan({
+      positionedRoom: positionedRoom.current,
+      room,
+      loading,
+      stickToBottom: stickToBottom.current,
+      countChanged: total !== lastCount.current
+    })
+    positionedRoom.current = plan.positionedRoom
+    lastCount.current = total
+    const el = scrollRef.current
+    if (plan.scroll === 'instant') {
+      if (el) el.scrollTop = el.scrollHeight
+      // Imagem e mídia que acabam de carregar empurram o fim: acompanha por
+      // um instante, só se a pessoa ainda estiver no fim.
+      settleUntil.current = Date.now() + 1500
+    } else if (plan.scroll === 'smooth') {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages.length, ephemeralCount])
+  }, [room, loading, total])
+
+  // Conteúdo que cresce logo após abrir (imagens): mantém o fim à vista.
+  useEffect(() => {
+    const content = contentRef.current
+    const el = scrollRef.current
+    if (!content || !el || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => {
+      if (Date.now() < settleUntil.current && stickToBottom.current) {
+        el.scrollTop = el.scrollHeight
+      }
+    })
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [loading, room])
 
   const firstId = messages[0]?.id
   useLayoutEffect(() => {
@@ -789,10 +860,13 @@ function ChatPane({
       return
     }
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    setHighlightedId(messageId)
-    window.setTimeout(() => {
+    // Zera antes: pular de novo para a mesma mensagem reinicia o pulso.
+    window.clearTimeout(highlightTimer.current)
+    setHighlightedId(null)
+    requestAnimationFrame(() => setHighlightedId(messageId))
+    highlightTimer.current = window.setTimeout(() => {
       setHighlightedId((current) => (current === messageId ? null : current))
-    }, 1600)
+    }, JUMP_HIGHLIGHT_MS + 100)
   }
 
   useEffect(() => {
@@ -916,7 +990,7 @@ function ChatPane({
             Carregando mensagens...
           </div>
         ) : (
-          <div className="flex min-h-full flex-col justify-end py-4">
+          <div ref={contentRef} className="flex min-h-full flex-col justify-end py-4">
             {hasMore && (
               <div className="flex justify-center py-2">
                 <button
@@ -939,6 +1013,7 @@ function ChatPane({
                 message={m}
                 serverId={serverId}
                 isHighlighted={highlightedId === m.id}
+                mentionLabels={labels}
                 onReply={() => handleStartReply(m)}
                 onReact={(emoji) => void handleReact(m.id, emoji)}
                 onJumpToMessage={handleJumpToMessage}
