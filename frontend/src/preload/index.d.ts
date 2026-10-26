@@ -32,6 +32,7 @@ export interface ScreenShareApi {
 export interface UpdatesApi {
   setCallSnapshot(snapshot: CallResume | null): void
   takeCallResume(): Promise<PendingCallResume | null>
+  currentVersion(): Promise<string>
   status(): Promise<{ version: string; ready: boolean } | null>
   autoUpdateUnavailable(): Promise<boolean>
   onAvailable(cb: (version: string) => void): () => void

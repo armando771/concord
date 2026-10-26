@@ -229,6 +229,14 @@ test('TECH_TEAM_USER_IDS troca a linha que já existe (e as repetidas)', () => {
   )
 })
 
+test('CHANGELOG_TOKEN entra no .env da VPS sem apagar o resto', () => {
+  const ctx = setup({ current: fakeBinary('good') })
+  const r = deploy(ctx, ['root@vps'], { CHANGELOG_TOKEN: 'abc123DEF456' })
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /CHANGELOG_TOKEN gravado/)
+  assert.equal(read(ctx, '.env'), 'export PORT="8090" # backend\nCHANGELOG_TOKEN=abc123DEF456\n')
+})
+
 test('sem TECH_TEAM_USER_IDS (vazio ou ausente) o .env fica intacto', () => {
   const ctx = setup({ current: fakeBinary('good') })
   const before = read(ctx, '.env')

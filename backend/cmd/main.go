@@ -18,6 +18,7 @@ import (
 	"gin-quickstart/backend/internal/birthday"
 	"gin-quickstart/backend/internal/bot"
 	"gin-quickstart/backend/internal/call"
+	"gin-quickstart/backend/internal/changelog"
 	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/clientip"
 	"gin-quickstart/backend/internal/conversation"
@@ -527,6 +528,7 @@ func main() {
 	notifysettings.Routes(api, notifySettingsHandler, authMiddleware)
 	proposal.ProposalRoutes(api, proposalHandler, authMiddleware, requireVerified)
 	birthday.BirthdayRoutes(api, birthdayHandler, authMiddleware)
+	changelog.Routes(api, changelog.NewHandler(changelog.NewRepository(db), os.Getenv("CHANGELOG_TOKEN")), authMiddleware)
 	music.Routes(api, music.NewHandler(musicManager, authService), authMiddleware)
 
 	// Presence (protected)
