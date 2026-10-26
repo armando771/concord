@@ -65,6 +65,8 @@ function fakeAccess(perms: number, opts: { isPrivate?: boolean } = {}): ServerAc
     highestOf: () => 0,
     canActOnMember: () => true,
     canChangeNickname: () => false,
+    canDisconnectMember: () => true,
+    canMoveMember: () => true,
     canManage: () => false,
     isPrivate: () => Boolean(opts.isPrivate)
   }

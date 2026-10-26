@@ -86,12 +86,6 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         name: 'MANAGE_NICKNAMES',
         label: 'Gerenciar apelidos',
         description: 'Mudar o apelido de quem está abaixo do seu cargo.'
-      },
-      {
-        name: 'ADMINISTRATOR',
-        label: 'Administrador',
-        description:
-          'Tem todas as permissões e ignora as restrições dos canais. Dê com muito cuidado.'
       }
     ]
   },
