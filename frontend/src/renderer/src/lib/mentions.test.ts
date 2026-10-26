@@ -3,9 +3,12 @@ import {
   applyMention,
   everyonePingsMe,
   everyoneSuggestions,
+  mentionChipText,
+  mentionLabels,
   mentionQuery,
   mentionSuggestions,
   messageMentionsMe,
+  sameLabels,
   mentionsUser,
   splitMentions
 } from './mentions'
@@ -326,5 +329,67 @@ describe('mentionSuggestions', () => {
   it('apelido vazio não casa com tudo', () => {
     const members = [{ username: 'x1', display_name: 'Xis', nickname: '' }]
     expect(names(mentionSuggestions('q', members, false))).toEqual([])
+  })
+})
+
+describe('mentionLabels / mentionChipText', () => {
+  const people = [
+    { username: 'ana', display_name: 'Ana Souza', nickname: 'Aninha' },
+    { username: 'bia', display_name: 'Bia', nickname: null },
+    { username: 'caio', display_name: '', nickname: '  ' }
+  ]
+  const labels = mentionLabels(people)
+  const chip = (text: string): string => {
+    const part = splitMentions(text).find((p) => p.mention)
+    return part ? mentionChipText(part, labels) : text
+  }
+
+  it('servidor: apelido; sem apelido, nome de exibição; nunca o @username', () => {
+    expect(chip('oi @ana')).toBe('@Aninha')
+    expect(chip('oi @bia')).toBe('@Bia')
+  })
+
+  it('DM (sem apelido): nome de exibição', () => {
+    const dm = mentionLabels([{ username: 'bia', display_name: 'Bia Lima' }])
+    const part = splitMentions('@bia')[0]
+    expect(mentionChipText(part, dm)).toBe('@Bia Lima')
+  })
+
+  it('sem nada além do nick, sobra o @nick', () => {
+    expect(chip('@caio')).toBe('@caio')
+  })
+
+  it('casa sem diferenciar maiúsculas', () => {
+    expect(chip('@ANA')).toBe('@Aninha')
+  })
+
+  it('quem não é conhecido (saiu do servidor) fica como no texto', () => {
+    expect(chip('@fulano')).toBe('@fulano')
+  })
+
+  it('@all/@here não são trocados, nem por quem tem esse nick', () => {
+    const l = mentionLabels([{ username: 'all', display_name: 'Todo Mundo' }])
+    const part = splitMentions('@all', 'all')[0]
+    expect(mentionChipText(part, l)).toBe('@all')
+  })
+
+  it('texto comum e mapa ausente ficam intactos', () => {
+    expect(mentionChipText({ text: 'oi' }, labels)).toBe('oi')
+    expect(mentionChipText({ text: '@ana', mention: 'ana' }, undefined)).toBe('@ana')
+  })
+
+  it('o primeiro da lista vence nick repetido', () => {
+    const l = mentionLabels([
+      { username: 'ana', display_name: 'Primeira' },
+      { username: 'ANA', display_name: 'Segunda' }
+    ])
+    expect(l.ana).toBe('Primeira')
+  })
+
+  it('sameLabels compara por conteúdo', () => {
+    expect(sameLabels({ a: 'A' }, { a: 'A' })).toBe(true)
+    expect(sameLabels({ a: 'A' }, { a: 'B' })).toBe(false)
+    expect(sameLabels({ a: 'A' }, { a: 'A', b: 'B' })).toBe(false)
+    expect(sameLabels(undefined, {})).toBe(false)
   })
 })

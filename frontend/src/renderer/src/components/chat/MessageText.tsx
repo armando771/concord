@@ -1,6 +1,7 @@
 import { memo, useMemo } from 'react'
 import type { MentionEveryone } from '../../api/messages'
 import { messageParts } from '../../lib/linkify'
+import { mentionChipText, sameLabels, type MentionLabels } from '../../lib/mentions'
 
 /** Host de verdade do link (em punycode: "аpple.com" cirílico aparece xn--…). */
 function hostOf(href: string): string {
@@ -16,15 +17,20 @@ function hostOf(href: string): string {
  * linha que dá para selecionar (o app inteiro é select-none); nome, hora e
  * botões continuam fora da seleção.
  *
+ * O chip da menção mostra o nome da pessoa (`mentionLabels`), não o @nick; o
+ * texto da mensagem continua "@nick".
+ *
  * O link abre no navegador de fora: na web pelo target="_blank"; no app o
  * mesmo target cai no setWindowOpenHandler, que só deixa passar http/https.
  */
 function MessageText({
   content,
-  everyone
+  everyone,
+  mentionLabels
 }: {
   content: string
   everyone: MentionEveryone | null
+  mentionLabels?: MentionLabels
 }): React.JSX.Element {
   // Quebra o texto só quando ele muda (hover e reações re-renderizam a linha).
   const parts = useMemo(() => messageParts(content, everyone), [content, everyone])
@@ -48,7 +54,7 @@ function MessageText({
           </a>
         ) : part.mention ? (
           <span key={i} className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]">
-            {part.text}
+            {mentionChipText(part, mentionLabels)}
           </span>
         ) : (
           part.text
@@ -58,4 +64,10 @@ function MessageText({
   )
 }
 
-export default memo(MessageText)
+export default memo(
+  MessageText,
+  (a, b) =>
+    a.content === b.content &&
+    a.everyone === b.everyone &&
+    sameLabels(a.mentionLabels, b.mentionLabels)
+)
