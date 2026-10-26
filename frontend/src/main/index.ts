@@ -14,8 +14,10 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import trayIcon from '../../resources/tray.png?asset'
 import trayIcon2x from '../../resources/tray-2x.png?asset'
-import { displayAudioMode } from './displayMedia'
+import { displayAudioMode, warnWindowAudioFallback } from './displayMedia'
 import { PendingDisplayRequest } from './displayPicker'
+import { checkScreenCastPortal } from './screenPortal'
+import { portalMissingMessage, screenShareFlow } from '../shared/screenShareFlow'
 import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './background'
 import { setupUpdater } from './updater'
 import { setupOverlay } from './overlay'
@@ -102,11 +104,58 @@ function registerThemeHandlers(): void {
 function registerScreenShareHandlers(): void {
   ipcMain.on('screen-share:ended', stopWindowWatch)
 
+  // Wayland: o seletor é o do sistema (xdg-desktop-portal). Cada getSources
+  // abre o seletor e devolve só a fonte escolhida, com id novo a cada vez —
+  // por isso não dá para listar no modal do app e depois procurar pelo id.
+  const flow = screenShareFlow(process.platform, process.env)
+
+  // O renderer pergunta antes de abrir o seletor: sem o portal, o getSources
+  // falha igual a um "Cancelar" e ninguém saberia o motivo.
+  ipcMain.handle('screen-share:portal-status', async () => {
+    const status = flow === 'portal' ? await checkScreenCastPortal() : 'available'
+    if (status === 'missing') logAudio('portal: sem a interface ScreenCast do xdg-desktop-portal')
+    return { status, message: portalMissingMessage(process.env.XDG_CURRENT_DESKTOP) }
+  })
+
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     pendingDisplay.hold(callback)
     pendingAudioRequested = request.audioRequested
+    if (flow === 'portal') {
+      stopWindowWatch()
+      void shareFromPortal()
+      return
+    }
     mainWindow?.webContents.send('screen-picker:show')
   })
+
+  // O som não vai junto no Linux (o loopback do Electron é só do Windows).
+  let portalRequest = 0
+  async function shareFromPortal(): Promise<void> {
+    const ticket = ++portalRequest
+    let source: Electron.DesktopCapturerSource | undefined
+    try {
+      // Tela e janela: o portal oferece as duas (vem como "window:" qualquer
+      // que seja a escolha). Sem miniatura: ninguém vai ver.
+      const sources = await desktopCapturer.getSources({
+        types: ['screen', 'window'],
+        thumbnailSize: { width: 0, height: 0 }
+      })
+      source = sources[0]
+    } catch (err) {
+      // Cancelou o seletor do sistema (ou o portal falhou).
+      logAudio(`portal: sem fonte (${String(err)})`)
+    }
+    // Um pedido mais novo chegou enquanto o seletor estava aberto: ele responde.
+    if (ticket !== portalRequest) return
+    const callback = pendingDisplay.take()
+    if (!callback) return
+    if (!source) {
+      callback(null)
+      return
+    }
+    logAudio(`compartilhando pelo portal (${source.id}): som = none`)
+    callback({ video: source })
+  }
 
   ipcMain.handle('screen-picker:sources', async () => {
     const sources = await desktopCapturer.getSources({
@@ -148,7 +197,14 @@ function registerScreenShareHandlers(): void {
         windowAudioOk
       })
       logAudio(`compartilhando "${source.name}" (${source.id}): som = ${mode}`)
-      if (mode === 'none' && source.id.startsWith('window:') && pendingAudioRequested) {
+      if (
+        warnWindowAudioFallback({
+          sourceId: source.id,
+          audioRequested: pendingAudioRequested,
+          platform: process.platform,
+          mode
+        })
+      ) {
         mainWindow?.webContents.send('screen-audio:fallback', audioLogPath())
       }
       if (source.id.startsWith('window:')) watchSharedWindow(source.id)

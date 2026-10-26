@@ -3,7 +3,13 @@
 
 import { openMicrophone, type MicHandle } from './noiseSuppression'
 import { pickerError, resetPickerCancel } from './screenPickerCancel'
-import { displayMediaOptions, retryWithoutAudio } from './displayMedia'
+import {
+  displayMediaOptions,
+  portalPickerError,
+  retryWithoutAudio,
+  ScreenShareSetupError,
+  usesNativePicker
+} from './displayMedia'
 import { IS_WEB } from './config'
 import { requestScreenQuality } from '../store/screenQualityStore'
 import {
@@ -23,11 +29,20 @@ export function getAudioStream(deviceId = ''): Promise<MicHandle> {
 // setDisplayMediaRequestHandler no processo main. No navegador, o seletor é o
 // do próprio navegador (ver lib/displayMedia.ts). Rejeita com NotAllowedError
 // quando o usuário cancela.
+// Linux/Wayland: o seletor é o do sistema (xdg-desktop-portal), como na web;
+// o som não vai junto (o Electron só captura o som do sistema no Windows).
 export async function getDisplayStream(): Promise<MediaStream> {
   resetPickerCancel()
-  // Web: confirmar o modal precede o seletor nativo. Desktop: a qualidade é
-  // escolhida no picker que atende ao pedido já pendente do Electron.
-  const requestedQuality = IS_WEB ? await requestScreenQuality() : null
+  const portal = window.api?.screenShare?.flow === 'portal'
+  if (portal) {
+    const { status, message } = await window.api!.screenShare!.portalStatus()
+    if (status === 'missing') throw new ScreenShareSetupError(message)
+  }
+  // Seletor do sistema: confirmar o modal de qualidade vem antes. Modal do
+  // app: a qualidade é escolhida nele, que atende ao pedido já pendente.
+  const requestedQuality = usesNativePicker(IS_WEB, window.api?.screenShare?.flow)
+    ? await requestScreenQuality()
+    : null
   const capture = (audio: boolean): Promise<MediaStream> =>
     navigator.mediaDevices.getDisplayMedia(
       displayMediaOptions(IS_WEB, {
@@ -35,14 +50,14 @@ export async function getDisplayStream(): Promise<MediaStream> {
         frameRate: requestedQuality?.frameRate ?? 60
       })
     )
-  const stream = await capture(true)
+  const stream = await capture(!portal)
     .catch((err: unknown) => {
       // Navegador sem captura de som de tela: compartilha só o vídeo.
       if (IS_WEB && retryWithoutAudio(err)) return capture(false)
       throw err
     })
     .catch((err: unknown) => {
-      throw pickerError(err)
+      throw portal ? portalPickerError(err) : pickerError(err)
     })
   const quality = requestedQuality ?? loadScreenQuality()
   stream.getVideoTracks().forEach(rememberScreenSource)
