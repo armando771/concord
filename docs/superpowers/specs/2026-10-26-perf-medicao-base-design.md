@@ -43,8 +43,11 @@ ganho.
 5. **Long Animation Frames (>50 ms) + FPS por `requestAnimationFrame`** para
    fluidez. *Por quê:* LoAF é a métrica que mais se aproxima do engasgo
    percebido (Chrome 123+, Electron 44 tem); FPS por rAF complementa na rolagem.
-6. **Rota normalizada** (IDs → `:id`). *Por quê:* o arquivo pode ser
-   compartilhado no PR sem dados pessoais.
+6. **Rota normalizada por lista de segmentos fixos** (o que não está na lista →
+   `:id`). *Por quê:* o arquivo pode ser compartilhado no PR sem dados pessoais.
+   Detectar IDs por formato não serve: o código de convite (`/convite/:code`) tem
+   8 caracteres e pode ser só letras. A lista falha para o lado seguro (rota nova
+   vira `:id`).
 7. **Sem ADR**: segue o padrão do repo (main por responsabilidade, IPC via
    preload, script em `scripts/` com lib pura testada). Sem dependência nova.
 
@@ -72,7 +75,7 @@ frontend/src/
     perfSession.ts                     junta o relatório do renderer com a amostra do
                                        main e escreve as linhas (startup e sample)
     setupPerfLog.ts                    só a ligação com o Electron: flag, timer de 1 s,
-                                       IPC 'perf:enabled' e 'perf:report', before-quit
+                                       IPC 'perf:enabled' e 'perf:report', evento quit
   main/index.ts                        + setupPerfLog(() => mainWindow), PRIMEIRA
                                        chamada do whenReady (2 linhas + import)
   preload/index.ts                     + window.api.perf =
@@ -160,14 +163,18 @@ gravado com o tempo em que aconteceu, `null` se não aconteceu até 60 s.
 chamada do `whenReady`. Se o usuário só entrar depois de 60 s, `usableMs` fica
 `null`: a medida vale para abertura a frio com sessão já salva.
 
-**Linha `end`** no `before-quit`: `{"kind":"end","t":…}`.
+**Linha `end`** no evento `quit` do app (e não `before-quit`, que pode ser
+cancelado): `{"kind":"end","t":…}`.
 
 **Relatório** (`node scripts/perf-report.mjs a.jsonl [b.jsonl]`):
 - Abertura: `appReadyMs`, `readyToShowMs`, `usableMs`.
 - Por contexto (chave: `window` + `inCall` + `sharing` + `watching`):
   CPU total (média, p95), RAM total (média), CPU/RAM por tipo de processo,
   FPS p5, LoAF por minuto, LoAF máx.
-- Descarta os primeiros 10 s depois de cada troca de contexto.
+- Descarta as amostras anteriores à janela pronta (`readyToShowMs`: ainda é o boot) e
+  os primeiros 10 s depois de cada troca de contexto.
+- A CPU total de uma amostra só conta quando todos os processos dela têm CPU (um tipo
+  que acabou de reaparecer vem `null`).
 - Contexto com < 30 amostras válidas recebe o aviso "amostra pequena".
 - Com dois arquivos: colunas antes/depois e Δ%.
 - Ignora linhas corrompidas (conta e avisa) e aceita arquivo sem `end`.
@@ -192,7 +199,7 @@ Nenhum texto para o usuário final: não há UI. As mensagens do
   em "Other", delta de CPU por processo; processo novo no meio não gera pico.
 - `main/perf/startupMarks.test.ts`: `usable` antes e depois do `ready-to-show`,
   marco ausente vira `null`.
-- `shared/perfLog.test.ts`: `normalizeRoute` troca IDs por `:id`.
+- `shared/perfLog.test.ts`: `normalizeRoute` mantém só os segmentos fixos das rotas reais (incluindo `/convite/:code`).
 - `renderer/src/shared/lib/perf/frameStats.test.ts`: FPS da janela de 1 s,
   LoAF só > 50 ms, contagem/máx/soma, reset entre janelas.
 - `scripts/lib/perfReport.test.mjs`: agrupamento, descarte de 10 s, p95,

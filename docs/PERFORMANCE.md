@@ -66,8 +66,11 @@ node scripts/perf-report.mjs antes.jsonl depois.jsonl    # antes → depois e Δ
 
 ## Privacidade
 
-A rota é gravada com os IDs trocados por `:id`, e o arquivo não guarda mensagens
-nem nomes. Mesmo assim, olhe o arquivo antes de anexá-lo a um PR.
+Da rota só ficam os segmentos fixos conhecidos (`servers`, `channels`, `dm`,
+`convite`...); todo o resto vira `:id`, inclusive o código de convite. O arquivo
+não guarda mensagens nem nomes. Se uma rota nova aparecer como `:id`, inclua o
+segmento em `FIXED_SEGMENTS` (`frontend/src/shared/perfLog.ts`). Mesmo assim,
+olhe o arquivo antes de anexá-lo a um PR.
 
 ## Investigar um número ruim
 
