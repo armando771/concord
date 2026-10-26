@@ -495,11 +495,12 @@ func TestJoinWithoutActivityOrOtherActivityIsIgnored(t *testing.T) {
 		t.Fatalf("join sem atividade gerou %d eventos", n)
 	}
 
-	if err := s.StartActivity(context.Background(), "call-1", "user-1", "survev", ""); err != nil {
+	if err := s.StartActivity(context.Background(), "call-1", "user-1", "krunker", ""); err != nil {
 		t.Fatalf("StartActivity: %v", err)
 	}
-	// Join de uma atividade que já foi trocada por outra não conta.
-	s.HandleCallMessage("user-2", "call:activity:join", raw)
+	// Join de outra atividade (já trocada ou encerrada) não conta.
+	other, _ := json.Marshal(ActivityPresencePayload{CallID: "call-1", ActivityID: "doom"})
+	s.HandleCallMessage("user-2", "call:activity:join", other)
 	if got := s.ActivityFor("call-1", "user-2"); !reflect.DeepEqual(got.Players, []string{"user-1"}) {
 		t.Fatalf("join da atividade antiga contou: %v", got.Players)
 	}
@@ -535,8 +536,8 @@ func TestLinkUpdateKeepsPlayersNewActivityResets(t *testing.T) {
 	if got := s.ActivityFor("call-1", "user-3"); !reflect.DeepEqual(got.Players, []string{"user-1", "user-2"}) {
 		t.Fatalf("troca de link perdeu jogadores: %v", got.Players)
 	}
-	// Outra pessoa abre outra atividade: começa só com ela.
-	if err := s.StartActivity(ctx, "call-1", "user-3", "survev", ""); err != nil {
+	// Outra pessoa abre a atividade: começa só com ela.
+	if err := s.StartActivity(ctx, "call-1", "user-3", "krunker", ""); err != nil {
 		t.Fatalf("StartActivity (outra): %v", err)
 	}
 	if got := s.ActivityFor("call-1", "user-1"); !reflect.DeepEqual(got.Players, []string{"user-3"}) {
@@ -566,20 +567,5 @@ func TestPlayerLeavingCallLeavesActivity(t *testing.T) {
 	}
 	if n := len(eventsOfType(pub, "call:activity:players")["user:user-1"]); n != before {
 		t.Fatalf("saída de quem não jogava avisou (%d -> %d)", before, n)
-	}
-}
-
-func TestNewActivitiesInCatalog(t *testing.T) {
-	cases := []struct{ id, raw string }{
-		{"survev", "https://survev.io/#r7S5"},
-		{"suroi", "https://suroi.io/?region=sa#xv0d"},
-	}
-	for _, tc := range cases {
-		if got, err := ValidateActivityURL(tc.id, tc.raw); err != nil || got != tc.raw {
-			t.Fatalf("%s: %q, %v", tc.id, got, err)
-		}
-	}
-	if _, err := ValidateActivityURL("survev", "https://krunker.io/"); !errors.Is(err, ErrActivityURL) {
-		t.Fatalf("survev aceitou link do krunker: %v", err)
 	}
 }

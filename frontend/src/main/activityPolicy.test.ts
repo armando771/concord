@@ -131,17 +131,19 @@ describe('activityPolicy', () => {
     })
 
     it('sair da sala não apaga a última (quem entrar depois ainda cai nela)', () => {
-      const tracker = createRoomTracker('survev')
-      expect(tracker.visit('https://survev.io/#1Fu4')).toBe('https://survev.io/#1Fu4')
-      expect(tracker.visit('https://survev.io/')).toBeNull()
-      expect(tracker.visit('https://survev.io/#1Fu4')).toBeNull()
+      const tracker = createRoomTracker('krunker')
+      const room = 'https://krunker.io/?game=BRZ:tukbo'
+      expect(tracker.visit(room)).toBe(room)
+      expect(tracker.visit('https://krunker.io/')).toBeNull()
+      expect(tracker.visit(room)).toBeNull()
     })
 
     it('reset: a mesma sala volta a ser avisada (janela reaberta)', () => {
-      const tracker = createRoomTracker('survev')
-      tracker.visit('https://survev.io/#1Fu4')
+      const tracker = createRoomTracker('krunker')
+      const room = 'https://krunker.io/?game=BRZ:tukbo'
+      tracker.visit(room)
       tracker.reset()
-      expect(tracker.visit('https://survev.io/#1Fu4')).toBe('https://survev.io/#1Fu4')
+      expect(tracker.visit(room)).toBe(room)
     })
   })
 })
