@@ -10,8 +10,8 @@ import {
   findOverwrite,
   isEmptyOverwrite,
   isPrivateChannel,
-  overwriteRows,
   privateOverwrite,
+  targetRows,
   triState,
   withTriState,
   type OverwriteTargetRef,
@@ -69,7 +69,7 @@ function ChannelPermissionsModal({
     return m ? serverDisplayName(m, m) : undefined
   }
   const rows = useMemo(
-    () => overwriteRows(overwrites, roles, (id) => memberName(id)),
+    () => targetRows(overwrites, roles, (id) => memberName(id)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [overwrites, roles, members]
   )
@@ -160,32 +160,27 @@ function ChannelPermissionsModal({
   }
 
   const term = adding.trim().toLowerCase()
-  const candidates = [
-    ...roles
-      .filter((r) => !findOverwrite(overwrites, { type: 'role', id: r.id }))
-      .filter((r) => !term || r.name.toLowerCase().includes(term))
-      .map((r) => ({ ref: { type: 'role' as const, id: r.id }, name: r.name, color: r.color })),
-    ...(term
-      ? members
-          .filter((m) => !findOverwrite(overwrites, { type: 'member', id: m.user_id }))
-          .filter((m) =>
-            [m.nickname, m.display_name, m.username].some((v) => v?.toLowerCase().includes(term))
-          )
-          .slice(0, 6)
-          .map((m) => ({
-            ref: { type: 'member' as const, id: m.user_id },
-            name: serverDisplayName(m, m),
-            color: null as number | null
-          }))
-      : [])
-  ].slice(0, 10)
+  // Os cargos já estão todos na lista ao lado: a busca acha membros.
+  const candidates = term
+    ? members
+        .filter((m) => !findOverwrite(overwrites, { type: 'member', id: m.user_id }))
+        .filter((m) =>
+          [m.nickname, m.display_name, m.username].some((v) => v?.toLowerCase().includes(term))
+        )
+        .slice(0, 8)
+        .map((m) => ({
+          ref: { type: 'member' as const, id: m.user_id },
+          name: serverDisplayName(m, m)
+        }))
+    : []
 
   const pendingRow =
     current && !rows.some((r) => r.type === current.type && r.id === current.id)
       ? {
           ...current,
-          name: roles.find((r) => r.id === current.id)?.name ?? memberName(current.id) ?? '?',
-          color: null as number | null
+          name: memberName(current.id) ?? '?',
+          color: null as number | null,
+          hasRules: false
         }
       : null
   const allRows = pendingRow ? [...rows, pendingRow] : rows
@@ -215,8 +210,8 @@ function ChannelPermissionsModal({
       <div className="flex gap-4">
         <div className="w-52 shrink-0">
           <Input
-            placeholder="Adicionar cargo ou membro"
-            aria-label="Adicionar cargo ou membro"
+            placeholder="Adicionar membro"
+            aria-label="Adicionar membro"
             value={adding}
             onChange={(e) => setAdding(e.target.value)}
             className="mb-2 text-xs"
@@ -233,14 +228,14 @@ function ChannelPermissionsModal({
                     onClick={() => addTarget(c.ref)}
                     className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10"
                   >
-                    <span className="text-gray-500">{c.ref.type === 'role' ? '◆' : '@'}</span>
+                    <span className="text-gray-500">@</span>
                     <span className="truncate">{c.name}</span>
                   </button>
                 </li>
               ))}
             </ul>
           )}
-          <ul className="flex flex-col gap-0.5">
+          <ul className="flex max-h-80 flex-col gap-0.5 overflow-y-auto">
             {allRows.map((row) => {
               const active = current?.type === row.type && current.id === row.id
               return (
@@ -264,15 +259,17 @@ function ChannelPermissionsModal({
                       {row.type === 'role' ? '◆' : '@'}
                     </span>
                     <span className="truncate">{row.name}</span>
+                    {row.hasRules && (
+                      <span
+                        aria-label="Tem regras neste canal"
+                        title="Tem regras neste canal"
+                        className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400"
+                      />
+                    )}
                   </button>
                 </li>
               )
             })}
-            {allRows.length === 0 && (
-              <li className="px-2 text-xs text-gray-500">
-                Sem regras: o canal segue as permissões do servidor.
-              </li>
-            )}
           </ul>
         </div>
 

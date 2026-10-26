@@ -19,7 +19,7 @@ function ConfirmCloseModal({
   onCancel: () => void
 }): React.JSX.Element {
   return (
-    <Modal open title="Encerrar a votação?" onClose={onCancel} solid>
+    <Modal open title="Encerrar a votação?" onClose={onCancel}>
       <div className="flex flex-col gap-4">
         <p className="text-sm text-gray-300">
           Mover <span className="font-semibold text-white">“{proposal.title}”</span> para{' '}
