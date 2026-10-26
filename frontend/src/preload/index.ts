@@ -153,6 +153,12 @@ const api = {
     setAutostart(enabled: boolean): Promise<boolean | null> {
       return ipcRenderer.invoke('settings:set-autostart', enabled)
     },
+    getCloseToTray(): Promise<{ enabled: boolean; available: boolean } | null> {
+      return ipcRenderer.invoke('settings:close-to-tray')
+    },
+    setCloseToTray(enabled: boolean): Promise<boolean | null> {
+      return ipcRenderer.invoke('settings:set-close-to-tray', enabled)
+    },
     onToggleMute(cb: () => void): () => void {
       const listener = (): void => cb()
       ipcRenderer.on('tray:toggle-mute', listener)

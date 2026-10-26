@@ -1,18 +1,23 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, Tray } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { probeTrayHost } from './trayHost'
 import { badgeBitmap, badgeDescription, badgeLabel, taskbarAction } from './taskbarBadge'
 import { logNotification } from './toasts'
 import {
+  closeToTrayEnabled,
   launchedHidden,
   LOGIN_ITEM_ARGS,
   shouldHideOnClose,
   notifyPlan,
-  staleLoginItem
+  staleLoginItem,
+  trayTooltip
 } from './windowPolicy'
 
 // Modo segundo plano estilo Discord: bandeja, instância única, iniciar com o
-// Windows e notificações nativas. Bandeja/fechar-esconde só no Windows.
+// Windows e notificações nativas. Bandeja no Windows e no Linux (StatusNotifier:
+// Waybar, KDE, GNOME com extensão); fechar-esconde sempre no Windows e, no
+// Linux, só se a bandeja está funcionando e a opção está ligada.
 
 interface CallState {
   inCall: boolean
@@ -33,6 +38,9 @@ interface NotifyPayload {
 }
 
 let tray: Tray | null = null
+let trayWindow: () => BrowserWindow | null = () => null
+// "Minimizar para a bandeja ao fechar" (só Linux; no Windows é sempre assim).
+let closeToTray = true
 // Notificações vivas: sem referência o GC do Windows as coleta e o clique some.
 const activeNotifications = new Set<Notification>()
 let quitting = false
@@ -56,7 +64,12 @@ export function markQuitting(value = true): void {
 
 const prefsPath = (): string => join(app.getPath('userData'), 'background.json')
 
-function readPrefs(): { autostartInitialized?: boolean } {
+interface Prefs {
+  autostartInitialized?: boolean
+  closeToTray?: boolean
+}
+
+function readPrefs(): Prefs {
   try {
     return JSON.parse(readFileSync(prefsPath(), 'utf8'))
   } catch {
@@ -64,7 +77,7 @@ function readPrefs(): { autostartInitialized?: boolean } {
   }
 }
 
-function writePrefs(prefs: { autostartInitialized?: boolean }): void {
+function writePrefs(prefs: Prefs): void {
   try {
     const dir = app.getPath('userData')
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
@@ -107,6 +120,8 @@ function initAutostart(): void {
 
 /** Selo vermelho com o número de não lidas sobre o ícone da barra de tarefas. */
 function updateTaskbarBadge(win: BrowserWindow): void {
+  // Na bandeja (Windows e Linux) o número de não lidas vai na dica do ícone.
+  refreshTray()
   if (process.platform !== 'win32' || win.isDestroyed()) return
   const label = badgeLabel(unseenCount)
   if (!label) {
@@ -129,9 +144,11 @@ function showWindow(win: BrowserWindow | null): void {
   win.focus()
 }
 
+const refreshTray = (): void => rebuildTrayMenu(trayWindow)
+
 function rebuildTrayMenu(getWindow: () => BrowserWindow | null): void {
-  if (!tray) return
-  tray.setToolTip(callState.inCall ? 'Salinha — em chamada' : 'Salinha')
+  if (!tray || tray.isDestroyed()) return
+  tray.setToolTip(trayTooltip(callState.inCall, unseenCount))
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Abrir a Salinha', click: () => showWindow(getWindow()) },
@@ -183,17 +200,58 @@ export function startHidden(): boolean {
   return autostartSupported() && launchedHidden(process.argv)
 }
 
-export function setupBackground(getWindow: () => BrowserWindow | null, icon: string): void {
+/** Ícones pequenos da bandeja do Linux (PNG 32 px e 64 px para telas HiDPI). */
+export interface TrayIcons {
+  small: string
+  large: string
+}
+
+/**
+ * Ícone da bandeja no Linux: o painel recebe o PNG pronto por D-Bus e o
+ * redimensiona; mandar os 512 px do ícone do app ficaria serrilhado.
+ */
+function linuxTrayImage(icons?: TrayIcons): Electron.NativeImage | null {
+  if (!icons) return null
+  try {
+    const image = nativeImage.createEmpty()
+    image.addRepresentation({ scaleFactor: 1, buffer: readFileSync(icons.small) })
+    image.addRepresentation({ scaleFactor: 2, buffer: readFileSync(icons.large) })
+    return image.isEmpty() ? null : image
+  } catch {
+    return null
+  }
+}
+
+function createTray(image: Electron.NativeImage, getWindow: () => BrowserWindow | null): void {
+  try {
+    tray = new Tray(image)
+  } catch (error) {
+    // Sem bandeja: no Linux fechar a janela passa a fechar o app.
+    tray = null
+    logNotification(`bandeja não criada: ${error}`)
+    return
+  }
+  tray.on('click', () => showWindow(getWindow()))
+  rebuildTrayMenu(getWindow)
+}
+
+export function setupBackground(
+  getWindow: () => BrowserWindow | null,
+  icon: string,
+  linuxIcons?: TrayIcons
+): void {
   initAutostart()
 
   app.on('before-quit', () => {
     quitting = true
   })
 
+  trayWindow = getWindow
+  closeToTray = closeToTrayEnabled(readPrefs().closeToTray)
   if (process.platform === 'win32') {
-    tray = new Tray(nativeImage.createFromPath(icon))
-    tray.on('click', () => showWindow(getWindow()))
-    rebuildTrayMenu(getWindow)
+    createTray(nativeImage.createFromPath(icon), getWindow)
+  } else if (process.platform === 'linux') {
+    createTray(linuxTrayImage(linuxIcons) ?? nativeImage.createFromPath(icon), getWindow)
   }
 
   ipcMain.on('call:state', (_e, state: CallState) => {
@@ -214,6 +272,19 @@ export function setupBackground(getWindow: () => BrowserWindow | null, icon: str
     if (!autostartSupported()) return null
     setAutostart(enabled)
     return enabled
+  })
+
+  // "Minimizar para a bandeja ao fechar": null fora do Linux ou sem bandeja.
+  // `available` = há um painel mostrando ícones agora (senão fechar fecha o app).
+  ipcMain.handle('settings:close-to-tray', async () => {
+    if (!linuxTrayCreated()) return null
+    return { enabled: closeToTray, available: await probeTrayHost() }
+  })
+  ipcMain.handle('settings:set-close-to-tray', (_e, enabled: boolean) => {
+    if (!linuxTrayCreated()) return null
+    closeToTray = enabled === true
+    writePrefs({ ...readPrefs(), closeToTray })
+    return closeToTray
   })
 
   ipcMain.on('notify', (_e, payload: NotifyPayload) => {
@@ -249,12 +320,34 @@ export function setupBackground(getWindow: () => BrowserWindow | null, icon: str
   })
 }
 
+const linuxTrayCreated = (): boolean =>
+  process.platform === 'linux' && tray !== null && !tray.isDestroyed()
+
 /** Liga o "fechar esconde na bandeja" na janela principal. */
 export function attachCloseToTray(win: BrowserWindow): void {
   win.on('close', (event) => {
-    if (!shouldHideOnClose(process.platform, quitting)) return
+    const trayEnabled = process.platform === 'linux' ? linuxTrayCreated() && closeToTray : true
+    // trayWorks: true só para saber se este caso pode esconder; no Linux a
+    // bandeja é confirmada no D-Bus logo abaixo, antes de esconder.
+    if (!shouldHideOnClose(process.platform, quitting, { trayWorks: true, enabled: trayEnabled }))
+      return
     event.preventDefault()
-    win.hide()
+    if (process.platform !== 'linux') {
+      win.hide()
+      return
+    }
+    // Linux: só esconde se o painel mostra a bandeja neste instante (ele pode
+    // ter fechado ou nunca ter existido). Senão fecha de verdade — a Salinha
+    // nunca fica invisível sem ícone para reabrir.
+    void probeTrayHost().then((works) => {
+      if (win.isDestroyed()) return
+      if (shouldHideOnClose('linux', quitting, { trayWorks: works, enabled: trayEnabled })) {
+        win.hide()
+      } else {
+        quitting = true
+        win.close()
+      }
+    })
   })
   // Voltou a olhar a janela: para de piscar e limpa o selo de não lidas.
   win.on('focus', () => {

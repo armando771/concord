@@ -12,6 +12,8 @@ import {
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import trayIcon from '../../resources/tray.png?asset'
+import trayIcon2x from '../../resources/tray-2x.png?asset'
 import { displayAudioMode } from './displayMedia'
 import { PendingDisplayRequest } from './displayPicker'
 import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './background'
@@ -280,7 +282,7 @@ app.whenReady().then(() => {
   registerScreenShareHandlers()
   registerThemeHandlers()
   registerScreenAudio()
-  setupBackground(() => mainWindow, icon)
+  setupBackground(() => mainWindow, icon, { small: trayIcon, large: trayIcon2x })
   setupOverlay(() => mainWindow)
   setupGlobalKeybinds(() => mainWindow)
   setupActivities(() => mainWindow)

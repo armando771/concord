@@ -195,6 +195,10 @@ export function DesktopSettings(): React.JSX.Element {
   const background = window.api?.background
   // undefined = ainda carregando; null = não suportado nesta plataforma
   const [autostart, setAutostart] = useState<boolean | null | undefined>(undefined)
+  // Linux: null = sem bandeja (ou outra plataforma); undefined = carregando.
+  const [closeToTray, setCloseToTray] = useState<
+    { enabled: boolean; available: boolean } | null | undefined
+  >(undefined)
   const overlayEnabled = useOverlayPrefsStore((s) => s.enabled)
   const setOverlayEnabled = useOverlayPrefsStore((s) => s.setEnabled)
   const overlayOpacity = useOverlayPrefsStore((s) => s.opacity)
@@ -206,6 +210,7 @@ export function DesktopSettings(): React.JSX.Element {
 
   useEffect(() => {
     void background?.getAutostart().then(setAutostart)
+    void background?.getCloseToTray?.().then(setCloseToTray)
   }, [background])
 
   const toggleAutostart = (): void => {
@@ -214,6 +219,14 @@ export function DesktopSettings(): React.JSX.Element {
     })
   }
 
+  const toggleCloseToTray = (): void => {
+    if (!closeToTray) return
+    void background?.setCloseToTray(!closeToTray.enabled).then((value) => {
+      if (value !== null) setCloseToTray({ ...closeToTray, enabled: value })
+    })
+  }
+
+  const hasCloseToTray = Boolean(background) && Boolean(closeToTray)
   const hasAutostart = Boolean(background) && typeof autostart === 'boolean'
   const hasOverlay = Boolean(background && window.api?.overlay?.supported)
 
@@ -226,6 +239,21 @@ export function DesktopSettings(): React.JSX.Element {
             description="Abre escondido na bandeja, pronto para receber chamadas."
             checked={Boolean(autostart)}
             onChange={toggleAutostart}
+          />
+        </div>
+      )}
+      {/* Linux: a bandeja depende do painel (Waybar, KDE, extensão do GNOME). */}
+      {hasCloseToTray && closeToTray && (
+        <div className="rounded-xl border border-subtle bg-fg/5 p-4">
+          <Toggle
+            title="Minimizar para a bandeja ao fechar"
+            description={
+              closeToTray.available
+                ? 'Fechar a janela deixa a Salinha na bandeja, pronta para receber chamadas.'
+                : 'Seu painel não está mostrando ícones de bandeja agora: enquanto isso, fechar a janela encerra a Salinha.'
+            }
+            checked={closeToTray.enabled}
+            onChange={toggleCloseToTray}
           />
         </div>
       )}
@@ -279,7 +307,7 @@ export function DesktopSettings(): React.JSX.Element {
           </label>
         </div>
       )}
-      {!hasAutostart && !hasOverlay && (
+      {!hasAutostart && !hasCloseToTray && !hasOverlay && (
         <p className="text-ds-md text-gray-400">Nada para configurar aqui nesta plataforma.</p>
       )}
       {/* Prévia da animação de nível: só no build de dev (some do build final). */}
