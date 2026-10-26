@@ -113,3 +113,21 @@ export function setServerDeafen(callId: string, userId: string, deafened: boolea
 export function disconnectParticipant(callId: string, userId: string): Promise<void> {
   return request<void>(`/calls/${callId}/participants/${userId}`, { method: 'DELETE' })
 }
+
+/** Miniatura da transmissão (base64 do JPEG); image null = pedida, ainda não chegou. */
+export function getScreenPreview(
+  callId: string,
+  userId: string
+): Promise<{ image: string | null }> {
+  return request<{ image: string | null }>(
+    `/calls/${encodeURIComponent(callId)}/screen-preview/${encodeURIComponent(userId)}`
+  )
+}
+
+/** Quem transmite manda a miniatura pedida pelo servidor (base64 do JPEG). */
+export function putScreenPreview(callId: string, image: string): Promise<void> {
+  return request<void>(`/calls/${encodeURIComponent(callId)}/screen-preview`, {
+    method: 'PUT',
+    body: JSON.stringify({ image })
+  })
+}
