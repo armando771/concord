@@ -527,10 +527,7 @@ export function SettingsSectionsSkeleton({
 /** Cartão de configuração (aniversário): título, campos e interruptor. */
 export function SettingsCardSkeleton(): React.JSX.Element {
   return (
-    <SkeletonRegion
-      label="Carregando…"
-      className="rounded-xl border border-subtle bg-fg/5 p-4"
-    >
+    <SkeletonRegion label="Carregando…" className="rounded-xl border border-subtle bg-fg/5 p-4">
       <Skeleton className="mb-3 h-3 w-24" />
       <div className="flex flex-col gap-3">
         <div className="flex gap-2">
