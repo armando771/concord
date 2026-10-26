@@ -36,7 +36,21 @@ const NAME_FONT_PACKAGES = [
   'zilla-slab',
   'oswald',
   'jetbrains-mono',
-  'bungee'
+  'bungee',
+  'silkscreen',
+  'vt323',
+  'dancing-script',
+  'great-vibes',
+  'unifrakturmaguntia',
+  'space-mono',
+  'fredoka',
+  'comfortaa',
+  'lobster',
+  'righteous',
+  'monoton',
+  'bangers',
+  'orbitron',
+  'creepster'
 ]
 
 export const fontLicensePlugin: Plugin = {
