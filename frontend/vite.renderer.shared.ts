@@ -23,14 +23,36 @@ export function cspPlugin(connectSrc: string, mediaSrc: string, extra?: string):
  * no out/renderer (desktop) e no dist-web. O instalador também leva uma cópia
  * em resources/licenses (electron-builder.yml).
  */
+// Fontes do estilo de nome (assets/nameFonts.css), todas OFL com copyright próprio.
+const NAME_FONT_PACKAGES = [
+  'bitter',
+  'pacifico',
+  'chango',
+  'montserrat',
+  'cinzel-decorative',
+  'press-start-2p',
+  'grenze-gotisch',
+  'caveat',
+  'zilla-slab',
+  'oswald',
+  'jetbrains-mono',
+  'bungee'
+]
+
 export const fontLicensePlugin: Plugin = {
   name: 'salinha-font-license',
   apply: 'build',
   generateBundle() {
+    const licenses: [string, string][] = [
+      ['outfit', 'node_modules/@fontsource-variable/outfit/LICENSE'],
+      ...NAME_FONT_PACKAGES.map((p): [string, string] => [p, `node_modules/@fontsource/${p}/LICENSE`])
+    ]
     this.emitFile({
       type: 'asset',
       fileName: 'assets/OFL.txt',
-      source: readFileSync(resolve('node_modules/@fontsource-variable/outfit/LICENSE'), 'utf8')
+      source: licenses
+        .map(([name, file]) => `=== ${name} ===\n${readFileSync(resolve(file), 'utf8')}`)
+        .join('\n\n')
     })
   }
 }
