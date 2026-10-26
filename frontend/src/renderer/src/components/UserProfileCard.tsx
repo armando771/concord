@@ -210,8 +210,14 @@ function UserProfileCard(): React.JSX.Element | null {
     if (!target) return
     const onDown = (e: MouseEvent): void => {
       const node = e.target as Node
-      // No item que abriu o cartão, o próprio clique fecha (toggle).
-      if (ref.current?.contains(node) || target.anchorEl?.contains(node)) return
+      // No item que abriu o cartão, no próprio cartão ou nas configs abertas dele, o clique não fecha o cartão.
+      if (
+        ref.current?.contains(node) ||
+        target.anchorEl?.contains(node) ||
+        (node instanceof Element && node.closest('[data-user-context-menu]'))
+      ) {
+        return
+      }
       close()
     }
     const onKey = (e: KeyboardEvent): void => {
@@ -226,6 +232,15 @@ function UserProfileCard(): React.JSX.Element | null {
       window.removeEventListener('resize', close)
     }
   }, [target, close])
+
+  useEffect(() => {
+    return () => {
+      const menu = useUserMenuStore.getState().target
+      if (menu && menu.userId === target?.userId && menu.anchorEl) {
+        useUserMenuStore.getState().close()
+      }
+    }
+  }, [target?.userId])
 
   if (!target) return null
 
@@ -347,13 +362,19 @@ function UserProfileCard(): React.JSX.Element | null {
     mutualServers.length > 0
 
   const openMore = (e: React.MouseEvent<HTMLButtonElement>): void => {
+    const currentMenu = useUserMenuStore.getState().target
+    if (currentMenu && currentMenu.userId === target.userId) {
+      useUserMenuStore.getState().close()
+      return
+    }
     const r = e.currentTarget.getBoundingClientRect()
     useUserMenuStore.getState().open({
       userId: target.userId,
       name: nickname || card.display_name,
       username: card.username,
       x: r.left,
-      y: r.bottom + 4
+      y: r.bottom + 4,
+      anchorEl: e.currentTarget
     })
   }
 

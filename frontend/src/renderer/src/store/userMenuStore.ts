@@ -13,6 +13,8 @@ export interface UserMenuTarget {
   conversationId?: string
   x: number
   y: number
+  /** Elemento que disparou o menu (ex.: botão 3 pontinhos no cartão). */
+  anchorEl?: HTMLElement
 }
 
 interface UserMenuState {

@@ -45,8 +45,8 @@ function App(): React.JSX.Element {
           <UpdateCallBridge />
         </>
       )}
-      <UserContextMenu />
       <UserProfileCard />
+      <UserContextMenu />
       <FriendActionsHost />
       <SettingsScreen />
       <ServerSettingsScreen />
