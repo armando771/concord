@@ -1069,6 +1069,33 @@ func (s *Service) HandleCallMessage(userID string, evType string, payload json.R
 		if err := s.SetScreenWatching(ctx, p.CallID, p.SharerID, userID, p.Watching); err != nil {
 			s.sendError(userID, p.CallID, err.Error())
 		}
+	case "call:screen_draw":
+		var p ScreenDrawPayload
+		if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" || p.SharerID == "" {
+			s.sendError(userID, "", "invalid call:screen_draw payload")
+			return
+		}
+		if err := s.HandleScreenDraw(ctx, userID, p); err != nil {
+			s.sendError(userID, p.CallID, err.Error())
+		}
+	case "call:screen_draw_clear":
+		var p ScreenDrawClearPayload
+		if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" || p.SharerID == "" {
+			s.sendError(userID, "", "invalid call:screen_draw_clear payload")
+			return
+		}
+		if err := s.HandleScreenDrawClear(ctx, userID, p); err != nil {
+			s.sendError(userID, p.CallID, err.Error())
+		}
+	case "call:screen_draw_undo":
+		var p ScreenDrawUndoPayload
+		if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" || p.SharerID == "" || p.StrokeID == "" {
+			s.sendError(userID, "", "invalid call:screen_draw_undo payload")
+			return
+		}
+		if err := s.HandleScreenDrawUndo(ctx, userID, p); err != nil {
+			s.sendError(userID, p.CallID, err.Error())
+		}
 	case "call:soundboard":
 		s.handleSoundboardMessage(ctx, userID, payload)
 	case "call:activity":

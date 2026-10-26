@@ -161,6 +161,42 @@ type LeavePayload struct {
 	CallID string `json:"call_id"`
 }
 
+// Epic Pen / Screen Annotation models
+
+type DrawPoint struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+type DrawStroke struct {
+	ID        string      `json:"id"`
+	SharerID  string      `json:"sharer_id"`
+	UserID    string      `json:"user_id"`
+	Tool      string      `json:"tool"` // "pen", "highlighter", "laser"
+	Color     string      `json:"color"`
+	Width     float64     `json:"width"`
+	Points    []DrawPoint `json:"points"`
+	CreatedAt int64       `json:"created_at"`
+	FadeOut   bool        `json:"fade_out,omitempty"`
+}
+
+type ScreenDrawPayload struct {
+	CallID   string     `json:"call_id"`
+	SharerID string     `json:"sharer_id"`
+	Stroke   DrawStroke `json:"stroke"`
+}
+
+type ScreenDrawClearPayload struct {
+	CallID   string `json:"call_id"`
+	SharerID string `json:"sharer_id"`
+}
+
+type ScreenDrawUndoPayload struct {
+	CallID   string `json:"call_id"`
+	SharerID string `json:"sharer_id"`
+	StrokeID string `json:"stroke_id"`
+}
+
 func marshalEvent(typ string, payload interface{}) []byte {
 	data, err := json.Marshal(map[string]interface{}{
 		"type":    typ,

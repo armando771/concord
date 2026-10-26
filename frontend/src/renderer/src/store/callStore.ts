@@ -51,6 +51,7 @@ import type { CallResume } from '../../../shared/callResume'
 import { useSoundboardStore } from './soundboardStore'
 import { useBoostStore } from './boostStore'
 import { useActivityStore } from './activityStore'
+import { useAnnotationStore } from './annotationStore'
 import { stopAllSoundboardAudio } from '../lib/soundboardPlayer'
 import { setVoiceOutputDevice } from '../lib/voiceOutput'
 
@@ -800,6 +801,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     localCameraStream?.getTracks().forEach((t) => t.stop())
     localCameraStream = null
     useSoundboardStore.getState().clearActivePlays()
+    useAnnotationStore.getState().cleanup()
     set({
       status: 'idle',
       callId: null,
@@ -1600,6 +1602,13 @@ export const useCallStore = create<CallState>()((set, get) => {
               [p.sharer_id]: p.watchers
             }
           }))
+          return
+        }
+
+        case 'call:screen_draw':
+        case 'call:screen_draw_clear':
+        case 'call:screen_draw_undo': {
+          useAnnotationStore.getState().handleWsEvent(event)
           return
         }
 
