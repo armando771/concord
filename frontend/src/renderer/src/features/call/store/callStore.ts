@@ -45,6 +45,7 @@ import {
 } from '../lib/liveBadge'
 import { callNotification, knockNotification, notifyDesktop } from '../../notifications/lib/notifications'
 import { playSound, setSoundOutput } from '../lib/sounds'
+import { playOwnJoinSound } from '../lib/entranceSoundOwn'
 import {
   abortWindowAudio,
   resetWindowAudio,
@@ -1336,7 +1337,7 @@ export const useCallStore = create<CallState>()((set, get) => {
           startedAt: Date.now(),
           locked: call.locked ?? false
         })
-        playSound('join')
+        void playOwnJoinSound(resume?.deafened ?? false)
         useChatStore.getState().subscribeRoom(`call:${call.id}`)
         // O backend já registrou a entrada (startCall é idempotente): a mídia
         // pode conectar em paralelo à leitura do estado da chamada.

@@ -113,7 +113,7 @@ vi.mock('../api/calls', () => api)
 const snapshot = vi.hoisted(() => ({ captureScreenPreview: vi.fn(async () => 'FOTO') }))
 vi.mock('../lib/screenSnapshot', () => snapshot)
 vi.mock('../../../shared/api/client', () => ({ ApiError: class extends Error {} }))
-vi.mock('../../../shared/lib/config', () => ({ LIVEKIT_URL: 'ws://servidor' }))
+vi.mock('../../../shared/lib/config', () => ({ LIVEKIT_URL: 'ws://servidor', API_BASE_URL: '/api' }))
 
 const chat = vi.hoisted(() => ({
   sendEvent: vi.fn(),
@@ -122,9 +122,12 @@ const chat = vi.hoisted(() => ({
   isWsConnected: () => true
 }))
 vi.mock('../../chat/store/chatStore', () => ({ useChatStore: { getState: () => chat } }))
+const me = vi.hoisted(() => ({ user: { id: 'eu', entrance_sound_url: null as string | null } }))
 vi.mock('../../auth/store/authStore', () => ({
-  useAuthStore: { getState: () => ({ user: { id: 'eu' } }) }
+  useAuthStore: { getState: () => ({ user: me.user }) }
 }))
+const entrance = vi.hoisted(() => ({ playEntranceClip: vi.fn(async () => true) }))
+vi.mock('../lib/entranceSoundPlayer', () => entrance)
 vi.mock('../../../shared/store/toastStore', () => ({ showToast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
 const sounds = vi.hoisted(() => ({ playSound: vi.fn(), setSoundOutput: vi.fn() }))
 vi.mock('../lib/sounds', () => sounds)
@@ -983,6 +986,17 @@ describe('callStore — mídia via LiveKit', () => {
 
     useCallStore.getState().endCall()
     expect(sounds.playSound).toHaveBeenLastCalledWith('leave')
+  })
+
+  it('ao entrar, toca o meu som de entrada no lugar do "join" padrão', async () => {
+    me.user = { id: 'eu', entrance_sound_url: '/api/entrance-sounds/0b6e7a52-3c1f-4c47-9d0e-2f6a8b1c4d5e' }
+    try {
+      await joinChannel()
+      expect(entrance.playEntranceClip).toHaveBeenCalledTimes(1)
+      expect(sounds.playSound).not.toHaveBeenCalledWith('join')
+    } finally {
+      me.user = { id: 'eu', entrance_sound_url: null }
+    }
   })
 
   it('toca som quando alguém sai da minha chamada; o de entrada é do entranceSound', async () => {
