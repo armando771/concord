@@ -68,7 +68,7 @@ function IncomingCallModal(): React.JSX.Element | null {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="glass-card w-full max-w-sm p-8 text-center">
+      <div className="rounded-2xl border border-white/10 bg-[#111320] shadow-2xl shadow-black/70 w-full max-w-sm p-8 text-center">
         <Avatar
           userId={peer.id}
           name={peer.display_name}

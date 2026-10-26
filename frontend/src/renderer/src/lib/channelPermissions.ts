@@ -77,6 +77,8 @@ export interface OverwriteRow {
   id: string
   name: string
   color: number | null
+  /** Já tem regra salva neste canal. */
+  hasRules?: boolean
 }
 
 /**
@@ -109,4 +111,32 @@ export function overwriteRows(
     if (a.type === 'role') return position(b) - position(a)
     return a.name.localeCompare(b.name)
   })
+}
+
+/**
+ * Alvos do editor: o @everyone primeiro, depois todos os cargos do servidor
+ * (do mais alto ao mais baixo) e por fim os membros que têm regra no canal.
+ * Cargo sem regra aparece igual, para dar para configurá-lo direto.
+ */
+export function targetRows(
+  overwrites: ChannelOverwrite[] | undefined,
+  roles: Role[],
+  memberName: (userId: string) => string | undefined
+): OverwriteRow[] {
+  const roleRows: OverwriteRow[] = [...roles]
+    .sort((a, b) => {
+      if (a.is_default !== b.is_default) return a.is_default ? -1 : 1
+      return b.position - a.position
+    })
+    .map((r) => ({
+      type: 'role',
+      id: r.id,
+      name: r.name,
+      color: r.color,
+      hasRules: !!findOverwrite(overwrites, { type: 'role', id: r.id })
+    }))
+  const memberRows = overwriteRows(overwrites, roles, memberName)
+    .filter((r) => r.type === 'member')
+    .map((r) => ({ ...r, hasRules: true }))
+  return [...roleRows, ...memberRows]
 }
