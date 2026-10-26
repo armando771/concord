@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useUIStore } from '../../../shared/store/uiStore'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useChatStore } from '../store/chatStore'
@@ -75,7 +75,10 @@ import {
 } from '../lib/chatPermissions'
 import { actionErrorMessage } from '../../servers/lib/permissionErrors'
 import { permissionError } from '../../servers/lib/permissions'
-import { bottomScrollPlan, JUMP_HIGHLIGHT_MS } from '../lib/scrollAnchor'
+import { JUMP_HIGHLIGHT_MS } from '../lib/scrollAnchor'
+import { useStickToBottom } from '../hooks/useStickToBottom'
+import { useJumpToPresent } from '../hooks/useJumpToPresent'
+import JumpToPresentButton from './JumpToPresentButton'
 import { useOlderMessages } from '../hooks/useOlderMessages'
 import { useInfiniteScrollOlder } from '../hooks/useInfiniteScrollOlder'
 import { useAutoFocusComposer } from '../hooks/useAutoFocusComposer'
@@ -654,11 +657,17 @@ function ChatPane({
     }
   }
 
-  const bottomRef = useRef<HTMLDivElement>(null)
   const ephemeralCount = useMusicStore((s) => s.ephemeral.length)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  // As pendentes ("enviando…") contam: a própria mensagem aparece embaixo.
+  const total = messages.length + ephemeralCount + pendingCount
   const stickToBottom = useRef(true)
-  const contentRef = useRef<HTMLDivElement>(null)
+  const { scrollRef, contentRef, bottomRef, onScroll } = useStickToBottom({
+    room,
+    loading,
+    total,
+    stickToBottom
+  })
+  const jump = useJumpToPresent({ room, messages, selfId: meId })
 
   useEffect(() => {
     stickToBottom.current = true
@@ -667,48 +676,6 @@ function ChatPane({
       useChatStore.getState().closeRoom(room)
     }
   }, [room, openRoom])
-
-  // Abrir a sala: a lista já nasce no fim, de uma vez e antes de pintar (sem
-  // rolar na frente da pessoa). Depois disso, mensagem nova rola suave.
-  const positionedRoom = useRef<string | null>(null)
-  const lastCount = useRef(0)
-  const settleUntil = useRef(0)
-  // As pendentes ("enviando…") contam: a própria mensagem aparece embaixo.
-  const total = messages.length + ephemeralCount + pendingCount
-  useLayoutEffect(() => {
-    const plan = bottomScrollPlan({
-      positionedRoom: positionedRoom.current,
-      room,
-      loading,
-      stickToBottom: stickToBottom.current,
-      countChanged: total !== lastCount.current
-    })
-    positionedRoom.current = plan.positionedRoom
-    lastCount.current = total
-    const el = scrollRef.current
-    if (plan.scroll === 'instant') {
-      if (el) el.scrollTop = el.scrollHeight
-      // Imagem e mídia que acabam de carregar empurram o fim: acompanha por
-      // um instante, só se a pessoa ainda estiver no fim.
-      settleUntil.current = Date.now() + 1500
-    } else if (plan.scroll === 'smooth') {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
-  }, [room, loading, total])
-
-  // Conteúdo que cresce logo após abrir (imagens): mantém o fim à vista.
-  useEffect(() => {
-    const content = contentRef.current
-    const el = scrollRef.current
-    if (!content || !el || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(() => {
-      if (Date.now() < settleUntil.current && stickToBottom.current) {
-        el.scrollTop = el.scrollHeight
-      }
-    })
-    observer.observe(content)
-    return () => observer.disconnect()
-  }, [loading, room])
 
   const { loadingOlder, loadOlder, loadOlderUntil } = useOlderMessages({
     room,
@@ -727,8 +694,8 @@ function ChatPane({
   })
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>): void => {
-    const el = e.currentTarget
-    stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60
+    onScroll(e.currentTarget)
+    jump.onScroll(e.currentTarget)
   }
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
@@ -1044,6 +1011,11 @@ function ChatPane({
       </div>
 
       <div className="relative shrink-0 px-4">
+        <JumpToPresentButton
+          visible={jump.visible}
+          newCount={jump.newCount}
+          onClick={() => jump.jumpToPresent(scrollRef.current)}
+        />
         <MentionSuggestionList
           suggestions={suggestions}
           highlight={highlight}
