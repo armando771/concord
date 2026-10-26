@@ -60,7 +60,9 @@ describe('runCrop', () => {
     out: { width: 512, height: 512 }
   } satisfies CropRequest
 
-  beforeEach(() => cropMedia.mockReset())
+  beforeEach(() => {
+    cropMedia.mockReset()
+  })
 
   it('entrega o recorte com o retângulo de origem calculado', async () => {
     const change = { kind: 'set' }
@@ -79,14 +81,18 @@ describe('runCrop', () => {
   })
 
   it('falha vira a mensagem do erro', async () => {
-    cropMedia.mockImplementation(() => Promise.reject(new Error('GIF grande demais')))
+    cropMedia.mockImplementation(() => {
+      throw new Error('GIF grande demais')
+    })
     const onError = vi.fn()
     await runCrop(request, vi.fn(), onError)
     expect(onError).toHaveBeenCalledWith('GIF grande demais')
   })
 
   it('erro sem mensagem usa o texto padrão', async () => {
-    cropMedia.mockImplementation(() => Promise.reject('boom'))
+    cropMedia.mockImplementation(() => {
+      throw 'boom'
+    })
     const onError = vi.fn()
     await runCrop(request, vi.fn(), onError)
     expect(onError).toHaveBeenCalledWith('Não foi possível usar essa imagem.')
