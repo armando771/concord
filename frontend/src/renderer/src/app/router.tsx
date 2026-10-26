@@ -4,7 +4,6 @@ import Friends from '../features/friends/pages/Friends'
 import ServerView from '../features/servers/pages/ServerView'
 import DmChat from '../features/chat/pages/DmChat'
 import GroupChat from '../features/chat/pages/GroupChat'
-import Invites from '../features/servers/pages/Invites'
 import Proposals from '../features/proposals/pages/Proposals'
 import Changelog from '../features/updates/pages/Changelog'
 import Login from '../features/auth/pages/Login'
@@ -37,7 +36,8 @@ export const router = createRouter([
     children: [
       { index: true, element: <Home /> },
       { path: 'friends', element: <Friends /> },
-      { path: 'invites', element: <Invites /> },
+      // Antiga página de convites: agora é a aba "Convites" do Início.
+      { path: 'invites', element: <Navigate to="/friends?tab=invites" replace /> },
       { path: 'proposals', element: <Proposals /> },
       { path: 'changelog', element: <Changelog /> },
       { path: 'dm/:userId', element: <DmChat /> },

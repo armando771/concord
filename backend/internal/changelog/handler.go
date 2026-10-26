@@ -1,7 +1,9 @@
 package changelog
 
 import (
+	"context"
 	"crypto/subtle"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -17,7 +19,7 @@ func NewHandler(store store, token string) *Handler {
 	return &Handler{store: store, token: token}
 }
 
-// List devolve todas as releases, da mais nova para a mais antiga: GET /changelog.
+// List devolve as releases com conteúdo, da mais nova para a mais antiga: GET /changelog.
 func (h *Handler) List(c *gin.Context) {
 	releases, err := h.store.List(c.Request.Context())
 	if err != nil {
@@ -25,10 +27,7 @@ func (h *Handler) List(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load changelog"})
 		return
 	}
-	if releases == nil {
-		releases = []Release{}
-	}
-	c.JSON(http.StatusOK, releases)
+	c.JSON(http.StatusOK, visible(releases))
 }
 
 // Publish grava (ou regrava) uma release: PUT /changelog/:version. Quem chama é
@@ -56,10 +55,20 @@ func (h *Handler) Publish(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.store.Upsert(c.Request.Context(), version, p); err != nil {
+	if err := h.publish(c.Request.Context(), version, p); err != nil {
 		log.Printf("[changelog] publish %s: %v", version, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish"})
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+// publish grava a release só com as notas que nenhuma release anterior trouxe.
+func (h *Handler) publish(ctx context.Context, version string, p Publication) error {
+	releases, err := h.store.List(ctx)
+	if err != nil {
+		return fmt.Errorf("listar releases: %w", err)
+	}
+	p.Entries = newEntries(releases, version, p.Entries)
+	return h.store.Upsert(ctx, version, p)
 }

@@ -1,4 +1,5 @@
-import { ALL_PERMISSIONS, PERMISSION_GROUPS, Perm, type PermissionGroup } from '../lib/permissions'
+import { ALL_PERMISSIONS, Perm } from '../lib/permissions'
+import { PERMISSION_GROUPS, type PermissionGroup } from '../lib/permissionCatalog'
 import Switch from '../../../shared/ui/Switch'
 
 interface PermissionSwitchesProps {

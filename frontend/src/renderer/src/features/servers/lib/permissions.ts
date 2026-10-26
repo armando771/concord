@@ -165,12 +165,13 @@ export function computeChannel(
 }
 
 /**
- * Sem ver o canal não se faz nada nele; em texto, sem enviar não anexa nem
- * menciona todos; em voz, sem conectar não fala, transmite nem modera.
+ * Sem ver o canal não se faz nada nele; sem enviar não anexa nem menciona
+ * todos (no texto e no chat do canal de voz); em voz, sem conectar não fala,
+ * transmite nem modera.
  */
 function implicitChannel(perms: number, channelType: ChannelKind): number {
   if (!(perms & Perm.VIEW_CHANNEL)) return 0
-  if (channelType === 'text' && !(perms & Perm.SEND_MESSAGES)) {
+  if (!(perms & Perm.SEND_MESSAGES)) {
     perms &= ~(Perm.ATTACH_FILES | Perm.MENTION_EVERYONE)
   }
   if (channelType === 'voice' && !(perms & Perm.CONNECT)) {
@@ -280,7 +281,7 @@ export {
   channelPermissionGroups,
   type PermissionInfo,
   type PermissionGroup
-} from './permissionGroups'
+} from './permissionCatalog'
 
 const PERMISSION_ERROR_MESSAGES: Record<string, string> = {
   missing_permission: 'Você não tem permissão para isso.',
@@ -301,7 +302,6 @@ const PERMISSION_ERROR_MESSAGES: Record<string, string> = {
   invalid_nickname: 'Apelido inválido: até 32 caracteres, sem caracteres invisíveis ou de controle.',
   system_channel: 'Esse canal é fixo do servidor: não pode ser alterado nem ter mensagens excluídas.'
 }
-
 /** Mensagem em português para os códigos de erro de permissão do servidor. */
 export function permissionError(code: string | undefined, fallback = 'Algo deu errado'): string {
   if (!code) return fallback

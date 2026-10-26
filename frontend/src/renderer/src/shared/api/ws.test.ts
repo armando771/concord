@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WsClient } from './ws'
+import { WsClient, onWsEvent } from './ws'
 
 /** WebSocket de mentira: o teste abre e fecha à mão. */
 class FakeSocket {
@@ -186,5 +186,33 @@ describe('WsClient — reconexão', () => {
     vi.advanceTimersByTime(60_000)
     expect(onLost).not.toHaveBeenCalled()
     expect(FakeSocket.instances).toHaveLength(2)
+  })
+})
+
+describe('onWsEvent — ouvintes extras', () => {
+  beforeEach(() => {
+    FakeSocket.instances = []
+    vi.stubGlobal('WebSocket', FakeSocket)
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('recebe cada evento depois do onEvent do cliente, até desligar', () => {
+    const order: string[] = []
+    const ws = new WsClient({
+      getToken: () => 'tok',
+      getUserId: () => 'eu',
+      onEvent: (e) => order.push(`cliente:${e.type}`)
+    })
+    const off = onWsEvent((e) => order.push(`ouvinte:${e.type}`))
+    ws.connect()
+    latest().open()
+
+    latest().onmessage?.({ data: JSON.stringify({ type: 'call:joined', payload: {} }) })
+    off()
+    latest().onmessage?.({ data: JSON.stringify({ type: 'call:left', payload: {} }) })
+
+    expect(order).toEqual(['cliente:call:joined', 'ouvinte:call:joined', 'cliente:call:left'])
   })
 })

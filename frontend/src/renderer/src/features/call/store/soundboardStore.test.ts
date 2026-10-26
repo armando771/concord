@@ -19,6 +19,10 @@ vi.mock('../../chat/store/chatStore', () => ({
   }
 }))
 
+// Cada teste reimporta o store (e o callStore, pesado) do zero com vi.resetModules;
+// sob cobertura e com a suíte em paralelo isso passa dos 5s padrão.
+vi.setConfig({ testTimeout: 30_000 })
+
 function memoryStorage(): Storage {
   const data = new Map<string, string>()
   return {

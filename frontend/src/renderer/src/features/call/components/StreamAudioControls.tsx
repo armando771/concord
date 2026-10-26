@@ -1,4 +1,5 @@
 import { streamAudioKey, useUserAudioStore } from '../store/userAudioStore'
+import { AnnotationVisibilityButton } from './AnnotationVisibilityButton'
 import { FullscreenIcon, VolumeIcon, VolumeOffIcon } from '../../../shared/ui/icons'
 
 /** Mutar + volume da transmissão só para você (compartilhado com a tela cheia). */
@@ -67,7 +68,12 @@ function StreamAudioControls({
       onDoubleClick={(e) => e.stopPropagation()}
       className="absolute bottom-2 right-2 z-20 flex items-center gap-2 rounded-lg bg-black/70 px-2 py-1 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover/tile:opacity-100 on-media"
     >
-      {userId && <StreamVolume userId={userId} />}
+      {userId && (
+        <>
+          <StreamVolume userId={userId} />
+          <AnnotationVisibilityButton sharerId={userId} />
+        </>
+      )}
       {onToggleFullscreen && (
         <button
           type="button"

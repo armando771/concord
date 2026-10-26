@@ -7,6 +7,8 @@ import {
   OVERLAY_PREFS_VERSION,
   OVERLAY_OPACITY_DEFAULT,
   overlayRowOpacity,
+  overlayAvatarSrc,
+  sameOverlaySnapshot,
   type OverlayInput
 } from './overlayState'
 import { OVERLAY_DEFAULT_LAYOUT } from './overlayLayout'
@@ -32,6 +34,35 @@ function input(over: Partial<OverlayInput> = {}): OverlayInput {
   }
 }
 
+describe('overlayAvatarSrc', () => {
+  const gif = { speaking: false, avatarUrl: '/s', avatarAnimatedUrl: '/a' }
+
+  it('quem fala anima; os outros ficam parados', () => {
+    expect(overlayAvatarSrc(gif, null)).toBe('/s')
+    expect(overlayAvatarSrc({ ...gif, speaking: true }, null)).toBe('/a')
+  })
+
+  it('sem versão animada usa a imagem; sem avatar ou com erro, a inicial', () => {
+    expect(overlayAvatarSrc({ speaking: true, avatarUrl: '/p', avatarAnimatedUrl: null }, null)).toBe('/p')
+    expect(overlayAvatarSrc({ speaking: true, avatarUrl: null, avatarAnimatedUrl: null }, null)).toBeNull()
+    expect(overlayAvatarSrc({ ...gif, speaking: true }, '/a')).toBeNull()
+  })
+})
+
+describe('sameOverlaySnapshot', () => {
+  it('igual por conteúdo, não por identidade', () => {
+    expect(sameOverlaySnapshot(buildOverlaySnapshot(input()), buildOverlaySnapshot(input()))).toBe(
+      true
+    )
+  })
+
+  it('muda quando alguém fala ou não há anterior', () => {
+    const a = buildOverlaySnapshot(input())
+    expect(sameOverlaySnapshot(null, a)).toBe(false)
+    expect(sameOverlaySnapshot(a, buildOverlaySnapshot(input({ speakingIds: ['ana'] })))).toBe(false)
+  })
+})
+
 describe('buildOverlaySnapshot', () => {
   it('avatar vira URL absoluta (a janela do overlay não é a origem da API)', () => {
     const s = buildOverlaySnapshot(
@@ -46,9 +77,22 @@ describe('buildOverlaySnapshot', () => {
     )
     expect(s.members.map((m) => m.avatarUrl)).toEqual([
       'http://srv:8080/api/profile-media/u1',
-      'http://srv:8080/api/profile-media/a_u2',
+      'http://srv:8080/api/profile-media/a_u2/static',
       'https://cdn.x/b.png',
       null
+    ])
+  })
+
+  it('GIF só tem versão animada à parte (anima só quem fala, poupa FPS do jogo)', () => {
+    const s = buildOverlaySnapshot(
+      input({
+        me: { id: 'eu', username: 'nico', display_name: 'Nico', avatar_url: '/api/profile-media/u1' },
+        participants: [{ ...ana, avatar_url: '/api/profile-media/a_u2' }]
+      })
+    )
+    expect(s.members.map((m) => m.avatarAnimatedUrl)).toEqual([
+      null,
+      'http://srv:8080/api/profile-media/a_u2'
     ])
   })
 

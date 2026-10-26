@@ -1,17 +1,22 @@
 // Grafo Web Audio do voice mod. Vive dentro do AudioContext do microfone
 // (noiseSuppression.ts), depois do ganho de entrada.
 //
-//   in ─ bypass ───────────────────────────────────────────────┐
-//   in ─ dryDelay ─ dry ───────────────────────────────────────┤
-//   in ─ shifter ─ rádio ─ timbre ─ wet ─┬─────────────────────┴─ out
-//                              └─ eco ───┘
+//   in ─ bypass ──────────────────────────────────────────────────────────┐
+//   in ─ dryDelay ─ dry ──────────────────────────────────────────────────┤
+//   in ─ shifter ─ passa-altas ─ passa-baixas ─ saturação ─ timbre ─┬─ wet ─ limitador ─┴─ out
+//                                                  ├─ eco ──────┤
+//                                                  └─ envio ─ reverb ┘
 //
-// Rádio e eco ficam sempre no grafo e são neutralizados pelos parâmetros
-// (passa-faixa aberto, curva nula, ganho do eco em 0): trocar de preset só
-// mexe em valores, nunca reconecta nós, então vale ao vivo sem estalo.
+// Todo bloco fica sempre no grafo e é neutralizado pelos parâmetros (filtros
+// abertos, curva nula, envios em 0): trocar de preset só mexe em valores, nunca
+// reconecta nós, então vale ao vivo sem estalo. Os envios ficam antes do eco e
+// do reverb: com ganho 0 o navegador vê silêncio e para de processar o
+// convolver depois da cauda (o reverb não pesa na CPU fora dos presets dele).
 // O caminho seco tem o mesmo atraso do pitch shifter para não haver filtro
-// pente ao misturar os dois.
+// pente ao misturar os dois; por isso o limitador é um WaveShaper (sem atraso)
+// e não um DynamicsCompressor (que tem look-ahead).
 import voiceModWorkletUrl from './voiceModWorklet.ts?worker&url'
+import { driveCurve, reverbImpulse, softLimitCurve } from './voiceModCurves'
 import {
   VOICE_MOD_LATENCY_MS,
   VOICE_MOD_PROCESSOR,
@@ -23,22 +28,10 @@ import { voiceModParams, type VoiceModSettings } from './voiceModPresets'
 const FADE_SECONDS = 0.015
 const ECHO_DELAY_SECONDS = 0.28
 const ECHO_FEEDBACK = 0.35
-const ECHO_LEVEL = 0.6
-const RADIO_HIGHPASS_HZ = 300
-const RADIO_LOWPASS_HZ = 3400
-/** Valores "abertos" dos filtros do rádio: passam o sinal sem mexer. */
-const OPEN_HIGHPASS_HZ = 10
-const OPEN_LOWPASS_HZ = 20_000
-
-/** Saturação suave do rádio. */
-const RADIO_CURVE = (() => {
-  const curve = new Float32Array(1024)
-  for (let i = 0; i < curve.length; i++) {
-    const x = (i / (curve.length - 1)) * 2 - 1
-    curve[i] = Math.tanh(3 * x) / Math.tanh(3)
-  }
-  return curve
-})()
+const REVERB = { seconds: 2.2, preDelaySeconds: 0.03 }
+/** O processado entra no limitador dividido por isto (picos de até 2× ainda cabem). */
+const LIMITER_HEADROOM = 2
+const LIMITER_CURVE = softLimitCurve(0.8, LIMITER_HEADROOM)
 
 export interface VoiceModNode {
   input: AudioNode
@@ -66,11 +59,11 @@ export async function createVoiceMod(ctx: AudioContext): Promise<VoiceModNode> {
     numberOfOutputs: 1,
     outputChannelCount: [1]
   })
-  const radioHigh = ctx.createBiquadFilter()
-  radioHigh.type = 'highpass'
-  const radioLow = ctx.createBiquadFilter()
-  radioLow.type = 'lowpass'
-  const radioClip = ctx.createWaveShaper()
+  const highpass = ctx.createBiquadFilter()
+  highpass.type = 'highpass'
+  const lowpass = ctx.createBiquadFilter()
+  lowpass.type = 'lowpass'
+  const shaper = ctx.createWaveShaper()
   const low = ctx.createBiquadFilter()
   low.type = 'lowshelf'
   low.frequency.value = 250
@@ -82,20 +75,31 @@ export async function createVoiceMod(ctx: AudioContext): Promise<VoiceModNode> {
   const echoFeedback = ctx.createGain()
   echoFeedback.gain.value = ECHO_FEEDBACK
   const echoLevel = ctx.createGain()
+  const reverbSend = ctx.createGain()
+  const reverb = ctx.createConvolver()
+  reverb.normalize = false
+  const impulse = reverbImpulse(ctx.sampleRate, REVERB)
+  const impulseBuffer = ctx.createBuffer(1, impulse.length, ctx.sampleRate)
+  impulseBuffer.getChannelData(0).set(impulse)
+  reverb.buffer = impulseBuffer
+  const limiter = ctx.createWaveShaper()
+  limiter.curve = LIMITER_CURVE
 
   input.connect(bypass).connect(output)
   input.connect(dryDelay).connect(dry).connect(output)
   input
     .connect(shifter)
-    .connect(radioHigh)
-    .connect(radioLow)
-    .connect(radioClip)
+    .connect(highpass)
+    .connect(lowpass)
+    .connect(shaper)
     .connect(low)
     .connect(high)
     .connect(wet)
+    .connect(limiter)
     .connect(output)
-  high.connect(echoDelay).connect(echoFeedback).connect(echoDelay)
-  echoDelay.connect(echoLevel).connect(wet)
+  high.connect(echoLevel).connect(echoDelay).connect(echoFeedback).connect(echoDelay)
+  echoDelay.connect(wet)
+  high.connect(reverbSend).connect(reverb).connect(wet)
 
   const nodes: AudioNode[] = [
     input,
@@ -105,14 +109,17 @@ export async function createVoiceMod(ctx: AudioContext): Promise<VoiceModNode> {
     wet,
     dryDelay,
     shifter,
-    radioHigh,
-    radioLow,
-    radioClip,
+    highpass,
+    lowpass,
+    shaper,
     low,
     high,
     echoDelay,
     echoFeedback,
-    echoLevel
+    echoLevel,
+    reverbSend,
+    reverb,
+    limiter
   ]
 
   const set = (param: AudioParam, value: number, instant: boolean): void => {
@@ -127,16 +134,26 @@ export async function createVoiceMod(ctx: AudioContext): Promise<VoiceModNode> {
     output,
     apply: (settings, instant) => {
       const p = voiceModParams(settings)
-      set(bypass.gain, p.bypass ? 1 : 0, instant)
-      set(dry.gain, p.bypass ? 0 : p.dry, instant)
-      set(wet.gain, p.bypass ? 0 : p.wet, instant)
-      set(low.gain, p.lowShelfDb, instant)
-      set(high.gain, p.highShelfDb, instant)
-      set(radioHigh.frequency, p.radio ? RADIO_HIGHPASS_HZ : OPEN_HIGHPASS_HZ, instant)
-      set(radioLow.frequency, p.radio ? RADIO_LOWPASS_HZ : OPEN_LOWPASS_HZ, instant)
-      set(echoLevel.gain, p.echo ? ECHO_LEVEL : 0, instant)
-      radioClip.curve = p.radio ? RADIO_CURVE : null
-      const message: VoiceModWorkletMessage = { ratio: p.pitchRatio, ringHz: p.ringHz }
+      const targets: [AudioParam, number][] = [
+        [bypass.gain, Number(p.bypass)],
+        [dry.gain, p.dry],
+        [wet.gain, p.wet / LIMITER_HEADROOM],
+        [low.gain, p.lowShelfDb],
+        [high.gain, p.highShelfDb],
+        [highpass.frequency, p.highpassHz],
+        [lowpass.frequency, p.lowpassHz],
+        [echoLevel.gain, p.echo],
+        [reverbSend.gain, p.reverb]
+      ]
+      targets.forEach(([param, value]) => set(param, value, instant))
+      shaper.curve = driveCurve(p.drive)
+      const message: VoiceModWorkletMessage = {
+        ratio: p.pitchRatio,
+        modHz: p.modHz,
+        modDepth: p.modDepth,
+        vibratoHz: p.vibratoHz,
+        vibratoSemitones: p.vibratoSemitones
+      }
       shifter.port.postMessage(message)
     },
     destroy: () => nodes.forEach((node) => node.disconnect())

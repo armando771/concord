@@ -57,6 +57,9 @@ let workArea: Rect | null = null
 let box: OverlaySize | null = null
 let pageDraft: OverlayDraft | null = null
 let placed: Rect | null = null
+// Pid do jogo sobre o qual a janela foi posta no topo; último estado que a página recebeu.
+let raisedFor: number | null = null
+let lastSent: string | null = null
 let frame: OverlayFrame | null = null
 // Atalhos globais pedidos agora → se o registro deu certo. Um que falhou
 // (outro app segurando) só é tentado de novo depois de soltar.
@@ -85,8 +88,7 @@ function createOverlayWindow(): BrowserWindow {
     alwaysOnTop: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
-      backgroundThrottling: false
+      sandbox: false
     }
   })
   // Cliques passam para o jogo; nível acima de janelas em tela cheia.
@@ -103,14 +105,19 @@ function createOverlayWindow(): BrowserWindow {
     if (win !== overlay) return
     pageReady = false
     box = null
+    lastSent = null
     setEditing(false)
     placeWindow()
     applyShortcuts()
   })
+  // Página que não carrega deixa uma janela transparente vazia: ao menos fica no log.
+  overlay.webContents.on('did-fail-load', (_event, code: number, description: string, url: string) =>
+    log(`página não carregou (${code} ${description}): ${url}`)
+  )
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     overlay.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/overlay.html`)
   } else {
-    overlay.loadFile(join(__dirname, '../../renderer/overlay.html'))
+    overlay.loadFile(join(__dirname, '../renderer/overlay.html'))
   }
   return overlay
 }
@@ -247,25 +254,49 @@ function sync(): void {
       box = null
       placed = null
       frame = null
+      lastSent = null
       win = createOverlayWindow()
     }
     // O helper fala em pixels físicos; o Electron posiciona em DIP.
     const display = screen.getDisplayMatching(screen.screenToDipRect(null, foreground.monitor))
     workArea = display.workArea
     placeWindow()
-    win.setAlwaysOnTop(true, 'screen-saver')
-    if (!win.isVisible()) win.showInactive()
-    win.moveTop()
+    raiseOverIfNeeded(win, foreground.pid)
     visible = true
   } else {
     // Esconder (ou fim da call) sempre devolve o click-through.
     setEditing(false)
     win?.hide()
     visible = false
+    raisedFor = null
   }
   applyShortcuts()
+  pushSnapshot()
+}
 
-  if (win) win.webContents.send('overlay:update', snapshot)
+/**
+ * Mostra a janela e a põe acima do jogo. O estado chega a cada fala e cada
+ * SetWindowPos de z-order faz o DWM reordenar a janela sobre o jogo (custa FPS):
+ * só refaz quando o overlay aparece ou o jogo na frente é outro.
+ */
+function raiseOverIfNeeded(target: BrowserWindow, pid: number): void {
+  if (target.isVisible() && raisedFor === pid) return
+  target.setAlwaysOnTop(true, 'screen-saver')
+  if (!target.isVisible()) target.showInactive()
+  target.moveTop()
+  raisedFor = pid
+}
+
+/**
+ * Manda o estado à página só se ela está à vista e o estado mudou. Escondida,
+ * ela pega o último no `overlay:ready` ou no próximo sync visível.
+ */
+function pushSnapshot(): void {
+  if (!win || !visible) return
+  const json = JSON.stringify(snapshot ?? null)
+  if (json === lastSent) return
+  lastSent = json
+  win.webContents.send('overlay:update', snapshot)
 }
 
 export function setupOverlay(getMainWindow: () => BrowserWindow | null): void {

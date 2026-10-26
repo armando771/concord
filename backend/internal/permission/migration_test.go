@@ -72,10 +72,10 @@ func nicknameMigrationBits(t *testing.T) map[string]int64 {
 	return added
 }
 
-// disconnectMigrationBits: o que a 000061 liga em cada cargo padrão.
+// disconnectMigrationBits: o que a 000063 liga em cada cargo padrão.
 func disconnectMigrationBits(t *testing.T) map[string]int64 {
 	t.Helper()
-	sql := readMigration(t, "000061_add_disconnect_members_permission.up.sql")
+	sql := readMigration(t, "000063_add_disconnect_members_permission.up.sql")
 	re := regexp.MustCompile(`UPDATE roles SET permissions = permissions \| (\d+) WHERE (.+);`)
 	targets := map[string]string{
 		"name = 'Moderador' AND NOT is_default": "Moderador",
@@ -84,7 +84,7 @@ func disconnectMigrationBits(t *testing.T) map[string]int64 {
 	for _, m := range re.FindAllStringSubmatch(sql, -1) {
 		name, ok := targets[m[2]]
 		if !ok {
-			t.Fatalf("UPDATE inesperado na 000061: %q", m[0])
+			t.Fatalf("UPDATE inesperado na 000063: %q", m[0])
 		}
 		bits, err := strconv.ParseInt(m[1], 10, 64)
 		if err != nil {
@@ -93,7 +93,7 @@ func disconnectMigrationBits(t *testing.T) map[string]int64 {
 		added[name] |= bits
 	}
 	if added["Moderador"] != DisconnectMembers {
-		t.Errorf("Moderador ganha %d na 000061, want DisconnectMembers (%d)", added["Moderador"], DisconnectMembers)
+		t.Errorf("Moderador ganha %d na 000063, want DisconnectMembers (%d)", added["Moderador"], DisconnectMembers)
 	}
 	return added
 }
@@ -107,9 +107,9 @@ func TestNicknameMigrationDownClearsBits(t *testing.T) {
 	}
 }
 
-// O down da 000061 desliga exatamente os bits que o up ligou.
+// O down da 000063 desliga exatamente os bits que o up ligou.
 func TestDisconnectMigrationDownClearsBits(t *testing.T) {
-	sql := readMigration(t, "000061_add_disconnect_members_permission.down.sql")
+	sql := readMigration(t, "000063_add_disconnect_members_permission.down.sql")
 	want := "permissions & ~" + strconv.FormatInt(DisconnectMembers, 10)
 	if !strings.Contains(sql, want) {
 		t.Errorf("down devia ter %q", want)

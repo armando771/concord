@@ -2002,7 +2002,6 @@ export const useCallStore = create<CallState>()((set, get) => {
           if (current.type === 'channel') {
             if (current.status !== 'active' || !meId || p.user.id === meId) return
             set({ participants: upsertParticipant(current.participants, p.user) })
-            playSound('userJoin')
             bumpList()
             return
           }

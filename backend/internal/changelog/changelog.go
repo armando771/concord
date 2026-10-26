@@ -15,7 +15,7 @@ const (
 	KindFeature = "feature"
 	KindFix     = "fix"
 
-	maxEntries   = 100
+	maxEntries   = 1000 // o next.md acumula entre deploys (ver dedup.go)
 	maxEntryText = 1000 // em caracteres (runas), não bytes: acento conta 1
 	maxSummary   = 500
 )

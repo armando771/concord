@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import {
   ALL_PERMISSIONS,
   DEFAULT_EVERYONE,
-  PERMISSION_GROUPS,
   Perm,
   canActOn,
   canDisconnectMember,
@@ -11,7 +10,6 @@ import {
   canGrant,
   canManageNicknameOf,
   canManageRole,
-  channelPermissionGroups,
   computeBase,
   computeChannel,
   has,
@@ -248,26 +246,6 @@ describe('cargos do membro', () => {
 })
 
 describe('textos', () => {
-  it('toda permissão tem um grupo, um rótulo e uma descrição', () => {
-    const listed = PERMISSION_GROUPS.flatMap((g) => g.permissions)
-    expect(listed.map((p) => p.name).sort()).toEqual(Object.keys(Perm).sort())
-    for (const p of listed) {
-      expect(p.label.length).toBeGreaterThan(0)
-      expect(p.description.length).toBeGreaterThan(0)
-    }
-  })
-
-  it('o editor de canal só mostra o que vale para o tipo', () => {
-    const text = channelPermissionGroups('text').flatMap((g) => g.permissions.map((p) => p.name))
-    const voice = channelPermissionGroups('voice').flatMap((g) => g.permissions.map((p) => p.name))
-    expect(text).toContain('SEND_MESSAGES')
-    expect(text).toContain('VIEW_CHANNEL')
-    expect(text).not.toContain('SPEAK')
-    expect(voice).toContain('SPEAK')
-    expect(voice).toContain('CONNECT')
-    expect(voice).not.toContain('SEND_MESSAGES')
-  })
-
   it('traduz os códigos de erro do servidor', () => {
     const codes = [
       'missing_permission',

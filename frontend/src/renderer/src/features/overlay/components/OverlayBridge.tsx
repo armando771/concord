@@ -1,6 +1,6 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { mergeCallPeople } from '../../call/lib/callParticipants'
-import { buildOverlaySnapshot } from '../lib/overlayState'
+import { buildOverlaySnapshot, sameOverlaySnapshot, type OverlaySnapshot } from '../lib/overlayState'
 import { serverDisplayName, withServerNames } from '../../servers/lib/serverNames'
 import { useCallNicknames } from '../../servers/hooks/useServerNames'
 import { useAuthStore } from '../../auth/store/authStore'
@@ -30,6 +30,7 @@ function OverlayBridge(): null {
   const deafened = useCallStore((s) => s.deafened)
   const members = useServerStore((s) => s.currentMembers)
 
+  const lastSent = useRef<OverlaySnapshot | null>(null)
   const meId = me?.id ?? null
   // Call num canal de voz: apelidos daquele servidor (mesmo olhando outro).
   const nicknames = useCallNicknames()
@@ -60,22 +61,24 @@ function OverlayBridge(): null {
 
   useEffect(() => {
     if (!overlay?.supported) return
-    overlay.setState(
-      buildOverlaySnapshot({
-        enabled,
-        status,
-        me: meInOverlay,
-        participants,
-        voiceStates,
-        speakingIds,
-        muted,
-        deafened,
-        opacity,
-        layout,
-        shortcut,
-        mediaBase: API_BASE_URL
-      })
-    )
+    const next = buildOverlaySnapshot({
+      enabled,
+      status,
+      me: meInOverlay,
+      participants,
+      voiceStates,
+      speakingIds,
+      muted,
+      deafened,
+      opacity,
+      layout,
+      shortcut,
+      mediaBase: API_BASE_URL
+    })
+    // Store que muda sem mudar o que o overlay mostra não vira IPC nem repaint no jogo.
+    if (sameOverlaySnapshot(lastSent.current, next)) return
+    lastSent.current = next
+    overlay.setState(next)
   }, [
     overlay,
     enabled,
