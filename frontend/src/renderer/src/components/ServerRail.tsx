@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react'
 import { serverIconSrc } from '../lib/serverIcon'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { PlusIcon, InboxIcon, DiamondIcon, SalinhaMarkIcon, VolumeIcon } from './icons'
+import {
+  PlusIcon,
+  InboxIcon,
+  DiamondIcon,
+  ChangelogIcon,
+  SalinhaMarkIcon,
+  VolumeIcon
+} from './icons'
 import { useServerStore } from '../store/serverStore'
 import { useInviteStore } from '../store/inviteStore'
 import { useAuthStore } from '../store/authStore'
@@ -44,6 +51,7 @@ function ServerRail(): React.JSX.Element {
   const fetchProposalMentions = useProposalStore((s) => s.fetchMentions)
   const meId = useAuthStore((s) => s.user?.id ?? null)
   const onProposals = location.pathname === '/proposals'
+  const onChangelog = location.pathname === '/changelog'
   // Propostas novas e menções desde a última visita; com o quadro aberto não mostra nada.
   const proposalsBadge = onProposals
     ? 0
@@ -249,6 +257,25 @@ function ServerRail(): React.JSX.Element {
               {proposalsBadge > 99 ? '99+' : proposalsBadge}
             </span>
           )}
+        </div>
+
+        {/* Novidades: changelog por versão */}
+        <div className="relative flex items-center justify-center">
+          <button
+            onClick={() => {
+              clearCurrentServer()
+              navigate('/changelog')
+            }}
+            title="Novidades"
+            aria-label="Novidades"
+            className={`relative flex h-12 w-12 cursor-pointer items-center justify-center transition-all duration-200 ${
+              onChangelog
+                ? 'rounded-2xl bg-violet-600 shadow-md shadow-violet-500/30'
+                : 'rounded-3xl border border-white/6 bg-[#12141d]/80 hover:rounded-2xl hover:bg-violet-600 hover:shadow-md hover:shadow-violet-500/30'
+            }`}
+          >
+            <ChangelogIcon className={`h-6 w-6 ${onChangelog ? 'text-white' : 'text-violet-400'}`} />
+          </button>
         </div>
 
         {/* Real User Servers List */}

@@ -68,6 +68,10 @@ const api = {
     takeCallResume(): Promise<PendingCallResume | null> {
       return ipcRenderer.invoke('update:take-call-resume')
     },
+    /** Versão instalada deste app. */
+    currentVersion(): Promise<string> {
+      return ipcRenderer.invoke('update:current-version')
+    },
     /** Versão nova conhecida (e se já está pronta para instalar), ou null. */
     status(): Promise<{ version: string; ready: boolean } | null> {
       return ipcRenderer.invoke('update:status')

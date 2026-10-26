@@ -324,6 +324,7 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
     return pending
   })
 
+  ipcMain.handle('update:current-version', () => app.getVersion())
   ipcMain.handle('update:status', () =>
     availableVersion
       ? { version: availableVersion, ready: readyVersion === availableVersion }
