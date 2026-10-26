@@ -70,12 +70,41 @@ export function opensExternally(url: string): boolean {
   }
 }
 
+/** Aviso que o Krunker mostra a quem tem "Electron/" no user agent. */
+export const KRUNKER_CLIENT_NOTICE = /discontinuing this version of the Krunker Client/i
+
 /**
- * User agent de navegador comum: sem os tokens do Electron e do app, que
- * alguns jogos web tratam como cliente não suportado.
+ * Roda na página do Krunker (mundo isolado: a página não vê nem mexe). Com o
+ * user agent verdadeiro do Electron, o Krunker acha que é o cliente oficial
+ * antigo dele e abre "We are discontinuing this version of the Krunker
+ * Client… download the new client" por cima do menu. Fecha esse aviso como se
+ * a pessoa clicasse fora dele (#popupBack chama o clearPops() do próprio
+ * jogo); qualquer outro popup fica como está. Sem dependências: vai como texto
+ * (toString) para a página.
  */
-export function activityUserAgent(userAgent: string): string {
-  return userAgent.replace(/\s+Electron\/\S+/g, '').replace(/\s+(salinha|concord)\/\S+/gi, '')
+export function dismissKrunkerClientNotice(doc: Document, notice: RegExp): void {
+  const pop = doc.getElementById('genericPop')
+  const back = doc.getElementById('popupBack')
+  if (!pop || !back) return
+  const check = (): void => {
+    if (pop.style.display === 'none' || !notice.test(pop.textContent ?? '')) return
+    back.click()
+  }
+  new MutationObserver(check).observe(pop, {
+    attributes: true,
+    attributeFilter: ['style'],
+    childList: true
+  })
+  check()
+}
+
+/**
+ * Script que a janela da atividade roda em cada página carregada (dom-ready),
+ * ou null. Só no site do próprio jogo.
+ */
+export function activityPageScript(activityId: string, url: string): string | null {
+  if (activityId !== 'krunker' || !canNavigateActivity(activityId, url)) return null
+  return `(${dismissKrunkerClientNotice.toString()})(document, ${KRUNKER_CLIENT_NOTICE.toString()})`
 }
 
 /** Janela em que um clique/tecla conta como gesto para abrir link fora. */
