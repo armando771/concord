@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
@@ -185,6 +186,59 @@ describe('overlay', () => {
       contentProtection: true,
       ignoreMouse: true
     })
+  })
+
+  it('no build, carrega o overlay.html ao lado do index.html (out/renderer)', async () => {
+    await setup()
+    sendState(inCall)
+    showGame()
+    const w = h.state.windows[0] as unknown as { loadFile: { mock: { calls: string[][] } } }
+    // O main é empacotado em out/main/index.js: o renderer fica em ../renderer.
+    expect(w.loadFile.mock.calls).toEqual([[join(__dirname, '../renderer/overlay.html')]])
+  })
+
+  it('estado repetido ou só de fala não refaz z-order nem reenvia o que a página já tem', async () => {
+    await setup()
+    sendState(inCall)
+    showGame()
+    const w = h.state.windows[0] as unknown as {
+      setAlwaysOnTop: { mock: { calls: unknown[] } }
+      moveTop: { mock: { calls: unknown[] } }
+      sent: [string, unknown][]
+    }
+    const updates = (): number => w.sent.filter(([ch]) => ch === 'overlay:update').length
+    const raised = [w.setAlwaysOnTop.mock.calls.length, w.moveTop.mock.calls.length]
+    const sentBefore = updates()
+    sendState({ ...inCall })
+    sendState({ ...inCall })
+    expect([w.setAlwaysOnTop.mock.calls.length, w.moveTop.mock.calls.length]).toEqual(raised)
+    expect(updates()).toBe(sentBefore)
+    sendState({ ...inCall, more: 1 })
+    expect(updates()).toBe(sentBefore + 1)
+  })
+
+  it('com o jogo fora da frente (janela oculta), não manda estado à página', async () => {
+    await setup()
+    sendState(inCall)
+    showGame()
+    const w = h.state.windows[0]
+    h.state.onChange?.(null)
+    const sentBefore = w.sent.length
+    sendState({ ...inCall, more: 2 })
+    expect(w.sent.slice(sentBefore).filter(([ch]) => ch === 'overlay:update')).toEqual([])
+    // Ao voltar o jogo, a página recebe o estado novo.
+    h.state.onChange?.(game)
+    expect(w.sent.filter(([ch]) => ch === 'overlay:update').at(-1)?.[1]).toMatchObject({ more: 2 })
+  })
+
+  it('outro jogo na frente sobe o z-order de novo', async () => {
+    await setup()
+    sendState(inCall)
+    showGame()
+    const w = h.state.windows[0] as unknown as { moveTop: { mock: { calls: unknown[] } } }
+    const before = w.moveTop.mock.calls.length
+    h.state.onChange?.({ ...game, pid: 999 })
+    expect(w.moveTop.mock.calls.length).toBe(before + 1)
   })
 
   it('antes de a página medir a lista, a janela cobre a área de trabalho', async () => {

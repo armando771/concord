@@ -3,15 +3,20 @@
 // lê estes tipos.
 
 import { normalizeOverlayLayout, type OverlayLayout } from './overlayLayout'
-import { profileMediaSrc } from '../../profile/lib/profileMedia'
+import { isAnimatedMedia, profileMediaSrc } from '../../profile/lib/profileMedia'
 import { normalizeOverlayShortcut, OVERLAY_SHORTCUT_DEFAULT } from './overlayShortcut'
 
 export interface OverlayMember {
   id: string
   name: string
   initial: string
-  /** URL absoluta do avatar (GIF animado inclusive); null = mostra a inicial. */
+  /** URL absoluta do avatar, parada se for GIF; null = mostra a inicial. */
   avatarUrl: string | null
+  /**
+   * O GIF em movimento (só se o avatar anima), usado por quem fala: GIF rodando o
+   * tempo todo faz o DWM recompor a janela sobre o jogo e custa FPS.
+   */
+  avatarAnimatedUrl: string | null
   self: boolean
   muted: boolean
   deafened: boolean
@@ -126,6 +131,23 @@ function nameOf(person: OverlayPerson): string {
   return person.display_name.trim() || person.username.trim() || 'Usuário'
 }
 
+/**
+ * Imagem do avatar na pílula: quem fala anima (GIF), os outros ficam no quadro
+ * parado. null = mostra a inicial (sem avatar, ou o endereço já falhou).
+ */
+export function overlayAvatarSrc(
+  member: Pick<OverlayMember, 'speaking' | 'avatarUrl' | 'avatarAnimatedUrl'>,
+  failedUrl: string | null
+): string | null {
+  const url = member.speaking ? (member.avatarAnimatedUrl ?? member.avatarUrl) : member.avatarUrl
+  return url === failedUrl ? null : url
+}
+
+/** Mesmo conteúdo? O bridge só manda ao main (e ao jogo) o que mudou de verdade. */
+export function sameOverlaySnapshot(a: OverlaySnapshot | null, b: OverlaySnapshot): boolean {
+  return a !== null && JSON.stringify(a) === JSON.stringify(b)
+}
+
 export function buildOverlaySnapshot(
   input: OverlayInput,
   maxRows = OVERLAY_MAX_ROWS
@@ -157,7 +179,10 @@ export function buildOverlaySnapshot(
       id: person.id,
       name,
       initial: name.charAt(0).toUpperCase(),
-      avatarUrl: profileMediaSrc(person.avatar_url, input.mediaBase),
+      avatarUrl: profileMediaSrc(person.avatar_url, input.mediaBase, { animate: false }),
+      avatarAnimatedUrl: isAnimatedMedia(person.avatar_url)
+        ? profileMediaSrc(person.avatar_url, input.mediaBase)
+        : null,
       self,
       muted,
       deafened,
