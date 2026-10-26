@@ -1045,7 +1045,7 @@ function ChatPane({
       ? `💟 Figurinha :${latestPin.sticker.name}:`
       : latestPin?.gif_url
       ? '👾 GIF'
-      : latestPin?.content.trim() ||
+      : latestPin?.content?.trim() ||
     (latestPin?.attachments?.length
       ? latestPin.attachments[0].kind === 'image'
         ? '📷 Imagem'

@@ -36,9 +36,11 @@ function StickerItem({
 
   useEffect(() => {
     let active = true
-    ensureMediaToken().then((token) => {
-      if (active) setSrc(stickerFileUrl(sticker.id, token))
-    })
+    ensureMediaToken()
+      .then((token) => {
+        if (active) setSrc(stickerFileUrl(sticker.id, token))
+      })
+      .catch(() => {})
     return () => {
       active = false
     }
