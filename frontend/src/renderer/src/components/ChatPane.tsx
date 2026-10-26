@@ -48,7 +48,12 @@ import { messagePreview } from '../lib/polls'
 import PollCard from './poll/PollCard'
 import CreatePollModal from './poll/CreatePollModal'
 import MessageAttachments from './chat/MessageAttachments'
-import { PaperclipIcon, PollIcon, PinIcon } from './icons'
+import MessageSticker from './chat/MessageSticker'
+import MessageGif from './chat/MessageGif'
+import UnifiedMediaPickerPopover from './chat/UnifiedMediaPickerPopover'
+import type { ServerSticker } from '../api/stickers'
+import type { GiphyItem } from '../api/giphy'
+import { PaperclipIcon, PollIcon, PinIcon, SmileyIcon } from './icons'
 import { selectPins, usePinStore } from '../store/pinStore'
 import {
   ACCEPT_ATTRIBUTE,
@@ -366,6 +371,10 @@ function MessageItem({
               />
             )
           )}
+          {message.sticker && <MessageSticker sticker={message.sticker} />}
+          {message.gif_url && (
+            <MessageGif gifUrl={message.gif_url} metadata={message.gif_metadata} />
+          )}
           {message.attachments?.length ? (
             <MessageAttachments attachments={message.attachments} copyImages />
           ) : null}
@@ -444,6 +453,7 @@ function ChatPane({
   const endPollInRoom = useChatStore((s) => s.endPollInRoom)
   const editInRoom = useChatStore((s) => s.editInRoom)
   const [pollOpen, setPollOpen] = useState(false)
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false)
   // Mensagem aberta na edição, por sala (o ServerView reaproveita o ChatPane).
   const [editState, setEditState] = useState<{ room: string; id: string } | null>(null)
   const editingId = editState?.room === room ? editState.id : null
@@ -846,6 +856,31 @@ function ChatPane({
     }
   }
 
+  const handleSelectEmoji = (emoji: string): void => {
+    setDraft((d) => d + emoji)
+    inputRef.current?.focus()
+  }
+
+  const handleSendSticker = async (stk: ServerSticker): Promise<void> => {
+    try {
+      await sendToRoom(room, '', [], null, { stickerId: stk.id })
+    } catch {
+      showToast.error('Não foi possível enviar a figurinha.')
+    }
+  }
+
+  const handleSendGif = async (gif: GiphyItem): Promise<void> => {
+    try {
+      await sendToRoom(room, draft, [], null, {
+        gifUrl: gif.url,
+        gifMetadata: { width: gif.width, height: gif.height, preview_url: gif.preview_url }
+      })
+      setDraft('')
+    } catch {
+      showToast.error('Não foi possível enviar o GIF.')
+    }
+  }
+
   const handleDelete = async (messageId: string): Promise<void> => {
     try {
       await deleteFromRoom(room, messageId)
@@ -1006,7 +1041,11 @@ function ChatPane({
     latestPin?.author
   )
   const latestPinPreview =
-    latestPin?.content.trim() ||
+    latestPin?.sticker
+      ? `💟 Figurinha :${latestPin.sticker.name}:`
+      : latestPin?.gif_url
+      ? '👾 GIF'
+      : latestPin?.content.trim() ||
     (latestPin?.attachments?.length
       ? latestPin.attachments[0].kind === 'image'
         ? '📷 Imagem'
@@ -1199,7 +1238,17 @@ function ChatPane({
             {disabledReason}
           </div>
         ) : (
-          <form
+          <div className="relative">
+            {mediaPickerOpen && (
+              <UnifiedMediaPickerPopover
+                serverId={serverId}
+                onSelectEmoji={handleSelectEmoji}
+                onSelectGif={handleSendGif}
+                onSelectSticker={handleSendSticker}
+                onClose={() => setMediaPickerOpen(false)}
+              />
+            )}
+            <form
             onSubmit={handleSubmit}
             className="relative flex items-center gap-2 rounded-xl border border-subtle bg-input px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
           >
@@ -1259,6 +1308,15 @@ function ChatPane({
               maxLength={2000}
               className="min-w-0 flex-1 bg-transparent text-ds-chat text-strong placeholder:text-gray-500 outline-none"
             />
+            <button
+              type="button"
+              onClick={() => setMediaPickerOpen((v) => !v)}
+              title="Emojis, GIFs e Figurinhas"
+              aria-label="Emojis, GIFs e Figurinhas"
+              className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <SmileyIcon className="h-5 w-5" />
+            </button>
             {permissions.canAttach && (
               <VoiceRecordButton key={room} disabled={sendingVoice} onRecorded={handleRecorded} />
             )}
@@ -1274,6 +1332,7 @@ function ChatPane({
                   : 'Enviar'}
             </button>
           </form>
+          </div>
         )}
         <TypingIndicator room={room} serverId={serverId} />
       </div>

@@ -22,6 +22,7 @@ var (
 	ErrMessageHidden       = errors.New("message not found")
 	ErrInvalidReply        = errors.New("invalid reply target")
 	ErrInvalidEmoji        = errors.New("invalid emoji reaction")
+	ErrInvalidSticker      = errors.New("invalid sticker or sticker does not belong to this server")
 )
 
 type EventPublisher interface {
@@ -50,6 +51,10 @@ type ConversationResolver interface {
 	RevealConversation(ctx context.Context, conversationID string) error
 }
 
+type StickerChecker interface {
+	StickerServerID(ctx context.Context, stickerID string) (string, error)
+}
+
 // FileRemover apaga o arquivo de um anexo do disco (media.Store).
 type FileRemover interface {
 	Remove(name string) error
@@ -64,6 +69,7 @@ type Service struct {
 	files           FileRemover
 	perms           PermissionChecker
 	mentionLimiter  *mentionLimiter
+	stickerChecker  StickerChecker
 }
 
 func MessageService(repository *Repository, publisher EventPublisher, channelResolver ChannelResolver, convResolver ConversationResolver, files FileRemover, perms PermissionChecker) *Service {
@@ -77,6 +83,10 @@ func MessageService(repository *Repository, publisher EventPublisher, channelRes
 		perms:           perms,
 		mentionLimiter:  newMentionLimiter(mentionEveryoneCooldown, time.Now),
 	}
+}
+
+func (s *Service) SetStickerChecker(checker StickerChecker) {
+	s.stickerChecker = checker
 }
 
 func ValidateEmoji(emoji string) error {
@@ -104,8 +114,9 @@ func SameRoomTarget(target *Message, channelID string, conversationID string) bo
 	return false
 }
 
-func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, authorID string, content string, replyToID *string, attachmentIDs []string) (*Message, error) {
-	if err := validateNewMessage(content, attachmentIDs); err != nil {
+func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, authorID string, content string, replyToID *string, attachmentIDs []string, stickerID *string, gifURL *string, gifMetadata *GifMetadata) (*Message, error) {
+	hasMedia := len(attachmentIDs) > 0 || stickerID != nil || gifURL != nil
+	if err := validateNewMessageWithMedia(content, attachmentIDs, hasMedia); err != nil {
 		return nil, err
 	}
 
@@ -114,8 +125,15 @@ func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, au
 		serverID, _ = s.channelResolver.ChannelServerID(ctx, channelID)
 	}
 
+	if stickerID != nil && s.stickerChecker != nil {
+		stkServerID, err := s.stickerChecker.StickerServerID(ctx, *stickerID)
+		if err != nil || stkServerID != serverID {
+			return nil, ErrInvalidSticker
+		}
+	}
+
 	mentionEveryone := s.resolveMentionEveryone(ctx, serverID, channelID, authorID, content)
-	msg, err := s.create(ctx, channelID, "", authorID, content, replyToID, attachmentIDs, mentionEveryone)
+	msg, err := s.create(ctx, channelID, "", authorID, content, replyToID, attachmentIDs, mentionEveryone, stickerID, gifURL, gifMetadata)
 	if err != nil {
 		// Mensagem que não saiu não gasta a vez do anti-spam.
 		if mentionEveryone != nil {
@@ -133,9 +151,16 @@ func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, au
 	return msg, nil
 }
 
-func (s *Service) CreateConversationMessage(ctx context.Context, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string) (*Message, error) {
+func (s *Service) CreateConversationMessage(ctx context.Context, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string, stickerID *string, gifURL *string, gifMetadata *GifMetadata) (*Message, error) {
+	hasMedia := len(attachmentIDs) > 0 || stickerID != nil || gifURL != nil
+	if err := validateNewMessageWithMedia(content, attachmentIDs, hasMedia); err != nil {
+		return nil, err
+	}
+	if stickerID != nil {
+		return nil, ErrInvalidSticker
+	}
 	// Em DM @all/@here é texto puro.
-	msg, err := s.create(ctx, "", conversationID, authorID, content, replyToID, attachmentIDs, nil)
+	msg, err := s.create(ctx, "", conversationID, authorID, content, replyToID, attachmentIDs, nil, nil, gifURL, gifMetadata)
 	if err != nil {
 		return nil, err
 	}
@@ -158,8 +183,9 @@ func (s *Service) CreateConversationMessage(ctx context.Context, conversationID 
 	return msg, nil
 }
 
-func (s *Service) create(ctx context.Context, channelID string, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string, mentionEveryone *string) (*Message, error) {
-	if err := validateNewMessage(content, attachmentIDs); err != nil {
+func (s *Service) create(ctx context.Context, channelID string, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string, mentionEveryone *string, stickerID *string, gifURL *string, gifMetadata *GifMetadata) (*Message, error) {
+	hasMedia := len(attachmentIDs) > 0 || stickerID != nil || gifURL != nil
+	if err := validateNewMessageWithMedia(content, attachmentIDs, hasMedia); err != nil {
 		return nil, err
 	}
 
@@ -183,6 +209,9 @@ func (s *Service) create(ctx context.Context, channelID string, conversationID s
 		ReplyToID:       normalizedReplyID,
 		Content:         content,
 		MentionEveryone: mentionEveryone,
+		StickerID:       stickerID,
+		GifURL:          gifURL,
+		GifMetadata:     gifMetadata,
 	}
 
 	if channelID == "" {

@@ -14,7 +14,8 @@ import { playSound } from '../lib/sounds'
 import { notificationPrefs } from './notificationPrefsStore'
 import { useAuthStore } from './authStore'
 import { WsClient, type WsEvent } from '../api/ws'
-import type { CreatePollInput, Message, Poll } from '../api/messages'
+import type { CreatePollInput, Message, Poll, ExtraMessageData } from '../api/messages'
+import { useStickerStore } from './stickerStore'
 import type { Server } from '../api/servers'
 import {
   listChannelMessages,
@@ -130,7 +131,8 @@ interface ChatState {
     room: RoomKey,
     content: string,
     attachmentIds?: string[],
-    replyToId?: string | null
+    replyToId?: string | null,
+    extra?: ExtraMessageData
   ) => Promise<void>
   deleteFromRoom: (room: RoomKey, messageId: string) => Promise<void>
   /** Edita o texto de uma mensagem sua; a lista já sai com a versão do servidor. */
@@ -316,15 +318,17 @@ const postMessage = async (
   room: RoomKey,
   content: string,
   attachmentIds: string[],
-  replyToId: string | null
+  replyToId: string | null,
+  extra?: ExtraMessageData
 ): Promise<void> => {
   const msg = room.startsWith('channel:')
-    ? await sendChannelMessage(room.slice('channel:'.length), content, attachmentIds, replyToId)
+    ? await sendChannelMessage(room.slice('channel:'.length), content, attachmentIds, replyToId, extra)
     : await sendConversationMessage(
         room.slice('conversation:'.length),
         content,
         attachmentIds,
-        replyToId
+        replyToId,
+        extra
       )
   if (msg?.id) {
     confirmedSends.add(msg.id)
@@ -490,7 +494,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
-  loadOlderUntil: async (room, messageId, maxPages = JUMP_MAX_PAGES) => {
+loadOlderUntil: async (room, messageId, maxPages = JUMP_MAX_PAGES) => {
     const has = (): boolean => (get().messagesByRoom[room] ?? []).some((m) => m.id === messageId)
     for (let i = 0; i < maxPages && !has(); i++) {
       if (!openRooms.has(room) || !(get().hasMoreByRoom[room] ?? false)) break
@@ -502,14 +506,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     return has()
   },
 
-  sendToRoom: async (room, content, attachmentIds = [], replyToId) => {
+  sendToRoom: async (room, content, attachmentIds = [], replyToId, extra) => {
     const trimmed = content.trim()
     // Mensagem pode ter só anexo, sem texto.
-    if (!trimmed && attachmentIds.length === 0) return
+    const hasMedia = attachmentIds.length > 0 || Boolean(extra?.stickerId) || Boolean(extra?.gifUrl)
+    if (!trimmed && !hasMedia) return
 
     // Só texto vira bolha "enviando…" (com anexo, os arquivos continuam no
     // campo e o ChatPane cuida da falha).
-    const localId = attachmentIds.length === 0 ? `local-${++pendingSeq}` : null
+    const localId =
+      attachmentIds.length === 0 && !extra?.stickerId && !extra?.gifUrl ? `local-${++pendingSeq}` : null
     if (localId) {
       setPending(room, (list) =>
         addPending(list, {
@@ -522,7 +528,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       )
     }
     try {
-      await postMessage(room, trimmed, attachmentIds, replyToId ?? null)
+      await postMessage(room, trimmed, attachmentIds, replyToId ?? null, extra)
     } catch (err) {
       if (localId && isRetryableSendError(err)) {
         // Fica na tela como "Não enviada — tentar de novo".
@@ -1278,6 +1284,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         }
       })
     ) {
+      return
+    }
+
+    if (useStickerStore.getState().handleWsEvent(event)) {
       return
     }
 
