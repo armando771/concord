@@ -21,8 +21,7 @@ const INFORMATIVO = [
   'features/profile/components/ProfileCardBody.tsx', // botão invisível sobre o avatar/banner, que já abre ao toque
   'features/servers/components/VoiceKnockOverlay.tsx', // tocar no canal já pede para entrar
   'shared/ui/Avatar.tsx', // o GIF só anima no hover
-  'app/UserBar.tsx', // troca o status pelo @ ao passar o mouse
-  'features/servers/components/RolesSection.tsx' // corrigido no PR #280 (setas de ordenar cargos)
+  'app/UserBar.tsx' // troca o status pelo @ ao passar o mouse
 ]
 
 function sourceFiles(dir: string): string[] {
