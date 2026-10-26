@@ -82,7 +82,8 @@ export function nameStyleCss(style: NameStyle): { className: string; style: CSSP
       break
     case 'toon':
       css.color = a
-      css.textShadow = '-1px -1px 0 #111, 1px -1px 0 #111, -1px 1px 0 #111, 1px 1px 0 #111'
+      // Contorno claro: o app é escuro, um contorno preto sumiria no fundo.
+      css.textShadow = '-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff'
       break
     case 'pop':
       css.color = '#fff'

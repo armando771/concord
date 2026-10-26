@@ -76,6 +76,11 @@ describe('nameStyleCss', () => {
     const { style } = nameStyleCss({ font: 'default', effect: 'neon', colors: ['#00ffaa'] })
     expect(String(style.textShadow)).toContain('#00ffaa')
   })
+  it('toon tem contorno claro (legível no tema escuro)', () => {
+    const { style } = nameStyleCss({ font: 'default', effect: 'toon', colors: ['#00ffaa'] })
+    expect(style.color).toBe('#00ffaa')
+    expect(String(style.textShadow)).toContain('#fff')
+  })
   it('arco-íris e pulso usam classe (animação)', () => {
     expect(nameStyleCss({ font: 'default', effect: 'rainbow', colors: [] }).className).toBe(
       'name-rainbow'
