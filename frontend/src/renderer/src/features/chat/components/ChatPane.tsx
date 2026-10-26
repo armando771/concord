@@ -83,11 +83,12 @@ import {
   type ChatPermissions
 } from '../lib/chatPermissions'
 import { actionErrorMessage } from '../../servers/lib/permissionErrors'
-import { Skeleton } from '../../../shared/ui/skeleton/Skeleton'
 import { MessageListSkeleton } from '../../../shared/ui/skeleton/layouts'
 import { permissionError } from '../../servers/lib/permissions'
 import { bottomScrollPlan, JUMP_HIGHLIGHT_MS } from '../lib/scrollAnchor'
 import { useOlderMessages } from '../hooks/useOlderMessages'
+import { useInfiniteScrollOlder } from '../hooks/useInfiniteScrollOlder'
+import OlderMessagesLoader from './OlderMessagesLoader'
 
 const NO_MENTIONABLE: Mentionable[] = []
 
@@ -705,6 +706,12 @@ function ChatPane({
       stickToBottom.current = false
     }
   })
+  const olderSentinelRef = useInfiniteScrollOlder({
+    scrollRef,
+    active: hasMore && !loading,
+    resetKey: `${room}:${messages[0]?.id}`,
+    onReachTop: () => void loadOlder()
+  })
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>): void => {
     const el = e.currentTarget
@@ -910,8 +917,8 @@ function ChatPane({
   }
 
   // Mensagem fora da tela (resposta antiga, resultado da busca): carrega as
-  // páginas antigas até ela, com a mesma âncora do "Carregar mensagens
-  // anteriores" (a tela não pula enquanto carrega), e então rola até ela.
+  // páginas antigas até ela, com a mesma âncora do scroll infinito (a tela
+  // não pula enquanto carrega), e então rola até ela.
   const shownMessage = (messageId: string): HTMLElement | null => {
     const node = document.getElementById(`msg-${messageId}`)
     return node && scrollRef.current?.contains(node) ? node : null
@@ -1073,24 +1080,7 @@ function ChatPane({
           <MessageListSkeleton />
         ) : (
           <div ref={contentRef} className="flex min-h-full flex-col justify-end py-4">
-            {hasMore && (
-              <div className="flex justify-center py-2">
-                <button
-                  onClick={loadOlder}
-                  disabled={loadingOlder}
-                  className="cursor-pointer rounded-full border border-subtle bg-fg/5 px-3 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:bg-fg/10 hover:text-strong disabled:opacity-50"
-                >
-                  {loadingOlder ? (
-                    <span className="flex h-4 items-center">
-                      <Skeleton className="h-2.5 w-36" />
-                      <span className="sr-only">Carregando mensagens anteriores</span>
-                    </span>
-                  ) : (
-                    'Carregar mensagens anteriores'
-                  )}
-                </button>
-              </div>
-            )}
+            {hasMore && <OlderMessagesLoader ref={olderSentinelRef} loading={loadingOlder} />}
             {messages.length === 0 && (
               <div className="flex items-center justify-center py-8 text-center text-sm text-gray-500">
                 Nenhuma mensagem por aqui ainda. Seja o primeiro a escrever!

@@ -1,5 +1,5 @@
 /**
- * Âncora de rolagem do "Carregar mensagens anteriores": a mensagem que era a
+ * Âncora de rolagem das páginas antigas (scroll infinito): a mensagem que era a
  * primeira da lista fica no mesmo lugar da tela depois que a página antiga
  * entra em cima dela.
  *

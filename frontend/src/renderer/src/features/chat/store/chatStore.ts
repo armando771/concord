@@ -481,7 +481,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     try {
       const fetched = await fetch(before)
       if (useAuthStore.getState().accessToken !== token) return
-      if (fetched.length === 0 || !openRooms.has(room)) return
+      if (!openRooms.has(room)) return
+      // Nada mais antigo (o histórico tinha um múltiplo exato da página):
+      // acabou, senão o scroll infinito deixaria o topo "carregando" para sempre.
+      if (fetched.length === 0) {
+        set((state) => ({ hasMoreByRoom: { ...state.hasMoreByRoom, [room]: false } }))
+        return
+      }
       set((state) => ({
         messagesByRoom: {
           ...state.messagesByRoom,

@@ -54,6 +54,9 @@ export function useOlderMessages({
   const [loadingRooms, setLoadingRooms] = useState<ReadonlySet<string>>(new Set())
   const loadingOlder = loadingRooms.has(room)
   const anchorRef = useRef<OlderAnchor | null>(null)
+  // Marca na hora (o estado só muda no próximo render): o scroll infinito
+  // pode pedir de novo antes disso, e não carrega duas vezes em paralelo.
+  const inFlight = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     anchorRef.current = null
@@ -85,16 +88,18 @@ export function useOlderMessages({
   }
 
   const tracked = async <T>(startedRoom: string, task: () => Promise<T>): Promise<T> => {
+    inFlight.current.add(startedRoom)
     setLoadingRooms((current) => withRoom(current, startedRoom))
     try {
       return await task()
     } finally {
+      inFlight.current.delete(startedRoom)
       setLoadingRooms((current) => withoutRoom(current, startedRoom))
     }
   }
 
   const loadOlder = async (): Promise<void> => {
-    if (loadingOlder) return
+    if (inFlight.current.has(room)) return
     const startedRoom = room
     const anchor = captureAnchor(startedRoom)
     if (anchor) {
