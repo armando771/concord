@@ -77,6 +77,8 @@ import { actionErrorMessage } from '../../servers/lib/permissionErrors'
 import { permissionError } from '../../servers/lib/permissions'
 import { JUMP_HIGHLIGHT_MS } from '../lib/scrollAnchor'
 import { useStickToBottom } from '../hooks/useStickToBottom'
+import { useJumpToPresent } from '../hooks/useJumpToPresent'
+import JumpToPresentButton from './JumpToPresentButton'
 import { useOlderMessages } from '../hooks/useOlderMessages'
 import { useInfiniteScrollOlder } from '../hooks/useInfiniteScrollOlder'
 import { useAutoFocusComposer } from '../hooks/useAutoFocusComposer'
@@ -665,6 +667,7 @@ function ChatPane({
     total,
     stickToBottom
   })
+  const jump = useJumpToPresent({ room, messages, selfId: meId })
 
   useEffect(() => {
     stickToBottom.current = true
@@ -692,6 +695,7 @@ function ChatPane({
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>): void => {
     onScroll(e.currentTarget)
+    jump.onScroll(e.currentTarget)
   }
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
@@ -1007,6 +1011,11 @@ function ChatPane({
       </div>
 
       <div className="relative shrink-0 px-4">
+        <JumpToPresentButton
+          visible={jump.visible}
+          newCount={jump.newCount}
+          onClick={() => jump.jumpToPresent(scrollRef.current)}
+        />
         <MentionSuggestionList
           suggestions={suggestions}
           highlight={highlight}
