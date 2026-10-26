@@ -7,7 +7,8 @@ import {
   inviteLink,
   normalizeInviteCode,
   parseInviteDeepLink,
-  parseInviteInput
+  parseInviteInput,
+  parseOwnInviteUrl
 } from './inviteLink'
 
 describe('inviteLink', () => {
@@ -129,5 +130,82 @@ describe('convite na volta do login', () => {
     expect(authPathWithInvite('/login', 'K7P2QX9M')).toBe('/login?convite=K7P2QX9M')
     expect(authPathWithInvite('/register', 'K7P2QX9M')).toBe('/register?convite=K7P2QX9M')
     expect(authPathWithInvite('/register', null)).toBe('/register')
+  })
+})
+
+describe('parseOwnInviteUrl', () => {
+  const sslip = 'https://74-0-5-252.sslip.io'
+
+  it('aceita os nossos endereços em /convite/<código>', () => {
+    expect(parseOwnInviteUrl('https://app-salinha.bhrx.com.br/convite/K7P2QX9M')).toBe('K7P2QX9M')
+    expect(parseOwnInviteUrl('https://salinha.bhrx.com.br/convite/k7p2qx9m/')).toBe('K7P2QX9M')
+    expect(parseOwnInviteUrl('HTTPS://APP-SALINHA.BHRX.COM.BR/convite/K7P2QX9M')).toBe('K7P2QX9M')
+    expect(parseOwnInviteUrl(`${sslip}/convite/K7P2QX9M`, [sslip])).toBe('K7P2QX9M')
+    expect(
+      parseOwnInviteUrl('http://localhost:4173/convite/K7P2QX9M', ['http://localhost:4173'])
+    ).toBe('K7P2QX9M')
+  })
+
+  it('ignora query e fragmento', () => {
+    expect(parseOwnInviteUrl('https://app-salinha.bhrx.com.br/convite/K7P2QX9M?utm=x#y')).toBe(
+      'K7P2QX9M'
+    )
+  })
+
+  it('recusa host que não é nosso', () => {
+    for (const bad of [
+      'https://exemplo.com/convite/K7P2QX9M',
+      'https://app-salinha.bhrx.com.br.evil.com/convite/K7P2QX9M',
+      'https://evil.com/https://app-salinha.bhrx.com.br/convite/K7P2QX9M',
+      'https://xapp-salinha.bhrx.com.br/convite/K7P2QX9M',
+      'https://bhrx.com.br/convite/K7P2QX9M',
+      'https://user@app-salinha.bhrx.com.br/convite/K7P2QX9M',
+      'https://user:pw@app-salinha.bhrx.com.br/convite/K7P2QX9M',
+      'https://app-salinha.bhrx.com.br:8443/convite/K7P2QX9M',
+      'http://app-salinha.bhrx.com.br/convite/K7P2QX9M',
+      `${sslip}/convite/K7P2QX9M`
+    ]) {
+      expect(parseOwnInviteUrl(bad), bad).toBeNull()
+    }
+  })
+
+  it('recusa esquema que não é http(s)', () => {
+    for (const bad of [
+      'javascript://app-salinha.bhrx.com.br/convite/K7P2QX9M',
+      'ftp://app-salinha.bhrx.com.br/convite/K7P2QX9M',
+      'salinha://convite/K7P2QX9M',
+      'file:///convite/K7P2QX9M'
+    ]) {
+      expect(parseOwnInviteUrl(bad), bad).toBeNull()
+    }
+  })
+
+  it('recusa caminho ou código inválido', () => {
+    for (const bad of [
+      'https://app-salinha.bhrx.com.br/',
+      'https://app-salinha.bhrx.com.br/convite',
+      'https://app-salinha.bhrx.com.br/convite/',
+      'https://app-salinha.bhrx.com.br/convite/ABC',
+      'https://app-salinha.bhrx.com.br/convite/' + 'A'.repeat(17),
+      'https://app-salinha.bhrx.com.br/convite/K7P2-QX9M',
+      'https://app-salinha.bhrx.com.br/convite/K7P2QX9M/extra',
+      'https://app-salinha.bhrx.com.br/convite/%4B7P2QX9M',
+      'https://app-salinha.bhrx.com.br/convite/../servers/1',
+      'https://app-salinha.bhrx.com.br/Convite/K7P2QX9M',
+      'https://app-salinha.bhrx.com.br/servers/K7P2QX9M',
+      'não é url',
+      ''
+    ]) {
+      expect(parseOwnInviteUrl(bad), bad).toBeNull()
+    }
+  })
+
+  it('origem extra vazia ou inválida não libera nada', () => {
+    expect(
+      parseOwnInviteUrl('https://exemplo.com/convite/K7P2QX9M', [undefined, '', 'lixo'])
+    ).toBeNull()
+    expect(parseOwnInviteUrl('https://app-salinha.bhrx.com.br/convite/K7P2QX9M', ['lixo'])).toBe(
+      'K7P2QX9M'
+    )
   })
 })

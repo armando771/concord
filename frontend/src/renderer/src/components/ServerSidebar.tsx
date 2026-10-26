@@ -86,7 +86,7 @@ export function ServerSidebar(): React.JSX.Element {
   const maestroChannels = useMusicStore(
     (s) => (currentServer ? s.presence[currentServer.id] : undefined) ?? NO_CHANNELS
   )
-  const openMusicPanel = useMusicStore((s) => s.openPanel)
+  const toggleMusicPanel = useMusicStore((s) => s.togglePanel)
   const roles = useServerStore((s) => s.roles)
   const channels = useServerStore((s) => s.channels)
   const createChannel = useServerStore((s) => s.createChannel)
@@ -1031,13 +1031,14 @@ export function ServerSidebar(): React.JSX.Element {
                             abre o painel "Tocando agora" (não o perfil). */}
                         {maestroChannels.includes(ch.id) && (
                           <div
+                            data-maestro-tile=""
                             onContextMenu={userMenuHandler(
                               maestroIdentity(ch.id),
                               MAESTRO_NAME,
                               user?.id
                             )}
                             onClick={() => {
-                              openMusicPanel()
+                              toggleMusicPanel()
                               if (currentServer?.id && channelId !== ch.id) {
                                 navigate(`/servers/${currentServer.id}/channels/${ch.id}`)
                               }
