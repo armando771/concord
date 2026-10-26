@@ -54,10 +54,25 @@ export const PRESET_COLORS = [
   '#22c55e', // Green
   '#38bdf8', // Cyan
   '#a855f7', // Purple
-  '#ffffff'  // White
+  '#ffffff' // White
 ]
 
 export const PRESET_WIDTHS = [2, 4, 8]
+
+// Seletor que devolve `[]` novo a cada leitura faz o zustand v5 entrar em loop
+// de render (React #185); sem dados, devolva sempre estas mesmas referências.
+const NO_STROKES: DrawStroke[] = []
+const NO_STROKE_IDS: string[] = []
+
+export const selectStrokes =
+  (sharerId: string) =>
+  (s: Pick<AnnotationState, 'strokes'>): DrawStroke[] =>
+    s.strokes[sharerId] ?? NO_STROKES
+
+export const selectMyStrokeIds =
+  (sharerId: string) =>
+  (s: Pick<AnnotationState, 'myStrokeIds'>): string[] =>
+    s.myStrokeIds[sharerId] ?? NO_STROKE_IDS
 
 export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   tool: 'pen',

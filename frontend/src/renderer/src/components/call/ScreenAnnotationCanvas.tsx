@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import {
-  useAnnotationStore,
-  type DrawPoint
-} from '../../store/annotationStore'
+import { useAnnotationStore, selectStrokes, type DrawPoint } from '../../store/annotationStore'
 
 interface ScreenAnnotationCanvasProps {
   sharerId: string
@@ -23,7 +20,7 @@ export default function ScreenAnnotationCanvas({
   const tool = useAnnotationStore((s) => s.tool)
   const color = useAnnotationStore((s) => s.color)
   const width = useAnnotationStore((s) => s.width)
-  const strokes = useAnnotationStore((s) => s.strokes[sharerId] ?? [])
+  const strokes = useAnnotationStore(selectStrokes(sharerId))
   const addStroke = useAnnotationStore((s) => s.addStroke)
   const undo = useAnnotationStore((s) => s.undo)
 
