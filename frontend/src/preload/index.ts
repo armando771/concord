@@ -4,6 +4,7 @@ import type { OverlaySnapshot } from '../renderer/src/features/overlay/lib/overl
 import type { OverlayFrame, OverlayLayout } from '../renderer/src/features/overlay/lib/overlayLayout'
 import type { CallResume, PendingCallResume } from '../shared/callResume'
 import type { AppMetrics } from '../shared/appMetrics'
+import type { PerfEvent } from '../shared/perfLog'
 import { screenShareFlow, type PortalStatus } from '../shared/screenShareFlow'
 
 interface ScreenSourceInfo {
@@ -19,6 +20,15 @@ const api = {
   appMetrics: {
     sample(reset = false): Promise<AppMetrics | null> {
       return ipcRenderer.invoke('app-metrics:sample', reset)
+    }
+  },
+  perf: {
+    /** O main responde true só quando o app foi aberto com --perf-log. */
+    enabled(): Promise<boolean> {
+      return ipcRenderer.invoke('perf:enabled')
+    },
+    report(event: PerfEvent): void {
+      ipcRenderer.send('perf:report', event)
     }
   },
   windowTheme: {
