@@ -66,19 +66,29 @@ frontend/src/
                                        uma instância de AppMetricsSampler por tipo
     perfRecorder.ts                    abre userData/perf/perf-<AAAAMMDD-HHmmss>.jsonl,
                                        acrescenta linhas, fecha com {"kind":"end"}
-    startupMarks.ts                    junta os marcos de abertura numa linha, puro
-    setupPerfLog.ts                    ligação: checa a flag, timer de 1 s, IPC
-                                       'perf:report', estado da janela, before-quit
-  main/index.ts                        + setupPerfLog(() => mainWindow) (uma linha)
-  preload/index.ts                     + window.api.perf = { enabled, report(evento) }
+    startupMarks.ts                    classe StartupMarks: junta os 3 marcos de abertura
+                                       numa linha (ou null no que faltou, aos 60 s)
+    windowState.ts                     visible | minimized | tray a partir da janela
+    perfSession.ts                     junta o relatório do renderer com a amostra do
+                                       main e escreve as linhas (startup e sample)
+    setupPerfLog.ts                    só a ligação com o Electron: flag, timer de 1 s,
+                                       IPC 'perf:enabled' e 'perf:report', before-quit
+  main/index.ts                        + setupPerfLog(() => mainWindow), PRIMEIRA
+                                       chamada do whenReady (2 linhas + import)
+  preload/index.ts                     + window.api.perf =
+                                       { enabled(): Promise<boolean>, report(evento) }
   preload/index.d.ts                   + tipo de window.api.perf
   renderer/src/
     shared/lib/perf/frameStats.ts      puro: FPS da janela de 1 s e resumo de LoAF
-    app/PerfBridge.tsx                 monta só se window.api?.perf?.enabled;
-                                       observa LoAF + rAF, lê rota e callStore
-                                       (somente leitura), envia perf:report a cada 1 s
-                                       e o mark "usable" uma vez
-    app/App.tsx                        + <PerfBridge /> ao lado do <BackgroundBridge />
+    app/perfContext.ts                 puro: rota + estado da chamada → PerfContext
+    app/perfReporting.ts               rAF + PerformanceObserver (LoAF) + timer de 1 s;
+                                       lê rota e callStore (somente leitura), envia
+                                       perf:report; o mark "usable" vem da inscrição em
+                                       serverStore.serversLoaded (nenhum componente muda)
+    app/PerfBridge.tsx                 pergunta ao main (perf:enabled) e só então liga
+                                       o perfReporting
+    app/App.tsx                        + <PerfBridge /> ao lado do <BackgroundBridge />,
+                                       sem condicional (o App tem CRAP 12)
 scripts/
   perf-report.mjs                      CLI: resumo de um arquivo ou comparação de dois
   lib/perfReport.mjs                   puro: parse tolerante, agrupamento, média/p95, Δ%
@@ -87,12 +97,16 @@ docs/PERFORMANCE.md                    roteiro dos cenários + trace do Chromium
 ```
 
 Restrições respeitadas:
-- `main/index.ts` (378 linhas) ganha uma linha e fica < 400.
-- Nenhum campo novo em god store: o `PerfBridge` só **lê** `callStore`
-  (`callId !== null` → `inCall`, `isScreenSharing` → `sharing`,
+- `main/index.ts` (378 linhas) ganha 3 linhas (import, comentário e chamada) e
+  fica em 381, abaixo de 400.
+- A flag chega ao renderer por IPC: o argv do app **não é repassado** aos
+  renderers pelo Chromium, então o preload não consegue lê-lo. O renderer chama
+  `perf:enabled` e o main responde `true` só quando a gravação abriu.
+- Nenhum campo novo em god store: o `perfReporting` só **lê** `callStore`
+  (`status === 'active'` → `inCall`, `isScreenSharing` → `sharing`,
   `watchedScreenIds.length > 0` → `watching`).
-- `shared/` não importa de `features/`: a leitura do `callStore` fica no
-  `PerfBridge`, que mora em `app/`.
+- `shared/` não importa de `features/`: a leitura do `callStore` e do
+  `serverStore` fica no `perfReporting`, que mora em `app/`.
 - Build web: sem `window.api`, o `PerfBridge` não monta.
 
 ## Fluxo de dados
@@ -122,9 +136,14 @@ O main ignora `perf:report` de outro `sender`/frame (mesma checagem do
 - `ctx.window`: `visible` | `minimized` | `tray` (oculta).
 - `ctx` (rota e flags), `fps` e `loaf` vêm do último `perf:report`; se o último
   tiver mais de 2 s, `fps` e `loaf` saem `null` (nunca 0 inventado).
-- CPU em % do total da máquina (mesma fórmula do `AppMetricsSampler`).
+- CPU em % do total da máquina (mesma fórmula do `AppMetricsSampler`). Na
+  primeira amostra a CPU de cada tipo é `null` (CPU é a diferença entre duas
+  leituras) e o relatório a ignora. Tipo de processo sem nenhum processo não
+  aparece em `procs`.
+- Sem nenhum relatório do renderer ainda, o contexto sai com `route: ""` e as
+  flags `false`.
 
-**Linha `startup`** (uma vez, assim que `usable` chega):
+**Linha `startup`** (uma vez, quando os 3 marcos chegaram ou aos 60 s):
 
 ```jsonl
 {"kind":"startup","appReadyMs":310,"readyToShowMs":1240,"usableMs":2050}
@@ -133,6 +152,9 @@ O main ignora `perf:report` de outro `sender`/frame (mesma checagem do
 Tempos medidos a partir do início do processo. `usable` pode chegar antes ou
 depois de `ready-to-show` (janela iniciada oculta na bandeja); cada campo é
 gravado com o tempo em que aconteceu, `null` se não aconteceu até 60 s.
+`appReadyMs` é o instante em que o `setupPerfLog` roda, que é a primeira
+chamada do `whenReady`. Se o usuário só entrar depois de 60 s, `usableMs` fica
+`null`: a medida vale para abertura a frio com sessão já salva.
 
 **Linha `end`** no `before-quit`: `{"kind":"end","t":…}`.
 
