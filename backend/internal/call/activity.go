@@ -33,8 +33,6 @@ var (
 // catálogo do app (frontend/src/shared/activities.ts).
 var activityCatalog = map[string][]string{
 	"krunker": {"https://krunker.io"},
-	"survev":  {"https://survev.io"},
-	"suroi":   {"https://suroi.io"},
 }
 
 // ValidateActivityURL confere o link da sala contra as origens da atividade.

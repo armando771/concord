@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { displayMediaOptions, retryWithoutAudio } from './displayMedia'
+import {
+  displayMediaOptions,
+  portalPickerError,
+  retryWithoutAudio,
+  usesNativePicker
+} from './displayMedia'
 
 describe('displayMediaOptions', () => {
   it('permite solicitar captura a 60 FPS sem mudar o áudio', () => {
@@ -51,5 +56,27 @@ describe('retryWithoutAudio', () => {
     expect(retryWithoutAudio(err('AbortError'))).toBe(false)
     expect(retryWithoutAudio(err('NotFoundError'))).toBe(false)
     expect(retryWithoutAudio(undefined)).toBe(false)
+  })
+})
+
+describe('usesNativePicker', () => {
+  it('navegador e Linux/Wayland (portal): seletor do sistema', () => {
+    expect(usesNativePicker(true, undefined)).toBe(true)
+    expect(usesNativePicker(false, 'portal')).toBe(true)
+  })
+  it('desktop (Windows, macOS, Linux X11): modal do app', () => {
+    expect(usesNativePicker(false, 'app')).toBe(false)
+    expect(usesNativePicker(false, undefined)).toBe(false)
+  })
+})
+
+describe('portalPickerError', () => {
+  it('fechar o seletor do portal é cancelamento', () => {
+    const err = portalPickerError(new DOMException('Invalid capture constraints', 'AbortError'))
+    expect(err).toMatchObject({ name: 'NotAllowedError' })
+  })
+  it('outros erros passam como vieram', () => {
+    const err = new DOMException('sem fonte', 'NotReadableError')
+    expect(portalPickerError(err)).toBe(err)
   })
 })

@@ -25,7 +25,7 @@ const root = { dataset: {} as Record<string, string> }
 
 /** Cores que o CSS daria a cada tema (só as que o store lê). */
 const COLORS: Record<string, Record<string, string>> = {
-  'discord-dark': { '--bg-app': '#2c2d32', '--interactive-normal': '#c5c6ca' },
+  'discord-dark': { '--bg-app': '#121214', '--interactive-normal': '#96979e' },
   'discord-light': { '--bg-app': '#f3f3f4', '--interactive-normal': '#595a63' },
   midnight: { '--bg-app': '#0b1220', '--interactive-normal': '#b6c2d3' }
 }
@@ -73,8 +73,8 @@ describe('themeStore', () => {
       theme: 'discord-dark'
     })
     expect(root.dataset.theme).toBe('discord-dark')
-    expect(meta.setAttribute).toHaveBeenCalledWith('content', '#2c2d32')
-    expect(titleBar).toHaveBeenCalledWith({ color: '#2c2d32', symbolColor: '#c5c6ca' })
+    expect(meta.setAttribute).toHaveBeenCalledWith('content', '#121214')
+    expect(titleBar).toHaveBeenCalledWith({ color: '#121214', symbolColor: '#96979e' })
   })
 
   it('aplica o tema salvo já no início', async () => {

@@ -853,29 +853,6 @@ export function CrosshairIcon({ className = '' }: IconProps): React.JSX.Element 
   )
 }
 
-/** Paraquedas (atividades battle royale, ex.: survev.io). */
-export function ParachuteIcon({ className = '' }: IconProps): React.JSX.Element {
-  return (
-    <svg
-      className={className}
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M3 11a9 9 0 0 1 18 0" />
-      <path d="M3 11c1.5-1.3 3-1.3 4.5 0 1.5-1.3 3-1.3 4.5 0 1.5-1.3 3-1.3 4.5 0 1.5-1.3 3-1.3 4.5 0" />
-      <path d="M3 11l7.5 8M21 11l-7.5 8M12 11v8" />
-      <rect x="10" y="19" width="4" height="3" rx="1" />
-    </svg>
-  )
-}
-
 /** Sinal da conexão de voz (o "Voz conectada" do painel). */
 export function SignalIcon({ className = '' }: IconProps): React.JSX.Element {
   return (

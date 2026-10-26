@@ -127,8 +127,6 @@ describe('fillCsp', () => {
   it('web: acrescenta as diretivas extras (base-uri e frame-src só dos jogos do catálogo)', () => {
     expect(
       fillCsp(html, { connectSrc: "'self'", mediaSrc: "'self' blob:", extra: WEB_EXTRA_CSP })
-    ).toContain(
-      "connect-src 'self'; base-uri 'self'; frame-src https://krunker.io https://survev.io https://suroi.io\""
-    )
+    ).toContain("connect-src 'self'; base-uri 'self'; frame-src https://krunker.io\"")
   })
 })

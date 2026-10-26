@@ -77,6 +77,38 @@ describe('statText', () => {
   })
 })
 
+describe('Contribuinte (cards de propostas)', () => {
+  const contribuinte = (over: Partial<Badge> = {}): Badge =>
+    badge({ category: 'contribuinte', name: 'Contribuinte', unit: 'proposals', ...over })
+
+  it('conta as propostas criadas', () => {
+    expect(statText(contribuinte({ value: 1 }))).toBe('1 proposta criada')
+    expect(statText(contribuinte({ value: 0 }))).toBe('0 propostas criadas')
+    expect(statText(contribuinte({ value: 1234 }))).toBe('1.234 propostas criadas')
+  })
+
+  it('escada, quanto falta e visão pública', () => {
+    expect(formatThreshold('proposals', 1)).toBe('1 proposta')
+    expect(formatThreshold('proposals', 15)).toBe('15 propostas')
+    const now = new Date('2026-10-25T12:00:00Z')
+    expect(remainingText(contribuinte({ value: 4, next_threshold: 5 }), now)).toBe(
+      'Falta 1 proposta'
+    )
+    expect(remainingText(contribuinte({ value: 5, next_threshold: 15 }), now)).toBe(
+      'Faltam 10 propostas'
+    )
+    const pub = contribuinte({
+      value: undefined,
+      tier: 2,
+      tiers: [
+        { tier: 1, name: 'Ideia', threshold: 1, rarity: 'comum' },
+        { tier: 2, name: 'Colaborador', threshold: 5, rarity: 'raro' }
+      ]
+    })
+    expect(publicStatText(pub)).toBe('5+ propostas')
+  })
+})
+
 describe('formatThreshold', () => {
   it('rótulo curto da escada', () => {
     expect(formatThreshold('seconds', HOUR)).toBe('1 hora')
@@ -220,7 +252,7 @@ describe('visão pública (perfil de outra pessoa)', () => {
       category: 'fundador',
       unit: 'founder',
       tier: 1,
-      tiers: [{ tier: 1, name: 'Fundador', threshold: 1, rarity: 'lendario' }]
+      tiers: [{ tier: 1, name: 'Pioneiro', threshold: 1, rarity: 'lendario' }]
     })
     expect(publicStatText(f)).toBe('Chegou nas primeiras semanas')
   })
@@ -247,17 +279,17 @@ describe('unlockCount', () => {
   })
 })
 
-describe('raridade mítica (Criador da Salinha)', () => {
+describe('raridade mítica (Fundador dos devs)', () => {
   const dev = badge({
     category: 'criador',
-    name: 'Criador da Salinha',
+    name: 'Fundador',
     unit: 'dev',
     value: 1,
     tier: 1,
-    tier_name: 'Criador da Salinha',
+    tier_name: 'Fundador',
     rarity: 'mitico',
     progress: 1,
-    tiers: [{ tier: 1, name: 'Criador da Salinha', threshold: 1, rarity: 'mitico' }]
+    tiers: [{ tier: 1, name: 'Fundador', threshold: 1, rarity: 'mitico' }]
   })
 
   it('fica acima de lendário', () => {
@@ -270,7 +302,7 @@ describe('raridade mítica (Criador da Salinha)', () => {
     expect(RARITY.mitico.color).not.toBe(RARITY.lendario.color)
   })
 
-  it('vem antes do Fundador na fileira do perfil', () => {
+  it('vem antes do Pioneiro na fileira do perfil', () => {
     const { shown } = profileBadgeRow([
       badge({ category: 'fundador', unit: 'founder', tier: 1, rarity: 'lendario' }),
       badge({ category: 'voz', tier: 1, rarity: 'comum' }),
@@ -280,7 +312,7 @@ describe('raridade mítica (Criador da Salinha)', () => {
   })
 
   it('rótulo não repete o nome quando o tier se chama igual ao badge', () => {
-    expect(badgeLabel(dev)).toBe('Criador da Salinha')
+    expect(badgeLabel(dev)).toBe('Fundador')
     expect(badgeLabel({ name: 'Tempo em call', tier_name: 'Locutor' })).toBe(
       'Locutor (Tempo em call)'
     )

@@ -2,9 +2,45 @@ import { win32 } from 'path'
 
 // Regras do modo segundo plano (estilo Discord). Puras para poder testar.
 
-/** No Windows, fechar a janela esconde na bandeja — a não ser no "Sair". */
-export function shouldHideOnClose(platform: NodeJS.Platform, quitting: boolean): boolean {
-  return platform === 'win32' && !quitting
+/**
+ * Fechar a janela esconde na bandeja? No Windows, sempre (menos no "Sair").
+ * No Linux só com a bandeja funcionando (um host StatusNotifier no D-Bus) e a
+ * opção "Minimizar para a bandeja ao fechar" ligada: sem bandeja o ícone não
+ * aparece e a Salinha ficaria invisível, sem como reabrir. Em dúvida, fecha.
+ */
+export function shouldHideOnClose(
+  platform: NodeJS.Platform,
+  quitting: boolean,
+  tray: { trayWorks: boolean; enabled: boolean } = { trayWorks: false, enabled: true }
+): boolean {
+  if (quitting) return false
+  if (platform === 'win32') return true
+  return platform === 'linux' && tray.trayWorks && tray.enabled
+}
+
+/** "Minimizar para a bandeja ao fechar": ligada, a não ser que a pessoa desligue. */
+export function closeToTrayEnabled(pref: unknown): boolean {
+  return pref !== false
+}
+
+/**
+ * Resposta do D-Bus (dbus-send, gdbus ou busctl) para a propriedade
+ * IsStatusNotifierHostRegistered do org.kde.StatusNotifierWatcher: há alguém
+ * (Waybar, KDE, extensão do GNOME…) desenhando os ícones da bandeja?
+ */
+export function trayHostRegistered(output: string): boolean {
+  return /\btrue\b/.test(output)
+}
+
+/** Dica do ícone da bandeja: em chamada e/ou mensagens não lidas. */
+export function trayTooltip(inCall: boolean, unseen: number): string {
+  const parts: string[] = []
+  if (inCall) parts.push('em chamada')
+  if (unseen > 0) {
+    const count = unseen > 99 ? '99+' : String(unseen)
+    parts.push(`${count} ${unseen === 1 ? 'não lida' : 'não lidas'}`)
+  }
+  return parts.length ? `Salinha — ${parts.join(' · ')}` : 'Salinha'
 }
 
 /**
@@ -58,8 +94,8 @@ export const TITLE_BAR_HEIGHT = 32
  * --interactive-normal de assets/theme.css). Trocando o tema, o renderer manda
  * as cores novas (ver parseTitleBarColors).
  */
-export const TITLE_BAR_COLOR = '#2c2d32'
-export const TITLE_BAR_SYMBOL_COLOR = '#c5c6ca'
+export const TITLE_BAR_COLOR = '#121214'
+export const TITLE_BAR_SYMBOL_COLOR = '#96979e'
 
 const HEX6 = /^#[0-9a-f]{6}$/i
 

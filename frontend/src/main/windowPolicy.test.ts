@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  closeToTrayEnabled,
   launchedHidden,
   shouldHideOnClose,
+  trayHostRegistered,
+  trayTooltip,
   notifyPlan,
   staleLoginItem,
   parseTitleBarColors,
@@ -19,9 +22,55 @@ describe('windowPolicy', () => {
     expect(shouldHideOnClose('win32', true)).toBe(false)
   })
 
-  it('fora do Windows, fechar continua fechando', () => {
-    expect(shouldHideOnClose('linux', false)).toBe(false)
+  it('no macOS, fechar continua fechando', () => {
     expect(shouldHideOnClose('darwin', false)).toBe(false)
+  })
+
+  it('no Linux, sem bandeja confirmada fechar fecha (nunca fica invisível)', () => {
+    expect(shouldHideOnClose('linux', false)).toBe(false)
+    expect(shouldHideOnClose('linux', false, { trayWorks: false, enabled: true })).toBe(false)
+  })
+
+  it('no Linux, com bandeja funcionando e a opção ligada, fechar esconde', () => {
+    expect(shouldHideOnClose('linux', false, { trayWorks: true, enabled: true })).toBe(true)
+  })
+
+  it('no Linux, opção desligada ou "Sair" fecham de verdade', () => {
+    expect(shouldHideOnClose('linux', false, { trayWorks: true, enabled: false })).toBe(false)
+    expect(shouldHideOnClose('linux', true, { trayWorks: true, enabled: true })).toBe(false)
+  })
+
+  it('no Windows a opção da bandeja não muda nada', () => {
+    expect(shouldHideOnClose('win32', false, { trayWorks: false, enabled: false })).toBe(true)
+  })
+
+  it('"Minimizar para a bandeja ao fechar" vem ligada se nunca foi mexida', () => {
+    expect(closeToTrayEnabled(undefined)).toBe(true)
+    expect(closeToTrayEnabled(true)).toBe(true)
+    expect(closeToTrayEnabled(false)).toBe(false)
+    expect(closeToTrayEnabled('nao')).toBe(true)
+  })
+
+  it('lê se há um host de bandeja (StatusNotifierHost) na resposta do D-Bus', () => {
+    // dbus-send, gdbus e busctl
+    expect(
+      trayHostRegistered('method return time=1 sender=:1.11\n   variant       boolean true\n')
+    ).toBe(true)
+    expect(trayHostRegistered('(<true>,)\n')).toBe(true)
+    expect(trayHostRegistered('b true\n')).toBe(true)
+    expect(trayHostRegistered('   variant       boolean false\n')).toBe(false)
+    expect(trayHostRegistered('(<false>,)')).toBe(false)
+    expect(trayHostRegistered('')).toBe(false)
+    expect(trayHostRegistered('Error org.freedesktop.DBus.Error.ServiceUnknown')).toBe(false)
+  })
+
+  it('dica da bandeja: chamada e não lidas', () => {
+    expect(trayTooltip(false, 0)).toBe('Salinha')
+    expect(trayTooltip(true, 0)).toBe('Salinha — em chamada')
+    expect(trayTooltip(false, 1)).toBe('Salinha — 1 não lida')
+    expect(trayTooltip(false, 3)).toBe('Salinha — 3 não lidas')
+    expect(trayTooltip(true, 3)).toBe('Salinha — em chamada · 3 não lidas')
+    expect(trayTooltip(false, 250)).toBe('Salinha — 99+ não lidas')
   })
 
   it('inicia escondido quando aberto pelo login do Windows', () => {
@@ -85,8 +134,8 @@ describe('titleBarOptions', () => {
       titleBarOverlay: { color: TITLE_BAR_COLOR, symbolColor: TITLE_BAR_SYMBOL_COLOR, height: 32 }
     })
     // Discord Escuro, o tema padrão (--bg-app e --interactive-normal).
-    expect(TITLE_BAR_COLOR).toBe('#2c2d32')
-    expect(TITLE_BAR_SYMBOL_COLOR).toBe('#c5c6ca')
+    expect(TITLE_BAR_COLOR).toBe('#121214')
+    expect(TITLE_BAR_SYMBOL_COLOR).toBe('#96979e')
     expect(titleBarOptions('linux').titleBarStyle).toBe('hidden')
   })
 

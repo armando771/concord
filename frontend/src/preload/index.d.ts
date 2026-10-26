@@ -3,6 +3,7 @@ import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
 import type { OverlayFrame, OverlayLayout } from '../renderer/src/lib/overlayLayout'
 import type { CallResume, PendingCallResume } from '../shared/callResume'
 import type { AppMetrics } from '../shared/appMetrics'
+import type { PortalStatus, ScreenShareFlow } from '../shared/screenShareFlow'
 
 export interface ScreenSourceInfo {
   id: string
@@ -25,6 +26,8 @@ export interface ScreenAudioApi {
 }
 
 export interface ScreenShareApi {
+  flow: ScreenShareFlow
+  portalStatus(): Promise<{ status: PortalStatus; message: string }>
   onWindowHidden(cb: () => void): () => void
   ended(): void
 }
@@ -63,6 +66,9 @@ export interface BackgroundApi {
   /** null = não suportado nesta plataforma */
   getAutostart(): Promise<boolean | null>
   setAutostart(enabled: boolean): Promise<boolean | null>
+  /** Só Linux com bandeja criada (null nas outras plataformas). */
+  getCloseToTray(): Promise<{ enabled: boolean; available: boolean } | null>
+  setCloseToTray(enabled: boolean): Promise<boolean | null>
   onToggleMute(cb: () => void): () => void
   onQuitRequested(cb: () => void): () => void
   onNavigate(cb: (route: string) => void): () => void

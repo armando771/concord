@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { displayAudioMode } from './displayMedia'
+import { displayAudioMode, warnWindowAudioFallback } from './displayMedia'
 
 describe('displayAudioMode', () => {
   const win = { audioRequested: true, platform: 'win32' as const }
@@ -39,5 +39,27 @@ describe('displayAudioMode', () => {
         windowAudioOk: false
       })
     ).toBe('none')
+  })
+})
+
+describe('warnWindowAudioFallback', () => {
+  const base = { sourceId: 'window:42:0', audioRequested: true, mode: 'none' as const }
+
+  it('Windows: janela que ficou sem som avisa', () => {
+    expect(warnWindowAudioFallback({ ...base, platform: 'win32' })).toBe(true)
+  })
+
+  it('Linux: nunca avisa (a tela não leva som lá)', () => {
+    expect(warnWindowAudioFallback({ ...base, platform: 'linux' })).toBe(false)
+  })
+
+  it('tela inteira, som pedido não, ou som da janela funcionando: não avisa', () => {
+    expect(warnWindowAudioFallback({ ...base, platform: 'win32', sourceId: 'screen:0:0' })).toBe(
+      false
+    )
+    expect(warnWindowAudioFallback({ ...base, platform: 'win32', audioRequested: false })).toBe(
+      false
+    )
+    expect(warnWindowAudioFallback({ ...base, platform: 'win32', mode: 'window' })).toBe(false)
   })
 })

@@ -8,7 +8,7 @@ const (
 	RarityRare      = "raro"
 	RarityEpic      = "epico"
 	RarityLegendary = "lendario"
-	// Acima de lendário: só badges concedidos à mão (Criador da Salinha).
+	// Acima de lendário: só badges concedidos à mão (Fundador).
 	RarityMythic = "mitico"
 )
 
@@ -23,10 +23,11 @@ const (
 	UnitServers   = "servers"
 	UnitFounder   = "founder"
 	UnitDev       = "dev"
+	UnitProposals = "proposals"
 )
 
 // FounderCutoff: quem criou a conta antes desta data (horário de Brasília)
-// ganha o badge Fundador. Depois dela ninguém mais consegue.
+// ganha o badge Pioneiro. Depois dela ninguém mais consegue.
 var FounderCutoff = time.Date(2026, 11, 1, 0, 0, 0, 0, time.FixedZone("BRT", -3*60*60))
 
 // Tier é um degrau da categoria. Threshold está na unidade da categoria
@@ -146,21 +147,21 @@ var Catalog = []Category{
 	},
 	{
 		Key:         "criador",
-		Name:        "Criador da Salinha",
-		Description: "Faz parte do time que constrói o Salinha. Não dá para conquistar: é dos devs.",
+		Name:        "Fundador",
+		Description: "Um dos criadores da Salinha. Não dá para conquistar: é dos devs.",
 		Unit:        UnitDev,
 		Tiers: []Tier{
-			{"Criador da Salinha", 1, RarityMythic},
+			{"Fundador", 1, RarityMythic},
 		},
 		Exclusive: true,
 	},
 	{
 		Key:         "fundador",
-		Name:        "Fundador",
-		Description: "Criou a conta nas primeiras semanas do Salinha, antes de 1º de novembro de 2026.",
+		Name:        "Pioneiro",
+		Description: "Entrou na Salinha nos primeiros dias, antes de 1º de novembro de 2026.",
 		Unit:        UnitFounder,
 		Tiers: []Tier{
-			{"Fundador", 1, RarityLegendary},
+			{"Pioneiro", 1, RarityLegendary},
 		},
 	},
 	{
@@ -205,6 +206,24 @@ var Catalog = []Category{
 			{"Curtidor", 50, RarityCommon},
 			{"Emotivo", 500, RarityRare},
 			{"Emojista", 2000, RarityEpic},
+		},
+	},
+	{
+		// Conta os cards que a pessoa criou e que ainda estão no quadro,
+		// inclusive os rejeitados (a ideia foi dada; ninguém perde por não ser
+		// aprovada). Spam o time tech apaga, e card apagado sai da contagem; o
+		// autor também só apaga em votação, então criar e apagar não sobe o
+		// badge. Como todo badge, o tier já conquistado não se perde.
+		Key:         "contribuinte",
+		Name:        "Contribuinte",
+		Description: "Crie cards no quadro de propostas de melhorias. Contam os que continuam no quadro, até os rejeitados.",
+		Unit:        UnitProposals,
+		Tiers: []Tier{
+			{"Ideia", 1, RarityCommon},
+			{"Colaborador", 5, RarityRare},
+			{"Inovador", 15, RarityEpic},
+			{"Visionário", 40, RarityEpic},
+			{"Arquiteto", 100, RarityLegendary},
 		},
 	},
 }

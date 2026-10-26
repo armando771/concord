@@ -8,7 +8,7 @@ import {
 import { useActivityStore } from '../../store/activityStore'
 import { useCallStore } from '../../store/callStore'
 import { IS_WEB } from '../../lib/config'
-import { CrosshairIcon, ParachuteIcon } from '../icons'
+import { CrosshairIcon } from '../icons'
 
 const POPOVER_WIDTH = 360
 const GAP = 10
@@ -16,19 +16,12 @@ const MARGIN = 8
 
 /** Ícone de cada atividade do catálogo. */
 export function ActivityGlyph({
-  activity,
   className = ''
 }: {
   activity: ActivityDefinition
   className?: string
 }): React.JSX.Element {
-  switch (activity.icon) {
-    case 'royale':
-      return <ParachuteIcon className={className} />
-    case 'crosshair':
-    default:
-      return <CrosshairIcon className={className} />
-  }
+  return <CrosshairIcon className={className} />
 }
 
 function ActivityCard({
