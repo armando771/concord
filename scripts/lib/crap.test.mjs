@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { crap, evaluate, formatReport, touches } from './crap.mjs'
-import { parseDiff } from './diff.mjs'
+import { codeChanges, parseDiff } from './diff.mjs'
 
 test('CRAP: sem teste é complexidade² + complexidade; 100% coberto é só a complexidade', () => {
   assert.equal(crap(5, 0), 30)
@@ -55,4 +55,16 @@ test('parseDiff: linhas novas por arquivo, ignorando remoções puras e arquivos
     '@@ -1,5 +0,0 @@'
   ].join('\n')
   assert.deepEqual(parseDiff(diff), { 'x.go': [[3, 3], [11, 14]] })
+})
+
+test('codeChanges: troca de import, comentário e linha em branco não é tocar no código', () => {
+  const files = {
+    'a.ts': "import { x } from '../shared/lib/x'\n} from './y'\n\n// comentário\nconst a = 1\n",
+    'b.go': 'import (\n\t"gin-quickstart/backend/internal/platform/media"\n\tlk "github.com/livekit/x"\n)\n',
+    'c.go': 'func f() {\n\treturn\n}\n',
+    'crlf.ts': "import x from './x'\r\nconst y = 1\r\n"
+  }
+  const read = (f) => files[f]
+  const result = codeChanges({ 'a.ts': [[1, 5]], 'b.go': [[2, 3]], 'c.go': [[2, 2]], 'crlf.ts': [[1, 2]], 'sumiu.ts': [[1, 1]] }, read)
+  assert.deepEqual(result, { 'a.ts': [[5, 5]], 'c.go': [[2, 2]], 'crlf.ts': [[2, 2]] })
 })

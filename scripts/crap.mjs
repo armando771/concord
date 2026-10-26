@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { classify, goPackages } from './lib/affected.mjs'
 import { evaluate, formatReport, LIMIT } from './lib/crap.mjs'
-import { changedLines, defaultBase } from './lib/diff.mjs'
+import { changedLines, codeChanges, defaultBase } from './lib/diff.mjs'
 import { capture, GO, ROOT, run } from './lib/run.mjs'
 import { tsFunctions } from './lib/ts-functions.mjs'
 
@@ -71,7 +71,7 @@ function measure(files) {
 function main() {
   const opts = parseArgs(process.argv.slice(2))
   process.chdir(ROOT)
-  const changes = opts.files ? Object.fromEntries(opts.files.map((f) => [f, []])) : changedLines(opts.base ?? defaultBase())
+  const changes = opts.files ? Object.fromEntries(opts.files.map((f) => [f, []])) : codeChanges(changedLines(opts.base ?? defaultBase()))
   const files = Object.keys(changes).filter(isSource)
   const result = evaluate(measure(files), changes, { limit: opts.limit, wholeFile: Boolean(opts.files) })
   console.log('\n' + (opts.json ? JSON.stringify(result, null, 2) : formatReport(result, opts.limit)))

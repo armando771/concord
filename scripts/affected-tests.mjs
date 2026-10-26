@@ -1,7 +1,7 @@
 // Pipeline de testes otimizada: roda só o que o diff afeta.
 //
 //   node scripts/affected-tests.mjs loop   # a cada ciclo TDD: testes afetados
-//   node scripts/affected-tests.mjs pr     # antes do PR: afetados + vet/typecheck + CRAP
+//   node scripts/affected-tests.mjs pr     # antes do PR: afetados + vet/typecheck + estrutura + CRAP
 //                                          # (vira `full` se tocou código compartilhado)
 //   node scripts/affected-tests.mjs full   # suíte inteira + vet/typecheck + CRAP
 //   opção: --base <ref> (padrão origin/develop, senão origin/main)
@@ -39,6 +39,7 @@ function checks(files, base) {
   const codes = []
   if (go.length) codes.push(run(GO, ['vet', ...goPackages(go)], backend))
   if (ts.length) codes.push(run('npm', ['run', 'typecheck'], frontend))
+  codes.push(run('node', ['scripts/check-structure.mjs', '--base', base]))
   codes.push(run('node', ['scripts/crap.mjs', '--base', base]))
   return codes
 }
@@ -63,7 +64,7 @@ function main() {
   let codes
   if (mode === 'full' || (mode === 'pr' && shared)) {
     if (mode === 'pr') console.log('Diff toca código compartilhado: rodando a suíte inteira.')
-    codes = [...full(), run('node', ['scripts/crap.mjs', '--base', base])]
+    codes = [...full(), run('node', ['scripts/check-structure.mjs', '--base', base]), run('node', ['scripts/crap.mjs', '--base', base])]
   } else if (mode === 'pr') {
     codes = [...loop(files), ...checks(files, base)]
   } else {
