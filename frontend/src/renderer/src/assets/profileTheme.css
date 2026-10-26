@@ -1,0 +1,207 @@
+/* Tema do cartão de perfil (lib/profileTheme.ts, components/profile/ProfileCardFrame.tsx).
+   O fundo vem em --pt-bg (sempre uma imagem: em camadas a cor só vale na
+   última), as cores da borda em --pt-b1/--pt-b2. Só CSS anima, e para tudo com
+   prefers-reduced-motion. */
+
+@property --pt-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.profile-frame {
+  position: relative;
+  isolation: isolate;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: var(--pt-bg);
+}
+
+.pt-border-solid {
+  border: 2px solid var(--pt-b1);
+}
+
+/* Neon: a borda acesa e um halo por trás que pulsa (só opacity anima). */
+.pt-border-neon {
+  border: 2px solid var(--pt-b1);
+  box-shadow: 0 0 6px var(--pt-b1);
+}
+.pt-border-neon::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    0 0 12px 1px var(--pt-b1),
+    0 0 26px 3px var(--pt-b1);
+  opacity: 0.35;
+  animation: pt-neon 2.4s ease-in-out infinite;
+}
+
+/* Degradê e arco-íris: o fundo do corpo no padding-box e o da borda no
+   border-box (borda transparente por cima). */
+.pt-border-gradient {
+  border: 2px solid transparent;
+  background:
+    var(--pt-bg) padding-box,
+    linear-gradient(135deg, var(--pt-b1), var(--pt-b2)) border-box;
+}
+
+.pt-border-rainbow {
+  border: 2px solid transparent;
+  background:
+    var(--pt-bg) padding-box,
+    conic-gradient(
+        from var(--pt-angle),
+        #ff4d4d,
+        #ffb84d,
+        #f2ff4d,
+        #4dff88,
+        #4dc3ff,
+        #b84dff,
+        #ff4d4d
+      )
+      border-box;
+  animation: pt-spin 4s linear infinite;
+}
+
+@keyframes pt-neon {
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes pt-spin {
+  to {
+    --pt-angle: 360deg;
+  }
+}
+
+/* --- Efeitos por cima do cartão (sem clique, recortados no cartão) --- */
+
+.pt-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.pt-fx > span {
+  position: absolute;
+  display: block;
+  will-change: transform, opacity;
+}
+
+.pt-fx-particles > span {
+  border-radius: 9999px;
+  background: var(--pt-fx);
+  box-shadow: 0 0 6px var(--pt-fx);
+  opacity: 0;
+  animation: pt-float linear infinite;
+}
+
+.pt-fx-sparkles > span {
+  color: #fff6c2;
+  line-height: 1;
+  text-shadow: 0 0 6px #ffd84d;
+  opacity: 0;
+  animation: pt-twinkle ease-in-out infinite;
+}
+
+.pt-fx-snow > span {
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.85);
+  box-shadow: 0 0 2px rgb(0 0 0 / 0.25);
+  animation: pt-snow linear infinite;
+}
+
+@keyframes pt-float {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  20%,
+  70% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-60px);
+  }
+}
+
+@keyframes pt-twinkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.4) rotate(0deg);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1) rotate(45deg);
+  }
+}
+
+@keyframes pt-snow {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(14px, 720px);
+  }
+}
+
+/* --- Cor do texto no fundo escolhido (pickInk) ---
+   O cartão usa os tokens de texto do tema (assets/theme.css). Com fundo
+   próprio, eles viram texto escuro (.pt-ink-dark) ou claro (.pt-ink-light),
+   valendo o que der mais contraste com aquele fundo. O que tem fundo do app
+   dentro do cartão (submenu de status) leva data-theme e volta ao tema. */
+
+.pt-ink-dark {
+  color: #1e1f22;
+  --text-strong: #1e1f22;
+  --text-normal: #1e1f22;
+  --text-secondary: #1e1f22;
+  --text-muted: #4e5058;
+  --text-faint: #4e5058;
+  --text-link: #005a99;
+  --interactive-normal: #1e1f22;
+  --interactive-hover: #000000;
+  --interactive-active: #000000;
+  --fg: #000000;
+  --bg-input: rgb(255 255 255 / 0.45);
+  --border-subtle: rgb(0 0 0 / 0.12);
+  --border-normal: rgb(0 0 0 / 0.16);
+}
+
+.pt-ink-light {
+  color: #ffffff;
+  --text-strong: #ffffff;
+  --text-normal: #ffffff;
+  --text-secondary: #ebebeb;
+  --text-muted: #d4d5d8;
+  --text-faint: #d4d5d8;
+  --text-link: #8cc4ff;
+  --interactive-normal: #ebebeb;
+  --interactive-hover: #ffffff;
+  --interactive-active: #ffffff;
+  --fg: #ffffff;
+  --bg-input: rgb(0 0 0 / 0.3);
+  --border-subtle: rgb(255 255 255 / 0.12);
+  --border-normal: rgb(255 255 255 / 0.16);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-border-rainbow,
+  .pt-border-neon::after,
+  .pt-fx > span {
+    animation: none;
+  }
+  .pt-fx-particles > span,
+  .pt-fx-sparkles > span {
+    opacity: 0.5;
+  }
+}

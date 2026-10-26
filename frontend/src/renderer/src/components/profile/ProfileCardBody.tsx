@@ -13,9 +13,10 @@ import { useActivity } from '../../store/presenceActivityStore'
 import LinkIcon from './LinkIcon'
 import StyledName from '../StyledName'
 import type { NameStyle } from '../../lib/nameStyle'
+import { CARD_BG, type ProfileTheme } from '../../lib/profileTheme'
 
-/** Fundo do cartão: recorta o avatar e a bolinha de status. */
-export const CARD_BG = 'var(--bg-floating)'
+/** Fundo do cartão sem tema: recorta o avatar e a bolinha de status. */
+export { CARD_BG }
 
 export interface CardProfile {
   id?: string
@@ -33,6 +34,8 @@ export interface CardProfile {
   links?: string[]
   /** Bot (Maestro, Salinha Bot): selo BOT; o Maestro tem banner animado próprio. */
   is_bot?: boolean
+  /** Borda, fundo e efeito do cartão (quem desenha é o ProfileCardFrame). */
+  profile_theme?: ProfileTheme
 }
 
 interface ProfileCardBodyProps {
@@ -50,6 +53,11 @@ interface ProfileCardBodyProps {
   onEditProfile?: () => void
   /** Prévia do editor: o avatar não usa o profileStore (mostra o rascunho). */
   preview?: boolean
+  /** Cor do fundo logo abaixo do banner (tema): anel do avatar e recorte do status. */
+  surface?: string
+  /** Prévia do editor: passar o mouse mostra o lápis e o clique já abre o arquivo. */
+  onEditAvatar?: () => void
+  onEditBanner?: () => void
   children?: ReactNode
 }
 
@@ -67,6 +75,9 @@ function ProfileCardBody({
   badges,
   onEditProfile,
   preview = false,
+  surface = CARD_BG,
+  onEditAvatar,
+  onEditBanner,
   children
 }: ProfileCardBodyProps): React.JSX.Element {
   // O banner animado é do Maestro; o Salinha Bot fica com o gradiente padrão.
@@ -82,7 +93,7 @@ function ProfileCardBody({
     <div>
       {/* Banner: imagem/GIF, cor escolhida ou o gradiente padrão. */}
       <div
-        className={`overflow-hidden rounded-t-xl ${bannerSrc ? 'h-[106px]' : 'h-16'}`}
+        className={`group/banner relative overflow-hidden rounded-t-[10px] ${bannerSrc ? 'h-[106px]' : 'h-16'}`}
         style={
           bannerSrc
             ? undefined
@@ -94,12 +105,30 @@ function ProfileCardBody({
         {bannerSrc && (
           <img src={bannerSrc} alt="" draggable={false} className="h-full w-full object-cover" />
         )}
+        {onEditBanner && (
+          <button
+            type="button"
+            onClick={onEditBanner}
+            aria-label="Alterar banner"
+            title="Alterar banner"
+            className="group/edit absolute inset-0 cursor-pointer outline-none"
+          >
+            <span className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-black/60 text-white opacity-0 shadow-lg ring-white/70 transition-opacity group-hover/banner:opacity-100 group-focus-visible/edit:opacity-100 group-focus-visible/edit:ring-2">
+              <PencilIcon className="h-4 w-4" />
+            </span>
+          </button>
+        )}
       </div>
 
       <div className="px-4 pb-4">
-        <div className="relative -mt-[46px] flex items-start justify-between">
+        {/* A faixa que sobe por cima do banner não pega o mouse (o lápis do banner
+            aparece nela também); só o avatar, a nota e o selo pegam. */}
+        <div className="pointer-events-none relative -mt-[46px] flex items-start justify-between">
           <div className="flex min-w-0 items-start gap-2">
-            <div className="relative shrink-0 rounded-full p-1.5" style={{ background: CARD_BG }}>
+            <div
+              className="pt-ink-keep pointer-events-auto relative shrink-0 rounded-full p-1.5"
+              style={{ background: surface }}
+            >
               <Avatar
                 userId={preview ? undefined : profile.id}
                 name={profile.nickname || profile.display_name}
@@ -107,7 +136,7 @@ function ProfileCardBody({
                 size={80}
                 animate="always"
                 status={status}
-                cutoutColor={CARD_BG}
+                cutoutColor={surface}
                 fallbackClassName={avatarFallbackClassName}
               />
               {onEditProfile && (
@@ -121,11 +150,22 @@ function ProfileCardBody({
                   Editar perfil
                 </button>
               )}
+              {onEditAvatar && (
+                <button
+                  type="button"
+                  onClick={onEditAvatar}
+                  aria-label="Alterar avatar"
+                  title="Alterar avatar"
+                  className="absolute inset-1.5 flex cursor-pointer items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+                >
+                  <PencilIcon className="h-5 w-5 drop-shadow" />
+                </button>
+              )}
             </div>
 
             {/* Nota: o balão ao lado da foto, como no Discord. */}
             {(note || (isMe && onEditProfile)) && (
-              <div className="relative mt-[38px] min-w-0">
+              <div className="pointer-events-auto relative mt-[38px] min-w-0">
                 <span
                   aria-hidden="true"
                   className="absolute -left-2.5 top-1 h-3 w-3 rounded-full border border-subtle bg-primary"
@@ -151,7 +191,7 @@ function ProfileCardBody({
               </div>
             )}
           </div>
-          {badge && <div className="mt-[52px] shrink-0">{badge}</div>}
+          {badge && <div className="pointer-events-auto mt-[52px] shrink-0">{badge}</div>}
         </div>
 
         <div className="mt-2">

@@ -25,7 +25,21 @@ export const NAME_FONTS = [
   { id: 'slab', label: 'Slab', family: "'Zilla Slab', serif" },
   { id: 'condensed', label: 'Condensada', family: "'Oswald', sans-serif" },
   { id: 'mono', label: 'Monoespaçada', family: "'JetBrains Mono', monospace" },
-  { id: 'retro', label: 'Retrô', family: "'Bungee', sans-serif" }
+  { id: 'retro', label: 'Retrô', family: "'Bungee', sans-serif" },
+  { id: 'pixel', label: 'Pixel', family: "'Silkscreen', monospace" },
+  { id: 'terminal', label: 'Terminal', family: "'VT323', monospace" },
+  { id: 'script', label: 'Cursiva', family: "'Dancing Script', cursive" },
+  { id: 'elegant', label: 'Elegante', family: "'Great Vibes', cursive" },
+  { id: 'gothic', label: 'Gótica', family: "'UnifrakturMaguntia', serif" },
+  { id: 'space', label: 'Espacial', family: "'Space Mono', monospace" },
+  { id: 'rounded', label: 'Arredondada', family: "'Fredoka', sans-serif" },
+  { id: 'soft', label: 'Suave', family: "'Comfortaa', sans-serif" },
+  { id: 'marquee', label: 'Letreiro', family: "'Lobster', cursive" },
+  { id: 'arcade', label: 'Fliperama', family: "'Righteous', sans-serif" },
+  { id: 'disco', label: 'Disco', family: "'Monoton', sans-serif" },
+  { id: 'cartoon', label: 'Gibi', family: "'Bangers', sans-serif" },
+  { id: 'scifi', label: 'Sci-fi', family: "'Orbitron', sans-serif" },
+  { id: 'horror', label: 'Terror', family: "'Creepster', cursive" }
 ] as const
 
 export const NAME_EFFECTS = [
@@ -35,7 +49,17 @@ export const NAME_EFFECTS = [
   { id: 'toon', label: 'Toon', minColors: 1, maxColors: 1 },
   { id: 'pop', label: 'Pop', minColors: 1, maxColors: 1 },
   { id: 'rainbow', label: 'Arco-íris', minColors: 0, maxColors: 0 },
-  { id: 'pulse', label: 'Pulso', minColors: 0, maxColors: 1 }
+  { id: 'pulse', label: 'Pulso', minColors: 0, maxColors: 1 },
+  { id: 'flow', label: 'Degradê animado', minColors: 2, maxColors: 2 },
+  { id: 'glow', label: 'Neon pulsante', minColors: 1, maxColors: 1 },
+  { id: 'glitch', label: 'Glitch', minColors: 0, maxColors: 1 },
+  { id: 'fire', label: 'Fogo', minColors: 0, maxColors: 0 },
+  { id: 'wave', label: 'Onda', minColors: 0, maxColors: 1 },
+  { id: 'shimmer', label: 'Cintilante', minColors: 0, maxColors: 1 },
+  { id: 'sparkle', label: 'Brilhos', minColors: 0, maxColors: 1 },
+  { id: 'typewriter', label: 'Digitando', minColors: 0, maxColors: 1 },
+  { id: 'chrome', label: 'Cromado', minColors: 0, maxColors: 0 },
+  { id: 'shadow3d', label: 'Sombra 3D', minColors: 2, maxColors: 2 }
 ] as const
 
 const COLOR = /^#[0-9a-f]{6}$/i
@@ -60,12 +84,45 @@ export function resolveNameStyle(raw?: Partial<NameStyle> | null): NameStyle {
   return { font, effect: effectDef.id, colors }
 }
 
-/** Classe (animação) e estilo inline de um nome. O padrão não muda nada. */
-export function nameStyleCss(style: NameStyle): { className: string; style: CSSProperties } {
+/** Estilo inline com as variáveis CSS que os efeitos leem (--name-c1...). */
+type NameCss = CSSProperties & Record<`--name-${string}`, string | number>
+
+export interface NameStyleCss {
+  className: string
+  style: NameCss
+  /** O efeito desenha uma cópia do texto (::before/::after com attr(data-text)). */
+  copy?: boolean
+  /** O efeito anima letra por letra (cada uma num span). */
+  letters?: boolean
+}
+
+/** Letras de verdade (emoji com tom de pele e acento combinado contam como uma). */
+export function nameGraphemes(text: string): string[] {
+  if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
+    const seg = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+    return Array.from(seg.segment(text), (s) => s.segment)
+  }
+  return Array.from(text)
+}
+
+const clipText = (css: NameCss): void => {
+  css.WebkitBackgroundClip = 'text'
+  css.backgroundClip = 'text'
+  css.color = 'transparent'
+}
+
+/**
+ * Classe (animação) e estilo inline de um nome. O padrão não muda nada. Tudo
+ * é CSS (assets/nameStyle.css): nenhum efeito roda JS por quadro, e todos
+ * param com prefers-reduced-motion.
+ */
+export function nameStyleCss(style: NameStyle): NameStyleCss {
   const family = NAME_FONTS.find((f) => f.id === style.font)?.family
-  const css: CSSProperties = family ? { fontFamily: family } : {}
+  const css: NameCss = family ? { fontFamily: family } : {}
   const [a, b] = style.colors
   let className = ''
+  let copy = false
+  let letters = false
   switch (style.effect) {
     case 'solid':
       if (a) css.color = a
@@ -96,6 +153,52 @@ export function nameStyleCss(style: NameStyle): { className: string; style: CSSP
       className = 'name-pulse'
       if (a) css.color = a
       break
+    case 'flow':
+      className = 'name-flow'
+      css.backgroundImage = `linear-gradient(90deg, ${a}, ${b}, ${a})`
+      clipText(css)
+      break
+    case 'glow':
+      className = 'name-glow'
+      copy = true
+      css.color = '#fff'
+      css['--name-c1'] = a
+      break
+    case 'glitch':
+      className = 'name-glitch'
+      copy = true
+      if (a) css.color = a
+      break
+    case 'fire':
+      className = 'name-fire'
+      break
+    case 'wave':
+      className = 'name-wave'
+      letters = true
+      if (a) css.color = a
+      break
+    case 'shimmer': {
+      const base = a ?? '#c9cdfb'
+      className = 'name-shimmer'
+      css.backgroundImage = `linear-gradient(110deg, ${base} 35%, #ffffff 50%, ${base} 65%)`
+      clipText(css)
+      break
+    }
+    case 'sparkle':
+      className = 'name-sparkle'
+      if (a) css.color = a
+      break
+    case 'typewriter':
+      className = 'name-typewriter'
+      if (a) css.color = a
+      break
+    case 'chrome':
+      className = 'name-chrome'
+      break
+    case 'shadow3d':
+      css.color = a
+      css.textShadow = [1, 2, 3].map((n) => `${n}px ${n}px 0 ${b}`).join(', ')
+      break
   }
-  return { className, style: css }
+  return { className, style: css, ...(copy ? { copy } : {}), ...(letters ? { letters } : {}) }
 }

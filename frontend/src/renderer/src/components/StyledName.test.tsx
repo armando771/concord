@@ -55,4 +55,25 @@ describe('StyledName', () => {
     )
     expect(html).toContain('class="font-bold name-rainbow"')
   })
+  it('glitch leva o texto em data-text (cópia desenhada pelo CSS)', () => {
+    const html = renderToStaticMarkup(
+      <StyledName name="Mugis" style={{ font: 'default', effect: 'glitch', colors: [] }} />
+    )
+    expect(html).toContain('data-text="Mugis"')
+    expect(html).toContain('name-glitch')
+  })
+  it('onda separa as letras e mantém o nome acessível', () => {
+    const html = renderToStaticMarkup(
+      <StyledName name="Oi👍🏽" style={{ font: 'default', effect: 'wave', colors: [] }} />
+    )
+    expect(html).toContain('<span class="sr-only">Oi👍🏽</span>')
+    expect(html.match(/name-wave-ch/g)).toHaveLength(3)
+    expect(html).toContain('--i:2')
+  })
+  it('digitando anima em passos do tamanho do nome', () => {
+    const html = renderToStaticMarkup(
+      <StyledName name="Mugis" style={{ font: 'default', effect: 'typewriter', colors: [] }} />
+    )
+    expect(html).toContain('--name-steps:5')
+  })
 })

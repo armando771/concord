@@ -51,6 +51,9 @@ func (r *fakeProfileRepo) UpdateProfile(_ context.Context, id string, in Profile
 	if in.NameStyle != nil {
 		u.NameStyle = *in.NameStyle
 	}
+	if in.ProfileTheme != nil {
+		u.ProfileTheme = *in.ProfileTheme
+	}
 	copied := *u
 	return &copied, nil
 }
@@ -485,6 +488,42 @@ func TestUpdateProfileNameStyle(t *testing.T) {
 	rec = e.do(t, http.MethodPut, "/api/users/me/profile", []byte(`{"display_name":"Mugis","links":[],"name_style":{"font":"x","effect":"solid","colors":[]}}`), "application/json")
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestUpdateProfileTheme(t *testing.T) {
+	e := newProfileEnv(t)
+	body := `{"display_name":"Mugis","links":[],"profile_theme":{"border":"gradient","border_colors":["#FF0000","#0000ff"],"background":"solid","background_colors":["#FBCFE8"],"effect":"sparkles"}}`
+	rec := e.do(t, http.MethodPut, "/api/users/me/profile", []byte(body), "application/json")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	u := decodeUser(t, rec)
+	if u.ProfileTheme.Border != "gradient" || u.ProfileTheme.BorderColors[0] != "#ff0000" || u.ProfileTheme.BackgroundColors[0] != "#fbcfe8" || u.ProfileTheme.Effect != "sparkles" {
+		t.Fatalf("profile_theme = %+v", u.ProfileTheme)
+	}
+	if e.events.published[0].ProfileTheme.Border != "gradient" {
+		t.Fatalf("o evento público tem de levar o tema: %+v", e.events.published[0])
+	}
+	if !strings.Contains(rec.Body.String(), `"profile_theme":{"border":"gradient"`) {
+		t.Fatalf("resposta sem profile_theme: %s", rec.Body.String())
+	}
+
+	// Cliente antigo (sem profile_theme) não apaga o tema.
+	rec = e.do(t, http.MethodPut, "/api/users/me/profile", []byte(`{"display_name":"Mugis","links":[]}`), "application/json")
+	if rec.Code != http.StatusOK || decodeUser(t, rec).ProfileTheme.Border != "gradient" {
+		t.Fatalf("tema foi perdido: %s", rec.Body.String())
+	}
+
+	for _, bad := range []string{
+		`{"border":"dotted","border_colors":[],"background":"default","background_colors":[],"effect":"none"}`,
+		`{"border":"none","border_colors":[],"background":"solid","background_colors":["red"],"effect":"none"}`,
+		`{"border":"none","border_colors":[],"background":"default","background_colors":[],"effect":"confetti"}`,
+	} {
+		rec = e.do(t, http.MethodPut, "/api/users/me/profile", []byte(`{"display_name":"Mugis","links":[],"profile_theme":`+bad+`}`), "application/json")
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s: status = %d, want 400", bad, rec.Code)
+		}
 	}
 }
 
