@@ -764,7 +764,7 @@ export function FullscreenExitIcon({ className = '' }: IconProps): React.JSX.Ele
   )
 }
 
-/** Ícone de Mesa de Áudio (Soundboard / pads musicais). */
+/** Ícone de Mesa de Áudio (mixer com faders deslizantes). */
 export function SoundboardIcon({ className = '' }: IconProps): React.JSX.Element {
   return (
     <svg
@@ -779,10 +779,10 @@ export function SoundboardIcon({ className = '' }: IconProps): React.JSX.Element
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <rect x="3" y="3" width="7" height="7" rx="1.5" />
-      <rect x="14" y="3" width="7" height="7" rx="1.5" />
-      <rect x="3" y="14" width="7" height="7" rx="1.5" />
-      <path d="M15 17.5h5M17.5 15v5" />
+      <path d="M6 3v4M6 11v10M12 3v10M12 17v4M18 3v2M18 9v12" />
+      <rect x="4" y="7" width="4" height="4" rx="1" />
+      <rect x="10" y="13" width="4" height="4" rx="1" />
+      <rect x="16" y="5" width="4" height="4" rx="1" />
     </svg>
   )
 }
