@@ -58,3 +58,33 @@ export function olderPagePrepended(
 ): boolean {
   return firstId !== undefined && !candidates.some((c) => c.id === firstId)
 }
+
+/**
+ * Rolagem ao fim da conversa. Ao abrir a sala (e enquanto ela carrega), a
+ * lista aparece já no fim, de uma vez e antes de pintar; só mensagem nova
+ * depois disso, com a pessoa já no fim, rola suavemente.
+ */
+export type BottomScroll = 'none' | 'instant' | 'smooth'
+
+export function bottomScrollPlan(input: {
+  /** Sala que já foi posicionada no fim (null: nenhuma ainda). */
+  positionedRoom: string | null
+  room: string
+  loading: boolean
+  stickToBottom: boolean
+  /** Entrou ou saiu algo no fim da lista desde a última checagem. */
+  countChanged: boolean
+}): { scroll: BottomScroll; positionedRoom: string | null } {
+  // Carregando (ou recarregando): o próximo conteúdo é uma abertura nova.
+  if (input.loading) return { scroll: 'none', positionedRoom: null }
+  if (input.positionedRoom !== input.room) {
+    return { scroll: 'instant', positionedRoom: input.room }
+  }
+  return {
+    scroll: input.stickToBottom && input.countChanged ? 'smooth' : 'none',
+    positionedRoom: input.positionedRoom
+  }
+}
+
+/** Duração do destaque ao pular para uma mensagem (igual ao .msg-jump-highlight). */
+export const JUMP_HIGHLIGHT_MS = 2000

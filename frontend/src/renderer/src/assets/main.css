@@ -1252,3 +1252,26 @@ body.boost-quake #root {
     animation-name: level-fade;
   }
 }
+
+/*
+ * Pulo para uma mensagem (resposta, fixada, link): pulso forte que esmaece em
+ * 2 s (JUMP_HIGHLIGHT_MS, lib/scrollAnchor). Só cor e sombra, sem movimento.
+ */
+@keyframes msg-jump-highlight {
+  0% {
+    background-color: rgb(88 101 242 / 0.55);
+    box-shadow: inset 0 0 0 2px rgb(88 101 242 / 0.9);
+  }
+  25% {
+    background-color: rgb(88 101 242 / 0.35);
+    box-shadow: inset 0 0 0 2px rgb(88 101 242 / 0.7);
+  }
+  100% {
+    background-color: rgb(88 101 242 / 0);
+    box-shadow: inset 0 0 0 2px rgb(88 101 242 / 0);
+  }
+}
+
+.msg-jump-highlight {
+  animation: msg-jump-highlight 2s ease-out;
+}
