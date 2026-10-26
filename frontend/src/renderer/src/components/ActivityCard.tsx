@@ -46,7 +46,7 @@ export function ActivityCard({
         className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md"
         style={{ background: `${accent}33`, color: accent }}
       >
-        <GameIcon name={activity.name} className="h-6 w-6" />
+        <GameIcon name={activity.name} appId={activity.app_id} iconHash={activity.icon_hash} className="h-6 w-6" />
       </span>
     </button>
   )

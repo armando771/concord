@@ -8,8 +8,9 @@
 # de download (site/), o app web (frontend/dist-web, gerado por
 # `yarn build:web`) e as atualizações do app (backend/updates, geradas por
 # release-win.sh/release-linux.sh: instaladores, AppImage, .tar.gz do Linux e
-# manifestos) para /opt/concord e reinicia o backend. O site/install.sh vai
-# com a chave pública de backend/.release-key embutida.
+# manifestos) para /opt/concord, garante o ffmpeg e o yt-dlp do Maestro (bot de
+# música; binário oficial + timer diário de atualização) e reinicia o backend.
+# O site/install.sh vai com a chave pública de backend/.release-key embutida.
 # Reiniciar não derruba chamadas: o backend recarrega as chamadas ativas, e a
 # mídia e a sinalização (/rtc, que o Caddy manda direto para o LiveKit —
 # deploy/Caddyfile) seguem no LiveKit. O Caddyfile da VPS não é enviado (use
@@ -123,6 +124,69 @@ else
 fi
 # Sobe o que estiver parado ou faltando, sem recriar o que já roda.
 docker compose up -d --no-recreate
+REMOTE
+
+# Dependências do Maestro (bot de música): ffmpeg e yt-dlp no PATH do servidor.
+# O backend só os procura ao subir (exec.LookPath); sem eles ele funciona
+# normalmente e o Maestro responde "fora do ar". Por isso isto roda ANTES de
+# reiniciar o concord-server. Idempotente: o que já existe não é tocado. O
+# yt-dlp é o binário oficial (o do apt fica velho e o `yt-dlp -U` não funciona
+# nele), mantido por um timer diário do systemd (o YouTube muda com frequência
+# e quebra versões antigas). Sem ffmpeg o deploy falha; o timer do yt-dlp é só
+# conveniência e nunca derruba o deploy. SYSTEMD_DIR existe para testes.
+remote SYSTEMD_DIR="${CONCORD_SYSTEMD_DIR:-/etc/systemd/system}" <<'REMOTE'
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+apt_updated=0
+apt_install() {
+  if ((apt_updated == 0)); then apt-get update -qq; apt_updated=1; fi
+  apt-get install -y -qq "$@"
+}
+
+if command -v ffmpeg >/dev/null 2>&1; then
+  echo "Maestro: ffmpeg já instalado"
+else
+  echo "Maestro: instalando ffmpeg..."
+  if ! apt_install ffmpeg || ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "ERRO: não consegui instalar o ffmpeg (o Maestro precisa dele)" >&2
+    exit 1
+  fi
+fi
+
+if command -v yt-dlp >/dev/null 2>&1; then
+  echo "Maestro: yt-dlp já instalado"
+else
+  echo "Maestro: instalando yt-dlp (binário oficial)..."
+  command -v python3 >/dev/null 2>&1 || apt_install python3
+  tmp=$(mktemp /usr/local/bin/.yt-dlp.XXXXXX)
+  if curl -fsSL --retry 3 -o "$tmp" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp; then
+    chmod a+rx "$tmp"
+    mv -f "$tmp" /usr/local/bin/yt-dlp
+  else
+    rm -f "$tmp"
+    echo "ERRO: não consegui baixar o yt-dlp (o Maestro precisa dele)" >&2
+    exit 1
+  fi
+fi
+
+# Atualização diária do yt-dlp. Falha aqui só avisa.
+setup_timer() {
+  local changed=0 f want
+  mkdir -p "$SYSTEMD_DIR"
+  want=$'[Unit]\nDescription=Atualiza o yt-dlp (Maestro do Concord)\n\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/yt-dlp -U\n'
+  f="$SYSTEMD_DIR/concord-ytdlp-update.service"
+  if [[ "$(cat "$f" 2>/dev/null || true)" != "${want%$'\n'}" ]]; then printf '%s' "$want" >"$f"; changed=1; fi
+  want=$'[Unit]\nDescription=Atualiza o yt-dlp todo dia (Maestro do Concord)\n\n[Timer]\nOnCalendar=daily\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n'
+  f="$SYSTEMD_DIR/concord-ytdlp-update.timer"
+  if [[ "$(cat "$f" 2>/dev/null || true)" != "${want%$'\n'}" ]]; then printf '%s' "$want" >"$f"; changed=1; fi
+  if ((changed)); then systemctl daemon-reload; fi
+  systemctl enable --now concord-ytdlp-update.timer
+}
+if (setup_timer); then
+  echo "Maestro: timer diário de atualização do yt-dlp ativo"
+else
+  echo "AVISO: não consegui configurar o timer de atualização do yt-dlp (o deploy segue)" >&2
+fi
 REMOTE
 
 # Checa o binário novo e aplica as migrations novas ANTES de reiniciar, com o
