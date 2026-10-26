@@ -14,8 +14,11 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import trayIcon from '../../resources/tray.png?asset'
 import trayIcon2x from '../../resources/tray-2x.png?asset'
-import { displayAudioMode, warnWindowAudioFallback } from './screen/displayMedia'
+import './screen/captureSwitches'
 import { PendingDisplayRequest } from './screen/displayPicker'
+import { shareStreams, type ShareDeps } from './screen/shareSource'
+import { WindowWatch } from './screen/windowWatch'
+import { PreferredSource, findGameWindow, listProcessWindows } from './screen/gameWindow'
 import { checkScreenCastPortal } from './screen/screenPortal'
 import { portalMissingMessage, screenShareFlow } from '../shared/screenShareFlow'
 import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './window/background'
@@ -39,7 +42,6 @@ import { isSafeExternalUrl } from '../shared/externalUrl'
 import { contextMenuItems } from './window/contextMenu'
 import {
   audioLogPath,
-  hwndFromSourceId,
   logAudio,
   registerScreenAudio,
   startWindowAudio,
@@ -55,35 +57,18 @@ const pendingDisplay = new PendingDisplayRequest((err) =>
   logAudio(`recusar o compartilhamento falhou: ${String(err)}`)
 )
 let pendingAudioRequested = false
-
-const WINDOW_WATCH_MS = 2000
-let windowWatch: NodeJS.Timeout | null = null
-
-function stopWindowWatch(): void {
-  if (windowWatch) clearInterval(windowWatch)
-  windowWatch = null
+// Janela do jogo em atividade escolhida pelo card (pula o modal de seleção).
+const preferredSource = new PreferredSource()
+const captureDeps = {
+  windows: () =>
+    desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 } }),
+  hwnds: listProcessWindows
 }
 
-// Janela minimizada some da lista de janelas e o Windows para de gerar imagem
-// dela: quem assiste vê a live congelar. Avisa quem compartilha, uma vez por
-// minimização.
-function watchSharedWindow(sourceId: string): void {
-  stopWindowWatch()
-  let hidden = false
-  windowWatch = setInterval(async () => {
-    try {
-      const sources = await desktopCapturer.getSources({
-        types: ['window'],
-        thumbnailSize: { width: 0, height: 0 }
-      })
-      const missing = !sources.some((s) => s.id === sourceId)
-      if (missing && !hidden) mainWindow?.webContents.send('screen-share:window-hidden')
-      hidden = missing
-    } catch {
-      /* próxima volta tenta de novo */
-    }
-  }, WINDOW_WATCH_MS)
-}
+const windowWatch = new WindowWatch(
+  async () => (await captureDeps.windows()).map((s) => s.id),
+  () => mainWindow?.webContents.send('screen-share:window-hidden')
+)
 
 /** Tema trocou no renderer: a barra de título nativa acompanha (Windows/Linux). */
 function registerThemeHandlers(): void {
@@ -103,7 +88,7 @@ function registerThemeHandlers(): void {
 }
 
 function registerScreenShareHandlers(): void {
-  ipcMain.on('screen-share:ended', stopWindowWatch)
+  ipcMain.on('screen-share:ended', () => windowWatch.stop())
 
   // Wayland: o seletor é o do sistema (xdg-desktop-portal). Cada getSources
   // abre o seletor e devolve só a fonte escolhida, com id novo a cada vez —
@@ -122,11 +107,21 @@ function registerScreenShareHandlers(): void {
     pendingDisplay.hold(callback)
     pendingAudioRequested = request.audioRequested
     if (flow === 'portal') {
-      stopWindowWatch()
+      windowWatch.stop()
       void shareFromPortal()
       return
     }
-    mainWindow?.webContents.send('screen-picker:show')
+    const preferred = preferredSource.take()
+    if (preferred) void shareSource(preferred)
+    else mainWindow?.webContents.send('screen-picker:show')
+  })
+
+  // Card do jogo: acha a janela dele; se achar, o próximo getDisplayMedia a usa.
+  ipcMain.handle('screen-share:prefer-game', async (_event, gameName: unknown) => {
+    preferredSource.clear()
+    const id = flow === 'app' ? await findGameWindow(gameName, captureDeps) : null
+    if (id) preferredSource.set(id)
+    return id
   })
 
   // O som não vai junto no Linux (o loopback do Electron é só do Windows).
@@ -173,64 +168,34 @@ function registerScreenShareHandlers(): void {
     }))
   })
 
-  ipcMain.on('screen-picker:select', async (_event, sourceId: string) => {
+  // Responde o getDisplayMedia pendente com a fonte escolhida (modal ou atalho do jogo).
+  async function shareSource(sourceId: string): Promise<void> {
     const callback = pendingDisplay.take()
     if (!callback) return
-    try {
-      const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] })
-      const source = sources.find((s) => s.id === sourceId)
-      // Cada escolha começa do zero: nada do compartilhamento anterior.
-      stopWindowAudio()
-      if (!source) {
-        logAudio(`fonte ${sourceId} não encontrada`)
-        callback(null)
-        return
-      }
-      const hwnd = hwndFromSourceId(source.id)
-      let windowAudioOk = false
-      if (hwnd && pendingAudioRequested && process.platform === 'win32' && mainWindow) {
-        windowAudioOk = await startWindowAudio(hwnd, mainWindow.webContents)
-      }
-      const mode = displayAudioMode({
-        sourceId: source.id,
-        audioRequested: pendingAudioRequested,
-        platform: process.platform,
-        windowAudioOk
-      })
-      logAudio(`compartilhando "${source.name}" (${source.id}): som = ${mode}`)
-      if (
-        warnWindowAudioFallback({
-          sourceId: source.id,
-          audioRequested: pendingAudioRequested,
-          platform: process.platform,
-          mode
-        })
-      ) {
-        mainWindow?.webContents.send('screen-audio:fallback', audioLogPath())
-      }
-      if (source.id.startsWith('window:')) watchSharedWindow(source.id)
-      else stopWindowWatch()
-      callback(mode === 'system' ? { video: source, audio: 'loopback' } : { video: source })
-    } catch (err) {
-      logAudio(`falha ao compartilhar ${sourceId}: ${String(err)}`)
-      callback(null)
-    }
+    callback(await shareStreams(sourceId, shareDeps()))
+  }
+
+  const shareDeps = (): ShareDeps => ({
+    listSources: () => desktopCapturer.getSources({ types: ['screen', 'window'] }),
+    stopWindowAudio,
+    startWindowAudio: (hwnd) =>
+      mainWindow ? startWindowAudio(hwnd, mainWindow.webContents) : Promise.resolve(false),
+    watchWindow: (id) => windowWatch.watch(id),
+    stopWatch: () => windowWatch.stop(),
+    warnAudioFallback: () =>
+      mainWindow?.webContents.send('screen-audio:fallback', audioLogPath()),
+    log: logAudio,
+    audioRequested: pendingAudioRequested,
+    platform: process.platform
   })
+
+  ipcMain.on('screen-picker:select', (_event, sourceId: string) => void shareSource(sourceId))
 
   ipcMain.on('screen-picker:cancel', () => {
     stopWindowAudio()
     pendingDisplay.deny()
   })
 }
-
-// Janela coberta/minimizada não pode ser tratada como oculta: o Windows marca
-// como "ocluída" e o Chromium para de renderizar (a captura congela).
-app.commandLine.appendSwitch('disable-renderer-backgrounding')
-app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
-app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
-// Captura de janela/tela via Windows Graphics Capture: continua entregando
-// quadros de uma janela coberta por outra (o capturador GDI antigo congela).
-app.commandLine.appendSwitch('enable-features', 'AllowWgcWindowCapturer,AllowWgcScreenCapturer')
 
 function createWindow(): void {
   // Create the browser window.
