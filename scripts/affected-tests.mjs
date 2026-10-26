@@ -12,6 +12,8 @@ import { capture, GO, ROOT, run } from './lib/run.mjs'
 
 const backend = path.join(ROOT, 'backend')
 const frontend = path.join(ROOT, 'frontend')
+// Notas da próxima release: o deploy recusa o PUT se passarem do limite.
+const NOTES = 'changelog/next.md'
 const GO_LIST = '{{.ImportPath}}|{{join .Imports ","}}|{{join .TestImports ","}}|{{join .XTestImports ","}}'
 
 // goAffected: pacotes alterados + quem importa deles, no formato do go test.
@@ -34,11 +36,16 @@ function loop(files) {
   return codes
 }
 
+function checkNotes(files) {
+  return files.includes(NOTES) ? [run('node', ['scripts/publish-changelog.mjs', '--check', NOTES])] : []
+}
+
 function checks(files, base) {
   const { go, ts } = classify(files)
   const codes = []
   if (go.length) codes.push(run(GO, ['vet', ...goPackages(go)], backend))
   if (ts.length) codes.push(run('npm', ['run', 'typecheck'], frontend))
+  codes.push(...checkNotes(files))
   codes.push(run('node', ['scripts/check-structure.mjs', '--base', base]))
   codes.push(run('node', ['scripts/crap.mjs', '--base', base]))
   return codes
@@ -64,7 +71,7 @@ function main() {
   let codes
   if (mode === 'full' || (mode === 'pr' && shared)) {
     if (mode === 'pr') console.log('Diff toca código compartilhado: rodando a suíte inteira.')
-    codes = [...full(), run('node', ['scripts/check-structure.mjs', '--base', base]), run('node', ['scripts/crap.mjs', '--base', base])]
+    codes = [...full(), ...checkNotes(files), run('node', ['scripts/check-structure.mjs', '--base', base]), run('node', ['scripts/crap.mjs', '--base', base])]
   } else if (mode === 'pr') {
     codes = [...loop(files), ...checks(files, base)]
   } else {
