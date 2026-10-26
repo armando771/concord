@@ -1,0 +1,185 @@
+/**
+ * Catálogo das permissões para as telas (rótulo e descrição em pt-BR, grupos
+ * do editor de cargos e do editor de sobrescritas de canal).
+ */
+import type { ChannelKind, PermName } from './permissions'
+
+export interface PermissionInfo {
+  name: PermName
+  label: string
+  description: string
+  /** Só faz sentido em canais de texto / de voz (as sobrescritas do canal filtram por isso). */
+  scope?: 'text' | 'voice'
+}
+
+export interface PermissionGroup {
+  title: string
+  permissions: PermissionInfo[]
+}
+
+export const PERMISSION_GROUPS: PermissionGroup[] = [
+  {
+    title: 'Geral',
+    permissions: [
+      {
+        name: 'VIEW_CHANNEL',
+        label: 'Ver canais',
+        description: 'Permite ver os canais. Sem isso o canal nem aparece.'
+      },
+      {
+        name: 'MANAGE_CHANNELS',
+        label: 'Gerenciar canais',
+        description: 'Criar, editar, reordenar e apagar canais.'
+      },
+      {
+        name: 'MANAGE_ROLES',
+        label: 'Gerenciar cargos',
+        description: 'Criar e editar cargos abaixo do seu e dar ou tirar cargos dos membros.'
+      },
+      {
+        name: 'MANAGE_SERVER',
+        label: 'Gerenciar servidor',
+        description: 'Mudar nome, ícone e canal principal do servidor.'
+      },
+      {
+        name: 'CREATE_INVITE',
+        label: 'Criar convite',
+        description: 'Convidar amigos e compartilhar o código do servidor.'
+      },
+      {
+        name: 'MANAGE_EXPRESSIONS',
+        label: 'Gerenciar mesa de áudio',
+        description: 'Apagar os áudios que outras pessoas enviaram.'
+      }
+    ]
+  },
+  {
+    title: 'Membros',
+    permissions: [
+      {
+        name: 'KICK_MEMBERS',
+        label: 'Expulsar membros',
+        description: 'Tirar membros do servidor (eles podem voltar por convite).'
+      },
+      {
+        name: 'BAN_MEMBERS',
+        label: 'Banir membros',
+        description: 'Banir membros: eles não voltam até serem desbanidos.'
+      },
+      {
+        name: 'CHANGE_NICKNAME',
+        label: 'Alterar apelido',
+        description: 'Mudar o próprio apelido neste servidor.'
+      },
+      {
+        name: 'MANAGE_NICKNAMES',
+        label: 'Gerenciar apelidos',
+        description: 'Mudar o apelido de quem está abaixo do seu cargo.'
+      },
+      {
+        name: 'ADMINISTRATOR',
+        label: 'Administrador',
+        description:
+          'Tem todas as permissões e ignora as restrições dos canais. Dê com muito cuidado.'
+      }
+    ]
+  },
+  {
+    title: 'Canais de texto',
+    permissions: [
+      {
+        name: 'SEND_MESSAGES',
+        label: 'Enviar mensagens',
+        description: 'Escrever nos canais de texto.',
+        scope: 'text'
+      },
+      {
+        name: 'ATTACH_FILES',
+        label: 'Enviar arquivos',
+        description: 'Anexar imagens e arquivos às mensagens.',
+        scope: 'text'
+      },
+      {
+        name: 'ADD_REACTIONS',
+        label: 'Adicionar reações',
+        description: 'Reagir às mensagens com emojis.',
+        scope: 'text'
+      },
+      {
+        name: 'MENTION_EVERYONE',
+        label: 'Mencionar @all e @here',
+        description: 'Avisar todo mundo do canal de uma vez.',
+        scope: 'text'
+      },
+      {
+        name: 'MANAGE_MESSAGES',
+        label: 'Gerenciar mensagens',
+        description: 'Apagar mensagens de outras pessoas e encerrar enquetes.',
+        scope: 'text'
+      },
+      {
+        name: 'READ_MESSAGE_HISTORY',
+        label: 'Ver histórico',
+        description: 'Ler as mensagens antigas do canal.',
+        scope: 'text'
+      }
+    ]
+  },
+  {
+    title: 'Canais de voz',
+    permissions: [
+      {
+        name: 'CONNECT',
+        label: 'Conectar',
+        description: 'Entrar nos canais de voz.',
+        scope: 'voice'
+      },
+      { name: 'SPEAK', label: 'Falar', description: 'Falar nos canais de voz.', scope: 'voice' },
+      {
+        name: 'STREAM',
+        label: 'Transmitir',
+        description: 'Compartilhar a tela e a câmera.',
+        scope: 'voice'
+      },
+      {
+        name: 'USE_SOUNDBOARD',
+        label: 'Usar mesa de áudio',
+        description: 'Tocar e enviar áudios na mesa do servidor.',
+        scope: 'voice'
+      },
+      {
+        name: 'MUTE_MEMBERS',
+        label: 'Silenciar membros',
+        description: 'Silenciar outras pessoas no servidor.',
+        scope: 'voice'
+      },
+      {
+        name: 'DEAFEN_MEMBERS',
+        label: 'Ensurdecer membros',
+        description: 'Ensurdecer outras pessoas no servidor.',
+        scope: 'voice'
+      },
+      {
+        name: 'MOVE_MEMBERS',
+        label: 'Mover membros',
+        description: 'Mover pessoas entre canais de voz e desconectá-las.',
+        scope: 'voice'
+      }
+    ]
+  }
+]
+
+/** Os grupos de permissão que valem para um tipo de canal (editor de sobrescritas). */
+export function channelPermissionGroups(kind: ChannelKind): PermissionGroup[] {
+  const groups: PermissionGroup[] = [
+    {
+      title: 'Geral',
+      permissions: PERMISSION_GROUPS[0].permissions.filter((p) => p.name === 'VIEW_CHANNEL')
+    }
+  ]
+  const specific = PERMISSION_GROUPS.find((g) =>
+    kind === 'text' ? g.title === 'Canais de texto' : g.title === 'Canais de voz'
+  )
+  if (specific) groups.push(specific)
+  return groups
+}
