@@ -42,3 +42,11 @@ export function resolveServerSection(
 export function canOpenServerSettings(perms: number): boolean {
   return visibleServerSections(perms).length > 0
 }
+
+/** O nome da seção aberta (título da tela); vazio se não há nenhuma. */
+export function serverSectionLabel(
+  sections: ServerSettingsSection[],
+  id: ServerSettingsSectionId | null
+): string {
+  return sections.find((s) => s.id === id)?.label ?? ''
+}

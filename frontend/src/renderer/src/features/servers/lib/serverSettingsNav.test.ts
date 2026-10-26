@@ -3,6 +3,7 @@ import { ALL_PERMISSIONS, DEFAULT_EVERYONE, Perm } from './permissions'
 import {
   canOpenServerSettings,
   resolveServerSection,
+  serverSectionLabel,
   visibleServerSections
 } from './serverSettingsNav'
 
@@ -41,5 +42,14 @@ describe('seções das configurações do servidor', () => {
     expect(resolveServerSection(Perm.BAN_MEMBERS, 'bans')).toBe('bans')
     expect(resolveServerSection(ALL_PERMISSIONS, 'roles')).toBe('roles')
     expect(resolveServerSection(0, 'overview')).toBeNull()
+  })
+})
+
+describe('serverSectionLabel', () => {
+  it('o nome da seção aberta, ou vazio se não houver', () => {
+    const sections = visibleServerSections(Perm.MANAGE_ROLES | Perm.BAN_MEMBERS)
+    expect(serverSectionLabel(sections, 'bans')).toBe('Banimentos')
+    expect(serverSectionLabel(sections, 'overview')).toBe('')
+    expect(serverSectionLabel(sections, null)).toBe('')
   })
 })
