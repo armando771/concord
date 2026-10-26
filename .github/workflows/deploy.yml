@@ -153,7 +153,8 @@ jobs:
           echo "Salinha ${{ steps.version.outputs.version }} no ar em ${PUBLIC_URL%/}"
 
       # Depois do "Conferir": a versão já está no ar e o endpoint novo também.
-      # O PUT é idempotente e o next.md só é esvaziado depois de gravar.
+      # O PUT é idempotente; o servidor guarda só as notas que nenhuma versão
+      # anterior trouxe, porque o next.md acumula entre deploys.
       - name: Changelog
         env:
           CHANGELOG_TOKEN: ${{ secrets.CHANGELOG_TOKEN }}

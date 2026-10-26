@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
+import { createServer } from 'node:http'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -76,4 +77,23 @@ test('--check sem arquivo mostra o uso', () => {
   const r = spawnSync(process.execPath, ['scripts/publish-changelog.mjs', '--check'], { encoding: 'utf8' })
   assert.equal(r.status, 1)
   assert.match(r.stderr, /uso:.*--check/)
+})
+
+// O esvaziamento só acontecia no runner do CI e nunca voltava ao git: dava a
+// falsa ideia de que a próxima versão começava do zero. Quem tira as notas já
+// publicadas é o servidor, então o arquivo fica como está.
+test('publicar não mexe no arquivo de notas', async () => {
+  const server = createServer((req, res) => req.resume().on('end', () => res.writeHead(204).end()))
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const dir = mkdtempSync(join(tmpdir(), 'changelog-'))
+  const file = join(dir, 'next.md')
+  const notes = '## Novidades\n- Curta\n'
+  writeFileSync(file, notes)
+  const child = spawn(process.execPath, ['scripts/publish-changelog.mjs', '0.6.46', file, `http://127.0.0.1:${server.address().port}`], {
+    env: { ...process.env, CHANGELOG_TOKEN: 'tok' }
+  })
+  const status = await new Promise((resolve) => child.on('exit', resolve))
+  server.close()
+  assert.equal(status, 0)
+  assert.equal(readFileSync(file, 'utf8'), notes)
 })
