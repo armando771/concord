@@ -27,11 +27,31 @@ function input(over: Partial<OverlayInput> = {}): OverlayInput {
     opacity: OVERLAY_OPACITY_DEFAULT,
     layout: OVERLAY_DEFAULT_LAYOUT,
     shortcut: 'Shift+Tab',
+    mediaBase: 'http://srv:8080/api',
     ...over
   }
 }
 
 describe('buildOverlaySnapshot', () => {
+  it('avatar vira URL absoluta (a janela do overlay não é a origem da API)', () => {
+    const s = buildOverlaySnapshot(
+      input({
+        me: { id: 'eu', username: 'nico', display_name: 'Nico', avatar_url: '/api/profile-media/u1' },
+        participants: [
+          { ...ana, avatar_url: '/api/profile-media/a_u2' },
+          { ...bia, avatar_url: 'https://cdn.x/b.png' },
+          { id: 'cai', username: 'cai', display_name: 'Cai' }
+        ]
+      })
+    )
+    expect(s.members.map((m) => m.avatarUrl)).toEqual([
+      'http://srv:8080/api/profile-media/u1',
+      'http://srv:8080/api/profile-media/a_u2',
+      'https://cdn.x/b.png',
+      null
+    ])
+  })
+
   it('eu fico no topo, marcado como você', () => {
     const s = buildOverlaySnapshot(input())
     expect(s.members.map((m) => m.id)).toEqual(['eu', 'ana', 'bia'])

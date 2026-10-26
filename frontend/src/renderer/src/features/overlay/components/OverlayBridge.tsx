@@ -5,6 +5,7 @@ import { serverDisplayName, withServerNames } from '../../servers/lib/serverName
 import { useCallNicknames } from '../../servers/hooks/useServerNames'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useCallStore } from '../../call/store/callStore'
+import { API_BASE_URL } from '../../../shared/lib/config'
 import { useOverlayPrefsStore } from '../store/overlayPrefsStore'
 import { useServerStore } from '../../servers/store/serverStore'
 
@@ -71,7 +72,8 @@ function OverlayBridge(): null {
         deafened,
         opacity,
         layout,
-        shortcut
+        shortcut,
+        mediaBase: API_BASE_URL
       })
     )
   }, [

@@ -3,12 +3,15 @@
 // lê estes tipos.
 
 import { normalizeOverlayLayout, type OverlayLayout } from './overlayLayout'
+import { profileMediaSrc } from '../../profile/lib/profileMedia'
 import { normalizeOverlayShortcut, OVERLAY_SHORTCUT_DEFAULT } from './overlayShortcut'
 
 export interface OverlayMember {
   id: string
   name: string
   initial: string
+  /** URL absoluta do avatar (GIF animado inclusive); null = mostra a inicial. */
+  avatarUrl: string | null
   self: boolean
   muted: boolean
   deafened: boolean
@@ -33,6 +36,7 @@ export interface OverlayPerson {
   id: string
   username: string
   display_name: string
+  avatar_url?: string | null
 }
 
 export interface OverlayInput {
@@ -49,6 +53,8 @@ export interface OverlayInput {
   opacity: number
   layout: OverlayLayout
   shortcut: string
+  /** API_BASE_URL: dá a origem aos avatares (a janela do overlay não é a da API). */
+  mediaBase: string
 }
 
 /** Pílulas no máximo (contando a do "+N"). */
@@ -151,6 +157,7 @@ export function buildOverlaySnapshot(
       id: person.id,
       name,
       initial: name.charAt(0).toUpperCase(),
+      avatarUrl: profileMediaSrc(person.avatar_url, input.mediaBase),
       self,
       muted,
       deafened,
