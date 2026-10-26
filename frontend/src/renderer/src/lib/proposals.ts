@@ -61,6 +61,27 @@ export function needsCloseConfirm(p: Pick<Proposal, 'status'>): boolean {
   return p.status === 'voting'
 }
 
+/**
+ * Mover um card que está com outro dev tira a tarefa dele: pede confirmação.
+ * Arrastar para Concluída não (mantém quem estava: pode ser só o deploy).
+ */
+export function needsTakeover(
+  p: Pick<Proposal, 'assignee'>,
+  meId: string | null,
+  target: ProposalStatus
+): boolean {
+  return !!p.assignee && !!meId && p.assignee.id !== meId && target !== 'done'
+}
+
+/** Usuário do GitHub (1–39, letras, números e hífen no meio), o "@" opcional. */
+export function githubUsernameError(raw: string): string | null {
+  const login = raw.trim().replace(/^@/, '')
+  if (!login) return null
+  return /^[A-Za-z0-9](?:[A-Za-z0-9]|-[A-Za-z0-9]){0,38}$/.test(login)
+    ? null
+    : 'Use o usuário do GitHub (letras, números e hífen).'
+}
+
 const timeOf = (iso: string | null | undefined): number => {
   const ms = iso ? new Date(iso).getTime() : NaN
   return Number.isFinite(ms) ? ms : 0

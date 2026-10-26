@@ -8,6 +8,7 @@ import {
 } from '../../lib/proposals'
 import Avatar from '../Avatar'
 import Button from '../Button'
+import AssigneeBadge from './AssigneeBadge'
 import MoveSelect from './MoveSelect'
 
 interface ProposalCardProps {
@@ -114,6 +115,12 @@ function ProposalCard({
           </span>
         )}
       </div>
+
+      {p.assignee && p.status !== 'voting' && (
+        <div className="flex">
+          <AssigneeBadge assignee={p.assignee} meId={meId} />
+        </div>
+      )}
 
       {(p.status === 'voting' || total > 0) && (
         <div className="flex flex-col gap-1.5">

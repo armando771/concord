@@ -3,6 +3,7 @@ package message
 import (
 	"context"
 	"errors"
+	"gin-quickstart/backend/internal/bot"
 	"gin-quickstart/backend/internal/permission"
 	"log"
 	"strings"
@@ -408,9 +409,29 @@ func (s *Service) RemoveChannelReaction(ctx context.Context, channelID string, m
 	return nil
 }
 
+// botConversation: a conversa é com um bot e quem age não é ele (só leitura).
+func (s *Service) botConversation(ctx context.Context, conversationID string, userID string) bool {
+	if s.convResolver == nil {
+		return false
+	}
+	ids, err := s.convResolver.ConversationParticipantIDs(ctx, conversationID)
+	if err != nil {
+		return false
+	}
+	for _, id := range ids {
+		if id != userID && bot.IsBot(id) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Service) AddConversationReaction(ctx context.Context, conversationID string, messageID string, userID string, emoji string) error {
 	if err := ValidateEmoji(emoji); err != nil {
 		return err
+	}
+	if s.botConversation(ctx, conversationID, userID) {
+		return ErrBotConversation
 	}
 
 	msg, err := s.repository.FindByID(ctx, messageID)

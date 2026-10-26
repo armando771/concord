@@ -52,8 +52,8 @@ func (s *ProfileService) Profile(ctx context.Context, viewerID, userID string) (
 	if err != nil {
 		return PublicProfile{}, notFound(err)
 	}
-	if userID == bot.UserID {
-		// O Maestro não tem websocket: não tem presença para consultar.
+	if bot.IsBot(userID) {
+		// Os bots não têm websocket: não têm presença para consultar.
 		p := u.Public("online")
 		p.IsBot = true
 		return p, nil
