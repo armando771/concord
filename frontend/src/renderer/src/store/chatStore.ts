@@ -56,6 +56,7 @@ import { useProposalStore } from './proposalStore'
 import { useNotifySettingsStore } from './notifySettingsStore'
 import { mentionKindOf, muteDecision } from '../lib/notificationMute'
 import { MAESTRO_USER_ID } from '../lib/music'
+import { isBotUser } from '../lib/bots'
 import { useSoundboardStore } from './soundboardStore'
 import { useMusicStore } from './musicStore'
 import { usePinStore } from './pinStore'
@@ -1385,6 +1386,8 @@ export function usePresenceStatus(userId: string | undefined): PresenceStatus {
   const known = useChatStore((s) => (userId ? s.statuses[userId] : undefined))
   const online = useChatStore((s) => (userId ? Boolean(s.presence[userId]) : false))
   if (mine) return mine
+  // Bots não têm websocket: sempre online (como no cartão de perfil).
+  if (isBotUser(userId)) return 'online'
   if (!online) return 'offline'
   return known && known !== 'offline' ? known : 'online'
 }

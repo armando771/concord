@@ -1,6 +1,7 @@
 package user
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -359,5 +360,19 @@ func (h *ProfileHandler) serve(c *gin.Context, wantStatic bool) {
 	header.Set("Content-Type", contentType)
 	header.Set("X-Content-Type-Options", "nosniff")
 	header.Set("Cache-Control", "public, max-age=31536000, immutable")
+	if contentType == "image/gif" && info.Size() <= maxGIFRewrite {
+		// GIF com repetição finita congela no fim: força repetir para sempre.
+		if data, err := io.ReadAll(file); err == nil {
+			http.ServeContent(c.Writer, c.Request, "", info.ModTime(), bytes.NewReader(loopForever(data)))
+			return
+		}
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			notFound()
+			return
+		}
+	}
 	http.ServeContent(c.Writer, c.Request, "", info.ModTime(), file)
 }
+
+// maxGIFRewrite limita o GIF lido na memória para ajustar a repetição.
+const maxGIFRewrite = 16 << 20

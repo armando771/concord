@@ -370,6 +370,8 @@ func (h *Handler) canSendToConversation(c *gin.Context, conversationID string, u
 		c.JSON(http.StatusForbidden, gin.H{"error": "you are not a participant of this conversation"})
 	case errors.Is(err, ErrBlocked):
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "blocked"})
+	case errors.Is(err, ErrBotConversation):
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "bot_conversation"})
 	case errors.Is(err, ErrCannotMessage):
 		c.JSON(http.StatusForbidden, gin.H{"error": "you can only message friends or people from your servers"})
 	default:
@@ -540,6 +542,10 @@ func (h *Handler) AddConversationReaction(c *gin.Context) {
 	if err := h.service.AddConversationReaction(c.Request.Context(), conversationID, messageID, userID, input.Emoji); err != nil {
 		if errors.Is(err, ErrInvalidEmoji) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, ErrBotConversation) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "bot_conversation"})
 			return
 		}
 		if errors.Is(err, ErrMessageNotFound) {

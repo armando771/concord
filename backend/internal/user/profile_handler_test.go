@@ -487,3 +487,16 @@ func TestUpdateProfileNameStyle(t *testing.T) {
 		t.Fatalf("status = %d, want 400", rec.Code)
 	}
 }
+
+func TestServeGIFLoopsForever(t *testing.T) {
+	e := newProfileEnv(t)
+	finite := append([]byte(nil), netscapeLoop...)
+	finite[16] = 2
+	rec := e.upload(t, "/api/users/me/avatar", map[string][]byte{"file": tinyGIF(finite), "static": webpData()})
+	url := *decodeUser(t, rec).AvatarURL
+
+	rec = e.do(t, http.MethodGet, url, nil, "")
+	if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), netscapeLoop) {
+		t.Fatalf("GIF entregue sem repetição infinita (status %d)", rec.Code)
+	}
+}

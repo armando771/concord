@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"gin-quickstart/backend/internal/bot"
 	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/server"
@@ -257,6 +258,10 @@ func (s *Service) StartDM(ctx context.Context, initiatorID string, conversationI
 	calleeID := conv.UserAID
 	if initiatorID == conv.UserAID {
 		calleeID = conv.UserBID
+	}
+	// DM com bot (Salinha Bot) é só leitura: não liga.
+	if bot.IsBot(calleeID) {
+		return nil, ErrNotParticipant
 	}
 
 	if s.blockedCheck != nil {
