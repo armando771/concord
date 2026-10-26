@@ -367,7 +367,7 @@ function MessageItem({
             )
           )}
           {message.attachments?.length ? (
-            <MessageAttachments attachments={message.attachments} />
+            <MessageAttachments attachments={message.attachments} copyImages />
           ) : null}
           {message.poll && (
             <PollCard

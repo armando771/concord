@@ -10,6 +10,7 @@ import SandboxNotice from './components/SandboxNotice'
 import AutoUpdateUnavailableNotice from './components/AutoUpdateUnavailableNotice'
 import UpdateCallBridge from './components/UpdateCallBridge'
 import UserContextMenu from './components/UserContextMenu'
+import ImageContextMenu from './components/ImageContextMenu'
 import UserProfileCard from './components/UserProfileCard'
 import FriendActionsHost from './components/friends/FriendActionsHost'
 import SettingsScreen from './components/settings/SettingsScreen'
@@ -48,6 +49,7 @@ function App(): React.JSX.Element {
       )}
       <UserProfileCard />
       <UserContextMenu />
+      <ImageContextMenu />
       <FriendActionsHost />
       <SettingsScreen />
       <ServerSettingsScreen />
