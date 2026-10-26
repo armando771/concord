@@ -431,6 +431,12 @@ func (s *Service) ensureIssue(ctx context.Context, p Proposal) bool {
 	if s.issues == nil || p.GithubIssueURL != nil {
 		return true
 	}
+	// A discussão do card vai no corpo da issue; sem ela, abre a issue mesmo assim.
+	if comments, err := s.store.ListComments(ctx, p.ID); err != nil {
+		log.Printf("[proposal] list comments for issue %s: %v", p.ID, err)
+	} else {
+		p.Comments = comments
+	}
 	number, url, err := s.issues.CreateIssue(ctx, p)
 	if err != nil {
 		return s.githubFailed("create issue for "+p.ID, err)
