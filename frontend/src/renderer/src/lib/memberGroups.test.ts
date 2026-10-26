@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { groupMembers, memberColor, type MemberGroup } from './memberGroups'
+import { groupMembers, memberColor, serverMemberColorCss, type MemberGroup } from './memberGroups'
 import type { Role } from './permissions'
 
 const role = (id: string, position: number, extra: Partial<Role> = {}): Role => ({
@@ -120,5 +120,70 @@ describe('memberColor', () => {
     expect(memberColor(roles, [])).toBeNull()
     expect(memberColor(roles, undefined)).toBeNull()
     expect(memberColor(roles, ['sem-cor'])).toBeNull()
+  })
+})
+
+describe('serverMemberColorCss', () => {
+  it('retorna a cor CSS (#rrggbb) do cargo primário (mais alto com cor) do membro no servidor', () => {
+    expect(
+      serverMemberColorCss({
+        serverId: 's1',
+        currentServerId: 's1',
+        userId: 'vipmod',
+        members,
+        roles
+      })
+    ).toBe('#00ff00')
+    expect(
+      serverMemberColorCss({
+        serverId: 's1',
+        currentServerId: 's1',
+        userId: 'artista',
+        members,
+        roles
+      })
+    ).toBe('#0000ff')
+  })
+
+  it('retorna undefined para membro sem cargo colorido ou fora do servidor', () => {
+    expect(
+      serverMemberColorCss({
+        serverId: 's1',
+        currentServerId: 's1',
+        userId: 'ana',
+        members,
+        roles
+      })
+    ).toBeUndefined()
+    expect(
+      serverMemberColorCss({
+        serverId: 's1',
+        currentServerId: 's1',
+        userId: 'desconhecido',
+        members,
+        roles
+      })
+    ).toBeUndefined()
+  })
+
+  it('retorna undefined fora de servidor (DM/grupo) ou quando currentServerId diverge', () => {
+    expect(
+      serverMemberColorCss({
+        serverId: undefined,
+        currentServerId: 's1',
+        userId: 'vipmod',
+        members,
+        roles
+      })
+    ).toBeUndefined()
+    expect(
+      serverMemberColorCss({
+        serverId: 's2',
+        currentServerId: 's1',
+        userId: 'vipmod',
+        members,
+        roles
+      })
+    ).toBeUndefined()
   })
 })

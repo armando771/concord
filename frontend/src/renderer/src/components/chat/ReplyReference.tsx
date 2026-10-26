@@ -4,12 +4,15 @@
  */
 function ReplyReference({
   authorName,
+  authorColor,
   content,
   emptyLabel = '📊 Enquete / Anexo',
   onJump
 }: {
   /** Nulo quando a mensagem original foi excluída. */
   authorName: string | null
+  /** Cor do cargo mais alto do autor no servidor (CSS). */
+  authorColor?: string
   content: string
   /** O que mostrar quando a original não tem texto (só anexo ou enquete). */
   emptyLabel?: string
@@ -24,7 +27,12 @@ function ReplyReference({
           onClick={onJump}
           className="flex min-w-0 cursor-pointer items-center gap-1.5 text-left transition-colors hover:text-gray-200"
         >
-          <span className="shrink-0 font-semibold text-gray-300">@{authorName}</span>
+          <span
+            style={authorColor ? { color: authorColor } : undefined}
+            className={`shrink-0 font-semibold ${authorColor ? '' : 'text-gray-300'}`}
+          >
+            @{authorName}
+          </span>
           <span className="truncate text-gray-400">{content || emptyLabel}</span>
         </button>
       ) : (

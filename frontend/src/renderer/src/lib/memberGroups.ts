@@ -1,4 +1,4 @@
-import { rolesOfMember, type Role } from './permissions'
+import { roleColorCss, rolesOfMember, type Role } from './permissions'
 
 export interface GroupableMember {
   user_id: string
@@ -20,6 +20,25 @@ export function memberColor(roles: Role[], roleIds: string[] | undefined): numbe
     if (role.color != null) return role.color
   }
   return null
+}
+
+/**
+ * Cor CSS (#rrggbb) do cargo mais alto com cor que a pessoa tem no servidor.
+ * Devolve undefined fora de servidor, se o servidor não é o aberto, ou se o
+ * membro não tem cargo colorido.
+ */
+export function serverMemberColorCss(opts: {
+  serverId: string | null | undefined
+  currentServerId: string | null | undefined
+  userId: string | null | undefined
+  members: GroupableMember[]
+  roles: Role[]
+}): string | undefined {
+  const { serverId, currentServerId, userId, members, roles } = opts
+  if (!serverId || !userId || currentServerId !== serverId) return undefined
+  const member = members.find((m) => m.user_id === userId)
+  if (!member) return undefined
+  return roleColorCss(memberColor(roles, member.role_ids))
 }
 
 /**

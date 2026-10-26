@@ -13,7 +13,11 @@ import Avatar from './Avatar'
 import { useUserLook } from '../store/profileStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import { userMenuHandler } from '../store/userMenuStore'
-import { useServerNickname, useServerNicknames } from '../store/useServerNames'
+import {
+  useServerMemberColor,
+  useServerNickname,
+  useServerNicknames
+} from '../store/useServerNames'
 import { serverDisplayName } from '../lib/serverNames'
 import { useFriendStore } from '../store/friendStore'
 import { applyMention, mentionQuery, mentionSuggestions, messageMentionsMe } from '../lib/mentions'
@@ -180,7 +184,9 @@ function MessageItem({
   })
   const nickname = useServerNickname(serverId, message.author_id)
   const name = serverDisplayName({ nickname }, { display_name: look.name })
+  const nameColor = useServerMemberColor(serverId, message.author_id)
   const replyNickname = useServerNickname(serverId, message.reply_to?.author_id)
+  const replyAuthorColor = useServerMemberColor(serverId, message.reply_to?.author_id)
   const openProfile = profileCardHandler(message.author_id, name, author?.username, 'right')
   const [hover, setHover] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -237,6 +243,7 @@ function MessageItem({
       {hasReplyReference && (
         <ReplyReference
           authorName={message.reply_to ? replyAuthorName : null}
+          authorColor={replyAuthorColor}
           content={message.reply_to?.content ?? ''}
           onJump={() => message.reply_to && onJumpToMessage(message.reply_to.id)}
         />
@@ -256,7 +263,10 @@ function MessageItem({
             <button
               type="button"
               onClick={openProfile}
-              className="cursor-pointer text-ds-chat font-medium text-white hover:underline"
+              style={nameColor ? { color: nameColor } : undefined}
+              className={`cursor-pointer text-ds-chat font-medium hover:underline ${
+                nameColor ? '' : 'text-white'
+              }`}
             >
               {name}
             </button>
