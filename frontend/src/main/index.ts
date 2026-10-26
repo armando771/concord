@@ -14,9 +14,9 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import trayIcon from '../../resources/tray.png?asset'
 import trayIcon2x from '../../resources/tray-2x.png?asset'
-import { displayAudioMode, warnWindowAudioFallback } from './screen/displayMedia'
 import './screen/captureSwitches'
 import { PendingDisplayRequest } from './screen/displayPicker'
+import { shareStreams, type ShareDeps } from './screen/shareSource'
 import { WindowWatch } from './screen/windowWatch'
 import { PreferredSource, findGameWindow, listProcessWindows } from './screen/gameWindow'
 import { checkScreenCastPortal } from './screen/screenPortal'
@@ -41,7 +41,6 @@ import { isSafeExternalUrl } from '../shared/externalUrl'
 import { contextMenuItems } from './window/contextMenu'
 import {
   audioLogPath,
-  hwndFromSourceId,
   logAudio,
   registerScreenAudio,
   startWindowAudio,
@@ -172,46 +171,22 @@ function registerScreenShareHandlers(): void {
   async function shareSource(sourceId: string): Promise<void> {
     const callback = pendingDisplay.take()
     if (!callback) return
-    try {
-      const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] })
-      const source = sources.find((s) => s.id === sourceId)
-      // Cada escolha começa do zero: nada do compartilhamento anterior.
-      stopWindowAudio()
-      if (!source) {
-        logAudio(`fonte ${sourceId} não encontrada`)
-        callback(null)
-        return
-      }
-      const hwnd = hwndFromSourceId(source.id)
-      let windowAudioOk = false
-      if (hwnd && pendingAudioRequested && process.platform === 'win32' && mainWindow) {
-        windowAudioOk = await startWindowAudio(hwnd, mainWindow.webContents)
-      }
-      const mode = displayAudioMode({
-        sourceId: source.id,
-        audioRequested: pendingAudioRequested,
-        platform: process.platform,
-        windowAudioOk
-      })
-      logAudio(`compartilhando "${source.name}" (${source.id}): som = ${mode}`)
-      if (
-        warnWindowAudioFallback({
-          sourceId: source.id,
-          audioRequested: pendingAudioRequested,
-          platform: process.platform,
-          mode
-        })
-      ) {
-        mainWindow?.webContents.send('screen-audio:fallback', audioLogPath())
-      }
-      if (source.id.startsWith('window:')) windowWatch.watch(source.id)
-      else windowWatch.stop()
-      callback(mode === 'system' ? { video: source, audio: 'loopback' } : { video: source })
-    } catch (err) {
-      logAudio(`falha ao compartilhar ${sourceId}: ${String(err)}`)
-      callback(null)
-    }
+    callback(await shareStreams(sourceId, shareDeps()))
   }
+
+  const shareDeps = (): ShareDeps => ({
+    listSources: () => desktopCapturer.getSources({ types: ['screen', 'window'] }),
+    stopWindowAudio,
+    startWindowAudio: (hwnd) =>
+      mainWindow ? startWindowAudio(hwnd, mainWindow.webContents) : Promise.resolve(false),
+    watchWindow: (id) => windowWatch.watch(id),
+    stopWatch: () => windowWatch.stop(),
+    warnAudioFallback: () =>
+      mainWindow?.webContents.send('screen-audio:fallback', audioLogPath()),
+    log: logAudio,
+    audioRequested: pendingAudioRequested,
+    platform: process.platform
+  })
 
   ipcMain.on('screen-picker:select', (_event, sourceId: string) => void shareSource(sourceId))
 
