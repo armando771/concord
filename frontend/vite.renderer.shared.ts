@@ -3,7 +3,7 @@ import { resolve } from 'path'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import type { Plugin, UserConfig } from 'vite'
-import { fillCsp } from './src/renderer/src/lib/serverUrl'
+import { fillCsp } from './src/renderer/src/shared/lib/serverUrl'
 
 // O que o renderer tem igual no app desktop (electron.vite.config.ts) e no
 // navegador (vite.web.config.ts): aliases, plugins e assets. Mexeu aqui, os

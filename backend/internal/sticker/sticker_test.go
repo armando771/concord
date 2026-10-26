@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"gin-quickstart/backend/internal/media"
+	"gin-quickstart/backend/internal/platform/media"
 	"gin-quickstart/backend/internal/permission"
 
 	"github.com/gin-gonic/gin"

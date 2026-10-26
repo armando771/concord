@@ -1,6 +1,6 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
-import type { OverlayFrame, OverlayLayout } from '../renderer/src/lib/overlayLayout'
+import type { OverlaySnapshot } from '../renderer/src/features/overlay/lib/overlayState'
+import type { OverlayFrame, OverlayLayout } from '../renderer/src/features/overlay/lib/overlayLayout'
 import type { CallResume, PendingCallResume } from '../shared/callResume'
 import type { AppMetrics } from '../shared/appMetrics'
 import type { PortalStatus, ScreenShareFlow } from '../shared/screenShareFlow'

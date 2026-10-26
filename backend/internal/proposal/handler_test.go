@@ -11,7 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"gin-quickstart/backend/internal/media"
+	"gin-quickstart/backend/internal/platform/media"
 )
 
 // png1x1 é um PNG válido mínimo (o Sniff olha só os primeiros bytes).

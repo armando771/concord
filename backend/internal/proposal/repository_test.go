@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"gin-quickstart/backend/internal/database"
+	"gin-quickstart/backend/internal/platform/database"
 
 	"github.com/google/uuid"
 )

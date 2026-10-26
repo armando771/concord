@@ -2,13 +2,13 @@ import './assets/main.css'
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import App from './App'
-import { PREVIEW_BOOST_CALL_ID } from './lib/boost'
-import { useBoostStore } from './store/boostStore'
-import { useCallStore } from './store/callStore'
-import { AppErrorBoundary } from './components/AppErrorScreen'
-import { useLevelStore } from './store/levelStore'
-import { startThemeSync } from './store/themeStore'
+import App from './app/App'
+import { PREVIEW_BOOST_CALL_ID } from './features/levels/lib/boost'
+import { useBoostStore } from './features/levels/store/boostStore'
+import { useCallStore } from './features/call/store/callStore'
+import { AppErrorBoundary } from './shared/ui/AppErrorScreen'
+import { useLevelStore } from './features/levels/store/levelStore'
+import { startThemeSync } from './features/settings/store/themeStore'
 
 // Tema salvo antes do primeiro render: o app já abre com as cores certas.
 startThemeSync()
@@ -19,7 +19,7 @@ window.addEventListener('dragover', (e) => e.preventDefault())
 window.addEventListener('drop', (e) => e.preventDefault())
 
 // Dev: `__salinhaLevelUp(85)` no console toca a animação de subir de nível;
-// `__salinhaLevelUp('marco')` toca o pr�ximo marco depois do seu n�vel.
+// `__salinhaLevelUp('marco')` toca o pr�ximo marco depois do seu n�vel.
 // `__salinhaBoost(175)` liga um buff de XP falso (125/150/175/200) na sua call.
 if (import.meta.env.DEV) {
   const dev = window as unknown as {

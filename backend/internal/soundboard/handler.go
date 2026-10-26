@@ -12,7 +12,7 @@ import (
 	"strings"
 	"syscall"
 
-	"gin-quickstart/backend/internal/media"
+	"gin-quickstart/backend/internal/platform/media"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

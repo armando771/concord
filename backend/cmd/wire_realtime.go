@@ -1,0 +1,56 @@
+package main
+
+import (
+	"context"
+	"log"
+
+	"gin-quickstart/backend/internal/auth"
+	"gin-quickstart/backend/internal/platform/mailer"
+	"gin-quickstart/backend/internal/platform/websocket"
+	"gin-quickstart/backend/internal/updates"
+
+	"github.com/gin-gonic/gin"
+)
+
+// wireRealtime: endpoint do WebSocket, presença e digitação.
+func (a *app) wireRealtime() {
+	// "Fulano está digitando…": mesma regra de escrita das mensagens.
+	typing := websocket.NewTyping(a.hub, a.roomAccess, a.userService.FindByID)
+	wsHandler := websocket.WsHandler(a.hub, a.authService, a.permissionService, a.serverService, a.conversationService, a.callService, typing)
+	a.hub.SetDisconnectHandler(a.callService.HandleDisconnect)
+
+	a.route(func(router *gin.Engine, api *gin.RouterGroup) {
+		presence := api.Group("/presence")
+		presence.Use(a.authMiddleware)
+		{
+			presence.GET("", wsHandler.Presence)
+			presence.GET("/", wsHandler.Presence)
+			presence.GET("/activities", wsHandler.Activities)
+		}
+		// WebSocket endpoint (public, auth via ?token=)
+		router.GET("/ws", wsHandler.ServeWS)
+	})
+}
+
+// wireAccount: login, cadastro e e-mails da conta (rotas públicas).
+func (a *app) wireAccount() {
+	appURL := envOr("APP_URL", "http://localhost:5173")
+	emailService := auth.NewEmailService(a.authRepository, a.userService, a.authService, mailer.FromEnv(), appURL)
+	authHandler := auth.AuthHandler(a.authService, a.userService).WithEmail(emailService)
+	a.route(func(_ *gin.Engine, api *gin.RouterGroup) {
+		auth.AuthRoutes(api, authHandler, a.authMiddleware)
+	})
+}
+
+// wireUpdates: atualizações do app (scripts/release-win.sh publica em UPDATES_DIR).
+func (a *app) wireUpdates() {
+	updatesDir := envOr("UPDATES_DIR", "updates")
+	// Versão nova publicada: avisa os apps na hora (sem esperar a checagem periódica).
+	go updates.NewWatcher(updatesDir, func(r updates.Release) {
+		log.Printf("[updates] nova versão em %s: %s", r.File, r.Version)
+		a.hub.PublishAppUpdate(r.File, r.Version)
+	}).Run(context.Background(), updates.PollInterval)
+	a.route(func(router *gin.Engine, _ *gin.RouterGroup) {
+		updates.Routes(router, updatesDir)
+	})
+}

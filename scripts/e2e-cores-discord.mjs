@@ -19,7 +19,7 @@ const OUT = process.env.OUT;
 const MAX_DELTA_E = 2;
 const run = Date.now().toString(36);
 
-// --- ΔE CIEDE2000 (a mesma conta de frontend/src/renderer/src/lib/colorDiff.ts) ---
+// --- ΔE CIEDE2000 (a mesma conta de frontend/src/renderer/src/shared/lib/colorDiff.ts) ---
 function lab([r, g, b]) {
   const lin = (v) =>
     (v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
