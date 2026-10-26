@@ -307,7 +307,7 @@ describe('jogadores da atividade (selo, perfil)', () => {
       activityReducer(state, {
         type: 'players',
         callId: 'call-1',
-        activityId: 'survev',
+        activityId: 'doom',
         players: []
       })
     ).toBe(state)
@@ -338,9 +338,9 @@ describe('jogadores da atividade (selo, perfil)', () => {
     ).toBe(false)
     expect(needsJoinReport(playing, 'u-ana')).toBe(false)
     expect(needsJoinReport(state, 'u-bia')).toBe(false)
-    expect(
-      needsJoinReport({ ...playing, local: { activityId: 'survev', url: 'x' } }, 'u-bia')
-    ).toBe(false)
+    expect(needsJoinReport({ ...playing, local: { activityId: 'doom', url: 'x' } }, 'u-bia')).toBe(
+      false
+    )
     expect(needsJoinReport(playing, null)).toBe(false)
   })
 
@@ -380,7 +380,7 @@ describe('capturedRoomToShare (sala lida da janela de quem abriu)', () => {
   it('não compartilha: outra pessoa abriu, outra atividade, sem jogo aberto ou link de fora', () => {
     const room = 'https://krunker.io/?game=BRZ:tukbo'
     expect(capturedRoomToShare(mine, 'u-bia', 'krunker', room)).toBeNull()
-    expect(capturedRoomToShare(mine, 'u-ana', 'survev', 'https://survev.io/#1Fu4')).toBeNull()
+    expect(capturedRoomToShare(mine, 'u-ana', 'doom', room)).toBeNull()
     expect(capturedRoomToShare({ ...mine, local: null }, 'u-ana', 'krunker', room)).toBeNull()
     expect(
       capturedRoomToShare(mine, 'u-ana', 'krunker', 'https://evil.com/?game=BRZ:tukbo')
