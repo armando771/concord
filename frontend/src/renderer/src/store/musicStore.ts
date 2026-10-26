@@ -51,6 +51,9 @@ interface MusicStore {
   videoEnabled: boolean
   /** Vídeo da música em destaque no palco da call (não persiste). */
   stageVideo: boolean
+  /** Painel "Tocando agora" aberto (clicando no Maestro no canal de voz).
+   *  Fechar só esconde: a música e o vídeo do palco seguem. */
+  panelOpen: boolean
   handleWsEvent: (event: WsEvent) => void
   loadState: (serverId: string) => Promise<void>
   loadPresence: (serverId: string) => Promise<void>
@@ -59,6 +62,8 @@ interface MusicStore {
   setDucking: (on: boolean) => void
   setVideoEnabled: (on: boolean) => void
   setStageVideo: (on: boolean) => void
+  openPanel: () => void
+  closePanel: () => void
   clearState: () => void
 }
 
@@ -80,6 +85,7 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
   duckingEnabled: readFlag(DUCKING_KEY),
   videoEnabled: readFlag(VIDEO_KEY),
   stageVideo: false,
+  panelOpen: false,
 
   handleWsEvent: (event) => {
     switch (event.type) {
@@ -142,5 +148,7 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
     set({ videoEnabled: on })
   },
   setStageVideo: (on) => set({ stageVideo: on }),
-  clearState: () => set({ state: null, stageVideo: false })
+  openPanel: () => set({ panelOpen: true }),
+  closePanel: () => set({ panelOpen: false }),
+  clearState: () => set({ state: null, stageVideo: false, panelOpen: false })
 }))

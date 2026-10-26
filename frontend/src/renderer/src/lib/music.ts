@@ -5,6 +5,8 @@ export const MAESTRO_USER_ID = '4d414553-5452-4f00-8000-000000000001'
 export const MAESTRO_NAME = 'Maestro'
 
 export const isMaestroIdentity = (id: string): boolean => id.startsWith('bot-music:')
+/** Identidade LiveKit do Maestro num canal de voz (bot.Identity no backend). */
+export const maestroIdentity = (channelId: string): string => `bot-music:${channelId}`
 export const isMaestroUser = (id: string): boolean =>
   id === MAESTRO_USER_ID || isMaestroIdentity(id)
 

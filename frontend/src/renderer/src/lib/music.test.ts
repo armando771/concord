@@ -5,6 +5,7 @@ import {
   duckTarget,
   formatDuration,
   isMaestroIdentity,
+  maestroIdentity,
   slashSuggestions,
   splitBold,
   stepGain,
@@ -53,6 +54,8 @@ describe('formatação e regras', () => {
   it('identidade do bot', () => {
     expect(isMaestroIdentity('bot-music:abc')).toBe(true)
     expect(isMaestroIdentity('abc')).toBe(false)
+    expect(maestroIdentity('v1')).toBe('bot-music:v1')
+    expect(isMaestroIdentity(maestroIdentity('v1'))).toBe(true)
   })
   it('canSwap só entre duas músicas minhas', () => {
     expect(canSwap(item('a', 'me'), item('b', 'me'), 'me')).toBe(true)
