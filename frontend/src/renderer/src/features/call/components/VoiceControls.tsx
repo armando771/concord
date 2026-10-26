@@ -22,6 +22,7 @@ import SoundboardPopover from './SoundboardPopover'
 import ActivityPickerPopover from './ActivityPickerPopover'
 import ScreenQualityPopover from './ScreenQualityPopover'
 import AudioDeviceMenu, { type AudioDeviceKind } from './AudioDeviceMenu'
+import { openOnContextMenu } from '../lib/anchorMenu'
 
 /** Setinha no canto do botão (como no Discord): abre o menu de dispositivos dele. */
 function DeviceChevron({
@@ -100,6 +101,7 @@ function VoiceControls(): React.JSX.Element {
       <div className="relative">
         <button
           onClick={toggleMute}
+          onContextMenu={openOnContextMenu(openDeviceMenu('input'))}
           aria-label={muted ? 'Ativar Microfone' : 'Silenciar Microfone'}
           title={
             !canSpeak
@@ -125,6 +127,7 @@ function VoiceControls(): React.JSX.Element {
       <div className="relative">
         <button
           onClick={toggleDeafen}
+          onContextMenu={openOnContextMenu(openDeviceMenu('output'))}
           aria-label={deafened ? 'Ativar Audio' : 'Silenciar Audio'}
           title={deafened ? 'Ativar Audio' : 'Silenciar Audio'}
           className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-colors ${
