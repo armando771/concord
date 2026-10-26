@@ -23,6 +23,8 @@ type Stats struct {
 	// Maior tempo seguido numa call com mais alguém.
 	LongestSessionSeconds int64
 	OwnedServers          int64
+	// Cards do quadro de propostas criados pela pessoa que ainda existem.
+	Proposals int64
 	// Está em dev_badge_users (Criador da Salinha).
 	IsDev bool
 }
@@ -126,6 +128,8 @@ func valueOf(c Category, s Stats, now time.Time) int64 {
 		return s.LongestSessionSeconds
 	case "reacoes":
 		return s.Reactions
+	case "contribuinte":
+		return s.Proposals
 	case "criador":
 		if s.IsDev {
 			return 1
