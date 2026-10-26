@@ -1,0 +1,77 @@
+import { app, ipcMain, type BrowserWindow } from 'electron'
+import { cpus } from 'node:os'
+import { join } from 'node:path'
+import { parsePerfEvent } from '../../shared/perfLog'
+import { appendLog } from '../app/appLog'
+import { isPerfLogEnabled } from './perfFlag'
+import { PerfRecorder } from './perfRecorder'
+import { PerfSession } from './perfSession'
+import { trackHidden, windowState } from './windowState'
+
+const SAMPLE_MS = 1000
+const nowMs = (): number => process.uptime() * 1000
+
+type GetWindow = () => BrowserWindow | null
+
+/**
+ * Acompanha as janelas criadas: o ready-to-show da principal (a de overlay também
+ * dispara; só a principal conta) e se ela está oculta na bandeja. Devolve a pergunta
+ * "a janela principal está oculta?". O rastreador também entra nas outras janelas
+ * (overlay, atividade): é inofensivo e o WeakMap não as segura.
+ */
+function watchWindows(getWindow: GetWindow, session: PerfSession): () => boolean {
+  const hiddenOf = new WeakMap<BrowserWindow, () => boolean>()
+  app.on('browser-window-created', (_event, win) => {
+    hiddenOf.set(win, trackHidden(win))
+    win.once('ready-to-show', () => {
+      if (win === getWindow()) session.mark('readyToShow', nowMs())
+    })
+  })
+  return () => {
+    const win = getWindow()
+    return win ? (hiddenOf.get(win)?.() ?? false) : true
+  }
+}
+
+/** Relatórios do renderer: mesma checagem de origem do app-metrics:sample. */
+function listenReports(getWindow: GetWindow, session: PerfSession): void {
+  ipcMain.on('perf:report', (event, raw: unknown) => {
+    const win = getWindow()
+    if (!win || win.isDestroyed() || event.sender !== win.webContents) return
+    if (event.senderFrame !== win.webContents.mainFrame) return
+    const parsed = parsePerfEvent(raw)
+    if (parsed) session.receive(parsed, nowMs())
+  })
+}
+
+function startRecording(getWindow: GetWindow): boolean {
+  const recorder = PerfRecorder.open(join(app.getPath('userData'), 'perf'), new Date())
+  if (!recorder) {
+    appendLog('perf.log', 'não foi possível abrir o arquivo de medição: --perf-log desligado')
+    return false
+  }
+  const session = new PerfSession((line) => recorder.write(line), cpus().length)
+  session.mark('appReady', nowMs())
+  const isHidden = watchWindows(getWindow, session)
+  listenReports(getWindow, session)
+  const timer = setInterval(
+    () => session.sample(app.getAppMetrics(), windowState(getWindow(), isHidden()), nowMs()),
+    SAMPLE_MS
+  )
+  // 'quit' e não 'before-quit': este último pode ser cancelado e o app seguir vivo.
+  app.once('quit', () => {
+    clearInterval(timer)
+    recorder.close(Math.round(nowMs() / 100) / 10)
+  })
+  return true
+}
+
+/**
+ * Medição de performance para dev (`--perf-log` ou `SALINHA_PERF_LOG=1`): grava um JSONL
+ * em userData/perf. Sem a flag só responde `false` a `perf:enabled`; nada mais roda.
+ * Chamar como PRIMEIRA coisa do whenReady, para o `appReady` refletir a abertura real.
+ */
+export function setupPerfLog(getWindow: GetWindow): void {
+  const started = isPerfLogEnabled(process.argv, process.env) && startRecording(getWindow)
+  ipcMain.handle('perf:enabled', () => started)
+}

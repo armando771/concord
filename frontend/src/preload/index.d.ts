@@ -3,6 +3,7 @@ import type { OverlaySnapshot } from '../renderer/src/features/overlay/lib/overl
 import type { OverlayFrame, OverlayLayout } from '../renderer/src/features/overlay/lib/overlayLayout'
 import type { CallResume, PendingCallResume } from '../shared/callResume'
 import type { AppMetrics } from '../shared/appMetrics'
+import type { PerfEvent } from '../shared/perfLog'
 import type { PortalStatus, ScreenShareFlow } from '../shared/screenShareFlow'
 
 export interface ScreenSourceInfo {
@@ -28,6 +29,7 @@ export interface ScreenAudioApi {
 export interface ScreenShareApi {
   flow: ScreenShareFlow
   portalStatus(): Promise<{ status: PortalStatus; message: string }>
+  preferGameWindow(gameName: string): Promise<string | null>
   onWindowHidden(cb: () => void): () => void
   ended(): void
 }
@@ -168,6 +170,7 @@ declare global {
     electron: ElectronAPI
     api?: {
       appMetrics?: { sample(reset?: boolean): Promise<AppMetrics | null> }
+      perf?: { enabled(): Promise<boolean>; report(event: PerfEvent): void }
       screenPicker: ScreenPickerApi
       background?: BackgroundApi
       updates?: UpdatesApi

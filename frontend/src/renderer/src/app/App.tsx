@@ -3,9 +3,11 @@ import router from './router'
 import Background from '../shared/ui/Background'
 import ToastContainer from '../shared/ui/ToastContainer'
 import BackgroundBridge from './BackgroundBridge'
+import PerfBridge from './PerfBridge'
 import OverlayBridge from '../features/overlay/components/OverlayBridge'
 import GameActivityBridge from '../features/activity/components/GameActivityBridge'
 import UpdateBridge from '../features/updates/components/UpdateBridge'
+import NoticeStack from '../features/updates/components/NoticeStack'
 import SandboxNotice from '../features/updates/components/SandboxNotice'
 import AutoUpdateUnavailableNotice from '../features/updates/components/AutoUpdateUnavailableNotice'
 import UpdateCallBridge from '../features/updates/components/UpdateCallBridge'
@@ -39,11 +41,14 @@ function App(): React.JSX.Element {
         <>
           {/* Só no Electron: bandeja, overlay de jogo e atualizações. */}
           <BackgroundBridge />
+          <PerfBridge />
           <OverlayBridge />
           <GameActivityBridge />
           <UpdateBridge />
-          <SandboxNotice />
-          <AutoUpdateUnavailableNotice />
+          <NoticeStack>
+            <SandboxNotice />
+            <AutoUpdateUnavailableNotice />
+          </NoticeStack>
           <UpdateCallBridge />
         </>
       )}

@@ -9,7 +9,7 @@ export function JoinRequestsStack(): React.JSX.Element | null {
   if (requests.length === 0) return null
 
   return (
-    <div className="fixed bottom-20 right-6 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+    <div className="pointer-events-none fixed inset-x-4 bottom-20 z-50 flex flex-col gap-2 sm:left-auto sm:right-6 sm:w-full sm:max-w-sm">
       {requests.map((user) => {
         const name = user.display_name || user.username || 'Alguém'
         return (
