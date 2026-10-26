@@ -1,0 +1,90 @@
+import { createBrowserRouter, createHashRouter, Navigate } from 'react-router-dom'
+import Home from './Home'
+import Friends from '../features/friends/pages/Friends'
+import ServerView from '../features/servers/pages/ServerView'
+import DmChat from '../features/chat/pages/DmChat'
+import GroupChat from '../features/chat/pages/GroupChat'
+import Invites from '../features/servers/pages/Invites'
+import Proposals from '../features/proposals/pages/Proposals'
+import Changelog from '../features/updates/pages/Changelog'
+import Login from '../features/auth/pages/Login'
+import Register from '../features/auth/pages/Register'
+import ForgotPassword from '../features/auth/pages/ForgotPassword'
+import ResetPassword from '../features/auth/pages/ResetPassword'
+import VerifyEmail from '../features/auth/pages/VerifyEmail'
+import InviteLanding from '../features/servers/pages/InviteLanding'
+import RequireAuth from '../features/auth/components/RequireAuth'
+import RedirectIfAuthed from '../features/auth/components/RedirectIfAuthed'
+import AppShell from './AppShell'
+import { RouteErrorScreen } from '../shared/ui/AppErrorScreen'
+import { IS_WEB } from '../shared/lib/config'
+
+// Desktop carrega de file:// e precisa do hash (#/rota). No navegador as rotas
+// são caminhos de verdade: o Caddy devolve o index.html para qualquer rota
+// (try_files), então recarregar em /servers/… continua no mesmo lugar.
+const createRouter = IS_WEB ? createBrowserRouter : createHashRouter
+
+// errorElement: tela "Algo deu errado" em vez do erro cru do react-router.
+export const router = createRouter([
+  {
+    path: '/',
+    element: (
+      <RequireAuth>
+        <AppShell />
+      </RequireAuth>
+    ),
+    errorElement: <RouteErrorScreen />,
+    children: [
+      { index: true, element: <Home /> },
+      { path: 'friends', element: <Friends /> },
+      { path: 'invites', element: <Invites /> },
+      { path: 'proposals', element: <Proposals /> },
+      { path: 'changelog', element: <Changelog /> },
+      { path: 'dm/:userId', element: <DmChat /> },
+      { path: 'dm/c/:conversationId', element: <GroupChat /> },
+      { path: 'servers/:id', element: <ServerView /> },
+      { path: 'servers/:id/channels/:channelId', element: <ServerView /> }
+    ]
+  },
+  {
+    path: '/login',
+    element: (
+      <RedirectIfAuthed>
+        <Login />
+      </RedirectIfAuthed>
+    ),
+    errorElement: <RouteErrorScreen />
+  },
+  {
+    path: '/register',
+    element: (
+      <RedirectIfAuthed>
+        <Register />
+      </RedirectIfAuthed>
+    ),
+    errorElement: <RouteErrorScreen />
+  },
+  {
+    path: '/forgot-password',
+    element: (
+      <RedirectIfAuthed>
+        <ForgotPassword />
+      </RedirectIfAuthed>
+    )
+  },
+  // Links dos e-mails: valem com ou sem sessão neste navegador.
+  { path: '/reset-password', element: <ResetPassword /> },
+  { path: '/verify-email', element: <VerifyEmail /> },
+  {
+    // Link de convite: abre sem login (o cartão mostra o servidor antes).
+    path: '/convite/:code',
+    element: <InviteLanding />,
+    errorElement: <RouteErrorScreen />
+  },
+  {
+    path: '*',
+    element: <Navigate to="/" replace />
+  }
+])
+
+export default router

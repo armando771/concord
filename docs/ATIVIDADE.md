@@ -9,7 +9,7 @@ de membros, amigos, DMs, barra do usuário, painel de voz e perfil) e na coluna
 
 ## Fluxo
 
-1. **Detecção (só Electron no Windows).** `frontend/src/main/gameDetector.ts`
+1. **Detecção (só Electron no Windows).** `frontend/src/main/activity/gameDetector.ts`
    lista os processos (`tasklist`) a cada 15 s e procura executáveis do
    catálogo `frontend/src/shared/gameCatalog.ts`. Processo fora do catálogo
    nunca sai do PC. Para incluir um jogo, adicione uma entrada em `GAMES`.

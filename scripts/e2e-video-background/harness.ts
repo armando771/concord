@@ -3,9 +3,9 @@
 import {
   createBackgroundPipeline,
   type BackgroundEffect
-} from '../../frontend/src/renderer/src/lib/backgroundPipeline'
-import { PRESET_BACKGROUNDS } from '../../frontend/src/renderer/src/lib/videoBackground'
-import { gifStorage } from '../../frontend/src/renderer/src/lib/gifStorage'
+} from '../../frontend/src/renderer/src/features/call/lib/backgroundPipeline'
+import { PRESET_BACKGROUNDS } from '../../frontend/src/renderer/src/features/call/lib/videoBackground'
+import { gifStorage } from '../../frontend/src/renderer/src/features/call/lib/gifStorage'
 
 interface Rect {
   x: number

@@ -1,6 +1,6 @@
 import { resolve } from 'path'
 import { defineConfig } from 'electron-vite'
-import { buildConnectSrc, buildMediaSrc } from './src/renderer/src/lib/serverUrl'
+import { buildConnectSrc, buildMediaSrc } from './src/renderer/src/shared/lib/serverUrl'
 import { cspPlugin, rendererShared } from './vite.renderer.shared'
 
 // A CSP do renderer precisa liberar o servidor embutido no build (API,

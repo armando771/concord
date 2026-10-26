@@ -15,7 +15,7 @@ const { chromium } = require('playwright')
 const fixture = `
 import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import Modal from '/src/renderer/src/components/Modal.tsx'
+import Modal from '/src/renderer/src/shared/ui/Modal.tsx'
 import '/src/renderer/src/assets/main.css'
 
 function Fixture() {

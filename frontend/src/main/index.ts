@@ -14,28 +14,28 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import trayIcon from '../../resources/tray.png?asset'
 import trayIcon2x from '../../resources/tray-2x.png?asset'
-import { displayAudioMode, warnWindowAudioFallback } from './displayMedia'
-import { PendingDisplayRequest } from './displayPicker'
-import { checkScreenCastPortal } from './screenPortal'
+import { displayAudioMode, warnWindowAudioFallback } from './screen/displayMedia'
+import { PendingDisplayRequest } from './screen/displayPicker'
+import { checkScreenCastPortal } from './screen/screenPortal'
 import { portalMissingMessage, screenShareFlow } from '../shared/screenShareFlow'
-import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './background'
-import { setupUpdater } from './updater'
-import { setupOverlay } from './overlay'
-import { setupGlobalKeybinds } from './globalKeybinds'
-import { setupGames } from './games'
-import { setupAppMetrics } from './appMetrics'
-import { handleInviteArgs, handleInviteUrl, setupInviteProtocol } from './inviteProtocol'
-import { closeActivity, setupActivities } from './activityWindow'
-import { APP_USER_MODEL_ID } from './toastPolicy'
-import { setupToasts } from './toasts'
+import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './window/background'
+import { setupUpdater } from './updates/updater'
+import { setupOverlay } from './overlay/overlay'
+import { setupGlobalKeybinds } from './overlay/globalKeybinds'
+import { setupGames } from './activity/games'
+import { setupAppMetrics } from './app/appMetrics'
+import { handleInviteArgs, handleInviteUrl, setupInviteProtocol } from './app/inviteProtocol'
+import { closeActivity, setupActivities } from './activity/activityWindow'
+import { APP_USER_MODEL_ID } from './window/toastPolicy'
+import { setupToasts } from './window/toasts'
 import {
   parseTitleBarColors,
   TITLE_BAR_COLOR,
   TITLE_BAR_HEIGHT,
   titleBarOptions
-} from './windowPolicy'
+} from './window/windowPolicy'
 import { isSafeExternalUrl } from '../shared/externalUrl'
-import { contextMenuItems } from './contextMenu'
+import { contextMenuItems } from './window/contextMenu'
 import {
   audioLogPath,
   hwndFromSourceId,
@@ -43,7 +43,7 @@ import {
   registerScreenAudio,
   startWindowAudio,
   stopWindowAudio
-} from './screenAudio'
+} from './screen/screenAudio'
 
 let mainWindow: BrowserWindow | null = null
 

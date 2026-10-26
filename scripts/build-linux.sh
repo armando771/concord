@@ -3,7 +3,7 @@
 #   - AppImage x64 + latest-linux.yml (electron-updater);
 #   - Salinha-<versão>-x64.tar.gz: o mesmo app + salinha-launcher, para a
 #     instalação por usuário sem FUSE (site/install.sh e o updater próprio do
-#     Linux em src/main/linuxUpdater.ts). O manifesto dele é do release-linux.sh.
+#     Linux em src/main/updates/linuxUpdater.ts). O manifesto dele é do release-linux.sh.
 # Uso: scripts/build-linux.sh https://endereco-publico
 set -euo pipefail
 

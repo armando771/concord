@@ -13,7 +13,7 @@ Cada servidor tem **cargos** com permissões, como no Discord. O **dono** (quem 
    3. a do próprio membro (vence tudo).
 5. Sem **Ver canais** o resultado é zero: o canal nem aparece. Em texto, sem *Enviar mensagens* caem *Enviar arquivos* e *Mencionar @all*. Em voz, sem *Conectar* caem falar, transmitir, mesa de áudio e moderação.
 
-O cálculo é o mesmo no backend (`backend/internal/permission`) e no app (`frontend/src/renderer/src/lib/permissions.ts`). Os dois rodam os mesmos casos de `backend/internal/permission/testdata/vectors.json`: mudou uma regra, mude os casos e os dois lados.
+O cálculo é o mesmo no backend (`backend/internal/permission`) e no app (`frontend/src/renderer/src/features/servers/lib/permissions.ts`). Os dois rodam os mesmos casos de `backend/internal/permission/testdata/vectors.json`: mudou uma regra, mude os casos e os dois lados.
 
 ## Permissões
 

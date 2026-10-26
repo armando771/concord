@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { overlayRowOpacity, type OverlayMember, type OverlaySnapshot } from '../lib/overlayState'
+import { overlayRowOpacity, type OverlayMember, type OverlaySnapshot } from '../features/overlay/lib/overlayState'
 import {
   moveOverlayBox,
   normalizeOverlayLayout,
@@ -14,9 +14,9 @@ import {
   type OverlayFrame,
   type OverlayLayout,
   type OverlaySize
-} from '../lib/overlayLayout'
-import { normalizeOverlayShortcut } from '../lib/overlayShortcut'
-import VoiceStateIcons from '../components/call/VoiceStateIcons'
+} from '../features/overlay/lib/overlayLayout'
+import { normalizeOverlayShortcut } from '../features/overlay/lib/overlayShortcut'
+import VoiceStateIcons from '../features/call/components/VoiceStateIcons'
 
 const editHint = (shortcut: string): string =>
   `Arraste para mover · canto para redimensionar · ${shortcut} ou Esc para sair`
