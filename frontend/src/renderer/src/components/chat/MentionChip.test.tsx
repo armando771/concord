@@ -36,7 +36,8 @@ describe('MentionChip integração', () => {
         username: 'me_user',
         display_name: 'Meu Nome',
         email: 'me@example.com',
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       }
     })
     useServerStore.setState({
@@ -48,7 +49,9 @@ describe('MentionChip integração', () => {
       },
       currentMembers: [
         {
+          server_id: 'srv-1',
           user_id: 'user-jamal',
+          role: 'member',
           username: 'jamal',
           display_name: 'Jamal Silva',
           nickname: 'Jamal Nick',
@@ -56,7 +59,9 @@ describe('MentionChip integração', () => {
           role_ids: []
         },
         {
+          server_id: 'srv-1',
           user_id: 'user-mugis',
+          role: 'member',
           username: 'mugis',
           display_name: 'Mugis',
           nickname: null,
