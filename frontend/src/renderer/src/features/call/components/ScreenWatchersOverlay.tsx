@@ -1,5 +1,5 @@
 import type { CallUserInfo } from '../store/callStore'
-import Avatar from '../../../shared/ui/Avatar'
+import CallAvatar from './CallAvatar'
 import { EyeIcon } from '../../../shared/ui/icons'
 
 interface ScreenWatchersOverlayProps {
@@ -37,7 +37,7 @@ export default function ScreenWatchersOverlay({
             title={watcher.display_name || watcher.username}
             className="relative transition-transform hover:z-30 hover:scale-110"
           >
-            <Avatar
+            <CallAvatar
               userId={watcher.id}
               name={watcher.display_name || watcher.username}
               avatarUrl={watcher.avatar_url}
