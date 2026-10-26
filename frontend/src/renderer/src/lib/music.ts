@@ -36,6 +36,16 @@ export const T20 = {
   seeMore: (hidden: number): string => `Ver mais (${hidden})`,
   seeLess: 'Ver menos'
 }
+/** Bloco "Como usar" do cartão de perfil do Maestro (acompanha o /help do backend). */
+export const MAESTRO_HOWTO = {
+  title: 'Como usar',
+  steps: [
+    'Entre em um canal de voz.',
+    'Em qualquer canal de texto, digite /play <link ou nome> para tocar ou pôr na fila.',
+    '/skip pula a sua música ou vota para pular a dos outros, e /fila mostra a fila.',
+    'Digite /help para ver isso de novo. O Maestro sai sozinho depois de 5 min sem música.'
+  ]
+}
 /** Quantas músicas da fila o painel mostra antes do "Ver mais". */
 export const QUEUE_PREVIEW = 3
 
