@@ -25,7 +25,9 @@ function ServerSettingsNav({
 }: ServerSettingsNavProps): React.JSX.Element {
   return (
     <>
-      <p className="m-4 mb-2 truncate text-ds-sm font-medium text-gray-400">{serverName}</p>
+      <p className="m-4 mb-2 truncate pr-10 text-ds-sm font-medium text-gray-400 md:pr-0">
+        {serverName}
+      </p>
       <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
         {sections.map((item) => (
           <button
