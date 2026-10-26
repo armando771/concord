@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useUIStore } from '../store/uiStore'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
+import { useSearchStore } from '../store/searchStore'
 import type { Message } from '../api/messages'
 import { showToast } from '../store/toastStore'
 import SystemMessage from './SystemMessage'
@@ -21,7 +22,14 @@ import {
 } from '../store/useServerNames'
 import { serverDisplayName } from '../lib/serverNames'
 import { useFriendStore } from '../store/friendStore'
-import { applyMention, mentionQuery, mentionSuggestions, messageMentionsMe } from '../lib/mentions'
+import {
+  applyMention,
+  mentionLabels,
+  mentionQuery,
+  mentionSuggestions,
+  messageMentionsMe,
+  type MentionLabels
+} from '../lib/mentions'
 import {
   canEditMessage,
   editErrorMessage,
@@ -55,6 +63,7 @@ import ComposerAttachments from './chat/ComposerAttachments'
 import { useAttachmentDraft } from './chat/useAttachmentDraft'
 import { useTypingSender } from './chat/useTypingSender'
 import TypingIndicator from './chat/TypingIndicator'
+import PendingMessages from './chat/PendingMessages'
 import {
   afterSendFailure,
   canRestoreHere,
@@ -68,14 +77,20 @@ import {
   type ChatPermissions
 } from '../lib/chatPermissions'
 import { actionErrorMessage } from '../lib/permissionErrors'
+import { Skeleton } from './skeleton/Skeleton'
+import { MessageListSkeleton } from './skeleton/layouts'
 import { permissionError } from '../lib/permissions'
 import {
   anchoredScrollTop,
+  bottomScrollPlan,
+  JUMP_HIGHLIGHT_MS,
   measureOffset,
   olderPagePrepended,
   pickAnchor,
   type AnchorCandidate
 } from '../lib/scrollAnchor'
+
+const NO_MENTIONABLE: Mentionable[] = []
 
 export interface Mentionable {
   username: string
@@ -133,6 +148,7 @@ function MessageItem({
   message,
   serverId,
   isHighlighted,
+  mentionLabels,
   onReply,
   onReact,
   onJumpToMessage,
@@ -157,6 +173,8 @@ function MessageItem({
   /** Canal de servidor: autor e resposta com o apelido daquele servidor. */
   serverId?: string
   isHighlighted: boolean
+  /** Nome mostrado nos chips de menção (@nick -> apelido/nome). */
+  mentionLabels?: MentionLabels
   onReply: () => void
   onReact: (emoji: string) => void
   onJumpToMessage: (messageId: string) => void
@@ -219,7 +237,7 @@ function MessageItem({
         <button
           type="button"
           onClick={() => setRevealBlocked(true)}
-          className="cursor-pointer text-[#00a8fc] hover:underline"
+          className="cursor-pointer text-link hover:underline"
         >
           Mostrar
         </button>
@@ -231,12 +249,10 @@ function MessageItem({
     <div
       id={`msg-${message.id}`}
       className={`group relative flex flex-col gap-1 rounded-md px-4 py-1.5 transition-colors ${
-        isHighlighted
-          ? 'bg-[#5865f2]/20 ring-1 ring-[#5865f2]/50'
-          : mentionsMe
-            ? 'border-l-2 border-[#f0b232] bg-[#f0b232]/10 hover:bg-[#f0b232]/15'
-            : 'hover:bg-white/[0.03]'
-      }`}
+        mentionsMe
+          ? 'border-l-2 border-warning bg-warning/10 hover:bg-warning/15'
+          : 'hover:bg-fg/[0.03]'
+      } ${isHighlighted ? 'msg-jump-highlight' : ''}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onContextMenu={(e) => {
@@ -271,7 +287,7 @@ function MessageItem({
               onClick={openProfile}
               style={nameColor ? { color: nameColor } : undefined}
               className={`cursor-pointer text-ds-chat font-medium hover:underline ${
-                nameColor ? '' : 'text-white'
+                nameColor ? '' : 'text-strong'
               }`}
             >
               {nickname ? (
@@ -289,7 +305,10 @@ function MessageItem({
               </span>
             )}
             {message.pinned_at && (
-              <span className="flex items-center gap-0.5 text-ds-xs text-amber-400 font-medium" title="Mensagem fixada">
+              <span
+                className="flex items-center gap-0.5 text-ds-xs text-amber-400 font-medium"
+                title="Mensagem fixada"
+              >
                 <PinIcon className="h-3 w-3" />
                 <span>fixada</span>
               </span>
@@ -304,7 +323,11 @@ function MessageItem({
             />
           ) : (
             message.content && (
-              <MessageText content={message.content} everyone={message.mention_everyone ?? null} />
+              <MessageText
+                content={message.content}
+                everyone={message.mention_everyone ?? null}
+                mentionLabels={mentionLabels}
+              />
             )
           )}
           {message.attachments?.length ? (
@@ -360,7 +383,7 @@ function ChatPane({
   room,
   serverId,
   placeholder = 'Digite sua mensagem',
-  mentionable = [],
+  mentionable = NO_MENTIONABLE,
   canMentionEveryone = false,
   disabledReason: disabledReasonProp,
   permissions = DIRECT_CHAT_PERMISSIONS,
@@ -372,6 +395,7 @@ function ChatPane({
   const hasMoreByRoom = useChatStore((s) => s.hasMoreByRoom)
   const loadingByRoom = useChatStore((s) => s.loadingByRoom)
   const messages = messagesByRoom[room] ?? []
+  const pendingCount = useChatStore((s) => s.pendingByRoom[room]?.length ?? 0)
   const hasMore = hasMoreByRoom[room] ?? false
   const loading = loadingByRoom[room] ?? true
   const openRoom = useChatStore((s) => s.openRoom)
@@ -395,6 +419,8 @@ function ChatPane({
   const [replyState, setReplyState] = useState<{ room: string; message: Message } | null>(null)
   const replyingTo = replyState?.room === room ? replyState.message : null
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
+  const highlightTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(highlightTimer.current), [])
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { drafts, addFiles: addDraftFiles, remove: removeAttachment } = useAttachmentDraft(room)
@@ -440,6 +466,29 @@ function ChatPane({
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
   const [highlightChoice, setHighlight] = useState<number | null>(null)
   const meUsername = useAuthStore((s) => s.user?.username)
+  const meUser = useAuthStore((s) => s.user)
+  // Chips de menção: quem está no chat, eu e os autores da lista (que podem
+  // ter saído do servidor). Em servidor vale o apelido; em DM, o nome.
+  const roomMessages = messagesByRoom[room]
+  const labels = useMemo(
+    () =>
+      mentionLabels([
+        ...mentionable,
+        ...(meUser
+          ? [
+              {
+                username: meUser.username,
+                display_name: meUser.display_name,
+                nickname: nicknames?.[meUser.id]
+              }
+            ]
+          : []),
+        ...(roomMessages ?? []).flatMap((m) =>
+          m.author ? [{ ...m.author, nickname: nicknames?.[m.author_id] }] : []
+        )
+      ]),
+    [mentionable, meUser, roomMessages, nicknames]
+  )
   // Tab/Enter pegam o item padrão (sempre uma pessoa, se houver) até a
   // pessoa navegar com as setas.
   const { items: suggestions, defaultIndex } = mention
@@ -548,7 +597,7 @@ function ChatPane({
   const ephemeralCount = useMusicStore((s) => s.ephemeral.length)
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
-  const firstRender = useRef(true)
+  const contentRef = useRef<HTMLDivElement>(null)
   // loadOlder: a antiga primeira mensagem (e sua posição no conteúdo) fica
   // no mesmo lugar da tela quando a página antiga entra em cima dela. As
   // seguintes vão junto, de reserva, caso ela seja apagada durante a espera.
@@ -563,16 +612,47 @@ function ChatPane({
     }
   }, [room, openRoom])
 
-  useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false
-      bottomRef.current?.scrollIntoView()
-      return
-    }
-    if (stickToBottom.current) {
+  // Abrir a sala: a lista já nasce no fim, de uma vez e antes de pintar (sem
+  // rolar na frente da pessoa). Depois disso, mensagem nova rola suave.
+  const positionedRoom = useRef<string | null>(null)
+  const lastCount = useRef(0)
+  const settleUntil = useRef(0)
+  // As pendentes ("enviando…") contam: a própria mensagem aparece embaixo.
+  const total = messages.length + ephemeralCount + pendingCount
+  useLayoutEffect(() => {
+    const plan = bottomScrollPlan({
+      positionedRoom: positionedRoom.current,
+      room,
+      loading,
+      stickToBottom: stickToBottom.current,
+      countChanged: total !== lastCount.current
+    })
+    positionedRoom.current = plan.positionedRoom
+    lastCount.current = total
+    const el = scrollRef.current
+    if (plan.scroll === 'instant') {
+      if (el) el.scrollTop = el.scrollHeight
+      // Imagem e mídia que acabam de carregar empurram o fim: acompanha por
+      // um instante, só se a pessoa ainda estiver no fim.
+      settleUntil.current = Date.now() + 1500
+    } else if (plan.scroll === 'smooth') {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages.length, ephemeralCount])
+  }, [room, loading, total])
+
+  // Conteúdo que cresce logo após abrir (imagens): mantém o fim à vista.
+  useEffect(() => {
+    const content = contentRef.current
+    const el = scrollRef.current
+    if (!content || !el || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => {
+      if (Date.now() < settleUntil.current && stickToBottom.current) {
+        el.scrollTop = el.scrollHeight
+      }
+    })
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [loading, room])
 
   const firstId = messages[0]?.id
   useLayoutEffect(() => {
@@ -633,6 +713,8 @@ function ChatPane({
     e.preventDefault()
     if (!submittable || sending) return
     setSending(true)
+    // A própria mensagem (e o "enviando…") aparece embaixo: acompanha.
+    stickToBottom.current = true
     const sentRoom = room
     const sentText = draft
     const sentReply = replyingTo
@@ -782,24 +864,78 @@ function ChatPane({
     requestAnimationFrame(() => inputRef.current?.focus())
   }
 
-  const handleJumpToMessage = (messageId: string): void => {
-    const el = document.getElementById(`msg-${messageId}`)
-    if (!el) {
-      showToast.info('A mensagem original é mais antiga e não está carregada na tela.')
-      return
-    }
+  const showMessage = (el: HTMLElement, messageId: string): void => {
+    stickToBottom.current = false
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    setHighlightedId(messageId)
-    window.setTimeout(() => {
+    // Zera antes: pular de novo para a mesma mensagem reinicia o pulso.
+    window.clearTimeout(highlightTimer.current)
+    setHighlightedId(null)
+    requestAnimationFrame(() => setHighlightedId(messageId))
+    highlightTimer.current = window.setTimeout(() => {
       setHighlightedId((current) => (current === messageId ? null : current))
-    }, 1600)
+    }, JUMP_HIGHLIGHT_MS + 100)
   }
 
+  // Mensagem fora da tela (resposta antiga, resultado da busca): carrega as
+  // páginas antigas até ela, com a mesma âncora do "Carregar mensagens
+  // anteriores" (a tela não pula enquanto carrega), e então rola até ela.
+  const handleJumpToMessage = async (messageId: string): Promise<void> => {
+    const shown = (): HTMLElement | null => {
+      const node = document.getElementById(`msg-${messageId}`)
+      return node && scrollRef.current?.contains(node) ? node : null
+    }
+    const el = shown()
+    if (el) {
+      showMessage(el, messageId)
+      return
+    }
+    const startedRoom = room
+    const container = scrollRef.current
+    if (container) {
+      const candidates: AnchorCandidate[] = []
+      for (const m of messages.slice(0, ANCHOR_CANDIDATES)) {
+        const node = document.getElementById(`msg-${m.id}`)
+        if (node) candidates.push({ id: m.id, offset: measureOffset(container, node) })
+      }
+      if (candidates.length > 0) olderAnchor.current = { room: startedRoom, candidates }
+    }
+    stickToBottom.current = false
+    setLoadingOlderRooms((current) => new Set(current).add(startedRoom))
+    const found = await useChatStore.getState().loadOlderUntil(startedRoom, messageId)
+    setLoadingOlderRooms((current) => {
+      const next = new Set(current)
+      next.delete(startedRoom)
+      return next
+    })
+    if (roomRef.current !== startedRoom) return
+    if (!found) {
+      showToast.info('Não encontrei essa mensagem: ela pode ter sido apagada ou ser antiga demais.')
+      return
+    }
+    // Espera o React desenhar a página que chegou.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const node = shown()
+        if (node) showMessage(node, messageId)
+      })
+    )
+  }
+
+  // Clique num resultado da busca: pula quando a sala já carregou.
+  const pendingJump = useSearchStore((s) => s.pendingJump)
   useEffect(() => {
-    const onJump = (e: Event) => {
+    if (!pendingJump || pendingJump.room !== room || loading) return
+    useSearchStore.getState().clearJump()
+    void handleJumpToMessage(pendingJump.messageId)
+    // handleJumpToMessage muda a cada render; o gatilho é o pedido de pulo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingJump, room, loading])
+
+  useEffect(() => {
+    const onJump = (e: Event): void => {
       const detail = (e as CustomEvent<{ messageId: string }>).detail
       if (detail?.messageId) {
-        handleJumpToMessage(detail.messageId)
+        void handleJumpToMessage(detail.messageId)
       }
     }
     window.addEventListener('concord:jump-to-message', onJump)
@@ -809,7 +945,7 @@ function ChatPane({
   const isChannel = room.startsWith('channel:')
   const channelId = isChannel ? room.slice('channel:'.length) : null
 
-  const handleTogglePin = async (message: Message) => {
+  const handleTogglePin = async (message: Message): Promise<void> => {
     if (!channelId) return
     if (message.pinned_at) {
       await usePinStore.getState().unpin(channelId, message.id)
@@ -839,13 +975,13 @@ function ChatPane({
       ? latestPin.attachments[0].kind === 'image'
         ? '📷 Imagem'
         : latestPin.attachments[0].kind === 'video'
-        ? '🎥 Vídeo'
-        : latestPin.attachments[0].kind === 'audio'
-        ? '🎵 Áudio'
-        : '📎 Anexo'
+          ? '🎥 Vídeo'
+          : latestPin.attachments[0].kind === 'audio'
+            ? '🎵 Áudio'
+            : '📎 Anexo'
       : latestPin?.poll
-      ? '📊 Enquete: ' + latestPin.poll.question
-      : 'Mensagem fixada')
+        ? '📊 Enquete: ' + latestPin.poll.question
+        : 'Mensagem fixada')
 
   const replyTargetAuthor = serverDisplayName(
     { nickname: replyingTo ? nicknames?.[replyingTo.author_id] : undefined },
@@ -863,7 +999,7 @@ function ChatPane({
       onDrop={handleDrop}
     >
       {dragging && (
-        <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-violet-400/70 bg-black/60 text-sm font-semibold text-white">
+        <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-violet-400/70 bg-black/60 text-sm font-semibold text-white on-media">
           Solte os arquivos para enviar
         </div>
       )}
@@ -873,28 +1009,24 @@ function ChatPane({
         <div
           role="button"
           tabIndex={0}
-          onClick={() => handleJumpToMessage(latestPin.id)}
-          onKeyDown={(e) => e.key === 'Enter' && handleJumpToMessage(latestPin.id)}
+          onClick={() => void handleJumpToMessage(latestPin.id)}
+          onKeyDown={(e) => e.key === 'Enter' && void handleJumpToMessage(latestPin.id)}
           title="Clique para ir até a mensagem fixada"
-          className="group relative z-10 flex shrink-0 cursor-pointer items-center justify-between border-b border-white/6 bg-[#18191c]/80 px-4 py-2 backdrop-blur transition hover:bg-[#1f2024]"
+          className="group relative z-10 flex shrink-0 cursor-pointer items-center justify-between border-b border-subtle bg-floating px-4 py-2 backdrop-blur transition hover:bg-surface"
         >
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-amber-400/15 text-amber-400">
               <PinIcon className="h-3.5 w-3.5" />
             </span>
             <div className="flex min-w-0 items-center gap-1.5 text-ds-xs">
-              <span className="shrink-0 font-semibold text-white">
-                {latestPinAuthorName}:
-              </span>
-              <span className="truncate text-gray-300">
-                {latestPinPreview}
-              </span>
+              <span className="shrink-0 font-semibold text-strong">{latestPinAuthorName}:</span>
+              <span className="truncate text-gray-300">{latestPinPreview}</span>
             </div>
           </div>
 
           <div className="flex shrink-0 items-center gap-2 pl-3">
             {pins.length > 1 && (
-              <span className="rounded bg-white/5 px-2 py-0.5 text-[10px] font-medium text-gray-400">
+              <span className="rounded bg-fg/5 px-2 py-0.5 text-[10px] font-medium text-gray-400">
                 +{pins.length - 1} fixada{pins.length - 1 > 1 ? 's' : ''}
               </span>
             )}
@@ -912,19 +1044,25 @@ function ChatPane({
         onScroll={handleScroll}
       >
         {loading ? (
-          <div className="flex h-full items-center justify-center text-sm text-gray-400">
-            Carregando mensagens...
-          </div>
+          // closeRoom apaga a lista ao sair do canal: carregando é sempre a primeira carga.
+          <MessageListSkeleton />
         ) : (
-          <div className="flex min-h-full flex-col justify-end py-4">
+          <div ref={contentRef} className="flex min-h-full flex-col justify-end py-4">
             {hasMore && (
               <div className="flex justify-center py-2">
                 <button
                   onClick={handleLoadOlder}
                   disabled={loadingOlder}
-                  className="cursor-pointer rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+                  className="cursor-pointer rounded-full border border-subtle bg-fg/5 px-3 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:bg-fg/10 hover:text-strong disabled:opacity-50"
                 >
-                  {loadingOlder ? 'Carregando...' : 'Carregar mensagens anteriores'}
+                  {loadingOlder ? (
+                    <span className="flex h-4 items-center">
+                      <Skeleton className="h-2.5 w-36" />
+                      <span className="sr-only">Carregando mensagens anteriores</span>
+                    </span>
+                  ) : (
+                    'Carregar mensagens anteriores'
+                  )}
                 </button>
               </div>
             )}
@@ -939,6 +1077,7 @@ function ChatPane({
                 message={m}
                 serverId={serverId}
                 isHighlighted={highlightedId === m.id}
+                mentionLabels={labels}
                 onReply={() => handleStartReply(m)}
                 onReact={(emoji) => void handleReact(m.id, emoji)}
                 onJumpToMessage={handleJumpToMessage}
@@ -958,6 +1097,7 @@ function ChatPane({
                 onTogglePin={() => void handleTogglePin(m)}
               />
             ))}
+            <PendingMessages room={room} />
             <MusicEphemeralList room={room} serverId={serverId ?? null} />
             <div ref={bottomRef} />
           </div>
@@ -969,7 +1109,7 @@ function ChatPane({
           <ul
             role="listbox"
             aria-label="Marcar alguém"
-            className="absolute bottom-full left-4 right-4 mb-2 overflow-hidden rounded-lg border border-white/10 bg-[#111214] py-1 shadow-2xl"
+            className="absolute bottom-full left-4 right-4 mb-2 overflow-hidden rounded-lg border border-subtle bg-floating py-1 shadow-2xl"
           >
             {suggestions.map((m, i) => (
               <li
@@ -982,7 +1122,7 @@ function ChatPane({
                 }}
                 onMouseEnter={() => setHighlight(i)}
                 className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm ${
-                  i === highlight ? 'bg-[#5865f2]/30 text-white' : 'text-gray-300'
+                  i === highlight ? 'bg-brand/30 text-strong' : 'text-gray-300'
                 }`}
               >
                 {m.kind === 'everyone' ? (
@@ -1002,29 +1142,29 @@ function ChatPane({
         )}
         <ComposerAttachments drafts={drafts} onRemove={removeAttachment} />
         {replyingTo && (
-          <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#18191c] px-3 py-1.5 text-ds-sm text-gray-300">
+          <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg border border-subtle bg-floating px-3 py-1.5 text-ds-sm text-gray-300">
             <div className="min-w-0 truncate">
-              Respondendo a <span className="font-semibold text-white">@{replyTargetAuthor}</span>
+              Respondendo a <span className="font-semibold text-strong">@{replyTargetAuthor}</span>
               <span className="ml-2 text-gray-400">{messagePreview(replyingTo)}</span>
             </div>
             <button
               type="button"
               onClick={() => setReplyState(null)}
               title="Cancelar resposta (Esc)"
-              className="shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+              className="shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
             >
               ✕
             </button>
           </div>
         )}
         {disabledReason ? (
-          <div className="rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-center text-sm text-gray-400">
+          <div className="rounded-xl border border-subtle bg-input px-4 py-3 text-center text-sm text-gray-400">
             {disabledReason}
           </div>
         ) : (
           <form
             onSubmit={handleSubmit}
-            className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
+            className="relative flex items-center gap-2 rounded-xl border border-subtle bg-input px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
           >
             {room.startsWith('channel:') && !mention && (
               <SlashSuggestions
@@ -1041,7 +1181,7 @@ function ChatPane({
                 onClick={() => fileInputRef.current?.click()}
                 title="Anexar arquivo"
                 aria-label="Anexar arquivo"
-                className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+                className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
               >
                 <PaperclipIcon className="h-5 w-5" />
               </button>
@@ -1062,7 +1202,7 @@ function ChatPane({
               onClick={() => setPollOpen(true)}
               title="Criar enquete"
               aria-label="Criar enquete"
-              className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+              className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
             >
               <PollIcon className="h-5 w-5" />
             </button>
@@ -1080,7 +1220,7 @@ function ChatPane({
               onBlur={() => setMention(null)}
               placeholder={replyingTo ? `Responder a @${replyTargetAuthor}...` : placeholder}
               maxLength={2000}
-              className="min-w-0 flex-1 bg-transparent text-ds-chat text-white placeholder:text-gray-500 outline-none"
+              className="min-w-0 flex-1 bg-transparent text-ds-chat text-strong placeholder:text-gray-500 outline-none"
             />
             {permissions.canAttach && (
               <VoiceRecordButton key={room} disabled={sendingVoice} onRecorded={handleRecorded} />
@@ -1088,7 +1228,7 @@ function ChatPane({
             <button
               type="submit"
               disabled={sending || !submittable}
-              className="cursor-pointer rounded-lg bg-[#5865f2] px-3 py-1.5 text-ds-sm font-medium text-white transition-all hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-40"
+              className="cursor-pointer rounded-lg bg-brand px-3 py-1.5 text-ds-sm font-medium text-white transition-all hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-40"
             >
               {attachmentState.uploading
                 ? 'Enviando arquivos...'

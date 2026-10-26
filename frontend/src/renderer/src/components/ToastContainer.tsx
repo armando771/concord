@@ -21,10 +21,10 @@ export function ToastContainer(): React.JSX.Element {
             key={toast.id}
             className={`pointer-events-auto flex items-center justify-between gap-3 rounded-xl border p-3.5 shadow-2xl backdrop-blur-xl transition-all duration-300 animate-in fade-in slide-in-from-top-2 ${
               isSuccess
-                ? 'border-emerald-500/30 bg-[#07150e]/90 text-emerald-200'
+                ? 'border-emerald-500/30 bg-floating text-emerald-200'
                 : isError
-                  ? 'border-red-500/30 bg-[#170709]/90 text-red-200'
-                  : 'border-violet-500/30 bg-[#0d0917]/90 text-violet-200'
+                  ? 'border-red-500/30 bg-floating text-red-200'
+                  : 'border-violet-500/30 bg-floating text-violet-200'
             }`}
           >
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
@@ -39,14 +39,14 @@ export function ToastContainer(): React.JSX.Element {
                   toast.action?.run()
                   removeToast(toast.id)
                 }}
-                className="shrink-0 cursor-pointer rounded-md border border-white/15 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-white/10"
+                className="shrink-0 cursor-pointer rounded-md border border-normal px-2 py-1 text-xs font-semibold text-strong transition-colors hover:bg-fg/10"
               >
                 {toast.action.label}
               </button>
             )}
             <button
               onClick={() => removeToast(toast.id)}
-              className="shrink-0 text-gray-400 hover:text-white transition-colors p-1 rounded-md hover:bg-white/10"
+              className="shrink-0 text-gray-400 hover:text-strong transition-colors p-1 rounded-md hover:bg-fg/10"
               title="Fechar"
             >
               ✕

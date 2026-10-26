@@ -113,6 +113,22 @@ func buildIssueCreator() proposal.IssueCreator {
 	return nil
 }
 
+// salinhaBotNotifier: o Salinha Bot escreve na DM de quem sugeriu o card
+// (abre a DM sem as regras de amizade; a conversa é só leitura para a pessoa).
+type salinhaBotNotifier struct {
+	conversations *conversation.Service
+	messages      *message.Service
+}
+
+func (n salinhaBotNotifier) Notify(ctx context.Context, userID, text string) error {
+	conv, err := n.conversations.GetOrCreateBotDM(ctx, bot.SalinhaBotID, userID)
+	if err != nil {
+		return err
+	}
+	_, err = n.messages.CreateConversationMessage(ctx, conv.ID, bot.SalinhaBotID, text, nil, nil)
+	return err
+}
+
 func findMigrationsDir() string {
 	// O deploy aplica as migrations novas de uma pasta à parte antes de
 	// trocá-las pelas do binário no ar (scripts/deploy-vps.sh).
@@ -326,6 +342,7 @@ func main() {
 	uploadSpace := media.NewSpace(uploadsDir, media.ReserveFromEnv(os.Getenv("UPLOADS_MIN_FREE_GB")))
 	roomAccess := message.NewServiceRoomAccess(channelService, permissionService, conversationService, friendshipService)
 	attachmentHandler := message.NewAttachmentHandler(messageRepository, uploads, uploadSpace, roomAccess, authService)
+	searchHandler := message.NewSearchHandler(messageRepository, permissionService, roomAccess)
 
 	// Boas-vindas no canal "avisos" para todo usuário novo no servidor.
 	serverService.OnMemberJoined(func(ctx context.Context, serverID string, member server.ServerMember) {
@@ -480,7 +497,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to open proposal images dir: %v", err)
 	}
-	proposalService := proposal.ProposalService(proposal.ProposalRepository(db), hub, issueCreator, proposalImages, techIDs)
+	proposalService := proposal.ProposalService(proposal.ProposalRepository(db), hub, issueCreator, proposalImages, techIDs).
+		WithNotifier(salinhaBotNotifier{conversations: conversationService, messages: messageService})
 	proposalHandler := proposal.ProposalHandler(proposalService, proposalImages, uploadSpace)
 	go proposalService.Run(ctx)
 
@@ -537,6 +555,7 @@ func main() {
 	conversation.ConversationRoutes(api, conversationHandler, authMiddleware)
 	message.MessageRoutes(api, messageHandler, authMiddleware)
 	message.AttachmentRoutes(api, attachmentHandler, authMiddleware)
+	message.SearchRoutes(api, searchHandler, authMiddleware)
 	call.CallRoutes(api, callHandler, authMiddleware)
 	soundboard.Routes(api, soundboardHandler, authMiddleware)
 	level.LevelRoutes(api, levelHandler, authMiddleware)

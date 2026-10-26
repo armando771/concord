@@ -16,6 +16,8 @@ import Button from '../components/Button'
 import { DiamondIcon } from '../components/icons'
 import BoardColumn from '../components/proposals/BoardColumn'
 import ConfirmCloseModal from '../components/proposals/ConfirmCloseModal'
+import ConfirmTakeoverModal from '../components/proposals/ConfirmTakeoverModal'
+import GithubUsernameButton from '../components/proposals/GithubUsernameButton'
 import DraggableProposalCard from '../components/proposals/DraggableProposalCard'
 import RejectDropZone from '../components/proposals/RejectDropZone'
 import NewProposalModal from '../components/proposals/NewProposalModal'
@@ -25,6 +27,7 @@ import {
   BOARD_COLUMNS,
   canDropOn,
   needsCloseConfirm,
+  needsTakeover,
   REJECTED_COLUMN,
   sortColumn
 } from '../lib/proposals'
@@ -32,6 +35,7 @@ import { snapCenterToCursor } from '../lib/dragModifiers'
 import { useAuthStore } from '../store/authStore'
 import { useProposalStore } from '../store/proposalStore'
 import { showToast } from '../store/toastStore'
+import { ProposalBoardSkeleton } from '../components/skeleton/layouts'
 
 interface ProposalActions {
   onVote: (approve: boolean) => Promise<void>
@@ -77,6 +81,14 @@ function Proposals(): React.JSX.Element {
   const dragging = draggingId ? (proposals.find((p) => p.id === draggingId) ?? null) : null
   // Se a votação acabou (ou o card sumiu) com a confirmação aberta, não há mais o que confirmar.
   const pendingCard = pendingMove ? (proposals.find((p) => p.id === pendingMove.id) ?? null) : null
+  // Mover um card que está com outro dev pede confirmação (tira a tarefa dele).
+  const [pendingTakeover, setPendingTakeover] = useState<{
+    id: string
+    status: ProposalStatus
+  } | null>(null)
+  const takeoverCard = pendingTakeover
+    ? (proposals.find((p) => p.id === pendingTakeover.id) ?? null)
+    : null
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: DRAG_DISTANCE_PX } })
@@ -134,26 +146,35 @@ function Proposals(): React.JSX.Element {
 
   // O card já voltou sozinho (setStatus desfaz); recarregar mostra o que mudou de verdade
   // (por exemplo, outra pessoa moveu o mesmo card antes).
-  const move = (id: string, status: ProposalStatus): Promise<void> =>
+  const move = (id: string, status: ProposalStatus, takeOver = false): Promise<void> =>
     run(
       id,
       async () => {
         try {
-          await setStatus(id, status)
+          await setStatus(id, status, takeOver)
         } catch (err) {
-          fetchProposals()
+          await fetchProposals()
+          // Outro dev pegou o card no meio: confirma de novo, já com o nome dele.
+          if (err instanceof ApiError && err.code === 'assignee_conflict') {
+            setPendingTakeover({ id, status })
+            return
+          }
           throw err
         }
       },
       'Não foi possível mover a proposta.'
     )
 
-  // Arrastando ou pelo menu "Mover para…": a mesma regra e a mesma confirmação.
+  // Arrastando ou pelo menu "Mover para…": a mesma regra e as mesmas confirmações.
   const requestMove = async (id: string, status: ProposalStatus): Promise<void> => {
     const card = proposals.find((p) => p.id === id)
     if (!card || !canDropOn(card.status, status)) return
     if (needsCloseConfirm(card)) {
       setPendingMove({ id, status })
+      return
+    }
+    if (needsTakeover(card, meId, status)) {
+      setPendingTakeover({ id, status })
       return
     }
     await move(id, status)
@@ -183,12 +204,13 @@ function Proposals(): React.JSX.Element {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-[#07080b]/90 backdrop-blur-2xl text-gray-100">
+    <div className="flex h-full w-full overflow-hidden bg-primary backdrop-blur-2xl text-gray-100">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-white/6 px-4">
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-subtle px-4">
           <DiamondIcon className="h-6 w-6 text-violet-400" />
-          <span className="text-base font-bold tracking-wide text-white">Propostas</span>
+          <span className="text-base font-bold tracking-wide text-strong">Propostas</span>
           <div className="ml-auto flex items-center gap-2">
+            {isTech && <GithubUsernameButton />}
             <Button variant="ghost" onClick={() => setShowRejected((v) => !v)}>
               {showRejected ? 'Ocultar recusadas' : `Ver recusadas (${rejectedCount})`}
             </Button>
@@ -197,7 +219,7 @@ function Proposals(): React.JSX.Element {
         </header>
 
         {loading ? (
-          <div className="py-8 text-center text-sm text-gray-400">Carregando propostas...</div>
+          <ProposalBoardSkeleton columns={columns} />
         ) : (
           <DndContext
             sensors={sensors}
@@ -291,6 +313,18 @@ function Proposals(): React.JSX.Element {
             const { id, status } = pendingMove
             setPendingMove(null)
             void move(id, status)
+          }}
+        />
+      )}
+      {pendingTakeover && takeoverCard?.assignee && (
+        <ConfirmTakeoverModal
+          proposal={takeoverCard}
+          target={pendingTakeover.status}
+          onCancel={() => setPendingTakeover(null)}
+          onConfirm={() => {
+            const { id, status } = pendingTakeover
+            setPendingTakeover(null)
+            void move(id, status, true)
           }}
         />
       )}

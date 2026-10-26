@@ -176,6 +176,8 @@ func (s *Service) announce(userID string, saved []Unlock) {
 
 func rarityRank(r string) int {
 	switch r {
+	case RarityMythic:
+		return 4
 	case RarityLegendary:
 		return 3
 	case RarityEpic:

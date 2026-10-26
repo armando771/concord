@@ -157,12 +157,12 @@ function ScreenMiniPlayer(): React.JSX.Element | null {
       aria-label={`Voltar para a chamada: transmissão de ${name}`}
       title="Voltar para a chamada (arraste para mover)"
       style={{ right: shown.right, bottom: shown.bottom }}
-      className={`fixed z-40 aspect-video w-72 touch-none select-none overflow-hidden rounded-2xl bg-black shadow-xl ring-2 ring-[#23a55a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+      className={`on-media fixed z-40 aspect-video w-72 touch-none select-none overflow-hidden rounded-2xl bg-black shadow-xl ring-2 ring-success focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
         dragging ? 'cursor-grabbing' : 'cursor-pointer'
       }`}
     >
       <VideoFill stream={screenStreams[id]} fit="contain" />
-      <div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-[#f23f43] px-1.5 py-0.5">
+      <div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-danger-strong px-1.5 py-0.5">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
         <span className="text-[10px] font-bold uppercase tracking-wide text-white">Ao vivo</span>
       </div>
@@ -175,12 +175,12 @@ function ScreenMiniPlayer(): React.JSX.Element | null {
         }}
         aria-label="Fechar transmissão"
         title="Fechar transmissão"
-        className="absolute right-2 top-2 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
+        className="absolute right-2 top-2 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white on-media"
       >
         <XIcon className="h-3.5 w-3.5" />
       </button>
-      <div className="absolute bottom-2 left-2 max-w-[calc(100%-1rem)] rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm">
-        <span className="block truncate text-xs font-semibold text-white">{name}</span>
+      <div className="absolute bottom-2 left-2 max-w-[calc(100%-1rem)] rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm on-media">
+        <span className="block truncate text-xs font-semibold text-strong">{name}</span>
       </div>
     </div>
   )

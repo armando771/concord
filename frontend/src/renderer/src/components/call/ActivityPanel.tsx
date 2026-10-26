@@ -28,18 +28,18 @@ function ActivityPanel(): React.JSX.Element | null {
         minimized ? 'pointer-events-none invisible' : ''
       }`}
     >
-      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-white/10 bg-[#0b0c10] px-3">
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-subtle bg-secondary px-3">
         <span style={{ color: activity.accent }}>
           <ActivityGlyph activity={activity} className="h-4 w-4" />
         </span>
-        <span className="min-w-0 flex-1 truncate text-xs font-bold text-white">
+        <span className="min-w-0 flex-1 truncate text-xs font-bold text-strong">
           {activity.name}
         </span>
         <a
           href={local.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+          className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-gray-300 transition-colors hover:bg-fg/10 hover:text-strong"
         >
           Abrir em nova aba
         </a>
@@ -48,7 +48,7 @@ function ActivityPanel(): React.JSX.Element | null {
           onClick={() => setMinimized(true)}
           aria-label="Minimizar atividade"
           title="Minimizar (o jogo continua)"
-          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-gray-300 transition-colors hover:bg-fg/10 hover:text-strong"
         >
           <ChevronDownIcon className="h-4 w-4" />
         </button>
@@ -57,7 +57,7 @@ function ActivityPanel(): React.JSX.Element | null {
           onClick={closeLocal}
           aria-label="Sair da atividade"
           title="Sair do jogo"
-          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-gray-300 transition-colors hover:bg-[#f23f43]/20 hover:text-[#f23f43]"
+          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-gray-300 transition-colors hover:bg-danger/20 hover:text-danger"
         >
           <XIcon className="h-4 w-4" />
         </button>

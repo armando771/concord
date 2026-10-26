@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import { getMe } from '../api/users'
 import { ApiError } from '../api/client'
 import { isDefinitiveRejection } from '../lib/authRefresh'
+import { AppBootSkeleton } from './skeleton/layouts'
 
 interface RequireAuthProps {
   children: React.ReactElement
@@ -56,12 +57,9 @@ function RequireAuth({ children }: RequireAuthProps): React.JSX.Element {
 
   if (!user) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4">
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/20 border-t-violet-500" />
-        {offline && (
-          <p className="text-sm text-gray-400">Sem conexão com o servidor. Tentando de novo…</p>
-        )}
-      </div>
+      <AppBootSkeleton
+        notice={offline ? 'Sem conexão com o servidor. Tentando de novo…' : undefined}
+      />
     )
   }
 

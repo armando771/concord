@@ -1,4 +1,9 @@
-import { activityLaunchUrl, findActivity, validateActivityLink } from '../../../shared/activities'
+import {
+  activityLaunchUrl,
+  findActivity,
+  validateActivityLink,
+  type ActivityDefinition
+} from '../../../shared/activities'
 import { serverDisplayName } from './serverNames'
 
 // Estado das atividades na chamada. Puro para poder testar: o activityStore só
@@ -17,6 +22,8 @@ export interface RawCallActivity {
   activity_id: string
   url: string
   started_by: ActivityUser
+  /** Ids de quem está jogando (o backend sempre inclui quem abriu). */
+  players?: string[]
 }
 
 /** Atividade aberta na chamada (todos veem a barra "Fulano abriu …"). */
@@ -26,6 +33,8 @@ export interface CallActivity {
   /** Link da sala; vazio = sem link (quem entra abre a página do jogo). */
   url: string
   startedBy: ActivityUser
+  /** Quem está com o jogo aberto agora (selo na lista e nos tiles). */
+  players: string[]
 }
 
 /** O jogo aberto neste app (janela no desktop, painel no navegador). */
@@ -56,6 +65,8 @@ export type ActivityAction =
   | { type: 'hydrate'; callId: string; activity: RawCallActivity | null }
   /** call:activity (meId: o eco do meu pedido abre o jogo pendente). */
   | { type: 'started'; activity: RawCallActivity; meId?: string | null }
+  /** call:activity:players: quem está jogando mudou. */
+  | { type: 'players'; callId: string; activityId: string; players: unknown }
   /** call:activity:stop */
   | { type: 'stopped'; callId: string; startedBy?: string }
   /** Pedi para abrir (url = o que abrir quando o servidor aceitar). */
@@ -66,6 +77,15 @@ export type ActivityAction =
   | { type: 'opened'; activityId: string; url: string }
   /** Fechei o jogo aqui. */
   | { type: 'closed' }
+
+/** Ids em texto, sem repetidos; quem abriu sempre conta como jogador. */
+function parsePlayers(raw: unknown, starterId: string): string[] {
+  const ids = new Set<string>([starterId])
+  if (Array.isArray(raw)) {
+    for (const id of raw) if (typeof id === 'string' && id) ids.add(id)
+  }
+  return [...ids]
+}
 
 function parseActivity(raw: RawCallActivity | null | undefined): CallActivity | null {
   if (!raw || typeof raw !== 'object') return null
@@ -82,7 +102,8 @@ function parseActivity(raw: RawCallActivity | null | undefined): CallActivity | 
       username: startedBy.username ?? '',
       display_name: startedBy.display_name ?? '',
       avatar_url: startedBy.avatar_url ?? null
-    }
+    },
+    players: parsePlayers(raw.players, startedBy.id)
   }
 }
 
@@ -124,6 +145,21 @@ export function activityReducer(state: ActivityState, action: ActivityAction): A
       if (!current || action.callId !== current.callId) return state
       if (action.startedBy && action.startedBy !== current.startedBy.id) return state
       return { ...state, shared: null }
+    }
+
+    case 'players': {
+      const current = state.shared
+      if (
+        !current ||
+        action.callId !== current.callId ||
+        action.activityId !== current.activityId
+      ) {
+        return state
+      }
+      return {
+        ...state,
+        shared: { ...current, players: parsePlayers(action.players, current.startedBy.id) }
+      }
     }
 
     case 'opened':
@@ -188,4 +224,50 @@ export function activityBanner(
     hasLink: shared.url !== '',
     launchUrl
   }
+}
+
+/** A atividade em que userId está jogando nesta chamada (selo); null = nenhuma. */
+export function activityOfPlayer(state: ActivityState, userId: string): ActivityDefinition | null {
+  const shared = state.shared
+  if (!shared || !shared.players.includes(userId)) return null
+  return findActivity(shared.activityId) ?? null
+}
+
+/**
+ * Estou com o jogo da atividade aberto aqui, mas o servidor ainda não me conta
+ * como jogador (abri agora, ou a atividade foi reaberta): avisar com join.
+ */
+export function needsJoinReport(state: ActivityState, meId: string | null): boolean {
+  const { shared, local } = state
+  if (!meId || !shared || !local || local.activityId !== shared.activityId) return false
+  return shared.startedBy.id !== meId && !shared.players.includes(meId)
+}
+
+/** "Juntar-se à atividade" no perfil de quem está jogando (e eu ainda não). */
+export function canJoinFromProfile(
+  state: ActivityState,
+  meId: string | null,
+  userId: string
+): boolean {
+  if (!meId || userId === meId || state.local) return false
+  return activityOfPlayer(state, userId) !== null
+}
+
+/**
+ * Desktop: a janela do jogo de quem abriu entrou numa sala. Devolve o link a
+ * compartilhar com a chamada, ou null (não é meu, não é a atividade aberta,
+ * link fora das origens ou a mesma sala que já está lá).
+ */
+export function capturedRoomToShare(
+  state: ActivityState,
+  meId: string | null,
+  activityId: string,
+  url: string
+): string | null {
+  const { shared, local } = state
+  if (!meId || !shared || shared.startedBy.id !== meId) return null
+  if (shared.activityId !== activityId || local?.activityId !== activityId) return null
+  const checked = validateActivityLink(activityId, url)
+  if (!checked.ok || !checked.url || checked.url === shared.url) return null
+  return checked.url
 }

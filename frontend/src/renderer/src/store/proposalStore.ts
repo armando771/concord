@@ -16,6 +16,7 @@ import {
   markProposalMentionsSeen,
   reactToProposalComment,
   removeProposalVote,
+  setGithubUsername,
   setProposalStatus,
   unreactProposalComment,
   updateProposal,
@@ -31,6 +32,8 @@ interface ProposalState {
   proposals: Proposal[]
   isTech: boolean
   loading: boolean
+  /** O quadro já respondeu uma vez: só a primeira carga mostra o skeleton. */
+  loaded: boolean
   /** Última visita ao quadro (ms); nulo até carregar. Os cards criados depois contam no badge. */
   lastSeenAt: number | null
   pendingMentions: PendingProposalMention[]
@@ -41,7 +44,11 @@ interface ProposalState {
   update: (id: string, title: string, description: string, imageIds: string[]) => Promise<void>
   vote: (id: string, approve: boolean) => Promise<void>
   removeVote: (id: string) => Promise<void>
-  setStatus: (id: string, status: ProposalStatus) => Promise<void>
+  /** `takeOver`: confirmou tirar o card do dev que estava com ele. */
+  setStatus: (id: string, status: ProposalStatus, takeOver?: boolean) => Promise<void>
+  /** Usuário do GitHub de quem é do time tech (assignee das issues). */
+  githubUsername: string | null
+  saveGithubUsername: (username: string) => Promise<void>
   remove: (id: string) => Promise<void>
   markSeen: () => void
   fetchMentions: () => Promise<void>
@@ -123,18 +130,21 @@ export const useProposalStore = create<ProposalState>()((set, get) => {
     proposals: [],
     isTech: false,
     loading: false,
+    loaded: false,
     lastSeenAt: null,
     pendingMentions: [],
     commentsByProposal: {},
     fetchProposals: async () => {
       const token = useAuthStore.getState().accessToken
-      if (get().proposals.length === 0) set({ loading: true })
+      if (!get().loaded && get().proposals.length === 0) set({ loading: true })
       try {
         const board = await listProposals()
         if (!isSameSession(token)) return
         set({
           proposals: Array.isArray(board.proposals) ? board.proposals : [],
-          isTech: !!board.is_tech
+          isTech: !!board.is_tech,
+          githubUsername: board.github_username ?? null,
+          loaded: true
         })
         ensureLastSeen()
       } catch (err) {
@@ -153,17 +163,21 @@ export const useProposalStore = create<ProposalState>()((set, get) => {
       // A resposta já vem sem o meu voto: força o nulo no merge.
       set({ proposals: get().proposals.map((x) => (x.id === id ? { ...p, my_vote: null } : x)) })
     },
-    setStatus: async (id, status) => {
+    setStatus: async (id, status, takeOver = false) => {
       // O card muda de coluna antes da resposta (o arrasto não espera a rede);
       // se o servidor recusar, ele volta como estava.
       const previous = get().proposals.find((p) => p.id === id)
       if (previous) set({ proposals: moveProposal(get().proposals, id, status) })
       try {
-        apply(await setProposalStatus(id, status))
+        apply(await setProposalStatus(id, status, takeOver))
       } catch (err) {
         if (previous) set({ proposals: restoreProposal(get().proposals, previous) })
         throw err
       }
+    },
+    githubUsername: null,
+    saveGithubUsername: async (username) => {
+      set({ githubUsername: await setGithubUsername(username) })
     },
     remove: async (id) => {
       await deleteProposal(id)
@@ -279,7 +293,9 @@ export const useProposalStore = create<ProposalState>()((set, get) => {
       set({
         proposals: [],
         isTech: false,
+        githubUsername: null,
         loading: false,
+        loaded: false,
         lastSeenAt: null,
         pendingMentions: [],
         commentsByProposal: {}

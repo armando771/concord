@@ -32,11 +32,11 @@ function BirthdayFields({
           onChange={(e) => onChange({ ...value, day: num(e.target.value) })}
           className={`${selectClass} w-20`}
         >
-          <option value="" className="bg-[#111214]">
+          <option value="" className="bg-floating">
             Dia
           </option>
           {Array.from({ length: maxDay }, (_, i) => i + 1).map((d) => (
-            <option key={d} value={d} className="bg-[#111214]">
+            <option key={d} value={d} className="bg-floating">
               {d}
             </option>
           ))}
@@ -47,11 +47,11 @@ function BirthdayFields({
           onChange={(e) => onChange(fit({ ...value, month: num(e.target.value) }))}
           className={`${selectClass} min-w-0 flex-1`}
         >
-          <option value="" className="bg-[#111214]">
+          <option value="" className="bg-floating">
             Mês
           </option>
           {MONTHS.map((name, i) => (
-            <option key={name} value={i + 1} className="bg-[#111214]">
+            <option key={name} value={i + 1} className="bg-floating">
               {name}
             </option>
           ))}
@@ -62,11 +62,11 @@ function BirthdayFields({
           onChange={(e) => onChange(fit({ ...value, year: num(e.target.value) }))}
           className={`${selectClass} w-24`}
         >
-          <option value="" className="bg-[#111214]">
+          <option value="" className="bg-floating">
             Ano
           </option>
           {birthYears().map((y) => (
-            <option key={y} value={y} className="bg-[#111214]">
+            <option key={y} value={y} className="bg-floating">
               {y}
             </option>
           ))}

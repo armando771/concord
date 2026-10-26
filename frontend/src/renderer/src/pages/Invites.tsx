@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { serverIconSrc } from '../lib/serverIcon'
 import Button from '../components/Button'
 import { InboxIcon } from '../components/icons'
+import { InviteListSkeleton } from '../components/skeleton/layouts'
 import { useInviteStore } from '../store/inviteStore'
 import { useServerStore } from '../store/serverStore'
 import { showToast } from '../store/toastStore'
@@ -55,20 +56,20 @@ function Invites(): React.JSX.Element {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-[#07080b]/90 backdrop-blur-2xl text-gray-100">
+    <div className="flex h-full w-full overflow-hidden bg-primary backdrop-blur-2xl text-gray-100">
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-white/6 px-4">
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-subtle px-4">
           <InboxIcon className="h-6 w-6 text-gray-300" />
-          <span className="font-bold text-white text-base tracking-wide">Convites</span>
+          <span className="font-bold text-strong text-base tracking-wide">Convites</span>
         </header>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <p className="mb-2 text-ds-sm font-mediumr text-gray-400">
-            Convites pendentes — {invites.length}
+            Convites pendentes{loading ? '' : ` — ${invites.length}`}
           </p>
 
           {loading ? (
-            <div className="py-8 text-center text-sm text-gray-400">Carregando convites...</div>
+            <InviteListSkeleton />
           ) : invites.length === 0 ? (
             <div className="py-12 text-center text-sm text-gray-400">
               Nenhum convite pendente no momento. Quando alguém te convidar para um servidor, ele
@@ -82,7 +83,7 @@ function Invites(): React.JSX.Element {
                 return (
                   <div
                     key={invite.id}
-                    className="flex items-center justify-between rounded-xl border border-white/6 bg-white/3 p-3"
+                    className="flex items-center justify-between rounded-xl border border-subtle bg-fg/3 p-3"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-linear-to-br from-violet-600 to-indigo-600 font-bold text-white text-base shadow-md">
@@ -97,7 +98,7 @@ function Invites(): React.JSX.Element {
                         )}
                       </div>
                       <div className="min-w-0 leading-tight">
-                        <p className="truncate font-semibold text-white text-sm">
+                        <p className="truncate font-semibold text-strong text-sm">
                           {invite.server_name}
                         </p>
                         <p className="truncate text-xs text-gray-400">

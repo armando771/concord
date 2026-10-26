@@ -1,6 +1,7 @@
 import { MAX_LINKS, linkError, normalizeLink } from './profileLinks'
 import { NAME_CHARS_MESSAGE, nameCharsError } from './nameChars'
 import { resolveNameStyle, type NameStyle } from './nameStyle'
+import { resolveProfileTheme, sameTheme, type ProfileTheme } from './profileTheme'
 
 // Rascunho do editor de perfil (Configurações → Perfis). Os limites são os do
 // backend (internal/user/profile.go) e do Discord.
@@ -27,6 +28,7 @@ export interface ProfileFields {
   banner_color: string | null
   links: string[]
   name_style: NameStyle
+  profile_theme: ProfileTheme
 }
 
 export interface ProfileDraft extends ProfileFields {
@@ -44,9 +46,10 @@ export const charCount = (text: string): number => Array.from(text).length
 
 /** Rascunho a partir do usuário salvo (links vêm do backend como {url}). */
 export function draftFromProfile(
-  profile: Partial<Omit<ProfileFields, 'links' | 'name_style'>> & {
+  profile: Partial<Omit<ProfileFields, 'links' | 'name_style' | 'profile_theme'>> & {
     links?: unknown
     name_style?: Partial<NameStyle> | null
+    profile_theme?: Partial<ProfileTheme> | null
   }
 ): ProfileDraft {
   const links = Array.isArray(profile.links)
@@ -62,6 +65,7 @@ export function draftFromProfile(
     banner_color: profile.banner_color ?? null,
     links,
     name_style: resolveNameStyle(profile.name_style),
+    profile_theme: resolveProfileTheme(profile.profile_theme),
     avatar: { kind: 'keep' },
     banner: { kind: 'keep' }
   }
@@ -111,7 +115,8 @@ export function profilePayload(draft: ProfileFields): ProfileFields {
     status_text: draft.status_text.trim(),
     banner_color: draft.banner_color || null,
     links: draft.links.map(normalizeLink),
-    name_style: resolveNameStyle(draft.name_style)
+    name_style: resolveNameStyle(draft.name_style),
+    profile_theme: resolveProfileTheme(draft.profile_theme)
   }
 }
 
@@ -127,7 +132,8 @@ export function fieldsChanged(draft: ProfileFields, saved: ProfileFields): boole
     (a.banner_color ?? '') !== (b.banner_color ?? '') ||
     a.links.length !== b.links.length ||
     a.links.some((l, i) => l !== b.links[i]) ||
-    JSON.stringify(a.name_style) !== JSON.stringify(b.name_style)
+    JSON.stringify(a.name_style) !== JSON.stringify(b.name_style) ||
+    !sameTheme(a.profile_theme, b.profile_theme)
   )
 }
 

@@ -61,7 +61,7 @@ function MembersSection(): React.JSX.Element {
         className="mb-4"
       />
       <p className="mb-2 text-ds-sm font-medium text-gray-400">Membros — {shown.length}</p>
-      <ul className="divide-y divide-white/6 rounded-lg border border-white/8">
+      <ul className="divide-y divide-subtle rounded-lg border border-subtle">
         {shown.map((m) => {
           const own = rolesOfMember(roles, m.role_ids)
           const isOwnerRow = m.user_id === server.owner_id
@@ -74,7 +74,7 @@ function MembersSection(): React.JSX.Element {
                 <span className="flex min-w-0 items-center gap-3">
                   <Avatar userId={m.user_id} name={nameOf(m)} avatarUrl={m.avatar_url} size={32} />
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-white">
+                    <span className="block truncate text-sm font-semibold text-strong">
                       {nameOf(m)}
                       {isOwnerRow && (
                         <span className="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-300">
@@ -137,7 +137,7 @@ function MembersSection(): React.JSX.Element {
                   return (
                     <span
                       key={role.id}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/5 py-0.5 pl-2 pr-1 text-xs text-gray-200"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-normal bg-fg/5 py-0.5 pl-2 pr-1 text-xs text-gray-200"
                     >
                       <span
                         aria-hidden
@@ -150,7 +150,7 @@ function MembersSection(): React.JSX.Element {
                           type="button"
                           aria-label={`Tirar o cargo ${role.name} de ${nameOf(m)}`}
                           onClick={() => void toggleRole(m.user_id, role.id, true)}
-                          className="flex h-4 w-4 cursor-pointer items-center justify-center rounded-full text-gray-400 hover:bg-white/15 hover:text-white"
+                          className="flex h-4 w-4 cursor-pointer items-center justify-center rounded-full text-gray-400 hover:bg-fg/15 hover:text-strong"
                         >
                           ×
                         </button>
@@ -166,14 +166,14 @@ function MembersSection(): React.JSX.Element {
                       type="button"
                       aria-label={`Dar um cargo a ${nameOf(m)}`}
                       onClick={() => setPickerFor(pickerFor === m.user_id ? null : m.user_id)}
-                      className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-dashed border-white/25 text-sm text-gray-300 hover:border-white/50 hover:text-white"
+                      className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-dashed border-strong text-sm text-gray-300 hover:border-strong hover:text-strong"
                     >
                       +
                     </button>
                     {pickerFor === m.user_id && (
                       <>
                         <div className="fixed inset-0 z-20" onClick={() => setPickerFor(null)} />
-                        <ul className="absolute left-0 top-full z-30 mt-1 max-h-56 w-52 overflow-y-auto rounded-xl border border-white/10 bg-[#0d0e15] p-1.5 shadow-2xl">
+                        <ul className="absolute left-0 top-full z-30 mt-1 max-h-56 w-52 overflow-y-auto rounded-xl border border-subtle bg-floating p-1.5 shadow-2xl">
                           {assignable.map((role) => {
                             const has = !!m.role_ids?.includes(role.id)
                             return (
@@ -181,7 +181,7 @@ function MembersSection(): React.JSX.Element {
                                 <button
                                   type="button"
                                   onClick={() => void toggleRole(m.user_id, role.id, has)}
-                                  className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-gray-200 hover:bg-white/10"
+                                  className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-gray-200 hover:bg-fg/10"
                                 >
                                   <span
                                     aria-hidden
@@ -189,7 +189,7 @@ function MembersSection(): React.JSX.Element {
                                     style={{ background: roleColorCss(role.color) ?? '#99aab5' }}
                                   />
                                   <span className="min-w-0 flex-1 truncate">{role.name}</span>
-                                  {has && <span className="text-[#23a55a]">✓</span>}
+                                  {has && <span className="text-success">✓</span>}
                                 </button>
                               </li>
                             )

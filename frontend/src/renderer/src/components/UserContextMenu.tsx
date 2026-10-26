@@ -30,8 +30,7 @@ import { serverIdFromPath } from '../lib/serverNames'
 
 const MENU_WIDTH = 232
 
-const itemClass =
-  'cursor-pointer rounded px-2 py-1.5 text-left hover:bg-white/5 disabled:opacity-50'
+const itemClass = 'cursor-pointer rounded px-2 py-1.5 text-left hover:bg-fg/5 disabled:opacity-50'
 
 /**
  * Botão direito em um usuário (como no Discord): perfil, mensagem, ligar,
@@ -118,16 +117,16 @@ function UserContextMenu(): React.JSX.Element | null {
           value={Math.round(audio.volume * 100)}
           onChange={(e) => setVolume(audioKey, Number(e.target.value) / 100)}
           aria-label={label}
-          className="accent-[#5865f2]"
+          className="accent-brand"
         />
       </label>
-      <label className="flex cursor-pointer items-center justify-between rounded px-2 py-1.5 hover:bg-white/5">
+      <label className="flex cursor-pointer items-center justify-between rounded px-2 py-1.5 hover:bg-fg/5">
         <span>{muteLabel}</span>
         <input
           type="checkbox"
           checked={audio.muted}
           onChange={() => toggleMuted(audioKey)}
-          className="h-4 w-4 accent-[#f23f43]"
+          className="h-4 w-4 accent-danger"
         />
       </label>
     </>
@@ -142,7 +141,7 @@ function UserContextMenu(): React.JSX.Element | null {
         aria-label={`Transmissão de ${target.name}`}
         style={{ left, top, width: MENU_WIDTH }}
         data-user-context-menu="true"
-        className="fixed z-[80] flex max-h-[calc(100vh-16px)] flex-col gap-1 overflow-y-auto rounded-lg border border-white/10 bg-[#111214] p-2 text-sm text-gray-200 shadow-2xl"
+        className="fixed z-[80] flex max-h-[calc(100vh-16px)] flex-col gap-1 overflow-y-auto rounded-lg border border-subtle bg-floating p-2 text-sm text-gray-200 shadow-2xl"
       >
         <p className="truncate px-2 pb-1 pt-0.5 text-xs font-bold text-gray-400">
           Transmissão de {target.name}
@@ -180,7 +179,7 @@ function UserContextMenu(): React.JSX.Element | null {
         aria-label={`Opções de ${target.name}`}
         style={{ left, top, width: MENU_WIDTH }}
         data-user-context-menu="true"
-        className="fixed z-[80] flex max-h-[calc(100vh-16px)] flex-col gap-1 overflow-y-auto rounded-lg border border-white/10 bg-[#111214] p-2 text-sm text-gray-200 shadow-2xl"
+        className="fixed z-[80] flex max-h-[calc(100vh-16px)] flex-col gap-1 overflow-y-auto rounded-lg border border-subtle bg-floating p-2 text-sm text-gray-200 shadow-2xl"
       >
         <p className="truncate px-2 pb-1 pt-0.5 text-xs font-bold text-gray-400">{target.name}</p>
         {onStage ? (
@@ -191,7 +190,7 @@ function UserContextMenu(): React.JSX.Element | null {
           </button>
         )}
         {server?.owner_id === meId && (
-          <button role="menuitem" onClick={removeMaestro} className={`${itemClass} text-[#f23f43]`}>
+          <button role="menuitem" onClick={removeMaestro} className={`${itemClass} text-danger`}>
             {T18.remove}
           </button>
         )}
@@ -387,14 +386,16 @@ function UserContextMenu(): React.JSX.Element | null {
         aria-label={`Opções de ${target.name}`}
         style={{ left, top, width: MENU_WIDTH }}
         data-user-context-menu="true"
-        className="fixed z-[80] flex max-h-[calc(100vh-16px)] flex-col gap-1 overflow-y-auto rounded-lg border border-white/10 bg-[#111214] p-2 text-ds-sm text-gray-200 shadow-2xl"
+        className="fixed z-[80] flex max-h-[calc(100vh-16px)] flex-col gap-1 overflow-y-auto rounded-lg border border-subtle bg-floating p-2 text-ds-sm text-gray-200 shadow-2xl"
       >
-        <p className="truncate px-2 pb-1 pt-0.5 text-ds-xs font-bold text-gray-400">{target.name}</p>
+        <p className="truncate px-2 pb-1 pt-0.5 text-ds-xs font-bold text-gray-400">
+          {target.name}
+        </p>
         <button role="menuitem" onClick={openProfile} className={itemClass}>
           Perfil
         </button>
         {nicknameItem}
-        <div className="my-1 h-px bg-white/10" />
+        <div className="my-1 h-px bg-fg/10" />
         <button role="menuitem" onClick={copyId} className={itemClass}>
           Copiar ID do usuário
         </button>
@@ -409,7 +410,7 @@ function UserContextMenu(): React.JSX.Element | null {
       aria-label={`Opções de ${target.name}`}
       style={{ left, top, width: MENU_WIDTH }}
       data-user-context-menu="true"
-        className="fixed z-[80] flex max-h-[calc(100vh-16px)] flex-col gap-1 overflow-y-auto rounded-lg border border-white/10 bg-[#111214] p-2 text-sm text-gray-200 shadow-2xl"
+      className="fixed z-[80] flex max-h-[calc(100vh-16px)] flex-col gap-1 overflow-y-auto rounded-lg border border-subtle bg-floating p-2 text-sm text-gray-200 shadow-2xl"
     >
       <p className="truncate px-2 pb-1 pt-0.5 text-xs font-bold text-gray-400">{target.name}</p>
 
@@ -435,7 +436,7 @@ function UserContextMenu(): React.JSX.Element | null {
         </button>
       )}
 
-      <div className="my-1 h-px bg-white/10" />
+      <div className="my-1 h-px bg-fg/10" />
       {relationship === 'none' && username && (
         <button role="menuitem" onClick={() => void addFriend()} className={itemClass}>
           Adicionar amigo
@@ -452,7 +453,7 @@ function UserContextMenu(): React.JSX.Element | null {
         </button>
       )}
       {relationship === 'friend' && username && (
-        <button role="menuitem" onClick={askRemove} className={`${itemClass} text-[#f23f43]`}>
+        <button role="menuitem" onClick={askRemove} className={`${itemClass} text-danger`}>
           Remover amigo
         </button>
       )}
@@ -461,21 +462,21 @@ function UserContextMenu(): React.JSX.Element | null {
           Desbloquear
         </button>
       ) : (
-        <button role="menuitem" onClick={askBlock} className={`${itemClass} text-[#f23f43]`}>
+        <button role="menuitem" onClick={askBlock} className={`${itemClass} text-danger`}>
           Bloquear
         </button>
       )}
 
       {inCallWith && (
         <>
-          <div className="my-1 h-px bg-white/10" />
+          <div className="my-1 h-px bg-fg/10" />
           {volumeControls('Volume do usuário', 'Silenciar')}
         </>
       )}
 
       {moveTargets.length > 0 && (
         <>
-          <div className="my-1 h-px bg-white/10" />
+          <div className="my-1 h-px bg-fg/10" />
           <p className="px-2 pt-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-500">
             Mover para
           </p>
@@ -495,21 +496,21 @@ function UserContextMenu(): React.JSX.Element | null {
         </>
       )}
 
-      <div className="my-1 h-px bg-white/10" />
+      <div className="my-1 h-px bg-fg/10" />
       <button role="menuitem" onClick={copyId} className={itemClass}>
         Copiar ID do usuário
       </button>
 
       {nicknameItem && (
         <>
-          <div className="my-1 h-px bg-white/10" />
+          <div className="my-1 h-px bg-fg/10" />
           {nicknameItem}
         </>
       )}
 
       {givable.length > 0 && member && server && (
         <>
-          <div className="my-1 h-px bg-white/10" />
+          <div className="my-1 h-px bg-fg/10" />
           <p className="px-2 pt-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-500">
             Cargos
           </p>
@@ -539,7 +540,7 @@ function UserContextMenu(): React.JSX.Element | null {
                     style={{ background: roleColorCss(role.color) ?? '#99aab5' }}
                   />
                   <span className="min-w-0 flex-1 truncate">{role.name}</span>
-                  {has && <span className="text-[#23a55a]">✓</span>}
+                  {has && <span className="text-success">✓</span>}
                 </button>
               )
             })}
@@ -549,7 +550,7 @@ function UserContextMenu(): React.JSX.Element | null {
 
       {(canMuteInVoice || canDeafenInVoice || canDisconnect) && voiceCallId && (
         <>
-          <div className="my-1 h-px bg-white/10" />
+          <div className="my-1 h-px bg-fg/10" />
           <p className="px-2 pt-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-500">
             Voz
           </p>
@@ -595,7 +596,7 @@ function UserContextMenu(): React.JSX.Element | null {
                   'Não foi possível desconectar.'
                 )
               }
-              className={`${itemClass} text-[#f23f43]`}
+              className={`${itemClass} text-danger`}
             >
               Desconectar da chamada
             </button>
@@ -605,7 +606,7 @@ function UserContextMenu(): React.JSX.Element | null {
 
       {(canKick || canBan) && server && (
         <>
-          <div className="my-1 h-px bg-white/10" />
+          <div className="my-1 h-px bg-fg/10" />
           {canKick && (
             <button
               role="menuitem"
@@ -613,7 +614,7 @@ function UserContextMenu(): React.JSX.Element | null {
                 close()
                 askKick({ serverId: server.id, userId: target.userId, name: target.name })
               }}
-              className={`${itemClass} text-[#f23f43]`}
+              className={`${itemClass} text-danger`}
             >
               Expulsar {target.name}
             </button>
@@ -625,7 +626,7 @@ function UserContextMenu(): React.JSX.Element | null {
                 close()
                 askBan({ serverId: server.id, userId: target.userId, name: target.name })
               }}
-              className={`${itemClass} text-[#f23f43]`}
+              className={`${itemClass} text-danger`}
             >
               Banir {target.name}
             </button>

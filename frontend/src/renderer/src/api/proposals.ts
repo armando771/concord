@@ -37,14 +37,24 @@ export interface Proposal {
   no_votes: number
   comment_count: number
   images: ProposalImage[]
+  /** Quem do time tech está com o card (quem o moveu; arrastar para Concluída não muda). */
+  assignee?: ProposalAssignee | null
   /** true = sim, false = não, ausente = não votou. */
   my_vote?: boolean | null
+}
+
+export interface ProposalAssignee {
+  id: string
+  name: string
+  avatar_url?: string | null
 }
 
 export interface ProposalBoard {
   proposals: Proposal[]
   /** Time tech: pode mover os cards a qualquer hora. */
   is_tech: boolean
+  /** Usuário do GitHub de quem é do time tech (assignee das issues). */
+  github_username?: string | null
 }
 
 export interface ProposalMention {
@@ -135,11 +145,28 @@ export function removeProposalVote(id: string): Promise<Proposal> {
   return request<Proposal>(`/proposals/${id}/vote`, { method: 'DELETE' })
 }
 
-export function setProposalStatus(id: string, status: ProposalStatus): Promise<Proposal> {
+/**
+ * Move o card. `takeOver`: confirmou tirar o card do dev que estava com ele
+ * (sem isso o servidor responde 409 `assignee_conflict`).
+ */
+export function setProposalStatus(
+  id: string,
+  status: ProposalStatus,
+  takeOver = false
+): Promise<Proposal> {
   return request<Proposal>(`/proposals/${id}/status`, {
     method: 'PATCH',
-    body: JSON.stringify({ status })
+    body: JSON.stringify({ status, take_over: takeOver })
   })
+}
+
+/** Guarda o usuário do GitHub de quem é do time tech ("" apaga). */
+export async function setGithubUsername(username: string): Promise<string | null> {
+  const res = await request<{ github_username: string | null }>('/proposals/github-username', {
+    method: 'PUT',
+    body: JSON.stringify({ username })
+  })
+  return res.github_username ?? null
 }
 
 export function deleteProposal(id: string): Promise<void> {

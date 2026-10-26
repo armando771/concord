@@ -53,6 +53,13 @@ interface ServerState {
    */
   nicknames: Record<string, Record<string, string>>
   loading: boolean
+  /**
+   * A lista de servidores já respondeu uma vez (com sucesso ou não). Só a
+   * primeira carga mostra o skeleton; as seguintes trocam os dados por baixo.
+   */
+  serversLoaded: boolean
+  /** Servidor cujos canais já chegaram (`channels` é o do anterior até lá). */
+  channelsLoadedFor: string | null
   fetchServers: () => Promise<void>
   selectServer: (id: string) => Promise<void>
   /**
@@ -186,14 +193,16 @@ export const useServerStore = create<ServerState>()((set, get) => ({
   channels: [],
   nicknames: {},
   loading: false,
+  serversLoaded: false,
+  channelsLoadedFor: null,
   fetchServers: async () => {
     const token = useAuthStore.getState().accessToken
     try {
       const servers = await listServers()
       if (!isSameSession(token)) return
-      set({ servers: Array.isArray(servers) ? servers : [] })
+      set({ servers: Array.isArray(servers) ? servers : [], serversLoaded: true })
     } catch {
-      if (isSameSession(token)) set({ servers: [] })
+      if (isSameSession(token)) set({ servers: [], serversLoaded: true })
     }
   },
   selectServer: async (id: string) => {
@@ -230,6 +239,7 @@ export const useServerStore = create<ServerState>()((set, get) => ({
         currentMembers: res.members,
         roles: sortRoles(res.roles ?? []),
         channels: Array.isArray(channels) ? channels : [],
+        channelsLoadedFor: serverId,
         nicknames: { ...get().nicknames, [serverId]: nicknameMap(res.members) }
       })
     } catch {
@@ -252,9 +262,9 @@ export const useServerStore = create<ServerState>()((set, get) => ({
     try {
       const channels = await apiListChannels(serverId)
       if (!isSameSession(token)) return
-      set({ channels: Array.isArray(channels) ? channels : [] })
+      set({ channels: Array.isArray(channels) ? channels : [], channelsLoadedFor: serverId })
     } catch {
-      if (isSameSession(token)) set({ channels: [] })
+      if (isSameSession(token)) set({ channels: [], channelsLoadedFor: serverId })
     }
   },
   addServer: async (name: string, icon_url?: string) => {
@@ -467,7 +477,13 @@ export const useServerStore = create<ServerState>()((set, get) => ({
     await get().fetchServerInvites(serverId)
   },
   clearCurrentServer: () =>
-    set({ currentServer: null, currentMembers: [], roles: [], channels: [] }),
+    set({
+      currentServer: null,
+      currentMembers: [],
+      roles: [],
+      channels: [],
+      channelsLoadedFor: null
+    }),
   reset: () =>
     set({
       servers: [],
@@ -477,6 +493,8 @@ export const useServerStore = create<ServerState>()((set, get) => ({
       serverInvites: [],
       channels: [],
       nicknames: {},
-      loading: false
+      loading: false,
+      serversLoaded: false,
+      channelsLoadedFor: null
     })
 }))

@@ -17,13 +17,14 @@ function FullscreenOverlay({
   watchers
 }: {
   name: string
-  userId: string
+  /** Dono da transmissão de tela; sem ele (câmera) não há volume nem anotações. */
+  userId?: string
   onExit: () => void
   watchers?: CallUserInfo[]
 }): React.JSX.Element {
   const [visible, setVisible] = useState(true)
   const [autoHide] = useState(() => new AutoHide(setVisible))
-  const isDrawing = useAnnotationStore((s) => Boolean(s.drawingActive[userId]))
+  const isDrawing = useAnnotationStore((s) => Boolean(userId && s.drawingActive[userId]))
   const toggleDrawing = useAnnotationStore((s) => s.toggleDrawing)
 
   useEffect(() => {
@@ -52,33 +53,37 @@ function FullscreenOverlay({
         onFocus={() => autoHide.show()}
         onClick={(e) => e.stopPropagation()}
         onDoubleClick={(e) => e.stopPropagation()}
-        className={`absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/80 to-transparent px-5 pb-4 pt-10 transition-opacity duration-200 ${
+        className={`on-media absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/80 to-transparent px-5 pb-4 pt-10 transition-opacity duration-200 ${
           visible ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
       >
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">{name}</span>
-        <button
-          type="button"
-          onClick={() => toggleDrawing(userId)}
-          aria-label="Anotações na transmissão"
-          title={isDrawing ? 'Fechar anotações' : 'Anotar / Desenhar na transmissão (Epic Pen)'}
-          className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg transition-colors ${
-            isDrawing
-              ? 'bg-[#23a55a] text-white shadow-md ring-1 ring-white/30'
-              : 'bg-black/60 text-gray-100 hover:bg-white/15'
-          }`}
-        >
-          <PencilIcon className="h-4 w-4" />
-        </button>
-        <div className="flex items-center gap-2 rounded-lg bg-black/60 px-2 py-1">
-          <StreamVolume userId={userId} />
-        </div>
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-strong">{name}</span>
+        {userId && (
+          <button
+            type="button"
+            onClick={() => toggleDrawing(userId)}
+            aria-label="Anotações na transmissão"
+            title={isDrawing ? 'Fechar anotações' : 'Anotar / Desenhar na transmissão (Epic Pen)'}
+            className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg transition-colors ${
+              isDrawing
+                ? 'bg-success-strong text-white shadow-md ring-1 ring-fg/30'
+                : 'bg-black/60 text-gray-100 hover:bg-white/15 on-media'
+            }`}
+          >
+            <PencilIcon className="h-4 w-4" />
+          </button>
+        )}
+        {userId && (
+          <div className="flex items-center gap-2 rounded-lg bg-black/60 px-2 py-1 on-media">
+            <StreamVolume userId={userId} />
+          </div>
+        )}
         <button
           type="button"
           onClick={onExit}
           aria-label="Sair da tela cheia"
           title="Sair da tela cheia"
-          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg bg-black/60 text-gray-100 transition-colors hover:bg-white/15"
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg bg-black/60 text-gray-100 transition-colors hover:bg-white/15 on-media"
         >
           <FullscreenExitIcon className="h-4 w-4" />
         </button>

@@ -23,7 +23,7 @@ function VoiceXPBar({ paused }: { paused: boolean }): React.JSX.Element | null {
     >
       {rank && <StyleRank percent={boostPercent} paused={paused} className="mb-1" />}
       <div className="mb-1 flex items-baseline justify-between text-[10px]">
-        <span className="font-bold" style={{ color: paused ? '#6b7280' : tier.color }}>
+        <span className="font-bold" style={{ color: paused ? 'var(--text-faint)' : tier.color }}>
           Nível {me.level}
         </span>
         <span className="text-gray-500">
@@ -31,7 +31,7 @@ function VoiceXPBar({ paused }: { paused: boolean }): React.JSX.Element | null {
         </span>
       </div>
       <div className="relative">
-        <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+        <div className="h-1.5 overflow-hidden rounded-full bg-fg/10">
           <div
             className="relative h-full overflow-hidden rounded-full transition-[width] duration-700"
             style={{

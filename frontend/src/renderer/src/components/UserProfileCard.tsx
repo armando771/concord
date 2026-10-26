@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import router from '../router'
 import { useAuthStore } from '../store/authStore'
 import { useCallStore } from '../store/callStore'
+import { useActivityStore } from '../store/activityStore'
+import { activityOfPlayer, canJoinFromProfile } from '../lib/activityState'
 import { useChatStore } from '../store/chatStore'
 import { useFriendStore, useRelationship } from '../store/friendStore'
 import { useUserMenuStore } from '../store/userMenuStore'
@@ -22,14 +24,23 @@ import { useModerationStore } from '../store/moderationStore'
 import { levelTier } from '../lib/levels'
 import { voiceChannelOf } from '../lib/voiceMove'
 import { memberColor } from '../lib/memberGroups'
-import { roleColorCss, rolesOfMember } from '../lib/permissions'
+import { Perm, roleColorCss, rolesOfMember } from '../lib/permissions'
+import { isUserLive, liveTarget, type MyCall } from '../lib/screenPreview'
+import { requestWatchStream } from '../store/streamJoinStore'
 import { CHOSEN_STATUSES, STATUS_META, type PresenceStatus } from '../lib/presenceStatus'
 import LevelBadge from './level/LevelBadge'
 import BadgeRow from './badges/BadgeRow'
 import ProfileCardBody, { CARD_BG, type CardProfile } from './profile/ProfileCardBody'
+import { ProfileInfoSkeleton } from './skeleton/layouts'
+import ProfileCardFrame from './profile/ProfileCardFrame'
+import { profileThemeLook, resolveProfileTheme } from '../lib/profileTheme'
+import LiveStreamPreview from './profile/LiveStreamPreview'
+import LiveBadge from './call/LiveBadge'
 import StatusIcon from './StatusIcon'
 import { DotsIcon, PencilIcon, VolumeIcon } from './icons'
 import Avatar from './Avatar'
+import { useThemeStore } from '../store/themeStore'
+import { ActivityGlyph } from './call/ActivityPickerPopover'
 
 const CARD_WIDTH = 300
 /** Altura aproximada do submenu de status (4 opções, duas com descrição). */
@@ -60,7 +71,7 @@ function MenuButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm font-medium text-gray-200 transition-colors hover:bg-white/10 hover:text-white"
+      className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm font-medium text-gray-200 transition-colors hover:bg-fg/10 hover:text-strong"
     >
       <span className="flex h-4 w-4 shrink-0 items-center justify-center text-gray-400">
         {icon}
@@ -73,6 +84,8 @@ function MenuButton({
 
 /** "Online ›" com o submenu dos status ao lado, como no Discord. */
 function StatusMenu({ status }: { status: PresenceStatus }): React.JSX.Element {
+  // O submenu tem o fundo do app: volta ao tema de cor mesmo num cartão com fundo próprio.
+  const appTheme = useThemeStore((s) => s.theme)
   const [open, setOpen] = useState(false)
   const [upward, setUpward] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
@@ -95,7 +108,8 @@ function StatusMenu({ status }: { status: PresenceStatus }): React.JSX.Element {
         <div className={`absolute left-full z-10 pl-3 ${upward ? 'bottom-0' : 'top-0'}`}>
           <div
             role="menu"
-            className="w-64 rounded-lg border border-white/10 p-1.5 shadow-2xl"
+            data-theme={appTheme}
+            className="pt-ink-keep w-64 rounded-lg border border-subtle p-1.5 shadow-2xl"
             style={{ background: CARD_BG }}
           >
             {CHOSEN_STATUSES.map((s) => (
@@ -108,7 +122,7 @@ function StatusMenu({ status }: { status: PresenceStatus }): React.JSX.Element {
                   setOpen(false)
                   void changeMyStatus(s)
                 }}
-                className="flex w-full cursor-pointer items-start gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-white/10"
+                className="flex w-full cursor-pointer items-start gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-fg/10"
               >
                 <StatusIcon status={s} size={12} className="mt-1" />
                 <span className="min-w-0">
@@ -147,8 +161,15 @@ function UserProfileCard(): React.JSX.Element | null {
   const online = useChatStore((s) => (target ? Boolean(s.presence[target.userId]) : false))
   const knownStatus = useChatStore((s) => (target ? s.statuses[target.userId] : undefined))
   const serverCalls = useCallStore((s) => s.serverCalls)
+  const callStatus = useCallStore((s) => s.status)
+  const callId = useCallStore((s) => s.callId)
+  const callType = useCallStore((s) => s.type)
+  const callChannelId = useCallStore((s) => s.channelId)
+  const screenSharers = useCallStore((s) => s.screenSharers)
+  const availableScreens = useCallStore((s) => s.availableScreens)
   const level = useLevelStore((s) => (target ? s.levels[target.userId] : undefined))
   const ensureLevels = useLevelStore((s) => s.ensureLevels)
+  const replayLevelUp = useLevelStore((s) => s.replayLevelUp)
   const relationship = useRelationship(target?.userId)
   const sendRequest = useFriendStore((s) => s.sendRequest)
   const accept = useFriendStore((s) => s.accept)
@@ -159,20 +180,58 @@ function UserProfileCard(): React.JSX.Element | null {
   const askNickname = useModerationStore((s) => s.askNickname)
   // Os badges chegam depois e podem mudar a altura do cartão.
   const badgesLoaded = useBadgeStore((s) => (target ? Boolean(s.byUser[target.userId]) : false))
+  // Atividade da chamada em que a pessoa está jogando (só se for a minha call).
+  const joinableActivity = useActivityStore((s) =>
+    target && canJoinFromProfile(s, me?.id ?? null, target.userId)
+      ? activityOfPlayer(s, target.userId)
+      : null
+  )
+  const joinActivity = useActivityStore((s) => s.join)
   const ref = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
   const [sending, setSending] = useState(false)
   // Amigos e servidores em comum (só no cartão de outra pessoa).
   const [loadedMutual, setMutual] = useState<{ userId: string; rel: Relationship } | null>(null)
   const mutual = loadedMutual && loadedMutual.userId === target?.userId ? loadedMutual.rel : null
+  // Quem já respondeu (mesmo com erro): o skeleton não fica para sempre se a chamada falhar.
+  const [profileSettled, setProfileSettled] = useState<string | null>(null)
+  const [mutualSettled, setMutualSettled] = useState<string | null>(null)
 
   const isMe = Boolean(target && target.userId === me?.id)
   const isBot = Boolean(profile?.is_bot || member?.is_bot)
 
+  // Transmitindo agora: selo LIVE e, se dá para assistir, a prévia com o botão.
+  const myCall: MyCall = {
+    status: callStatus,
+    callId,
+    type: callType,
+    channelId: callChannelId,
+    screenSharers,
+    availableScreens
+  }
+  const live = target ? isUserLive(target.userId, myCall, serverCalls) : false
+  const stream = target
+    ? liveTarget({
+        userId: target.userId,
+        meId: me?.id,
+        call: myCall,
+        serverCalls,
+        canConnect: (channelId) => access.canInChannel(channelId, Perm.VIEW_CHANNEL | Perm.CONNECT)
+      })
+    : null
+  const streamKey = stream ? `${stream.kind}:${stream.callId}` : ''
+
   useEffect(() => {
     if (!target) return
     ensureLevels([target.userId])
-    if (target.userId !== useAuthStore.getState().user?.id) void fetchProfile(target.userId)
+    if (target.userId === useAuthStore.getState().user?.id) return
+    let cancelled = false
+    void fetchProfile(target.userId).finally(() => {
+      if (!cancelled) setProfileSettled(target.userId)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [target, ensureLevels, fetchProfile])
 
   useEffect(() => {
@@ -183,6 +242,9 @@ function UserProfileCard(): React.JSX.Element | null {
         if (!cancelled) setMutual({ userId: target.userId, rel: r })
       })
       .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setMutualSettled(target.userId)
+      })
     return () => {
       cancelled = true
     }
@@ -204,7 +266,18 @@ function UserProfileCard(): React.JSX.Element | null {
         { width: window.innerWidth, height: window.innerHeight }
       )
     )
-  }, [target, profile, me, mutual, badgesLoaded])
+  }, [
+    target,
+    profile,
+    me,
+    mutual,
+    badgesLoaded,
+    profileSettled,
+    mutualSettled,
+    streamKey,
+    live,
+    joinableActivity
+  ])
 
   useEffect(() => {
     if (!target) return
@@ -275,8 +348,11 @@ function UserProfileCard(): React.JSX.Element | null {
     bio: source?.bio,
     status_text: source?.status_text,
     links: source?.links?.map((l) => l.url) ?? [],
-    is_bot: isBot
+    is_bot: isBot,
+    profile_theme: source?.profile_theme
   }
+  const theme = resolveProfileTheme(card.profile_theme)
+  const look = profileThemeLook(theme)
   // O Maestro não tem websocket: está sempre online.
   const status: PresenceStatus = isBot
     ? 'online'
@@ -351,6 +427,9 @@ function UserProfileCard(): React.JSX.Element | null {
     }
   }
 
+  // Primeira carga de cada parte: o cartão abre na hora com o que já se sabe.
+  const profileLoading = !isMe && !profile && profileSettled !== target.userId
+  const mutualLoading = !isMe && !mutual && mutualSettled !== target.userId
   const mutualFriends = mutual?.mutual_friends ?? []
   const mutualServers = mutual?.mutual_servers ?? []
   const hasInfo =
@@ -359,7 +438,20 @@ function UserProfileCard(): React.JSX.Element | null {
     salinhaSince ||
     voiceChannel ||
     mutualFriends.length > 0 ||
-    mutualServers.length > 0
+    mutualServers.length > 0 ||
+    mutualLoading
+
+  const watchStream = (): void => {
+    if (!stream) return
+    close()
+    requestWatchStream({
+      userId: target.userId,
+      name: nickname || card.display_name,
+      target: stream,
+      channelName:
+        stream.kind === 'join' ? channels.find((c) => c.id === stream.channelId)?.name : undefined
+    })
+  }
 
   const openMore = (e: React.MouseEvent<HTMLButtonElement>): void => {
     const currentMenu = useUserMenuStore.getState().target
@@ -379,8 +471,10 @@ function UserProfileCard(): React.JSX.Element | null {
   }
 
   return (
-    <div
+    <ProfileCardFrame
       ref={ref}
+      look={look}
+      effect={theme.effect}
       role="dialog"
       aria-label={`Perfil de ${nickname || card.display_name}`}
       style={{
@@ -388,17 +482,25 @@ function UserProfileCard(): React.JSX.Element | null {
         left: pos?.left ?? -9999,
         top: pos?.top ?? 0,
         visibility: pos ? 'visible' : 'hidden',
-        background: CARD_BG
+        // O tema troca o padding-box; "fixed" ganha do relative da moldura.
+        position: 'fixed'
       }}
-      className="fixed z-[60] rounded-xl border border-white/10 text-sm text-gray-200 shadow-2xl"
+      className="z-[60] text-sm text-gray-200 shadow-2xl"
     >
       <ProfileCardBody
         profile={card}
+        surface={look.surface}
         status={status}
         isMe={isMe}
         fallbackBanner={fallbackBanner}
         avatarFallbackClassName={role.avatar}
-        badge={<LevelBadge userId={target.userId} size="md" />}
+        badge={
+          <LevelBadge
+            userId={target.userId}
+            size="md"
+            onClick={() => replayLevelUp(target.userId, card.display_name)}
+          />
+        }
         badges={
           <BadgeRow
             userId={target.userId}
@@ -408,16 +510,41 @@ function UserProfileCard(): React.JSX.Element | null {
           />
         }
         onEditProfile={isMe ? editProfile : undefined}
+        loading={profileLoading}
       >
+        {stream && (
+          <LiveStreamPreview
+            key={`${stream.callId}:${target.userId}`}
+            userId={target.userId}
+            name={nickname || card.display_name}
+            target={stream}
+            onWatch={watchStream}
+          />
+        )}
+
+        {joinableActivity && (
+          <button
+            type="button"
+            onClick={() => {
+              close()
+              void joinActivity()
+            }}
+            className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-success-strong px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-success-strong-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          >
+            <ActivityGlyph activity={joinableActivity} className="h-4 w-4" />
+            Juntar-se à atividade
+            <span className="sr-only">: {joinableActivity.name}</span>
+          </button>
+        )}
         {hasInfo && (
-          <div className="mt-3 flex flex-col gap-3 rounded-lg bg-black/30 p-3">
+          <div className="mt-3 flex flex-col gap-3 rounded-lg bg-input p-3">
             {inServer && (isServerOwner || memberRoles.length > 0) && (
               <div>
                 <SectionTitle>{memberRoles.length > 1 ? 'Cargos' : 'Cargo'}</SectionTitle>
                 <div className="flex flex-wrap gap-1.5">
                   {isServerOwner && (
                     <span
-                      className="inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2 py-0.5 text-xs font-semibold"
+                      className="inline-flex items-center gap-1.5 rounded-md bg-fg/5 px-2 py-0.5 text-xs font-semibold"
                       style={{ color: OWNER_STYLE.color }}
                     >
                       <span
@@ -432,7 +559,7 @@ function UserProfileCard(): React.JSX.Element | null {
                     return (
                       <span
                         key={r.id}
-                        className="inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2 py-0.5 text-xs font-semibold"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-fg/5 px-2 py-0.5 text-xs font-semibold"
                         style={{ color }}
                       >
                         <span className="h-2 w-2 rounded-full" style={{ background: color }} />
@@ -510,27 +637,31 @@ function UserProfileCard(): React.JSX.Element | null {
               <div>
                 <SectionTitle>Em call</SectionTitle>
                 <p className="flex items-center gap-1.5 text-xs text-gray-200">
-                  <VolumeIcon className="h-3.5 w-3.5 text-[#23a55a]" />
-                  {voiceChannel.name}
+                  <VolumeIcon className="h-3.5 w-3.5 text-success" />
+                  <span className="min-w-0 truncate">{voiceChannel.name}</span>
+                  {live && <LiveBadge />}
                 </p>
               </div>
             )}
+
+            {/* Amigos e servidores em comum vêm de outra chamada. */}
+            {mutualLoading && <ProfileInfoSkeleton sections={2} />}
           </div>
         )}
 
         {isMe ? (
           <>
-            <div className="mt-3 rounded-lg bg-black/30 p-1.5">
+            <div className="mt-3 rounded-lg bg-input p-1.5">
               <MenuButton
                 icon={<PencilIcon className="h-4 w-4" />}
                 label="Editar perfil"
                 onClick={editProfile}
               />
               {nicknameButton}
-              <div className="mx-2 my-1 h-px bg-white/10" />
+              <div className="mx-2 my-1 h-px bg-fg/10" />
               <StatusMenu status={status} />
             </div>
-            <div className="mt-2 rounded-lg bg-black/30 p-1.5">
+            <div className="mt-2 rounded-lg bg-input p-1.5">
               <MenuButton
                 icon={
                   <span className="rounded-[3px] border border-current px-0.5 text-[8px] font-black leading-tight">
@@ -547,7 +678,7 @@ function UserProfileCard(): React.JSX.Element | null {
             <button
               type="button"
               onClick={sendMessage}
-              className="flex-1 cursor-pointer rounded-lg bg-[#5865f2] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#4752c4]"
+              className="flex-1 cursor-pointer rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-hover"
             >
               Enviar mensagem
             </button>
@@ -556,10 +687,10 @@ function UserProfileCard(): React.JSX.Element | null {
                 type="button"
                 disabled={sending || relationship === 'outgoing'}
                 onClick={() => void addFriend()}
-                className={`cursor-pointer rounded-lg px-3 py-2 text-xs font-semibold text-white transition-colors disabled:cursor-default disabled:opacity-60 ${
+                className={`cursor-pointer rounded-lg px-3 py-2 text-xs font-semibold transition-colors disabled:cursor-default disabled:opacity-60 ${
                   relationship === 'incoming'
-                    ? 'bg-[#248046] hover:bg-[#1a6334]'
-                    : 'bg-white/10 hover:bg-white/15'
+                    ? 'bg-success-strong text-white hover:bg-success-strong-hover'
+                    : 'bg-fg/10 text-strong hover:bg-fg/15'
                 }`}
               >
                 {relationship === 'outgoing'
@@ -574,17 +705,17 @@ function UserProfileCard(): React.JSX.Element | null {
               aria-label="Mais"
               title="Mais"
               onClick={openMore}
-              className="flex cursor-pointer items-center justify-center rounded-lg bg-white/10 px-2.5 text-gray-200 transition-colors hover:bg-white/15"
+              className="flex cursor-pointer items-center justify-center rounded-lg bg-fg/10 px-2.5 text-gray-200 transition-colors hover:bg-fg/15"
             >
               <DotsIcon className="h-4 w-4" />
             </button>
           </div>
         )}
         {!isMe && nicknameButton && (
-          <div className="mt-2 rounded-lg bg-black/30 p-1.5">{nicknameButton}</div>
+          <div className="mt-2 rounded-lg bg-input p-1.5">{nicknameButton}</div>
         )}
       </ProfileCardBody>
-    </div>
+    </ProfileCardFrame>
   )
 }
 

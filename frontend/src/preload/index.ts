@@ -20,6 +20,12 @@ const api = {
       return ipcRenderer.invoke('app-metrics:sample', reset)
     }
   },
+  windowTheme: {
+    /** Pinta a barra de título nativa (Windows/Linux) com as cores do tema. */
+    setTitleBarColors(colors: { color: string; symbolColor: string }): void {
+      ipcRenderer.send('window:title-bar-colors', colors)
+    }
+  },
   screenPicker: {
     /** Main avisa que um pedido de getDisplayMedia está aguardando seleção. */
     onShow(cb: () => void): () => void {
@@ -180,13 +186,24 @@ const api = {
     watch(enabled: boolean): void {
       ipcRenderer.send('games:watch', enabled)
     },
-    current(): Promise<{ name: string; startedAt: number; appId?: number; iconHash?: string } | null> {
+    current(): Promise<{
+      name: string
+      startedAt: number
+      appId?: number
+      iconHash?: string
+    } | null> {
       return ipcRenderer.invoke('games:current')
     },
     /** O jogo em andamento mudou (null = parou). Retorna unsubscribe. */
-    onChange(cb: (game: { name: string; startedAt: number; appId?: number; iconHash?: string } | null) => void): () => void {
-      const listener = (_e: unknown, game: { name: string; startedAt: number; appId?: number; iconHash?: string } | null): void =>
-        cb(game)
+    onChange(
+      cb: (
+        game: { name: string; startedAt: number; appId?: number; iconHash?: string } | null
+      ) => void
+    ): () => void {
+      const listener = (
+        _e: unknown,
+        game: { name: string; startedAt: number; appId?: number; iconHash?: string } | null
+      ): void => cb(game)
       ipcRenderer.on('games:current', listener)
       return () => ipcRenderer.removeListener('games:current', listener)
     }
@@ -204,6 +221,12 @@ const api = {
       const listener = (_e: unknown, activityId: string): void => cb(activityId)
       ipcRenderer.on('activity:closed', listener)
       return () => ipcRenderer.removeListener('activity:closed', listener)
+    },
+    /** A janela do jogo entrou numa sala (partida/time) nova. */
+    onRoom(cb: (activityId: string, url: string) => void): () => void {
+      const listener = (_e: unknown, activityId: string, url: string): void => cb(activityId, url)
+      ipcRenderer.on('activity:room', listener)
+      return () => ipcRenderer.removeListener('activity:room', listener)
     }
   },
   keybinds: {

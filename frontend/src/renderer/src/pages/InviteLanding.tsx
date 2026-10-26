@@ -7,9 +7,10 @@ import {
   InviteServerInfo,
   InviteSpinner
 } from '../components/invite/InviteServerInfo'
+import { ButtonSkeleton, InvitePreviewSkeleton } from '../components/skeleton/layouts'
 import { useInvitePreview } from '../components/invite/useInvitePreview'
 import { IS_WEB } from '../lib/config'
-import { watchAppLaunch } from '../lib/appLaunch'
+import { looksLikeDesktop, watchAppLaunch } from '../lib/appLaunch'
 import {
   authPathWithInvite,
   DOWNLOAD_URL,
@@ -23,9 +24,10 @@ import { useInviteLinkStore } from '../store/inviteLinkStore'
 const APP_OPEN_TIMEOUT_MS = 1500
 
 /**
- * /convite/<código>. No navegador: cartão do convite com "Abrir aplicativo"
- * (salinha://) e "Continuar no Navegador". No desktop (link salinha://) vai
- * direto para a confirmação.
+ * /convite/<código>. No navegador: num computador tenta abrir o app na hora
+ * (salinha://) e só mostra o cartão do convite, com "Abrir aplicativo" e
+ * "Continuar no Navegador", se o app não abrir (celular mostra o cartão
+ * direto). No desktop (link salinha://) vai direto para a confirmação.
  */
 function InviteLanding(): React.JSX.Element {
   const params = useParams()
@@ -62,9 +64,37 @@ function InviteCard({ code }: { code: string }): React.JSX.Element {
   const state = useInvitePreview(code)
   const continueInApp = useContinueInApp(code)
   const [showDownload, setShowDownload] = useState(false)
+  // Computador: abre o app logo que a página carrega, antes do cartão.
+  const [launching, setLaunching] = useState(() =>
+    looksLikeDesktop(navigator.userAgent, navigator.maxTouchPoints)
+  )
+  const launched = useRef(false)
   const stopWatching = useRef<(() => void) | undefined>(undefined)
 
   useEffect(() => () => stopWatching.current?.(), [])
+
+  useEffect(() => {
+    if (!launching) return
+    // Sem o app instalado (ou se a pessoa recusar) o navegador não faz nada:
+    // cai no cartão, com o aviso de download. Com o app abrindo na frente, a
+    // aba perde o foco: mostra o cartão para quando ela voltar.
+    const stop = watchAppLaunch(
+      window,
+      document,
+      APP_OPEN_TIMEOUT_MS,
+      () => {
+        setLaunching(false)
+        setShowDownload(true)
+      },
+      () => setLaunching(false)
+    )
+    // Uma tentativa só (o Strict Mode roda o efeito duas vezes no dev).
+    if (!launched.current) {
+      launched.current = true
+      window.location.href = inviteDeepLink(code)
+    }
+    return stop
+  }, [launching, code])
 
   const openApp = (): void => {
     setShowDownload(false)
@@ -80,24 +110,49 @@ function InviteCard({ code }: { code: string }): React.JSX.Element {
 
   const preview = state.status === 'ready' ? state.preview : null
 
+  if (launching) {
+    return (
+      <div className="fixed inset-0 z-10 flex items-center justify-center overflow-y-auto bg-tertiary p-4">
+        <InviteBackdrop iconUrl={preview?.icon_url} className="fixed inset-0" />
+        <div
+          role="status"
+          className="relative flex w-full max-w-[360px] flex-col items-center rounded-2xl border border-subtle bg-modal p-8 text-center shadow-2xl shadow-black/60 backdrop-blur"
+        >
+          <InviteSpinner />
+          <h1 className="mt-4 text-ds-lg font-bold text-strong">Abrindo a Salinha…</h1>
+          <p className="mt-2 text-ds-sm text-gray-300">
+            Confirme no seu navegador, se ele perguntar.
+          </p>
+          <Button variant="secondary" className="mt-6 w-full py-2.5" onClick={continueInApp}>
+            Continuar no Navegador
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center overflow-y-auto bg-[#050508] p-4">
+    <div className="fixed inset-0 z-10 flex items-center justify-center overflow-y-auto bg-tertiary p-4">
       <InviteBackdrop iconUrl={preview?.icon_url} className="fixed inset-0" />
-      <div className="relative w-full max-w-[480px] rounded-2xl border border-white/10 bg-[#1e1f24]/95 p-8 shadow-2xl shadow-black/60 backdrop-blur">
+      <div className="relative w-full max-w-[480px] rounded-2xl border border-subtle bg-modal p-8 shadow-2xl shadow-black/60 backdrop-blur">
         {state.status === 'loading' && (
-          <div className="flex justify-center py-16">
-            <InviteSpinner />
-          </div>
+          <>
+            <InvitePreviewSkeleton />
+            <div className="mt-8 flex flex-col gap-3">
+              <ButtonSkeleton />
+              <ButtonSkeleton />
+            </div>
+          </>
         )}
 
         {state.status === 'error' && (
           <div className="flex flex-col items-center text-center">
             <InviteServerIcon name="?" />
-            <h1 className="mt-4 text-ds-lg font-bold text-white">Convite indisponível</h1>
+            <h1 className="mt-4 text-ds-lg font-bold text-strong">Convite indisponível</h1>
             <p className="mt-2 text-ds-sm text-gray-300">{state.message}</p>
             <Link
               to="/"
-              className="mt-8 w-full rounded-lg bg-white/10 px-4 py-2.5 text-ds-sm font-semibold text-white transition-colors hover:bg-white/15"
+              className="mt-8 w-full rounded-lg bg-fg/10 px-4 py-2.5 text-ds-sm font-semibold text-strong transition-colors hover:bg-fg/15"
             >
               Ir para a Salinha
             </Link>

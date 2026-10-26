@@ -126,8 +126,8 @@ function Leaf({
       {renderTile(id)}
 
       {over && (
-        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-2xl bg-[#5865f2]/30 ring-2 ring-[#5865f2]">
-          <span className="rounded-md bg-black/70 px-2 py-1 text-xs font-semibold text-white">
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-2xl bg-brand/30 ring-2 ring-brand">
+          <span className="rounded-md bg-black/70 px-2 py-1 text-xs font-semibold text-white on-media">
             Trocar com {name}
           </span>
         </div>
@@ -179,7 +179,7 @@ function Divider({
       }`}
     >
       <span
-        className={`rounded-full bg-white/10 transition-colors group-hover/divider:bg-[#5865f2] group-active/divider:bg-[#5865f2] ${
+        className={`rounded-full bg-fg/10 transition-colors group-hover/divider:bg-brand group-active/divider:bg-brand ${
           horizontal ? 'h-10 w-1' : 'h-1 w-10'
         }`}
       />
@@ -316,8 +316,8 @@ function StreamMosaic({ ids, renderTile, nameOf }: StreamMosaicProps): React.JSX
                 aria-pressed={preset === option.preset}
                 className={`flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-[11px] font-semibold transition-colors ${
                   preset === option.preset
-                    ? 'bg-[#5865f2] text-white'
-                    : 'text-gray-400 hover:bg-white/10 hover:text-white'
+                    ? 'bg-brand text-white'
+                    : 'text-gray-400 hover:bg-fg/10 hover:text-strong'
                 }`}
               >
                 <PresetGlyph preset={option.preset} cells={option.cells} />

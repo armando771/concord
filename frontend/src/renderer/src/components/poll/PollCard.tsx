@@ -91,8 +91,8 @@ function PollCard({ poll, isAuthor, onVote, onEnd }: PollCardProps): React.JSX.E
   const votesLabel = `${poll.total_voters} ${poll.total_voters === 1 ? 'voto' : 'votos'}`
 
   return (
-    <div className="mt-1 w-full max-w-md rounded-xl border border-white/10 bg-black/30 p-4">
-      <p className="break-words text-[15px] font-semibold text-white">{poll.question}</p>
+    <div className="mt-1 w-full max-w-md rounded-xl border border-subtle bg-input p-4">
+      <p className="break-words text-[15px] font-semibold text-strong">{poll.question}</p>
       <p className="mb-3 mt-0.5 text-xs text-gray-400">
         {closed
           ? 'Enquete encerrada'
@@ -116,17 +116,17 @@ function PollCard({ poll, isAuthor, onVote, onEnd }: PollCardProps): React.JSX.E
               aria-checked={showResults ? undefined : isSelected}
               className={`relative flex min-h-11 w-full items-center gap-3 overflow-hidden rounded-lg border px-3 py-2 text-left transition-colors ${
                 isSelected
-                  ? 'border-[#5865f2] bg-[#5865f2]/15'
+                  ? 'border-brand bg-brand/15'
                   : answer.me_voted && showResults
-                    ? 'border-[#5865f2]/60 bg-white/[0.04]'
-                    : 'border-white/10 bg-white/[0.04]'
-              } ${showResults ? 'cursor-default' : 'cursor-pointer hover:border-white/25 hover:bg-white/[0.07]'}`}
+                    ? 'border-brand/60 bg-fg/[0.04]'
+                    : 'border-subtle bg-fg/[0.04]'
+              } ${showResults ? 'cursor-default' : 'cursor-pointer hover:border-strong hover:bg-fg/[0.07]'}`}
             >
               {showResults && (
                 <span
                   aria-hidden="true"
                   className={`absolute inset-y-0 left-0 transition-[width] duration-500 ${
-                    isWinner ? 'bg-[#23a55a]/25' : 'bg-[#5865f2]/20'
+                    isWinner ? 'bg-success/25' : 'bg-brand/20'
                   }`}
                   style={{ width: `${percent}%` }}
                 />
@@ -138,7 +138,7 @@ function PollCard({ poll, isAuthor, onVote, onEnd }: PollCardProps): React.JSX.E
               {showResults ? (
                 <span className="relative flex shrink-0 items-center gap-2 text-xs font-semibold text-gray-300">
                   {answer.me_voted && (
-                    <span className="text-[#949cf7]" title="Seu voto">
+                    <span className="text-brand" title="Seu voto">
                       ✓
                     </span>
                   )}
@@ -151,7 +151,7 @@ function PollCard({ poll, isAuthor, onVote, onEnd }: PollCardProps): React.JSX.E
                   aria-hidden="true"
                   className={`relative flex h-5 w-5 shrink-0 items-center justify-center border-2 text-[11px] text-white ${
                     poll.allow_multiselect ? 'rounded-md' : 'rounded-full'
-                  } ${isSelected ? 'border-[#5865f2] bg-[#5865f2]' : 'border-gray-500'}`}
+                  } ${isSelected ? 'border-brand bg-brand' : 'border-gray-500'}`}
                 >
                   {isSelected && '✓'}
                 </span>
@@ -171,7 +171,7 @@ function PollCard({ poll, isAuthor, onVote, onEnd }: PollCardProps): React.JSX.E
             <button
               type="button"
               onClick={() => setPeek((v) => !v)}
-              className="cursor-pointer rounded-md px-2 py-1 text-xs font-semibold text-gray-300 transition-colors hover:text-white"
+              className="cursor-pointer rounded-md px-2 py-1 text-xs font-semibold text-gray-300 transition-colors hover:text-strong"
             >
               {peek ? 'Voltar a votar' : 'Mostrar resultados'}
             </button>
@@ -181,7 +181,7 @@ function PollCard({ poll, isAuthor, onVote, onEnd }: PollCardProps): React.JSX.E
               type="button"
               disabled={busy}
               onClick={() => void run(() => onVote([]), 'Falha ao remover o voto.')}
-              className="cursor-pointer rounded-md px-2 py-1 text-xs font-semibold text-gray-300 transition-colors hover:text-white disabled:opacity-50"
+              className="cursor-pointer rounded-md px-2 py-1 text-xs font-semibold text-gray-300 transition-colors hover:text-strong disabled:opacity-50"
             >
               Remover voto
             </button>
@@ -201,7 +201,7 @@ function PollCard({ poll, isAuthor, onVote, onEnd }: PollCardProps): React.JSX.E
               type="button"
               disabled={busy || selected.length === 0}
               onClick={() => void handleVote()}
-              className="cursor-pointer rounded-lg bg-[#5865f2] px-4 py-1.5 text-xs font-semibold text-white transition-all hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-40"
+              className="cursor-pointer rounded-lg bg-brand px-4 py-1.5 text-xs font-semibold text-white transition-all hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-40"
             >
               Votar
             </button>

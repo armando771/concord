@@ -47,7 +47,7 @@ function MediaPicker({
 
   return (
     <div
-      className="absolute left-0 top-full z-10 mt-1 w-72 rounded-lg border border-white/10 bg-[#111214] p-3 shadow-2xl"
+      className="absolute left-0 top-full z-10 mt-1 w-72 rounded-lg border border-subtle bg-floating p-3 shadow-2xl"
       onMouseDown={(e) => e.stopPropagation()}
     >
       <div className="grid grid-cols-8 gap-1">
@@ -59,8 +59,8 @@ function MediaPicker({
               onChange({ emoji, image_url: '' })
               onClose()
             }}
-            className={`cursor-pointer rounded-md p-1 text-lg leading-none transition-colors hover:bg-white/10 ${
-              answer.emoji === emoji ? 'bg-[#5865f2]/30' : ''
+            className={`cursor-pointer rounded-md p-1 text-lg leading-none transition-colors hover:bg-fg/10 ${
+              answer.emoji === emoji ? 'bg-brand/30' : ''
             }`}
           >
             {emoji}
@@ -85,7 +85,7 @@ function MediaPicker({
         <button
           type="submit"
           disabled={!url.trim()}
-          className="cursor-pointer rounded-md bg-white/10 px-2 text-xs font-semibold text-white hover:bg-white/15 disabled:opacity-40"
+          className="cursor-pointer rounded-md bg-fg/10 px-2 text-xs font-semibold text-strong hover:bg-fg/15 disabled:opacity-40"
         >
           Usar
         </button>
@@ -178,7 +178,7 @@ function CreatePollModal({ open, onClose, onCreate }: CreatePollModalProps): Rea
                 aria-label={`Emoji ou imagem da resposta ${i + 1}`}
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => setPicker((p) => (p === i ? null : i))}
-                className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-white/5 text-lg text-gray-400 transition-colors hover:bg-white/10"
+                className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-subtle bg-fg/5 text-lg text-gray-400 transition-colors hover:bg-fg/10"
               >
                 {answer.emoji || answer.image_url ? (
                   <PollAnswerMedia answer={answer} />
@@ -207,7 +207,7 @@ function CreatePollModal({ open, onClose, onCreate }: CreatePollModalProps): Rea
                   type="button"
                   onClick={() => removeAnswer(i)}
                   aria-label={`Remover resposta ${i + 1}`}
-                  className="shrink-0 cursor-pointer px-1 text-white/50 transition-colors hover:text-red-400"
+                  className="shrink-0 cursor-pointer px-1 text-strong/50 transition-colors hover:text-red-400"
                 >
                   ✕
                 </button>
@@ -218,7 +218,7 @@ function CreatePollModal({ open, onClose, onCreate }: CreatePollModalProps): Rea
             <button
               type="button"
               onClick={() => setDraft((d) => ({ ...d, answers: [...d.answers, emptyAnswer()] }))}
-              className="flex cursor-pointer items-center gap-1.5 self-start rounded-md px-1 py-1 text-xs font-semibold text-[#949cf7] transition-colors hover:text-white"
+              className="flex cursor-pointer items-center gap-1.5 self-start rounded-md px-1 py-1 text-xs font-semibold text-brand transition-colors hover:text-strong"
             >
               <PlusIcon className="h-4 w-4" />
               Adicionar outra resposta
@@ -235,7 +235,7 @@ function CreatePollModal({ open, onClose, onCreate }: CreatePollModalProps): Rea
               className="glass-input !w-auto !py-1.5"
             >
               {POLL_DURATIONS.map((d) => (
-                <option key={d.hours} value={d.hours} className="bg-[#111214]">
+                <option key={d.hours} value={d.hours} className="bg-floating">
                   {d.label}
                 </option>
               ))}
@@ -246,7 +246,7 @@ function CreatePollModal({ open, onClose, onCreate }: CreatePollModalProps): Rea
               type="checkbox"
               checked={draft.allow_multiselect}
               onChange={(e) => setDraft((d) => ({ ...d, allow_multiselect: e.target.checked }))}
-              className="h-4 w-4 accent-[#5865f2]"
+              className="h-4 w-4 accent-brand"
             />
             Permitir múltiplas respostas
           </label>

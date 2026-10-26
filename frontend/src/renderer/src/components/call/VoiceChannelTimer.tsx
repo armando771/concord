@@ -12,7 +12,7 @@ function VoiceChannelTimer({ startedAt }: { startedAt: string }): React.JSX.Elem
   return (
     <span
       title="Tempo de chamada neste canal"
-      className="shrink-0 font-mono text-[10px] font-semibold tabular-nums text-[#23a55a]"
+      className="shrink-0 font-mono text-[10px] font-semibold tabular-nums text-success"
     >
       {formatDuration(elapsed)}
     </span>

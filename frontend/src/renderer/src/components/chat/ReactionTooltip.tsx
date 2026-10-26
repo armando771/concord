@@ -122,7 +122,7 @@ function ReactionTooltip({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       style={{ ...position, width: WIDTH, maxHeight }}
-      className="fixed z-40 flex flex-col rounded-lg border border-white/10 bg-[#18191c] p-1.5 shadow-2xl shadow-black/60"
+      className="fixed z-40 flex flex-col rounded-lg border border-subtle bg-floating p-1.5 shadow-2xl shadow-black/60"
     >
       <div className="flex shrink-0 items-center gap-1.5 px-1 pb-1 text-ds-xs text-gray-400">
         <span className="text-sm leading-none">{emoji}</span>

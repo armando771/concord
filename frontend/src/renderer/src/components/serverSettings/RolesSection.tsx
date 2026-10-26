@@ -103,13 +103,13 @@ function RolesSection(): React.JSX.Element {
                 aria-current={selected?.id === role.id ? 'true' : undefined}
                 className={`flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors ${
                   selected?.id === role.id
-                    ? 'bg-white/10 text-white'
-                    : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                    ? 'bg-fg/10 text-strong'
+                    : 'text-gray-400 hover:bg-fg/5 hover:text-gray-200'
                 }`}
               >
                 <span
                   aria-hidden
-                  className="h-3 w-3 shrink-0 rounded-full border border-white/20"
+                  className="h-3 w-3 shrink-0 rounded-full border border-normal"
                   style={{ background: roleColorCss(role.color) ?? 'transparent' }}
                 />
                 <span className="min-w-0 flex-1 truncate">{role.name}</span>
@@ -124,7 +124,7 @@ function RolesSection(): React.JSX.Element {
                     aria-label={`Subir ${role.name}`}
                     disabled={!canMove(role, -1)}
                     onClick={() => void move(role, -1)}
-                    className="cursor-pointer rounded text-gray-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                    className="cursor-pointer rounded text-gray-400 hover:text-strong disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     <ChevronUpIcon className="h-3.5 w-3.5" />
                   </button>
@@ -133,7 +133,7 @@ function RolesSection(): React.JSX.Element {
                     aria-label={`Descer ${role.name}`}
                     disabled={!canMove(role, 1)}
                     onClick={() => void move(role, 1)}
-                    className="cursor-pointer rounded text-gray-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                    className="cursor-pointer rounded text-gray-400 hover:text-strong disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     <ChevronDownIcon className="h-3.5 w-3.5" />
                   </button>
@@ -213,7 +213,7 @@ function RoleEditor({ serverId, role }: { serverId: string; role: Role }): React
   return (
     <div>
       <div className="mb-5 flex items-center justify-between gap-3">
-        <h2 className="min-w-0 truncate text-base font-bold text-white">
+        <h2 className="min-w-0 truncate text-base font-bold text-strong">
           {role.is_default ? 'Permissões padrão (@everyone)' : `Editar cargo — ${role.name}`}
         </h2>
         {!role.is_default && !role.is_system && manageable && (
@@ -234,13 +234,14 @@ function RoleEditor({ serverId, role }: { serverId: string; role: Role }): React
       )}
 
       {role.is_system && (
-        <p className="mb-4 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-gray-300">
-          O cargo <b className="text-white">{role.name}</b> é fixo do servidor e exclusivo para bots:
-          fica sempre abaixo dos demais cargos e não pode ser apagado nem atribuído a outros usuários.
+        <p className="mb-4 rounded-lg border border-subtle bg-fg/5 px-3 py-2 text-xs text-gray-300">
+          O cargo <b className="text-strong">{role.name}</b> é fixo do servidor e exclusivo para
+          bots: fica sempre abaixo dos demais cargos e não pode ser apagado nem atribuído a outros
+          usuários.
         </p>
       )}
 
-      <div className="mb-5 flex gap-1 border-b border-white/8">
+      <div className="mb-5 flex gap-1 border-b border-subtle">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -249,7 +250,7 @@ function RoleEditor({ serverId, role }: { serverId: string; role: Role }): React
             aria-current={activeTab === t.id ? 'page' : undefined}
             className={`-mb-px cursor-pointer border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${
               activeTab === t.id
-                ? 'border-[#5865f2] text-white'
+                ? 'border-brand text-strong'
                 : 'border-transparent text-gray-400 hover:text-gray-200'
             }`}
           >
@@ -278,7 +279,7 @@ function RoleEditor({ serverId, role }: { serverId: string; role: Role }): React
                   aria-label="Sem cor"
                   title="Sem cor"
                   className={`h-7 w-7 cursor-pointer rounded-full border text-xs text-gray-400 ${
-                    color === null ? 'border-white' : 'border-white/20'
+                    color === null ? 'border-[var(--text-strong)]' : 'border-normal'
                   }`}
                 >
                   ∅
@@ -290,7 +291,7 @@ function RoleEditor({ serverId, role }: { serverId: string; role: Role }): React
                     onClick={() => setColor(c)}
                     aria-label={`Cor ${roleColorCss(c)}`}
                     className={`h-7 w-7 cursor-pointer rounded-full border-2 ${
-                      color === c ? 'border-white' : 'border-transparent'
+                      color === c ? 'border-[var(--text-strong)]' : 'border-transparent'
                     }`}
                     style={{ background: roleColorCss(c) }}
                   />
@@ -300,7 +301,7 @@ function RoleEditor({ serverId, role }: { serverId: string; role: Role }): React
                   aria-label="Escolher outra cor"
                   value={roleColorCss(color) ?? '#99aab5'}
                   onChange={(e) => setColor(parseColorCss(e.target.value))}
-                  className="h-7 w-9 cursor-pointer rounded border border-white/20 bg-transparent p-0"
+                  className="h-7 w-9 cursor-pointer rounded border border-normal bg-transparent p-0"
                 />
               </div>
               <p className="mt-2 text-xs text-gray-500">
@@ -310,9 +311,9 @@ function RoleEditor({ serverId, role }: { serverId: string; role: Role }): React
             </div>
 
             {!role.is_system && (
-              <div className="flex items-center justify-between gap-4 rounded-lg border border-white/8 bg-white/3 px-4 py-3">
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-subtle bg-fg/3 px-4 py-3">
                 <div>
-                  <p className="text-sm font-semibold text-white">Exibir membros separadamente</p>
+                  <p className="text-sm font-semibold text-strong">Exibir membros separadamente</p>
                   <p className="text-xs text-gray-400">
                     Quem está online com este cargo ganha um grupo próprio na lista de membros.
                   </p>
@@ -337,7 +338,7 @@ function RoleEditor({ serverId, role }: { serverId: string; role: Role }): React
       )}
 
       {dirty && manageable && (
-        <div className="sticky bottom-4 mt-6 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#0d0e15]/95 px-4 py-3 shadow-2xl backdrop-blur-xl">
+        <div className="sticky bottom-4 mt-6 flex items-center justify-between gap-3 rounded-xl border border-subtle bg-floating px-4 py-3 shadow-2xl backdrop-blur-xl">
           <p className="text-sm text-gray-300">Cuidado: você tem alterações não salvas.</p>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={reset} disabled={saving}>
@@ -365,7 +366,7 @@ function RoleEditor({ serverId, role }: { serverId: string; role: Role }): React
         }}
       >
         <p>
-          Quem tem o cargo <b className="text-white">{role.name}</b> perde as permissões dele, e as
+          Quem tem o cargo <b className="text-strong">{role.name}</b> perde as permissões dele, e as
           regras dos canais que usavam este cargo são removidas.
         </p>
       </ConfirmModal>
@@ -414,7 +415,7 @@ function RoleMembers({
             onChange={(e) => setQuery(e.target.value)}
           />
           {term && (
-            <ul className="mt-2 divide-y divide-white/6 rounded-lg border border-white/8">
+            <ul className="mt-2 divide-y divide-subtle rounded-lg border border-subtle">
               {candidates.length === 0 && (
                 <li className="px-3 py-2 text-xs text-gray-500">Ninguém encontrado.</li>
               )}
@@ -427,7 +428,7 @@ function RoleMembers({
                       avatarUrl={m.avatar_url}
                       size={24}
                     />
-                    <span className="truncate text-sm text-white">{nameOf(m)}</span>
+                    <span className="truncate text-sm text-strong">{nameOf(m)}</span>
                   </span>
                   <Button
                     variant="secondary"
@@ -450,12 +451,12 @@ function RoleMembers({
         {withRole.length === 0 ? (
           <p className="text-sm text-gray-500">Ninguém tem este cargo ainda.</p>
         ) : (
-          <ul className="divide-y divide-white/6 rounded-lg border border-white/8">
+          <ul className="divide-y divide-subtle rounded-lg border border-subtle">
             {withRole.map((m) => (
               <li key={m.user_id} className="flex items-center justify-between gap-3 px-3 py-2">
                 <span className="flex min-w-0 items-center gap-2">
                   <Avatar userId={m.user_id} name={nameOf(m)} avatarUrl={m.avatar_url} size={24} />
-                  <span className="truncate text-sm text-white">{nameOf(m)}</span>
+                  <span className="truncate text-sm text-strong">{nameOf(m)}</span>
                 </span>
                 {manageable && !role.is_system && (
                   <button

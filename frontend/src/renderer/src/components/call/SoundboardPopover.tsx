@@ -18,6 +18,7 @@ import {
 } from '../icons'
 import SoundboardUploadModal from './SoundboardUploadModal'
 import { formatKeyboardShortcut } from './useSoundboardHotkeys'
+import { SoundboardSkeleton } from '../skeleton/layouts'
 
 const POPOVER_WIDTH = 380
 const GAP = 10
@@ -51,8 +52,8 @@ function SoundPad({
     <div
       className={`group relative flex flex-col justify-between rounded-xl border p-2.5 transition-all ${
         isPlaying
-          ? 'border-[#23a55a] bg-[#23a55a]/15 shadow-[0_0_16px_rgba(35,165,90,0.25)]'
-          : 'border-white/8 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.08]'
+          ? 'border-success bg-success/15 shadow-[0_0_16px_rgba(35,165,90,0.25)]'
+          : 'border-subtle bg-fg/[0.04] hover:border-normal hover:bg-fg/[0.08]'
       }`}
     >
       <button
@@ -61,11 +62,11 @@ function SoundPad({
         className="flex w-full cursor-pointer items-center gap-2.5 text-left"
         title={`Tocar "${sound.name}" para todos na chamada`}
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-black/40 text-lg">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-input text-lg">
           {sound.emoji || '🔊'}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-bold text-white">{sound.name}</p>
+          <p className="truncate text-xs font-bold text-strong">{sound.name}</p>
           <p className="truncate text-[10px] text-gray-400">
             {(sound.duration_ms / 1000).toFixed(1)}s
             {sound.uploader_name ? ` • ${sound.uploader_name}` : ''}
@@ -73,17 +74,17 @@ function SoundPad({
         </div>
       </button>
 
-      <div className="mt-2 flex items-center justify-between gap-1 border-t border-white/6 pt-1.5">
+      <div className="mt-2 flex items-center justify-between gap-1 border-t border-subtle pt-1.5">
         <button
           type="button"
           onClick={onStartRecordKey}
           title="Definir atalho de teclado (ex.: F1, Alt+1). Clique e pressione a combinação ou Backspace para limpar."
           className={`cursor-pointer truncate rounded px-1.5 py-0.5 text-[10px] font-semibold transition-colors ${
             recordingKey
-              ? 'animate-pulse bg-[#5865f2] text-white'
+              ? 'animate-pulse bg-brand text-white'
               : keybind
-                ? 'bg-white/15 text-gray-200 hover:bg-white/25'
-                : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-gray-200'
+                ? 'bg-fg/15 text-gray-200 hover:bg-fg/25'
+                : 'bg-fg/5 text-gray-400 hover:bg-fg/10 hover:text-gray-200'
           }`}
         >
           {recordingKey ? 'Tecla…' : keybind || 'Atalho'}
@@ -97,8 +98,8 @@ function SoundPad({
             title={isFavorite ? 'Remover dos favoritos' : 'Favoritar'}
             className={`flex h-6 w-6 cursor-pointer items-center justify-center rounded transition-colors ${
               isFavorite
-                ? 'text-[#f0b232] hover:bg-white/10'
-                : 'text-gray-400 hover:bg-white/10 hover:text-gray-200'
+                ? 'text-warning hover:bg-fg/10'
+                : 'text-gray-400 hover:bg-fg/10 hover:text-gray-200'
             }`}
           >
             <FavoriteStarIcon className="h-3.5 w-3.5" filled={isFavorite} />
@@ -109,7 +110,7 @@ function SoundPad({
               onClick={onDelete}
               aria-label={`Excluir som ${sound.name}`}
               title="Excluir som"
-              className="flex h-6 w-6 cursor-pointer items-center justify-center rounded text-gray-400 transition-colors hover:bg-[#f23f43]/20 hover:text-[#f23f43]"
+              className="flex h-6 w-6 cursor-pointer items-center justify-center rounded text-gray-400 transition-colors hover:bg-danger/20 hover:text-danger"
             >
               <TrashIcon className="h-3.5 w-3.5" />
             </button>
@@ -138,7 +139,13 @@ function SoundboardPopover({
   const sounds = useSoundboardStore((s) =>
     serverId ? (s.soundsByServer[serverId] ?? EMPTY_SOUNDS) : EMPTY_SOUNDS
   )
-  const loading = useSoundboardStore((s) => (serverId ? Boolean(s.loadingByServer[serverId]) : false))
+  const loading = useSoundboardStore((s) =>
+    serverId ? Boolean(s.loadingByServer[serverId]) : false
+  )
+  // Já buscou este servidor alguma vez: reabrir mostra os sons na hora.
+  const soundsLoaded = useSoundboardStore((s) =>
+    serverId ? s.soundsByServer[serverId] !== undefined : false
+  )
   const volume = useSoundboardStore((s) => s.volume)
   const favorites = useSoundboardStore((s) => s.favorites)
   const keybinds = useSoundboardStore((s) => s.keybinds)
@@ -267,18 +274,18 @@ function SoundboardPopover({
         role="dialog"
         aria-label="Mesa de Áudio"
         style={{ width: POPOVER_WIDTH, left, bottom }}
-        className="fixed z-50 flex max-h-[460px] flex-col rounded-2xl border border-white/10 bg-[#111214] p-4 shadow-2xl"
+        className="fixed z-50 flex max-h-[460px] flex-col rounded-2xl border border-subtle bg-floating p-4 shadow-2xl"
       >
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
-            <p className="text-sm font-bold text-white">Mesa de Áudio</p>
+            <p className="text-sm font-bold text-strong">Mesa de Áudio</p>
             <p className="text-[11px] text-gray-400">Toque sons na chamada para todos</p>
           </div>
           {canUseSoundboard && (
             <button
               type="button"
               onClick={() => setUploadOpen(true)}
-              className="flex cursor-pointer items-center gap-1 rounded-lg bg-[#5865f2] px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#4752c4]"
+              className="flex cursor-pointer items-center gap-1 rounded-lg bg-brand px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-hover"
             >
               <PlusIcon className="h-3.5 w-3.5" />
               Adicionar som
@@ -287,16 +294,16 @@ function SoundboardPopover({
         </div>
 
         {/* Controle de volume dedicado da mesa de áudio */}
-        <div className="mb-3 flex items-center gap-2.5 rounded-xl bg-white/[0.04] px-3 py-2">
+        <div className="mb-3 flex items-center gap-2.5 rounded-xl bg-fg/[0.04] px-3 py-2">
           <button
             type="button"
             onClick={toggleVolumeMute}
             aria-label={volume === 0 ? 'Ativar som da mesa' : 'Silenciar mesa de áudio'}
             title={volume === 0 ? 'Ativar som da mesa' : 'Silenciar mesa de áudio'}
-            className="cursor-pointer text-gray-300 transition-colors hover:text-white"
+            className="cursor-pointer text-gray-300 transition-colors hover:text-strong"
           >
             {volume === 0 ? (
-              <VolumeOffIcon className="h-4 w-4 text-[#f23f43]" />
+              <VolumeOffIcon className="h-4 w-4 text-danger" />
             ) : (
               <VolumeIcon className="h-4 w-4" />
             )}
@@ -312,7 +319,7 @@ function SoundboardPopover({
               setVolume(next)
             }}
             aria-label="Volume da mesa de áudio"
-            className="h-1.5 flex-1 cursor-pointer accent-[#5865f2]"
+            className="h-1.5 flex-1 cursor-pointer accent-brand"
           />
           <span className="w-9 text-right text-[11px] font-semibold text-gray-300">
             {Math.round(volume * 100)}%
@@ -327,16 +334,16 @@ function SoundboardPopover({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar som na mesa…"
-            className="w-full rounded-xl border border-white/10 bg-black/40 py-1.5 pl-8 pr-3 text-xs text-white placeholder-gray-500 focus:border-[#5865f2] focus:outline-none"
+            className="w-full rounded-xl border border-subtle bg-input py-1.5 pl-8 pr-3 text-xs text-strong placeholder-gray-500 focus:border-brand focus:outline-none"
           />
         </div>
 
         {/* Lista de sons */}
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-          {loading && sounds.length === 0 ? (
-            <p className="py-8 text-center text-xs text-gray-400">Carregando sons…</p>
+          {loading && !soundsLoaded ? (
+            <SoundboardSkeleton />
           ) : filtered.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-white/10 py-8 text-center">
+            <div className="rounded-xl border border-dashed border-subtle py-8 text-center">
               <p className="text-xs font-medium text-gray-300">
                 {sounds.length === 0
                   ? 'Nenhum som neste servidor ainda.'

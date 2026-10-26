@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useBadgeStore } from '../../store/badgeStore'
-import { profileBadgeRow, rarityMeta } from '../../lib/badges'
+import { badgeLabel, isMythic, profileBadgeRow, rarityMeta } from '../../lib/badges'
 import BadgeIcon from './BadgeIcon'
+import { BadgeRowSkeleton } from '../skeleton/layouts'
 
 interface BadgeRowProps {
   userId: string
@@ -28,11 +29,20 @@ function BadgeRow({
   const ensureBadges = useBadgeStore((s) => s.ensureBadges)
   const openModal = useBadgeStore((s) => s.openModal)
 
+  // Quem já respondeu (mesmo com erro): o skeleton não fica para sempre se falhar.
+  const [settled, setSettled] = useState<string | null>(null)
+
   useEffect(() => {
-    void ensureBadges(userId)
+    let cancelled = false
+    void ensureBadges(userId).then(() => {
+      if (!cancelled) setSettled(userId)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [userId, ensureBadges])
 
-  if (!badges) return null
+  if (!badges) return settled === userId ? null : <BadgeRowSkeleton />
   const { shown, overflow } = profileBadgeRow(badges, max)
   if (shown.length === 0) return null
 
@@ -43,7 +53,7 @@ function BadgeRow({
 
   return (
     <div
-      className="flex shrink-0 items-center gap-0.5 rounded-md border border-white/10 bg-black/25 px-1 py-0.5"
+      className="flex shrink-0 items-center gap-0.5 rounded-md border border-subtle bg-input px-1 py-0.5"
       aria-label="Badges"
     >
       {shown.map((b) => (
@@ -51,18 +61,27 @@ function BadgeRow({
           key={b.category}
           type="button"
           onClick={() => open(b.category)}
-          aria-label={`${b.tier_name} (${b.name})`}
+          aria-label={badgeLabel(b)}
           className="group relative flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded transition-transform hover:scale-110"
         >
           <BadgeIcon category={b.category} tier={b.tier} rarity={b.rarity} size={20} />
           <span
             role="tooltip"
-            className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#111214] px-2 py-1 text-center shadow-xl group-hover:block group-focus-visible:block"
+            className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-subtle bg-floating px-2 py-1 text-center shadow-xl group-hover:block group-focus-visible:block"
           >
-            <span className="block text-xs font-bold" style={{ color: rarityMeta(b.rarity).color }}>
-              {b.tier_name}
-            </span>
-            <span className="block text-[10px] text-gray-400">{b.name}</span>
+            {isMythic(b.rarity) ? (
+              <span className="mythic-text block text-xs font-black">{b.tier_name}</span>
+            ) : (
+              <span
+                className="block text-xs font-bold"
+                style={{ color: rarityMeta(b.rarity).color }}
+              >
+                {b.tier_name}
+              </span>
+            )}
+            {b.tier_name !== b.name && (
+              <span className="block text-[10px] text-gray-400">{b.name}</span>
+            )}
           </span>
         </button>
       ))}
@@ -71,7 +90,7 @@ function BadgeRow({
           type="button"
           onClick={() => open()}
           aria-label={`Ver mais ${overflow} badges`}
-          className="cursor-pointer rounded px-1 text-[11px] font-semibold text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+          className="cursor-pointer rounded px-1 text-[11px] font-semibold text-gray-300 transition-colors hover:bg-fg/10 hover:text-strong"
         >
           +{overflow}
         </button>

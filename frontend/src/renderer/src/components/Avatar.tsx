@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { API_BASE_URL } from '../lib/config'
 import { MAESTRO_USER_ID } from '../lib/music'
+import { SALINHA_BOT_USER_ID } from '../lib/bots'
 import maestroGif from '../assets/maestro.gif'
+import { SalinhaMarkIcon } from './icons'
 import { isAnimatedMedia, profileMediaSrc } from '../lib/profileMedia'
 import { STATUS_META, type PresenceStatus } from '../lib/presenceStatus'
 import { useUserLook } from '../store/profileStore'
@@ -39,7 +41,7 @@ function Avatar({
   size,
   animate = 'hover',
   status,
-  cutoutColor = '#111214',
+  cutoutColor = 'var(--bg-floating)',
   fallbackClassName = 'bg-violet-600',
   className = ''
 }: AvatarProps): React.JSX.Element {
@@ -51,25 +53,28 @@ function Avatar({
   const moving =
     animated && animate === 'hover' ? profileMediaSrc(look.avatarUrl, API_BASE_URL) : null
   const showImage = still && failedSrc !== still
-  // O Maestro não tem foto no banco: o GIF vem embutido no app.
+  // O Maestro não tem foto no banco: o GIF vem embutido no app. O Salinha Bot
+  // usa o ícone da Salinha (o mesmo da tela de login).
   const maestro = userId === MAESTRO_USER_ID && !showImage
+  const salinhaBot = userId === SALINHA_BOT_USER_ID && !showImage
 
   const dot = Math.max(10, Math.round(size * 0.3))
   const border = size >= 64 ? 5 : size >= 32 ? 3 : 2
 
   return (
-    <div
-      className={`group relative shrink-0 ${className}`}
-      style={{ width: size, height: size }}
-    >
+    <div className={`group relative shrink-0 ${className}`} style={{ width: size, height: size }}>
       {maestro ? (
         <img
           src={maestroGif}
           alt=""
           draggable={false}
           style={{ imageRendering: 'pixelated' }}
-          className="h-full w-full rounded-full bg-[#1e1f22] object-cover"
+          className="h-full w-full rounded-full bg-accent object-cover"
         />
+      ) : salinhaBot ? (
+        <div className="flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-brand to-[#8b5cf6] text-white">
+          <SalinhaMarkIcon className="h-[72%] w-[72%]" />
+        </div>
       ) : showImage ? (
         <>
           <img

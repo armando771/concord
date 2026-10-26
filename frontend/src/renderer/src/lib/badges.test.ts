@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Badge } from '../api/badges'
 import {
+  badgeLabel,
   formatThreshold,
   formatUnlockDate,
+  holoPointer,
+  isMythic,
   profileBadgeRow,
   progressPercent,
   publicStatText,
@@ -241,5 +244,82 @@ describe('unlockCount', () => {
         { category: 'conta', name: '', tier: 1, tier_name: '', rarity: 'comum' }
       ])
     ).toBe(2)
+  })
+})
+
+describe('raridade mítica (Criador da Salinha)', () => {
+  const dev = badge({
+    category: 'criador',
+    name: 'Criador da Salinha',
+    unit: 'dev',
+    value: 1,
+    tier: 1,
+    tier_name: 'Criador da Salinha',
+    rarity: 'mitico',
+    progress: 1,
+    tiers: [{ tier: 1, name: 'Criador da Salinha', threshold: 1, rarity: 'mitico' }]
+  })
+
+  it('fica acima de lendário', () => {
+    const order = (['comum', 'raro', 'epico', 'lendario', 'mitico'] as const).map(
+      (r) => RARITY[r].rank
+    )
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+    expect(new Set(order).size).toBe(order.length)
+    expect(RARITY.mitico.label).toBe('Mítico')
+    expect(RARITY.mitico.color).not.toBe(RARITY.lendario.color)
+  })
+
+  it('vem antes do Fundador na fileira do perfil', () => {
+    const { shown } = profileBadgeRow([
+      badge({ category: 'fundador', unit: 'founder', tier: 1, rarity: 'lendario' }),
+      badge({ category: 'voz', tier: 1, rarity: 'comum' }),
+      dev
+    ])
+    expect(shown.map((b) => b.category)).toEqual(['criador', 'fundador', 'voz'])
+  })
+
+  it('rótulo não repete o nome quando o tier se chama igual ao badge', () => {
+    expect(badgeLabel(dev)).toBe('Criador da Salinha')
+    expect(badgeLabel({ name: 'Tempo em call', tier_name: 'Locutor' })).toBe(
+      'Locutor (Tempo em call)'
+    )
+  })
+
+  it('só mítico tem efeito', () => {
+    expect(isMythic('mitico')).toBe(true)
+    expect(isMythic('lendario')).toBe(false)
+    expect(isMythic(undefined)).toBe(false)
+  })
+
+  it('não tem número, nem no próprio perfil nem no de outra pessoa', () => {
+    expect(statText(dev)).toBe('Dev do Salinha')
+    expect(publicStatText({ ...dev, value: undefined, progress: undefined })).toBe('Dev do Salinha')
+    expect(formatThreshold('dev', 1)).toBe('Só para os devs')
+    expect(remainingText(dev)).toBe('Tier máximo!')
+    expect(remainingText({ ...dev, tier: 0, next_threshold: 1, value: 0 })).toBe('Só para os devs')
+  })
+})
+
+describe('holoPointer', () => {
+  const rect = { left: 100, top: 50, width: 200, height: 100 }
+
+  it('no centro não inclina', () => {
+    expect(holoPointer(200, 100, rect)).toEqual({ mx: 50, my: 50, rx: 0, ry: 0 })
+  })
+
+  it('nos cantos inclina até o máximo', () => {
+    expect(holoPointer(100, 50, rect, 10)).toEqual({ mx: 0, my: 0, rx: 10, ry: -10 })
+    expect(holoPointer(300, 150, rect, 10)).toEqual({ mx: 100, my: 100, rx: -10, ry: 10 })
+  })
+
+  it('fora da caixa ou caixa vazia não passa do limite', () => {
+    expect(holoPointer(9999, -9999, rect, 10)).toEqual({ mx: 100, my: 0, rx: 10, ry: 10 })
+    expect(holoPointer(5, 5, { left: 0, top: 0, width: 0, height: 0 })).toEqual({
+      mx: 50,
+      my: 50,
+      rx: 0,
+      ry: 0
+    })
   })
 })

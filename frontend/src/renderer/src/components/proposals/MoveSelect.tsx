@@ -19,13 +19,13 @@ function MoveSelect({
       onChange={(e) => {
         if (e.target.value) onMove(e.target.value as ProposalStatus)
       }}
-      className="glass-input cursor-pointer rounded-lg px-2 py-1 text-xs text-white disabled:cursor-not-allowed disabled:opacity-50"
+      className="glass-input cursor-pointer rounded-lg px-2 py-1 text-xs text-strong disabled:cursor-not-allowed disabled:opacity-50"
     >
       <option value="" disabled>
         Mover para…
       </option>
       {moveTargets(status).map((target) => (
-        <option key={target} value={target} className="bg-[#12141d]">
+        <option key={target} value={target} className="bg-surface">
           {STATUS_ACTION_LABEL[target]}
         </option>
       ))}

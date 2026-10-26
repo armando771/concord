@@ -28,7 +28,7 @@ function DeviceSelect({
         className="glass-input !py-2 text-sm"
       >
         {options.map((o) => (
-          <option key={o.id} value={o.id} className="bg-[#111214]">
+          <option key={o.id} value={o.id} className="bg-floating">
             {o.label}
           </option>
         ))}
@@ -52,7 +52,7 @@ function VolumeSlider({
     <label className="flex flex-col gap-1.5">
       <span className="flex items-center justify-between text-ds-sm font-medium text-gray-400">
         {label}
-        <span className={percent > 100 ? 'text-[#f0b232]' : 'text-white'}>{percent}%</span>
+        <span className={percent > 100 ? 'text-warning' : 'text-strong'}>{percent}%</span>
       </span>
       <input
         type="range"
@@ -61,7 +61,7 @@ function VolumeSlider({
         step={1}
         value={percent}
         onChange={(e) => onChange(Number(e.target.value) / 100)}
-        className="w-full cursor-pointer accent-[#5865f2]"
+        className="w-full cursor-pointer accent-brand"
       />
     </label>
   )
@@ -86,8 +86,8 @@ function VoiceSettings(): React.JSX.Element {
   const threshold = thresholdDb(sensitivity)
 
   return (
-    <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
-      <p className="text-ds-md font-medium text-white">Voz</p>
+    <div className="space-y-3 rounded-xl border border-subtle bg-fg/5 p-4">
+      <p className="text-ds-md font-medium text-strong">Voz</p>
       <DeviceSelect
         label="Microfone"
         value={inputDeviceId}
@@ -104,10 +104,10 @@ function VoiceSettings(): React.JSX.Element {
         />
       )}
       <VolumeSlider label="Volume de saída" value={outputVolume} onChange={setOutputVolume} />
-      <div className="space-y-3 border-t border-white/10 pt-3">
+      <div className="space-y-3 border-t border-subtle pt-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-ds-sm font-medium text-white">Detecção de voz</p>
+            <p className="text-ds-sm font-medium text-strong">Detecção de voz</p>
             <p className="text-xs text-gray-400">
               Envia sua voz só quando ela passa da sensibilidade.
             </p>
@@ -121,7 +121,7 @@ function VoiceSettings(): React.JSX.Element {
         <label className="flex flex-col gap-1.5">
           <span className="flex items-center justify-between text-ds-sm font-medium text-gray-400">
             Sensibilidade
-            <span className="text-white">{Math.round(threshold)} dB</span>
+            <span className="text-strong">{Math.round(threshold)} dB</span>
           </span>
           <input
             type="range"
@@ -129,19 +129,19 @@ function VoiceSettings(): React.JSX.Element {
             max={100}
             value={sensitivity}
             onChange={(e) => setSensitivity(Number(e.target.value))}
-            className="w-full cursor-pointer accent-[#5865f2]"
+            className="w-full cursor-pointer accent-brand"
           />
           <span className="text-xs text-gray-400">Mais à direita, capta vozes mais baixas.</span>
         </label>
         <SensitivityMeter thresholdDb={threshold} />
         {!rnnoiseAvailable && (
-          <p className="text-xs text-[#f0b232]">
+          <p className="text-xs text-warning">
             O volume de entrada e a detecção de voz precisam do RNNoise, que não carregou neste
             computador.
           </p>
         )}
       </div>
-      <div className="border-t border-white/10 pt-3">
+      <div className="border-t border-subtle pt-3">
         <NoiseSuppressionSettings />
       </div>
     </div>

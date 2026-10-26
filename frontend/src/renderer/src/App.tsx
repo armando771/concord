@@ -15,6 +15,7 @@ import FriendActionsHost from './components/friends/FriendActionsHost'
 import SettingsScreen from './components/settings/SettingsScreen'
 import ServerSettingsScreen from './components/serverSettings/ServerSettingsScreen'
 import ModerationHost from './components/ModerationHost'
+import StreamJoinHost from './components/StreamJoinHost'
 import TitleBar from './components/TitleBar'
 import WebNotificationBridge from './components/WebNotificationBridge'
 import WebLeaveGuard from './components/WebLeaveGuard'
@@ -51,6 +52,7 @@ function App(): React.JSX.Element {
       <SettingsScreen />
       <ServerSettingsScreen />
       <ModerationHost />
+      <StreamJoinHost />
       {customTitleBar ? (
         <div className="flex h-full flex-col">
           <TitleBar />

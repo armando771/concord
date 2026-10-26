@@ -8,6 +8,9 @@ import { profileCardHandler } from '../store/profileCardStore'
 import { userMenuHandler } from '../store/userMenuStore'
 import { showToast } from '../store/toastStore'
 import ChatPane from '../components/ChatPane'
+import MessageSearchBar from '../components/search/MessageSearchBar'
+import SearchResultsPanel from '../components/search/SearchResultsPanel'
+import { useSearchStore } from '../store/searchStore'
 import Avatar from '../components/Avatar'
 import StyledName from '../components/StyledName'
 import GroupIcon from '../components/friends/GroupIcon'
@@ -25,8 +28,13 @@ import {
 } from '../api/conversations'
 import { conversationTitle, otherMembers } from '../lib/conversations'
 import { imageFileError } from '../lib/profileValidation'
+import {
+  ChannelHeaderSkeleton,
+  ComposerSkeleton,
+  MessageListSkeleton
+} from '../components/skeleton/layouts'
 
-const MAIN_BG = '#07080b'
+const MAIN_BG = 'var(--bg-primary)'
 
 function MemberRow({
   member,
@@ -51,7 +59,7 @@ function MemberRow({
       tabIndex={0}
       onClick={profileCardHandler(member.id, look.name, member.username, 'left')}
       onContextMenu={userMenuHandler(member.id, look.name, meId, member.username)}
-      className="group flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-white/6"
+      className="group flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-fg/6"
     >
       <Avatar
         userId={member.id}
@@ -59,7 +67,7 @@ function MemberRow({
         avatarUrl={look.avatarUrl}
         size={32}
         status={status}
-        cutoutColor="#0b0c10"
+        cutoutColor="var(--bg-secondary)"
       />
       <span
         className={`min-w-0 flex-1 truncate text-ds-md font-medium ${
@@ -69,7 +77,7 @@ function MemberRow({
         <StyledName name={look.name} userId={member.id} style={member.name_style} />
       </span>
       {isOwner && (
-        <span title="Dono do grupo" className="text-[#f0b232]">
+        <span title="Dono do grupo" className="text-warning">
           👑
         </span>
       )}
@@ -82,7 +90,7 @@ function MemberRow({
             e.stopPropagation()
             onRemove()
           }}
-          className="hidden cursor-pointer text-gray-400 hover:text-[#f23f43] group-hover:block"
+          className="hidden cursor-pointer text-gray-400 hover:text-danger group-hover:block"
         >
           <XIcon className="h-4 w-4" />
         </button>
@@ -97,7 +105,7 @@ function GroupChat(): React.JSX.Element {
   const navigate = useNavigate()
   const meId = useAuthStore((s) => s.user?.id)
   const conversations = useChatStore((s) => s.conversations)
-  const conversationsLoading = useChatStore((s) => s.conversationsLoading)
+  const conversationsLoaded = useChatStore((s) => s.conversationsLoaded)
   const fetchConversations = useChatStore((s) => s.fetchConversations)
   const loadFriends = useFriendStore((s) => s.loadAll)
   const conv = conversations.find((c) => c.id === conversationId)
@@ -105,6 +113,9 @@ function GroupChat(): React.JSX.Element {
   // Texto do nome enquanto edita (null = mostra o nome salvo).
   const [editingName, setEditingName] = useState<string | null>(null)
   const [showMembers, setShowMembers] = useState(true)
+  const searchOpen = useSearchStore(
+    (s) => s.scope?.kind === 'conversation' && s.scope.id === conversationId
+  )
   const [adding, setAdding] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const [removing, setRemoving] = useState<ConversationOtherUser | null>(null)
@@ -117,12 +128,24 @@ function GroupChat(): React.JSX.Element {
   }, [loadFriends, fetchConversations])
 
   if (!conv || conv.type !== 'group') {
+    // Antes da primeira resposta da lista ainda não dá para saber se existe.
+    if (!conversationsLoaded) {
+      return (
+        <div className="flex h-full flex-1 flex-col" style={{ background: MAIN_BG }}>
+          <ChannelHeaderSkeleton />
+          <div className="min-h-0 flex-1">
+            <MessageListSkeleton label="Abrindo conversa…" />
+          </div>
+          <ComposerSkeleton />
+        </div>
+      )
+    }
     return (
       <div
         className="flex h-full flex-1 items-center justify-center text-ds-md text-gray-400"
         style={{ background: MAIN_BG }}
       >
-        {conversationsLoading ? 'Abrindo conversa...' : 'Conversa não encontrada.'}
+        Conversa não encontrada.
       </div>
     )
   }
@@ -158,7 +181,7 @@ function GroupChat(): React.JSX.Element {
       className="flex h-full w-full flex-col overflow-hidden text-gray-100"
       style={{ background: MAIN_BG }}
     >
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-white/6 px-4">
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-subtle px-4">
         <button
           type="button"
           title="Trocar ícone"
@@ -193,7 +216,7 @@ function GroupChat(): React.JSX.Element {
           maxLength={100}
           placeholder={title}
           aria-label="Nome do grupo"
-          className="min-w-0 max-w-xs flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-ds-md font-semibold text-white outline-none placeholder:text-white hover:border-black/40 focus:border-[#5865f2] focus:bg-[#111214]"
+          className="min-w-0 max-w-xs flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-ds-md font-semibold text-strong outline-none placeholder:text-strong hover:border-black/40 focus:border-brand focus:bg-floating"
         />
         <div className="ml-auto flex items-center gap-3 text-gray-400">
           <button
@@ -202,7 +225,7 @@ function GroupChat(): React.JSX.Element {
             aria-label="Adicionar amigos ao grupo"
             disabled={conv.members.length >= MAX_GROUP_MEMBERS}
             onClick={() => setAdding(true)}
-            className="cursor-pointer hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="cursor-pointer hover:text-strong disabled:cursor-not-allowed disabled:opacity-40"
           >
             <UserPlusIcon className="h-5 w-5" />
           </button>
@@ -211,17 +234,27 @@ function GroupChat(): React.JSX.Element {
             title={showMembers ? 'Ocultar lista de membros' : 'Mostrar lista de membros'}
             aria-label="Lista de membros"
             onClick={() => setShowMembers((v) => !v)}
-            className={`cursor-pointer hover:text-white ${showMembers ? 'text-white' : ''}`}
+            className={`cursor-pointer hover:text-strong ${showMembers ? 'text-strong' : ''}`}
           >
             <FriendsIcon className="h-5 w-5" />
           </button>
           <button
             type="button"
             onClick={() => setLeaving(true)}
-            className="cursor-pointer rounded-md px-2 py-1 text-ds-sm font-medium text-[#f23f43] hover:bg-[#f23f43]/10"
+            className="cursor-pointer rounded-md px-2 py-1 text-ds-sm font-medium text-danger hover:bg-danger/10"
           >
             Sair do grupo
           </button>
+          <MessageSearchBar
+            scope={{ kind: 'conversation', id: conv.id }}
+            name={title}
+            users={conv.members.map((m) => ({
+              id: m.id,
+              username: m.username,
+              displayName: m.display_name,
+              avatarUrl: m.avatar_url
+            }))}
+          />
         </div>
       </header>
 
@@ -236,8 +269,9 @@ function GroupChat(): React.JSX.Element {
             }))}
           />
         </div>
-        {showMembers && (
-          <aside className="w-60 shrink-0 overflow-y-auto border-l border-white/6 bg-[#0b0c10]/60 px-2 py-4">
+        {searchOpen && <SearchResultsPanel scope={{ kind: 'conversation', id: conv.id }} />}
+        {showMembers && !searchOpen && (
+          <aside className="w-60 shrink-0 overflow-y-auto border-l border-subtle bg-secondary px-2 py-4">
             <p className="px-2 pb-1 text-ds-sm font-medium text-gray-400">
               Membros — {conv.members.length}
             </p>

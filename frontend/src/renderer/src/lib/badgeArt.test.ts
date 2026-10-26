@@ -10,6 +10,7 @@ const TIERS: Record<string, number> = {
   nivel: 5,
   coruja: 4,
   madrugador: 4,
+  criador: 1,
   fundador: 1,
   dono: 3,
   festeiro: 3,

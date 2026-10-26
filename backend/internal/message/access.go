@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"gin-quickstart/backend/internal/bot"
 	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/friendship"
@@ -21,6 +22,8 @@ var (
 	ErrNoRoomAccess  = errors.New("you do not have access to this room")
 	ErrCannotMessage = errors.New("you can only message friends or people from your servers")
 	ErrBlocked       = errors.New("you cannot message this user")
+	// ErrBotConversation: DM com um bot (Salinha Bot) é só leitura.
+	ErrBotConversation = errors.New("this conversation is read-only")
 )
 
 // PermissionChecker: as permissões do membro num canal (permission.Service).
@@ -88,6 +91,10 @@ func (a *ServiceRoomAccess) WriteParticipants(ctx context.Context, room Room, us
 	otherUserID := conv.UserAID
 	if otherUserID == userID {
 		otherUserID = conv.UserBID
+	}
+	// DM com bot: ele avisa, ninguém responde.
+	if bot.IsBot(otherUserID) {
+		return nil, ErrBotConversation
 	}
 	// DM 1:1: sem bloqueio; amigos ou quem divide um servidor (se o outro
 	// aceita DM de membros de servidores).

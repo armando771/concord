@@ -15,6 +15,7 @@ import Avatar from '../Avatar'
 import Button from '../Button'
 import MediaLightbox from '../chat/MediaLightbox'
 import Modal from '../Modal'
+import AssigneeBadge from './AssigneeBadge'
 import MoveSelect from './MoveSelect'
 import NewProposalModal from './NewProposalModal'
 import ProposalComments from './ProposalComments'
@@ -58,7 +59,7 @@ function ProposalDetailModal({
 
   return (
     <>
-      <Modal open title={p.title} onClose={onClose} xl solid>
+      <Modal open title={p.title} onClose={onClose} xl>
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <div className="flex min-w-0 flex-col gap-5">
             <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
@@ -112,9 +113,9 @@ function ProposalDetailModal({
             {closeLabel(p) && <p className="text-xs text-gray-400">{closeLabel(p)}</p>}
 
             {(p.status === 'voting' || total > 0) && (
-              <div className="flex flex-col gap-1.5 rounded-xl border border-white/8 bg-white/3 p-3">
+              <div className="flex flex-col gap-1.5 rounded-xl border border-subtle bg-fg/3 p-3">
                 <div
-                  className="flex h-2 overflow-hidden rounded-full bg-white/10"
+                  className="flex h-2 overflow-hidden rounded-full bg-fg/10"
                   role="img"
                   aria-label={`${p.yes_votes} sim e ${p.no_votes} não`}
                 >
@@ -131,6 +132,12 @@ function ProposalDetailModal({
                   <span>{p.yes_votes} sim</span>
                   <span>{p.no_votes} não</span>
                 </div>
+              </div>
+            )}
+
+            {p.assignee && p.status !== 'voting' && (
+              <div className="flex">
+                <AssigneeBadge assignee={p.assignee} meId={meId} />
               </div>
             )}
 
@@ -158,7 +165,7 @@ function ProposalDetailModal({
             )}
 
             {(p.github_issue_url || canEdit || canDelete || isTech) && (
-              <div className="flex flex-wrap items-center gap-2 border-t border-white/6 pt-3">
+              <div className="flex flex-wrap items-center gap-2 border-t border-subtle pt-3">
                 {p.github_issue_url && (
                   <a
                     href={p.github_issue_url}
@@ -196,7 +203,7 @@ function ProposalDetailModal({
             )}
           </div>
 
-          <aside className="min-w-0 rounded-xl border border-white/8 bg-white/3 p-4 lg:max-h-[68vh] lg:overflow-y-auto">
+          <aside className="min-w-0 rounded-xl border border-subtle bg-fg/3 p-4 lg:max-h-[68vh] lg:overflow-y-auto">
             <ProposalComments proposalId={p.id} meId={meId} isTech={isTech} />
           </aside>
         </div>

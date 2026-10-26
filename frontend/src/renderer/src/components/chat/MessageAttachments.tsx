@@ -23,7 +23,7 @@ function ImageAttachment({ attachment }: { attachment: Attachment }): React.JSX.
         onClick={() => src && !failed && setOpen(true)}
         title={attachment.filename}
         style={{ width: box.width, height: box.height }}
-        className="relative max-w-full cursor-zoom-in overflow-hidden rounded-md bg-white/5"
+        className="relative max-w-full cursor-zoom-in overflow-hidden rounded-md bg-fg/5"
       >
         {failed ? (
           <span className="flex h-full w-full items-center justify-center p-2 text-center text-xs text-gray-400">
@@ -60,7 +60,7 @@ function VideoAttachment({ attachment }: { attachment: Attachment }): React.JSX.
   return (
     <div
       style={{ width: box.width, height: box.height }}
-      className="relative max-w-full overflow-hidden rounded-md bg-black/60"
+      className="relative max-w-full overflow-hidden rounded-md bg-black/60 on-media"
     >
       {activated && src && !failed ? (
         <video
@@ -84,7 +84,7 @@ function VideoAttachment({ attachment }: { attachment: Attachment }): React.JSX.
           onClick={() => setActivated(true)}
           disabled={failed}
           aria-label={`Reproduzir ${attachment.filename}`}
-          className="flex h-full w-full cursor-pointer flex-col items-center justify-center gap-2 text-gray-300 transition-colors hover:text-white disabled:cursor-default"
+          className="flex h-full w-full cursor-pointer flex-col items-center justify-center gap-2 text-gray-300 transition-colors hover:text-strong disabled:cursor-default"
         >
           {failed ? (
             <span className="p-2 text-center text-xs text-gray-400">
@@ -92,7 +92,7 @@ function VideoAttachment({ attachment }: { attachment: Attachment }): React.JSX.
             </span>
           ) : (
             <>
-              <span className="rounded-full bg-black/60 p-3">
+              <span className="rounded-full bg-black/60 p-3 on-media">
                 <PlayIcon className="h-8 w-8" />
               </span>
               <span className="max-w-[90%] truncate text-xs">{attachment.filename}</span>

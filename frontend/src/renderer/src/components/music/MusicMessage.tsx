@@ -13,16 +13,13 @@ export function MaestroText({ text }: { text: string }): React.JSX.Element {
     <>
       {splitBold(text).map((part, i) =>
         part.bold ? (
-          <strong key={i} className="font-bold text-white">
+          <strong key={i} className="font-bold text-strong">
             {part.text}
           </strong>
         ) : (
           splitMentions(part.text).map((m, j) =>
             m.mention ? (
-              <span
-                key={`${i}-${j}`}
-                className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]"
-              >
+              <span key={`${i}-${j}`} className="rounded bg-brand/30 px-0.5 font-medium text-brand">
                 {m.text}
               </span>
             ) : (

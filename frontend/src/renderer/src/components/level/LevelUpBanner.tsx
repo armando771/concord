@@ -1,10 +1,9 @@
 import { useEffect, useMemo } from 'react'
-import { useAuthStore } from '../../store/authStore'
-import { useLevelStore } from '../../store/levelStore'
 import { useCallStore } from '../../store/callStore'
 import { levelUpEffects, type LevelTier } from '../../lib/levels'
 import { oncePerKey, playSound } from '../../lib/sounds'
 import LevelBadge from './LevelBadge'
+import { useScreenCelebration } from './useScreenCelebration'
 
 /** Emblema da faixa (80+): escudo com estrela, nas cores da faixa. */
 function TierEmblem({ tier, size }: { tier: LevelTier; size: number }): React.JSX.Element {
@@ -45,8 +44,7 @@ const firstPlay = oncePerKey()
  * faixa nova, mostra "Nova faixa: <nome>!".
  */
 function LevelUpBanner(): React.JSX.Element | null {
-  const meId = useAuthStore((s) => s.user?.id)
-  const celebration = useLevelStore((s) => (meId ? s.celebrations[meId] : undefined))
+  const celebration = useScreenCelebration()
 
   const fx = useMemo(
     () => (celebration ? levelUpEffects(celebration.level, celebration.previous) : null),
@@ -81,7 +79,7 @@ function LevelUpBanner(): React.JSX.Element | null {
     })
   }, [fx])
 
-  if (!meId || !celebration || !fx) return null
+  if (!celebration || !fx) return null
 
   const { tier, milestone } = fx
   const vars = {
@@ -97,6 +95,15 @@ function LevelUpBanner(): React.JSX.Element | null {
     .padStart(2, '0')
   const shadow = `0 0 ${glowPx}px ${tier.color}${glowAlpha}`
 
+  const who = celebration.name ?? 'Essa pessoa'
+  const headline = celebration.own
+    ? milestone
+      ? `Marco ${milestone.level} alcançado!`
+      : 'Você subiu de nível!'
+    : milestone
+      ? `${who} chegou ao marco ${milestone.level}`
+      : `${who} está no nível ${celebration.level}`
+
   const content = (
     <>
       <span
@@ -111,15 +118,13 @@ function LevelUpBanner(): React.JSX.Element | null {
         {fx.stage === 5 ? '👑' : milestone ? '🏆' : '⬆️'}
       </span>
       <div className="relative leading-tight">
-        <p className="text-sm font-bold text-white">
-          {milestone ? `Marco ${milestone.level} alcançado!` : 'Você subiu de nível!'}
-        </p>
+        <p className="max-w-[280px] truncate text-sm font-bold text-strong">{headline}</p>
         <p className="text-[11px] text-gray-400">
           Faixa {tier.name}
           {milestone ? ` · ${milestone.title}` : ''}
         </p>
       </div>
-      <LevelBadge userId={meId} size="md" className="relative" />
+      <LevelBadge userId={celebration.userId} size="md" className="relative" />
     </>
   )
 
@@ -170,13 +175,13 @@ function LevelUpBanner(): React.JSX.Element | null {
                   animation: 'level-border-spin 1.8s linear infinite'
                 }}
               />
-              <div className="relative flex items-center gap-3 overflow-hidden rounded-[14px] bg-[#0b0b10]/95 px-4 py-2.5 backdrop-blur-xl">
+              <div className="relative flex items-center gap-3 overflow-hidden rounded-[14px] bg-floating px-4 py-2.5 backdrop-blur-xl">
                 {content}
               </div>
             </div>
           ) : (
             <div
-              className="relative flex items-center gap-3 overflow-hidden rounded-2xl border bg-[#0b0b10]/90 px-4 py-2.5 shadow-2xl backdrop-blur-xl"
+              className="relative flex items-center gap-3 overflow-hidden rounded-2xl border bg-floating px-4 py-2.5 shadow-2xl backdrop-blur-xl"
               style={{ borderColor: `${tier.color}66`, boxShadow: shadow }}
             >
               {content}

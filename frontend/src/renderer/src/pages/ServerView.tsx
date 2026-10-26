@@ -1,4 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  ChannelHeaderSkeleton,
+  ComposerSkeleton,
+  MemberListSkeleton,
+  MessageListSkeleton
+} from '../components/skeleton/layouts'
 import { userMenuHandler } from '../store/userMenuStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import InviteCodeBox from '../components/InviteCodeBox'
@@ -18,6 +24,9 @@ import ChatPane from '../components/ChatPane'
 import VoiceChannelView from '../components/call/VoiceChannelView'
 import { UserPlusIcon, SearchIcon, VolumeIcon, PinIcon } from '../components/icons'
 import PinnedMessagesPopover from '../components/chat/PinnedMessagesPopover'
+import MessageSearchBar from '../components/search/MessageSearchBar'
+import SearchResultsPanel from '../components/search/SearchResultsPanel'
+import { useSearchStore } from '../store/searchStore'
 import LevelBadge from '../components/level/LevelBadge'
 import LevelRowShimmer from '../components/level/LevelRowShimmer'
 import LevelUpBurst from '../components/level/LevelUpBurst'
@@ -84,7 +93,7 @@ function MemberRow({
       // Na lista de membros o menu abre até em você (para "Alterar apelido").
       onContextMenu={userMenuHandler(userId, name, meId, handle, { allowSelf: true })}
       onClick={profileCardHandler(userId, name, handle, 'left')}
-      className={`group relative flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1 hover:bg-white/5 ${
+      className={`group relative flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1 hover:bg-fg/5 ${
         online ? '' : 'opacity-60 hover:opacity-100'
       }`}
     >
@@ -98,7 +107,7 @@ function MemberRow({
           size={32}
           // O Maestro não tem websocket: está sempre online.
           status={isBot ? 'online' : status}
-          cutoutColor="#07080b"
+          cutoutColor="var(--bg-members)"
           fallbackClassName={colorClass}
         />
       </div>
@@ -109,11 +118,7 @@ function MemberRow({
             style={nameColor ? { color: nameColor } : undefined}
             className={`truncate text-ds-md font-medium ${nameColor ? '' : nameClass}`}
           >
-            {nickname?.trim() ? (
-              name
-            ) : (
-              <StyledName name={name} userId={userId} style={nameStyle} />
-            )}
+            {nickname?.trim() ? name : <StyledName name={name} userId={userId} style={nameStyle} />}
           </p>
           {isBot ? (
             <span className="rounded bg-violet-400/30 px-1 text-[9px] font-bold uppercase text-violet-100">
@@ -145,7 +150,7 @@ function MembersAside({ children }: { children: React.ReactNode }): React.JSX.El
   return (
     <aside
       style={panel.panelStyle}
-      className="relative hidden shrink-0 flex-col border-l border-white/6 bg-[#07080b]/60 lg:flex"
+      className="relative hidden shrink-0 flex-col border-l border-subtle bg-primary lg:flex"
     >
       <ResizeHandle {...panel.handleProps} />
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">{children}</div>
@@ -182,6 +187,8 @@ export function ServerView(): React.JSX.Element {
   const [inviteFilter, setInviteFilter] = useState('')
   const [invitingId, setInvitingId] = useState<string | null>(null)
   const [pinsOpen, setPinsOpen] = useState(false)
+  // Com uma busca deste servidor aberta, os resultados tomam o lugar dos membros.
+  const searchOpen = useSearchStore((s) => s.scope?.kind === 'server' && s.scope.id === id)
 
   useEffect(() => {
     return () => closeInviteModal()
@@ -214,6 +221,19 @@ export function ServerView(): React.JSX.Element {
     }
   }, [currentMembers, fetchPresenceFor])
 
+  // Estável entre renders: o ChatPane monta os nomes das menções a partir dele.
+  const mentionable = useMemo(
+    () =>
+      currentMembers
+        .filter((m) => m.username)
+        .map((m) => ({
+          username: m.username as string,
+          display_name: m.display_name || (m.username as string),
+          nickname: m.nickname
+        })),
+    [currentMembers]
+  )
+
   useEffect(() => {
     if (inviteModalOpen && id) {
       fetchServerInvites(id)
@@ -239,9 +259,19 @@ export function ServerView(): React.JSX.Element {
 
   // currentServer ainda é o anterior no 1º render após clicar noutro servidor.
   if (loading || !currentServer || currentServer.id !== id) {
+    // O mesmo desenho da tela pronta (coluna central e lista de membros), em skeleton.
     return (
-      <div className="flex h-full w-full items-center justify-center bg-[#07080b]/90 text-gray-400">
-        <p className="text-ds-md">Carregando servidor...</p>
+      <div className="flex h-full w-full overflow-hidden bg-primary text-gray-100">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-r border-subtle">
+          <ChannelHeaderSkeleton />
+          <div className="min-h-0 flex-1">
+            <MessageListSkeleton label="Carregando servidor…" />
+          </div>
+          <ComposerSkeleton />
+        </div>
+        <MembersAside>
+          <MemberListSkeleton />
+        </MembersAside>
       </div>
     )
   }
@@ -285,11 +315,11 @@ export function ServerView(): React.JSX.Element {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-[#07080b]/90 backdrop-blur-2xl text-gray-100">
+    <div className="flex h-full w-full overflow-hidden bg-primary backdrop-blur-2xl text-gray-100">
       {/* Central Server View Column */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-r border-white/6">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-r border-subtle">
         {/* Top Channel Header Bar */}
-        <header className="relative flex h-14 shrink-0 items-center justify-between border-b border-white/6 px-4">
+        <header className="relative flex h-14 shrink-0 items-center justify-between border-b border-subtle px-4">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex min-w-0 items-center gap-2 text-gray-300">
               {activeChannel?.type === 'voice' ? (
@@ -299,7 +329,7 @@ export function ServerView(): React.JSX.Element {
               )}
               <span
                 title={activeChannel?.name ?? currentServer.name}
-                className="truncate text-ds-md font-semibold text-white"
+                className="truncate text-ds-md font-semibold text-strong"
               >
                 {activeChannel?.name ?? currentServer.name}
               </span>
@@ -315,7 +345,7 @@ export function ServerView(): React.JSX.Element {
                 className={`flex h-8 w-8 items-center justify-center rounded-lg border transition ${
                   pinsOpen
                     ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
-                    : 'border-white/10 bg-white/5 text-gray-400 hover:border-white/20 hover:text-white'
+                    : 'border-subtle bg-fg/5 text-gray-400 hover:border-normal hover:text-strong'
                 }`}
               >
                 <PinIcon className="h-4 w-4" />
@@ -332,6 +362,22 @@ export function ServerView(): React.JSX.Element {
                 <span>Convidar</span>
               </Button>
             )}
+            <MessageSearchBar
+              scope={{ kind: 'server', id: currentServer.id }}
+              name={currentServer.name}
+              users={currentMembers
+                .filter((m) => m.username)
+                .map((m) => ({
+                  id: m.user_id,
+                  username: m.username as string,
+                  displayName: m.display_name || (m.username as string),
+                  nickname: m.nickname,
+                  avatarUrl: m.avatar_url
+                }))}
+              channels={channels
+                .filter((c) => c.server_id === currentServer.id && (c.type ?? 'text') === 'text')
+                .map((c) => ({ id: c.id, name: c.name }))}
+            />
           </div>
 
           {pinsOpen && channelId && (
@@ -353,13 +399,7 @@ export function ServerView(): React.JSX.Element {
             canMentionEveryone={canMentionEveryone}
             permissions={chatPermissions}
             canDeleteMessages={!activeChannel?.is_system}
-            mentionable={currentMembers
-              .filter((m) => m.username)
-              .map((m) => ({
-                username: m.username as string,
-                display_name: m.display_name || (m.username as string),
-                nickname: m.nickname
-              }))}
+            mentionable={mentionable}
           />
         ) : (
           <div className="flex flex-1 flex-col justify-between overflow-y-auto p-6">
@@ -367,12 +407,12 @@ export function ServerView(): React.JSX.Element {
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-violet-600/30 border border-violet-500/40 text-violet-300 font-bold text-2xl shadow-lg">
                 #
               </div>
-              <h1 className="text-ds-xxl font-bold text-white">
+              <h1 className="text-ds-xxl font-bold text-strong">
                 Bem-vindo a #{currentServer.name}!
               </h1>
               <p className="text-ds-md text-gray-400">
                 Este é o início do servidor{' '}
-                <strong className="text-white">{currentServer.name}</strong>. Convide seus amigos e
+                <strong className="text-strong">{currentServer.name}</strong>. Convide seus amigos e
                 comece a conversar!
               </p>
             </div>
@@ -380,49 +420,58 @@ export function ServerView(): React.JSX.Element {
         )}
       </div>
 
+      {searchOpen && (
+        <SearchResultsPanel
+          scope={{ kind: 'server', id: currentServer.id }}
+          currentChannelId={channelId}
+        />
+      )}
+
       {/* Right Column: Server Members List */}
-      <MembersAside>
-        {memberGroups.map((group) => {
-          const offline = group.key === 'offline'
-          return (
-            <div key={group.key}>
-              <p className="mb-1 text-ds-sm font-medium text-gray-400">
-                {group.title} — {group.members.length}
-              </p>
-              <div className={`flex flex-col gap-1 ${offline ? 'opacity-70' : ''}`}>
-                {group.members.map((m) => {
-                  const isOwner = m.user_id === currentServer.owner_id
-                  const displayName =
-                    m.display_name ??
-                    m.username ??
-                    (m.user_id === me?.id ? me?.display_name : 'Membro')
-                  const handle = m.username ?? (m.user_id === me?.id ? me?.username : 'membro')
-                  return (
-                    <MemberRow
-                      key={m.user_id}
-                      userId={m.user_id}
-                      displayName={displayName ?? 'Membro'}
-                      nickname={m.nickname}
-                      nameStyle={m.name_style}
-                      avatarUrl={m.avatar_url}
-                      handle={handle ?? 'membro'}
-                      colorClass={
-                        offline ? 'bg-gray-600' : isOwner ? 'bg-amber-600' : 'bg-indigo-600'
-                      }
-                      nameClass={
-                        offline ? 'text-gray-400' : isOwner ? 'text-amber-300' : 'text-gray-200'
-                      }
-                      nameColor={roleColorCss(memberColor(roles, m.role_ids))}
-                      online={!offline}
-                      isBot={!!m.is_bot}
-                    />
-                  )
-                })}
+      {!searchOpen && (
+        <MembersAside>
+          {memberGroups.map((group) => {
+            const offline = group.key === 'offline'
+            return (
+              <div key={group.key}>
+                <p className="mb-1 text-ds-sm font-medium text-gray-400">
+                  {group.title} — {group.members.length}
+                </p>
+                <div className={`flex flex-col gap-1 ${offline ? 'opacity-70' : ''}`}>
+                  {group.members.map((m) => {
+                    const isOwner = m.user_id === currentServer.owner_id
+                    const displayName =
+                      m.display_name ??
+                      m.username ??
+                      (m.user_id === me?.id ? me?.display_name : 'Membro')
+                    const handle = m.username ?? (m.user_id === me?.id ? me?.username : 'membro')
+                    return (
+                      <MemberRow
+                        key={m.user_id}
+                        userId={m.user_id}
+                        displayName={displayName ?? 'Membro'}
+                        nickname={m.nickname}
+                        nameStyle={m.name_style}
+                        avatarUrl={m.avatar_url}
+                        handle={handle ?? 'membro'}
+                        colorClass={
+                          offline ? 'bg-gray-600' : isOwner ? 'bg-amber-600' : 'bg-indigo-600'
+                        }
+                        nameClass={
+                          offline ? 'text-gray-400' : isOwner ? 'text-amber-300' : 'text-gray-200'
+                        }
+                        nameColor={roleColorCss(memberColor(roles, m.role_ids))}
+                        online={!offline}
+                        isBot={!!m.is_bot}
+                      />
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          )
-        })}
-      </MembersAside>
+            )
+          })}
+        </MembersAside>
+      )}
 
       {/* Modal Convidar Amigos */}
       <Modal
@@ -462,7 +511,7 @@ export function ServerView(): React.JSX.Element {
                 return (
                   <div
                     key={f.id}
-                    className="flex items-center justify-between rounded-xl border border-white/6 bg-white/3 p-2.5"
+                    className="flex items-center justify-between rounded-xl border border-subtle bg-fg/3 p-2.5"
                   >
                     <div className="flex items-center gap-3">
                       <Avatar
@@ -472,7 +521,7 @@ export function ServerView(): React.JSX.Element {
                         size={32}
                       />
                       <div className="leading-tight">
-                        <p className="text-ds-md font-medium text-white">{f.display_name}</p>
+                        <p className="text-ds-md font-medium text-strong">{f.display_name}</p>
                         <p className="text-ds-xs text-gray-400">@{f.username}</p>
                       </div>
                     </div>

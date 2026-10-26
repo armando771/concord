@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -26,7 +27,43 @@ var (
 	ErrInvalidAttachment  = errors.New("invalid attachment")
 	ErrInvalidEmoji       = errors.New("invalid emoji")
 	ErrTooManyReactions   = errors.New("too many different reactions")
+	ErrAssigneeConflict   = errors.New("assigned to another dev")
+	ErrInvalidGithubLogin = errors.New("invalid github username")
 )
+
+// AssigneeConflictError: o card está com outro dev; mover tira dele (o app
+// confirma e manda de novo com take_over).
+type AssigneeConflictError struct{ AssigneeName string }
+
+func (e *AssigneeConflictError) Error() string { return "assigned to " + e.AssigneeName }
+
+func (e *AssigneeConflictError) Is(target error) bool { return target == ErrAssigneeConflict }
+
+// StatusNotifier manda a mensagem do Salinha Bot na DM de userID.
+type StatusNotifier interface {
+	Notify(ctx context.Context, userID, text string) error
+}
+
+// nextAssignee decide quem fica com o card quando mover vai para status:
+// arrastar para Concluída mantém quem estava (pode ser só o deploy do colega);
+// qualquer outro movimento passa para quem moveu, e tirar de outro dev pede
+// confirmação (takeOver).
+func nextAssignee(current *UserRef, mover, status string, takeOver bool) (string, error) {
+	if current == nil || current.ID == mover {
+		return mover, nil
+	}
+	if status == StatusDone {
+		return current.ID, nil
+	}
+	if !takeOver {
+		return "", &AssigneeConflictError{AssigneeName: current.Name}
+	}
+	return mover, nil
+}
+
+// githubLogin: o formato de usuário do GitHub (1–39, letras, números e hífen
+// no meio).
+var githubLogin = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9]|-[A-Za-z0-9]){0,38}$`)
 
 // Intervalo do fechamento das votações e das novas tentativas de issue.
 const tickInterval = time.Minute
@@ -39,10 +76,14 @@ type store interface {
 	UpsertVote(ctx context.Context, id, userID string, approve bool, now time.Time) (bool, error)
 	DeleteVote(ctx context.Context, id, userID string, now time.Time) (bool, error)
 	Delete(ctx context.Context, id string) error
-	SetStatus(ctx context.Context, id, userID, status string) error
+	SetStatus(ctx context.Context, id, userID, status, assigneeID string) error
 	CloseDue(ctx context.Context, now time.Time) ([]string, error)
 	WithoutIssue(ctx context.Context) ([]Proposal, error)
 	SetIssue(ctx context.Context, id string, number int, url string) error
+	NeedingIssueSync(ctx context.Context) ([]Proposal, error)
+	SetIssueSynced(ctx context.Context, id, state string, assignee *string) error
+	GithubUsername(ctx context.Context, userID string) (*string, error)
+	SetGithubUsername(ctx context.Context, userID string, login *string) error
 
 	CreateImage(ctx context.Context, id, uploaderID, contentType string, size int64) error
 	ImageIDs(ctx context.Context, proposalID string) ([]string, error)
@@ -83,10 +124,19 @@ type fileRemover interface {
 type Service struct {
 	store     store
 	publisher EventPublisher
-	issues    IssueCreator // nil: sem token do GitHub, não cria issue
-	files     fileRemover  // nil: não apaga arquivos (testes)
+	issues    IssueCreator   // nil: sem token do GitHub, não cria issue
+	files     fileRemover    // nil: não apaga arquivos (testes)
+	notifier  StatusNotifier // nil: o Salinha Bot não avisa
 	tech      map[string]bool
 	now       func() time.Time
+	// githubBlockedLogged: até quando já foi logado o limite da API (loga uma vez).
+	githubBlockedLogged time.Time
+}
+
+// WithNotifier liga os avisos do Salinha Bot na DM de quem sugeriu.
+func (s *Service) WithNotifier(n StatusNotifier) *Service {
+	s.notifier = n
+	return s
 }
 
 // ProposalService: techIDs são os usuários do time tech (TECH_TEAM_USER_IDS).
@@ -112,7 +162,33 @@ func (s *Service) Board(ctx context.Context, userID string) (*Board, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Board{Proposals: list, IsTech: s.IsTech(userID)}, nil
+	board := &Board{Proposals: list, IsTech: s.IsTech(userID)}
+	if board.IsTech {
+		if board.GithubUsername, err = s.store.GithubUsername(ctx, userID); err != nil {
+			return nil, err
+		}
+	}
+	return board, nil
+}
+
+// SetGithubUsername guarda o usuário do GitHub de quem é do time tech ("" apaga).
+// Os cards com ele passam a ter o assignee certo na próxima sincronização.
+func (s *Service) SetGithubUsername(ctx context.Context, userID, login string) (*string, error) {
+	if !s.IsTech(userID) {
+		return nil, ErrForbidden
+	}
+	login = strings.TrimPrefix(strings.TrimSpace(login), "@")
+	var value *string
+	if login != "" {
+		if !githubLogin.MatchString(login) {
+			return nil, ErrInvalidGithubLogin
+		}
+		value = &login
+	}
+	if err := s.store.SetGithubUsername(ctx, userID, value); err != nil {
+		return nil, err
+	}
+	return value, nil
 }
 
 // validateContent confere título, descrição e a quantidade de imagens.
@@ -246,32 +322,56 @@ var validStatus = map[string]bool{
 	StatusRejected:   true,
 }
 
-// SetStatus move o card para qualquer coluna, a qualquer hora (só o time tech).
-// Indo para uma coluna aprovada, a issue do GitHub sai na hora.
-func (s *Service) SetStatus(ctx context.Context, id, userID, status string) (*Proposal, error) {
+// SetStatus move o card para qualquer coluna, a qualquer hora (só o time tech),
+// e decide quem fica com ele (nextAssignee). Indo para uma coluna aprovada, a
+// issue do GitHub sai na hora; a issue acompanha o card (fecha, reabre,
+// assignee) e o Salinha Bot avisa quem sugeriu.
+func (s *Service) SetStatus(ctx context.Context, id, userID, status string, takeOver bool) (*Proposal, error) {
 	if !s.IsTech(userID) {
 		return nil, ErrForbidden
 	}
 	if !validStatus[status] {
 		return nil, ErrInvalidStatus
 	}
-	p, err := s.store.Get(ctx, id, nil)
+	before, err := s.store.Get(ctx, id, nil)
 	if err != nil {
 		return nil, err
 	}
-	if p.Status == status {
+	if before.Status == status {
 		return nil, ErrInvalidStatus
 	}
-	if err := s.store.SetStatus(ctx, id, userID, status); err != nil {
+	assignee, err := nextAssignee(before.Assignee, userID, status, takeOver)
+	if err != nil {
 		return nil, err
 	}
-	if status != StatusRejected {
-		if moved, err := s.store.Get(ctx, id, nil); err == nil {
+	if err := s.store.SetStatus(ctx, id, userID, status, assignee); err != nil {
+		return nil, err
+	}
+	if moved, err := s.store.Get(ctx, id, nil); err == nil {
+		if status != StatusRejected {
 			s.ensureIssue(ctx, *moved)
+		}
+		s.syncIssue(ctx, id)
+		if moved.AuthorID != userID {
+			s.notifyStatus(ctx, *before, *moved)
 		}
 	}
 	s.publish("proposal:update", id)
 	return s.store.Get(ctx, id, &userID)
+}
+
+// notifyStatus manda o aviso do Salinha Bot (falha só é registrada: o card já mudou).
+func (s *Service) notifyStatus(ctx context.Context, before, after Proposal) {
+	if s.notifier == nil {
+		return
+	}
+	text := statusMessage(before, after)
+	if text == "" {
+		return
+	}
+	if err := s.notifier.Notify(ctx, after.AuthorID, text); err != nil {
+		log.Printf("[proposal] aviso do bot para %s: %v", after.AuthorID, err)
+	}
 }
 
 // Run fecha as votações vencidas e cria as issues que faltam até ctx acabar.
@@ -295,41 +395,121 @@ func (s *Service) Tick(ctx context.Context) {
 	}
 	for _, id := range ids {
 		s.publish("proposal:update", id)
+		if closed, err := s.store.Get(ctx, id, nil); err == nil {
+			s.notifyStatus(ctx, Proposal{Status: StatusVoting}, *closed)
+		}
 	}
-	s.createMissingIssues(ctx)
+	if s.createMissingIssues(ctx) {
+		s.syncIssues(ctx)
+	}
 	s.cleanPendingImages(ctx)
 }
 
-func (s *Service) createMissingIssues(ctx context.Context) {
+// createMissingIssues abre as issues que faltam; false se o limite da API
+// acabou (o resto espera o reset, no próximo Tick).
+func (s *Service) createMissingIssues(ctx context.Context) bool {
 	if s.issues == nil {
-		return
+		return false
 	}
 	pending, err := s.store.WithoutIssue(ctx)
 	if err != nil {
 		log.Printf("[proposal] list without issue: %v", err)
-		return
+		return true
 	}
 	for _, p := range pending {
-		s.ensureIssue(ctx, p)
+		if !s.ensureIssue(ctx, p) {
+			return false
+		}
 	}
+	return true
 }
 
 // ensureIssue abre a issue do card se ainda não tem. Falha (sem token ou erro
 // do GitHub) só é registrada: o Tick tenta de novo, o card já está movido.
-func (s *Service) ensureIssue(ctx context.Context, p Proposal) {
+// false = limite da API esgotado (pare a fila).
+func (s *Service) ensureIssue(ctx context.Context, p Proposal) bool {
 	if s.issues == nil || p.GithubIssueURL != nil {
-		return
+		return true
+	}
+	// A discussão do card vai no corpo da issue; sem ela, abre a issue mesmo assim.
+	if comments, err := s.store.ListComments(ctx, p.ID); err != nil {
+		log.Printf("[proposal] list comments for issue %s: %v", p.ID, err)
+	} else {
+		p.Comments = comments
 	}
 	number, url, err := s.issues.CreateIssue(ctx, p)
 	if err != nil {
-		log.Printf("[proposal] create issue for %s: %v", p.ID, err)
-		return
+		return s.githubFailed("create issue for "+p.ID, err)
 	}
 	if err := s.store.SetIssue(ctx, p.ID, number, url); err != nil {
 		log.Printf("[proposal] save issue for %s: %v", p.ID, err)
-		return
+		return true
 	}
 	s.publish("proposal:update", p.ID)
+	return true
+}
+
+// githubFailed registra a falha; o limite da API é logado uma vez por bloqueio
+// e devolve false (espere o reset).
+func (s *Service) githubFailed(what string, err error) bool {
+	var limited *RateLimitError
+	if errors.As(err, &limited) {
+		if !limited.Until.Equal(s.githubBlockedLogged) {
+			s.githubBlockedLogged = limited.Until
+			log.Printf("[proposal] limite da API do GitHub: continua às %s", limited.Until.Format(time.RFC3339))
+		}
+		return false
+	}
+	log.Printf("[proposal] %s: %v", what, err)
+	return true
+}
+
+// syncIssues deixa as issues como os cards pedem, até o limite da API acabar.
+func (s *Service) syncIssues(ctx context.Context) {
+	if _, ok := s.issues.(IssueUpdater); !ok {
+		return
+	}
+	pending, err := s.store.NeedingIssueSync(ctx)
+	if err != nil {
+		log.Printf("[proposal] list issues to sync: %v", err)
+		return
+	}
+	for _, p := range pending {
+		if !s.applyIssue(ctx, p) {
+			return
+		}
+	}
+}
+
+// syncIssue tenta na hora depois de mover o card (o Tick refaz se falhar).
+func (s *Service) syncIssue(ctx context.Context, id string) {
+	if _, ok := s.issues.(IssueUpdater); !ok {
+		return
+	}
+	if p, err := s.store.Get(ctx, id, nil); err == nil {
+		s.applyIssue(ctx, *p)
+	}
+}
+
+// applyIssue aplica estado e assignee na issue do card; false = limite da API.
+func (s *Service) applyIssue(ctx context.Context, p Proposal) bool {
+	updater, ok := s.issues.(IssueUpdater)
+	if !ok || p.GithubIssueNumber == nil || p.IssueInSync() {
+		return true
+	}
+	state := p.WantedIssueState()
+	applied, err := updater.UpdateIssue(ctx, *p.GithubIssueNumber, state, p.AssigneeGithub)
+	if err != nil {
+		return s.githubFailed("sync issue for "+p.ID, err)
+	}
+	if !applied && p.AssigneeGithub != nil {
+		// Login recusado pelo GitHub: grava como aplicado para não insistir.
+		log.Printf("[proposal] o GitHub recusou %q como assignee da issue #%d", *p.AssigneeGithub, *p.GithubIssueNumber)
+	}
+	if err := s.store.SetIssueSynced(ctx, p.ID, state, p.AssigneeGithub); err != nil {
+		log.Printf("[proposal] save issue sync for %s: %v", p.ID, err)
+	}
+	return true
 }
 
 // cleanPendingImages apaga as imagens enviadas e nunca anexadas a um card.

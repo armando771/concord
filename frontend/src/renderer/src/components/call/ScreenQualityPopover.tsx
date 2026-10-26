@@ -102,9 +102,9 @@ function QualityCard(): React.JSX.Element {
       role="dialog"
       aria-label="Qualidade da transmissão"
       aria-busy={pending !== null}
-      className="w-64 rounded-xl border border-white/10 bg-[#111214] p-3 shadow-2xl"
+      className="w-64 rounded-xl border border-subtle bg-floating p-3 shadow-2xl"
     >
-      <p className="text-sm font-bold text-white">Qualidade da transmissão</p>
+      <p className="text-sm font-bold text-strong">Qualidade da transmissão</p>
       <ScreenQualityControls compact value={pending ?? applied} onChange={update} />
       <p className="mt-2 text-xs text-gray-500">
         {pending ? 'Aplicando…' : 'Não interrompe quem está assistindo.'}

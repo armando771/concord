@@ -114,4 +114,77 @@ describe('WsClient — reconexão', () => {
     expect(onLost).not.toHaveBeenCalled()
     expect(FakeSocket.instances).toHaveLength(1)
   })
+
+  it('avisa a queda com o número da tentativa e se é reinício planejado', () => {
+    const { ws, onLost } = client()
+    ws.connect()
+    latest().open()
+
+    latest().drop(1006)
+    expect(onLost).toHaveBeenLastCalledWith({ attempt: 1, planned: false })
+    vi.advanceTimersByTime(1000)
+    latest().drop(1006)
+    expect(onLost).toHaveBeenLastCalledWith({ attempt: 2, planned: false })
+  })
+
+  it('1012: as tentativas que falham no meio do reinício seguem como planejadas', () => {
+    const { ws, onLost } = client()
+    ws.connect()
+    latest().open()
+
+    latest().drop(1012)
+    expect(onLost).toHaveBeenLastCalledWith({ attempt: 1, planned: true })
+    vi.advanceTimersByTime(300)
+    latest().drop(1006)
+    expect(onLost).toHaveBeenLastCalledWith({ attempt: 2, planned: true })
+  })
+
+  it('retryNow() tenta na hora, sem esperar o backoff', () => {
+    const { ws } = client()
+    ws.connect()
+    latest().open()
+    latest().drop(1006)
+    vi.advanceTimersByTime(1000)
+    latest().drop(1006) // agora a espera seria de 2 s
+
+    ws.retryNow()
+    expect(FakeSocket.instances).toHaveLength(3)
+    // O timer antigo foi cancelado: não abre uma conexão a mais.
+    vi.advanceTimersByTime(2000)
+    expect(FakeSocket.instances).toHaveLength(3)
+  })
+
+  it('retryNow() não abre outra conexão se já está conectando ou conectado', () => {
+    const { ws } = client()
+    ws.connect()
+    ws.retryNow()
+    expect(FakeSocket.instances).toHaveLength(1)
+    latest().open()
+    ws.retryNow()
+    expect(FakeSocket.instances).toHaveLength(1)
+  })
+
+  it('retryNow() depois de disconnect() não faz nada', () => {
+    const { ws } = client()
+    ws.connect()
+    latest().open()
+    ws.disconnect()
+    ws.retryNow()
+    expect(FakeSocket.instances).toHaveLength(1)
+  })
+
+  it('fechamento atrasado da conexão antiga (disconnect + connect) não conta como queda', () => {
+    const { ws, onLost } = client()
+    ws.connect()
+    const old = latest()
+    old.open()
+    ws.disconnect()
+    ws.connect()
+    latest().open()
+
+    old.drop(1000)
+    vi.advanceTimersByTime(60_000)
+    expect(onLost).not.toHaveBeenCalled()
+    expect(FakeSocket.instances).toHaveLength(2)
+  })
 })

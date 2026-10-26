@@ -70,7 +70,7 @@ function ServerIconPicker({
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          className="cursor-pointer rounded-md bg-[#5865f2] px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-[#4752c4]"
+          className="cursor-pointer rounded-md bg-brand px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-brand-hover"
         >
           Alterar ícone
         </button>
@@ -78,7 +78,7 @@ function ServerIconPicker({
           <button
             type="button"
             onClick={() => change({ kind: 'remove' })}
-            className="cursor-pointer rounded-md bg-white/10 px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-white/15"
+            className="cursor-pointer rounded-md bg-fg/10 px-4 py-2 text-ds-sm font-medium text-strong transition-colors hover:bg-fg/15"
           >
             Remover ícone
           </button>

@@ -28,7 +28,14 @@ func ProposalHandler(service *Service, images *media.Store, space *media.Space) 
 }
 
 func (h *Handler) fail(c *gin.Context, err error) {
+	var conflict *AssigneeConflictError
 	switch {
+	case errors.As(err, &conflict):
+		// O card está com outro dev: o app confirma e manda de novo com take_over.
+		c.JSON(http.StatusConflict, gin.H{"error": "assigned to another dev", "code": "assignee_conflict",
+			"assignee_name": conflict.AssigneeName})
+	case errors.Is(err, ErrInvalidGithubLogin):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid github username", "code": "invalid_github_username"})
 	case errors.Is(err, ErrNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": "proposal not found"})
 	case errors.Is(err, ErrCommentNotFound):
@@ -175,17 +182,36 @@ func (h *Handler) SetStatus(c *gin.Context) {
 	}
 	var body struct {
 		Status string `json:"status"`
+		// TakeOver: confirmou tirar o card do dev que estava com ele.
+		TakeOver bool `json:"take_over"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
 		return
 	}
-	p, err := h.service.SetStatus(c.Request.Context(), id, c.GetString("userID"), body.Status)
+	p, err := h.service.SetStatus(c.Request.Context(), id, c.GetString("userID"), body.Status, body.TakeOver)
 	if err != nil {
 		h.fail(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, p)
+}
+
+// SetGithubUsername: PUT /proposals/github-username (só o time tech).
+func (h *Handler) SetGithubUsername(c *gin.Context) {
+	var body struct {
+		Username string `json:"username"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+	login, err := h.service.SetGithubUsername(c.Request.Context(), c.GetString("userID"), body.Username)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"github_username": login})
 }
 
 func (h *Handler) Delete(c *gin.Context) {

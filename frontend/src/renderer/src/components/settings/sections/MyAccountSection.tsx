@@ -8,7 +8,7 @@ import { profileMediaSrc } from '../../../lib/profileMedia'
 import Avatar from '../../Avatar'
 import StyledName from '../../StyledName'
 
-const CARD_BG = '#111214'
+const CARD_BG = 'var(--bg-floating)'
 
 function Row({
   label,
@@ -23,7 +23,7 @@ function Row({
     <div className="flex items-center justify-between gap-4 py-3">
       <div className="min-w-0">
         <p className="text-ds-sm font-medium text-gray-400">{label}</p>
-        <div className="truncate text-ds-md text-white">{value}</div>
+        <div className="truncate text-ds-md text-strong">{value}</div>
       </div>
       {action}
     </div>
@@ -49,7 +49,7 @@ function MyAccountSection(): React.JSX.Element | null {
     <button
       type="button"
       onClick={() => goTo('profiles')}
-      className="shrink-0 cursor-pointer rounded-md bg-white/10 px-4 py-1.5 text-ds-sm font-medium text-white transition-colors hover:bg-white/15"
+      className="shrink-0 cursor-pointer rounded-md bg-fg/10 px-4 py-1.5 text-ds-sm font-medium text-strong transition-colors hover:bg-fg/15"
     >
       Editar
     </button>
@@ -57,7 +57,7 @@ function MyAccountSection(): React.JSX.Element | null {
 
   return (
     <div
-      className="overflow-hidden rounded-xl border border-white/10"
+      className="overflow-hidden rounded-xl border border-subtle"
       style={{ background: CARD_BG }}
     >
       <div
@@ -85,20 +85,20 @@ function MyAccountSection(): React.JSX.Element | null {
                 cutoutColor={CARD_BG}
               />
             </div>
-            <p className="mb-2 truncate text-xl font-bold text-white">
+            <p className="mb-2 truncate text-xl font-bold text-strong">
               <StyledName name={name} userId={user.id} style={user.name_style} />
             </p>
           </div>
           <button
             type="button"
             onClick={() => goTo('profiles')}
-            className="mb-2 shrink-0 cursor-pointer rounded-md bg-[#5865f2] px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-[#4752c4]"
+            className="mb-2 shrink-0 cursor-pointer rounded-md bg-brand px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-brand-hover"
           >
             Editar perfil de usuário
           </button>
         </div>
 
-        <div className="mt-4 divide-y divide-white/10 rounded-lg bg-black/30 px-4">
+        <div className="mt-4 divide-y divide-subtle rounded-lg bg-input px-4">
           <Row label="Nome de exibição" value={name} action={editButton} />
           <Row label="Nome de usuário" value={user.username} />
           <Row
@@ -109,7 +109,7 @@ function MyAccountSection(): React.JSX.Element | null {
                 <button
                   type="button"
                   onClick={() => setShowEmail((v) => !v)}
-                  className="cursor-pointer text-[#00a8fc] hover:underline"
+                  className="cursor-pointer text-link hover:underline"
                 >
                   {showEmail ? 'Ocultar' : 'Mostrar'}
                 </button>

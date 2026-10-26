@@ -136,13 +136,13 @@ function VoiceRecordButton({
       {recording && (
         <div
           className={`pointer-events-none absolute inset-0 z-[5] flex items-center gap-3 rounded-xl px-4 pr-16 text-sm ${
-            inside ? 'bg-[#1e1f22]' : 'bg-red-600/90'
+            inside ? 'bg-accent' : 'bg-red-600/90'
           }`}
         >
           {inside ? (
             <>
               <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-red-500" />
-              <span className="shrink-0 font-semibold tabular-nums text-white">
+              <span className="shrink-0 font-semibold tabular-nums text-strong">
                 {formatDuration(recordElapsed(state, now))}
               </span>
               <span className="truncate text-gray-400">
@@ -150,7 +150,7 @@ function VoiceRecordButton({
               </span>
             </>
           ) : (
-            <span className="font-semibold text-white">Solte para cancelar</span>
+            <span className="font-semibold text-strong">Solte para cancelar</span>
           )}
         </div>
       )}
@@ -168,7 +168,7 @@ function VoiceRecordButton({
         onPointerLeave={() => dispatch({ type: 'leave' })}
         onPointerEnter={() => dispatch({ type: 'enter' })}
         className={`relative z-10 shrink-0 cursor-pointer rounded-md p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-          recording ? 'bg-red-500 text-white' : 'text-gray-400 hover:bg-white/10 hover:text-white'
+          recording ? 'bg-red-500 text-white' : 'text-gray-400 hover:bg-fg/10 hover:text-strong'
         }`}
       >
         <MicIcon className="h-5 w-5" />
