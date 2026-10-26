@@ -63,3 +63,16 @@ export function scriptTests(scriptFiles, exists = existsSync) {
   const tests = scriptFiles.map((f) => (f.endsWith('.test.mjs') ? f : f.replace(/\.mjs$/, '.test.mjs')))
   return [...new Set(tests.filter((f) => exists(f)))].sort()
 }
+
+const MODES = ['loop', 'pr', 'full']
+
+// parseArgs: modo (loop|pr|full) e --base <ref> da linha de comando. Erro em
+// vez de cair calado no loop, que pula vet/CRAP e ainda diz "Tudo verde".
+export function parseArgs(args) {
+  const i = args.indexOf('--base')
+  const base = i >= 0 ? args[i + 1] : null
+  if (i >= 0 && (!base || base.startsWith('--'))) throw new Error('--base sem valor')
+  const mode = args.find((a, j) => !a.startsWith('--') && (i < 0 || j !== i + 1)) ?? 'loop'
+  if (!MODES.includes(mode)) throw new Error(`modo desconhecido: ${mode} (use ${MODES.join('|')})`)
+  return { mode, base }
+}

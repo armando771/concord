@@ -17,6 +17,7 @@ import {
 } from '../features/overlay/lib/overlayLayout'
 import { normalizeOverlayShortcut } from '../features/overlay/lib/overlayShortcut'
 import VoiceStateIcons from '../features/call/components/VoiceStateIcons'
+import OverlayAvatar from './OverlayAvatar'
 
 const editHint = (shortcut: string): string =>
   `Arraste para mover · canto para redimensionar · ${shortcut} ou Esc para sair`
@@ -39,13 +40,7 @@ function OverlayPill({
       className="flex w-fit max-w-[240px] items-center gap-2 rounded-full bg-floating/85 py-1 pl-1 pr-3 transition-opacity duration-150"
       style={rowStyle(opacity, member.speaking)}
     >
-      <div
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold text-white ${
-          member.speaking ? 'ring-2 ring-success' : ''
-        }`}
-      >
-        {member.initial}
-      </div>
+      <OverlayAvatar member={member} />
       <span
         className={`truncate text-sm ${
           member.speaking ? 'font-bold text-strong' : 'font-medium text-gray-200'
