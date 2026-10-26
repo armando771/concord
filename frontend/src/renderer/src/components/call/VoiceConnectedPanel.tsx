@@ -40,10 +40,10 @@ const ICON_BUTTON =
 type RowTone = 'idle' | 'on' | 'open' | 'running'
 
 const ROW_TONE: Record<RowTone, string> = {
-  idle: 'bg-white/6 text-gray-200 hover:bg-white/12 hover:text-white',
-  on: 'bg-[#23a55a] text-white hover:bg-[#1e8c4a]',
-  open: 'bg-[#5865f2] text-white',
-  running: 'bg-[#5865f2]/25 text-white hover:bg-[#5865f2]/40'
+  idle: 'bg-fg/6 text-gray-200 hover:bg-fg/12 hover:text-strong',
+  on: 'bg-success-strong text-white hover:bg-success-strong-hover',
+  open: 'bg-brand text-white',
+  running: 'bg-brand/25 text-strong hover:bg-brand/40'
 }
 
 /**
@@ -77,9 +77,7 @@ function RowButton({
       aria-expanded={expanded}
       title={title}
       className={`flex h-8 min-w-0 flex-1 items-center justify-center rounded-md transition-colors ${
-        disabled
-          ? 'cursor-not-allowed bg-white/5 text-gray-600'
-          : `cursor-pointer ${ROW_TONE[tone]}`
+        disabled ? 'cursor-not-allowed bg-fg/5 text-gray-600' : `cursor-pointer ${ROW_TONE[tone]}`
       }`}
     >
       {children}
@@ -163,10 +161,15 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   const soundboardAvailable = type === 'channel' && connected
 
   return (
-    <div className="shrink-0 border-t border-white/6 bg-[#07080b]/90 px-2 pb-2 pt-1.5">
+    <div className="shrink-0 border-t border-subtle bg-primary px-2 pb-2 pt-1.5">
       {myGame && (
-        <p className="mb-1.5 flex items-center gap-2 border-b border-white/6 pb-1.5 text-ds-md font-semibold text-white">
-          <GameIcon name={myGame.name} appId={myGame.app_id} iconHash={myGame.icon_hash} className="h-4 w-4 shrink-0" />
+        <p className="mb-1.5 flex items-center gap-2 border-b border-subtle pb-1.5 text-ds-md font-semibold text-strong">
+          <GameIcon
+            name={myGame.name}
+            appId={myGame.app_id}
+            iconHash={myGame.icon_hash}
+            className="h-4 w-4 shrink-0"
+          />
           <span className="truncate">{myGame.name}</span>
         </p>
       )}
@@ -182,8 +185,8 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
               const element = event.currentTarget
               setConnectionAnchor(connectionOpen ? null : { element, callId })
             }}
-            className={`flex max-w-full items-center gap-1.5 rounded text-left text-ds-md font-semibold outline-none focus-visible:ring-2 focus-visible:ring-[#5865f2] ${connected ? 'cursor-pointer hover:underline' : ''} ${
-              connected ? 'text-[#23a55a]' : 'text-[#f0b232]'
+            className={`flex max-w-full items-center gap-1.5 rounded text-left text-ds-md font-semibold outline-none focus-visible:ring-2 focus-visible:ring-brand ${connected ? 'cursor-pointer hover:underline' : ''} ${
+              connected ? 'text-success' : 'text-warning'
             }`}
           >
             <SignalIcon className="h-4 w-4 shrink-0" />
@@ -214,7 +217,7 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
             className={`${ICON_BUTTON} ${
               locked
                 ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
-                : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                : 'text-gray-300 hover:bg-fg/10 hover:text-strong'
             }`}
           >
             {locked ? (
@@ -238,7 +241,7 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
               : 'Supressão de ruído desativada'
           }
           className={`${ICON_BUTTON} ${
-            noiseAnchor ? 'bg-white/15 text-white' : 'hover:bg-white/10 hover:text-white'
+            noiseAnchor ? 'bg-fg/15 text-strong' : 'hover:bg-fg/10 hover:text-strong'
           } ${noiseSuppression ? 'text-gray-300' : 'text-gray-500'}`}
         >
           <NoiseSuppressionIcon className="h-5 w-5" off={!noiseSuppression} />
@@ -248,7 +251,7 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
           onClick={endCall}
           aria-label="Desconectar da voz"
           title="Desconectar"
-          className={`${ICON_BUTTON} text-gray-300 hover:bg-[#f23f43]/15 hover:text-[#f23f43]`}
+          className={`${ICON_BUTTON} text-gray-300 hover:bg-danger/15 hover:text-danger`}
         >
           <HangUpIcon className="h-5 w-5" />
         </button>

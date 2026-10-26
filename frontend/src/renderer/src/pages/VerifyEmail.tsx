@@ -53,7 +53,7 @@ function VerifyEmail(): React.JSX.Element {
           </p>
           <Link
             to={home}
-            className="mt-6 inline-block rounded-lg bg-[#5865f2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4752c4]"
+            className="mt-6 inline-block rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
           >
             {accessToken ? 'Ir para o app' : 'Entrar'}
           </Link>

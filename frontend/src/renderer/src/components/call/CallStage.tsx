@@ -198,7 +198,7 @@ function CallStage({
             type="button"
             onClick={() => setStageVideo(false)}
             aria-label="Fechar"
-            className="absolute right-2 top-2 cursor-pointer rounded-full bg-black/60 p-1 text-white"
+            className="absolute right-2 top-2 cursor-pointer rounded-full bg-black/60 p-1 text-white on-media"
           >
             <XIcon className="h-4 w-4" />
           </button>
@@ -369,7 +369,7 @@ function CallStage({
             onClick={() => setFocused(null)}
             aria-label="Sair do modo foco"
             title="Sair do modo foco"
-            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white on-media"
           >
             <ChevronDownIcon className="h-4 w-4" />
           </button>
@@ -378,7 +378,7 @@ function CallStage({
               onClick={() => stopWatchingScreen(focused.userId)}
               aria-label="Fechar transmissão"
               title="Fechar transmissão"
-              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white on-media"
             >
               <XIcon className="h-4 w-4" />
             </button>

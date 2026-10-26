@@ -75,17 +75,17 @@ function Form({
   return (
     <div className="flex flex-col gap-5">
       <section>
-        <h3 className="mb-2 text-ds-sm font-semibold text-white">
+        <h3 className="mb-2 text-ds-sm font-semibold text-strong">
           {isServer ? 'Silenciar servidor' : 'Silenciar canal'}
         </h3>
         {muted ? (
-          <div className="flex items-center justify-between gap-3 rounded-lg bg-white/5 p-3">
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-fg/5 p-3">
             <span className="text-ds-sm text-gray-300">{muteLabel(current)}</span>
             <button
               type="button"
               disabled={saving}
               onClick={unmute}
-              className="shrink-0 cursor-pointer rounded-md bg-white/10 px-3 py-1.5 text-ds-sm font-medium text-white hover:bg-white/20 disabled:opacity-50"
+              className="shrink-0 cursor-pointer rounded-md bg-fg/10 px-3 py-1.5 text-ds-sm font-medium text-strong hover:bg-fg/20 disabled:opacity-50"
             >
               Reativar
             </button>
@@ -98,7 +98,7 @@ function Form({
                 type="button"
                 disabled={saving}
                 onClick={() => mute(d.ms)}
-                className="cursor-pointer rounded-md bg-white/10 px-3 py-1.5 text-ds-sm font-medium text-gray-200 hover:bg-white/20 disabled:opacity-50"
+                className="cursor-pointer rounded-md bg-fg/10 px-3 py-1.5 text-ds-sm font-medium text-gray-200 hover:bg-fg/20 disabled:opacity-50"
               >
                 {d.label}
               </button>
@@ -112,7 +112,7 @@ function Form({
       </section>
 
       <section>
-        <h3 className="mb-2 text-ds-sm font-semibold text-white">Avisos</h3>
+        <h3 className="mb-2 text-ds-sm font-semibold text-strong">Avisos</h3>
         <div role="radiogroup" className="flex flex-col gap-1">
           {LEVELS.map((l) => (
             <button
@@ -122,14 +122,14 @@ function Form({
               aria-checked={current.level === l.value}
               disabled={saving}
               onClick={() => void save({ ...current, level: l.value })}
-              className="flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-left text-ds-sm text-gray-200 hover:bg-white/10 disabled:opacity-50"
+              className="flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-left text-ds-sm text-gray-200 hover:bg-fg/10 disabled:opacity-50"
             >
               <span
                 className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                  current.level === l.value ? 'border-[#5865f2]' : 'border-white/40'
+                  current.level === l.value ? 'border-brand' : 'border-strong'
                 }`}
               >
-                {current.level === l.value && <span className="h-2 w-2 rounded-full bg-[#5865f2]" />}
+                {current.level === l.value && <span className="h-2 w-2 rounded-full bg-brand" />}
               </span>
               {l.label}
             </button>
@@ -145,7 +145,7 @@ function Form({
       {isServer && (
         <section className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-ds-sm font-semibold text-white">Ignorar @all e @here</div>
+            <div className="text-ds-sm font-semibold text-strong">Ignorar @all e @here</div>
             <div className="text-ds-xs text-gray-500">
               Menções em massa não avisam nem viram selo.
             </div>

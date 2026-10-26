@@ -123,7 +123,7 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
         role="dialog"
         aria-modal="true"
         aria-label={preview ? `Convite para ${preview.name}` : 'Convite'}
-        className="flex max-h-full w-full max-w-[880px] overflow-hidden rounded-2xl border border-white/10 bg-[#1e1f24] shadow-2xl shadow-black/60"
+        className="flex max-h-full w-full max-w-[880px] overflow-hidden rounded-2xl border border-subtle bg-modal shadow-2xl shadow-black/60"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex min-h-[420px] w-full flex-col items-center justify-center px-8 py-10 md:w-[420px] md:shrink-0">
@@ -142,7 +142,7 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
           {state.status === 'error' && (
             <div className="flex flex-col items-center text-center">
               <InviteServerIcon name="?" />
-              <h1 className="mt-4 text-ds-lg font-bold text-white">Convite indisponível</h1>
+              <h1 className="mt-4 text-ds-lg font-bold text-strong">Convite indisponível</h1>
               <p className="mt-2 text-ds-sm text-gray-300">{state.message}</p>
               <Button variant="secondary" className="mt-8 w-full" onClick={close}>
                 Fechar
@@ -186,14 +186,14 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
                   <div className="mt-3 flex gap-4">
                     <button
                       type="button"
-                      className="cursor-pointer text-ds-sm font-medium text-violet-300 hover:text-white hover:underline"
+                      className="cursor-pointer text-ds-sm font-medium text-violet-300 hover:text-strong hover:underline"
                       onClick={() => void resend()}
                     >
                       Reenviar e-mail
                     </button>
                     <button
                       type="button"
-                      className="cursor-pointer text-ds-sm font-medium text-gray-300 hover:text-white hover:underline"
+                      className="cursor-pointer text-ds-sm font-medium text-gray-300 hover:text-strong hover:underline"
                       onClick={close}
                     >
                       Não, obrigado
@@ -213,7 +213,7 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
                   </Button>
                   <button
                     type="button"
-                    className="mt-3 cursor-pointer text-ds-sm font-medium text-gray-300 hover:text-white hover:underline"
+                    className="mt-3 cursor-pointer text-ds-sm font-medium text-gray-300 hover:text-strong hover:underline"
                     onClick={close}
                   >
                     Fechar
@@ -241,7 +241,7 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
                   </Button>
                   <button
                     type="button"
-                    className="mt-3 cursor-pointer text-ds-sm font-medium text-gray-300 hover:text-white hover:underline disabled:opacity-50"
+                    className="mt-3 cursor-pointer text-ds-sm font-medium text-gray-300 hover:text-strong hover:underline disabled:opacity-50"
                     onClick={close}
                     disabled={joining}
                   >

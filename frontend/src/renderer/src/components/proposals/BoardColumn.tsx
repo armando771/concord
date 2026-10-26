@@ -29,21 +29,21 @@ function BoardColumn({
   const accepts = dragging && canDropOn(dragFrom, status)
   const isOrigin = dragging && dragFrom === status
 
-  let state = 'border-white/6'
+  let state = 'border-subtle'
   if (accepts) state = isOver ? 'border-violet-400 bg-violet-500/10' : 'border-violet-400/30'
   else if (dragging && !isOrigin)
-    state = `cursor-not-allowed border-dashed ${isOver ? 'border-red-400/70' : 'border-white/10'}`
+    state = `cursor-not-allowed border-dashed ${isOver ? 'border-red-400/70' : 'border-subtle'}`
 
   return (
     <section
       ref={setNodeRef}
       data-column={status}
-      className={`flex min-h-0 min-w-64 flex-1 basis-64 flex-col rounded-2xl border bg-[#12141d]/60 transition-colors ${state}`}
+      className={`flex min-h-0 min-w-64 flex-1 basis-64 flex-col rounded-2xl border bg-surface transition-colors ${state}`}
     >
       <div className="shrink-0 px-3 pb-2 pt-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">{title}</h2>
-          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-gray-300">
+          <h2 className="text-sm font-semibold text-strong">{title}</h2>
+          <span className="rounded-full bg-fg/10 px-2 py-0.5 text-[11px] text-gray-300">
             {count}
           </span>
         </div>

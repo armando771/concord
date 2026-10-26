@@ -73,10 +73,10 @@ export default function SearchResultsPanel({
   return (
     <aside
       aria-label="Resultados da busca"
-      className="flex w-80 shrink-0 flex-col border-l border-white/6 bg-[#07080b]/80 xl:w-[26rem]"
+      className="flex w-80 shrink-0 flex-col border-l border-subtle bg-members xl:w-[26rem]"
     >
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/6 px-4 py-3">
-        <p className="text-ds-sm font-semibold text-white" aria-live="polite">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-subtle px-4 py-3">
+        <p className="text-ds-sm font-semibold text-strong" aria-live="polite">
           {loading
             ? 'Buscando…'
             : error
@@ -88,7 +88,7 @@ export default function SearchResultsPanel({
           onClick={close}
           aria-label="Fechar resultados"
           title="Fechar"
-          className="cursor-pointer rounded p-1 text-gray-400 hover:bg-white/10 hover:text-white"
+          className="cursor-pointer rounded p-1 text-gray-400 hover:bg-fg/10 hover:text-strong"
         >
           <XIcon className="h-4 w-4" />
         </button>
@@ -97,7 +97,7 @@ export default function SearchResultsPanel({
       <div
         role="group"
         aria-label="Ordenar"
-        className="flex shrink-0 gap-1 border-b border-white/6 px-3 py-2"
+        className="flex shrink-0 gap-1 border-b border-subtle px-3 py-2"
       >
         {(Object.keys(SORT_LABELS) as SearchSort[]).map((s) => (
           <button
@@ -107,8 +107,8 @@ export default function SearchResultsPanel({
             onClick={() => sort !== s && setSort(s)}
             className={`cursor-pointer rounded-md px-2.5 py-1 text-ds-xs font-medium transition ${
               sort === s
-                ? 'bg-[#5865f2]/30 text-white'
-                : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                ? 'bg-brand/30 text-strong'
+                : 'text-gray-400 hover:bg-fg/5 hover:text-strong'
             }`}
           >
             {SORT_LABELS[s]}
@@ -125,7 +125,7 @@ export default function SearchResultsPanel({
           <p className="px-2 py-8 text-center text-ds-sm text-gray-400">Buscando mensagens…</p>
         ) : page && page.results.length === 0 ? (
           <div className="flex flex-col items-center px-4 py-10 text-center">
-            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/5 text-gray-400">
+            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-fg/5 text-gray-400">
               <SearchIcon className="h-6 w-6" />
             </span>
             <p className="text-ds-sm font-medium text-gray-200">Nenhum resultado</p>
@@ -153,13 +153,13 @@ export default function SearchResultsPanel({
       {!error && page && pages > 1 && (
         <nav
           aria-label="Páginas dos resultados"
-          className="flex shrink-0 items-center justify-between gap-2 border-t border-white/6 px-4 py-2"
+          className="flex shrink-0 items-center justify-between gap-2 border-t border-subtle px-4 py-2"
         >
           <button
             type="button"
             disabled={current <= 1 || loading}
             onClick={() => goTo(offset - SEARCH_PAGE_SIZE)}
-            className="cursor-pointer rounded-md px-2.5 py-1 text-ds-xs font-medium text-gray-300 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="cursor-pointer rounded-md px-2.5 py-1 text-ds-xs font-medium text-gray-300 hover:bg-fg/5 hover:text-strong disabled:cursor-not-allowed disabled:opacity-40"
           >
             Anterior
           </button>
@@ -170,7 +170,7 @@ export default function SearchResultsPanel({
             type="button"
             disabled={current >= pages || loading}
             onClick={() => goTo(offset + SEARCH_PAGE_SIZE)}
-            className="cursor-pointer rounded-md px-2.5 py-1 text-ds-xs font-medium text-gray-300 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="cursor-pointer rounded-md px-2.5 py-1 text-ds-xs font-medium text-gray-300 hover:bg-fg/5 hover:text-strong disabled:cursor-not-allowed disabled:opacity-40"
           >
             Próxima
           </button>
@@ -204,7 +204,7 @@ function ResultItem({
       type="button"
       onClick={onOpen}
       title="Ir para a mensagem"
-      className="group w-full cursor-pointer rounded-lg border border-white/5 bg-[#18191c]/80 p-3 text-left transition hover:border-white/15 hover:bg-[#1f2024] focus-visible:outline-2 focus-visible:outline-[#5865f2]"
+      className="group w-full cursor-pointer rounded-lg border border-subtle bg-floating p-3 text-left transition hover:border-normal hover:bg-surface focus-visible:outline-2 focus-visible:outline-brand"
     >
       {result.channel_name && (
         <span className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold text-gray-400">
@@ -223,7 +223,7 @@ function ResultItem({
           <span className="flex items-baseline gap-2">
             <span
               style={color ? { color } : undefined}
-              className={`truncate text-ds-sm font-semibold ${color ? '' : 'text-white'}`}
+              className={`truncate text-ds-sm font-semibold ${color ? '' : 'text-strong'}`}
             >
               {name}
             </span>

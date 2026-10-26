@@ -11,7 +11,7 @@ function SlashSuggestions({
   const items = slashSuggestions(input)
   if (items.length === 0) return null
   return (
-    <div className="absolute bottom-full left-0 right-0 mb-2 rounded-lg border border-white/10 bg-[#111214] p-1 shadow-2xl">
+    <div className="absolute bottom-full left-0 right-0 mb-2 rounded-lg border border-subtle bg-floating p-1 shadow-2xl">
       {items.map((s) => (
         <button
           key={s.command}
@@ -20,9 +20,9 @@ function SlashSuggestions({
             e.preventDefault() // não tira o foco do campo
             onPick(s.command + ' ')
           }}
-          className="flex w-full cursor-pointer items-baseline gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-white/10"
+          className="flex w-full cursor-pointer items-baseline gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-fg/10"
         >
-          <span className="font-semibold text-white">{s.usage}</span>
+          <span className="font-semibold text-strong">{s.usage}</span>
           <span className="text-xs text-gray-500">{s.aliases.join(' · ')}</span>
         </button>
       ))}

@@ -39,6 +39,7 @@ import LiveBadge from './call/LiveBadge'
 import StatusIcon from './StatusIcon'
 import { DotsIcon, PencilIcon, VolumeIcon } from './icons'
 import Avatar from './Avatar'
+import { useThemeStore } from '../store/themeStore'
 import { ActivityGlyph } from './call/ActivityPickerPopover'
 
 const CARD_WIDTH = 300
@@ -70,7 +71,7 @@ function MenuButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm font-medium text-gray-200 transition-colors hover:bg-white/10 hover:text-white"
+      className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm font-medium text-gray-200 transition-colors hover:bg-fg/10 hover:text-strong"
     >
       <span className="flex h-4 w-4 shrink-0 items-center justify-center text-gray-400">
         {icon}
@@ -83,6 +84,8 @@ function MenuButton({
 
 /** "Online ›" com o submenu dos status ao lado, como no Discord. */
 function StatusMenu({ status }: { status: PresenceStatus }): React.JSX.Element {
+  // O submenu tem o fundo do app: volta ao tema de cor mesmo num cartão com fundo próprio.
+  const appTheme = useThemeStore((s) => s.theme)
   const [open, setOpen] = useState(false)
   const [upward, setUpward] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
@@ -105,7 +108,8 @@ function StatusMenu({ status }: { status: PresenceStatus }): React.JSX.Element {
         <div className={`absolute left-full z-10 pl-3 ${upward ? 'bottom-0' : 'top-0'}`}>
           <div
             role="menu"
-            className="pt-ink-keep w-64 rounded-lg border border-white/10 p-1.5 shadow-2xl"
+            data-theme={appTheme}
+            className="pt-ink-keep w-64 rounded-lg border border-subtle p-1.5 shadow-2xl"
             style={{ background: CARD_BG }}
           >
             {CHOSEN_STATUSES.map((s) => (
@@ -118,7 +122,7 @@ function StatusMenu({ status }: { status: PresenceStatus }): React.JSX.Element {
                   setOpen(false)
                   void changeMyStatus(s)
                 }}
-                className="flex w-full cursor-pointer items-start gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-white/10"
+                className="flex w-full cursor-pointer items-start gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-fg/10"
               >
                 <StatusIcon status={s} size={12} className="mt-1" />
                 <span className="min-w-0">
@@ -504,7 +508,7 @@ function UserProfileCard(): React.JSX.Element | null {
               close()
               void joinActivity()
             }}
-            className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#23a55a] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1e8c4a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-success-strong px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-success-strong-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
             <ActivityGlyph activity={joinableActivity} className="h-4 w-4" />
             Juntar-se à atividade
@@ -512,14 +516,14 @@ function UserProfileCard(): React.JSX.Element | null {
           </button>
         )}
         {hasInfo && (
-          <div className="mt-3 flex flex-col gap-3 rounded-lg bg-black/30 p-3">
+          <div className="mt-3 flex flex-col gap-3 rounded-lg bg-input p-3">
             {inServer && (isServerOwner || memberRoles.length > 0) && (
               <div>
                 <SectionTitle>{memberRoles.length > 1 ? 'Cargos' : 'Cargo'}</SectionTitle>
                 <div className="flex flex-wrap gap-1.5">
                   {isServerOwner && (
                     <span
-                      className="inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2 py-0.5 text-xs font-semibold"
+                      className="inline-flex items-center gap-1.5 rounded-md bg-fg/5 px-2 py-0.5 text-xs font-semibold"
                       style={{ color: OWNER_STYLE.color }}
                     >
                       <span
@@ -534,7 +538,7 @@ function UserProfileCard(): React.JSX.Element | null {
                     return (
                       <span
                         key={r.id}
-                        className="inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2 py-0.5 text-xs font-semibold"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-fg/5 px-2 py-0.5 text-xs font-semibold"
                         style={{ color }}
                       >
                         <span className="h-2 w-2 rounded-full" style={{ background: color }} />
@@ -612,7 +616,7 @@ function UserProfileCard(): React.JSX.Element | null {
               <div>
                 <SectionTitle>Em call</SectionTitle>
                 <p className="flex items-center gap-1.5 text-xs text-gray-200">
-                  <VolumeIcon className="h-3.5 w-3.5 text-[#23a55a]" />
+                  <VolumeIcon className="h-3.5 w-3.5 text-success" />
                   <span className="min-w-0 truncate">{voiceChannel.name}</span>
                   {live && <LiveBadge />}
                 </p>
@@ -626,17 +630,17 @@ function UserProfileCard(): React.JSX.Element | null {
 
         {isMe ? (
           <>
-            <div className="mt-3 rounded-lg bg-black/30 p-1.5">
+            <div className="mt-3 rounded-lg bg-input p-1.5">
               <MenuButton
                 icon={<PencilIcon className="h-4 w-4" />}
                 label="Editar perfil"
                 onClick={editProfile}
               />
               {nicknameButton}
-              <div className="mx-2 my-1 h-px bg-white/10" />
+              <div className="mx-2 my-1 h-px bg-fg/10" />
               <StatusMenu status={status} />
             </div>
-            <div className="mt-2 rounded-lg bg-black/30 p-1.5">
+            <div className="mt-2 rounded-lg bg-input p-1.5">
               <MenuButton
                 icon={
                   <span className="rounded-[3px] border border-current px-0.5 text-[8px] font-black leading-tight">
@@ -653,7 +657,7 @@ function UserProfileCard(): React.JSX.Element | null {
             <button
               type="button"
               onClick={sendMessage}
-              className="flex-1 cursor-pointer rounded-lg bg-[#5865f2] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#4752c4]"
+              className="flex-1 cursor-pointer rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-hover"
             >
               Enviar mensagem
             </button>
@@ -662,10 +666,10 @@ function UserProfileCard(): React.JSX.Element | null {
                 type="button"
                 disabled={sending || relationship === 'outgoing'}
                 onClick={() => void addFriend()}
-                className={`cursor-pointer rounded-lg px-3 py-2 text-xs font-semibold text-white transition-colors disabled:cursor-default disabled:opacity-60 ${
+                className={`cursor-pointer rounded-lg px-3 py-2 text-xs font-semibold transition-colors disabled:cursor-default disabled:opacity-60 ${
                   relationship === 'incoming'
-                    ? 'bg-[#248046] hover:bg-[#1a6334]'
-                    : 'bg-white/10 hover:bg-white/15'
+                    ? 'bg-success-strong text-white hover:bg-success-strong-hover'
+                    : 'bg-fg/10 text-strong hover:bg-fg/15'
                 }`}
               >
                 {relationship === 'outgoing'
@@ -680,14 +684,14 @@ function UserProfileCard(): React.JSX.Element | null {
               aria-label="Mais"
               title="Mais"
               onClick={openMore}
-              className="flex cursor-pointer items-center justify-center rounded-lg bg-white/10 px-2.5 text-gray-200 transition-colors hover:bg-white/15"
+              className="flex cursor-pointer items-center justify-center rounded-lg bg-fg/10 px-2.5 text-gray-200 transition-colors hover:bg-fg/15"
             >
               <DotsIcon className="h-4 w-4" />
             </button>
           </div>
         )}
         {!isMe && nicknameButton && (
-          <div className="mt-2 rounded-lg bg-black/30 p-1.5">{nicknameButton}</div>
+          <div className="mt-2 rounded-lg bg-input p-1.5">{nicknameButton}</div>
         )}
       </ProfileCardBody>
     </ProfileCardFrame>

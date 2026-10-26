@@ -20,8 +20,11 @@ export const DEFAULT_PROFILE_THEME: ProfileTheme = {
   effect: 'none'
 }
 
-/** Fundo do cartão sem tema (recorta o avatar e a bolinha de status). */
-export const CARD_BG = '#111214'
+/**
+ * Fundo do cartão sem tema (recorta o avatar e a bolinha de status): o
+ * --bg-floating do tema de cor do app (assets/theme.css).
+ */
+export const CARD_BG = 'var(--bg-floating)'
 
 export const PROFILE_BORDERS = [
   { id: 'none', label: 'Nenhuma', colors: 0 },
@@ -175,8 +178,10 @@ export function profileThemeLook(theme: ProfileTheme): ProfileThemeLook {
   if (b1) vars['--pt-b1'] = b1
   if (b2) vars['--pt-b2'] = b2
   vars['--pt-fx'] = b1 ?? bg[1] ?? '#c4b5fd'
-  const ink = pickInk(bg.length ? bg : [CARD_BG])
-  const className = ['profile-frame', `pt-border-${theme.border}`, ink === 'dark' && 'pt-ink-dark']
+  // Sem fundo próprio o texto é o do tema do app; com fundo, o de mais contraste.
+  const ink = bg.length ? pickInk(bg) : 'light'
+  const inkClass = bg.length ? (ink === 'dark' ? 'pt-ink-dark' : 'pt-ink-light') : null
+  const className = ['profile-frame', `pt-border-${theme.border}`, inkClass]
     .filter(Boolean)
     .join(' ')
   return { className, style: vars as CSSProperties, surface, ink }

@@ -53,7 +53,7 @@ function BadgeRow({
 
   return (
     <div
-      className="flex shrink-0 items-center gap-0.5 rounded-md border border-white/10 bg-black/25 px-1 py-0.5"
+      className="flex shrink-0 items-center gap-0.5 rounded-md border border-subtle bg-input px-1 py-0.5"
       aria-label="Badges"
     >
       {shown.map((b) => (
@@ -67,7 +67,7 @@ function BadgeRow({
           <BadgeIcon category={b.category} tier={b.tier} rarity={b.rarity} size={20} />
           <span
             role="tooltip"
-            className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#111214] px-2 py-1 text-center shadow-xl group-hover:block group-focus-visible:block"
+            className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-subtle bg-floating px-2 py-1 text-center shadow-xl group-hover:block group-focus-visible:block"
           >
             {isMythic(b.rarity) ? (
               <span className="mythic-text block text-xs font-black">{b.tier_name}</span>
@@ -90,7 +90,7 @@ function BadgeRow({
           type="button"
           onClick={() => open()}
           aria-label={`Ver mais ${overflow} badges`}
-          className="cursor-pointer rounded px-1 text-[11px] font-semibold text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+          className="cursor-pointer rounded px-1 text-[11px] font-semibold text-gray-300 transition-colors hover:bg-fg/10 hover:text-strong"
         >
           +{overflow}
         </button>

@@ -158,7 +158,7 @@ function ProfileCardBody({
                   type="button"
                   onClick={onEditProfile}
                   aria-label="Editar perfil"
-                  className="absolute inset-1.5 flex cursor-pointer flex-col items-center justify-center gap-0.5 rounded-full bg-black/60 text-[10px] font-bold uppercase text-white opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+                  className="absolute inset-1.5 flex cursor-pointer flex-col items-center justify-center gap-0.5 rounded-full bg-black/60 text-[10px] font-bold uppercase text-white opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100 on-media"
                 >
                   <PencilIcon className="h-4 w-4" />
                   Editar perfil
@@ -182,23 +182,23 @@ function ProfileCardBody({
               <div className="pointer-events-auto relative mt-[38px] min-w-0">
                 <span
                   aria-hidden="true"
-                  className="absolute -left-2.5 top-1 h-3 w-3 rounded-full border border-white/10 bg-[#232428]"
+                  className="absolute -left-2.5 top-1 h-3 w-3 rounded-full border border-subtle bg-primary"
                 />
                 <span
                   aria-hidden="true"
-                  className="absolute -left-4 -top-0.5 h-1.5 w-1.5 rounded-full border border-white/10 bg-[#232428]"
+                  className="absolute -left-4 -top-0.5 h-1.5 w-1.5 rounded-full border border-subtle bg-primary"
                 />
                 {note ? (
-                  <p className="relative max-w-[170px] break-words rounded-2xl border border-white/10 bg-[#232428] px-3 py-2 text-xs leading-snug text-gray-200 shadow-lg">
+                  <p className="relative max-w-[170px] break-words rounded-2xl border border-subtle bg-primary px-3 py-2 text-xs leading-snug text-gray-200 shadow-lg">
                     {note}
                   </p>
                 ) : (
                   <button
                     type="button"
                     onClick={onEditProfile}
-                    className="relative flex max-w-[170px] cursor-pointer items-center gap-1.5 rounded-2xl border border-white/10 bg-[#232428] px-3 py-2 text-left text-xs italic text-gray-400 shadow-lg transition-colors hover:text-gray-200"
+                    className="relative flex max-w-[170px] cursor-pointer items-center gap-1.5 rounded-2xl border border-subtle bg-primary px-3 py-2 text-left text-xs italic text-gray-400 shadow-lg transition-colors hover:text-gray-200"
                   >
-                    <PlusIcon className="h-3.5 w-3.5 shrink-0 rounded-full bg-gray-400 p-0.5 text-[#232428]" />
+                    <PlusIcon className="h-3.5 w-3.5 shrink-0 rounded-full bg-gray-400 p-0.5 text-[var(--bg-floating)]" />
                     Adicionar uma nota
                   </button>
                 )}
@@ -209,7 +209,7 @@ function ProfileCardBody({
         </div>
 
         <div className="mt-2">
-          <p className="truncate text-xl font-bold text-white">
+          <p className="truncate text-xl font-bold text-strong">
             {profile.nickname ? (
               profile.nickname
             ) : (
@@ -243,7 +243,7 @@ function ProfileCardBody({
                 {profile.pronouns && <span className="text-gray-400">{profile.pronouns}</span>}
               </p>
               {profile.is_bot && (
-                <span className="shrink-0 rounded bg-[#5865f2] px-1.5 py-px text-[10px] font-bold uppercase leading-tight text-white">
+                <span className="shrink-0 rounded bg-brand px-1.5 py-px text-[10px] font-bold uppercase leading-tight text-white">
                   Bot
                 </span>
               )}
@@ -253,9 +253,9 @@ function ProfileCardBody({
         </div>
 
         {game && (
-          <div className="mt-3 rounded-lg bg-white/5 p-2.5">
+          <div className="mt-3 rounded-lg bg-fg/5 p-2.5">
             <p className="text-ds-xs font-bold uppercase text-gray-400">Jogando agora</p>
-            <p className="mt-1 flex items-center gap-1.5 text-ds-md font-semibold text-white">
+            <p className="mt-1 flex items-center gap-1.5 text-ds-md font-semibold text-strong">
               <GameIcon
                 name={game.name}
                 appId={game.app_id}
@@ -279,7 +279,7 @@ function ProfileCardBody({
                   href={part.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-[#00a8fc] hover:underline"
+                  className="text-link hover:underline"
                 >
                   {part.text}
                 </a>
@@ -302,7 +302,7 @@ function ProfileCardBody({
                   rel="noreferrer"
                   title={`${provider.label}: ${linkLabel(url)}`}
                   aria-label={`${provider.label}: ${linkLabel(url)}`}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-subtle bg-fg/5 text-gray-300 transition-colors hover:bg-fg/10 hover:text-strong"
                 >
                   <LinkIcon provider={provider.id} />
                 </a>

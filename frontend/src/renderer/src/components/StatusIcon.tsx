@@ -33,7 +33,7 @@ function StatusIcon({
           <circle cx="5" cy="5" r="2.5" fill="black" />
         )}
       </mask>
-      <circle cx="5" cy="5" r="5" fill={color} mask={`url(#${maskId})`} />
+      <circle cx="5" cy="5" r="5" style={{ fill: color }} mask={`url(#${maskId})`} />
     </svg>
   )
 }

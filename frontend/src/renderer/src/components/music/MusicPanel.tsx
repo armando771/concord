@@ -87,7 +87,7 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
     <aside
       ref={asideRef}
       aria-hidden={!panelOpen}
-      className={`absolute inset-y-0 left-0 z-20 flex w-72 flex-col gap-3 overflow-y-auto border-r border-white/10 bg-[#1a1b1e]/95 p-4 shadow-2xl backdrop-blur transition-all duration-300 ease-out ${
+      className={`absolute inset-y-0 left-0 z-20 flex w-72 flex-col gap-3 overflow-y-auto border-r border-subtle bg-floating p-4 shadow-2xl backdrop-blur transition-all duration-300 ease-out ${
         panelOpen
           ? 'translate-x-0 opacity-100'
           : 'pointer-events-none invisible -translate-x-full opacity-0'
@@ -100,7 +100,7 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
           onClick={closePanel}
           aria-label="Fechar"
           title="Fechar"
-          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-white/10 text-gray-200 transition-colors hover:bg-white/20 hover:text-white"
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-fg/10 text-gray-200 transition-colors hover:bg-fg/20 hover:text-strong"
         >
           <XIcon className="h-4 w-4" />
         </button>
@@ -115,28 +115,28 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
               <button
                 type="button"
                 onClick={() => setStageVideo(true)}
-                className="cursor-pointer rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/15"
+                className="cursor-pointer rounded bg-fg/10 px-2 py-1 text-xs text-strong hover:bg-fg/15"
               >
                 {T20.watch}
               </button>
               <button
                 type="button"
                 onClick={goFullscreen}
-                className="cursor-pointer rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/15"
+                className="cursor-pointer rounded bg-fg/10 px-2 py-1 text-xs text-strong hover:bg-fg/15"
               >
                 {T20.fullscreen}
               </button>
             </div>
           )}
           <div className="min-w-0">
-            <p data-testid="music-now-title" className="truncate font-semibold text-white">
+            <p data-testid="music-now-title" className="truncate font-semibold text-strong">
               {now.item.title}
             </p>
             <p className="truncate text-xs text-gray-400">
               {now.item.artist} · @{now.item.requested_by.username}
             </p>
           </div>
-          <div className="h-1 overflow-hidden rounded bg-white/10">
+          <div className="h-1 overflow-hidden rounded bg-fg/10">
             <div
               className="h-full bg-violet-400"
               style={{
@@ -152,7 +152,7 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
             type="button"
             onClick={onSkip}
             disabled={!mineNow && voted}
-            className="cursor-pointer rounded-md bg-white/10 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-50"
+            className="cursor-pointer rounded-md bg-fg/10 px-3 py-1.5 text-sm font-semibold text-strong hover:bg-fg/15 disabled:opacity-50"
           >
             {mineNow ? T17.skip : T17.vote(state.skip.votes, state.skip.needed)}
           </button>
@@ -176,11 +176,11 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
                   if (source && canSwap(source, it, meId)) e.preventDefault()
                 }}
                 onDrop={() => onDrop(it)}
-                className={`flex items-center gap-2 rounded px-2 py-1 text-sm ${mine ? 'cursor-grab bg-white/5' : 'opacity-80'}`}
+                className={`flex items-center gap-2 rounded px-2 py-1 text-sm ${mine ? 'cursor-grab bg-fg/5' : 'opacity-80'}`}
               >
                 <span className="w-4 text-xs text-gray-500">{i + 1}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-white">{it.title}</span>
+                  <span className="block truncate text-strong">{it.title}</span>
                   <span className="block truncate text-[11px] text-gray-500">
                     {formatDuration(it.duration_ms)} · @{it.requested_by.username}
                   </span>
@@ -194,7 +194,7 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
                         showToast.error(errorText(err))
                       )
                     }
-                    className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-gray-300 transition-colors hover:bg-white/15 hover:text-white"
+                    className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-gray-300 transition-colors hover:bg-fg/15 hover:text-strong"
                   >
                     <XIcon className="h-3.5 w-3.5" />
                   </button>
@@ -209,7 +209,7 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
           type="button"
           onClick={() => setShowAll((v) => !v)}
           aria-expanded={showAll}
-          className="cursor-pointer rounded-md bg-white/10 px-3 py-1.5 text-xs font-semibold text-gray-200 transition-colors hover:bg-white/15 hover:text-white"
+          className="cursor-pointer rounded-md bg-fg/10 px-3 py-1.5 text-xs font-semibold text-gray-200 transition-colors hover:bg-fg/15 hover:text-strong"
         >
           {showAll ? T20.seeLess : T20.seeMore(state.queue.length - QUEUE_PREVIEW)}
         </button>

@@ -36,19 +36,19 @@ function OverlayPill({
 }): React.JSX.Element {
   return (
     <div
-      className="flex w-fit max-w-[240px] items-center gap-2 rounded-full bg-black/55 py-1 pl-1 pr-3 transition-opacity duration-150"
+      className="flex w-fit max-w-[240px] items-center gap-2 rounded-full bg-floating/85 py-1 pl-1 pr-3 transition-opacity duration-150"
       style={rowStyle(opacity, member.speaking)}
     >
       <div
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white ${
-          member.speaking ? 'ring-2 ring-[#23a55a]' : ''
+        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold text-white ${
+          member.speaking ? 'ring-2 ring-success' : ''
         }`}
       >
         {member.initial}
       </div>
       <span
         className={`truncate text-sm ${
-          member.speaking ? 'font-bold text-white' : 'font-medium text-gray-200'
+          member.speaking ? 'font-bold text-strong' : 'font-medium text-gray-200'
         }`}
       >
         {member.name}
@@ -207,7 +207,7 @@ function OverlayApp(): React.JSX.Element | null {
         ref={boxRef}
         // w-max: a largura não depende da janela (que é do tamanho da caixa).
         className={`absolute w-max rounded-xl border-2 p-2 ${
-          editing ? 'cursor-move border-dashed border-[#5865f2] bg-black/20' : 'border-transparent'
+          editing ? 'cursor-move border-dashed border-brand bg-black/20' : 'border-transparent'
         }`}
         // Escondida até medir: sem o tamanho, não dá para centralizar nem encaixar.
         style={{
@@ -226,7 +226,7 @@ function OverlayApp(): React.JSX.Element | null {
           ))}
           {snapshot.more > 0 && (
             <div
-              className="w-fit rounded-full bg-black/55 px-3 py-1 text-sm font-medium text-gray-200"
+              className="w-fit rounded-full bg-floating/85 px-3 py-1 text-sm font-medium text-gray-200"
               style={rowStyle(snapshot.opacity, false)}
             >
               +{snapshot.more}
@@ -237,11 +237,11 @@ function OverlayApp(): React.JSX.Element | null {
           <>
             <div
               aria-label="Redimensionar"
-              className="absolute -bottom-2 -right-2 h-4 w-4 cursor-nwse-resize rounded-sm border-2 border-[#5865f2] bg-black/70"
+              className="absolute -bottom-2 -right-2 h-4 w-4 cursor-nwse-resize rounded-sm border-2 border-brand bg-floating"
               onPointerDown={(e) => begin('resize', e)}
             />
             <div
-              className={`pointer-events-none absolute whitespace-nowrap rounded-md bg-black/75 px-2 py-1 text-xs font-medium text-white ${
+              className={`pointer-events-none absolute whitespace-nowrap rounded-md bg-floating px-2 py-1 text-xs font-medium text-normal ${
                 hintBelow ? 'top-full mt-3' : 'bottom-full mb-3'
               } ${hintRight ? 'right-0' : 'left-0'}`}
             >

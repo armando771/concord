@@ -50,12 +50,12 @@ function MessageText({
             // link não inverte o endereço na tela.
             dir="ltr"
             style={{ unicodeBidi: 'isolate' }}
-            className="text-[#00a8fc] hover:underline"
+            className="text-link hover:underline"
           >
             {part.text}
           </a>
         ) : part.mention ? (
-          <span key={i} className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]">
+          <span key={i} className="rounded bg-brand/30 px-0.5 font-medium text-brand">
             {mentionChipText(part, mentionLabels)}
           </span>
         ) : (

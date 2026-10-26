@@ -229,7 +229,7 @@ function CommentComposer({
         <ul
           role="listbox"
           aria-label="Marcar alguém"
-          className="absolute bottom-full left-0 right-0 z-10 mb-1 overflow-hidden rounded-lg border border-white/10 bg-[#111214] py-1 shadow-2xl"
+          className="absolute bottom-full left-0 right-0 z-10 mb-1 overflow-hidden rounded-lg border border-subtle bg-floating py-1 shadow-2xl"
         >
           {suggestions.map((m, i) => (
             <li
@@ -242,7 +242,7 @@ function CommentComposer({
               }}
               onMouseEnter={() => setHighlight(i)}
               className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm ${
-                i === highlight ? 'bg-[#5865f2]/30 text-white' : 'text-gray-300'
+                i === highlight ? 'bg-brand/30 text-strong' : 'text-gray-300'
               }`}
             >
               <span className="font-semibold">{m.display_name}</span>
@@ -255,11 +255,11 @@ function CommentComposer({
       {replyingTo && (
         <div
           data-reply-bar
-          className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#18191c] px-3 py-1.5 text-ds-sm text-gray-300"
+          className="flex items-center justify-between gap-2 rounded-lg border border-subtle bg-floating px-3 py-1.5 text-ds-sm text-gray-300"
         >
           <div className="min-w-0 truncate">
             Respondendo a{' '}
-            <span className="font-semibold text-white">@{replyingTo.author_name}</span>
+            <span className="font-semibold text-strong">@{replyingTo.author_name}</span>
             <span className="ml-2 text-gray-400">{commentPreview(replyingTo)}</span>
           </div>
           <button
@@ -267,7 +267,7 @@ function CommentComposer({
             onClick={onCancelReply}
             title="Cancelar resposta (Esc)"
             aria-label="Cancelar resposta"
-            className="shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+            className="shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
           >
             ✕
           </button>
@@ -284,7 +284,7 @@ function CommentComposer({
             ? `Responder a @${replyingTo.author_name}...`
             : 'Comente, ou use @ para marcar alguém'
         }
-        className="glass-input w-full resize-none rounded-lg px-3 py-2 text-ds-sm text-white"
+        className="glass-input w-full resize-none rounded-lg px-3 py-2 text-ds-sm text-strong"
         onChange={(e) => {
           setText(e.target.value)
           setCaret(e.target.selectionStart)
@@ -313,7 +313,7 @@ function CommentComposer({
             onClick={() => fileInput.current?.click()}
             title="Anexar arquivo"
             aria-label="Anexar arquivo"
-            className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+            className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
           >
             <PaperclipIcon className="h-5 w-5" />
           </button>

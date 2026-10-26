@@ -1,6 +1,8 @@
 @import 'tailwindcss';
 /* Mesma fonte, pilha de fallback (com emoji) e escala do app. */
 @import '../assets/typography.css';
+/* Mesmos tokens de cor do app: as pílulas seguem o tema escolhido. */
+@import '../assets/theme.css';
 
 /* Janela transparente por cima do jogo: só as pílulas aparecem. */
 html,

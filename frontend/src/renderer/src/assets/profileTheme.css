@@ -154,40 +154,44 @@
   }
 }
 
-/* --- Texto escuro em fundo claro (pickInk) ---
-   O cartão usa as classes de texto claro do app; aqui elas escurecem. Fica de
-   fora o que tem fundo próprio (bg-[#...], como o balão da nota e os botões
-   coloridos) e o que está dentro de .pt-ink-keep (o submenu de status). */
+/* --- Cor do texto no fundo escolhido (pickInk) ---
+   O cartão usa os tokens de texto do tema (assets/theme.css). Com fundo
+   próprio, eles viram texto escuro (.pt-ink-dark) ou claro (.pt-ink-light),
+   valendo o que der mais contraste com aquele fundo. O que tem fundo do app
+   dentro do cartão (submenu de status) leva data-theme e volta ao tema. */
 
 .pt-ink-dark {
   color: #1e1f22;
+  --text-strong: #1e1f22;
+  --text-normal: #1e1f22;
+  --text-secondary: #1e1f22;
+  --text-muted: #4e5058;
+  --text-faint: #4e5058;
+  --text-link: #005a99;
+  --interactive-normal: #1e1f22;
+  --interactive-hover: #000000;
+  --interactive-active: #000000;
+  --fg: #000000;
+  --bg-input: rgb(255 255 255 / 0.45);
+  --border-subtle: rgb(0 0 0 / 0.12);
+  --border-normal: rgb(0 0 0 / 0.16);
 }
-.pt-ink-dark
-  :is(.text-white, .text-gray-100, .text-gray-200, .text-gray-300):not([class*='bg-[']):not(
-    .pt-ink-keep *
-  ) {
-  color: #1e1f22;
-}
-.pt-ink-dark :is(.text-gray-400, .text-gray-500):not([class*='bg-[']):not(.pt-ink-keep *) {
-  color: #4e5058;
-}
-.pt-ink-dark .text-\[\#00a8fc\]:not(.pt-ink-keep *) {
-  color: #005a99;
-}
-.pt-ink-dark .bg-black\/30:not(.pt-ink-keep *) {
-  background-color: rgb(255 255 255 / 0.45);
-}
-.pt-ink-dark :is(.bg-white\/5, .bg-white\/10):not(.pt-ink-keep *) {
-  background-color: rgb(0 0 0 / 0.07);
-}
-.pt-ink-dark :is(.hover\:bg-white\/10, .hover\:bg-white\/15):hover:not(.pt-ink-keep *) {
-  background-color: rgb(0 0 0 / 0.12);
-}
-.pt-ink-dark :is(.border-white\/10):not(.pt-ink-keep *) {
-  border-color: rgb(0 0 0 / 0.12);
-}
-.pt-ink-dark .bg-white\/10.h-px {
-  background-color: rgb(0 0 0 / 0.12);
+
+.pt-ink-light {
+  color: #ffffff;
+  --text-strong: #ffffff;
+  --text-normal: #ffffff;
+  --text-secondary: #ebebeb;
+  --text-muted: #d4d5d8;
+  --text-faint: #d4d5d8;
+  --text-link: #8cc4ff;
+  --interactive-normal: #ebebeb;
+  --interactive-hover: #ffffff;
+  --interactive-active: #ffffff;
+  --fg: #ffffff;
+  --bg-input: rgb(0 0 0 / 0.3);
+  --border-subtle: rgb(255 255 255 / 0.12);
+  --border-normal: rgb(255 255 255 / 0.16);
 }
 
 @media (prefers-reduced-motion: reduce) {

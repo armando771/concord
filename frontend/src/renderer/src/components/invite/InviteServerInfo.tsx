@@ -32,7 +32,7 @@ export function InviteServerInfo({ preview }: { preview: InvitePreview }): React
     <div className="flex flex-col items-center text-center">
       <InviteServerIcon name={preview.name} iconUrl={preview.icon_url} />
       <p className="mt-4 text-ds-sm text-gray-300">Você foi convidado(a) para entrar</p>
-      <h1 className="mt-1 break-words text-ds-xl font-bold text-white">{preview.name}</h1>
+      <h1 className="mt-1 break-words text-ds-xl font-bold text-strong">{preview.name}</h1>
       <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-ds-sm text-gray-300">
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-discord-green" aria-hidden />
@@ -64,7 +64,7 @@ export function InviteBackdrop({
             alt=""
             className="absolute inset-0 h-full w-full scale-125 object-cover opacity-70 blur-2xl"
           />
-          <div className="absolute inset-0 bg-black/45" />
+          <div className="absolute inset-0 bg-black/45 on-media" />
         </>
       ) : (
         <>
@@ -81,6 +81,6 @@ export function InviteBackdrop({
 /** Espera de uma ação (abrindo o app): não é conteúdo carregando, então segue o spinner. */
 export function InviteSpinner(): React.JSX.Element {
   return (
-    <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/20 border-t-violet-500" />
+    <div className="h-10 w-10 animate-spin rounded-full border-2 border-normal border-t-violet-500" />
   )
 }

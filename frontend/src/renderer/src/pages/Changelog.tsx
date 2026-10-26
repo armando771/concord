@@ -34,16 +34,11 @@ function Group({
   )
 }
 
-export function ChangelogView({
-  releases,
-  current,
-  loading,
-  error
-}: ViewProps): React.JSX.Element {
+export function ChangelogView({ releases, current, loading, error }: ViewProps): React.JSX.Element {
   return (
-    <div className="flex h-full w-full overflow-hidden bg-[#07080b]/90 backdrop-blur-2xl text-gray-100">
+    <div className="flex h-full w-full overflow-hidden bg-primary backdrop-blur-2xl text-gray-100">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-white/6 px-4">
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-subtle px-4">
           <ChangelogIcon className="h-5 w-5 text-violet-400" />
           <h1 className="text-base font-semibold">Novidades</h1>
         </header>
@@ -59,7 +54,7 @@ export function ChangelogView({
               return (
                 <section
                   key={rel.version}
-                  className="rounded-xl border border-white/6 bg-[#12141d]/80 p-4"
+                  className="rounded-xl border border-subtle bg-surface p-4"
                 >
                   <div className="flex flex-wrap items-baseline gap-2">
                     <h2 className="text-lg font-bold">v{rel.version}</h2>

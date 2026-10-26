@@ -19,12 +19,12 @@ function StreamJoinHost(): React.JSX.Element {
       }}
     >
       <p>
-        Para assistir à transmissão de <b className="text-white">{pending?.name}</b>, você sai da
+        Para assistir à transmissão de <b className="text-strong">{pending?.name}</b>, você sai da
         chamada em que está
         {pending?.channelName ? (
           <>
             {' '}
-            e entra em <b className="text-white">{pending.channelName}</b>
+            e entra em <b className="text-strong">{pending.channelName}</b>
           </>
         ) : null}
         .

@@ -35,7 +35,7 @@ function ModerationHost(): React.JSX.Element {
         }}
       >
         <p>
-          <b className="text-white">{kick?.name}</b> sai do servidor, mas pode voltar com um novo
+          <b className="text-strong">{kick?.name}</b> sai do servidor, mas pode voltar com um novo
           convite. Para impedir que volte, use <b>Banir</b>.
         </p>
       </ConfirmModal>
@@ -77,7 +77,7 @@ function BanModal(): React.JSX.Element | null {
   return (
     <Modal open title={`Banir ${ban.name}`} onClose={close}>
       <p className="text-sm leading-relaxed text-gray-300">
-        <b className="text-white">{ban.name}</b> sai do servidor e não consegue voltar, nem por
+        <b className="text-strong">{ban.name}</b> sai do servidor e não consegue voltar, nem por
         convite nem pelo código, até ser desbanido(a) em Configurações do servidor → Banimentos.
       </p>
       <label className="mt-4 block text-xs font-semibold text-gray-400" htmlFor="ban-reason">
@@ -169,7 +169,7 @@ function NicknameModal(): React.JSX.Element | null {
           htmlFor="nickname-input"
         >
           <span>Apelido</span>
-          <span className={check.ok ? 'text-gray-500' : 'text-[#f23f43]'}>
+          <span className={check.ok ? 'text-gray-500' : 'text-danger'}>
             {charCount(value.trim())}/{MAX_NICKNAME}
           </span>
         </label>
@@ -182,7 +182,7 @@ function NicknameModal(): React.JSX.Element | null {
           aria-invalid={!check.ok}
           className="glass-input mt-1 w-full text-ds-sm"
         />
-        {!check.ok && <p className="mt-1.5 text-ds-xs text-[#f23f43]">{check.error}</p>}
+        {!check.ok && <p className="mt-1.5 text-ds-xs text-danger">{check.error}</p>}
         <p className="mt-2 text-ds-xs text-gray-400">
           {target.self ? 'Seu nome' : 'O nome'} só muda neste servidor, para todo mundo daqui. O
           nome de exibição e o @ continuam os mesmos.

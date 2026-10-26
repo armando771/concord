@@ -63,7 +63,7 @@ function LevelBadge({
       {...wrapperProps}
       className={`level-anim inline-flex shrink-0 ${
         onClick
-          ? 'cursor-pointer rounded-md transition-transform hover:scale-105 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/70'
+          ? 'cursor-pointer rounded-md transition-transform hover:scale-105 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-fg/70'
           : ''
       } ${className}`}
       style={

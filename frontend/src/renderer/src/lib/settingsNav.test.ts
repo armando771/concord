@@ -17,11 +17,14 @@ describe('filterSections', () => {
     expect(ids('gif')).toEqual(['profiles'])
     expect(ids('rnnoise')).toEqual(['voice'])
     expect(ids('overlay')).toEqual(['app'])
+    expect(ids('tema')).toEqual(['appearance'])
+    expect(ids('modo escuro')).toEqual(['appearance'])
   })
 
   it('ignora acento e maiúscula', () => {
     expect(ids('NOTIFICACAO')).toEqual(['notifications'])
     expect(ids('aniversario')).toEqual(['profiles'])
+    expect(ids('aparencia')).toEqual(['appearance'])
   })
 
   it('sem resultado volta vazio', () => {

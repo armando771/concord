@@ -12,8 +12,8 @@ import {
 import ProfileCardFrame from '../profile/ProfileCardFrame'
 
 const optionClass = (active: boolean): string =>
-  `cursor-pointer rounded-md border px-3 py-2 text-left text-ds-sm text-white transition-colors ${
-    active ? 'border-[#5865f2] bg-white/10' : 'border-white/10 bg-black/30 hover:bg-white/10'
+  `cursor-pointer rounded-md border px-3 py-2 text-left text-ds-sm text-strong transition-colors ${
+    active ? 'border-brand bg-fg/10' : 'border-subtle bg-black/30 hover:bg-fg/10'
   }`
 
 function Options<T extends { id: string; label: string }>({
@@ -70,7 +70,7 @@ function ColorPickers({
               next[i] = ev.target.value
               onChange(next)
             }}
-            className="h-8 w-12 cursor-pointer rounded border border-white/10 bg-transparent"
+            className="h-8 w-12 cursor-pointer rounded border border-subtle bg-transparent"
           />
           {label}
         </label>
@@ -120,7 +120,7 @@ export default function ProfileThemeEditor({
                 title={preset.label}
                 onClick={() => onChange(preset.theme)}
                 className={`group cursor-pointer rounded-lg p-1 text-center transition-colors ${
-                  active ? 'bg-white/10 ring-2 ring-[#5865f2]' : 'hover:bg-white/5'
+                  active ? 'bg-fg/10 ring-2 ring-brand' : 'hover:bg-fg/5'
                 }`}
               >
                 <ProfileCardFrame

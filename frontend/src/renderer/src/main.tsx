@@ -8,6 +8,10 @@ import { useBoostStore } from './store/boostStore'
 import { useCallStore } from './store/callStore'
 import { AppErrorBoundary } from './components/AppErrorScreen'
 import { useLevelStore } from './store/levelStore'
+import { startThemeSync } from './store/themeStore'
+
+// Tema salvo antes do primeiro render: o app já abre com as cores certas.
+startThemeSync()
 
 // Soltar um arquivo fora do chat não pode fazer o Electron abrir o arquivo no
 // lugar do app (o chat trata o próprio drop).

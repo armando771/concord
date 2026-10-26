@@ -116,8 +116,8 @@ function ReactionChips({
               locked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
             } ${
               meReacted
-                ? 'border-[#5865f2] bg-[#5865f2]/25 text-white'
-                : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'
+                ? 'border-brand bg-brand/25 text-strong'
+                : 'border-subtle bg-fg/5 text-gray-300 hover:bg-fg/10'
             }`}
           >
             <span>{reaction.emoji}</span>
@@ -130,7 +130,7 @@ function ReactionChips({
           type="button"
           onClick={onOpenPicker}
           title="Adicionar reação"
-          className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+          className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-subtle bg-fg/5 text-xs text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
         >
           +
         </button>

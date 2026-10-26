@@ -185,7 +185,7 @@ export function PersonListSkeleton({
       {Array.from({ length: count }, (_, i) => (
         <div
           key={i}
-          className="mx-[-10px] flex items-center gap-3 border-t border-white/6 px-2.5 py-2.5"
+          className="mx-[-10px] flex items-center gap-3 border-t border-subtle px-2.5 py-2.5"
         >
           <Skeleton circle className="h-8 w-8" />
           <div className="min-w-0 flex-1">
@@ -262,7 +262,7 @@ export function BadgeRowSkeleton(): React.JSX.Element {
       role="status"
       aria-busy="true"
       aria-label="Carregando badges…"
-      className="flex shrink-0 items-center gap-0.5 rounded-md border border-white/10 bg-black/25 px-1 py-0.5"
+      className="flex shrink-0 items-center gap-0.5 rounded-md border border-subtle bg-input px-1 py-0.5"
     >
       {[0, 1, 2].map((i) => (
         <span key={i} className="flex h-[22px] w-[22px] items-center justify-center">
@@ -334,7 +334,7 @@ export function InviteListSkeleton({ count = 3 }: { count?: number }): React.JSX
       {Array.from({ length: count }, (_, i) => (
         <div
           key={i}
-          className="flex items-center justify-between rounded-xl border border-white/6 bg-white/3 p-3"
+          className="flex items-center justify-between rounded-xl border border-subtle bg-fg/3 p-3"
         >
           <div className="flex items-center gap-3">
             <Skeleton circle className="h-11 w-11" />
@@ -358,7 +358,7 @@ export function BanListSkeleton({ count = 3 }: { count?: number }): React.JSX.El
   return (
     <SkeletonRegion
       label="Carregando banimentos…"
-      className="divide-y divide-white/6 rounded-lg border border-white/8"
+      className="divide-y divide-subtle rounded-lg border border-subtle"
     >
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="flex items-center justify-between gap-4 px-4 py-3">
@@ -379,7 +379,7 @@ export function BanListSkeleton({ count = 3 }: { count?: number }): React.JSX.El
 /** Card do quadro de propostas: p-3, título, descrição e rodapé com avatar. */
 function ProposalCardSkeleton({ lines }: { lines: number }): React.JSX.Element {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-white/6 bg-white/3 p-3">
+    <div className="flex flex-col gap-3 rounded-xl border border-subtle bg-fg/3 p-3">
       <div>
         <Skeleton className="h-3.5 w-4/5" />
         {Array.from({ length: lines }, (_, i) => (
@@ -408,10 +408,10 @@ export function ProposalBoardSkeleton({
       {columns.map((col, c) => (
         <section
           key={col.status}
-          className="flex min-h-0 min-w-64 flex-1 basis-64 flex-col rounded-2xl border border-white/6 bg-[#12141d]/60"
+          className="flex min-h-0 min-w-64 flex-1 basis-64 flex-col rounded-2xl border border-subtle bg-surface"
         >
           <div className="shrink-0 px-3 pb-2 pt-3">
-            <h2 className="text-sm font-semibold text-white">{col.title}</h2>
+            <h2 className="text-sm font-semibold text-strong">{col.title}</h2>
             <p className="text-[11px] text-gray-500">{col.hint}</p>
           </div>
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-3 pb-3">
@@ -448,7 +448,7 @@ export function PinnedListSkeleton({ count = 3 }: { count?: number }): React.JSX
   return (
     <SkeletonRegion label="Carregando mensagens fixadas…" className="space-y-3">
       {Array.from({ length: count }, (_, i) => (
-        <div key={i} className="rounded-xl border border-white/6 bg-white/3 p-3">
+        <div key={i} className="rounded-xl border border-subtle bg-fg/3 p-3">
           <div className="flex items-center gap-2">
             <Skeleton circle className="h-6 w-6" />
             <Skeleton className="h-3 w-24" />
@@ -477,7 +477,7 @@ export function ChangelogSkeleton({ count = 2 }: { count?: number }): React.JSX.
   return (
     <SkeletonRegion label="Carregando novidades…" className="flex flex-col gap-4">
       {Array.from({ length: count }, (_, i) => (
-        <div key={i} className="rounded-xl border border-white/6 bg-[#12141d]/80 p-4">
+        <div key={i} className="rounded-xl border border-subtle bg-surface p-4">
           <div className="flex items-baseline gap-2">
             <Skeleton className="h-5 w-16" />
             <Skeleton className="h-3 w-24" />
@@ -505,11 +505,11 @@ export function SettingsSectionsSkeleton({
   return (
     <SkeletonRegion label="Carregando configurações…" className="flex flex-col gap-8">
       {sections.map((rows, s) => (
-        <div key={s} className={s < sections.length - 1 ? 'border-b border-white/10 pb-6' : ''}>
+        <div key={s} className={s < sections.length - 1 ? 'border-b border-subtle pb-6' : ''}>
           <Skeleton className="mb-3 h-3 w-56" />
           <div className="flex flex-col gap-2">
             {Array.from({ length: rows }, (_, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-md bg-black/20 px-3 py-2.5">
+              <div key={i} className="flex items-center gap-3 rounded-md bg-input px-3 py-2.5">
                 <Skeleton circle className="h-4 w-4" />
                 <div className="min-w-0 flex-1">
                   <Line height="h-5" barClass="h-3.5" width={45 + ((s + i) % 3) * 12} />
@@ -529,7 +529,7 @@ export function SettingsCardSkeleton(): React.JSX.Element {
   return (
     <SkeletonRegion
       label="Carregando…"
-      className="rounded-xl border border-white/10 bg-white/5 p-4"
+      className="rounded-xl border border-subtle bg-fg/5 p-4"
     >
       <Skeleton className="mb-3 h-3 w-24" />
       <div className="flex flex-col gap-3">
@@ -558,7 +558,7 @@ export function ChannelHeaderSkeleton(): React.JSX.Element {
   return (
     <div
       aria-hidden="true"
-      className="flex h-14 shrink-0 items-center gap-3 border-b border-white/6 px-4"
+      className="flex h-14 shrink-0 items-center gap-3 border-b border-subtle px-4"
     >
       <Skeleton circle className="h-5 w-5" />
       <Skeleton className="h-4 w-36" />
@@ -573,13 +573,13 @@ export function ChannelHeaderSkeleton(): React.JSX.Element {
 export function AppBootSkeleton({ notice }: { notice?: string }): React.JSX.Element {
   return (
     <SkeletonRegion label="Carregando o app…" className="relative flex h-full">
-      <aside className="flex h-full w-18 shrink-0 flex-col items-center gap-2 border-r border-white/6 bg-[#06070a]/85 py-3">
+      <aside className="flex h-full w-18 shrink-0 flex-col items-center gap-2 border-r border-subtle bg-tertiary py-3">
         <Skeleton className="h-12 w-12 rounded-3xl" />
-        <div className="my-1 h-0.5 w-8 rounded-full bg-white/10" />
+        <div className="my-1 h-0.5 w-8 rounded-full bg-fg/10" />
         <ServerRailSkeleton count={5} />
       </aside>
-      <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-white/6 bg-[#0b0c10]/80 sm:flex">
-        <div className="flex h-12 shrink-0 items-center border-b border-white/6 px-2.5">
+      <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-subtle bg-secondary sm:flex">
+        <div className="flex h-12 shrink-0 items-center border-b border-subtle px-2.5">
           <Skeleton className="h-7 w-full rounded-md" />
         </div>
         <div className="px-2 py-3">
@@ -620,7 +620,7 @@ export function ScreenSourceGridSkeleton({ count = 4 }: { count?: number }): Rea
   return (
     <SkeletonRegion label="Carregando telas e janelas…" className="contents">
       {Array.from({ length: count }, (_, i) => (
-        <div key={i} className="rounded-lg bg-white/[0.03] p-2">
+        <div key={i} className="rounded-lg bg-fg/[0.03] p-2">
           <Skeleton className="mb-2 aspect-video w-full rounded-md" />
           <Line height="h-4" barClass="h-2.5" width={55 + (i % 3) * 12} />
         </div>

@@ -67,7 +67,7 @@ function BirthdayModal(): React.JSX.Element | null {
         role="dialog"
         aria-label="Feliz aniversário"
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-amber-400/30 bg-[#111214] p-6 text-center shadow-2xl"
+        className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-amber-400/30 bg-floating p-6 text-center shadow-2xl"
       >
         {/* Confete caindo */}
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -88,7 +88,7 @@ function BirthdayModal(): React.JSX.Element | null {
           <div className="mx-auto mb-3 animate-bounce text-6xl" aria-hidden="true">
             🎂
           </div>
-          <h2 className="text-xl font-bold text-white">🎂 Feliz aniversário, {today.name}!</h2>
+          <h2 className="text-xl font-bold text-strong">🎂 Feliz aniversário, {today.name}!</h2>
           {today.age !== undefined && today.age > 0 && (
             <p className="mt-1 text-base font-semibold text-amber-200">
               Hoje você completa {today.age} {today.age === 1 ? 'ano' : 'anos'}! 🎈

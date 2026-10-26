@@ -31,7 +31,7 @@ export function Toggle({
   return (
     <div className="flex items-center justify-between gap-4">
       <span className="min-w-0">
-        <span className="block text-ds-md font-medium text-white">{title}</span>
+        <span className="block text-ds-md font-medium text-strong">{title}</span>
         <span className="block text-ds-sm text-gray-400">{description}</span>
       </span>
       <Switch checked={checked} onChange={onChange} label={title} />
@@ -95,13 +95,13 @@ function BrowserPermission(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg bg-black/20 px-3 py-2">
+    <div className="flex items-center justify-between gap-3 rounded-lg bg-input px-3 py-2">
       <span className="text-xs text-gray-400">{view.status}</span>
       {view.canRequest && (
         <button
           type="button"
           onClick={() => void requestBrowserPermission().then(setPermission)}
-          className="shrink-0 cursor-pointer rounded-md bg-[#23a55a] px-3 py-1.5 text-ds-sm font-medium text-white transition-colors hover:bg-[#1f9450]"
+          className="shrink-0 cursor-pointer rounded-md bg-success-strong px-3 py-1.5 text-ds-sm font-medium text-white transition-colors hover:bg-success-strong-hover"
         >
           Permitir notificações
         </button>
@@ -140,7 +140,7 @@ export function BirthdaySettings(): React.JSX.Element {
   const error = birthdayError(birthday)
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+    <div className="rounded-xl border border-subtle bg-fg/5 p-4">
       <h3 className="mb-3 text-ds-sm font-medium text-gray-400">Aniversário</h3>
       <div className="flex flex-col gap-3">
         <BirthdayFields
@@ -168,7 +168,7 @@ export function NotificationSettings(): React.JSX.Element {
   const prefs = useNotificationPrefsStore()
   return (
     <>
-      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <div className="rounded-xl border border-subtle bg-fg/5 p-4">
         <div className="flex flex-col gap-4">
           {IS_WEB && <BrowserPermission />}
           {NOTIFICATION_OPTIONS.map((option) => (
@@ -220,7 +220,7 @@ export function DesktopSettings(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-4">
       {hasAutostart && (
-        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+        <div className="rounded-xl border border-subtle bg-fg/5 p-4">
           <Toggle
             title="Iniciar com o Windows"
             description="Abre escondido na bandeja, pronto para receber chamadas."
@@ -231,7 +231,7 @@ export function DesktopSettings(): React.JSX.Element {
       )}
       {/* Overlay de jogo: só Windows (preload: process.platform, sandbox desligado). */}
       {hasOverlay && (
-        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+        <div className="rounded-xl border border-subtle bg-fg/5 p-4">
           <h3 className="mb-3 text-ds-sm font-medium text-gray-400">Overlay</h3>
           <Toggle
             title="Overlay nos jogos"
@@ -242,7 +242,7 @@ export function DesktopSettings(): React.JSX.Element {
           <OverlayShortcutField disabled={!overlayEnabled} />
           <div className="mt-4 flex items-center justify-between gap-3">
             <span>
-              <span className="block text-ds-md font-medium text-white">Posição e tamanho</span>
+              <span className="block text-ds-md font-medium text-strong">Posição e tamanho</span>
               <span className="block text-ds-sm text-gray-400">
                 Volta para a esquerda, no meio da tela, no tamanho normal.
               </span>
@@ -251,13 +251,13 @@ export function DesktopSettings(): React.JSX.Element {
               type="button"
               onClick={resetOverlayLayout}
               disabled={!overlayMoved}
-              className="shrink-0 cursor-pointer rounded-lg bg-white/10 px-3 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-white/15 disabled:cursor-default disabled:opacity-50"
+              className="shrink-0 cursor-pointer rounded-lg bg-fg/10 px-3 py-2 text-ds-sm font-medium text-strong transition-colors hover:bg-fg/15 disabled:cursor-default disabled:opacity-50"
             >
               Restaurar posição
             </button>
           </div>
           <label className="mt-4 flex flex-col gap-2">
-            <span className="flex items-center justify-between text-ds-md font-medium text-white">
+            <span className="flex items-center justify-between text-ds-md font-medium text-strong">
               Opacidade do overlay (quem fala fica mais visível)
               <span className="text-xs font-medium text-gray-400">{overlayOpacity}%</span>
             </span>
@@ -270,7 +270,7 @@ export function DesktopSettings(): React.JSX.Element {
               disabled={!overlayEnabled}
               onChange={(e) => setOverlayOpacity(Number(e.target.value))}
               aria-label="Opacidade do overlay"
-              className="accent-[#5865f2] disabled:opacity-40"
+              className="accent-brand disabled:opacity-40"
             />
             <span className="text-xs text-gray-400">
               Bem fraquinho em repouso para não atrapalhar o jogo; quem está falando aparece mais

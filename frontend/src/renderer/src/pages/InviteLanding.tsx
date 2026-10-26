@@ -112,14 +112,14 @@ function InviteCard({ code }: { code: string }): React.JSX.Element {
 
   if (launching) {
     return (
-      <div className="fixed inset-0 z-10 flex items-center justify-center overflow-y-auto bg-[#050508] p-4">
+      <div className="fixed inset-0 z-10 flex items-center justify-center overflow-y-auto bg-tertiary p-4">
         <InviteBackdrop iconUrl={preview?.icon_url} className="fixed inset-0" />
         <div
           role="status"
-          className="relative flex w-full max-w-[360px] flex-col items-center rounded-2xl border border-white/10 bg-[#1e1f24]/95 p-8 text-center shadow-2xl shadow-black/60 backdrop-blur"
+          className="relative flex w-full max-w-[360px] flex-col items-center rounded-2xl border border-subtle bg-modal p-8 text-center shadow-2xl shadow-black/60 backdrop-blur"
         >
           <InviteSpinner />
-          <h1 className="mt-4 text-ds-lg font-bold text-white">Abrindo a Salinha…</h1>
+          <h1 className="mt-4 text-ds-lg font-bold text-strong">Abrindo a Salinha…</h1>
           <p className="mt-2 text-ds-sm text-gray-300">
             Confirme no seu navegador, se ele perguntar.
           </p>
@@ -132,9 +132,9 @@ function InviteCard({ code }: { code: string }): React.JSX.Element {
   }
 
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center overflow-y-auto bg-[#050508] p-4">
+    <div className="fixed inset-0 z-10 flex items-center justify-center overflow-y-auto bg-tertiary p-4">
       <InviteBackdrop iconUrl={preview?.icon_url} className="fixed inset-0" />
-      <div className="relative w-full max-w-[480px] rounded-2xl border border-white/10 bg-[#1e1f24]/95 p-8 shadow-2xl shadow-black/60 backdrop-blur">
+      <div className="relative w-full max-w-[480px] rounded-2xl border border-subtle bg-modal p-8 shadow-2xl shadow-black/60 backdrop-blur">
         {state.status === 'loading' && (
           <>
             <InvitePreviewSkeleton />
@@ -148,11 +148,11 @@ function InviteCard({ code }: { code: string }): React.JSX.Element {
         {state.status === 'error' && (
           <div className="flex flex-col items-center text-center">
             <InviteServerIcon name="?" />
-            <h1 className="mt-4 text-ds-lg font-bold text-white">Convite indisponível</h1>
+            <h1 className="mt-4 text-ds-lg font-bold text-strong">Convite indisponível</h1>
             <p className="mt-2 text-ds-sm text-gray-300">{state.message}</p>
             <Link
               to="/"
-              className="mt-8 w-full rounded-lg bg-white/10 px-4 py-2.5 text-ds-sm font-semibold text-white transition-colors hover:bg-white/15"
+              className="mt-8 w-full rounded-lg bg-fg/10 px-4 py-2.5 text-ds-sm font-semibold text-strong transition-colors hover:bg-fg/15"
             >
               Ir para a Salinha
             </Link>

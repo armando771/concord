@@ -817,9 +817,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         // O canal "bot" e o que o Maestro escreve nunca avisam nem contam como não lido.
         const quiet =
           msg.author_id === MAESTRO_USER_ID ||
-          useServerStore.getState().channels.some(
-            (c) => c.id === msg.channel_id && c.is_system && c.name === 'bot'
-          )
+          useServerStore
+            .getState()
+            .channels.some((c) => c.id === msg.channel_id && c.is_system && c.name === 'bot')
         const decision = quiet
           ? { notify: false, unread: false, mention: false }
           : meUser && serverId && msg.channel_id

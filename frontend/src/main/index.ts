@@ -24,7 +24,12 @@ import { handleInviteArgs, handleInviteUrl, setupInviteProtocol } from './invite
 import { closeActivity, setupActivities } from './activityWindow'
 import { APP_USER_MODEL_ID } from './toastPolicy'
 import { setupToasts } from './toasts'
-import { TITLE_BAR_COLOR, titleBarOptions } from './windowPolicy'
+import {
+  parseTitleBarColors,
+  TITLE_BAR_COLOR,
+  TITLE_BAR_HEIGHT,
+  titleBarOptions
+} from './windowPolicy'
 import { isSafeExternalUrl } from '../shared/externalUrl'
 import { contextMenuItems } from './contextMenu'
 import {
@@ -73,6 +78,23 @@ function watchSharedWindow(sourceId: string): void {
       /* próxima volta tenta de novo */
     }
   }, WINDOW_WATCH_MS)
+}
+
+/** Tema trocou no renderer: a barra de título nativa acompanha (Windows/Linux). */
+function registerThemeHandlers(): void {
+  ipcMain.on('window:title-bar-colors', (event, raw: unknown) => {
+    const win = mainWindow
+    if (!win || event.sender !== win.webContents) return
+    const colors = parseTitleBarColors(raw)
+    if (!colors) return
+    win.setBackgroundColor(colors.color)
+    if (process.platform === 'darwin') return
+    try {
+      win.setTitleBarOverlay({ ...colors, height: TITLE_BAR_HEIGHT })
+    } catch {
+      // Sem overlay nativo nesta plataforma/versão: só a faixa do renderer muda.
+    }
+  })
 }
 
 function registerScreenShareHandlers(): void {
@@ -256,6 +278,7 @@ app.whenReady().then(() => {
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
 
   registerScreenShareHandlers()
+  registerThemeHandlers()
   registerScreenAudio()
   setupBackground(() => mainWindow, icon)
   setupOverlay(() => mainWindow)

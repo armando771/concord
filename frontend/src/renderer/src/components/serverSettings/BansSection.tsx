@@ -59,7 +59,7 @@ function BansSection(): React.JSX.Element {
             setBans(null)
             setAttempt((n) => n + 1)
           }}
-          className="cursor-pointer font-semibold text-[#5865f2] hover:underline"
+          className="cursor-pointer font-semibold text-brand hover:underline"
         >
           Tentar de novo
         </button>
@@ -72,7 +72,7 @@ function BansSection(): React.JSX.Element {
   }
 
   return (
-    <ul className="divide-y divide-white/6 rounded-lg border border-white/8">
+    <ul className="divide-y divide-subtle rounded-lg border border-subtle">
       {bans.map((ban) => {
         const name = ban.display_name || ban.username
         return (
@@ -80,7 +80,7 @@ function BansSection(): React.JSX.Element {
             <span className="flex min-w-0 items-center gap-3">
               <Avatar userId={ban.user_id} name={name} avatarUrl={ban.avatar_url} size={32} />
               <span className="min-w-0">
-                <span className="block truncate text-sm font-semibold text-white">{name}</span>
+                <span className="block truncate text-sm font-semibold text-strong">{name}</span>
                 <span className="block truncate text-xs text-gray-400">
                   {ban.reason ? `Motivo: ${ban.reason}` : 'Sem motivo informado'}
                 </span>

@@ -24,7 +24,7 @@ import { BadgeDetailSkeleton, BadgeGridSkeleton } from '../skeleton/layouts'
 function RarityChip({ badge }: { badge: Badge }): React.JSX.Element {
   if (badge.tier === 0) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-gray-300">
+      <span className="inline-flex items-center gap-1 rounded-full bg-fg/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-gray-300">
         <LockIcon className="h-3 w-3" />
         Bloqueado
       </span>
@@ -72,9 +72,7 @@ function Tile({
       aria-pressed={selected}
       title={locked ? badge.name : `${badge.tier_name} · ${badge.name}`}
       className={`flex aspect-square cursor-pointer items-center justify-center rounded-xl border transition-colors ${
-        selected
-          ? 'border-[#5865f2] bg-[#5865f2]/15'
-          : 'border-transparent bg-white/5 hover:bg-white/10'
+        selected ? 'border-brand bg-brand/15' : 'border-transparent bg-fg/5 hover:bg-fg/10'
       }`}
     >
       <BadgeIcon
@@ -138,7 +136,7 @@ function Detail({
           <span
             aria-hidden="true"
             className="absolute inset-4 rounded-full blur-2xl"
-            style={{ background: earned ? `${meta.color}33` : 'rgba(255,255,255,0.05)' }}
+            style={{ background: earned ? `${meta.color}33` : 'var(--bg-hover)' }}
           />
         )}
         <BadgeIcon
@@ -155,7 +153,7 @@ function Detail({
       {title !== badge.name && <p className="mt-2 text-sm text-gray-300">{badge.name}</p>}
       <h3
         className={`${title !== badge.name ? 'mt-0.5' : 'mt-2'} text-center text-3xl font-black uppercase tracking-wide ${
-          mythic ? 'mythic-text' : 'text-white'
+          mythic ? 'mythic-text' : 'text-strong'
         }`}
       >
         {title}
@@ -175,10 +173,10 @@ function Detail({
         </span>
       </p>
 
-      <div className="mt-5 w-full rounded-xl bg-black/25 p-4">
+      <div className="mt-5 w-full rounded-xl bg-input p-4">
         {isMe && (
           <>
-            <p className="text-sm font-semibold text-white">Seu progresso</p>
+            <p className="text-sm font-semibold text-strong">Seu progresso</p>
             <div className="mt-3 flex items-center gap-3">
               {earned && (
                 <BadgeIcon
@@ -191,7 +189,7 @@ function Detail({
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-gray-100">{remainingText(badge)}</p>
                 <div
-                  className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/10"
+                  className="mt-1.5 h-2 overflow-hidden rounded-full bg-fg/10"
                   role="progressbar"
                   aria-valuemin={0}
                   aria-valuemax={100}
@@ -200,7 +198,7 @@ function Detail({
                 >
                   <div
                     className={`h-full rounded-full transition-[width] duration-500 ${
-                      mythic ? 'mythic-bar' : 'bg-[#5865f2]'
+                      mythic ? 'mythic-bar' : 'bg-brand'
                     }`}
                     style={{ width: `${progressPercent(badge)}%` }}
                   />
@@ -216,14 +214,14 @@ function Detail({
                 />
               )}
             </div>
-            <div className="my-4 h-px bg-white/10" />
+            <div className="my-4 h-px bg-fg/10" />
           </>
         )}
 
         <p className="text-sm leading-snug text-gray-200">{badge.description}</p>
 
-        <div className="my-4 h-px bg-white/10" />
-        <p className="text-sm font-semibold text-white">
+        <div className="my-4 h-px bg-fg/10" />
+        <p className="text-sm font-semibold text-strong">
           {isMe ? 'Tiers' : `Progresso de ${ownerName}`}
         </p>
         <ol className="mt-3 grid grid-cols-4 gap-x-2 gap-y-4">
@@ -338,9 +336,9 @@ function BadgesModal(): React.JSX.Element | null {
         aria-modal="true"
         aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
-        className="flex h-[min(600px,100%)] w-full max-w-[760px] overflow-hidden rounded-2xl border border-white/10 text-gray-200 shadow-2xl"
+        className="flex h-[min(600px,100%)] w-full max-w-[760px] overflow-hidden rounded-2xl border border-subtle text-gray-200 shadow-2xl"
       >
-        <aside className="flex w-[290px] shrink-0 flex-col bg-[#1a1b1e]">
+        <aside className="flex w-[290px] shrink-0 flex-col bg-secondary">
           <div className="min-h-0 flex-1 overflow-y-auto p-6">
             <div className="flex items-center gap-2.5">
               {!isMe && (
@@ -351,7 +349,7 @@ function BadgesModal(): React.JSX.Element | null {
                   size={28}
                 />
               )}
-              <h2 id={titleId} className="min-w-0 truncate text-xl font-bold text-white">
+              <h2 id={titleId} className="min-w-0 truncate text-xl font-bold text-strong">
                 {isMe ? 'Seus badges' : `Badges de ${target.name}`}
               </h2>
             </div>
@@ -376,7 +374,7 @@ function BadgesModal(): React.JSX.Element | null {
                 )}
                 {isMe && available.length > 0 && (
                   <div className="mt-6">
-                    <p className="mb-2.5 text-sm font-semibold text-white">
+                    <p className="mb-2.5 text-sm font-semibold text-strong">
                       Disponíveis para desbloquear
                     </p>
                     <Grid
@@ -391,11 +389,11 @@ function BadgesModal(): React.JSX.Element | null {
             )}
           </div>
           {!isMe && me && (
-            <div className="border-t border-white/10 p-4">
+            <div className="border-t border-subtle p-4">
               <button
                 type="button"
                 onClick={viewMine}
-                className="w-full cursor-pointer rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/15"
+                className="w-full cursor-pointer rounded-lg bg-fg/10 px-3 py-2 text-sm font-semibold text-strong transition-colors hover:bg-fg/15"
               >
                 Ver seus badges
               </button>
@@ -403,13 +401,13 @@ function BadgesModal(): React.JSX.Element | null {
           )}
         </aside>
 
-        <section className="relative min-w-0 flex-1 overflow-y-auto bg-[#232428] p-6">
+        <section className="relative min-w-0 flex-1 overflow-y-auto bg-primary p-6">
           <button
             ref={closeRef}
             type="button"
             onClick={close}
             aria-label="Fechar"
-            className="absolute right-4 top-4 flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+            className="absolute right-4 top-4 flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-strong/60 transition-colors hover:bg-fg/10 hover:text-strong"
           >
             ✕
           </button>
