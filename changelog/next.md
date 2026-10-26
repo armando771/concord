@@ -11,6 +11,7 @@
 - Vídeo: nova seção em Configurações → Vídeo, com escolha da câmera, prévia ao vivo e fundo do vídeo como no Discord: desfocar o fundo (Borrar), usar uma das imagens do app, a sua própria ou até um GIF animado, sem precisar de pano verde. A separação roda no seu computador. Na chamada, o microfone, o fone e a câmera ganharam uma setinha para trocar de dispositivo, e a câmera também abre o "Mudar fundo de vídeo". Com "Sempre ver prévia do vídeo" você confere como aparece antes de ligar a câmera. O chroma key da versão anterior saiu.
 
 ## Correções
+- Perfil: nomes com fonte decorativa não perdem mais a ponta da última letra nas listas de membros, amigos e DMs.
 - Mensagens diretas: ao trocar de conversa, a tela não mostra mais a conversa anterior, que deixava mandar mensagem para a pessoa errada.
 - Chat: o texto que você está digitando agora fica guardado em cada canal e conversa, e não passa mais de um para o outro.
 - Sair da conta agora encerra a chamada em andamento.
