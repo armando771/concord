@@ -6,6 +6,8 @@ import { useActivity } from '../../store/presenceActivityStore'
 import { useServerStore } from '../../store/serverStore'
 import { useNoiseSuppressionStore } from '../../store/noiseSuppressionStore'
 import { useActivityStore } from '../../store/activityStore'
+import { useVoiceModStore } from '../../store/voiceModStore'
+import { isVoiceModActive } from '../../lib/voiceModPresets'
 import {
   ActivityIcon,
   CameraIcon,
@@ -142,6 +144,7 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   const [activityAnchor, setActivityAnchor] = useState<HTMLElement | null>(null)
   const closeActivities = useCallback(() => setActivityAnchor(null), [])
   const activityRunning = useActivityStore((s) => s.shared !== null || s.local !== null)
+  const voiceModActive = useVoiceModStore(isVoiceModActive)
 
   useSoundboardHotkeys()
 
@@ -374,7 +377,15 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
             setSoundboardAnchor((open) => (open ? null : button))
           }}
         >
-          <SoundboardIcon className="h-5 w-5" />
+          <span className="relative">
+            <SoundboardIcon className="h-5 w-5" />
+            {voiceModActive && (
+              <span
+                aria-hidden="true"
+                className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-success-strong"
+              />
+            )}
+          </span>
         </RowButton>
       </div>
 

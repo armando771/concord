@@ -787,6 +787,29 @@ export function SoundboardIcon({ className = '' }: IconProps): React.JSX.Element
   )
 }
 
+/** Ícone da seção "Sons" da Mesa de Áudio (grade de pads). */
+export function SoundPadsIcon({ className = '' }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <path d="M15 17.5h5M17.5 15v5" />
+    </svg>
+  )
+}
+
 /** Estrela de favorito (mesa de áudio): vazada ou cheia. */
 export function FavoriteStarIcon({
   className = '',

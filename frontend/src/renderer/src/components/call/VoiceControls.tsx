@@ -1,6 +1,8 @@
 import { useCallback, useState } from 'react'
 import { useCallStore } from '../../store/callStore'
 import { useActivityStore } from '../../store/activityStore'
+import { useVoiceModStore } from '../../store/voiceModStore'
+import { isVoiceModActive } from '../../lib/voiceModPresets'
 import {
   ActivityIcon,
   CameraIcon,
@@ -44,6 +46,7 @@ function VoiceControls(): React.JSX.Element {
   const activityOpen = activityAnchor !== null
   const closeActivities = useCallback(() => setActivityAnchor(null), [])
   const activityRunning = useActivityStore((s) => s.shared !== null || s.local !== null)
+  const voiceModActive = useVoiceModStore(isVoiceModActive)
 
   const handleToggleScreen = (): void => {
     if (sharing) {
@@ -164,7 +167,15 @@ function VoiceControls(): React.JSX.Element {
                 : 'cursor-pointer bg-fg/5 text-gray-200 hover:bg-fg/10'
           }`}
         >
-          <SoundboardIcon className="h-5 w-5" />
+          <span className="relative">
+            <SoundboardIcon className="h-5 w-5" />
+            {voiceModActive && (
+              <span
+                aria-hidden="true"
+                className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-success-strong"
+              />
+            )}
+          </span>
         </button>
       )}
       <button
