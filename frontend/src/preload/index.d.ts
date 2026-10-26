@@ -63,6 +63,9 @@ export interface BackgroundApi {
   /** null = não suportado nesta plataforma */
   getAutostart(): Promise<boolean | null>
   setAutostart(enabled: boolean): Promise<boolean | null>
+  /** Só Linux com bandeja criada (null nas outras plataformas). */
+  getCloseToTray(): Promise<{ enabled: boolean; available: boolean } | null>
+  setCloseToTray(enabled: boolean): Promise<boolean | null>
   onToggleMute(cb: () => void): () => void
   onQuitRequested(cb: () => void): () => void
   onNavigate(cb: (route: string) => void): () => void

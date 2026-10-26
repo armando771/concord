@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({
   state: {
     handlers: {} as Record<string, (...a: unknown[]) => unknown>,
+    trayHost: true,
+    trays: 0,
     loginItem: null as { openAtLogin: boolean; args: string[] } | null
   }
 }))
@@ -36,12 +38,17 @@ vi.mock('electron', () => {
       static isSupported = (): boolean => true
     },
     Tray: class {
+      constructor() {
+        h.state.trays++
+      }
+      isDestroyed = (): boolean => false
       on = vi.fn()
       setToolTip = vi.fn()
       setContextMenu = vi.fn()
     }
   }
 })
+vi.mock('./trayHost', () => ({ probeTrayHost: async () => h.state.trayHost }))
 vi.mock('fs', () => ({
   existsSync: () => true,
   mkdirSync: vi.fn(),
@@ -65,6 +72,8 @@ beforeEach(() => {
   Object.defineProperty(process, 'platform', { value: 'win32' })
   h.state.handlers = {}
   h.state.loginItem = null
+  h.state.trayHost = true
+  h.state.trays = 0
 })
 
 afterEach(() => {
@@ -83,5 +92,48 @@ describe('Iniciar com o Windows', () => {
   it('primeira execução já vem ligada e a tela de configurações vê isso', async () => {
     await setup()
     expect(await invoke('settings:autostart')).toBe(true)
+  })
+})
+
+describe('Bandeja no Linux', () => {
+  beforeEach(() => {
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+  })
+
+  it('cria a bandeja no Linux e a opção "minimizar ao fechar" vem ligada', async () => {
+    await setup()
+    expect(h.state.trays).toBe(1)
+    expect(await invoke('settings:close-to-tray')).toEqual({ enabled: true, available: true })
+  })
+
+  it('avisa quando o painel não mostra bandeja (sem host StatusNotifier)', async () => {
+    h.state.trayHost = false
+    await setup()
+    expect(await invoke('settings:close-to-tray')).toEqual({ enabled: true, available: false })
+  })
+
+  it('desligar e reabrir as configurações continua desligado', async () => {
+    await setup()
+    expect(await invoke('settings:set-close-to-tray', false)).toBe(false)
+    expect(await invoke('settings:close-to-tray')).toEqual({ enabled: false, available: true })
+  })
+
+  it('iniciar com o Windows não existe no Linux', async () => {
+    await setup()
+    expect(await invoke('settings:autostart')).toBeNull()
+  })
+
+  it('no Windows não há opção de bandeja (sempre esconde)', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    await setup()
+    expect(h.state.trays).toBe(1)
+    expect(await invoke('settings:close-to-tray')).toBeNull()
+  })
+
+  it('no macOS não cria bandeja', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    await setup()
+    expect(h.state.trays).toBe(0)
+    expect(await invoke('settings:close-to-tray')).toBeNull()
   })
 })
