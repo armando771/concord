@@ -3,12 +3,26 @@ import type { WsEvent } from '../api/ws'
 import { fetchLevels, fetchMyLevel, type LevelProgress } from '../api/levels'
 import { useAuthStore } from './authStore'
 import { levelUpEffects, milestoneFor, nextMilestone } from '../lib/levels'
+import {
+  canReplay,
+  isAttentive,
+  queueLevelUp,
+  readAttention,
+  resolvePending,
+  type PendingLevelUp
+} from '../lib/levelAttention'
 
 export interface Celebration {
   level: number
   previous: number
   /** Muda a cada subida, para reiniciar a animação. */
   key: number
+}
+
+/** Celebração de OUTRA pessoa tocando só na sua tela (clique no selo do cartão). */
+export interface Showcase extends Celebration {
+  userId: string
+  name?: string
 }
 
 interface LevelState {
@@ -18,6 +32,8 @@ interface LevelState {
   me: LevelProgress | null
   /** Quem está com a animação de subir de nível tocando agora. */
   celebrations: Record<string, Celebration>
+  /** Celebração em tela cheia do nível de outra pessoa (só local). */
+  showcase: Showcase | null
   ensureLevels: (userIds: string[]) => void
   loadMe: () => Promise<void>
   handleWsEvent: (event: WsEvent) => void
@@ -28,6 +44,15 @@ interface LevelState {
   previewLevelUp: (level: number) => void
   /** Só em dev: prévia do próximo marco (10, 20…) depois do seu nível. */
   previewNextMilestone: () => void
+  /**
+   * Clique no selo de nível do cartão de perfil: toca a animação do nível de
+   * `userId`. No seu cartão é a sua celebração completa; no de outra pessoa,
+   * a celebração em tela cheia do nível dela, só na sua tela. Tem um
+   * intervalo mínimo entre cliques.
+   */
+  replayLevelUp: (userId: string, name?: string) => void
+  /** A janela voltou a ser vista: toca (ou descarta) a subida que ficou na fila. */
+  flushPending: () => void
   reset: () => void
 }
 
@@ -36,6 +61,10 @@ const requested = new Set<string>()
 let queued = new Set<string>()
 let flushTimer: ReturnType<typeof setTimeout> | null = null
 let celebrationSeq = 0
+/** Sua subida que chegou com a janela fora de vista e espera a volta. */
+let pendingMine: PendingLevelUp | null = null
+let lastReplayAt: number | null = null
+let showcaseTimer: ReturnType<typeof setTimeout> | null = null
 
 /** Cena de marco tocando agora, por usuário (chave da celebração e quando acaba). */
 const scenes = new Map<string, { key: number; endsAt: number }>()
@@ -51,9 +80,18 @@ export const useLevelStore = create<LevelState>()((set, get) => {
    * Se a cena de um marco ainda está tocando, não corta: uma subida comum só
    * atualiza o selo (a cena e o jingle seguem) e outro marco entra na fila e
    * toca logo depois. Vários na fila viram um só, do nível mais alto.
+   * A SUA celebração (tela cheia, marco e jingle) não toca com a janela fora
+   * de vista: fica na fila e toca quando você volta (flushPending). O que os
+   * outros veem no seu avatar e no seu tile não depende disso. `force` pula
+   * essa espera (prévia de dev, clique no selo).
    */
-  const celebrate = (userId: string, level: number, previous: number): void => {
+  const celebrate = (userId: string, level: number, previous: number, force = false): void => {
     const now = Date.now()
+    if (!force && userId === useAuthStore.getState().user?.id && !isAttentive(readAttention())) {
+      pendingMine = queueLevelUp(pendingMine, { level, previous }, now)
+      set((state) => ({ levels: { ...state.levels, [userId]: level } }))
+      return
+    }
     const scene = scenes.get(userId)
     const playing =
       scene !== undefined && scene.endsAt > now && get().celebrations[userId]?.key === scene.key
@@ -97,6 +135,7 @@ export const useLevelStore = create<LevelState>()((set, get) => {
     levels: {},
     me: null,
     celebrations: {},
+    showcase: null,
 
     ensureLevels: (userIds) => {
       for (const id of userIds) {
@@ -156,7 +195,7 @@ export const useLevelStore = create<LevelState>()((set, get) => {
       const target = Math.floor(level)
       // Nível de verdade (o do levelStore.me é o mais confiável).
       const real = get().me?.level ?? get().levels[meId]
-      celebrate(meId, target, target - 1)
+      celebrate(meId, target, target - 1, true)
       setTimeout(
         () => {
           set((state) => {
@@ -179,13 +218,48 @@ export const useLevelStore = create<LevelState>()((set, get) => {
       get().previewLevelUp(nextMilestone(real))
     },
 
+    replayLevelUp: (userId, name) => {
+      const level = get().levels[userId]
+      if (level === undefined || !Number.isFinite(level)) return
+      const now = Date.now()
+      if (!canReplay(lastReplayAt, now)) return
+      lastReplayAt = now
+      if (userId === useAuthStore.getState().user?.id) {
+        celebrate(userId, level, level - 1, true)
+        return
+      }
+      const key = ++celebrationSeq
+      if (showcaseTimer) clearTimeout(showcaseTimer)
+      set({ showcase: { userId, name, level, previous: level - 1, key } })
+      showcaseTimer = setTimeout(
+        () => {
+          showcaseTimer = null
+          set((state) => (state.showcase?.key === key ? { showcase: null } : {}))
+        },
+        levelUpEffects(level, level - 1).durationMs
+      )
+    },
+
+    flushPending: () => {
+      const meId = useAuthStore.getState().user?.id
+      const action = resolvePending(pendingMine, readAttention(), Date.now())
+      if (action === 'wait' || !pendingMine) return
+      const { level, previous } = pendingMine
+      pendingMine = null
+      if (action === 'play' && meId) celebrate(meId, level, previous, true)
+    },
+
     reset: () => {
+      pendingMine = null
+      lastReplayAt = null
+      if (showcaseTimer) clearTimeout(showcaseTimer)
+      showcaseTimer = null
       for (const wait of waiting.values()) clearTimeout(wait.timer)
       waiting.clear()
       scenes.clear()
       requested.clear()
       queued = new Set()
-      set({ levels: {}, me: null, celebrations: {} })
+      set({ levels: {}, me: null, celebrations: {}, showcase: null })
     }
   }
 })

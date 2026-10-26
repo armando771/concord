@@ -28,6 +28,9 @@ import { useSoundboardHotkeys } from './useSoundboardHotkeys'
 import { useCallChannelName } from './useCallChannelName'
 import { showVoicePanel, voicePanelHeading, voicePanelLabel, voicePanelRoute } from './voicePanel'
 import VoiceXPBar from '../level/VoiceXPBar'
+import { QualityBarsIcon } from './ConnectionQualityBars'
+import { useCallConnectionView } from './useCallConnectionView'
+import { qualityTooltip } from '../../lib/connectionQuality'
 
 // @max-[239px]: sidebar no mínimo (o @container é o SidebarFooter).
 const ICON_BUTTON =
@@ -40,10 +43,10 @@ const ICON_BUTTON =
 type RowTone = 'idle' | 'on' | 'open' | 'running'
 
 const ROW_TONE: Record<RowTone, string> = {
-  idle: 'bg-white/6 text-gray-200 hover:bg-white/12 hover:text-white',
-  on: 'bg-[#23a55a] text-white hover:bg-[#1e8c4a]',
-  open: 'bg-[#5865f2] text-white',
-  running: 'bg-[#5865f2]/25 text-white hover:bg-[#5865f2]/40'
+  idle: 'bg-fg/6 text-gray-200 hover:bg-fg/12 hover:text-strong',
+  on: 'bg-success-strong text-white hover:bg-success-strong-hover',
+  open: 'bg-brand text-white',
+  running: 'bg-brand/25 text-strong hover:bg-brand/40'
 }
 
 /**
@@ -77,9 +80,7 @@ function RowButton({
       aria-expanded={expanded}
       title={title}
       className={`flex h-8 min-w-0 flex-1 items-center justify-center rounded-md transition-colors ${
-        disabled
-          ? 'cursor-not-allowed bg-white/5 text-gray-600'
-          : `cursor-pointer ${ROW_TONE[tone]}`
+        disabled ? 'cursor-not-allowed bg-fg/5 text-gray-600' : `cursor-pointer ${ROW_TONE[tone]}`
       }`}
     >
       {children}
@@ -115,6 +116,10 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   const locked = useCallStore((s) => s.locked)
   const toggleLock = useCallStore((s) => s.toggleLock)
   const endCall = useCallStore((s) => s.endCall)
+  const retryConnection = useCallStore((s) => s.retryConnection)
+  const myQuality = useCallStore((s) => (meId ? s.connectionQuality[meId] : undefined))
+  const myDetails = useCallStore((s) => (meId ? s.qualityDetails[meId] : undefined))
+  const connectionView = useCallConnectionView()
 
   const serverName = useServerStore((s) =>
     serverId ? s.servers.find((srv) => srv.id === serverId)?.name : undefined
@@ -143,6 +148,19 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   if (!showVoicePanel(status)) return null
 
   const connected = status === 'active'
+  const outgoing = status === 'outgoing'
+  const heading = voicePanelHeading(status, connectionView.heading)
+  const headingTone = outgoing
+    ? 'text-warning'
+    : connectionView.tone === 'ok'
+      ? 'text-success'
+      : connectionView.tone === 'error'
+        ? 'text-danger'
+        : 'text-warning'
+  const showBars = !outgoing && connectionView.tone === 'ok' && myQuality && myQuality !== 'unknown'
+  const qualityTitle = showBars ? qualityTooltip(myQuality, null, myDetails) : undefined
+  const showConnectionNotice =
+    !outgoing && (connectionView.detail !== null || connectionView.offerRetry)
   const connectionOpen =
     connected && connectionAnchor?.callId === callId && connectionAnchor !== null
   const label = voicePanelLabel({
@@ -163,10 +181,15 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   const soundboardAvailable = type === 'channel' && connected
 
   return (
-    <div className="shrink-0 border-t border-white/6 bg-[#07080b]/90 px-2 pb-2 pt-1.5">
+    <div className="shrink-0 border-t border-subtle bg-primary px-2 pb-2 pt-1.5">
       {myGame && (
-        <p className="mb-1.5 flex items-center gap-2 border-b border-white/6 pb-1.5 text-ds-md font-semibold text-white">
-          <GameIcon name={myGame.name} appId={myGame.app_id} iconHash={myGame.icon_hash} className="h-4 w-4 shrink-0" />
+        <p className="mb-1.5 flex items-center gap-2 border-b border-subtle pb-1.5 text-ds-md font-semibold text-strong">
+          <GameIcon
+            name={myGame.name}
+            appId={myGame.app_id}
+            iconHash={myGame.icon_hash}
+            className="h-4 w-4 shrink-0"
+          />
           <span className="truncate">{myGame.name}</span>
         </p>
       )}
@@ -175,19 +198,26 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
           <button
             type="button"
             disabled={!connected}
-            aria-label="Detalhes da conexão de voz"
+            aria-label={`Detalhes da conexão de voz: ${heading}${qualityTitle ? `. ${qualityTitle}` : ''}`}
             aria-haspopup="dialog"
             aria-expanded={connectionOpen}
+            title={qualityTitle}
             onClick={(event) => {
               const element = event.currentTarget
               setConnectionAnchor(connectionOpen ? null : { element, callId })
             }}
-            className={`flex max-w-full items-center gap-1.5 rounded text-left text-ds-md font-semibold outline-none focus-visible:ring-2 focus-visible:ring-[#5865f2] ${connected ? 'cursor-pointer hover:underline' : ''} ${
-              connected ? 'text-[#23a55a]' : 'text-[#f0b232]'
-            }`}
+            className={`flex max-w-full items-center gap-1.5 rounded text-left text-ds-md font-semibold outline-none focus-visible:ring-2 focus-visible:ring-brand ${connected ? 'cursor-pointer hover:underline' : ''} ${headingTone}`}
           >
-            <SignalIcon className="h-4 w-4 shrink-0" />
-            <span className="truncate">{voicePanelHeading(status)}</span>
+            {showBars ? (
+              <QualityBarsIcon quality={myQuality} className="h-4 w-4 shrink-0" />
+            ) : (
+              <SignalIcon
+                className={`h-4 w-4 shrink-0 ${connectionView.tone === 'pending' || outgoing ? 'animate-pulse' : ''}`}
+              />
+            )}
+            <span className="truncate" aria-live="polite" data-testid="voice-panel-heading">
+              {heading}
+            </span>
           </button>
           {route ? (
             <button
@@ -214,7 +244,7 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
             className={`${ICON_BUTTON} ${
               locked
                 ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
-                : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                : 'text-gray-300 hover:bg-fg/10 hover:text-strong'
             }`}
           >
             {locked ? (
@@ -238,7 +268,7 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
               : 'Supressão de ruído desativada'
           }
           className={`${ICON_BUTTON} ${
-            noiseAnchor ? 'bg-white/15 text-white' : 'hover:bg-white/10 hover:text-white'
+            noiseAnchor ? 'bg-fg/15 text-strong' : 'hover:bg-fg/10 hover:text-strong'
           } ${noiseSuppression ? 'text-gray-300' : 'text-gray-500'}`}
         >
           <NoiseSuppressionIcon className="h-5 w-5" off={!noiseSuppression} />
@@ -248,11 +278,42 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
           onClick={endCall}
           aria-label="Desconectar da voz"
           title="Desconectar"
-          className={`${ICON_BUTTON} text-gray-300 hover:bg-[#f23f43]/15 hover:text-[#f23f43]`}
+          className={`${ICON_BUTTON} text-gray-300 hover:bg-danger/15 hover:text-danger`}
         >
           <HangUpIcon className="h-5 w-5" />
         </button>
       </div>
+
+      {showConnectionNotice && (
+        <div
+          role={connectionView.tone === 'error' ? 'alert' : 'status'}
+          className={`mt-1.5 rounded-md px-2 py-1.5 text-ds-xs ${
+            connectionView.tone === 'error'
+              ? 'bg-danger/12 text-normal'
+              : 'bg-warning/10 text-normal'
+          }`}
+        >
+          {connectionView.detail && <p>{connectionView.detail}</p>}
+          {connectionView.offerRetry && (
+            <div className="mt-1.5 flex gap-2">
+              <button
+                type="button"
+                onClick={retryConnection}
+                className="cursor-pointer rounded bg-fg/10 px-2 py-1 font-semibold text-strong outline-none hover:bg-fg/20 focus-visible:ring-2 focus-visible:ring-brand"
+              >
+                Tentar de novo
+              </button>
+              <button
+                type="button"
+                onClick={endCall}
+                className="cursor-pointer rounded px-2 py-1 font-semibold text-secondary outline-none hover:bg-hover hover:text-strong focus-visible:ring-2 focus-visible:ring-brand"
+              >
+                Sair
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-2 flex gap-2">
         <RowButton

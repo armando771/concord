@@ -5,6 +5,7 @@ import { verifyEmail } from '../api/auth'
 import { emailActionErrorMessage } from '../lib/loginError'
 import { getMe } from '../api/users'
 import { useAuthStore } from '../store/authStore'
+import { AuthResultSkeleton } from '../components/skeleton/layouts'
 
 type State = { kind: 'loading' } | { kind: 'ok' } | { kind: 'error'; message: string }
 
@@ -43,9 +44,7 @@ function VerifyEmail(): React.JSX.Element {
 
   return (
     <AuthLayout>
-      {state.kind === 'loading' && (
-        <p className="text-sm text-gray-300">Confirmando seu e-mail...</p>
-      )}
+      {state.kind === 'loading' && <AuthResultSkeleton label="Confirmando seu e-mail…" />}
       {state.kind === 'ok' && (
         <>
           <h1 className="text-2xl font-semibold text-gray-50">E-mail confirmado!</h1>
@@ -54,7 +53,7 @@ function VerifyEmail(): React.JSX.Element {
           </p>
           <Link
             to={home}
-            className="mt-6 inline-block rounded-lg bg-[#5865f2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4752c4]"
+            className="mt-6 inline-block rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
           >
             {accessToken ? 'Ir para o app' : 'Entrar'}
           </Link>

@@ -103,7 +103,7 @@ function ProposalForm({
       }}
     >
       {dragging && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-violet-400 bg-black/60 text-sm font-medium text-violet-200">
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-violet-400 bg-black/60 text-sm font-medium text-violet-200 on-media">
           Solte as imagens aqui
         </div>
       )}
@@ -131,7 +131,7 @@ function ProposalForm({
           maxLength={MAX_DESCRIPTION}
           rows={5}
           placeholder="Explique o problema e como você imagina a solução."
-          className="glass-input w-full resize-none rounded-lg px-3 py-2 text-ds-sm text-white"
+          className="glass-input w-full resize-none rounded-lg px-3 py-2 text-ds-sm text-strong"
           onChange={(e) => setDescription(e.target.value)}
           onPaste={(e) => {
             const files = [...e.clipboardData.files]
@@ -209,7 +209,6 @@ function NewProposalModal({
       open={open}
       title={proposal ? 'Editar proposta' : 'Propor uma melhoria'}
       onClose={onClose}
-      solid
     >
       <ProposalForm onClose={onClose} proposal={proposal} />
     </Modal>

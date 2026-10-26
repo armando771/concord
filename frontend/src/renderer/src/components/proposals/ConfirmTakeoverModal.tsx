@@ -21,10 +21,10 @@ function ConfirmTakeoverModal({
 }): React.JSX.Element {
   const assignee = proposal.assignee
   return (
-    <Modal open title="Tirar a tarefa do colega?" onClose={onCancel} solid>
+    <Modal open title="Tirar a tarefa do colega?" onClose={onCancel}>
       <div className="flex flex-col gap-4">
         {assignee && (
-          <div className="flex items-center gap-3 rounded-lg border border-white/8 bg-white/4 px-3 py-2">
+          <div className="flex items-center gap-3 rounded-lg border border-subtle bg-fg/4 px-3 py-2">
             <Avatar
               userId={assignee.id}
               name={assignee.name}
@@ -32,13 +32,13 @@ function ConfirmTakeoverModal({
               size={28}
             />
             <span className="text-sm text-gray-200">
-              Está com <span className="font-semibold text-white">{assignee.name}</span>
+              Está com <span className="font-semibold text-strong">{assignee.name}</span>
             </span>
           </div>
         )}
         <p className="text-sm text-gray-300">
-          Mover <span className="font-semibold text-white">“{proposal.title}”</span> para{' '}
-          <span className="font-semibold text-white">{STATUS_ACTION_LABEL[target]}</span> passa a
+          Mover <span className="font-semibold text-strong">“{proposal.title}”</span> para{' '}
+          <span className="font-semibold text-strong">{STATUS_ACTION_LABEL[target]}</span> passa a
           tarefa para você.
         </p>
         <div className="flex justify-end gap-2">

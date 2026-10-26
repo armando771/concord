@@ -20,6 +20,7 @@ import MessageText from '../chat/MessageText'
 import ReactionChips from '../chat/ReactionChips'
 import ReplyReference from '../chat/ReplyReference'
 import CommentComposer from './CommentComposer'
+import { CommentListSkeleton } from '../skeleton/layouts'
 
 const NO_COMMENTS: ProposalComment[] = []
 
@@ -109,7 +110,7 @@ function CommentRow({
       id={`comment-${comment.id}`}
       data-comment
       className={`group relative flex flex-col gap-1 rounded-md px-2 py-1.5 transition-colors ${
-        highlighted ? 'bg-[#5865f2]/20 ring-1 ring-[#5865f2]/50' : 'hover:bg-white/3'
+        highlighted ? 'bg-brand/20 ring-1 ring-brand/50' : 'hover:bg-fg/3'
       }`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
@@ -131,7 +132,7 @@ function CommentRow({
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2 text-xs">
-            <span className="font-semibold text-white">{comment.author_name}</span>
+            <span className="font-semibold text-strong">{comment.author_name}</span>
             <span className="text-gray-500">{formatTime(comment.created_at)}</span>
             {comment.edited_at && <span className="text-gray-500">(editado)</span>}
           </div>
@@ -143,7 +144,7 @@ function CommentRow({
                 rows={2}
                 aria-label="Editar comentário"
                 autoFocus
-                className="glass-input w-full resize-none rounded-lg px-3 py-2 text-ds-sm text-white"
+                className="glass-input w-full resize-none rounded-lg px-3 py-2 text-ds-sm text-strong"
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -264,13 +265,15 @@ function ProposalComments({
 
   return (
     <section aria-label="Comentários" className="flex flex-col gap-3">
-      <h3 className="text-sm font-semibold text-white">
+      <h3 className="text-sm font-semibold text-strong">
         Comentários{loaded && comments.length > 0 ? ` (${comments.length})` : ''}
       </h3>
       {!loaded ? (
-        <p className="text-xs text-gray-400">
-          {failed ? 'Não foi possível carregar os comentários.' : 'Carregando comentários...'}
-        </p>
+        failed ? (
+          <p className="text-xs text-gray-400">Não foi possível carregar os comentários.</p>
+        ) : (
+          <CommentListSkeleton />
+        )
       ) : comments.length === 0 ? (
         <p className="text-xs text-gray-500">Ninguém comentou ainda. Comece a conversa!</p>
       ) : (

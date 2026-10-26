@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../api/levels', () => ({ fetchLevels: vi.fn(), fetchMyLevel: vi.fn() }))
 
 import { levelUpEffects, milestoneFor } from '../lib/levels'
+import { REPLAY_COOLDOWN_MS } from '../lib/levelAttention'
 import { useAuthStore } from './authStore'
 import { useLevelStore } from './levelStore'
 
@@ -126,5 +127,121 @@ describe('levelStore: celebração', () => {
     useLevelStore.getState().previewLevelUp(0)
     useLevelStore.getState().previewLevelUp(Number.NaN)
     expect(useLevelStore.getState().celebrations).toEqual({})
+  })
+})
+
+describe('levelStore: janela fora de vista', () => {
+  let attentive = true
+  beforeEach(() => {
+    vi.useFakeTimers()
+    attentive = true
+    vi.stubGlobal('document', {
+      hasFocus: () => attentive,
+      visibilityState: 'visible'
+    })
+    useLevelStore.getState().reset()
+    useAuthStore.setState({ user: { id: 'eu' } as never })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('subida sua com a janela sem foco fica na fila e só atualiza o selo', () => {
+    attentive = false
+    levelUp('eu', 30)
+    expect(useLevelStore.getState().celebrations.eu).toBeUndefined()
+    expect(useLevelStore.getState().levels.eu).toBe(30)
+    attentive = true
+    useLevelStore.getState().flushPending()
+    expect(useLevelStore.getState().celebrations.eu).toMatchObject({ level: 30, previous: 29 })
+  })
+
+  it('várias na fila tocam uma só, a mais alta, com o marco cruzado', () => {
+    attentive = false
+    levelUp('eu', 29)
+    levelUp('eu', 31, 30)
+    levelUp('eu', 30, 29)
+    attentive = true
+    useLevelStore.getState().flushPending()
+    expect(useLevelStore.getState().celebrations.eu).toMatchObject({ level: 31, previous: 28 })
+    expect(milestoneFor(31, 28)?.level).toBe(30)
+  })
+
+  it('não toca enquanto a janela continua fora de vista', () => {
+    attentive = false
+    levelUp('eu', 12)
+    useLevelStore.getState().flushPending()
+    expect(useLevelStore.getState().celebrations.eu).toBeUndefined()
+  })
+
+  it('descarta a subida com mais de 10 minutos', () => {
+    attentive = false
+    levelUp('eu', 12)
+    vi.advanceTimersByTime(10 * 60 * 1000 + 1)
+    attentive = true
+    useLevelStore.getState().flushPending()
+    expect(useLevelStore.getState().celebrations.eu).toBeUndefined()
+    useLevelStore.getState().flushPending()
+    expect(useLevelStore.getState().celebrations.eu).toBeUndefined()
+  })
+
+  it('tocar uma vez só: a fila esvazia depois de tocar', () => {
+    attentive = false
+    levelUp('eu', 12)
+    attentive = true
+    useLevelStore.getState().flushPending()
+    vi.advanceTimersByTime(levelUpEffects(12).durationMs + 1)
+    useLevelStore.getState().flushPending()
+    expect(useLevelStore.getState().celebrations.eu).toBeUndefined()
+  })
+
+  it('o que os outros veem no avatar continua tocando com a janela fora de vista', () => {
+    attentive = false
+    levelUp('ana', 50)
+    expect(useLevelStore.getState().celebrations.ana).toMatchObject({ level: 50 })
+  })
+})
+
+describe('levelStore: clique no selo do cartão', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    useLevelStore.getState().reset()
+    useAuthStore.setState({ user: { id: 'eu' } as never })
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it('no seu cartão toca a sua celebração completa', () => {
+    useLevelStore.setState({ levels: { eu: 40 } })
+    useLevelStore.getState().replayLevelUp('eu')
+    expect(useLevelStore.getState().celebrations.eu).toMatchObject({ level: 40, previous: 39 })
+    expect(useLevelStore.getState().showcase).toBeNull()
+  })
+
+  it('no cartão de outra pessoa toca só local, sem mexer no avatar dela', () => {
+    useLevelStore.setState({ levels: { ana: 40 } })
+    useLevelStore.getState().replayLevelUp('ana', 'Ana')
+    const { showcase, celebrations } = useLevelStore.getState()
+    expect(showcase).toMatchObject({ userId: 'ana', name: 'Ana', level: 40, previous: 39 })
+    expect(celebrations.ana).toBeUndefined()
+    vi.advanceTimersByTime(levelUpEffects(40, 39).durationMs)
+    expect(useLevelStore.getState().showcase).toBeNull()
+  })
+
+  it('nível ainda não carregado não faz nada', () => {
+    useLevelStore.getState().replayLevelUp('ana')
+    expect(useLevelStore.getState().showcase).toBeNull()
+  })
+
+  it('cliques seguidos respeitam o intervalo', () => {
+    useLevelStore.setState({ levels: { ana: 40 } })
+    useLevelStore.getState().replayLevelUp('ana')
+    const first = useLevelStore.getState().showcase!.key
+    vi.advanceTimersByTime(REPLAY_COOLDOWN_MS - 1)
+    useLevelStore.getState().replayLevelUp('ana')
+    expect(useLevelStore.getState().showcase?.key).toBe(first)
+    vi.advanceTimersByTime(1)
+    useLevelStore.getState().replayLevelUp('ana')
+    expect(useLevelStore.getState().showcase?.key).not.toBe(first)
   })
 })

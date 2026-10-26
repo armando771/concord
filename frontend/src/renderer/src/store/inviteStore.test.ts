@@ -26,7 +26,7 @@ const invite = (id: string): ServerInvite => ({
 
 beforeEach(() => {
   listInvites.mockReset()
-  useInviteStore.setState({ invites: [], loading: false })
+  useInviteStore.setState({ invites: [], loading: false, loaded: false })
 })
 
 describe('fetchInvites', () => {
@@ -59,6 +59,27 @@ describe('fetchInvites', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     await useInviteStore.getState().fetchInvites()
     expect(useInviteStore.getState().invites).toHaveLength(1)
+    expect(useInviteStore.getState().loading).toBe(false)
+  })
+})
+
+describe('loaded (skeleton só na primeira carga)', () => {
+  it('lista que chegou vazia: reler não volta ao carregando', async () => {
+    listInvites.mockResolvedValue([])
+    await useInviteStore.getState().fetchInvites()
+    expect(useInviteStore.getState().loaded).toBe(true)
+    const seen: boolean[] = []
+    const stop = useInviteStore.subscribe((s) => seen.push(s.loading))
+    await useInviteStore.getState().fetchInvites()
+    stop()
+    expect(seen.some(Boolean)).toBe(false)
+  })
+
+  it('falha na primeira carga não marca como carregada (tenta de novo no foco)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    listInvites.mockRejectedValue(new Error('rede fora'))
+    await useInviteStore.getState().fetchInvites()
+    expect(useInviteStore.getState().loaded).toBe(false)
     expect(useInviteStore.getState().loading).toBe(false)
   })
 })

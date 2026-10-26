@@ -70,13 +70,13 @@ function VoiceChannelView({ channelId }: { channelId: string }): React.JSX.Eleme
         />
       )}
       {connectedHere && (
-        <div className="absolute right-4 top-3 z-10 flex items-center gap-2 rounded-full border border-[#23a55a]/30 bg-[#23a55a]/15 px-3 py-1 text-xs font-semibold text-[#23a55a]">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#23a55a]" />
+        <div className="absolute right-4 top-3 z-10 flex items-center gap-2 rounded-full border border-success/30 bg-success/15 px-3 py-1 text-xs font-semibold text-success">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
           Voz conectada · {formatDuration(elapsed)}
         </div>
       )}
       {connectedHere && rank && (
-        <div className="absolute left-4 top-3 z-10 rounded-xl border border-white/10 bg-black/40 px-3 py-1.5 backdrop-blur">
+        <div className="absolute left-4 top-3 z-10 rounded-xl border border-subtle bg-floating px-3 py-1.5 backdrop-blur">
           <StyleRank percent={boostPercent} paused={muted || deafened} size="md" />
         </div>
       )}
@@ -87,11 +87,11 @@ function VoiceChannelView({ channelId }: { channelId: string }): React.JSX.Eleme
             <CallStage speaking={speaking} serverId={serverId} />
           ) : (serverCalls[channelId]?.participants ?? []).length === 0 ? (
             <div className="flex flex-col items-center gap-4 text-center">
-              <div className="flex h-20 w-20 items-center justify-center rounded-full border border-[#23a55a]/40 bg-[#23a55a]/10 text-[#23a55a] shadow-lg">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full border border-success/40 bg-success/10 text-success shadow-lg">
                 <VolumeIcon className="h-9 w-9" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">Ninguém aqui ainda</h2>
+                <h2 className="text-xl font-bold text-strong">Ninguém aqui ainda</h2>
                 <p className="mt-1 text-sm text-gray-400">
                   Entre na voz para conversar com os membros do servidor.
                 </p>
@@ -131,8 +131,8 @@ function VoiceChannelView({ channelId }: { channelId: string }): React.JSX.Eleme
             </div>
           )}
         </div>
-        {connectedHere && serverId && <MusicPanel serverId={serverId} />}
       </div>
+      {connectedHere && serverId && <MusicPanel serverId={serverId} />}
 
       {connectedHere && <CallControlsDock />}
     </div>

@@ -18,7 +18,8 @@ import {
 } from './icons'
 import StyledName from './StyledName'
 
-const BAR_BG = '#07080b'
+/** Fundo do painel do usuário (também o recorte do status no avatar). */
+const BAR_BG = 'var(--bg-tertiary)'
 
 /**
  * Microfone ou fone com a setinha do lado (como no Discord): o botão liga e
@@ -47,8 +48,8 @@ function AudioToggle({
   children: React.ReactNode
 }): React.JSX.Element {
   const tone = off
-    ? 'bg-[#f23f43]/15 text-[#f23f43] hover:bg-[#f23f43]/25'
-    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+    ? 'bg-danger/15 text-danger hover:bg-danger/25'
+    : 'text-gray-300 hover:bg-fg/10 hover:text-strong'
   const menuLabel = kind === 'input' ? 'Opções de entrada' : 'Opções de saída'
   return (
     <div className="flex shrink-0 items-center">
@@ -71,7 +72,7 @@ function AudioToggle({
         aria-expanded={menuOpen}
         title={menuLabel}
         className={`flex h-8 w-4 cursor-pointer items-center justify-center rounded-r-md transition-colors @max-[239px]:hidden ${
-          menuOpen ? 'bg-white/15 text-white' : tone
+          menuOpen ? 'bg-fg/15 text-strong' : tone
         }`}
       >
         <ChevronDownIcon className="h-3 w-3" />
@@ -125,14 +126,14 @@ function UserBar(): React.JSX.Element {
 
   return (
     <div
-      className="flex shrink-0 items-center gap-1 border-t border-white/6 px-2 py-1.5 @max-[239px]:gap-0"
-      style={{ background: `${BAR_BG}e6` }}
+      className="flex shrink-0 items-center gap-1 border-t border-subtle px-2 py-1.5 @max-[239px]:gap-0"
+      style={{ background: BAR_BG }}
     >
       <button
         type="button"
         onClick={user ? profileCardHandler(user.id, name, user.username, 'top') : undefined}
         aria-label="Abrir meu perfil"
-        className="group flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md p-1 text-left transition-colors hover:bg-white/5"
+        className="group flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md p-1 text-left transition-colors hover:bg-fg/5"
       >
         <Avatar
           userId={user?.id}
@@ -142,16 +143,16 @@ function UserBar(): React.JSX.Element {
           animate="always"
           status={status}
           cutoutColor={BAR_BG}
-          className={`rounded-full transition-shadow ${speaking ? 'ring-2 ring-[#23a55a]' : ''}`}
+          className={`rounded-full transition-shadow ${speaking ? 'ring-2 ring-success' : ''}`}
         />
         <div className="min-w-0">
-          <p className="truncate text-ds-md leading-[18px] font-medium text-white">
+          <p className="truncate text-ds-md leading-[18px] font-medium text-strong">
             <StyledName name={name} userId={user?.id} style={user?.name_style} />
           </p>
           {/* Como no Discord: "Em call", a nota (ou o status) e, com o mouse, o @. */}
           <p
             className={`truncate text-ds-xs leading-[13px] font-medium group-hover:hidden ${
-              inCall && !game ? 'text-[#23a55a]' : 'text-gray-400'
+              inCall && !game ? 'text-success' : 'text-gray-400'
             }`}
           >
             {subtitle}
@@ -203,7 +204,7 @@ function UserBar(): React.JSX.Element {
         onClick={() => openSettings('account')}
         aria-label="Configurações do usuário"
         title="Configurações do usuário"
-        className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+        className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
       >
         <GearIcon className="h-[18px] w-[18px]" />
       </button>

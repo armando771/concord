@@ -23,6 +23,8 @@ type Stats struct {
 	// Maior tempo seguido numa call com mais alguém.
 	LongestSessionSeconds int64
 	OwnedServers          int64
+	// Está em dev_badge_users (Criador da Salinha).
+	IsDev bool
 }
 
 // Unlocks: categoria -> tier -> quando foi desbloqueado (o que está gravado).
@@ -124,6 +126,11 @@ func valueOf(c Category, s Stats, now time.Time) int64 {
 		return s.LongestSessionSeconds
 	case "reacoes":
 		return s.Reactions
+	case "criador":
+		if s.IsDev {
+			return 1
+		}
+		return 0
 	}
 	return 0
 }
@@ -149,6 +156,10 @@ func Evaluate(s Stats, stored Unlocks, now time.Time) ([]Badge, []Unlock) {
 
 	for _, c := range Catalog {
 		value := valueOf(c, s, now)
+		// Concedido à mão: quem não tem nem vê; tirar da tabela tira o badge.
+		if c.Exclusive && value == 0 {
+			continue
+		}
 		reached := tierFor(c, value)
 		saved := stored[c.Key]
 

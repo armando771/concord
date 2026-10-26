@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_NAME_STYLE } from './nameStyle'
+import { DEFAULT_PROFILE_THEME } from './profileTheme'
 import {
   draftFromProfile,
   hasErrors,
@@ -140,5 +141,34 @@ describe('estilo do nome no rascunho', () => {
     const edited = { ...saved(), name_style: { font: 'bit8', effect: 'solid', colors: [] } }
     expect(isDirty(edited, saved())).toBe(true)
     expect(profilePayload(edited).name_style).toEqual(edited.name_style)
+  })
+})
+
+describe('tema do perfil no rascunho', () => {
+  const theme = {
+    border: 'neon',
+    border_colors: ['#00ffaa'],
+    background: 'gradient',
+    background_colors: ['#1e1b4b', '#0f172a'],
+    effect: 'snow'
+  }
+
+  it('rascunho vem com o tema salvo, ou o padrão', () => {
+    expect(draftFromProfile({ display_name: 'a' }).profile_theme).toEqual(DEFAULT_PROFILE_THEME)
+    expect(draftFromProfile({ display_name: 'a', profile_theme: theme }).profile_theme).toEqual(
+      theme
+    )
+  })
+
+  it('mudar só o tema deixa o perfil sujo e vai no payload', () => {
+    const edited = { ...saved(), profile_theme: theme }
+    expect(isDirty(edited, saved())).toBe(true)
+    expect(profilePayload(edited).profile_theme).toEqual(theme)
+    expect(isDirty(saved(), saved())).toBe(false)
+  })
+
+  it('tema inválido no rascunho sai resolvido no payload', () => {
+    const edited = { ...saved(), profile_theme: { ...theme, border_colors: ['url(x)'] } }
+    expect(profilePayload(edited).profile_theme.border).toBe('none')
   })
 })

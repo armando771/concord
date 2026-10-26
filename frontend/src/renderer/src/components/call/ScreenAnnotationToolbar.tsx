@@ -50,10 +50,10 @@ export default function ScreenAnnotationToolbar({
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
-      className={`z-30 flex items-center gap-2 rounded-2xl border border-white/10 bg-[#18191c]/90 px-3 py-1.5 shadow-2xl backdrop-blur-md select-none text-white transition-all ${className}`}
+      className={`z-30 flex items-center gap-2 rounded-2xl border border-subtle bg-floating px-3 py-1.5 shadow-2xl backdrop-blur-md select-none text-strong transition-all ${className}`}
     >
       {/* Ferramentas de traço */}
-      <div className="flex items-center gap-1 border-r border-white/10 pr-2">
+      <div className="flex items-center gap-1 border-r border-subtle pr-2">
         {tools.map((t) => {
           const isActive = tool === t.id
           return (
@@ -64,8 +64,8 @@ export default function ScreenAnnotationToolbar({
               onClick={() => setTool(t.id)}
               className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${
                 isActive
-                  ? 'bg-white/20 text-white shadow-sm ring-1 ring-white/30'
-                  : 'text-gray-400 hover:bg-white/10 hover:text-gray-200'
+                  ? 'bg-fg/20 text-strong shadow-sm ring-1 ring-fg/30'
+                  : 'text-gray-400 hover:bg-fg/10 hover:text-gray-200'
               }`}
             >
               {t.icon}
@@ -76,7 +76,7 @@ export default function ScreenAnnotationToolbar({
 
       {/* Cores */}
       {tool !== 'eraser' && (
-        <div className="flex items-center gap-1.5 border-r border-white/10 pr-2">
+        <div className="flex items-center gap-1.5 border-r border-subtle pr-2">
           {PRESET_COLORS.map((c) => {
             const isSelected = color === c
             return (
@@ -98,7 +98,7 @@ export default function ScreenAnnotationToolbar({
 
       {/* Espessura */}
       {tool !== 'eraser' && (
-        <div className="flex items-center gap-1 border-r border-white/10 pr-2">
+        <div className="flex items-center gap-1 border-r border-subtle pr-2">
           {PRESET_WIDTHS.map((w) => {
             const isSelected = width === w
             return (
@@ -109,8 +109,8 @@ export default function ScreenAnnotationToolbar({
                 onClick={() => setWidth(w)}
                 className={`flex h-7 w-6 items-center justify-center rounded-lg transition-colors ${
                   isSelected
-                    ? 'bg-white/20 text-white ring-1 ring-white/30'
-                    : 'text-gray-400 hover:bg-white/10'
+                    ? 'bg-fg/20 text-strong ring-1 ring-fg/30'
+                    : 'text-gray-400 hover:bg-fg/10'
                 }`}
               >
                 <span
@@ -127,7 +127,7 @@ export default function ScreenAnnotationToolbar({
       )}
 
       {/* Ações: Desfazer e Limpar */}
-      <div className="flex items-center gap-1 border-r border-white/10 pr-2">
+      <div className="flex items-center gap-1 border-r border-subtle pr-2">
         <button
           type="button"
           title="Desfazer meu último traço"
@@ -135,7 +135,7 @@ export default function ScreenAnnotationToolbar({
           onClick={() => undo(callId, sharerId)}
           className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${
             myStrokes.length > 0
-              ? 'text-gray-300 hover:bg-white/10 hover:text-white cursor-pointer'
+              ? 'text-gray-300 hover:bg-fg/10 hover:text-strong cursor-pointer'
               : 'text-gray-600 cursor-not-allowed'
           }`}
         >
@@ -157,7 +157,7 @@ export default function ScreenAnnotationToolbar({
         type="button"
         title="Fechar ferramentas de desenho"
         onClick={onClose}
-        className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+        className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
       >
         <XIcon className="h-3.5 w-3.5" />
       </button>

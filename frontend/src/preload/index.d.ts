@@ -110,12 +110,19 @@ export interface ActivitiesApi {
   close(): void
   /** A janela do jogo fechou (pelo usuário ou pelo app). Retorna unsubscribe. */
   onClosed(cb: (activityId: string) => void): () => void
+  /** A janela do jogo entrou numa sala nova (URL já canônica). Retorna unsubscribe. */
+  onRoom(cb: (activityId: string, url: string) => void): () => void
 }
 
 /** Atalho do modo de edição e se outro programa já tem ele. */
 export interface OverlayShortcutStatus {
   accelerator: string
   taken: boolean
+}
+
+export interface WindowThemeApi {
+  /** Pinta a barra de título nativa (Windows/Linux) com as cores do tema. */
+  setTitleBarColors(colors: { color: string; symbolColor: string }): void
 }
 
 export interface OverlayApi {
@@ -165,6 +172,7 @@ declare global {
       activities?: ActivitiesApi
       games?: GamesApi
       keybinds?: KeybindsApi
+      windowTheme?: WindowThemeApi
     }
   }
 }

@@ -16,8 +16,8 @@ export function StreamVolume({ userId }: { userId: string }): React.JSX.Element 
         onClick={() => toggleMuted(key)}
         aria-label={audio.muted ? 'Ouvir transmissão' : 'Silenciar transmissão para você'}
         title={audio.muted ? 'Ouvir transmissão' : 'Silenciar só para você'}
-        className={`flex h-6 w-6 cursor-pointer items-center justify-center rounded-md transition-colors hover:bg-white/10 ${
-          audio.muted ? 'text-[#f23f43]' : 'text-gray-100'
+        className={`flex h-6 w-6 cursor-pointer items-center justify-center rounded-md transition-colors hover:bg-fg/10 ${
+          audio.muted ? 'text-danger' : 'text-gray-100'
         }`}
       >
         {audio.muted ? <VolumeOffIcon className="h-4 w-4" /> : <VolumeIcon className="h-4 w-4" />}
@@ -34,22 +34,23 @@ export function StreamVolume({ userId }: { userId: string }): React.JSX.Element 
         }}
         aria-label="Volume da transmissão (só para você)"
         title={`Volume: ${audio.muted ? 0 : volume}%`}
-        className="h-1 w-20 cursor-pointer accent-[#5865f2]"
+        className="h-1 w-20 cursor-pointer accent-brand"
       />
     </>
   )
 }
 
 /**
- * Barra que aparece ao passar o mouse na live de alguém: mutar e volume da
- * transmissão só para você (os outros continuam ouvindo normalmente) e, no
- * canto, o botão de tela cheia. O pai precisa da classe `group/tile`.
+ * Barra que aparece ao passar o mouse no vídeo: mutar e volume da transmissão
+ * só para você (os outros continuam ouvindo normalmente; só na live de alguém)
+ * e, no canto, o botão de tela cheia. O pai precisa da classe `group/tile`.
  */
 function StreamAudioControls({
   userId,
   onToggleFullscreen
 }: {
-  userId: string
+  /** Sem id (câmera): não há volume de transmissão, só a tela cheia. */
+  userId?: string
   /** Presente = mostra o botão "Tela cheia" no canto inferior direito. */
   onToggleFullscreen?: () => void
 }): React.JSX.Element {
@@ -64,16 +65,16 @@ function StreamAudioControls({
       }}
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
-      className="absolute bottom-2 right-2 z-20 flex items-center gap-2 rounded-lg bg-black/70 px-2 py-1 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover/tile:opacity-100"
+      className="absolute bottom-2 right-2 z-20 flex items-center gap-2 rounded-lg bg-black/70 px-2 py-1 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover/tile:opacity-100 on-media"
     >
-      <StreamVolume userId={userId} />
+      {userId && <StreamVolume userId={userId} />}
       {onToggleFullscreen && (
         <button
           type="button"
           onClick={onToggleFullscreen}
           aria-label="Tela cheia"
           title="Tela cheia"
-          className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-gray-100 transition-colors hover:bg-white/10"
+          className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-gray-100 transition-colors hover:bg-fg/10"
         >
           <FullscreenIcon className="h-4 w-4" />
         </button>

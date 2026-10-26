@@ -7,6 +7,7 @@ import { PinIcon, XIcon } from '../icons'
 import Avatar from '../Avatar'
 import type { PinnedMessage } from '../../api/messages'
 import MessageAttachments from './MessageAttachments'
+import { PinnedListSkeleton } from '../skeleton/layouts'
 
 interface PinnedMessagesPopoverProps {
   channelId: string
@@ -57,7 +58,7 @@ function PinnedMessageItem({
   )
 
   return (
-    <div className="group relative rounded-lg border border-white/5 bg-[#18191c]/80 p-3 transition hover:border-white/15 hover:bg-[#18191c]">
+    <div className="group relative rounded-lg border border-subtle bg-floating p-3 transition hover:border-normal hover:bg-floating">
       {/* Cabeçalho do Card */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
@@ -69,7 +70,7 @@ function PinnedMessageItem({
           />
           <span
             style={authorColor ? { color: authorColor } : undefined}
-            className={`truncate text-ds-sm font-semibold ${authorColor ? '' : 'text-white'}`}
+            className={`truncate text-ds-sm font-semibold ${authorColor ? '' : 'text-strong'}`}
           >
             {authorName}
           </span>
@@ -81,7 +82,7 @@ function PinnedMessageItem({
             type="button"
             onClick={() => onJump(pin.id)}
             title="Ir para a mensagem no chat"
-            className="rounded bg-white/5 px-2 py-0.5 text-[11px] font-medium text-gray-300 hover:bg-violet-600 hover:text-white"
+            className="rounded bg-fg/5 px-2 py-0.5 text-[11px] font-medium text-gray-300 hover:bg-violet-600 hover:text-white"
           >
             Ir
           </button>
@@ -90,7 +91,7 @@ function PinnedMessageItem({
               type="button"
               onClick={() => onUnpin(pin.id)}
               title="Desafixar mensagem"
-              className="rounded bg-white/5 px-2 py-0.5 text-[11px] font-medium text-gray-400 hover:bg-red-500/20 hover:text-red-400"
+              className="rounded bg-fg/5 px-2 py-0.5 text-[11px] font-medium text-gray-400 hover:bg-red-500/20 hover:text-red-400"
             >
               Desafixar
             </button>
@@ -132,6 +133,8 @@ export default function PinnedMessagesPopover({
   const popoverRef = useRef<HTMLDivElement>(null)
   const pins = usePinStore(selectPins(channelId))
   const loading = usePinStore((s) => s.loadingByChannel[channelId] ?? false)
+  // Já buscou este canal alguma vez: abrir de novo mostra as fixadas na hora.
+  const pinsLoaded = usePinStore((s) => s.pinsByChannel[channelId] !== undefined)
   const loadPins = usePinStore((s) => s.loadPins)
   const unpin = usePinStore((s) => s.unpin)
   const serverId = useServerStore((s) => s.currentServer?.id)
@@ -180,14 +183,14 @@ export default function PinnedMessagesPopover({
   return (
     <div
       ref={popoverRef}
-      className="absolute right-4 top-14 z-50 flex max-h-[540px] w-96 flex-col rounded-xl border border-white/10 bg-[#1e1f22]/95 shadow-2xl backdrop-blur-md"
+      className="absolute right-4 top-14 z-50 flex max-h-[540px] w-96 flex-col rounded-xl border border-subtle bg-accent shadow-2xl backdrop-blur-md"
     >
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
+      <div className="flex shrink-0 items-center justify-between border-b border-subtle px-4 py-3">
         <div className="flex items-center gap-2">
           <PinIcon className="h-4 w-4 text-amber-400" />
-          <h3 className="text-ds-sm font-semibold text-white">Mensagens Fixadas</h3>
-          <span className="rounded bg-white/10 px-1.5 py-0.5 text-[11px] font-medium text-gray-300">
+          <h3 className="text-ds-sm font-semibold text-strong">Mensagens Fixadas</h3>
+          <span className="rounded bg-fg/10 px-1.5 py-0.5 text-[11px] font-medium text-gray-300">
             {pins.length}/50
           </span>
         </div>
@@ -195,7 +198,7 @@ export default function PinnedMessagesPopover({
           type="button"
           onClick={onClose}
           title="Fechar"
-          className="rounded p-1 text-gray-400 hover:bg-white/10 hover:text-white"
+          className="rounded p-1 text-gray-400 hover:bg-fg/10 hover:text-strong"
         >
           <XIcon className="h-4 w-4" />
         </button>
@@ -203,13 +206,11 @@ export default function PinnedMessagesPopover({
 
       {/* Conteúdo */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {loading && pins.length === 0 ? (
-          <div className="flex h-40 items-center justify-center text-gray-400 text-ds-sm">
-            Carregando mensagens fixadas...
-          </div>
+        {loading && !pinsLoaded ? (
+          <PinnedListSkeleton />
         ) : pins.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/5 text-gray-400">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-fg/5 text-gray-400">
               <PinIcon className="h-6 w-6" />
             </div>
             <p className="text-ds-sm font-medium text-gray-200">Nenhuma mensagem fixada ainda</p>

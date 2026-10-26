@@ -23,4 +23,23 @@ describe('PendingInvite', () => {
     pending.offerArgs(['Salinha.exe', 'salinha://convite/BBBB3333'])
     expect(pending.take()).toBe('BBBB3333')
   })
+
+  it('link https de convite nosso, clicado no app, também fica guardado', () => {
+    const pending = new PendingInvite()
+    expect(
+      pending.offerWebUrl('https://app-salinha.bhrx.com.br/convite/K7P2QX9M', [undefined])
+    ).toBe(true)
+    expect(pending.take()).toBe('K7P2QX9M')
+    expect(
+      pending.offerWebUrl('https://1-2-3-4.sslip.io/convite/ABCD2345', ['https://1-2-3-4.sslip.io'])
+    ).toBe(true)
+    expect(pending.take()).toBe('ABCD2345')
+  })
+
+  it('link https de outro host ou sem convite não é guardado', () => {
+    const pending = new PendingInvite()
+    expect(pending.offerWebUrl('https://exemplo.com/convite/K7P2QX9M', [])).toBe(false)
+    expect(pending.offerWebUrl('https://app-salinha.bhrx.com.br/servers/1', [])).toBe(false)
+    expect(pending.take()).toBeNull()
+  })
 })

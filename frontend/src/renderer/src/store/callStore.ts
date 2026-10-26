@@ -5,6 +5,7 @@ import {
   endCall as endCallApi,
   getCallState,
   getCallToken,
+  putScreenPreview,
   type CallStateResponse
 } from '../api/calls'
 import { ApiError } from '../api/client'
@@ -24,6 +25,8 @@ import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
 import { micBlockReason, streamBlockReason } from '../lib/voicePermissions'
 import { addWatched, miniPlayerOnly, pruneWatched, resolveFocus } from '../lib/screenWatch'
+import { createPreviewSender } from '../lib/screenPreviewFlow'
+import { captureScreenPreview } from '../lib/screenSnapshot'
 import {
   applyLiveEvent,
   LIVE_GRACE_MS,
@@ -45,6 +48,23 @@ import { useAuthStore } from './authStore'
 import { useServerStore } from './serverStore'
 import { serverDisplayName } from '../lib/serverNames'
 import { showToast } from './toastStore'
+import { useConnectionStore } from './connectionStore'
+import {
+  CALL_FAILED_AUTO_LEAVE_MS,
+  callConnectionReducer,
+  describeDisconnect,
+  describeJoinError,
+  describeTokenError,
+  IDLE_CALL_CONNECTION,
+  type CallConnection,
+  type CallConnectionEvent
+} from '../lib/callConnection'
+import {
+  isPoorQuality,
+  QUALITY_STATS_INTERVAL_MS,
+  type CallQuality,
+  type QualityDetails
+} from '../lib/connectionQuality'
 
 import type { CallResume } from '../../../shared/callResume'
 
@@ -256,6 +276,15 @@ interface CallState {
   knock: KnockState | null
   /** canal em que acabei de entrar por pedido aceito (a sidebar navega e limpa) */
   admittedChannelId: string | null
+  /** Conexão com o servidor de voz: conectando (e em que etapa), reconectando, falhou. */
+  connection: CallConnection
+  /** userId -> qualidade da conexão (sinal do LiveKit), inclusive a minha. */
+  connectionQuality: Record<string, CallQuality>
+  /** userId -> perda/latência medidas de quem está com conexão ruim (tooltip). */
+  qualityDetails: Record<string, QualityDetails>
+
+  /** "Tentar de novo": refaz a conexão de voz sem sair da chamada. */
+  retryConnection: () => void
 
   toggleLock: () => void
   /** Bate na porta da sala trancada do canal. */
@@ -302,6 +331,12 @@ let callGeneration = 0
 let resyncing = false
 /** Conexão com o servidor de mídia (LiveKit) da chamada atual. */
 let media: CallMedia | null = null
+/** Falhou e ninguém decidiu: sai sozinho depois de um tempo (ver CALL_FAILED_AUTO_LEAVE_MS). */
+let failedLeaveTimer: ReturnType<typeof setTimeout> | null = null
+/** Medição de perda/latência enquanto alguém está com conexão ruim. */
+let qualityStatsTimer: ReturnType<typeof setInterval> | null = null
+
+const browserOnline = (): boolean => useConnectionStore.getState().online
 
 /** Leitura sob demanda; o histórico pertence somente ao popover. */
 export async function readCallLatency(): Promise<number | null> {
@@ -370,6 +405,12 @@ async function runScreenQualityQueue(): Promise<void> {
     useCallStore.setState({ pendingScreenQuality: null })
   }
 }
+
+/** Foto da própria tela para a prévia no cartão de perfil, só quando o servidor pede. */
+const sendScreenPreview = createPreviewSender({
+  capture: captureScreenPreview,
+  upload: putScreenPreview
+})
 
 // Som só da janela compartilhada (Windows), quando o helper nativo captura
 let windowAudio: WindowAudio | null = null
@@ -493,6 +534,81 @@ export const useCallStore = create<CallState>()((set, get) => {
     })
   }
 
+  const setConnection = (event: CallConnectionEvent): void => {
+    const next = callConnectionReducer(get().connection, event, Date.now())
+    if (next !== get().connection) set({ connection: next })
+  }
+
+  const clearFailedLeave = (): void => {
+    if (failedLeaveTimer) clearTimeout(failedLeaveTimer)
+    failedLeaveTimer = null
+  }
+
+  const stopQualityStats = (): void => {
+    if (qualityStatsTimer) clearInterval(qualityStatsTimer)
+    qualityStatsTimer = null
+  }
+
+  /**
+   * Mede perda/latência de quem está com conexão ruim (para o tooltip). Só lê
+   * as estatísticas quando há alguém ruim: nada a fazer na chamada boa.
+   */
+  const startQualityStats = (connection: CallMedia): void => {
+    stopQualityStats()
+    let busy = false
+    qualityStatsTimer = setInterval(() => {
+      if (media !== connection) {
+        stopQualityStats()
+        return
+      }
+      const poor = Object.entries(get().connectionQuality)
+        .filter(([, quality]) => isPoorQuality(quality))
+        .map(([userId]) => userId)
+      if (poor.length === 0) {
+        if (Object.keys(get().qualityDetails).length > 0) set({ qualityDetails: {} })
+        return
+      }
+      if (busy) return
+      busy = true
+      const meId = useAuthStore.getState().user?.id ?? null
+      void connection
+        .getQualityDetails(poor, meId)
+        .then((details) => {
+          if (media === connection) set({ qualityDetails: details })
+        })
+        .catch(() => {})
+        .finally(() => {
+          busy = false
+        })
+    }, QUALITY_STATS_INTERVAL_MS)
+  }
+
+  /**
+   * A conexão de voz falhou (ao entrar ou numa queda sem volta): em vez de
+   * sumir com a chamada, o painel mostra o motivo com "Tentar de novo" e
+   * "Sair". Ninguém respondeu: sai sozinho depois de um tempo.
+   */
+  const failMedia = (connection: CallMedia, message: string): void => {
+    if (media !== connection) return
+    connection.disconnect()
+    media = null
+    stopQualityStats()
+    serverSpeakers = []
+    publishSpeaking()
+    applyRemoteMedia({ ...EMPTY_MEDIA, reconnecting: true })
+    set({ connectionQuality: {}, qualityDetails: {} })
+    setConnection({ type: 'failed', error: message })
+    showToast.error(message)
+    clearFailedLeave()
+    const generation = callGeneration
+    failedLeaveTimer = setTimeout(() => {
+      failedLeaveTimer = null
+      if (callGeneration !== generation || get().connection.phase !== 'failed') return
+      showToast.info('Você saiu da chamada: não deu para conectar ao servidor de voz.')
+      get().endCall()
+    }, CALL_FAILED_AUTO_LEAVE_MS)
+  }
+
   /**
    * Entra na sala de mídia da chamada. O callee de DM pode pedir o token antes
    * do backend processar o call:accept (403) — por isso o retry curto.
@@ -506,16 +622,22 @@ export const useCallStore = create<CallState>()((set, get) => {
       onRemoteMedia: (remote) => {
         if (media === connection) applyRemoteMedia(remote)
       },
-      onConnectionLost: () => {
+      onConnectionLost: (reason) => {
         if (media !== connection) return
-        showToast.error('Conexão com o servidor de voz perdida.')
-        get().endCall()
+        failMedia(connection, describeDisconnect(reason, browserOnline()))
       },
       onReconnecting: () => {
-        if (media === connection) showToast.info('Reconectando a chamada…')
+        if (media === connection) setConnection({ type: 'reconnecting' })
       },
       onReconnected: () => {
-        if (media === connection) showToast.info('Chamada reconectada.')
+        if (media === connection) setConnection({ type: 'reconnected' })
+      },
+      onSignalConnected: () => {
+        if (media === connection) setConnection({ type: 'step', step: 'media' })
+      },
+      onConnectionQuality: (userId, quality) => {
+        if (media !== connection || get().connectionQuality[userId] === quality) return
+        set((s) => ({ connectionQuality: { ...s.connectionQuality, [userId]: quality } }))
       },
       onActiveSpeakers: (userIds) => {
         if (media !== connection) return
@@ -547,21 +669,34 @@ export const useCallStore = create<CallState>()((set, get) => {
     // Só reinicia se a detecção ficou presa a uma track antiga.
     if (speakingWatch?.track !== mic) startLocalSpeaking()
 
+    setConnection({ type: 'start' })
+    let token: string
     try {
-      const { token } = await retry(() => getCallToken(callId), {
+      ;({ token } = await retry(() => getCallToken(callId), {
         attempts: TOKEN_ATTEMPTS,
         delayMs: TOKEN_RETRY_DELAY_MS,
         shouldRetry: (err) => err instanceof ApiError && err.status === 403
-      })
-      if (media !== connection || get().callId !== callId) return
-      await connection.connect(LIVEKIT_URL, token, mic, get().muted)
-    } catch {
+      }))
+    } catch (err) {
       if (media !== connection) return
-      showToast.error('Não foi possível conectar ao servidor de voz.')
-      get().endCall()
+      const status = err instanceof ApiError ? err.status : null
+      failMedia(connection, describeTokenError(status, browserOnline()))
+      return
+    }
+    if (media !== connection || get().callId !== callId) return
+    setConnection({ type: 'step', step: 'signal' })
+    try {
+      await connection.connect(LIVEKIT_URL, token, mic, get().muted)
+    } catch (err) {
+      if (media !== connection) return
+      const message = describeJoinError(err, browserOnline())
+      // Cancelado por nós (saiu, tentou de novo): quem cancelou já cuida.
+      if (message !== null) failMedia(connection, message)
       return
     }
     if (media !== connection) return
+    setConnection({ type: 'connected' })
+    startQualityStats(connection)
 
     // O microfone pode ter sido trocado enquanto a sala conectava.
     const currentMic = localMic?.stream.getAudioTracks()[0]
@@ -636,7 +771,8 @@ export const useCallStore = create<CallState>()((set, get) => {
               ...joinReqs.filter((r) => !s.joinRequests.some((q) => q.id === r.id))
             ],
         screenSharers: sharing,
-        screenWatchers: (state.screen_watchers as Record<string, CallUserInfo[]>) ?? s.screenWatchers,
+        screenWatchers:
+          (state.screen_watchers as Record<string, CallUserInfo[]>) ?? s.screenWatchers,
         voiceStates: {
           ...Object.fromEntries(
             state.participants.map((p) => [
@@ -794,6 +930,8 @@ export const useCallStore = create<CallState>()((set, get) => {
     }
     media?.disconnect()
     media = null
+    clearFailedLeave()
+    stopQualityStats()
     stopLocalSpeaking()
     serverSpeakers = []
     stopLocalStream()
@@ -835,7 +973,10 @@ export const useCallStore = create<CallState>()((set, get) => {
       mutedBeforeDeafen: false,
       startedAt: null,
       locked: false,
-      joinRequests: []
+      joinRequests: [],
+      connection: IDLE_CALL_CONNECTION,
+      connectionQuality: {},
+      qualityDetails: {}
     })
   }
 
@@ -913,6 +1054,25 @@ export const useCallStore = create<CallState>()((set, get) => {
     joinRequests: [],
     knock: null,
     admittedChannelId: null,
+    connection: IDLE_CALL_CONNECTION,
+    connectionQuality: {},
+    qualityDetails: {},
+
+    retryConnection: () => {
+      const { status, callId } = get()
+      if (status !== 'active' || !callId || !localMic) return
+      clearFailedLeave()
+      stopQualityStats()
+      // Derruba a tentativa atual (se houver) e começa outra na mesma chamada.
+      const previous = media
+      media = null
+      previous?.disconnect()
+      serverSpeakers = []
+      publishSpeaking()
+      applyRemoteMedia({ ...EMPTY_MEDIA, reconnecting: true })
+      set({ connectionQuality: {}, qualityDetails: {} })
+      void connectMedia(callId)
+    },
 
     toggleLock: () => {
       const { callId, type, locked, status } = get()
@@ -1468,6 +1628,8 @@ export const useCallStore = create<CallState>()((set, get) => {
     },
 
     handleWsReconnect: () => {
+      // A voz falhou (ex.: sem internet) e o chat voltou: a rede voltou, tenta a voz de novo.
+      if (get().status === 'active' && get().connection.phase === 'failed') get().retryConnection()
       void resyncChannelCall()
       void resyncDmCall()
       // Listas dos canais de voz (quem está em cada um, LIVE) voltam a valer.
@@ -1606,6 +1768,15 @@ export const useCallStore = create<CallState>()((set, get) => {
               [p.sharer_id]: p.watchers
             }
           }))
+          return
+        }
+
+        case 'call:screen_preview_request': {
+          // Alguém abriu meu cartão de perfil: manda uma foto pequena da tela.
+          const p = payload as unknown as { call_id: string }
+          const stream = localScreenStream
+          if (!stream || get().callId !== p.call_id || !get().isScreenSharing) return
+          void sendScreenPreview(p.call_id, stream)
           return
         }
 
@@ -1840,12 +2011,7 @@ export const useCallStore = create<CallState>()((set, get) => {
 
 // Atividades seguem a chamada atual: sair/trocar de chamada fecha o jogo aqui.
 useCallStore.subscribe((s) => {
-  useActivityStore
-    .getState()
-    .setCall(
-      s.status === 'idle' ? null : s.callId,
-      voiceServerId(s)
-    )
+  useActivityStore.getState().setCall(s.status === 'idle' ? null : s.callId, voiceServerId(s))
 })
 
 // Os efeitos sonoros saem no mesmo dispositivo escolhido para as vozes.

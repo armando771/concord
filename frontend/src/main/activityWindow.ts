@@ -6,6 +6,7 @@ import {
   activityWindowOptions,
   canNavigateActivity,
   createExternalOpenGate,
+  createRoomTracker,
   isUserGestureInput,
   opensExternally
 } from './activityPolicy'
@@ -13,6 +14,8 @@ import {
 // Atividades no desktop: o jogo abre numa janela própria (moldura normal), com
 // sessão separada e nada do app exposto. Uma por vez; fechar a janela encerra
 // a participação (o renderer principal é avisado por 'activity:closed').
+// A sala em que o jogo está (URL da partida/time) vai para o renderer por
+// 'activity:room'; se quem abriu for você, ela é compartilhada com a chamada.
 
 let win: BrowserWindow | null = null
 let current: string | null = null
@@ -84,6 +87,20 @@ function createActivityWindow(
   created.webContents.on('will-redirect', (details) => {
     if (!details.isMainFrame || canNavigateActivity(activityId, details.url)) return
     details.preventDefault()
+  })
+
+  // O jogo troca a própria URL ao entrar numa partida ou criar um time (history
+  // API ou #hash): a sala vai para o renderer, que a compartilha se for o caso.
+  const rooms = createRoomTracker(activityId)
+  const reportRoom = (url: string): void => {
+    const room = rooms.visit(url)
+    const main = getMain()
+    if (room && main && !main.isDestroyed())
+      main.webContents.send('activity:room', activityId, room)
+  }
+  created.webContents.on('did-navigate', (_event, url) => reportRoom(url))
+  created.webContents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+    if (isMainFrame) reportRoom(url)
   })
 
   created.on('closed', () => {

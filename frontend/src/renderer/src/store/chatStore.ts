@@ -65,8 +65,17 @@ import { useActivityStore } from './activityStore'
 import { useTypingStore } from './typingStore'
 import { usePresenceActivityStore } from './presenceActivityStore'
 import { sanitizeActivity } from '../lib/presenceActivity'
-import { showToast, useToastStore } from './toastStore'
-import { createReconnectNotice } from '../lib/wsReconnect'
+import { showToast } from './toastStore'
+import { useConnectionStore } from './connectionStore'
+import {
+  addPending,
+  isRetryableSendError,
+  removePending,
+  retryableSendErrorText,
+  settlePending,
+  updatePending,
+  type PendingMessage
+} from '../lib/pendingMessages'
 import { router } from '../router'
 import { MESSAGE_LIMIT } from '../api/messages'
 import type { PublicProfile } from '../api/users'
@@ -74,6 +83,9 @@ import { useProfileStore } from './profileStore'
 import { prefsForStatus, presenceStatusOf, type PresenceStatus } from '../lib/presenceStatus'
 
 export type RoomKey = string
+
+/** Até onde o pulo para uma mensagem antiga volta: 40 páginas (2000 mensagens). */
+export const JUMP_MAX_PAGES = 40
 
 interface ChatState {
   messagesByRoom: Record<RoomKey, Message[]>
@@ -91,14 +103,29 @@ interface ChatState {
   statuses: Record<string, PresenceStatus>
   conversations: ConversationSummary[]
   conversationsLoading: boolean
+  /** A lista de conversas já respondeu uma vez: só a primeira carga mostra o skeleton. */
+  conversationsLoaded: boolean
+  /** Minhas mensagens ainda sem confirmação do servidor ("enviando…" / "não enviada"). */
+  pendingByRoom: Record<RoomKey, PendingMessage[]>
+  /** Reenvia uma mensagem que falhou. */
+  retryPending: (room: RoomKey, localId: string) => Promise<void>
+  /** Desiste de uma mensagem que falhou. */
+  discardPending: (room: RoomKey, localId: string) => void
   connect: () => void
   disconnect: () => void
   isWsConnected: () => boolean
+  /** Botão "Tentar agora" do aviso de conexão. */
+  retryWsNow: () => void
   openRoom: (room: RoomKey) => Promise<void>
   closeRoom: (room: RoomKey) => void
   openServer: (serverId: string) => void
   closeServer: (serverId: string) => void
   loadOlder: (room: RoomKey) => Promise<void>
+  /**
+   * Carrega páginas antigas até a mensagem aparecer na lista (pular para um
+   * resultado da busca ou uma resposta antiga). true = está na lista.
+   */
+  loadOlderUntil: (room: RoomKey, messageId: string, maxPages?: number) => Promise<boolean>
   sendToRoom: (
     room: RoomKey,
     content: string,
@@ -202,22 +229,12 @@ const replacePoll = (
 const LISTS_RESYNC_DELAY_MS = 3000
 let listsResyncTimer: ReturnType<typeof setTimeout> | null = null
 
-/** Aviso "Reconectando…" só se o servidor demorar (um deploy leva menos de 3 s). */
-let reconnectToastId: string | null = null
-const dismissReconnectToast = (): void => {
-  if (reconnectToastId) useToastStore.getState().removeToast(reconnectToastId)
-  reconnectToastId = null
+/** O navegador avisa que a rede voltou: tenta o WS na hora, sem esperar o backoff. */
+const handleOnline = (): void => {
+  useConnectionStore.getState().setOnline(true)
+  client.retryNow()
 }
-const reconnectNotice = createReconnectNotice({
-  onSlow: () => {
-    reconnectToastId = showToast.info('Reconectando ao servidor…', 0)
-  },
-  onBack: () => {
-    dismissReconnectToast()
-    showToast.success('Conectado ao servidor de novo.')
-  },
-  onDismiss: dismissReconnectToast
-})
+const handleOffline = (): void => useConnectionStore.getState().setOnline(false)
 
 // Marca a DM como lida no servidor, juntando rajadas de mensagens.
 const readTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -246,7 +263,7 @@ const client = new WsClient({
   getUserId: () => useAuthStore.getState().user?.id ?? null,
   onEvent: (event) => useChatStore.getState().handleWsEvent(event),
   onOpen: (reconnected) => {
-    reconnectNotice.restored()
+    useConnectionStore.getState().wsEvent({ type: 'open' })
     // Avisos de digitando de antes da queda podem nunca receber o stop.
     useTypingStore.getState().reset()
     useCallStore.getState().handleWsReconnect()
@@ -257,8 +274,79 @@ const client = new WsClient({
     requestUpdateCheck()
     if (reconnected) void useChatStore.getState().resyncAfterReconnect()
   },
-  onLost: () => reconnectNotice.lost()
+  onLost: (info) => useConnectionStore.getState().wsEvent({ type: 'lost', ...info })
 })
+
+/** Ids locais das mensagens pendentes. */
+let pendingSeq = 0
+/**
+ * Mensagens cuja resposta do POST já chegou (e tirou a pendente): o eco delas
+ * pelo WS não pode levar embora outra pendente com o mesmo texto.
+ */
+const confirmedSends = new Set<string>()
+
+const setPending = (
+  room: RoomKey,
+  next: (list: PendingMessage[] | undefined) => PendingMessage[]
+): void => {
+  useChatStore.setState((state) => {
+    const current = state.pendingByRoom[room]
+    const updated = next(current)
+    if (updated === current) return {}
+    const pendingByRoom = { ...state.pendingByRoom }
+    if (updated.length === 0) delete pendingByRoom[room]
+    else pendingByRoom[room] = updated
+    return { pendingByRoom }
+  })
+}
+
+const failPending = (room: RoomKey, localId: string, err: unknown): void =>
+  setPending(room, (list) =>
+    updatePending(list, localId, {
+      status: 'failed',
+      error: retryableSendErrorText(err, useConnectionStore.getState().online)
+    })
+  )
+
+/**
+ * Manda a mensagem e já põe a versão do servidor na sala (sem esperar o
+ * evento do WS, que pode estar atrasado ou caído).
+ */
+const postMessage = async (
+  room: RoomKey,
+  content: string,
+  attachmentIds: string[],
+  replyToId: string | null
+): Promise<void> => {
+  const msg = room.startsWith('channel:')
+    ? await sendChannelMessage(room.slice('channel:'.length), content, attachmentIds, replyToId)
+    : await sendConversationMessage(
+        room.slice('conversation:'.length),
+        content,
+        attachmentIds,
+        replyToId
+      )
+  if (msg?.id) {
+    confirmedSends.add(msg.id)
+    if (confirmedSends.size > 200) confirmedSends.delete(confirmedSends.values().next().value!)
+  }
+  if (msg?.id && openRooms.has(room)) {
+    useChatStore.setState((state) =>
+      state.messagesByRoom[room]
+        ? {
+            messagesByRoom: {
+              ...state.messagesByRoom,
+              [room]: mergeMessages(state.messagesByRoom[room], [msg])
+            }
+          }
+        : {}
+    )
+  }
+  if (!client.isConnected()) {
+    await useChatStore.getState().openRoom(room)
+  }
+  useChatStore.getState().fetchConversations()
+}
 
 /** Mensagens que já geraram notificação (chegam por mais de uma sala). */
 const notifiedMessages = new Set<string>()
@@ -277,8 +365,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   statuses: {},
   conversations: [],
   conversationsLoading: false,
+  conversationsLoaded: false,
+  pendingByRoom: {},
 
   connect: () => {
+    useConnectionStore.getState().wsEvent({ type: 'connect' })
+    useConnectionStore.getState().setOnline(navigator.onLine !== false)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
     client.connect()
     get().fetchConversations()
     void useLevelStore.getState().loadMe()
@@ -286,7 +380,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
   disconnect: () => {
     client.disconnect()
-    reconnectNotice.cancel()
+    window.removeEventListener('online', handleOnline)
+    window.removeEventListener('offline', handleOffline)
+    useConnectionStore.getState().wsEvent({ type: 'stop' })
     if (listsResyncTimer) clearTimeout(listsResyncTimer)
     listsResyncTimer = null
     get().reset()
@@ -297,6 +393,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     useNotifySettingsStore.getState().reset()
   },
   isWsConnected: () => client.isConnected(),
+  retryWsNow: () => client.retryNow(),
 
   openRoom: async (room) => {
     // Reabrir a sala carrega o histórico de novo (closeRoom apaga a lista).
@@ -393,27 +490,73 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
+  loadOlderUntil: async (room, messageId, maxPages = JUMP_MAX_PAGES) => {
+    const has = (): boolean => (get().messagesByRoom[room] ?? []).some((m) => m.id === messageId)
+    for (let i = 0; i < maxPages && !has(); i++) {
+      if (!openRooms.has(room) || !(get().hasMoreByRoom[room] ?? false)) break
+      const oldest = get().messagesByRoom[room]?.[0]?.id
+      await get().loadOlder(room)
+      // Nada novo (erro ou fim): não adianta insistir.
+      if (get().messagesByRoom[room]?.[0]?.id === oldest) break
+    }
+    return has()
+  },
+
   sendToRoom: async (room, content, attachmentIds = [], replyToId) => {
     const trimmed = content.trim()
     // Mensagem pode ter só anexo, sem texto.
     if (!trimmed && attachmentIds.length === 0) return
 
-    if (room.startsWith('channel:')) {
-      await sendChannelMessage(room.slice('channel:'.length), trimmed, attachmentIds, replyToId)
-    } else {
-      await sendConversationMessage(
-        room.slice('conversation:'.length),
-        trimmed,
-        attachmentIds,
-        replyToId
+    // Só texto vira bolha "enviando…" (com anexo, os arquivos continuam no
+    // campo e o ChatPane cuida da falha).
+    const localId = attachmentIds.length === 0 ? `local-${++pendingSeq}` : null
+    if (localId) {
+      setPending(room, (list) =>
+        addPending(list, {
+          localId,
+          content: trimmed,
+          replyToId: replyToId ?? null,
+          status: 'sending',
+          error: null
+        })
       )
     }
-
-    if (!client.isConnected()) {
-      await get().openRoom(room)
+    try {
+      await postMessage(room, trimmed, attachmentIds, replyToId ?? null)
+    } catch (err) {
+      if (localId && isRetryableSendError(err)) {
+        // Fica na tela como "Não enviada — tentar de novo".
+        failPending(room, localId, err)
+        return
+      }
+      if (localId) setPending(room, (list) => removePending(list, localId))
+      throw err
     }
-    get().fetchConversations()
+    if (localId) setPending(room, (list) => removePending(list, localId))
   },
+
+  retryPending: async (room, localId) => {
+    const item = get().pendingByRoom[room]?.find((p) => p.localId === localId)
+    if (!item || item.status === 'sending') return
+    setPending(room, (list) => updatePending(list, localId, { status: 'sending', error: null }))
+    try {
+      await postMessage(room, item.content, [], item.replyToId)
+    } catch (err) {
+      if (isRetryableSendError(err)) {
+        failPending(room, localId, err)
+        return
+      }
+      const message =
+        (err as { status?: unknown } | null)?.status === 403
+          ? 'Você não pode mais enviar mensagens aqui.'
+          : 'O servidor recusou a mensagem.'
+      setPending(room, (list) => updatePending(list, localId, { status: 'failed', error: message }))
+      return
+    }
+    setPending(room, (list) => removePending(list, localId))
+  },
+
+  discardPending: (room, localId) => setPending(room, (list) => removePending(list, localId)),
 
   deleteFromRoom: async (room, messageId) => {
     if (room.startsWith('channel:')) {
@@ -532,7 +675,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           const room = `conversation:${c.id}`
           unreadByRoom[room] = room === state.activeRoom ? 0 : (c.unread_count ?? 0)
         }
-        return { conversations: list, unreadByRoom }
+        return { conversations: list, unreadByRoom, conversationsLoaded: true }
       })
       const meId = useAuthStore.getState().user?.id
       const ids = list
@@ -541,6 +684,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       if (ids.length > 0) await get().fetchPresenceFor(ids)
     } catch (err) {
       console.error('[chatStore] fetchConversations error:', err)
+      if (useAuthStore.getState().accessToken === token) set({ conversationsLoaded: true })
     } finally {
       set({ conversationsLoading: false })
     }
@@ -793,9 +937,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         // O canal "bot" e o que o Maestro escreve nunca avisam nem contam como não lido.
         const quiet =
           msg.author_id === MAESTRO_USER_ID ||
-          useServerStore.getState().channels.some(
-            (c) => c.id === msg.channel_id && c.is_system && c.name === 'bot'
-          )
+          useServerStore
+            .getState()
+            .channels.some((c) => c.id === msg.channel_id && c.is_system && c.name === 'bot')
         const decision = quiet
           ? { notify: false, unread: false, mention: false }
           : meUser && serverId && msg.channel_id
@@ -804,6 +948,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                 mentionKindOf(msg, meUser)
               )
             : null
+        // Chegou a minha mensagem que ainda aparecia como pendente: o servidor gravou.
+        if (!confirmedSends.has(msg.id)) {
+          setPending(room, (list) => settlePending(list, msg, useAuthStore.getState().user?.id))
+        }
         set((state) => {
           const nextMessages = openRooms.has(room)
             ? {
@@ -1339,7 +1487,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       presence: {},
       statuses: {},
       conversations: [],
-      conversationsLoading: false
+      conversationsLoading: false,
+      conversationsLoaded: false,
+      pendingByRoom: {}
     })
   }
 }))

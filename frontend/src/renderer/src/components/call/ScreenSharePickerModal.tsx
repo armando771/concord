@@ -7,6 +7,7 @@ import { notePickerCancelled } from '../../lib/screenPickerCancel'
 import { loadScreenQuality, saveScreenQuality } from '../../lib/screenShareQuality'
 import ScreenQualityControls from './ScreenQualityControls'
 import { trapTab } from '../../lib/focusTrap'
+import { ScreenSourceGridSkeleton } from '../skeleton/layouts'
 
 /**
  * Picker de fonte para compartilhamento de tela (estilo Discord).
@@ -22,6 +23,8 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
   const [quality, setQuality] = useState(loadScreenQuality)
   const dialogRef = useRef<HTMLDivElement>(null)
   const [sources, setSources] = useState<ScreenSourceInfo[]>([])
+  // Listar as fontes demora (miniaturas): antes disso não dá para dizer "nenhuma opção".
+  const [sourcesLoaded, setSourcesLoaded] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [tab, setTab] = useState<'screen' | 'window'>('screen')
 
@@ -29,6 +32,7 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
     if (!screenPicker) return
     const off = screenPicker.onShow(() => {
       setSelected(null)
+      setSourcesLoaded(false)
       setQuality(loadScreenQuality())
       setTab('screen')
       setOpen(true)
@@ -44,6 +48,7 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
       .then((all) => {
         if (cancelled) return
         setSources(all)
+        setSourcesLoaded(true)
         const firstScreen = all.find((s) => s.displayId !== '')
         if (firstScreen) setSelected(firstScreen.id)
       })
@@ -100,10 +105,10 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
         tabIndex={-1}
         aria-modal="true"
         aria-label="Compartilhe sua tela"
-        className="glass-card max-h-[95vh] w-full max-w-2xl overflow-y-auto p-6"
+        className="rounded-2xl border border-subtle bg-modal shadow-2xl shadow-black/70 max-h-[95vh] w-full max-w-2xl overflow-y-auto p-6"
       >
-        <h2 className="text-xl font-bold text-white">Compartilhe sua tela</h2>
-        <div className="mt-4 flex gap-4 border-b border-white/10">
+        <h2 className="text-xl font-bold text-strong">Compartilhe sua tela</h2>
+        <div className="mt-4 flex gap-4 border-b border-subtle">
           <button
             onClick={() => {
               setTab('screen')
@@ -111,7 +116,7 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
             }}
             className={`cursor-pointer border-b-2 px-3 pb-2 text-sm font-semibold transition-colors ${
               tab === 'screen'
-                ? 'border-white text-white'
+                ? 'border-[var(--text-strong)] text-strong'
                 : 'border-transparent text-gray-400 hover:text-gray-200'
             }`}
           >
@@ -124,7 +129,7 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
             }}
             className={`cursor-pointer border-b-2 px-3 pb-2 text-sm font-semibold transition-colors ${
               tab === 'window'
-                ? 'border-white text-white'
+                ? 'border-[var(--text-strong)] text-strong'
                 : 'border-transparent text-gray-400 hover:text-gray-200'
             }`}
           >
@@ -133,7 +138,8 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
         </div>
 
         <div className="mt-5 grid max-h-[46vh] grid-cols-2 gap-3 overflow-y-auto pr-1">
-          {visible.length === 0 && (
+          {!sourcesLoaded && <ScreenSourceGridSkeleton />}
+          {sourcesLoaded && visible.length === 0 && (
             <p className="col-span-2 py-8 text-center text-sm text-gray-500">
               Nenhuma opção disponível.
             </p>
@@ -143,14 +149,14 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
               key={source.id}
               onClick={() => setSelected(source.id)}
               className={`group cursor-pointer rounded-lg p-2 text-left transition-colors ${
-                selected === source.id ? 'bg-[#5865f2]/20' : 'bg-white/[0.03] hover:bg-white/[0.07]'
+                selected === source.id ? 'bg-brand/20' : 'bg-fg/[0.03] hover:bg-fg/[0.07]'
               }`}
             >
               <div
                 className={`relative mb-2 aspect-video overflow-hidden rounded-md bg-black ${
                   selected === source.id
-                    ? 'ring-2 ring-[#5865f2]'
-                    : 'ring-1 ring-white/10 group-hover:ring-white/25'
+                    ? 'ring-2 ring-brand'
+                    : 'ring-1 ring-fg/10 group-hover:ring-fg/25'
                 }`}
               >
                 {source.thumbnail ? (
@@ -165,7 +171,7 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
                   </div>
                 )}
                 {selected === source.id && (
-                  <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#5865f2] text-xs font-bold text-white">
+                  <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
                     ✓
                   </span>
                 )}

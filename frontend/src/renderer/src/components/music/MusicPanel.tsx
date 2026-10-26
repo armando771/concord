@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { removeQueueItem, skipMusic, swapQueueItems, type MusicItem } from '../../api/music'
-import { canSwap, formatDuration, T17, T20 } from '../../lib/music'
+import { canSwap, formatDuration, QUEUE_PREVIEW, T17, T20 } from '../../lib/music'
 import { useAuthStore } from '../../store/authStore'
 import { useMusicStore } from '../../store/musicStore'
 import { showToast } from '../../store/toastStore'
@@ -13,7 +13,8 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : 'Falha na operação.'
 }
 
-/** Painel "Tocando agora" da call: abre ao clicar no Maestro no canal de voz.
+/** Painel "Tocando agora" da call: coluna que desliza da esquerda sobre a tela
+ *  de voz ao clicar no Maestro (clicar de novo, fora, Esc ou no X fecha).
  *  Fechar só esconde o painel (a música e o vídeo do palco seguem). */
 function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | null {
   const state = useMusicStore((s) => s.state)
@@ -28,11 +29,34 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
   const serverOffsetMs = useMusicStore((s) => s.serverOffsetMs)
   const meId = useAuthStore((s) => s.user?.id)
   const [dragId, setDragId] = useState<string | null>(null)
+  const [showAll, setShowAll] = useState(false)
   // useElapsed recebe o início em ms (relógio local) e devolve segundos.
   const startedAt = state?.now ? state.now.started_at - serverOffsetMs : null
   const elapsed = useElapsed(startedAt)
+  const asideRef = useRef<HTMLElement | null>(null)
 
-  if (!state || !panelOpen) return null
+  // Clique fora fecha. O Maestro (tile ou linha da lateral) fica de fora: ele
+  // mesmo alterna, senão o clique fecharia e reabriria na sequência.
+  useEffect(() => {
+    if (!panelOpen) return
+    const onDown = (e: MouseEvent): void => {
+      const target = e.target as Element | null
+      if (!target || asideRef.current?.contains(target) || target.closest('[data-maestro-tile]'))
+        return
+      closePanel()
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') closePanel()
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [panelOpen, closePanel])
+
+  if (!state) return null
   const now = state.now
   const mineNow = now?.item.requested_by.id === meId
   const voted = !!meId && state.skip.voters.includes(meId)
@@ -60,48 +84,59 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
   }
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-white/6 bg-black/20 p-4">
+    <aside
+      ref={asideRef}
+      aria-hidden={!panelOpen}
+      className={`absolute inset-y-0 left-0 z-20 flex w-72 flex-col gap-3 overflow-y-auto border-r border-subtle bg-floating p-4 shadow-2xl backdrop-blur transition-all duration-300 ease-out ${
+        panelOpen
+          ? 'translate-x-0 opacity-100'
+          : 'pointer-events-none invisible -translate-x-full opacity-0'
+      }`}
+    >
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400">{T17.title}</h3>
         <button
           type="button"
           onClick={closePanel}
           aria-label="Fechar"
-          className="cursor-pointer rounded p-1 text-gray-400 hover:bg-white/10 hover:text-white"
+          title="Fechar"
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-fg/10 text-gray-200 transition-colors hover:bg-fg/20 hover:text-strong"
         >
           <XIcon className="h-4 w-4" />
         </button>
       </div>
       {now && (
         <div className="flex flex-col gap-2">
-          <MusicVideo serverId={serverId} item={now.item} startedAt={now.started_at} />
+          {panelOpen && (
+            <MusicVideo serverId={serverId} item={now.item} startedAt={now.started_at} />
+          )}
           {now.item.has_video && (
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setStageVideo(true)}
-                className="cursor-pointer rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/15"
+                className="cursor-pointer rounded bg-fg/10 px-2 py-1 text-xs text-strong hover:bg-fg/15"
               >
                 {T20.watch}
               </button>
               <button
                 type="button"
                 onClick={goFullscreen}
-                className="cursor-pointer rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/15"
+                className="cursor-pointer rounded bg-fg/10 px-2 py-1 text-xs text-strong hover:bg-fg/15"
               >
                 {T20.fullscreen}
               </button>
             </div>
           )}
           <div className="min-w-0">
-            <p data-testid="music-now-title" className="truncate font-semibold text-white">
+            <p data-testid="music-now-title" className="truncate font-semibold text-strong">
               {now.item.title}
             </p>
             <p className="truncate text-xs text-gray-400">
               {now.item.artist} · @{now.item.requested_by.username}
             </p>
           </div>
-          <div className="h-1 overflow-hidden rounded bg-white/10">
+          <div className="h-1 overflow-hidden rounded bg-fg/10">
             <div
               className="h-full bg-violet-400"
               style={{
@@ -117,7 +152,7 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
             type="button"
             onClick={onSkip}
             disabled={!mineNow && voted}
-            className="cursor-pointer rounded-md bg-white/10 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-50"
+            className="cursor-pointer rounded-md bg-fg/10 px-3 py-1.5 text-sm font-semibold text-strong hover:bg-fg/15 disabled:opacity-50"
           >
             {mineNow ? T17.skip : T17.vote(state.skip.votes, state.skip.needed)}
           </button>
@@ -129,7 +164,7 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
         <p className="text-sm text-gray-500">{T17.empty}</p>
       ) : (
         <ol className="flex flex-col gap-1">
-          {state.queue.map((it, i) => {
+          {(showAll ? state.queue : state.queue.slice(0, QUEUE_PREVIEW)).map((it, i) => {
             const mine = it.requested_by.id === meId
             return (
               <li
@@ -141,11 +176,11 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
                   if (source && canSwap(source, it, meId)) e.preventDefault()
                 }}
                 onDrop={() => onDrop(it)}
-                className={`flex items-center gap-2 rounded px-2 py-1 text-sm ${mine ? 'cursor-grab bg-white/5' : 'opacity-80'}`}
+                className={`flex items-center gap-2 rounded px-2 py-1 text-sm ${mine ? 'cursor-grab bg-fg/5' : 'opacity-80'}`}
               >
                 <span className="w-4 text-xs text-gray-500">{i + 1}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-white">{it.title}</span>
+                  <span className="block truncate text-strong">{it.title}</span>
                   <span className="block truncate text-[11px] text-gray-500">
                     {formatDuration(it.duration_ms)} · @{it.requested_by.username}
                   </span>
@@ -159,15 +194,25 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
                         showToast.error(errorText(err))
                       )
                     }
-                    className="cursor-pointer text-gray-500 hover:text-white"
+                    className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-gray-300 transition-colors hover:bg-fg/15 hover:text-strong"
                   >
-                    ✕
+                    <XIcon className="h-3.5 w-3.5" />
                   </button>
                 )}
               </li>
             )
           })}
         </ol>
+      )}
+      {state.queue.length > QUEUE_PREVIEW && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          aria-expanded={showAll}
+          className="cursor-pointer rounded-md bg-fg/10 px-3 py-1.5 text-xs font-semibold text-gray-200 transition-colors hover:bg-fg/15 hover:text-strong"
+        >
+          {showAll ? T20.seeLess : T20.seeMore(state.queue.length - QUEUE_PREVIEW)}
+        </button>
       )}
 
       <div className="mt-auto flex items-center justify-between gap-2 text-xs text-gray-300">

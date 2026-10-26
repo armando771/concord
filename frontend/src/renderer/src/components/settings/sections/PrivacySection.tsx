@@ -12,6 +12,7 @@ import { useSettingsStore } from '../../../store/settingsStore'
 import { useUIStore } from '../../../store/uiStore'
 import { showToast } from '../../../store/toastStore'
 import router from '../../../router'
+import { SettingsSectionsSkeleton } from '../../skeleton/layouts'
 
 const POLICIES: { id: FriendRequestPolicy; title: string; description: string }[] = [
   { id: 'everyone', title: 'Todos', description: 'Qualquer pessoa com seu nome de usuário.' },
@@ -78,11 +79,11 @@ export function PrivacySection(): React.JSX.Element {
     void router.navigate('/friends')
   }
 
-  if (!privacy) return <p className="text-ds-md text-gray-500">Carregando…</p>
+  if (!privacy) return <SettingsSectionsSkeleton sections={[4, 1, 1]} />
 
   return (
     <div className="flex flex-col gap-8">
-      <section className="border-b border-white/10 pb-6">
+      <section className="border-b border-subtle pb-6">
         <SectionTitle>Quem pode te enviar pedido de amizade</SectionTitle>
         <div role="radiogroup" className="flex flex-col gap-2">
           {POLICIES.map((p) => {
@@ -91,7 +92,7 @@ export function PrivacySection(): React.JSX.Element {
               <label
                 key={p.id}
                 className={`flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 transition-colors ${
-                  checked ? 'bg-white/10' : 'bg-black/20 hover:bg-white/5'
+                  checked ? 'bg-fg/10' : 'bg-input hover:bg-fg/5'
                 }`}
               >
                 <input
@@ -100,10 +101,10 @@ export function PrivacySection(): React.JSX.Element {
                   checked={checked}
                   disabled={saving}
                   onChange={() => void save({ ...privacy, friend_request_policy: p.id })}
-                  className="h-4 w-4 accent-[#5865f2]"
+                  className="h-4 w-4 accent-brand"
                 />
                 <span className="min-w-0">
-                  <span className="block text-ds-md font-medium text-white">{p.title}</span>
+                  <span className="block text-ds-md font-medium text-strong">{p.title}</span>
                   <span className="block text-ds-sm text-gray-400">{p.description}</span>
                 </span>
               </label>
@@ -112,7 +113,7 @@ export function PrivacySection(): React.JSX.Element {
         </div>
       </section>
 
-      <section className="border-b border-white/10 pb-6">
+      <section className="border-b border-subtle pb-6">
         <SectionTitle>Mensagens diretas</SectionTitle>
         <Toggle
           title="Permitir DMs de membros de servidores"
@@ -123,7 +124,7 @@ export function PrivacySection(): React.JSX.Element {
       </section>
 
       {window.api?.games && (
-        <section className="border-b border-white/10 pb-6">
+        <section className="border-b border-subtle pb-6">
           <SectionTitle>Atividade</SectionTitle>
           <Toggle
             title="Mostrar o jogo que estou jogando"
@@ -147,7 +148,7 @@ export function PrivacySection(): React.JSX.Element {
           <button
             type="button"
             onClick={openBlocked}
-            className="cursor-pointer rounded-md bg-white/10 px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-white/15"
+            className="cursor-pointer rounded-md bg-fg/10 px-4 py-2 text-ds-sm font-medium text-strong transition-colors hover:bg-fg/15"
           >
             Ver bloqueados
           </button>

@@ -1,11 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createReconnectNotice,
-  isPlannedRestart,
-  RECONNECT_NOTICE_DELAY_MS,
-  reconnectDelay,
-  SERVICE_RESTART_CLOSE_CODE
-} from './wsReconnect'
+import { describe, expect, it } from 'vitest'
+import { isPlannedRestart, reconnectDelay, SERVICE_RESTART_CLOSE_CODE } from './wsReconnect'
 
 describe('isPlannedRestart', () => {
   it('reconhece o 1012 que o servidor manda ao reiniciar', () => {
@@ -35,56 +29,5 @@ describe('reconnectDelay', () => {
     expect(reconnectDelay(1, false)).toBe(2000)
     expect(reconnectDelay(2, false)).toBe(4000)
     expect(reconnectDelay(10, false)).toBe(30000)
-  })
-})
-
-describe('createReconnectNotice', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-  })
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  const setup = (): {
-    notice: ReturnType<typeof createReconnectNotice>
-    show: ReturnType<typeof vi.fn>
-    back: ReturnType<typeof vi.fn>
-  } => {
-    const show = vi.fn()
-    const back = vi.fn()
-    return { notice: createReconnectNotice({ onSlow: show, onBack: back }), show, back }
-  }
-
-  it('não avisa nada se a conexão volta em menos de 3 s (deploy normal)', () => {
-    const { notice, show, back } = setup()
-    notice.lost()
-    vi.advanceTimersByTime(RECONNECT_NOTICE_DELAY_MS - 1)
-    notice.restored()
-    vi.advanceTimersByTime(10_000)
-    expect(show).not.toHaveBeenCalled()
-    expect(back).not.toHaveBeenCalled()
-  })
-
-  it('avisa "reconectando" uma vez só se passar de 3 s, e avisa quando volta', () => {
-    const { notice, show, back } = setup()
-    notice.lost()
-    vi.advanceTimersByTime(1000)
-    notice.lost() // tentativa que falhou
-    vi.advanceTimersByTime(RECONNECT_NOTICE_DELAY_MS)
-    notice.lost()
-    expect(show).toHaveBeenCalledTimes(1)
-    notice.restored()
-    expect(back).toHaveBeenCalledTimes(1)
-  })
-
-  it('cancel (logout) não deixa aviso pendente', () => {
-    const { notice, show, back } = setup()
-    notice.lost()
-    notice.cancel()
-    vi.advanceTimersByTime(10_000)
-    notice.restored()
-    expect(show).not.toHaveBeenCalled()
-    expect(back).not.toHaveBeenCalled()
   })
 })

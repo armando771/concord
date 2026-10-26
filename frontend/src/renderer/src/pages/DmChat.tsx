@@ -15,7 +15,10 @@ import { getOrCreateConversationWith } from '../api/conversations'
 import { showToast } from '../store/toastStore'
 import ChatPane from '../components/ChatPane'
 import DmCallView from '../components/call/DmCallView'
+import MessageSearchBar from '../components/search/MessageSearchBar'
+import SearchResultsPanel from '../components/search/SearchResultsPanel'
 import { PhoneIcon, PhoneOffIcon } from '../components/icons'
+import { ComposerSkeleton, MessageListSkeleton } from '../components/skeleton/layouts'
 
 function DmChat(): React.JSX.Element {
   const { userId } = useParams<{ userId: string }>()
@@ -89,6 +92,30 @@ function DmChat(): React.JSX.Element {
       : undefined
   const chatPermissions = withBot ? BOT_DM_PERMISSIONS : undefined
 
+  // Quem aparece no from:/mentions: da busca: eu e a outra pessoa.
+  const searchUsers = [
+    ...(me
+      ? [
+          {
+            id: me.id,
+            username: me.username,
+            displayName: me.display_name || me.username,
+            avatarUrl: me.avatar_url
+          }
+        ]
+      : []),
+    ...(userId && otherHandle && userId !== me?.id
+      ? [
+          {
+            id: userId,
+            username: otherHandle,
+            displayName: otherName,
+            avatarUrl: other?.avatar_url
+          }
+        ]
+      : [])
+  ]
+
   const openMenu = (e: React.MouseEvent): void => {
     if (!userId || userId === me?.id) return
     e.preventDefault()
@@ -103,10 +130,10 @@ function DmChat(): React.JSX.Element {
   }
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-[#07080b]/90 backdrop-blur-2xl text-gray-100">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-primary backdrop-blur-2xl text-gray-100">
       <header
         onContextMenu={openMenu}
-        className="flex h-14 shrink-0 items-center gap-3 border-b border-white/6 px-4"
+        className="flex h-14 shrink-0 items-center gap-3 border-b border-subtle px-4"
       >
         <div className="flex items-center gap-2.5 min-w-0">
           <button
@@ -126,23 +153,23 @@ function DmChat(): React.JSX.Element {
               size={32}
               animate="always"
               status={status}
-              cutoutColor="#07080b"
+              cutoutColor="var(--bg-primary)"
             />
           </button>
           <div className="min-w-0">
-            <p className="truncate text-ds-md font-semibold text-white">
+            <p className="truncate text-ds-md font-semibold text-strong">
               <StyledName name={look.name} userId={userId} style={other?.name_style} />
             </p>
             {otherHandle && <p className="truncate text-ds-xs text-gray-400">@{otherHandle}</p>}
           </div>
         </div>
-        <span className="text-ds-xs font-semibold" style={{ color: STATUS_META[status].color }}>
+        <span className="text-ds-xs font-semibold" style={{ color: STATUS_META[status].textColor }}>
           {STATUS_META[status].label}
         </span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           {withBot ? null : inCallWithUser ? (
             <button
-              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-[#f23f43] text-white transition-colors hover:bg-[#d83a3e]"
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-danger-strong text-white transition-colors hover:bg-danger-strong-hover"
               onClick={endCall}
               aria-label="Encerrar chamada"
               title="Encerrar chamada"
@@ -151,7 +178,7 @@ function DmChat(): React.JSX.Element {
             </button>
           ) : (
             <button
-              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-white/5 text-gray-300 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-fg/5 text-gray-300 transition-colors hover:bg-fg/10 hover:text-strong disabled:cursor-not-allowed disabled:opacity-40"
               onClick={() => {
                 if (!conversationId || !userId) return
                 void startDMCall(conversationId, {
@@ -173,6 +200,13 @@ function DmChat(): React.JSX.Element {
               <PhoneIcon className="h-[18px] w-[18px]" />
             </button>
           )}
+          {conversationId && (
+            <MessageSearchBar
+              scope={{ kind: 'conversation', id: conversationId }}
+              name={look.name}
+              users={searchUsers}
+            />
+          )}
         </div>
       </header>
 
@@ -181,28 +215,36 @@ function DmChat(): React.JSX.Element {
           <p>{error}</p>
         </div>
       ) : conversationId ? (
-        inCallWithUser ? (
-          <DmCallView>
-            <ChatPane
-              room={`conversation:${conversationId}`}
-              placeholder={`Mensagem para @${otherHandle || otherName}`}
-              mentionable={dmMentionable}
-              disabledReason={blockedReason}
-              permissions={chatPermissions}
-            />
-          </DmCallView>
-        ) : (
-          <ChatPane
-            room={`conversation:${conversationId}`}
-            placeholder={`Mensagem para @${otherHandle || otherName}`}
-            mentionable={dmMentionable}
-            disabledReason={blockedReason}
-            permissions={chatPermissions}
-          />
-        )
+        <div className="flex min-h-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-col">
+            {inCallWithUser ? (
+              <DmCallView>
+                <ChatPane
+                  room={`conversation:${conversationId}`}
+                  placeholder={`Mensagem para @${otherHandle || otherName}`}
+                  mentionable={dmMentionable}
+                  disabledReason={blockedReason}
+                  permissions={chatPermissions}
+                />
+              </DmCallView>
+            ) : (
+              <ChatPane
+                room={`conversation:${conversationId}`}
+                placeholder={`Mensagem para @${otherHandle || otherName}`}
+                mentionable={dmMentionable}
+                disabledReason={blockedReason}
+                permissions={chatPermissions}
+              />
+            )}
+          </div>
+          <SearchResultsPanel scope={{ kind: 'conversation', id: conversationId }} />
+        </div>
       ) : (
-        <div className="flex flex-1 items-center justify-center text-ds-md text-gray-400">
-          <p>Abrindo conversa...</p>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1">
+            <MessageListSkeleton label="Abrindo conversa…" />
+          </div>
+          <ComposerSkeleton />
         </div>
       )}
     </div>

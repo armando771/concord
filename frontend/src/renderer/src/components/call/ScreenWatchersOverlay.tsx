@@ -23,7 +23,7 @@ export default function ScreenWatchersOverlay({
     <div
       data-testid="screen-watchers-overlay"
       title={`Assistindo (${watchers.length}): ${tooltipText}`}
-      className={`z-20 flex items-center gap-1.5 rounded-full bg-black/65 px-2 py-1 text-xs text-white backdrop-blur-md shadow-lg border border-white/10 select-none ${className}`}
+      className={`on-media z-20 flex items-center gap-1.5 rounded-full bg-black/65 px-2 py-1 text-xs text-white backdrop-blur-md shadow-lg border border-white/10 select-none ${className}`}
     >
       <div className="flex items-center gap-1 text-gray-300">
         <EyeIcon className="h-3.5 w-3.5 text-emerald-400" />
@@ -48,8 +48,11 @@ export default function ScreenWatchersOverlay({
         ))}
         {remainingCount > 0 && (
           <div
-            title={`+${remainingCount} outros: ${watchers.slice(maxVisible).map((w) => w.display_name || w.username).join(', ')}`}
-            className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold text-white ring-2 ring-black/80"
+            title={`+${remainingCount} outros: ${watchers
+              .slice(maxVisible)
+              .map((w) => w.display_name || w.username)
+              .join(', ')}`}
+            className="flex h-5 w-5 items-center justify-center rounded-full bg-fg/20 text-[10px] font-bold text-strong ring-2 ring-black/80"
           >
             +{remainingCount}
           </div>

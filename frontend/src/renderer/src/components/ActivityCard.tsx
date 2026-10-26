@@ -38,19 +38,14 @@ export function ActivityCard({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full cursor-pointer items-center gap-3 rounded-lg border border-white/6 bg-[#111214] p-3 text-left transition-colors hover:bg-white/5"
+      className="flex w-full cursor-pointer items-center gap-3 rounded-lg border border-subtle bg-floating p-3 text-left transition-colors hover:bg-fg/5"
     >
-      <Avatar
-        userId={user.id}
-        name={look.name}
-        avatarUrl={look.avatarUrl}
-        size={32}
-      />
+      <Avatar userId={user.id} name={look.name} avatarUrl={look.avatarUrl} size={32} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-ds-sm font-medium text-gray-400">
           <StyledName name={look.name} userId={user.id} style={user.name_style} />
         </p>
-        <p className="truncate text-ds-md font-bold text-white">{activity.name}</p>
+        <p className="truncate text-ds-md font-bold text-strong">{activity.name}</p>
         <p className="truncate text-ds-xs text-gray-400">
           <Elapsed startedAt={activity.started_at} />
         </p>
@@ -59,7 +54,12 @@ export function ActivityCard({
         className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md"
         style={{ background: `${accent}33`, color: accent }}
       >
-        <GameIcon name={activity.name} appId={activity.app_id} iconHash={activity.icon_hash} className="h-6 w-6" />
+        <GameIcon
+          name={activity.name}
+          appId={activity.app_id}
+          iconHash={activity.icon_hash}
+          className="h-6 w-6"
+        />
       </span>
     </button>
   )

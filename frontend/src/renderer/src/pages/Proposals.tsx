@@ -35,6 +35,7 @@ import { snapCenterToCursor } from '../lib/dragModifiers'
 import { useAuthStore } from '../store/authStore'
 import { useProposalStore } from '../store/proposalStore'
 import { showToast } from '../store/toastStore'
+import { ProposalBoardSkeleton } from '../components/skeleton/layouts'
 
 interface ProposalActions {
   onVote: (approve: boolean) => Promise<void>
@@ -203,11 +204,11 @@ function Proposals(): React.JSX.Element {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-[#07080b]/90 backdrop-blur-2xl text-gray-100">
+    <div className="flex h-full w-full overflow-hidden bg-primary backdrop-blur-2xl text-gray-100">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-white/6 px-4">
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-subtle px-4">
           <DiamondIcon className="h-6 w-6 text-violet-400" />
-          <span className="text-base font-bold tracking-wide text-white">Propostas</span>
+          <span className="text-base font-bold tracking-wide text-strong">Propostas</span>
           <div className="ml-auto flex items-center gap-2">
             {isTech && <GithubUsernameButton />}
             <Button variant="ghost" onClick={() => setShowRejected((v) => !v)}>
@@ -218,7 +219,7 @@ function Proposals(): React.JSX.Element {
         </header>
 
         {loading ? (
-          <div className="py-8 text-center text-sm text-gray-400">Carregando propostas...</div>
+          <ProposalBoardSkeleton columns={columns} />
         ) : (
           <DndContext
             sensors={sensors}

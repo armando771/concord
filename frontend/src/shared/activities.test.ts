@@ -2,14 +2,19 @@ import { describe, expect, it } from 'vitest'
 import {
   ACTIVITIES,
   activityLaunchUrl,
+  activityRoomFromUrl,
   findActivity,
   isAllowedActivityUrl,
   validateActivityLink
 } from './activities'
 
 describe('catálogo de atividades', () => {
-  it('começa só com o Krunker.io', () => {
-    expect(ACTIVITIES.map((a) => a.id)).toEqual(['krunker'])
+  it('Krunker.io e os battle royales survev.io e Suroi', () => {
+    expect(ACTIVITIES.map((a) => a.id)).toEqual(['krunker', 'survev', 'suroi'])
+    expect(findActivity('survev')?.origins).toEqual(['https://survev.io'])
+    expect(findActivity('suroi')?.origins).toEqual(['https://suroi.io'])
+    // Cada jogo tem a própria sessão na janela do desktop.
+    expect(new Set(ACTIVITIES.map((a) => a.partition)).size).toBe(ACTIVITIES.length)
     const krunker = findActivity('krunker')
     expect(krunker?.name).toBe('Krunker.io')
     expect(krunker?.origins).toEqual(['https://krunker.io'])
@@ -64,6 +69,83 @@ describe('validateActivityLink', () => {
       ok: false,
       error: 'Atividade desconhecida.'
     })
+  })
+})
+
+describe('validateActivityLink com código da sala', () => {
+  it('Krunker: REGIÃO:id vira o link da sala', () => {
+    expect(validateActivityLink('krunker', ' BRZ:tukbo ')).toEqual({
+      ok: true,
+      url: 'https://krunker.io/?game=BRZ:tukbo'
+    })
+  })
+
+  it('survev/Suroi: o código do time vira o link (no iframe o jogo copia só o código)', () => {
+    expect(validateActivityLink('survev', 'r7S5')).toEqual({
+      ok: true,
+      url: 'https://survev.io/#r7S5'
+    })
+    expect(validateActivityLink('suroi', '#xv0d')).toEqual({
+      ok: true,
+      url: 'https://suroi.io/#xv0d'
+    })
+  })
+
+  it('código com cara errada continua recusado', () => {
+    expect(validateActivityLink('survev', 'sala do joão').ok).toBe(false)
+    expect(validateActivityLink('krunker', 'r7S5').ok).toBe(false)
+    expect(validateActivityLink('survev', 'BRZ:tukbo').ok).toBe(false)
+  })
+})
+
+describe('activityRoomFromUrl', () => {
+  it('Krunker: a URL da partida (?game=REGIÃO:id) é a sala', () => {
+    expect(activityRoomFromUrl('krunker', 'https://krunker.io/?game=BRZ:tukbo')).toBe(
+      'https://krunker.io/?game=BRZ:tukbo'
+    )
+  })
+
+  it('survev/Suroi: o #código do time é a sala; a região do Suroi vem junto', () => {
+    expect(activityRoomFromUrl('survev', 'https://survev.io/#1Fu4')).toBe('https://survev.io/#1Fu4')
+    expect(activityRoomFromUrl('suroi', 'https://suroi.io/#xv0d')).toBe('https://suroi.io/#xv0d')
+    expect(activityRoomFromUrl('suroi', 'https://suroi.io/?region=sa#xv0d')).toBe(
+      'https://suroi.io/?region=sa#xv0d'
+    )
+  })
+
+  it('só os parâmetros da sala vão adiante (o resto da URL é descartado)', () => {
+    expect(
+      activityRoomFromUrl('krunker', 'https://krunker.io/?game=BRZ:tukbo&utm_source=x&token=abc')
+    ).toBe('https://krunker.io/?game=BRZ:tukbo')
+    expect(activityRoomFromUrl('suroi', 'https://suroi.io/?region=<x>#xv0d')).toBe(
+      'https://suroi.io/#xv0d'
+    )
+  })
+
+  it.each([
+    ['página inicial', 'krunker', 'https://krunker.io/'],
+    ['saiu do time', 'survev', 'https://survev.io/'],
+    ['hash do login social', 'survev', 'https://survev.io/#_=_'],
+    ['outra página do site', 'krunker', 'https://krunker.io/social.html?game=BRZ:tukbo'],
+    ['outro site', 'krunker', 'https://evil.com/?game=BRZ:tukbo'],
+    ['código esquisito', 'krunker', 'https://krunker.io/?game=<script>'],
+    ['sala de outro jogo', 'survev', 'https://suroi.io/#xv0d'],
+    ['atividade desconhecida', 'doom', 'https://krunker.io/?game=BRZ:tukbo'],
+    ['lixo', 'krunker', 'não é url']
+  ])('%s: null', (_name, id, url) => {
+    expect(activityRoomFromUrl(id, url)).toBeNull()
+  })
+
+  it('a sala capturada passa na validação do link (e cabe no limite)', () => {
+    for (const [id, url] of [
+      ['krunker', 'https://krunker.io/?game=BRZ:tukbo'],
+      ['survev', 'https://survev.io/#1Fu4'],
+      ['suroi', 'https://suroi.io/?region=sa#xv0d']
+    ]) {
+      const room = activityRoomFromUrl(id, url)
+      expect(room).not.toBeNull()
+      expect(isAllowedActivityUrl(id, room ?? '')).toBe(true)
+    }
   })
 })
 

@@ -16,10 +16,11 @@ import MyAccountSection from './sections/MyAccountSection'
 import ProfilesSection from './sections/ProfilesSection'
 import { PrivacySection } from './sections/PrivacySection'
 import { KeybindsSection } from './sections/KeybindsSection'
+import { AppearanceSection } from './sections/AppearanceSection'
 import { AppSection, NotificationsSection, VoiceSection } from './sections/SimpleSections'
 
-const NAV_BG = '#0b0c10'
-const CONTENT_BG = '#050508'
+const NAV_BG = 'var(--bg-secondary)'
+const CONTENT_BG = 'var(--bg-primary)'
 
 // "Aplicativo" (iniciar com o sistema, overlay) só existe no desktop; no dev
 // fica por causa da prévia da animação de nível.
@@ -30,6 +31,7 @@ const SECTION_VIEW: Record<SettingsSectionId, () => React.JSX.Element | null> = 
   account: MyAccountSection,
   profiles: ProfilesSection,
   privacy: PrivacySection,
+  appearance: AppearanceSection,
   voice: VoiceSection,
   keybinds: KeybindsSection,
   notifications: NotificationsSection,
@@ -86,13 +88,13 @@ function SettingsContent(): React.JSX.Element {
     >
       {/* Navegação */}
       <aside
-        className="flex w-[260px] shrink-0 flex-col border-r border-white/6"
+        className="flex w-[260px] shrink-0 flex-col border-r border-subtle"
         style={{ background: NAV_BG }}
       >
         <button
           type="button"
           onClick={() => goTo('profiles')}
-          className="m-3 flex cursor-pointer items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-white/5"
+          className="m-3 flex cursor-pointer items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-fg/5"
         >
           <Avatar
             userId={user?.id}
@@ -102,21 +104,21 @@ function SettingsContent(): React.JSX.Element {
             animate="always"
           />
           <span className="min-w-0">
-            <span className="block truncate text-ds-md font-medium text-white">{name}</span>
+            <span className="block truncate text-ds-md font-medium text-strong">{name}</span>
             <span className="flex items-center gap-1 text-xs text-gray-400">
               Editar perfis <PencilIcon className="h-3 w-3" />
             </span>
           </span>
         </button>
 
-        <label className="mx-3 mb-3 flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-3 py-2 focus-within:border-[#5865f2]">
+        <label className="mx-3 mb-3 flex items-center gap-2 rounded-lg border border-subtle bg-input px-3 py-2 focus-within:border-brand">
           <SearchIcon className="h-4 w-4 shrink-0 text-gray-400" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar"
             aria-label="Buscar nas configurações"
-            className="min-w-0 flex-1 bg-transparent text-ds-md text-white placeholder:text-gray-500 focus:outline-none"
+            className="min-w-0 flex-1 bg-transparent text-ds-md text-strong placeholder:text-gray-500 focus:outline-none"
           />
         </label>
 
@@ -135,8 +137,8 @@ function SettingsContent(): React.JSX.Element {
                     aria-current={item.id === current.id ? 'page' : undefined}
                     className={`mb-0.5 block w-full cursor-pointer rounded-md px-2 py-1.5 text-left text-ds-md font-medium transition-colors ${
                       item.id === current.id
-                        ? 'bg-white/10 text-white'
-                        : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                        ? 'bg-fg/10 text-strong'
+                        : 'text-gray-400 hover:bg-fg/5 hover:text-gray-200'
                     }`}
                   >
                     {item.label}
@@ -149,12 +151,12 @@ function SettingsContent(): React.JSX.Element {
             <p className="px-2 text-ds-md text-gray-500">Nada encontrado para “{query}”.</p>
           )}
 
-          <div className="mt-2 border-t border-white/10 pt-2">
+          <div className="mt-2 border-t border-subtle pt-2">
             <button
               type="button"
               onClick={() => void logout()}
               disabled={loggingOut}
-              className="block w-full cursor-pointer rounded-md px-2 py-1.5 text-left text-ds-md font-medium text-[#f23f43] transition-colors hover:bg-[#f23f43]/10 disabled:opacity-50"
+              className="block w-full cursor-pointer rounded-md px-2 py-1.5 text-left text-ds-md font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
             >
               {loggingOut ? 'Saindo...' : 'Sair'}
             </button>
@@ -165,7 +167,7 @@ function SettingsContent(): React.JSX.Element {
       {/* Conteúdo */}
       <main className="relative min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[740px] px-10 pb-28 pt-14">
-          <h1 className="mb-6 text-ds-lg font-semibold text-white">{current.label}</h1>
+          <h1 className="mb-6 text-ds-lg font-semibold text-strong">{current.label}</h1>
           <View />
         </div>
         <div
@@ -176,7 +178,7 @@ function SettingsContent(): React.JSX.Element {
             type="button"
             onClick={close}
             aria-label="Fechar configurações"
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-2 border-gray-500 text-gray-400 transition-colors hover:border-white hover:text-white"
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-2 border-gray-500 text-gray-400 transition-colors hover:border-[var(--text-strong)] hover:text-strong"
           >
             <XIcon className="h-4 w-4" />
           </button>

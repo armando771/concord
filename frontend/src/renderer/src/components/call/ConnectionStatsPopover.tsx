@@ -29,17 +29,17 @@ function PingGraph({
   const segments = pingSegments(history, ceiling)
   const color =
     latest?.ms == null
-      ? '#949ba4'
+      ? 'var(--text-muted)'
       : latest.ms < 100
-        ? '#23a55a'
+        ? 'var(--green)'
         : latest.ms < 250
-          ? '#f0b232'
-          : '#f23f43'
+          ? 'var(--yellow)'
+          : 'var(--red)'
   const end = latest?.time
 
   return (
     <div>
-      <div className="relative rounded border border-white/10 bg-black/15 px-2 py-3">
+      <div className="relative rounded border border-subtle bg-input px-2 py-3">
         <svg
           viewBox="0 0 240 72"
           className="block h-20 w-full overflow-visible"
@@ -47,10 +47,26 @@ function PingGraph({
           aria-label={`Histórico de latência até o servidor de voz. Último ping: ${formatPing(latest?.ms ?? null)}. Escala de 0 a ${ceiling} ms.`}
         >
           {[0, 24, 48, 72].map((y) => (
-            <line key={`h${y}`} x1="0" x2="240" y1={y} y2={y} stroke="white" strokeOpacity="0.12" />
+            <line
+              key={`h${y}`}
+              x1="0"
+              x2="240"
+              y1={y}
+              y2={y}
+              style={{ stroke: 'var(--fg)' }}
+              strokeOpacity="0.12"
+            />
           ))}
           {[0, 60, 120, 180, 240].map((x) => (
-            <line key={`v${x}`} x1={x} x2={x} y1="0" y2="72" stroke="white" strokeOpacity="0.12" />
+            <line
+              key={`v${x}`}
+              x1={x}
+              x2={x}
+              y1="0"
+              y2="72"
+              style={{ stroke: 'var(--fg)' }}
+              strokeOpacity="0.12"
+            />
           ))}
           {[ceiling, ceiling / 2, 0].map((value, index) => (
             <text
@@ -58,7 +74,7 @@ function PingGraph({
               x="237"
               y={index * 36 + (index === 0 ? 9 : -3)}
               textAnchor="end"
-              fill="#949ba4"
+              style={{ fill: 'var(--text-muted)' }}
               fontSize="9"
             >
               {Math.round(value)}
@@ -69,7 +85,7 @@ function PingGraph({
               key={index}
               points={points}
               fill="none"
-              stroke={color}
+              style={{ stroke: color }}
               strokeWidth="1.5"
               strokeLinejoin="round"
             />
@@ -79,7 +95,7 @@ function PingGraph({
               cx="240"
               cy={72 - (Math.min(latest.ms, ceiling) / ceiling) * 72}
               r="2"
-              fill={color}
+              style={{ fill: color }}
             />
           )}
         </svg>
@@ -158,11 +174,11 @@ function ConnectionStatsPopover({
       aria-labelledby={titleId}
       tabIndex={-1}
       style={{ width, left, bottom, maxHeight: Math.max(80, rect.top - MARGIN * 2) }}
-      className="fixed z-50 overflow-y-auto rounded-xl border border-white/10 bg-[#111214] shadow-2xl outline-none"
+      className="fixed z-50 overflow-y-auto rounded-xl border border-subtle bg-floating shadow-2xl outline-none"
     >
       <h2
         id={titleId}
-        className="border-b border-white/6 px-4 py-3 text-center text-ds-xs font-bold uppercase tracking-wide text-gray-200"
+        className="border-b border-subtle px-4 py-3 text-center text-ds-xs font-bold uppercase tracking-wide text-gray-200"
       >
         Conexão de voz
       </h2>
@@ -183,7 +199,7 @@ function ConnectionStatsPopover({
           </div>
         </dl>
         <p className="text-ds-xs text-gray-500">Latência até o servidor de voz.</p>
-        <div className="border-t border-white/10 pt-3">
+        <div className="border-t border-subtle pt-3">
           <h3 className="mb-2 text-ds-xs font-bold text-gray-400">Uso do aplicativo</h3>
           {metricsAvailable ? (
             <dl className="grid grid-cols-2 gap-3 text-ds-sm">

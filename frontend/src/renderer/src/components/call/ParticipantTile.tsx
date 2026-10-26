@@ -6,7 +6,11 @@ import VoiceStateIcons from './VoiceStateIcons'
 import StreamAudioControls from './StreamAudioControls'
 import FullscreenOverlay from './FullscreenOverlay'
 import { useStreamFullscreen } from './useStreamFullscreen'
-import { ClickDisambiguator, isInteractiveTarget } from '../../lib/fullscreenControls'
+import {
+  ClickDisambiguator,
+  canTileFullscreen,
+  isInteractiveTarget
+} from '../../lib/fullscreenControls'
 import { VolumeOffIcon, XIcon, PencilIcon } from '../icons'
 import { useAuthStore } from '../../store/authStore'
 import { useCallStore } from '../../store/callStore'
@@ -21,6 +25,8 @@ import ScreenWatchersOverlay from './ScreenWatchersOverlay'
 import ScreenAnnotationCanvas from './ScreenAnnotationCanvas'
 import ScreenAnnotationToolbar from './ScreenAnnotationToolbar'
 import StyledName from '../StyledName'
+import ConnectionQualityBars from './ConnectionQualityBars'
+import CallActivityBadge from './CallActivityBadge'
 
 export function VideoFill({
   stream,
@@ -91,7 +97,7 @@ function ParticipantTile({
   action,
   onClose,
   streamAudioUserId,
-  fullscreenable = false,
+  fullscreenable = true,
   watchers,
   hasHeaderOffset = false
 }: {
@@ -120,16 +126,16 @@ function ParticipantTile({
   onClose?: () => void
   /** Live de outra pessoa: barra de mutar/volume (só para você) ao passar o mouse. */
   streamAudioUserId?: string
-  /** Transmissão assistida: botão e duplo clique de tela cheia (só com vídeo). */
+  /** Botão e duplo clique de tela cheia (só com vídeo; câmera e transmissão assistida). */
   fullscreenable?: boolean
   /** Espectadores assistindo à transmissão (ao vivo). */
   watchers?: CallUserInfo[]
   /** Espaço para não cobrir botões do cabeçalho da transmissão focada. */
   hasHeaderOffset?: boolean
 }): React.JSX.Element {
-  // Clicar no Maestro na call abre o painel "Tocando agora" (vídeo, fila…).
-  const openMusicPanel = useMusicStore((s) => s.openPanel)
-  const onClick = onClickProp ?? (isMaestroIdentity(user.id) ? openMusicPanel : undefined)
+  // Clicar no Maestro na call abre/fecha o painel "Tocando agora" (vídeo, fila…).
+  const toggleMusicPanel = useMusicStore((s) => s.togglePanel)
+  const onClick = onClickProp ?? (isMaestroIdentity(user.id) ? toggleMusicPanel : undefined)
   const activeSound = useSoundboardStore((s) => (isScreen ? undefined : s.activePlays[user.id]))
   const isPlayingSound = Boolean(activeSound)
   // 'fill': o maior retângulo com a proporção do vídeo que cabe no container
@@ -151,7 +157,7 @@ function ParticipantTile({
   const isDrawing = useAnnotationStore((s) => Boolean(s.drawingActive[user.id]))
   const toggleDrawing = useAnnotationStore((s) => s.toggleDrawing)
 
-  const canFullscreen = fullscreenable && !!videoStream && !!streamAudioUserId
+  const canFullscreen = canTileFullscreen(fullscreenable, !!videoStream)
   const {
     ref: tileRef,
     active: inFullscreen,
@@ -178,6 +184,7 @@ function ParticipantTile({
       onClick={handleClick}
       onDoubleClick={canFullscreen ? handleDoubleClick : undefined}
       onContextMenu={onContextMenu}
+      data-maestro-tile={isMaestroIdentity(user.id) ? '' : undefined}
       role={onClick ? 'button' : undefined}
       title={onClick && isScreen ? 'Expandir tela' : undefined}
       style={inFullscreen ? undefined : fillStyle}
@@ -187,16 +194,16 @@ function ParticipantTile({
         inFullscreen
           ? ''
           : isScreen
-            ? 'ring-2 ring-[#23a55a] shadow-[0_0_24px_rgba(35,165,90,0.25)]'
+            ? 'ring-2 ring-success shadow-[0_0_24px_rgba(35,165,90,0.25)]'
             : speaking || isPlayingSound
-              ? 'ring-2 ring-[#23a55a] shadow-[0_0_24px_rgba(35,165,90,0.25)]'
-              : 'ring-1 ring-white/6'
+              ? 'ring-2 ring-success shadow-[0_0_24px_rgba(35,165,90,0.25)]'
+              : 'ring-1 ring-fg/6'
       } ${onClick && !inFullscreen ? 'cursor-pointer hover:brightness-110' : ''}`}
     >
       {videoStream && (
         <VideoFill
           stream={videoStream}
-          fit={isScreen ? 'contain' : 'cover'}
+          fit={isScreen || inFullscreen ? 'contain' : 'cover'}
           mirror={mirror}
           square={inFullscreen}
           onAspect={size === 'fill' ? setAspect : undefined}
@@ -226,7 +233,7 @@ function ParticipantTile({
                 size={avatarSize}
                 animate="always"
                 className={`rounded-full transition-shadow ${
-                  speaking || isPlayingSound ? 'ring-4 ring-[#23a55a]' : ''
+                  speaking || isPlayingSound ? 'ring-4 ring-success' : ''
                 }`}
               />
             )}
@@ -240,11 +247,11 @@ function ParticipantTile({
       {activeSound && (
         <div
           data-testid={`soundboard-badge-${user.id}`}
-          className="absolute left-2 top-2 z-10 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-full border border-[#23a55a]/50 bg-black/75 px-2.5 py-1 text-xs font-semibold text-white shadow-lg backdrop-blur-sm"
+          className="absolute left-2 top-2 z-10 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-full border border-success/50 bg-black/75 px-2.5 py-1 text-xs font-semibold text-white shadow-lg backdrop-blur-sm on-media"
         >
           <span>{activeSound.emoji || '🔊'}</span>
           <span className="truncate">{activeSound.soundName}</span>
-          <span className="h-1.5 w-1.5 shrink-0 animate-ping rounded-full bg-[#23a55a]" />
+          <span className="h-1.5 w-1.5 shrink-0 animate-ping rounded-full bg-success" />
         </div>
       )}
       {isScreen && !inFullscreen && watchers && watchers.length > 0 && (
@@ -265,8 +272,8 @@ function ParticipantTile({
             title={isDrawing ? 'Fechar anotações' : 'Anotar / Desenhar na transmissão (Epic Pen)'}
             className={`flex h-6 items-center gap-1 rounded-md px-1.5 text-xs font-semibold backdrop-blur-sm transition-colors cursor-pointer ${
               isDrawing
-                ? 'bg-[#23a55a] text-white shadow-md ring-1 ring-white/30'
-                : 'bg-black/60 text-gray-200 hover:bg-black/80 hover:text-white'
+                ? 'bg-success-strong text-white shadow-md ring-1 ring-fg/30'
+                : 'bg-black/60 text-gray-200 hover:bg-black/80 hover:text-white on-media'
             }`}
           >
             <PencilIcon className="h-3.5 w-3.5" />
@@ -274,9 +281,11 @@ function ParticipantTile({
           </button>
         )}
         {isScreen && !inFullscreen && (
-          <div className="flex items-center gap-1.5 rounded-md bg-[#f23f43] px-1.5 py-0.5">
+          <div className="flex items-center gap-1.5 rounded-md bg-danger-strong px-1.5 py-0.5">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-            <span className="text-[10px] font-bold uppercase tracking-wide text-white">Ao vivo</span>
+            <span className="text-[10px] font-bold uppercase tracking-wide text-white">
+              Ao vivo
+            </span>
           </div>
         )}
         {onClose && !inFullscreen && (
@@ -287,7 +296,7 @@ function ParticipantTile({
             }}
             aria-label="Fechar transmissão"
             title="Fechar transmissão"
-            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
+            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white on-media"
           >
             <XIcon className="h-3.5 w-3.5" />
           </button>
@@ -308,13 +317,13 @@ function ParticipantTile({
           className="absolute bottom-12 left-1/2 -translate-x-1/2"
         />
       )}
-      {streamAudioUserId && videoStream && !inFullscreen && (
+      {videoStream && (streamAudioUserId || canFullscreen) && !inFullscreen && (
         <StreamAudioControls
           userId={streamAudioUserId}
           onToggleFullscreen={canFullscreen ? toggleFullscreen : undefined}
         />
       )}
-      {inFullscreen && streamAudioUserId && (
+      {inFullscreen && (
         <FullscreenOverlay
           name={user.display_name}
           userId={streamAudioUserId}
@@ -323,7 +332,7 @@ function ParticipantTile({
         />
       )}
       <div
-        className={`absolute bottom-2 left-2 max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm ${
+        className={`on-media absolute bottom-2 left-2 max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm ${
           inFullscreen ? 'hidden' : 'flex'
         }`}
       >
@@ -339,13 +348,17 @@ function ParticipantTile({
           serverDeafened={serverDeafened}
           className="h-3 w-3"
         />
-        <span className="truncate text-xs font-semibold text-white">
+        <span className="truncate text-xs font-semibold text-strong">
           <StyledName name={user.display_name} userId={user.id} style={user.name_style} />
         </span>
+        {!isScreen && <CallActivityBadge userId={user.id} className="h-3.5 w-3.5" />}
         {isMaestroIdentity(user.id) && (
           <span className="rounded bg-violet-400/30 px-1 text-[9px] font-bold uppercase text-violet-100">
             {T18.tag}
           </span>
+        )}
+        {!isScreen && !isMaestroIdentity(user.id) && (
+          <ConnectionQualityBars userId={user.id} name={user.display_name} className="h-3 w-3" />
         )}
       </div>
     </div>

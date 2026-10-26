@@ -116,3 +116,8 @@ export function isInteractiveTarget(
 ): boolean {
   return Boolean(target?.closest?.('button, input, a, select, textarea, [role="slider"]'))
 }
+
+/** Tela cheia do tile: câmera ou transmissão com vídeo (a minha tela fica de fora). */
+export function canTileFullscreen(fullscreenable: boolean, hasVideo: boolean): boolean {
+  return fullscreenable && hasVideo
+}
