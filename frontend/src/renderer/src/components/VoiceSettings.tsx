@@ -7,6 +7,7 @@ import { CAN_CHOOSE_OUTPUT, useAudioDevices } from './useAudioDevices'
 import { NoiseSuppressionSettings } from './call/NoiseSuppressionPopover'
 import SensitivityMeter from './call/SensitivityMeter'
 import Switch from './Switch'
+import ChromaKeySettings from './ChromaKeySettings'
 
 function DeviceSelect({
   label,
@@ -143,6 +144,9 @@ function VoiceSettings(): React.JSX.Element {
       </div>
       <div className="border-t border-subtle pt-3">
         <NoiseSuppressionSettings />
+      </div>
+      <div className="border-t border-subtle pt-3">
+        <ChromaKeySettings />
       </div>
     </div>
   )

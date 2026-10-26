@@ -90,7 +90,10 @@ func (h *Handler) CreateChannelMessage(c *gin.Context) {
 	var input struct {
 		Content       string   `json:"content"`
 		ReplyToID     *string  `json:"reply_to_id"`
-		AttachmentIDs []string `json:"attachment_ids"`
+		AttachmentIDs []string     `json:"attachment_ids"`
+		StickerID     *string      `json:"sticker_id"`
+		GifURL        *string      `json:"gif_url"`
+		GifMetadata   *GifMetadata `json:"gif_metadata"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -118,7 +121,7 @@ func (h *Handler) CreateChannelMessage(c *gin.Context) {
 		}
 	}
 
-	msg, err := h.service.CreateChannelMessage(c.Request.Context(), channelID, userID, input.Content, input.ReplyToID, input.AttachmentIDs)
+	msg, err := h.service.CreateChannelMessage(c.Request.Context(), channelID, userID, input.Content, input.ReplyToID, input.AttachmentIDs, input.StickerID, input.GifURL, input.GifMetadata)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -331,7 +334,10 @@ func (h *Handler) CreateConversationMessage(c *gin.Context) {
 	var input struct {
 		Content       string   `json:"content"`
 		ReplyToID     *string  `json:"reply_to_id"`
-		AttachmentIDs []string `json:"attachment_ids"`
+		AttachmentIDs []string     `json:"attachment_ids"`
+		StickerID     *string      `json:"sticker_id"`
+		GifURL        *string      `json:"gif_url"`
+		GifMetadata   *GifMetadata `json:"gif_metadata"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -348,7 +354,7 @@ func (h *Handler) CreateConversationMessage(c *gin.Context) {
 		return
 	}
 
-	msg, err := h.service.CreateConversationMessage(c.Request.Context(), conversationID, userID, input.Content, input.ReplyToID, input.AttachmentIDs)
+	msg, err := h.service.CreateConversationMessage(c.Request.Context(), conversationID, userID, input.Content, input.ReplyToID, input.AttachmentIDs, input.StickerID, input.GifURL, input.GifMetadata)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

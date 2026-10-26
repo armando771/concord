@@ -80,6 +80,10 @@ export interface Message {
   mention_everyone?: MentionEveryone | null
   poll?: Poll | null
   attachments?: Attachment[] | null
+  sticker_id?: string | null
+  sticker?: { id: string; server_id: string; name: string; content_type: string } | null
+  gif_url?: string | null
+  gif_metadata?: { width?: number; height?: number; preview_url?: string } | null
   created_at: string
   /** Quando o autor editou o texto pela última vez; ausente = nunca editada. */
   edited_at?: string | null
@@ -114,18 +118,28 @@ export function listChannelMessages(channelId: string, before?: string): Promise
   return request<Message[]>(`/channels/${channelId}/messages?${query.toString()}`)
 }
 
+export interface ExtraMessageData {
+  stickerId?: string | null
+  gifUrl?: string | null
+  gifMetadata?: { width?: number; height?: number; preview_url?: string } | null
+}
+
 export function sendChannelMessage(
   channelId: string,
   content: string,
   attachmentIds: string[] = [],
-  replyToId?: string | null
+  replyToId?: string | null,
+  extra?: ExtraMessageData
 ): Promise<Message> {
   return request<Message>(`/channels/${channelId}/messages`, {
     method: 'POST',
     body: JSON.stringify({
       content,
       attachment_ids: attachmentIds,
-      ...(replyToId ? { reply_to_id: replyToId } : {})
+      ...(replyToId ? { reply_to_id: replyToId } : {}),
+      ...(extra?.stickerId ? { sticker_id: extra.stickerId } : {}),
+      ...(extra?.gifUrl ? { gif_url: extra.gifUrl } : {}),
+      ...(extra?.gifMetadata ? { gif_metadata: extra.gifMetadata } : {})
     })
   })
 }
@@ -190,14 +204,18 @@ export function sendConversationMessage(
   conversationId: string,
   content: string,
   attachmentIds: string[] = [],
-  replyToId?: string | null
+  replyToId?: string | null,
+  extra?: ExtraMessageData
 ): Promise<Message> {
   return request<Message>(`/conversations/${conversationId}/messages`, {
     method: 'POST',
     body: JSON.stringify({
       content,
       attachment_ids: attachmentIds,
-      ...(replyToId ? { reply_to_id: replyToId } : {})
+      ...(replyToId ? { reply_to_id: replyToId } : {}),
+      ...(extra?.stickerId ? { sticker_id: extra.stickerId } : {}),
+      ...(extra?.gifUrl ? { gif_url: extra.gifUrl } : {}),
+      ...(extra?.gifMetadata ? { gif_metadata: extra.gifMetadata } : {})
     })
   })
 }

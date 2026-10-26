@@ -2,6 +2,7 @@ package message
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 
 	"gin-quickstart/backend/internal/namestyle"
@@ -41,7 +42,13 @@ var messageColumns = `
 	ru.display_name,
 	ru.avatar_url,
 	` + namestyle.Expr("ru") + `,
-	rm.content
+	rm.content,
+	m.sticker_id,
+	stk.server_id,
+	stk.name,
+	stk.content_type,
+	m.gif_url,
+	m.gif_metadata
 `
 
 const messageFrom = `
@@ -49,14 +56,19 @@ const messageFrom = `
 	JOIN users u ON u.id = m.author_id
 	LEFT JOIN messages rm ON rm.id = m.reply_to_id
 	LEFT JOIN users ru ON ru.id = rm.author_id
+	LEFT JOIN server_stickers stk ON stk.id = m.sticker_id
 `
 
 func (r *Repository) Create(ctx context.Context, msg *Message) error {
+	var gifMetaBytes []byte
+	if msg.GifMetadata != nil {
+		gifMetaBytes, _ = json.Marshal(msg.GifMetadata)
+	}
 	return r.db.QueryRow(
 		ctx,
 		`
-		INSERT INTO messages (id, author_id, channel_id, conversation_id, reply_to_id, content, system_kind, mention_everyone)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO messages (id, author_id, channel_id, conversation_id, reply_to_id, content, system_kind, mention_everyone, sticker_id, gif_url, gif_metadata)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING
 			id,
 			author_id,
@@ -74,6 +86,9 @@ func (r *Repository) Create(ctx context.Context, msg *Message) error {
 		msg.Content,
 		msg.SystemKind,
 		msg.MentionEveryone,
+		msg.StickerID,
+		msg.GifURL,
+		gifMetaBytes,
 	).Scan(
 		&msg.ID,
 		&msg.AuthorID,
@@ -90,6 +105,8 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Message, error) 
 	var replyID, replyAuthorID, replyUsername, replyDisplayName, replyContent *string
 	var replyAvatarURL *string
 	var replyStyle namestyle.Style
+	var stickerServerID, stickerName, stickerContentType *string
+	var rawGifMeta []byte
 
 	err := r.db.QueryRow(
 		ctx,
@@ -121,6 +138,18 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Message, error) 
 		&replyAvatarURL,
 		&replyStyle,
 		&replyContent,
+		&msg.StickerID,
+		&stickerServerID,
+		&stickerName,
+		&stickerContentType,
+		&msg.GifURL,
+		&rawGifMeta,
+		&msg.StickerID,
+		&stickerServerID,
+		&stickerName,
+		&stickerContentType,
+		&msg.GifURL,
+		&rawGifMeta,
 	)
 	if err != nil {
 		return nil, err
@@ -142,12 +171,12 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Message, error) 
 		}
 	}
 
+	populateMedia(msg, stickerServerID, stickerName, stickerContentType, rawGifMeta)
 	msgs := []Message{*msg}
 	if err := r.attachReactions(ctx, msgs); err != nil {
 		return nil, err
 	}
 	*msg = msgs[0]
-
 	return msg, nil
 }
 
@@ -409,6 +438,23 @@ type rowScanner interface {
 	Scan(dest ...interface{}) error
 }
 
+func populateMedia(msg *Message, stickerServerID, stickerName, stickerContentType *string, rawGifMeta []byte) {
+	if msg.StickerID != nil && stickerName != nil && stickerServerID != nil && stickerContentType != nil {
+		msg.Sticker = &StickerPreview{
+			ID:          *msg.StickerID,
+			ServerID:    *stickerServerID,
+			Name:        *stickerName,
+			ContentType: *stickerContentType,
+		}
+	}
+	if len(rawGifMeta) > 0 {
+		var gm GifMetadata
+		if err := json.Unmarshal(rawGifMeta, &gm); err == nil {
+			msg.GifMetadata = &gm
+		}
+	}
+}
+
 func scanMessages(rows rowScanner) ([]Message, error) {
 	var messages []Message
 	for rows.Next() {
@@ -433,6 +479,8 @@ func scanMessageRow(rows rowScanner, extra ...any) (Message, error) {
 	var replyID, replyAuthorID, replyUsername, replyDisplayName, replyContent *string
 	var replyAvatarURL *string
 	var replyStyle namestyle.Style
+	var stickerServerID, stickerName, stickerContentType *string
+	var rawGifMeta []byte
 
 	msg.Author = &Author{}
 	dest := []any{
@@ -457,6 +505,12 @@ func scanMessageRow(rows rowScanner, extra ...any) (Message, error) {
 		&replyAvatarURL,
 		&replyStyle,
 		&replyContent,
+		&msg.StickerID,
+		&stickerServerID,
+		&stickerName,
+		&stickerContentType,
+		&msg.GifURL,
+		&rawGifMeta,
 	}
 	if err := rows.Scan(append(dest, extra...)...); err != nil {
 		return Message{}, err
@@ -477,5 +531,7 @@ func scanMessageRow(rows rowScanner, extra ...any) (Message, error) {
 			Content: *replyContent,
 		}
 	}
+
+	populateMedia(&msg, stickerServerID, stickerName, stickerContentType, rawGifMeta)
 	return msg, nil
 }
