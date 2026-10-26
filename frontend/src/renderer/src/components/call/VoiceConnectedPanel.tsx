@@ -28,6 +28,9 @@ import { useSoundboardHotkeys } from './useSoundboardHotkeys'
 import { useCallChannelName } from './useCallChannelName'
 import { showVoicePanel, voicePanelHeading, voicePanelLabel, voicePanelRoute } from './voicePanel'
 import VoiceXPBar from '../level/VoiceXPBar'
+import { QualityBarsIcon } from './ConnectionQualityBars'
+import { useCallConnectionView } from './useCallConnectionView'
+import { qualityTooltip } from '../../lib/connectionQuality'
 
 // @max-[239px]: sidebar no mínimo (o @container é o SidebarFooter).
 const ICON_BUTTON =
@@ -115,6 +118,10 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   const locked = useCallStore((s) => s.locked)
   const toggleLock = useCallStore((s) => s.toggleLock)
   const endCall = useCallStore((s) => s.endCall)
+  const retryConnection = useCallStore((s) => s.retryConnection)
+  const myQuality = useCallStore((s) => (meId ? s.connectionQuality[meId] : undefined))
+  const myDetails = useCallStore((s) => (meId ? s.qualityDetails[meId] : undefined))
+  const connectionView = useCallConnectionView()
 
   const serverName = useServerStore((s) =>
     serverId ? s.servers.find((srv) => srv.id === serverId)?.name : undefined
@@ -143,6 +150,19 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
   if (!showVoicePanel(status)) return null
 
   const connected = status === 'active'
+  const outgoing = status === 'outgoing'
+  const heading = voicePanelHeading(status, connectionView.heading)
+  const headingTone = outgoing
+    ? 'text-[#f0b232]'
+    : connectionView.tone === 'ok'
+      ? 'text-[#23a55a]'
+      : connectionView.tone === 'error'
+        ? 'text-[#f23f43]'
+        : 'text-[#f0b232]'
+  const showBars = !outgoing && connectionView.tone === 'ok' && myQuality && myQuality !== 'unknown'
+  const qualityTitle = showBars ? qualityTooltip(myQuality, null, myDetails) : undefined
+  const showConnectionNotice =
+    !outgoing && (connectionView.detail !== null || connectionView.offerRetry)
   const connectionOpen =
     connected && connectionAnchor?.callId === callId && connectionAnchor !== null
   const label = voicePanelLabel({
@@ -175,19 +195,26 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
           <button
             type="button"
             disabled={!connected}
-            aria-label="Detalhes da conexão de voz"
+            aria-label={`Detalhes da conexão de voz: ${heading}${qualityTitle ? `. ${qualityTitle}` : ''}`}
             aria-haspopup="dialog"
             aria-expanded={connectionOpen}
+            title={qualityTitle}
             onClick={(event) => {
               const element = event.currentTarget
               setConnectionAnchor(connectionOpen ? null : { element, callId })
             }}
-            className={`flex max-w-full items-center gap-1.5 rounded text-left text-ds-md font-semibold outline-none focus-visible:ring-2 focus-visible:ring-[#5865f2] ${connected ? 'cursor-pointer hover:underline' : ''} ${
-              connected ? 'text-[#23a55a]' : 'text-[#f0b232]'
-            }`}
+            className={`flex max-w-full items-center gap-1.5 rounded text-left text-ds-md font-semibold outline-none focus-visible:ring-2 focus-visible:ring-[#5865f2] ${connected ? 'cursor-pointer hover:underline' : ''} ${headingTone}`}
           >
-            <SignalIcon className="h-4 w-4 shrink-0" />
-            <span className="truncate">{voicePanelHeading(status)}</span>
+            {showBars ? (
+              <QualityBarsIcon quality={myQuality} className="h-4 w-4 shrink-0" />
+            ) : (
+              <SignalIcon
+                className={`h-4 w-4 shrink-0 ${connectionView.tone === 'pending' || outgoing ? 'animate-pulse' : ''}`}
+              />
+            )}
+            <span className="truncate" aria-live="polite" data-testid="voice-panel-heading">
+              {heading}
+            </span>
           </button>
           {route ? (
             <button
@@ -253,6 +280,37 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
           <HangUpIcon className="h-5 w-5" />
         </button>
       </div>
+
+      {showConnectionNotice && (
+        <div
+          role={connectionView.tone === 'error' ? 'alert' : 'status'}
+          className={`mt-1.5 rounded-md px-2 py-1.5 text-ds-xs ${
+            connectionView.tone === 'error'
+              ? 'bg-[#f23f43]/12 text-red-100'
+              : 'bg-[#f0b232]/10 text-amber-100'
+          }`}
+        >
+          {connectionView.detail && <p>{connectionView.detail}</p>}
+          {connectionView.offerRetry && (
+            <div className="mt-1.5 flex gap-2">
+              <button
+                type="button"
+                onClick={retryConnection}
+                className="cursor-pointer rounded bg-white/10 px-2 py-1 font-semibold text-white outline-none hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-[#5865f2]"
+              >
+                Tentar de novo
+              </button>
+              <button
+                type="button"
+                onClick={endCall}
+                className="cursor-pointer rounded px-2 py-1 font-semibold text-gray-300 outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-[#5865f2]"
+              >
+                Sair
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-2 flex gap-2">
         <RowButton

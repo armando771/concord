@@ -55,6 +55,7 @@ import ComposerAttachments from './chat/ComposerAttachments'
 import { useAttachmentDraft } from './chat/useAttachmentDraft'
 import { useTypingSender } from './chat/useTypingSender'
 import TypingIndicator from './chat/TypingIndicator'
+import PendingMessages from './chat/PendingMessages'
 import {
   afterSendFailure,
   canRestoreHere,
@@ -372,6 +373,7 @@ function ChatPane({
   const hasMoreByRoom = useChatStore((s) => s.hasMoreByRoom)
   const loadingByRoom = useChatStore((s) => s.loadingByRoom)
   const messages = messagesByRoom[room] ?? []
+  const pendingCount = useChatStore((s) => s.pendingByRoom[room]?.length ?? 0)
   const hasMore = hasMoreByRoom[room] ?? false
   const loading = loadingByRoom[room] ?? true
   const openRoom = useChatStore((s) => s.openRoom)
@@ -572,7 +574,7 @@ function ChatPane({
     if (stickToBottom.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages.length, ephemeralCount])
+  }, [messages.length, ephemeralCount, pendingCount])
 
   const firstId = messages[0]?.id
   useLayoutEffect(() => {
@@ -633,6 +635,8 @@ function ChatPane({
     e.preventDefault()
     if (!submittable || sending) return
     setSending(true)
+    // A própria mensagem (e o "enviando…") aparece embaixo: acompanha.
+    stickToBottom.current = true
     const sentRoom = room
     const sentText = draft
     const sentReply = replyingTo
@@ -958,6 +962,7 @@ function ChatPane({
                 onTogglePin={() => void handleTogglePin(m)}
               />
             ))}
+            <PendingMessages room={room} />
             <MusicEphemeralList room={room} serverId={serverId ?? null} />
             <div ref={bottomRef} />
           </div>
