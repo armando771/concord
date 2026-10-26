@@ -86,15 +86,8 @@ import { actionErrorMessage } from '../../servers/lib/permissionErrors'
 import { Skeleton } from '../../../shared/ui/skeleton/Skeleton'
 import { MessageListSkeleton } from '../../../shared/ui/skeleton/layouts'
 import { permissionError } from '../../servers/lib/permissions'
-import {
-  anchoredScrollTop,
-  bottomScrollPlan,
-  JUMP_HIGHLIGHT_MS,
-  measureOffset,
-  olderPagePrepended,
-  pickAnchor,
-  type AnchorCandidate
-} from '../lib/scrollAnchor'
+import { bottomScrollPlan, JUMP_HIGHLIGHT_MS } from '../lib/scrollAnchor'
+import { useOlderMessages } from '../hooks/useOlderMessages'
 
 const NO_MENTIONABLE: Mentionable[] = []
 
@@ -126,8 +119,6 @@ interface ChatPaneProps {
 }
 
 const MAX_SUGGESTIONS = 6
-/** Reservas da âncora do loadOlder (a primeira e as seguintes). */
-const ANCHOR_CANDIDATES = 20
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -457,7 +448,6 @@ function ChatPane({
   const hasMore = hasMoreByRoom[room] ?? false
   const loading = loadingByRoom[room] ?? true
   const openRoom = useChatStore((s) => s.openRoom)
-  const loadOlder = useChatStore((s) => s.loadOlder)
   const sendToRoom = useChatStore((s) => s.sendToRoom)
   const deleteFromRoom = useChatStore((s) => s.deleteFromRoom)
   const toggleReaction = useChatStore((s) => s.toggleReaction)
@@ -651,23 +641,14 @@ function ChatPane({
     }
   }
 
-  // Por sala: o ServerView reaproveita o ChatPane entre canais, e o
-  // carregamento de um canal não pode travar (nem destravar) o botão do outro.
-  const [loadingOlderRooms, setLoadingOlderRooms] = useState<ReadonlySet<string>>(new Set())
-  const loadingOlder = loadingOlderRooms.has(room)
   const bottomRef = useRef<HTMLDivElement>(null)
   const ephemeralCount = useMusicStore((s) => s.ephemeral.length)
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
   const contentRef = useRef<HTMLDivElement>(null)
-  // loadOlder: a antiga primeira mensagem (e sua posição no conteúdo) fica
-  // no mesmo lugar da tela quando a página antiga entra em cima dela. As
-  // seguintes vão junto, de reserva, caso ela seja apagada durante a espera.
-  const olderAnchor = useRef<{ room: string; candidates: AnchorCandidate[] } | null>(null)
 
   useEffect(() => {
     stickToBottom.current = true
-    olderAnchor.current = null
     void openRoom(room)
     return () => {
       useChatStore.getState().closeRoom(room)
@@ -716,59 +697,18 @@ function ChatPane({
     return () => observer.disconnect()
   }, [loading, room])
 
-  const firstId = messages[0]?.id
-  useLayoutEffect(() => {
-    const el = scrollRef.current
-    const anchor = olderAnchor.current
-    // Só quando a página antiga entrou em cima; mensagem ao vivo embaixo (ou a
-    // de cima apagada) não gasta a âncora.
-    if (!el || !anchor || !olderPagePrepended(firstId, anchor.candidates)) return
-    olderAnchor.current = null
-    if (anchor.room !== room) return
-    const elementOf = (id: string): HTMLElement | null => {
-      const node = document.getElementById(`msg-${id}`)
-      return node && el.contains(node) ? node : null
+  const { loadingOlder, loadOlder, loadOlderUntil } = useOlderMessages({
+    room,
+    messages,
+    scrollRef,
+    onLeaveBottom: () => {
+      stickToBottom.current = false
     }
-    const kept = pickAnchor(anchor.candidates, (id) => elementOf(id) !== null)
-    const node = kept && elementOf(kept.id)
-    if (!kept || !node) return
-    el.scrollTop = anchoredScrollTop(el.scrollTop, kept.offset, measureOffset(el, node))
-  }, [firstId, room])
+  })
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>): void => {
     const el = e.currentTarget
     stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60
-  }
-
-  const handleLoadOlder = async (): Promise<void> => {
-    if (loadingOlder) return
-    const startedRoom = room
-    setLoadingOlderRooms((current) => new Set(current).add(startedRoom))
-    const el = scrollRef.current
-    let anchor: typeof olderAnchor.current = null
-    if (el) {
-      const candidates: AnchorCandidate[] = []
-      for (const m of messages.slice(0, ANCHOR_CANDIDATES)) {
-        const node = document.getElementById(`msg-${m.id}`)
-        if (node) candidates.push({ id: m.id, offset: measureOffset(el, node) })
-      }
-      if (candidates.length > 0) {
-        anchor = { room: startedRoom, candidates }
-        olderAnchor.current = anchor
-        stickToBottom.current = false
-      }
-    }
-    await loadOlder(startedRoom)
-    setLoadingOlderRooms((current) => {
-      const next = new Set(current)
-      next.delete(startedRoom)
-      return next
-    })
-    // Nada novo (ou já aplicado no layout effect): esta âncora não vale para
-    // a próxima mudança. Só a desta chamada — outra sala pode ter a sua.
-    requestAnimationFrame(() => {
-      if (anchor && olderAnchor.current === anchor) olderAnchor.current = null
-    })
   }
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
@@ -983,23 +923,7 @@ function ChatPane({
       return
     }
     const startedRoom = room
-    const container = scrollRef.current
-    if (container) {
-      const candidates: AnchorCandidate[] = []
-      for (const m of messages.slice(0, ANCHOR_CANDIDATES)) {
-        const node = document.getElementById(`msg-${m.id}`)
-        if (node) candidates.push({ id: m.id, offset: measureOffset(container, node) })
-      }
-      if (candidates.length > 0) olderAnchor.current = { room: startedRoom, candidates }
-    }
-    stickToBottom.current = false
-    setLoadingOlderRooms((current) => new Set(current).add(startedRoom))
-    const found = await useChatStore.getState().loadOlderUntil(startedRoom, messageId)
-    setLoadingOlderRooms((current) => {
-      const next = new Set(current)
-      next.delete(startedRoom)
-      return next
-    })
+    const found = await loadOlderUntil(messageId)
     if (roomRef.current !== startedRoom) return
     if (!found) {
       showToast.info('Não encontrei essa mensagem: ela pode ter sido apagada ou ser antiga demais.')
@@ -1148,7 +1072,7 @@ function ChatPane({
             {hasMore && (
               <div className="flex justify-center py-2">
                 <button
-                  onClick={handleLoadOlder}
+                  onClick={loadOlder}
                   disabled={loadingOlder}
                   className="cursor-pointer rounded-full border border-subtle bg-fg/5 px-3 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:bg-fg/10 hover:text-strong disabled:opacity-50"
                 >
