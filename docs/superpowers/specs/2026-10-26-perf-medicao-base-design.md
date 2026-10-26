@@ -133,7 +133,11 @@ O main ignora `perf:report` de outro `sender`/frame (mesma checagem do
 ```
 
 - `t`: segundos desde o início do processo (`process.uptime()`).
-- `ctx.window`: `visible` | `minimized` | `tray` (oculta).
+- `ctx.window`: `visible` | `minimized` | `tray` (oculta). A bandeja é detectada
+  pelos eventos `show`/`hide` da janela: no Windows uma janela minimizada e depois
+  oculta tem `isMinimized()` true e `isVisible()` false, igual a uma só minimizada.
+  `fps` e `loaf` só existem com a janela `visible` (fora disso o rAF cai para 1 Hz
+  e cada segundo viraria um "quadro longo" de ~1000 ms).
 - `ctx` (rota e flags), `fps` e `loaf` vêm do último `perf:report`; se o último
   tiver mais de 2 s, `fps` e `loaf` saem `null` (nunca 0 inventado).
 - CPU em % do total da máquina (mesma fórmula do `AppMetricsSampler`). Na

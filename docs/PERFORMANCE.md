@@ -56,6 +56,10 @@ node scripts/perf-report.mjs antes.jsonl depois.jsonl    # antes → depois e Δ
 - **RAM total MB**: soma do working set dos processos.
 - **FPS (p5)**: o pior 5% dos segundos; mais alto é melhor.
 - **LoAF por minuto / máx**: quadros acima de 50 ms; menos é melhor.
+- FPS e LoAF só existem no contexto `visible`: com a janela minimizada ou na
+  bandeja o Chromium limita a animação a 1 Hz, o que daria um falso "quadro
+  longo" por segundo. Nesses contextos compare CPU e RAM.
+- `tray` é a janela oculta pelo botão de fechar; `minimized` é a minimizada.
 - **(amostra pequena)**: menos de 30 amostras válidas no contexto; não confie.
 - `—` quer dizer que a métrica não existe naquele arquivo/contexto.
 - Aviso de "sem linha end": o app fechou de forma abrupta; os dados valem.
