@@ -32,8 +32,12 @@ export const T18 = {
 export const T20 = {
   watch: 'Ver vídeo',
   fullscreen: 'Tela cheia',
-  showInPanel: 'Mostrar vídeo no painel'
+  showInPanel: 'Mostrar vídeo no painel',
+  seeMore: (hidden: number): string => `Ver mais (${hidden})`,
+  seeLess: 'Ver menos'
 }
+/** Quantas músicas da fila o painel mostra antes do "Ver mais". */
+export const QUEUE_PREVIEW = 3
 
 export interface SlashSuggestion {
   command: string

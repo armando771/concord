@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { removeQueueItem, skipMusic, swapQueueItems, type MusicItem } from '../../api/music'
-import { canSwap, formatDuration, T17, T20 } from '../../lib/music'
+import { canSwap, formatDuration, QUEUE_PREVIEW, T17, T20 } from '../../lib/music'
 import { useAuthStore } from '../../store/authStore'
 import { useMusicStore } from '../../store/musicStore'
 import { showToast } from '../../store/toastStore'
@@ -29,6 +29,7 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
   const serverOffsetMs = useMusicStore((s) => s.serverOffsetMs)
   const meId = useAuthStore((s) => s.user?.id)
   const [dragId, setDragId] = useState<string | null>(null)
+  const [showAll, setShowAll] = useState(false)
   // useElapsed recebe o início em ms (relógio local) e devolve segundos.
   const startedAt = state?.now ? state.now.started_at - serverOffsetMs : null
   const elapsed = useElapsed(startedAt)
@@ -163,7 +164,7 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
         <p className="text-sm text-gray-500">{T17.empty}</p>
       ) : (
         <ol className="flex flex-col gap-1">
-          {state.queue.map((it, i) => {
+          {(showAll ? state.queue : state.queue.slice(0, QUEUE_PREVIEW)).map((it, i) => {
             const mine = it.requested_by.id === meId
             return (
               <li
@@ -202,6 +203,16 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
             )
           })}
         </ol>
+      )}
+      {state.queue.length > QUEUE_PREVIEW && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          aria-expanded={showAll}
+          className="cursor-pointer rounded-md bg-white/10 px-3 py-1.5 text-xs font-semibold text-gray-200 transition-colors hover:bg-white/15 hover:text-white"
+        >
+          {showAll ? T20.seeLess : T20.seeMore(state.queue.length - QUEUE_PREVIEW)}
+        </button>
       )}
 
       <div className="mt-auto flex items-center justify-between gap-2 text-xs text-gray-300">
