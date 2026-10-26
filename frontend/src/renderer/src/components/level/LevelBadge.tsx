@@ -6,6 +6,8 @@ interface LevelBadgeProps {
   userId: string
   size?: 'sm' | 'md'
   className?: string
+  /** Com isso o selo vira um botão (ex.: tocar a animação do nível). */
+  onClick?: () => void
 }
 
 /** Quantos números o contador passa antes de parar no nível novo. */
@@ -19,7 +21,8 @@ const ROLL_STEPS = 6
 function LevelBadge({
   userId,
   size = 'sm',
-  className = ''
+  className = '',
+  onClick
 }: LevelBadgeProps): React.JSX.Element | null {
   const level = useLevelStore((s) => s.levels[userId])
   const celebration = useLevelStore((s) => s.celebrations[userId])
@@ -38,11 +41,31 @@ function LevelBadge({
   const rollFrom = Math.max(0, level - ROLL_STEPS)
   const text = size === 'md' ? 'text-[11px] px-1.5 py-0.5' : 'text-[9px] px-1 py-px'
 
+  const title = `Nível ${level} · ${tier.name}`
+  const wrapperProps = onClick
+    ? ({
+        role: 'button',
+        tabIndex: 0,
+        title: `${title} · clique para ver a animação`,
+        'aria-label': `Tocar a animação do nível ${level}`,
+        onClick,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key !== 'Enter' && e.key !== ' ') return
+          e.preventDefault()
+          onClick()
+        }
+      } as const)
+    : { title }
+
   return (
     <span
       key={celebration?.key}
-      title={`Nível ${level} · ${tier.name}`}
-      className={`level-anim inline-flex shrink-0 ${className}`}
+      {...wrapperProps}
+      className={`level-anim inline-flex shrink-0 ${
+        onClick
+          ? 'cursor-pointer rounded-md transition-transform hover:scale-105 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/70'
+          : ''
+      } ${className}`}
       style={
         celebration
           ? { animation: 'level-badge-pop 900ms cubic-bezier(.3,1.6,.5,1) 200ms both' }

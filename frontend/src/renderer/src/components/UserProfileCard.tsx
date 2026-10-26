@@ -149,6 +149,7 @@ function UserProfileCard(): React.JSX.Element | null {
   const serverCalls = useCallStore((s) => s.serverCalls)
   const level = useLevelStore((s) => (target ? s.levels[target.userId] : undefined))
   const ensureLevels = useLevelStore((s) => s.ensureLevels)
+  const replayLevelUp = useLevelStore((s) => s.replayLevelUp)
   const relationship = useRelationship(target?.userId)
   const sendRequest = useFriendStore((s) => s.sendRequest)
   const accept = useFriendStore((s) => s.accept)
@@ -377,7 +378,13 @@ function UserProfileCard(): React.JSX.Element | null {
         isMe={isMe}
         fallbackBanner={fallbackBanner}
         avatarFallbackClassName={role.avatar}
-        badge={<LevelBadge userId={target.userId} size="md" />}
+        badge={
+          <LevelBadge
+            userId={target.userId}
+            size="md"
+            onClick={() => replayLevelUp(target.userId, card.display_name)}
+          />
+        }
         badges={
           <BadgeRow
             userId={target.userId}
