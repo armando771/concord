@@ -173,6 +173,8 @@
   --interactive-active: #000000;
   --fg: #000000;
   --bg-input: rgb(255 255 255 / 0.45);
+  /* Balão da nota ao lado do avatar: sem isso ficava o escuro do app. */
+  --bg-primary: rgb(255 255 255 / 0.6);
   --border-subtle: rgb(0 0 0 / 0.12);
   --border-normal: rgb(0 0 0 / 0.16);
 }
