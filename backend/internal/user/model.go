@@ -90,7 +90,9 @@ type PublicProfile struct {
 	StatusText  string        `json:"status_text"`
 	Links       []ProfileLink `json:"links"`
 	Status      string        `json:"status"`
-	CreatedAt   time.Time     `json:"created_at"`
+	// IsBot: o Maestro. Aparece com o selo BOT e sempre online.
+	IsBot     bool      `json:"is_bot"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Public monta o perfil público com o status já calculado por quem chama.

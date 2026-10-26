@@ -4,6 +4,7 @@ import { profileMediaSrc } from '../../lib/profileMedia'
 import { detectProvider, linkLabel, splitLinks } from '../../lib/profileLinks'
 import type { PresenceStatus } from '../../lib/presenceStatus'
 import Avatar from '../Avatar'
+import maestroBanner from '../../assets/maestro-banner.gif'
 import { PencilIcon, PlusIcon } from '../icons'
 import GameIcon from '../GameIcon'
 import { Elapsed } from '../ActivityCard'
@@ -26,6 +27,8 @@ export interface CardProfile {
   bio?: string
   status_text?: string
   links?: string[]
+  /** Bot (Maestro): selo BOT e banner animado próprio. */
+  is_bot?: boolean
 }
 
 interface ProfileCardBodyProps {
@@ -62,7 +65,8 @@ function ProfileCardBody({
   preview = false,
   children
 }: ProfileCardBodyProps): React.JSX.Element {
-  const bannerSrc = profileMediaSrc(profile.banner_url, API_BASE_URL)
+  const bannerSrc =
+    profileMediaSrc(profile.banner_url, API_BASE_URL) ?? (profile.is_bot ? maestroBanner : null)
   const note = profile.status_text?.trim()
   const bio = profile.bio?.trim()
   const game = useActivity(preview ? undefined : profile.id)
@@ -166,6 +170,11 @@ function ProfileCardBody({
                 {profile.username && profile.pronouns && <span className="text-gray-500"> • </span>}
                 {profile.pronouns && <span className="text-gray-400">{profile.pronouns}</span>}
               </p>
+              {profile.is_bot && (
+                <span className="shrink-0 rounded bg-[#5865f2] px-1.5 py-px text-[10px] font-bold uppercase leading-tight text-white">
+                  Bot
+                </span>
+              )}
               {badges}
             </div>
           )}
@@ -175,7 +184,12 @@ function ProfileCardBody({
           <div className="mt-3 rounded-lg bg-white/5 p-2.5">
             <p className="text-ds-xs font-bold uppercase text-gray-400">Jogando agora</p>
             <p className="mt-1 flex items-center gap-1.5 text-ds-md font-semibold text-white">
-              <GameIcon name={game.name} appId={game.app_id} iconHash={game.icon_hash} className="h-4 w-4 shrink-0" />
+              <GameIcon
+                name={game.name}
+                appId={game.app_id}
+                iconHash={game.icon_hash}
+                className="h-4 w-4 shrink-0"
+              />
               <span className="truncate">{game.name}</span>
               <span className="shrink-0 text-ds-xs font-normal text-gray-400">
                 <Elapsed startedAt={game.started_at} />

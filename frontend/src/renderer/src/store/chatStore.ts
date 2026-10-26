@@ -55,6 +55,7 @@ import { useBadgeStore } from './badgeStore'
 import { useProposalStore } from './proposalStore'
 import { useNotifySettingsStore } from './notifySettingsStore'
 import { mentionKindOf, muteDecision } from '../lib/notificationMute'
+import { MAESTRO_USER_ID } from '../lib/music'
 import { useSoundboardStore } from './soundboardStore'
 import { useMusicStore } from './musicStore'
 import { usePinStore } from './pinStore'
@@ -788,8 +789,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         // Mensagem de canal: silenciar/nível do servidor e do canal decidem o
         // aviso, a contagem de não lidas e o selo de menção. DM não passa por aqui.
         const meUser = useAuthStore.getState().user
-        const decision =
-          meUser && serverId && msg.channel_id
+        // O canal "bot" e o que o Maestro escreve nunca avisam nem contam como não lido.
+        const quiet =
+          msg.author_id === MAESTRO_USER_ID ||
+          useServerStore.getState().channels.some((c) => c.id === msg.channel_id && c.is_system)
+        const decision = quiet
+          ? { notify: false, unread: false, mention: false }
+          : meUser && serverId && msg.channel_id
             ? muteDecision(
                 useNotifySettingsStore.getState().resolve(serverId, msg.channel_id),
                 mentionKindOf(msg, meUser)

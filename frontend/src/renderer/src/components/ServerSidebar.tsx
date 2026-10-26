@@ -501,7 +501,7 @@ export function ServerSidebar(): React.JSX.Element {
                 <StarIcon className="h-3.5 w-3.5 text-amber-400" />
               </button>
             )}
-          {canManageChannels && (
+          {canManageChannels && !ch.is_system && (
             <button
               onClick={() => {
                 setChannelMenuFor(null)
@@ -515,7 +515,7 @@ export function ServerSidebar(): React.JSX.Element {
               <PencilIcon className="h-3.5 w-3.5" />
             </button>
           )}
-          {access.canInChannel(ch.id, Perm.MANAGE_ROLES) && (
+          {access.canInChannel(ch.id, Perm.MANAGE_ROLES) && !ch.is_system && (
             <button
               onClick={() => {
                 setChannelMenuFor(null)
@@ -527,7 +527,7 @@ export function ServerSidebar(): React.JSX.Element {
               <LockIcon className="h-3.5 w-3.5" />
             </button>
           )}
-          {canManageChannels && (
+          {canManageChannels && !ch.is_system && (
             <button
               onClick={() => {
                 setChannelMenuFor(null)

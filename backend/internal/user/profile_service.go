@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"gin-quickstart/backend/internal/bot"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -50,6 +51,12 @@ func (s *ProfileService) Profile(ctx context.Context, viewerID, userID string) (
 	u, err := s.repo.FindByID(ctx, userID)
 	if err != nil {
 		return PublicProfile{}, notFound(err)
+	}
+	if userID == bot.UserID {
+		// O Maestro não tem websocket: não tem presença para consultar.
+		p := u.Public("online")
+		p.IsBot = true
+		return p, nil
 	}
 	if viewerID == userID {
 		return u.Public(u.Status), nil
