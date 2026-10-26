@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   disconnectParticipant,
   moveToVoiceChannel,
@@ -73,11 +73,20 @@ function UserContextMenu(): React.JSX.Element | null {
   const serverCalls = useCallStore((s) => s.serverCalls)
   const ref = useRef<HTMLDivElement | null>(null)
   const [saving, setSaving] = useState(false)
+  const [menuHeight, setMenuHeight] = useState<number>(420)
+
+  useLayoutEffect(() => {
+    if (ref.current) {
+      setMenuHeight(ref.current.offsetHeight)
+    }
+  }, [target])
 
   useEffect(() => {
     if (!target) return
     const onDown = (e: MouseEvent): void => {
-      if (!ref.current?.contains(e.target as Node)) close()
+      const node = e.target as Node
+      if (ref.current?.contains(node) || target.anchorEl?.contains(node)) return
+      close()
     }
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') close()
@@ -92,8 +101,8 @@ function UserContextMenu(): React.JSX.Element | null {
 
   if (!target || !audio) return null
 
-  const left = Math.min(target.x, window.innerWidth - MENU_WIDTH - 8)
-  const top = Math.max(8, Math.min(target.y, window.innerHeight - 420))
+  const left = Math.max(8, Math.min(target.x, window.innerWidth - MENU_WIDTH - 8))
+  const top = Math.max(8, Math.min(target.y, window.innerHeight - (menuHeight || 420) - 8))
 
   const volumeControls = (label: string, muteLabel: string): React.JSX.Element => (
     <>
@@ -131,7 +140,8 @@ function UserContextMenu(): React.JSX.Element | null {
         role="menu"
         aria-label={`Transmissão de ${target.name}`}
         style={{ left, top, width: MENU_WIDTH }}
-        className="fixed z-[60] flex flex-col gap-1 rounded-lg border border-subtle bg-floating p-2 text-sm text-gray-200 shadow-2xl"
+        data-user-context-menu="true"
+        className="fixed z-[80] flex max-h-[calc(100vh-16px)] flex-col gap-1 overflow-y-auto rounded-lg border border-subtle bg-floating p-2 text-sm text-gray-200 shadow-2xl"
       >
         <p className="truncate px-2 pb-1 pt-0.5 text-xs font-bold text-gray-400">
           Transmissão de {target.name}
@@ -168,7 +178,8 @@ function UserContextMenu(): React.JSX.Element | null {
         role="menu"
         aria-label={`Opções de ${target.name}`}
         style={{ left, top, width: MENU_WIDTH }}
-        className="fixed z-[60] flex flex-col gap-1 rounded-lg border border-subtle bg-floating p-2 text-sm text-gray-200 shadow-2xl"
+        data-user-context-menu="true"
+        className="fixed z-[80] flex max-h-[calc(100vh-16px)] flex-col gap-1 overflow-y-auto rounded-lg border border-subtle bg-floating p-2 text-sm text-gray-200 shadow-2xl"
       >
         <p className="truncate px-2 pb-1 pt-0.5 text-xs font-bold text-gray-400">{target.name}</p>
         {onStage ? (
@@ -374,7 +385,8 @@ function UserContextMenu(): React.JSX.Element | null {
         role="menu"
         aria-label={`Opções de ${target.name}`}
         style={{ left, top, width: MENU_WIDTH }}
-        className="fixed z-[60] flex flex-col gap-1 rounded-lg border border-subtle bg-floating p-2 text-ds-sm text-gray-200 shadow-2xl"
+        data-user-context-menu="true"
+        className="fixed z-[80] flex max-h-[calc(100vh-16px)] flex-col gap-1 overflow-y-auto rounded-lg border border-subtle bg-floating p-2 text-ds-sm text-gray-200 shadow-2xl"
       >
         <p className="truncate px-2 pb-1 pt-0.5 text-ds-xs font-bold text-gray-400">
           {target.name}
@@ -397,7 +409,8 @@ function UserContextMenu(): React.JSX.Element | null {
       role="menu"
       aria-label={`Opções de ${target.name}`}
       style={{ left, top, width: MENU_WIDTH }}
-      className="fixed z-[60] flex flex-col gap-1 rounded-lg border border-subtle bg-floating p-2 text-sm text-gray-200 shadow-2xl"
+      data-user-context-menu="true"
+      className="fixed z-[80] flex max-h-[calc(100vh-16px)] flex-col gap-1 overflow-y-auto rounded-lg border border-subtle bg-floating p-2 text-sm text-gray-200 shadow-2xl"
     >
       <p className="truncate px-2 pb-1 pt-0.5 text-xs font-bold text-gray-400">{target.name}</p>
 

@@ -286,7 +286,12 @@ function MessageItem({
       onContextMenu={(e) => {
         // Sobre texto selecionado desta linha ou link fica o menu do
         // navegador/app (copiar, copiar link); no resto da linha, o do autor.
-        if (selectionTouches(e.currentTarget) || (e.target as Element).closest('a')) return
+        // Sobre anexo (imagem/vídeo) não abre o menu do autor.
+        if (
+          selectionTouches(e.currentTarget) ||
+          (e.target as Element).closest('a, [data-message-media]')
+        )
+          return
         onAuthorMenu?.(e)
       }}
     >

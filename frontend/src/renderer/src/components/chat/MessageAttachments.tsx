@@ -113,7 +113,7 @@ function MessageAttachments({ attachments }: { attachments: Attachment[] }): Rea
   const audios = attachments.filter((a) => a.kind === 'audio')
 
   return (
-    <div className="mt-1 flex flex-col gap-2">
+    <div data-message-media className="mt-1 flex flex-col gap-2">
       {visual.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {visual.map((a) =>
