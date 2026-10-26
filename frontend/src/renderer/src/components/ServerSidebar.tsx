@@ -66,6 +66,7 @@ import { setPrimaryChannel } from '../api/servers'
 import { primaryChannelId } from '../lib/primaryChannel'
 import ResizeHandle from './ResizeHandle'
 import { useResizableWidth } from './useResizableWidth'
+import StyledName from './StyledName'
 
 /**
  * Nomes longos quebram linha em vez de cortar com "…" (o canal "predador-🐺-vs…"
@@ -1000,7 +1001,11 @@ export function ServerSidebar(): React.JSX.Element {
                                   isMe ? 'font-bold text-white' : 'font-medium text-gray-300'
                                 }`}
                               >
-                                {name}
+                                {nicknames?.[p.user_id] ? (
+                                  name
+                                ) : (
+                                  <StyledName name={name} userId={p.user_id} style={p.name_style} />
+                                )}
                               </span>
                               {/* Selo de nível só na lista de membros da direita; aqui o
                                   nível só ordena a lista (ver voiceOrder). */}

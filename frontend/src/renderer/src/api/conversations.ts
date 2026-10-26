@@ -1,5 +1,6 @@
 import { request } from './client'
 import { uploadImage } from './users'
+import type { NameStyle } from '../lib/nameStyle'
 
 export type ConversationType = 'dm' | 'group'
 
@@ -25,6 +26,7 @@ export interface ConversationOtherUser {
   username: string
   display_name: string
   avatar_url?: string | null
+  name_style?: NameStyle
 }
 
 export interface ConversationLastMessage {

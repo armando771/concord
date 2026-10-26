@@ -1,6 +1,10 @@
 package user
 
-import "time"
+import (
+	"time"
+
+	"gin-quickstart/backend/internal/namestyle"
+)
 
 type User struct {
 	ID          string `json:"id"`
@@ -18,6 +22,7 @@ type User struct {
 	StatusText   string        `json:"status_text"`
 	Links        []ProfileLink `json:"links"`
 	Status       string        `json:"status"`
+	NameStyle    namestyle.Style `json:"name_style"`
 	// Privacidade: só a própria pessoa vê (vai no SelfUser).
 	FriendRequestPolicy string `json:"-"`
 	AllowServerDMs      bool   `json:"-"`
@@ -92,6 +97,7 @@ type PublicProfile struct {
 	Status      string        `json:"status"`
 	// IsBot: o Maestro. Aparece com o selo BOT e sempre online.
 	IsBot     bool      `json:"is_bot"`
+	NameStyle namestyle.Style `json:"name_style"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -113,6 +119,7 @@ func (u *User) Public(status string) PublicProfile {
 		StatusText:  u.StatusText,
 		Links:       links,
 		Status:      status,
+		NameStyle:   u.NameStyle,
 		CreatedAt:   u.CreatedAt,
 	}
 }

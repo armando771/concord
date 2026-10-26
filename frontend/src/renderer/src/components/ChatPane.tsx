@@ -10,6 +10,7 @@ import MusicEphemeralList from './music/MusicEphemeralList'
 import SlashSuggestions from './music/SlashSuggestions'
 import { useMusicStore } from '../store/musicStore'
 import Avatar from './Avatar'
+import StyledName from './StyledName'
 import { useUserLook } from '../store/profileStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import { userMenuHandler } from '../store/userMenuStore'
@@ -268,7 +269,11 @@ function MessageItem({
                 nameColor ? '' : 'text-white'
               }`}
             >
-              {name}
+              {nickname ? (
+                name
+              ) : (
+                <StyledName name={name} userId={message.author_id} style={author?.name_style} />
+              )}
             </button>
             <span className="text-ds-xs font-medium text-gray-500">
               {formatTime(message.created_at)}

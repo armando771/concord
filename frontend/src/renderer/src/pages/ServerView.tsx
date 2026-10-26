@@ -38,12 +38,16 @@ import {
   rememberServerChannel,
   resolveServerChannel
 } from '../lib/serverChannel'
+import StyledName from '../components/StyledName'
+import type { NameStyle } from '../lib/nameStyle'
 
 interface MemberRowProps {
   userId: string
   displayName: string
   /** Apelido neste servidor (ganha do nome de exibição). */
   nickname?: string | null
+  /** Fonte/efeito do nome de exibição (só vale sem apelido). */
+  nameStyle?: NameStyle
   handle: string
   avatarUrl?: string | null
   colorClass: string
@@ -58,6 +62,7 @@ function MemberRow({
   userId,
   displayName,
   nickname,
+  nameStyle,
   handle,
   avatarUrl,
   colorClass,
@@ -108,7 +113,11 @@ function MemberRow({
             style={nameColor ? { color: nameColor } : undefined}
             className={`truncate text-ds-md font-medium ${nameColor ? '' : nameClass}`}
           >
-            {name}
+            {nickname?.trim() ? (
+              name
+            ) : (
+              <StyledName name={name} userId={userId} style={nameStyle} />
+            )}
           </p>
           {isBot ? (
             <span className="rounded bg-violet-400/30 px-1 text-[9px] font-bold uppercase text-violet-100">
@@ -397,6 +406,7 @@ export function ServerView(): React.JSX.Element {
                       userId={m.user_id}
                       displayName={displayName ?? 'Membro'}
                       nickname={m.nickname}
+                      nameStyle={m.name_style}
                       avatarUrl={m.avatar_url}
                       handle={handle ?? 'membro'}
                       colorClass={

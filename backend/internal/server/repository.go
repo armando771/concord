@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"gin-quickstart/backend/internal/namestyle"
 	"gin-quickstart/backend/internal/permission"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -266,6 +267,7 @@ func (r *Repository) ListMembers(ctx context.Context, serverID string) ([]Server
 			u.username,
 			u.display_name,
 			u.avatar_url,
+			` + namestyle.Expr("u") + `,
 			u.is_bot,
 			sm.nickname,
 			`+legacyRoleColumn+`,
@@ -293,6 +295,7 @@ func (r *Repository) ListMembers(ctx context.Context, serverID string) ([]Server
 			&m.Username,
 			&m.DisplayName,
 			&m.AvatarURL,
+			&m.NameStyle,
 			&m.IsBot,
 			&m.Nickname,
 			&m.Role,
@@ -349,6 +352,7 @@ func (r *Repository) FindMemberByUserID(ctx context.Context, serverID string, us
 			u.username,
 			u.display_name,
 			u.avatar_url,
+			` + namestyle.Expr("u") + `,
 			u.is_bot,
 			sm.nickname,
 			`+legacyRoleColumn+`,
@@ -367,6 +371,7 @@ func (r *Repository) FindMemberByUserID(ctx context.Context, serverID string, us
 		&m.Username,
 		&m.DisplayName,
 		&m.AvatarURL,
+		&m.NameStyle,
 		&m.IsBot,
 		&m.Nickname,
 		&m.Role,

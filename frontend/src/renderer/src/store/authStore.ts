@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { AUTH_STORAGE_KEY } from '../lib/authRefresh'
 import type { ChosenStatus } from '../lib/presenceStatus'
+import type { NameStyle } from '../lib/nameStyle'
 
 export interface ProfileLink {
   url: string
@@ -25,6 +26,8 @@ export interface PublicUser {
   status_text?: string
   links?: ProfileLink[]
   status?: ChosenStatus
+  /** Fonte e efeito do nome de exibição (ausente = padrão). */
+  name_style?: NameStyle
   created_at: string
   updated_at: string
 }

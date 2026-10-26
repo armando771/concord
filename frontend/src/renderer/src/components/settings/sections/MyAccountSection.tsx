@@ -6,6 +6,7 @@ import { formatMemberSince } from '../../../lib/profileCard'
 import { API_BASE_URL } from '../../../lib/config'
 import { profileMediaSrc } from '../../../lib/profileMedia'
 import Avatar from '../../Avatar'
+import StyledName from '../../StyledName'
 
 const CARD_BG = '#111214'
 
@@ -84,7 +85,9 @@ function MyAccountSection(): React.JSX.Element | null {
                 cutoutColor={CARD_BG}
               />
             </div>
-            <p className="mb-2 truncate text-xl font-bold text-white">{name}</p>
+            <p className="mb-2 truncate text-xl font-bold text-white">
+              <StyledName name={name} userId={user.id} style={user.name_style} />
+            </p>
           </div>
           <button
             type="button"

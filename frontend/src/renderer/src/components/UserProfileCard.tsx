@@ -250,6 +250,7 @@ function UserProfileCard(): React.JSX.Element | null {
   const card: CardProfile = {
     id: target.userId,
     display_name: source?.display_name || member?.display_name || target.name,
+    name_style: source?.name_style ?? member?.name_style,
     nickname,
     username: source?.username || member?.username || target.username,
     avatar_url: source ? source.avatar_url : member?.avatar_url,

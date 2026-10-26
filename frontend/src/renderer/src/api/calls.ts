@@ -1,5 +1,6 @@
 import { request } from './client'
 import type { RawCallActivity } from '../lib/activityState'
+import type { NameStyle } from '../lib/nameStyle'
 
 export type CallType = 'dm' | 'channel'
 export type CallStatus = 'ringing' | 'active' | 'ended'
@@ -32,6 +33,7 @@ export interface CallParticipant {
   username?: string
   display_name?: string
   avatar_url?: string | null
+  name_style?: NameStyle
 }
 
 export interface CallStateResponse {

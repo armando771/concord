@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"gin-quickstart/backend/internal/namestyle"
 )
 
 // Limites do perfil (os mesmos do Discord; o app usa os mesmos números).
@@ -31,6 +33,8 @@ type ProfileInput struct {
 	StatusText  string        `json:"status_text"`
 	BannerColor *string       `json:"banner_color"`
 	Links       []ProfileLink `json:"links"`
+	// NameStyle nil = não mexe (cliente antigo não manda o campo).
+	NameStyle *namestyle.Style `json:"name_style"`
 }
 
 func invalid(msg string) error {
@@ -88,6 +92,14 @@ func ValidateProfile(in ProfileInput) (ProfileInput, error) {
 		}
 		seen[key] = true
 		out.Links = append(out.Links, ProfileLink{URL: raw})
+	}
+
+	if in.NameStyle != nil {
+		style, err := namestyle.Validate(*in.NameStyle)
+		if err != nil {
+			return ProfileInput{}, invalid(err.Error())
+		}
+		out.NameStyle = &style
 	}
 
 	return out, nil

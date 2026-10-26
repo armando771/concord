@@ -16,6 +16,7 @@ import {
   MicIcon,
   MicOffIcon
 } from './icons'
+import StyledName from './StyledName'
 
 const BAR_BG = '#07080b'
 
@@ -144,7 +145,9 @@ function UserBar(): React.JSX.Element {
           className={`rounded-full transition-shadow ${speaking ? 'ring-2 ring-[#23a55a]' : ''}`}
         />
         <div className="min-w-0">
-          <p className="truncate text-ds-md leading-[18px] font-medium text-white">{name}</p>
+          <p className="truncate text-ds-md leading-[18px] font-medium text-white">
+            <StyledName name={name} userId={user?.id} style={user?.name_style} />
+          </p>
           {/* Como no Discord: "Em call", a nota (ou o status) e, com o mouse, o @. */}
           <p
             className={`truncate text-ds-xs leading-[13px] font-medium group-hover:hidden ${
