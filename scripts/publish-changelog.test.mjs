@@ -71,3 +71,9 @@ test('--check valida o arquivo sem publicar (roda no affected-tests pr)', () => 
   assert.match(longa.stderr, /1001 caracteres/)
   assert.match(readFileSync(file, 'utf8'), /x{1001}/) // não esvaziou
 })
+
+test('--check sem arquivo mostra o uso', () => {
+  const r = spawnSync(process.execPath, ['scripts/publish-changelog.mjs', '--check'], { encoding: 'utf8' })
+  assert.equal(r.status, 1)
+  assert.match(r.stderr, /uso:.*--check/)
+})

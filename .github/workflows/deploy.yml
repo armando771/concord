@@ -50,6 +50,11 @@ jobs:
       - name: Migrations (números)
         run: node scripts/check-migrations.mjs
 
+      # Nota acima do limite do servidor faria o PUT do changelog falhar só no
+      # fim, com a versão já no ar. Aqui falha antes de publicar qualquer coisa.
+      - name: Changelog (limites)
+        run: node scripts/publish-changelog.mjs --check changelog/next.md
+
       - uses: actions/setup-go@v7
         with:
           go-version-file: backend/go.mod

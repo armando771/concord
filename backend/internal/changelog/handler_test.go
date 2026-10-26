@@ -127,6 +127,15 @@ func TestPublishCountsCharactersNotBytes(t *testing.T) {
 	}
 }
 
+func TestPublishCountsSummaryCharactersNotBytes(t *testing.T) {
+	st := &fakeStore{}
+	body := `{"summary":"` + strings.Repeat("é", maxSummary) + `","entries":[]}`
+	w := serve(t, st, "tok", http.MethodPut, "/api/changelog/0.6.3", "tok", body, false)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestPublishAcceptsTheLongestNoteSoFar(t *testing.T) {
 	st := &fakeStore{}
 	w := serve(t, st, "tok", http.MethodPut, "/api/changelog/0.6.3", "tok", entryBody(strings.Repeat("ã", 535)), false)
@@ -141,6 +150,7 @@ func TestPublishRejectsBadInput(t *testing.T) {
 		"kind inválido":   {"/api/changelog/0.6.3", `{"entries":[{"kind":"x","text":"a"}]}`},
 		"texto vazio":     {"/api/changelog/0.6.3", `{"entries":[{"kind":"fix","text":"  "}]}`},
 		"texto longo":     {"/api/changelog/0.6.3", entryBody(strings.Repeat("a", maxEntryText+1))},
+		"summary longo":   {"/api/changelog/0.6.3", `{"summary":"` + strings.Repeat("a", maxSummary+1) + `"}`},
 		"json quebrado":   {"/api/changelog/0.6.3", `{`},
 	}
 	for name, tc := range cases {

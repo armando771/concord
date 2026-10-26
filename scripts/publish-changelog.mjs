@@ -58,6 +58,7 @@ export async function publishError(version, res) {
 
 // --check <notas.md>: só valida (o affected-tests pr chama quando o diff toca o arquivo).
 function check(file) {
+  if (!file) throw new Error('uso: publish-changelog.mjs --check <notas.md>')
   const { entries } = parseNotes(readFileSync(file, 'utf8'))
   console.log(`${file}: ${entries.length} entradas dentro dos limites`)
 }

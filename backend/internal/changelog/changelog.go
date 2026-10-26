@@ -49,7 +49,7 @@ type store interface {
 
 func (p *Publication) validate() error {
 	p.Summary = strings.TrimSpace(p.Summary)
-	if len(p.Summary) > maxSummary {
+	if utf8.RuneCountInString(p.Summary) > maxSummary {
 		return errors.New("summary muito longo")
 	}
 	if len(p.Entries) > maxEntries {
