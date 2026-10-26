@@ -4,7 +4,14 @@ import { useEffect, useState } from 'react'
  * Microfones e saídas da máquina, atualizados quando algo é plugado ou tirado
  * (Configurações → Voz e o menu da setinha do microfone/fone).
  */
-export function useAudioDevices({ probe = true }: { probe?: boolean } = {}): MediaDeviceInfo[] {
+export function useAudioDevices({
+  probe = true,
+  refreshKey
+}: {
+  probe?: boolean
+  /** Mudou: lista de novo (ex.: a câmera acabou de ganhar permissão e os nomes aparecem). */
+  refreshKey?: unknown
+} = {}): MediaDeviceInfo[] {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
 
   useEffect(() => {
@@ -30,7 +37,7 @@ export function useAudioDevices({ probe = true }: { probe?: boolean } = {}): Med
       cancelled = true
       navigator.mediaDevices.removeEventListener('devicechange', refresh)
     }
-  }, [probe])
+  }, [probe, refreshKey])
 
   return devices
 }

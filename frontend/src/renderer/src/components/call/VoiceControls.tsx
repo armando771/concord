@@ -7,6 +7,7 @@ import {
   ActivityIcon,
   CameraIcon,
   CameraOffIcon,
+  ChevronUpIcon,
   HeadsetIcon,
   HeadsetOffIcon,
   LockIcon,
@@ -20,6 +21,34 @@ import {
 import SoundboardPopover from './SoundboardPopover'
 import ActivityPickerPopover from './ActivityPickerPopover'
 import ScreenQualityPopover from './ScreenQualityPopover'
+import AudioDeviceMenu, { type AudioDeviceKind } from './AudioDeviceMenu'
+
+/** Setinha no canto do botão (como no Discord): abre o menu de dispositivos dele. */
+function DeviceChevron({
+  label,
+  open,
+  onOpen
+}: {
+  label: string
+  open: boolean
+  onOpen: (anchor: HTMLElement) => void
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={(e) => onOpen(e.currentTarget)}
+      aria-label={label}
+      aria-haspopup="menu"
+      aria-expanded={open}
+      title={label}
+      className={`absolute -right-0.5 -top-0.5 z-10 flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border border-subtle shadow transition-colors hover:bg-brand hover:text-white ${
+        open ? 'bg-brand text-white' : 'bg-floating text-gray-300'
+      }`}
+    >
+      <ChevronUpIcon className="h-2.5 w-2.5" />
+    </button>
+  )
+}
 
 function VoiceControls(): React.JSX.Element {
   const muted = useCallStore((s) => s.muted)
@@ -38,6 +67,16 @@ function VoiceControls(): React.JSX.Element {
   const startScreenShare = useCallStore((s) => s.startScreenShare)
   const stopScreenShare = useCallStore((s) => s.stopScreenShare)
   const endCall = useCallStore((s) => s.endCall)
+
+  const [deviceMenu, setDeviceMenu] = useState<{
+    kind: AudioDeviceKind
+    anchor: HTMLElement
+  } | null>(null)
+  const closeDeviceMenu = useCallback(() => setDeviceMenu(null), [])
+  const openDeviceMenu =
+    (kind: AudioDeviceKind) =>
+    (anchor: HTMLElement): void =>
+      setDeviceMenu((current) => (current?.kind === kind ? null : { kind, anchor }))
 
   const [soundboardAnchor, setSoundboardAnchor] = useState<HTMLElement | null>(null)
   const soundboardOpen = soundboardAnchor !== null
@@ -58,57 +97,78 @@ function VoiceControls(): React.JSX.Element {
 
   return (
     <div className="flex items-center gap-1.5 rounded-full border border-subtle bg-secondary p-1.5 shadow-2xl backdrop-blur-xl">
-      <button
-        onClick={toggleMute}
-        aria-label={muted ? 'Ativar Microfone' : 'Silenciar Microfone'}
-        title={
-          !canSpeak
-            ? 'Você não pode falar neste canal'
-            : muted
-              ? 'Ativar Microfone'
-              : 'Silenciar Microfone'
-        }
-        className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-colors ${
-          muted
-            ? 'bg-[var(--text-strong)] text-[var(--bg-primary)]'
-            : 'bg-fg/5 text-gray-200 hover:bg-fg/10'
-        } ${canSpeak ? '' : 'opacity-50'}`}
-      >
-        {muted ? <MicOffIcon className="h-5 w-5" /> : <MicIcon className="h-5 w-5" />}
-      </button>
-      <button
-        onClick={toggleDeafen}
-        aria-label={deafened ? 'Ativar Audio' : 'Silenciar Audio'}
-        title={deafened ? 'Ativar Audio' : 'Silenciar Audio'}
-        className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-colors ${
-          deafened
-            ? 'bg-[var(--text-strong)] text-[var(--bg-primary)]'
-            : 'bg-fg/5 text-gray-200 hover:bg-fg/10'
-        }`}
-      >
-        {deafened ? <HeadsetOffIcon className="h-5 w-5" /> : <HeadsetIcon className="h-5 w-5" />}
-      </button>
-      <button
-        onClick={() => void toggleCamera()}
-        disabled={!connected || (!canStream && !cameraOn)}
-        aria-label={cameraOn ? 'Desligar câmera' : 'Ligar câmera'}
-        title={
-          !canStream && !cameraOn
-            ? 'Você não pode transmitir neste canal'
-            : cameraOn
-              ? 'Desligar câmera'
-              : 'Ligar câmera'
-        }
-        className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-          !connected || (!canStream && !cameraOn)
-            ? 'cursor-not-allowed bg-fg/5 text-gray-500 opacity-50'
-            : cameraOn
-              ? 'cursor-pointer bg-success-strong text-white hover:bg-success-strong-hover'
-              : 'cursor-pointer bg-fg/5 text-gray-200 hover:bg-fg/10'
-        }`}
-      >
-        {cameraOn ? <CameraIcon className="h-5 w-5" /> : <CameraOffIcon className="h-5 w-5" />}
-      </button>
+      <div className="relative">
+        <button
+          onClick={toggleMute}
+          aria-label={muted ? 'Ativar Microfone' : 'Silenciar Microfone'}
+          title={
+            !canSpeak
+              ? 'Você não pode falar neste canal'
+              : muted
+                ? 'Ativar Microfone'
+                : 'Silenciar Microfone'
+          }
+          className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-colors ${
+            muted
+              ? 'bg-[var(--text-strong)] text-[var(--bg-primary)]'
+              : 'bg-fg/5 text-gray-200 hover:bg-fg/10'
+          } ${canSpeak ? '' : 'opacity-50'}`}
+        >
+          {muted ? <MicOffIcon className="h-5 w-5" /> : <MicIcon className="h-5 w-5" />}
+        </button>
+        <DeviceChevron
+          label="Opções de entrada"
+          open={deviceMenu?.kind === 'input'}
+          onOpen={openDeviceMenu('input')}
+        />
+      </div>
+      <div className="relative">
+        <button
+          onClick={toggleDeafen}
+          aria-label={deafened ? 'Ativar Audio' : 'Silenciar Audio'}
+          title={deafened ? 'Ativar Audio' : 'Silenciar Audio'}
+          className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-colors ${
+            deafened
+              ? 'bg-[var(--text-strong)] text-[var(--bg-primary)]'
+              : 'bg-fg/5 text-gray-200 hover:bg-fg/10'
+          }`}
+        >
+          {deafened ? <HeadsetOffIcon className="h-5 w-5" /> : <HeadsetIcon className="h-5 w-5" />}
+        </button>
+        <DeviceChevron
+          label="Opções de saída"
+          open={deviceMenu?.kind === 'output'}
+          onOpen={openDeviceMenu('output')}
+        />
+      </div>
+      <div className="relative">
+        <button
+          onClick={() => void toggleCamera()}
+          disabled={!connected || (!canStream && !cameraOn)}
+          aria-label={cameraOn ? 'Desligar câmera' : 'Ligar câmera'}
+          title={
+            !canStream && !cameraOn
+              ? 'Você não pode transmitir neste canal'
+              : cameraOn
+                ? 'Desligar câmera'
+                : 'Ligar câmera'
+          }
+          className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+            !connected || (!canStream && !cameraOn)
+              ? 'cursor-not-allowed bg-fg/5 text-gray-500 opacity-50'
+              : cameraOn
+                ? 'cursor-pointer bg-success-strong text-white hover:bg-success-strong-hover'
+                : 'cursor-pointer bg-fg/5 text-gray-200 hover:bg-fg/10'
+          }`}
+        >
+          {cameraOn ? <CameraIcon className="h-5 w-5" /> : <CameraOffIcon className="h-5 w-5" />}
+        </button>
+        <DeviceChevron
+          label="Opções de câmera"
+          open={deviceMenu?.kind === 'camera'}
+          onOpen={openDeviceMenu('camera')}
+        />
+      </div>
       <ScreenQualityPopover disabled={!connected}>
         <button
           onClick={handleToggleScreen}
@@ -207,6 +267,13 @@ function VoiceControls(): React.JSX.Element {
       >
         <PhoneOffIcon className="h-5 w-5" />
       </button>
+      {deviceMenu && (
+        <AudioDeviceMenu
+          kind={deviceMenu.kind}
+          anchor={deviceMenu.anchor}
+          onClose={closeDeviceMenu}
+        />
+      )}
       {soundboardAnchor && (
         <SoundboardPopover anchor={soundboardAnchor} onClose={closeSoundboard} />
       )}
