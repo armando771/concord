@@ -54,7 +54,7 @@ function VoiceControls(): React.JSX.Element {
   }
 
   return (
-    <div className="flex items-center gap-1.5 rounded-full border border-white/10 bg-[#0b0c10]/95 p-1.5 shadow-2xl backdrop-blur-xl">
+    <div className="flex items-center gap-1.5 rounded-full border border-subtle bg-secondary p-1.5 shadow-2xl backdrop-blur-xl">
       <button
         onClick={toggleMute}
         aria-label={muted ? 'Ativar Microfone' : 'Silenciar Microfone'}
@@ -66,7 +66,9 @@ function VoiceControls(): React.JSX.Element {
               : 'Silenciar Microfone'
         }
         className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-colors ${
-          muted ? 'bg-white text-[#07080b]' : 'bg-white/5 text-gray-200 hover:bg-white/10'
+          muted
+            ? 'bg-[var(--text-strong)] text-[var(--bg-primary)]'
+            : 'bg-fg/5 text-gray-200 hover:bg-fg/10'
         } ${canSpeak ? '' : 'opacity-50'}`}
       >
         {muted ? <MicOffIcon className="h-5 w-5" /> : <MicIcon className="h-5 w-5" />}
@@ -76,7 +78,9 @@ function VoiceControls(): React.JSX.Element {
         aria-label={deafened ? 'Ativar Audio' : 'Silenciar Audio'}
         title={deafened ? 'Ativar Audio' : 'Silenciar Audio'}
         className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-colors ${
-          deafened ? 'bg-white text-[#07080b]' : 'bg-white/5 text-gray-200 hover:bg-white/10'
+          deafened
+            ? 'bg-[var(--text-strong)] text-[var(--bg-primary)]'
+            : 'bg-fg/5 text-gray-200 hover:bg-fg/10'
         }`}
       >
         {deafened ? <HeadsetOffIcon className="h-5 w-5" /> : <HeadsetIcon className="h-5 w-5" />}
@@ -94,10 +98,10 @@ function VoiceControls(): React.JSX.Element {
         }
         className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
           !connected || (!canStream && !cameraOn)
-            ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
+            ? 'cursor-not-allowed bg-fg/5 text-gray-500 opacity-50'
             : cameraOn
-              ? 'cursor-pointer bg-[#23a55a] text-white hover:bg-[#1e8c4a]'
-              : 'cursor-pointer bg-white/5 text-gray-200 hover:bg-white/10'
+              ? 'cursor-pointer bg-success-strong text-white hover:bg-success-strong-hover'
+              : 'cursor-pointer bg-fg/5 text-gray-200 hover:bg-fg/10'
         }`}
       >
         {cameraOn ? <CameraIcon className="h-5 w-5" /> : <CameraOffIcon className="h-5 w-5" />}
@@ -116,10 +120,10 @@ function VoiceControls(): React.JSX.Element {
           }
           className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
             !connected || (!canStream && !sharing)
-              ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
+              ? 'cursor-not-allowed bg-fg/5 text-gray-500 opacity-50'
               : sharing
-                ? 'cursor-pointer bg-[#23a55a] text-white hover:bg-[#1e8c4a]'
-                : 'cursor-pointer bg-white/5 text-gray-200 hover:bg-white/10'
+                ? 'cursor-pointer bg-success-strong text-white hover:bg-success-strong-hover'
+                : 'cursor-pointer bg-fg/5 text-gray-200 hover:bg-fg/10'
           }`}
         >
           <MonitorIcon className="h-5 w-5" />
@@ -133,10 +137,10 @@ function VoiceControls(): React.JSX.Element {
           title={locked ? 'Destrancar sala' : 'Trancar sala (pedir permissão para entrar)'}
           className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
             !connected
-              ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
+              ? 'cursor-not-allowed bg-fg/5 text-gray-500 opacity-50'
               : locked
                 ? 'cursor-pointer bg-amber-500 text-black shadow-sm hover:bg-amber-400'
-                : 'cursor-pointer bg-white/5 text-gray-200 hover:bg-white/10'
+                : 'cursor-pointer bg-fg/5 text-gray-200 hover:bg-fg/10'
           }`}
         >
           {locked ? <LockIcon className="h-5 w-5" /> : <LockOpenIcon className="h-5 w-5" />}
@@ -154,10 +158,10 @@ function VoiceControls(): React.JSX.Element {
           title="Mesa de Áudio"
           className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
             !connected
-              ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
+              ? 'cursor-not-allowed bg-fg/5 text-gray-500 opacity-50'
               : soundboardOpen
-                ? 'cursor-pointer bg-[#5865f2] text-white'
-                : 'cursor-pointer bg-white/5 text-gray-200 hover:bg-white/10'
+                ? 'cursor-pointer bg-brand text-white'
+                : 'cursor-pointer bg-fg/5 text-gray-200 hover:bg-fg/10'
           }`}
         >
           <SoundboardIcon className="h-5 w-5" />
@@ -174,12 +178,12 @@ function VoiceControls(): React.JSX.Element {
         title="Atividades"
         className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
           !connected
-            ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
+            ? 'cursor-not-allowed bg-fg/5 text-gray-500 opacity-50'
             : activityOpen
-              ? 'cursor-pointer bg-[#5865f2] text-white'
+              ? 'cursor-pointer bg-brand text-white'
               : activityRunning
-                ? 'cursor-pointer bg-[#5865f2]/25 text-white hover:bg-[#5865f2]/40'
-                : 'cursor-pointer bg-white/5 text-gray-200 hover:bg-white/10'
+                ? 'cursor-pointer bg-brand/25 text-strong hover:bg-brand/40'
+                : 'cursor-pointer bg-fg/5 text-gray-200 hover:bg-fg/10'
         }`}
       >
         <ActivityIcon className="h-5 w-5" />
@@ -188,7 +192,7 @@ function VoiceControls(): React.JSX.Element {
         onClick={endCall}
         aria-label="Desconectar"
         title="Desconectar"
-        className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-[#f23f43] text-white transition-colors hover:bg-[#d83a3e]"
+        className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-danger-strong text-white transition-colors hover:bg-danger-strong-hover"
       >
         <PhoneOffIcon className="h-5 w-5" />
       </button>

@@ -51,7 +51,7 @@ function ShortcutsModal(): React.JSX.Element | null {
                       {bindingLabels(bindings[def.id] ?? 'Sem atalho', isMac).map((k) => (
                         <kbd
                           key={k}
-                          className="rounded bg-white/10 px-1.5 py-0.5 text-xs font-semibold text-white"
+                          className="rounded bg-fg/10 px-1.5 py-0.5 text-xs font-semibold text-strong"
                         >
                           {k}
                         </kbd>

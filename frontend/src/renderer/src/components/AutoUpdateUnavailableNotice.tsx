@@ -39,9 +39,9 @@ function AutoUpdateUnavailableNotice(): React.JSX.Element | null {
   return (
     <div
       role="status"
-      className="fixed bottom-4 left-4 z-50 w-80 rounded-xl border border-amber-400/40 bg-[#111318]/95 p-4 shadow-2xl backdrop-blur"
+      className="fixed bottom-4 left-4 z-50 w-80 rounded-xl border border-amber-400/40 bg-floating p-4 shadow-2xl backdrop-blur"
     >
-      <p className="text-sm font-semibold text-white">
+      <p className="text-sm font-semibold text-strong">
         Atualização automática indisponível nesta instalação
       </p>
       <p className="mt-1 text-xs text-gray-400">
@@ -51,7 +51,7 @@ function AutoUpdateUnavailableNotice(): React.JSX.Element | null {
       <button
         type="button"
         onClick={dismiss}
-        className="mt-2 cursor-pointer text-xs font-semibold text-gray-300 hover:text-white"
+        className="mt-2 cursor-pointer text-xs font-semibold text-gray-300 hover:text-strong"
       >
         Entendi
       </button>

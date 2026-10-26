@@ -22,8 +22,8 @@ function ConfirmCloseModal({
     <Modal open title="Encerrar a votação?" onClose={onCancel}>
       <div className="flex flex-col gap-4">
         <p className="text-sm text-gray-300">
-          Mover <span className="font-semibold text-white">“{proposal.title}”</span> para{' '}
-          <span className="font-semibold text-white">{STATUS_ACTION_LABEL[target]}</span> encerra a
+          Mover <span className="font-semibold text-strong">“{proposal.title}”</span> para{' '}
+          <span className="font-semibold text-strong">{STATUS_ACTION_LABEL[target]}</span> encerra a
           votação agora, com <span className="text-discord-green">{proposal.yes_votes} sim</span> e{' '}
           <span className="text-discord-dnd">{proposal.no_votes} não</span>. Não dá para reabri-la.
         </p>

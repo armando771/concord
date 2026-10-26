@@ -64,12 +64,12 @@ function ProposalCard({
       }}
       className={`flex flex-col gap-3 rounded-xl border p-3 focus-visible:outline-2 focus-visible:outline-violet-400 ${
         overlay
-          ? 'rotate-2 cursor-grabbing border-violet-400/60 bg-[#1b1d2b] shadow-2xl shadow-black/60'
-          : 'cursor-pointer border-white/6 bg-white/3 transition-colors hover:bg-white/5'
+          ? 'rotate-2 cursor-grabbing border-violet-400/60 bg-floating shadow-2xl shadow-black/60'
+          : 'cursor-pointer border-subtle bg-fg/3 transition-colors hover:bg-fg/5'
       }`}
     >
       {firstImage && (
-        <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black/30">
+        <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-input">
           <img
             src={proposalImageSrc(firstImage.url)}
             alt=""
@@ -78,14 +78,16 @@ function ProposalCard({
             className="h-full w-full object-cover"
           />
           {p.images.length > 1 && (
-            <span className="absolute bottom-1 right-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+            <span className="absolute bottom-1 right-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-white on-media">
               +{p.images.length - 1}
             </span>
           )}
         </div>
       )}
       <div className="min-w-0">
-        <h3 className="wrap-break-word text-sm font-semibold leading-snug text-white">{p.title}</h3>
+        <h3 className="wrap-break-word text-sm font-semibold leading-snug text-strong">
+          {p.title}
+        </h3>
         {p.description && (
           <p className="mt-1 line-clamp-4 whitespace-pre-wrap wrap-break-word text-xs text-gray-400">
             {p.description}
@@ -125,7 +127,7 @@ function ProposalCard({
       {(p.status === 'voting' || total > 0) && (
         <div className="flex flex-col gap-1.5">
           <div
-            className="flex h-1.5 overflow-hidden rounded-full bg-white/10"
+            className="flex h-1.5 overflow-hidden rounded-full bg-fg/10"
             role="img"
             aria-label={`${p.yes_votes} sim e ${p.no_votes} não`}
           >
@@ -179,7 +181,7 @@ function ProposalCard({
 
       {!overlay && (isTech || canDelete) && (
         <div
-          className="flex flex-wrap items-center gap-2 border-t border-white/6 pt-2"
+          className="flex flex-wrap items-center gap-2 border-t border-subtle pt-2"
           onClick={stop}
         >
           {isTech && <MoveSelect status={p.status} disabled={busy} onMove={onMove} />}

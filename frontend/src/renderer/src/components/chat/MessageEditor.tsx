@@ -60,14 +60,14 @@ function MessageEditor({
         maxLength={Math.max(2000, initial.length)}
         aria-label="Editar mensagem"
         disabled={saving}
-        className="w-full resize-none rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-ds-chat text-white outline-none focus:border-violet-500/40 disabled:opacity-60"
+        className="w-full resize-none rounded-lg border border-subtle bg-input px-3 py-2 text-ds-chat text-strong outline-none focus:border-violet-500/40 disabled:opacity-60"
       />
       <div className="mt-0.5 text-ds-xs text-gray-500">
         Esc para{' '}
         <button
           type="button"
           onClick={onCancel}
-          className="cursor-pointer text-[#00a8fc] hover:underline"
+          className="cursor-pointer text-link hover:underline"
         >
           cancelar
         </button>{' '}
@@ -76,7 +76,7 @@ function MessageEditor({
           type="button"
           onClick={() => onSave(draft)}
           disabled={saving}
-          className="cursor-pointer text-[#00a8fc] hover:underline disabled:opacity-60"
+          className="cursor-pointer text-link hover:underline disabled:opacity-60"
         >
           salvar
         </button>

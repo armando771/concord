@@ -152,7 +152,7 @@ function Register(): React.JSX.Element {
                 {[1, 2, 3, 4].map((i) => (
                   <div
                     key={i}
-                    className={`flex-1 rounded-full ${i <= strength ? STRENGTH_COLOR[strength] : 'bg-white/10'}`}
+                    className={`flex-1 rounded-full ${i <= strength ? STRENGTH_COLOR[strength] : 'bg-fg/10'}`}
                   />
                 ))}
               </div>

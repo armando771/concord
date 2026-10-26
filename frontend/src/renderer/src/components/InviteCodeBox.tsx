@@ -44,7 +44,7 @@ function InviteCodeBox({ serverId }: { serverId: string }): React.JSX.Element {
   }
 
   return (
-    <div className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-4">
+    <div className="space-y-2 rounded-xl border border-subtle bg-fg/5 p-4">
       <p className="text-ds-sm font-medium text-gray-400">Link de convite</p>
       <div className="flex items-center gap-2">
         <input
@@ -53,7 +53,7 @@ function InviteCodeBox({ serverId }: { serverId: string }): React.JSX.Element {
           value={link ?? ''}
           placeholder="Gerando link…"
           onFocus={(e) => e.currentTarget.select()}
-          className="min-w-0 flex-1 truncate rounded-lg bg-black/40 px-3 py-2 font-mono text-ds-sm text-white outline-none focus:ring-2 focus:ring-violet-500/50"
+          className="min-w-0 flex-1 truncate rounded-lg bg-input px-3 py-2 font-mono text-ds-sm text-strong outline-none focus:ring-2 focus:ring-violet-500/50"
         />
         <Button variant="success" onClick={copy} disabled={!link}>
           Copiar
@@ -68,7 +68,7 @@ function InviteCodeBox({ serverId }: { serverId: string }): React.JSX.Element {
         type="button"
         onClick={() => setConfirmReset(true)}
         disabled={!code}
-        className="cursor-pointer text-ds-xs font-medium text-violet-300 hover:text-white hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+        className="cursor-pointer text-ds-xs font-medium text-violet-300 hover:text-strong hover:underline disabled:cursor-not-allowed disabled:opacity-50"
       >
         Gerar novo link
       </button>

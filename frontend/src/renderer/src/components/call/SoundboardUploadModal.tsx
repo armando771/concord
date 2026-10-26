@@ -139,15 +139,15 @@ function SoundboardUploadModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#111214] p-5 shadow-2xl"
+        className="w-full max-w-md rounded-2xl border border-subtle bg-floating p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-bold text-white">Adicionar Som à Mesa de Áudio</h2>
+          <h2 className="text-base font-bold text-strong">Adicionar Som à Mesa de Áudio</h2>
           <button
             type="button"
             onClick={onClose}
-            className="cursor-pointer text-gray-400 transition-colors hover:text-white"
+            className="cursor-pointer text-gray-400 transition-colors hover:text-strong"
             aria-label="Fechar"
           >
             ✕
@@ -170,13 +170,13 @@ function SoundboardUploadModal({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex flex-1 cursor-pointer items-center justify-between rounded-xl border border-dashed border-white/20 bg-white/5 px-3 py-2.5 text-left text-xs text-gray-200 transition-colors hover:border-white/40 hover:bg-white/10"
+                className="flex flex-1 cursor-pointer items-center justify-between rounded-xl border border-dashed border-normal bg-fg/5 px-3 py-2.5 text-left text-xs text-gray-200 transition-colors hover:border-strong hover:bg-fg/10"
               >
                 <span className="truncate">
                   {file ? file.name : 'Escolher arquivo (.mp3, .wav, .ogg, .m4a)'}
                 </span>
                 {durationMs !== null && (
-                  <span className="ml-2 shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[11px] font-semibold text-gray-300">
+                  <span className="ml-2 shrink-0 rounded bg-fg/10 px-1.5 py-0.5 text-[11px] font-semibold text-gray-300">
                     {(durationMs / 1000).toFixed(1)}s • {(file!.size / 1024).toFixed(0)} KB
                   </span>
                 )}
@@ -186,7 +186,7 @@ function SoundboardUploadModal({
                   type="button"
                   onClick={togglePreview}
                   title={previewPlaying ? 'Parar prévia' : 'Ouvir prévia'}
-                  className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-[#5865f2] text-white transition-colors hover:bg-[#4752c4]"
+                  className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-brand text-white transition-colors hover:bg-brand-hover"
                 >
                   {previewPlaying ? (
                     <PauseIcon className="h-4 w-4" />
@@ -231,8 +231,8 @@ function SoundboardUploadModal({
                   onClick={() => setEmoji(em)}
                   className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-base transition-colors ${
                     emoji === em
-                      ? 'bg-[#5865f2] text-white ring-2 ring-white/40'
-                      : 'bg-white/5 hover:bg-white/15'
+                      ? 'bg-brand text-white ring-2 ring-fg/40'
+                      : 'bg-fg/5 hover:bg-fg/15'
                   }`}
                 >
                   {em}
@@ -244,12 +244,12 @@ function SoundboardUploadModal({
                 onChange={(e) => setEmoji(e.target.value.slice(0, 4))}
                 placeholder="🎵"
                 aria-label="Emoji personalizado"
-                className="h-8 w-12 rounded-lg border border-white/10 bg-white/5 text-center text-sm text-white focus:border-[#5865f2] focus:outline-none"
+                className="h-8 w-12 rounded-lg border border-subtle bg-fg/5 text-center text-sm text-strong focus:border-brand focus:outline-none"
               />
             </div>
           </div>
 
-          {error && <p className="text-xs font-medium text-[#f23f43]">{error}</p>}
+          {error && <p className="text-xs font-medium text-danger">{error}</p>}
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={onClose}>

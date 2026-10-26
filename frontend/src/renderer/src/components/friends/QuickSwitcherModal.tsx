@@ -65,7 +65,9 @@ function QuickSwitcherModal({
             ? `${(c.members ?? []).length} membros`
             : (c.other_user?.username ?? ''),
         route,
-        avatar: c.other_user ? { userId: c.other_user.id, url: c.other_user.avatar_url } : undefined,
+        avatar: c.other_user
+          ? { userId: c.other_user.id, url: c.other_user.avatar_url }
+          : undefined,
         nameStyle: c.type !== 'group' ? c.other_user?.name_style : undefined
       })
     }
@@ -136,7 +138,7 @@ function QuickSwitcherModal({
           }
         }}
         placeholder="Para onde você quer ir?"
-        className="w-full rounded-md border border-black/40 bg-[#111214] px-3 py-2.5 text-base text-white outline-none placeholder:text-gray-500 focus:border-[#5865f2]"
+        className="w-full rounded-md border border-black/40 bg-floating px-3 py-2.5 text-base text-strong outline-none placeholder:text-gray-500 focus:border-brand"
       />
       <div className="mt-3 max-h-80 overflow-y-auto">
         {items.length === 0 && (
@@ -149,7 +151,7 @@ function QuickSwitcherModal({
             onMouseEnter={() => setIndex(i)}
             onClick={() => go(item)}
             className={`flex w-full cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-left ${
-              i === index ? 'bg-white/10' : ''
+              i === index ? 'bg-fg/10' : ''
             }`}
           >
             {item.avatar ? (
@@ -162,11 +164,11 @@ function QuickSwitcherModal({
             ) : item.iconUrl ? (
               <img src={item.iconUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
             ) : (
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#5865f2] text-[11px] font-bold text-white">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand text-[11px] font-bold text-white">
                 {item.label.replace(/^#/, '').slice(0, 1).toUpperCase()}
               </span>
             )}
-            <span className="truncate text-sm text-white">
+            <span className="truncate text-sm text-strong">
               {item.kind === 'person' ? (
                 <StyledName name={item.label} userId={item.avatar?.userId} style={item.nameStyle} />
               ) : (
@@ -177,7 +179,7 @@ function QuickSwitcherModal({
           </button>
         ))}
       </div>
-      <p className="mt-3 border-t border-white/10 pt-2 text-xs text-gray-500">
+      <p className="mt-3 border-t border-subtle pt-2 text-xs text-gray-500">
         Dica: use <b>@</b> para pessoas, <b>*</b> para servidores e <b>#</b> para canais.
       </p>
     </Modal>

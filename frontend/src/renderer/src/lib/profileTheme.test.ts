@@ -128,6 +128,8 @@ describe('contraste', () => {
     expect(contrastRatio('#777777', '#ffffff')).toBeCloseTo(4.48, 1)
   })
   it('fundo escuro ou saturado escuro → texto claro', () => {
+    expect(pickInk(['#111214'])).toBe('light')
+    // O fundo padrão vem do tema (var()), não dá para medir: fica o texto do app.
     expect(pickInk([CARD_BG])).toBe('light')
     expect(pickInk(['#1e1b4b', '#0b1020'])).toBe('light')
     expect(pickInk(['#6b1d12', '#4b4f58'])).toBe('light')
@@ -189,6 +191,16 @@ describe('profileThemeLook', () => {
     expect(look.surface).toBe('#fce7f3')
     expect(look.className).toContain('pt-border-neon')
     expect(look.className).toContain('pt-ink-dark')
+  })
+  it('fundo próprio escuro força o texto claro (vale em qualquer tema do app)', () => {
+    const look = profileThemeLook({
+      ...DEFAULT_PROFILE_THEME,
+      background: 'solid',
+      background_colors: ['#1e1b4b']
+    })
+    expect(look.ink).toBe('light')
+    expect(look.className).toContain('pt-ink-light')
+    expect(look.className).not.toContain('pt-ink-dark')
   })
 })
 

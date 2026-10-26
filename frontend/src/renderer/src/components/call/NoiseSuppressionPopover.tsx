@@ -18,7 +18,7 @@ export function NoiseSuppressionSettings(): React.JSX.Element {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-base font-bold text-white">Supressão de ruído</p>
+        <p className="text-base font-bold text-strong">Supressão de ruído</p>
         <Switch checked={enabled} onChange={setEnabled} label="Supressão de ruído" />
       </div>
       <p className="text-sm leading-snug text-gray-300">
@@ -26,18 +26,18 @@ export function NoiseSuppressionSettings(): React.JSX.Element {
         ar-condicionado são removidos enquanto você fala. Seus amigos só ouvirão a sua voz.
       </p>
       {!available && (
-        <p className="text-xs text-[#f0b232]">
+        <p className="text-xs text-warning">
           O RNNoise não carregou neste computador — usando a supressão padrão.
         </p>
       )}
       <div className="space-y-2">
-        <p className="text-sm font-bold text-white">Teste do microfone</p>
+        <p className="text-sm font-bold text-strong">Teste do microfone</p>
         <MicTest />
       </div>
       <div className="flex items-end justify-between gap-3 pt-1">
         <div>
           <p className="text-xs font-bold text-gray-400">Fornecido por</p>
-          <p className="text-lg font-black tracking-tight text-white">
+          <p className="text-lg font-black tracking-tight text-strong">
             RNNoise <span className="text-xs font-medium text-gray-400">Xiph.Org</span>
           </p>
         </div>
@@ -45,7 +45,7 @@ export function NoiseSuppressionSettings(): React.JSX.Element {
           href={RNNOISE_URL}
           target="_blank"
           rel="noreferrer"
-          className="text-sm text-[#00a8fc] hover:underline"
+          className="text-sm text-link hover:underline"
         >
           Saiba mais
         </a>
@@ -94,7 +94,7 @@ function NoiseSuppressionPopover({
       role="dialog"
       aria-label="Supressão de ruído"
       style={{ width: POPOVER_WIDTH, left, bottom }}
-      className="fixed z-50 rounded-xl border border-white/10 bg-[#111214] p-4 shadow-2xl"
+      className="fixed z-50 rounded-xl border border-subtle bg-floating p-4 shadow-2xl"
     >
       <NoiseSuppressionSettings />
     </div>,

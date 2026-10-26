@@ -4,7 +4,9 @@ import {
   shouldHideOnClose,
   notifyPlan,
   staleLoginItem,
+  parseTitleBarColors,
   TITLE_BAR_COLOR,
+  TITLE_BAR_SYMBOL_COLOR,
   titleBarOptions
 } from './windowPolicy'
 
@@ -77,15 +79,35 @@ describe('windowPolicy', () => {
 })
 
 describe('titleBarOptions', () => {
-  it('no Windows esconde a moldura clara e pinta os botões com o preto do app', () => {
+  it('no Windows esconde a moldura clara e pinta os botões com a cor do app', () => {
     expect(titleBarOptions('win32')).toEqual({
       titleBarStyle: 'hidden',
-      titleBarOverlay: { color: TITLE_BAR_COLOR, symbolColor: '#e5e7eb', height: 32 }
+      titleBarOverlay: { color: TITLE_BAR_COLOR, symbolColor: TITLE_BAR_SYMBOL_COLOR, height: 32 }
     })
+    // Discord Escuro, o tema padrão (--bg-app e --interactive-normal).
+    expect(TITLE_BAR_COLOR).toBe('#2c2d32')
+    expect(TITLE_BAR_SYMBOL_COLOR).toBe('#c5c6ca')
     expect(titleBarOptions('linux').titleBarStyle).toBe('hidden')
   })
 
   it('no macOS mantém a barra nativa', () => {
     expect(titleBarOptions('darwin')).toEqual({})
+  })
+})
+
+describe('parseTitleBarColors', () => {
+  it('aceita duas cores hex de 6 dígitos (o tema trocou)', () => {
+    expect(parseTitleBarColors({ color: '#FFFFFF', symbolColor: '#28282d' })).toEqual({
+      color: '#ffffff',
+      symbolColor: '#28282d'
+    })
+  })
+
+  it('recusa o que não for hex opaco (vem do renderer)', () => {
+    expect(parseTitleBarColors(null)).toBeNull()
+    expect(parseTitleBarColors('#fff')).toBeNull()
+    expect(parseTitleBarColors({ color: 'red', symbolColor: '#000000' })).toBeNull()
+    expect(parseTitleBarColors({ color: '#000000', symbolColor: 'rgba(0,0,0,0.5)' })).toBeNull()
+    expect(parseTitleBarColors({ color: '#00000080', symbolColor: '#000000' })).toBeNull()
   })
 })

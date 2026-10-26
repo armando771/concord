@@ -71,10 +71,8 @@ export function ActivityLine({
           className="h-3.5 w-3.5 shrink-0"
         />
       )}
-      {line.kind === 'voice' && <VolumeIcon className="h-3.5 w-3.5 shrink-0 text-[#23a55a]" />}
-      <span className={`truncate ${line.kind === 'voice' ? 'text-[#23a55a]' : ''}`}>
-        {line.text}
-      </span>
+      {line.kind === 'voice' && <VolumeIcon className="h-3.5 w-3.5 shrink-0 text-success" />}
+      <span className={`truncate ${line.kind === 'voice' ? 'text-success' : ''}`}>{line.text}</span>
     </span>
   )
 }

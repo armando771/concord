@@ -54,10 +54,10 @@ function SensitivityMeter({ thresholdDb }: { thresholdDb: number }): React.JSX.E
       aria-valuemin={FLOOR_DB}
       aria-valuemax={0}
       aria-valuenow={Math.round(level)}
-      className="relative h-2.5 overflow-hidden rounded-full bg-white/10"
+      className="relative h-2.5 overflow-hidden rounded-full bg-fg/10"
     >
       <div
-        className={`h-full ${level >= thresholdDb ? 'bg-[#23a55a]' : 'bg-white/30'}`}
+        className={`h-full ${level >= thresholdDb ? 'bg-success' : 'bg-fg/30'}`}
         style={{ width: `${fraction(level) * 100}%` }}
       />
       <div

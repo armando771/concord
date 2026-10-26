@@ -106,7 +106,7 @@ function ResizeHandle({
     >
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 w-0.5 bg-transparent transition-colors group-hover/resize:bg-white/15 group-focus-visible/resize:bg-violet-500 group-data-dragging/resize:bg-violet-500"
+        className="pointer-events-none absolute inset-y-0 left-0 w-0.5 bg-transparent transition-colors group-hover/resize:bg-fg/15 group-focus-visible/resize:bg-violet-500 group-data-dragging/resize:bg-violet-500"
       />
     </div>
   )

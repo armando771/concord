@@ -88,7 +88,7 @@ function MicTest(): React.JSX.Element {
       <button
         type="button"
         onClick={() => setTesting((t) => !t)}
-        className="shrink-0 cursor-pointer rounded-md bg-white/10 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/15"
+        className="shrink-0 cursor-pointer rounded-md bg-fg/10 px-4 py-1.5 text-sm font-medium text-strong transition-colors hover:bg-fg/15"
       >
         {testing ? 'Parar' : 'Testar'}
       </button>
@@ -104,7 +104,7 @@ function MicTest(): React.JSX.Element {
           <span
             key={i}
             className={`h-full w-[3px] rounded-full transition-colors duration-75 ${
-              i < lit ? 'bg-[#23a55a]' : 'bg-white/15'
+              i < lit ? 'bg-success' : 'bg-fg/15'
             }`}
           />
         ))}

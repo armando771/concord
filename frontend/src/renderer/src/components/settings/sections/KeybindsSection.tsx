@@ -21,7 +21,7 @@ function Keys({ binding }: { binding: string | null }): React.JSX.Element {
   return (
     <span className="flex gap-1">
       {bindingLabels(binding, isMacPlatform()).map((k) => (
-        <kbd key={k} className="rounded bg-white/10 px-1.5 py-0.5 text-xs font-semibold text-white">
+        <kbd key={k} className="rounded bg-fg/10 px-1.5 py-0.5 text-xs font-semibold text-strong">
           {k}
         </kbd>
       ))}
@@ -117,8 +117,8 @@ function BindingField({
       }}
       className={`flex min-w-[10rem] shrink-0 cursor-pointer items-center justify-center rounded-lg border px-3 py-2 transition-colors focus-visible:outline-2 focus-visible:outline-violet-400 ${
         recording
-          ? 'border-[#5865f2] bg-[#5865f2]/15 text-xs font-semibold text-white'
-          : 'border-white/10 bg-white/10 hover:bg-white/15'
+          ? 'border-brand bg-brand/15 text-xs font-semibold text-strong'
+          : 'border-subtle bg-fg/10 hover:bg-fg/15'
       }`}
     >
       {recording ? 'Aperte a tecla ou o botão…' : <Keys binding={bindings[def.id]} />}
@@ -158,7 +158,7 @@ function Row({
               onError(null)
               setBinding(def.id, null)
             }}
-            className="h-8 w-8 cursor-pointer rounded-md text-gray-400 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
+            className="h-8 w-8 cursor-pointer rounded-md text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
           >
             ✕
           </button>
@@ -171,14 +171,14 @@ function Row({
               onError(null)
               resetBinding(def.id)
             }}
-            className="h-8 w-8 cursor-pointer rounded-md text-gray-400 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
+            className="h-8 w-8 cursor-pointer rounded-md text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
           >
             ↺
           </button>
         </div>
       </div>
       {canGlobal && (
-        <div className="rounded-lg bg-black/20 px-3 py-2">
+        <div className="rounded-lg bg-input px-3 py-2">
           <Toggle
             title="Funcionar com o app em segundo plano"
             description="Vale mesmo com a Salinha minimizada ou em outro programa (ex.: jogando)."
@@ -206,8 +206,8 @@ export function KeybindsSection(): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-        <p className="text-ds-md font-medium text-white">Atalhos</p>
+      <div className="rounded-xl border border-subtle bg-fg/5 p-4">
+        <p className="text-ds-md font-medium text-strong">Atalhos</p>
         <p className="mt-1 text-ds-sm text-gray-400">
           Clique em um atalho e aperte a nova tecla ou um botão do mouse (meio ou laterais). Esc
           cancela.
@@ -216,7 +216,7 @@ export function KeybindsSection(): React.JSX.Element {
       </div>
 
       {GROUP_ORDER.map((group) => (
-        <section key={group} className="rounded-xl border border-white/10 bg-white/5 p-4">
+        <section key={group} className="rounded-xl border border-subtle bg-fg/5 p-4">
           <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-400">
             {SHORTCUT_GROUP_LABELS[group]}
           </h3>

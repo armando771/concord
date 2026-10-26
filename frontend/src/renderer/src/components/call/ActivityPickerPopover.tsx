@@ -47,20 +47,20 @@ function ActivityCard({
       aria-pressed={selected}
       className={`flex w-full cursor-pointer items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
         selected
-          ? 'border-[#5865f2] bg-[#5865f2]/15'
-          : 'border-white/8 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.08]'
+          ? 'border-brand bg-brand/15'
+          : 'border-subtle bg-fg/[0.04] hover:border-normal hover:bg-fg/[0.08]'
       }`}
     >
       <span
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-black/40"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-input"
         style={{ color: activity.accent }}
       >
         <ActivityGlyph activity={activity} className="h-6 w-6" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className="truncate text-sm font-bold text-white">{activity.name}</span>
-          <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-300">
+          <span className="truncate text-sm font-bold text-strong">{activity.name}</span>
+          <span className="rounded bg-fg/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-300">
             {activity.category}
           </span>
         </span>
@@ -136,10 +136,10 @@ function ActivityPickerPopover({
       role="dialog"
       aria-label="Atividades"
       style={{ width: POPOVER_WIDTH, left, bottom }}
-      className="fixed z-50 flex max-h-[460px] flex-col rounded-2xl border border-white/10 bg-[#111214] p-4 shadow-2xl"
+      className="fixed z-50 flex max-h-[460px] flex-col rounded-2xl border border-subtle bg-floating p-4 shadow-2xl"
     >
       <div className="mb-3">
-        <p className="text-sm font-bold text-white">Atividades</p>
+        <p className="text-sm font-bold text-strong">Atividades</p>
         <p className="text-[11px] text-gray-400">
           Jogue com quem está na chamada — a voz continua aqui.
         </p>
@@ -183,13 +183,13 @@ function ActivityPickerPopover({
               }}
               placeholder={selected.linkExample}
               aria-invalid={error !== null}
-              className={`w-full rounded-xl border bg-black/40 px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none ${
-                error ? 'border-[#f23f43]' : 'border-white/10 focus:border-[#5865f2]'
+              className={`w-full rounded-xl border bg-input px-3 py-1.5 text-xs text-strong placeholder-gray-500 focus:outline-none ${
+                error ? 'border-danger' : 'border-subtle focus:border-brand'
               }`}
             />
           </label>
           {error ? (
-            <p role="alert" className="text-[11px] text-[#f23f43]">
+            <p role="alert" className="text-[11px] text-danger">
               {error}
             </p>
           ) : (
@@ -204,7 +204,7 @@ function ActivityPickerPopover({
           <button
             type="submit"
             disabled={!callId || busy}
-            className="w-full cursor-pointer rounded-xl bg-[#5865f2] py-2 text-xs font-semibold text-white transition-colors hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full cursor-pointer rounded-xl bg-brand py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? 'Abrindo…' : `Abrir ${selected.name}`}
           </button>

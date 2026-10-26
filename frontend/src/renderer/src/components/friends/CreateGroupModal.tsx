@@ -96,7 +96,7 @@ function CreateGroupModal({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Digite o nome de usuário de um amigo"
-        className="w-full rounded-md border border-black/40 bg-[#111214] px-3 py-2 text-sm text-white outline-none placeholder:text-gray-500 focus:border-[#5865f2]"
+        className="w-full rounded-md border border-black/40 bg-floating px-3 py-2 text-sm text-strong outline-none placeholder:text-gray-500 focus:border-brand"
       />
       <div className="mt-3 max-h-72 overflow-y-auto">
         {available.length === 0 && (
@@ -105,7 +105,7 @@ function CreateGroupModal({
         {available.map((f) => (
           <label
             key={f.id}
-            className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-white/5"
+            className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-fg/5"
           >
             <Avatar
               userId={f.id}
@@ -113,7 +113,7 @@ function CreateGroupModal({
               avatarUrl={f.avatar_url}
               size={32}
             />
-            <span className="min-w-0 flex-1 truncate text-sm text-white">
+            <span className="min-w-0 flex-1 truncate text-sm text-strong">
               <StyledName name={f.display_name || f.username} userId={f.id} style={f.name_style} />
               <span className="ml-1.5 text-gray-500">{f.username}</span>
             </span>
@@ -121,7 +121,7 @@ function CreateGroupModal({
               type="checkbox"
               checked={selected.includes(f.id)}
               onChange={() => toggle(f.id)}
-              className="h-5 w-5 accent-[#5865f2]"
+              className="h-5 w-5 accent-brand"
             />
           </label>
         ))}
@@ -130,7 +130,7 @@ function CreateGroupModal({
         type="button"
         disabled={selected.length === 0 || busy}
         onClick={submit}
-        className="mt-4 w-full cursor-pointer rounded-md bg-[#5865f2] py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-50"
+        className="mt-4 w-full cursor-pointer rounded-md bg-brand py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
       >
         {groupId ? 'Adicionar' : selected.length > 1 ? 'Criar grupo' : 'Criar DM'}
       </button>

@@ -3,11 +3,16 @@ import { DEFAULT_NOTIFICATION_PREFS } from './notifications'
 import { STATUS_META, isChosenStatus, prefsForStatus, presenceStatusOf } from './presenceStatus'
 
 describe('STATUS_META', () => {
-  it('usa as cores do Discord', () => {
-    expect(STATUS_META.online.color).toBe('#23a55a')
-    expect(STATUS_META.idle.color).toBe('#f0b232')
-    expect(STATUS_META.dnd.color).toBe('#f23f43')
+  it('usa as cores do tema (verde/amarelo/vermelho do Discord no padrão)', () => {
+    expect(STATUS_META.online.color).toBe('var(--green)')
+    expect(STATUS_META.idle.color).toBe('var(--yellow)')
+    expect(STATUS_META.dnd.color).toBe('var(--red)')
     expect(STATUS_META.invisible.color).toBe(STATUS_META.offline.color)
+  })
+
+  it('texto do status usa a versão legível da cor', () => {
+    expect(STATUS_META.online.textColor).toBe('var(--text-positive)')
+    expect(STATUS_META.dnd.textColor).toBe('var(--text-danger)')
   })
 
   it('tem os nomes em português', () => {

@@ -6,7 +6,7 @@ const LEVELS = [1, 5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 120, 250]
 const MILESTONES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 
 const chip =
-  'cursor-pointer rounded-md bg-white/10 px-2 py-1 text-xs font-semibold text-gray-200 hover:bg-white/20'
+  'cursor-pointer rounded-md bg-fg/10 px-2 py-1 text-xs font-semibold text-gray-200 hover:bg-fg/20'
 
 /**
  * Só em dev (import.meta.env.DEV): toca a animação de subir para qualquer
@@ -65,7 +65,7 @@ function LevelUpPreview(): React.JSX.Element {
           onChange={(e) => setLevel(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && preview(Number(level))}
           aria-label="Nível da prévia"
-          className="w-20 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-xs text-white"
+          className="w-20 rounded-md border border-subtle bg-input px-2 py-1 text-xs text-strong"
         />
         <button
           onClick={() => preview(Number(level))}

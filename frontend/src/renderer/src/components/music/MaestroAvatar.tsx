@@ -8,7 +8,7 @@ function MaestroAvatar({ size = 36 }: { size?: number }): React.JSX.Element {
       alt=""
       draggable={false}
       style={{ width: size, height: size, imageRendering: 'pixelated' }}
-      className="shrink-0 rounded-full bg-[#1e1f22] object-cover shadow-md"
+      className="shrink-0 rounded-full bg-accent object-cover shadow-md"
       aria-hidden="true"
     />
   )
