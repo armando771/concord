@@ -28,6 +28,9 @@ vi.mock('../../chat/store/chatStore', () => ({
 vi.mock('../../chat/store/searchStore', () => ({
   useSearchStore: { getState: () => ({ close: track('search.close') }) }
 }))
+vi.mock('../../chat/store/draftStore', () => ({
+  useDraftStore: { getState: () => ({ clear: track('drafts.clear') }) }
+}))
 vi.mock('../../call/store/callStore', () => ({
   useCallStore: { getState: () => ({ endCall: track('call.endCall') }) }
 }))
@@ -72,6 +75,11 @@ describe('logoutAndReset', () => {
   it('fecha a busca, que guarda resultados da conta que saiu', async () => {
     await logoutAndReset()
     expect(calls).toContain('search.close')
+  })
+
+  it('apaga os rascunhos, que não podem passar para a próxima conta', async () => {
+    await logoutAndReset()
+    expect(calls).toContain('drafts.clear')
   })
 
   it('limpa a sessão local mesmo se o servidor recusar o logout', async () => {

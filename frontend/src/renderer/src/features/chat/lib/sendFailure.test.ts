@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Message } from '../api/messages'
-import { reportSendFailure, type SendFailureEnv } from './sendFailure'
+import { reportSendFailure, type SendFailureEnv, type SentMessage } from './sendFailure'
 
 const reply = { id: 'm1' } as Message
 
@@ -29,7 +29,10 @@ function setup(over: Partial<SendFailureEnv> = {}): {
   return { env, draft: () => draft, replyState: () => replyState }
 }
 
-const sent = (text: string, over: Partial<{ room: string; reply: Message | null }> = {}) => ({
+const sent = (
+  text: string,
+  over: Partial<{ room: string; reply: Message | null }> = {}
+): SentMessage => ({
   room: 'channel:a',
   text,
   reply: null,

@@ -7,6 +7,7 @@ import { useAuthStore } from '../../auth/store/authStore'
 import { useChannelNameStore } from '../../servers/store/channelNameStore'
 import { useCallStore } from '../../call/store/callStore'
 import { useChatStore } from '../../chat/store/chatStore'
+import { useDraftStore } from '../../chat/store/draftStore'
 import { useSearchStore } from '../../chat/store/searchStore'
 import { useFriendStore } from '../../friends/store/friendStore'
 import { useInviteStore } from '../../servers/store/inviteStore'
@@ -36,6 +37,7 @@ export async function logoutAndReset(): Promise<void> {
     useChannelNameStore.getState().reset()
     useChatStore.getState().disconnect()
     useSearchStore.getState().close()
+    useDraftStore.getState().clear()
     useProfileCardStore.getState().close()
     useSettingsStore.getState().forceClose()
     await clearSession()

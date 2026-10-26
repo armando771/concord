@@ -60,6 +60,8 @@ import { uploadAttachment } from '../api/attachments'
 import { ApiError } from '../../../shared/api/client'
 import ComposerAttachments from './ComposerAttachments'
 import { useAttachmentDraft } from '../hooks/useAttachmentDraft'
+import { useRoomDraft } from '../hooks/useRoomDraft'
+import { useRoomState } from '../hooks/useRoomState'
 import { useTypingSender } from '../hooks/useTypingSender'
 import TypingIndicator from './TypingIndicator'
 import { reportSendFailure, type ReplyState } from '../lib/sendFailure'
@@ -466,16 +468,16 @@ function ChatPane({
   const votePollInRoom = useChatStore((s) => s.votePollInRoom)
   const endPollInRoom = useChatStore((s) => s.endPollInRoom)
   const editInRoom = useChatStore((s) => s.editInRoom)
-  const [pollOpen, setPollOpen] = useState(false)
-  const [mediaPickerOpen, setMediaPickerOpen] = useState(false)
+  const [pollOpen, setPollOpen] = useRoomState(room, false)
+  const [mediaPickerOpen, setMediaPickerOpen] = useRoomState(room, false)
   // Mensagem aberta na edição, por sala (o ServerView reaproveita o ChatPane).
   const [editState, setEditState] = useState<{ room: string; id: string } | null>(null)
   const editingId = inRoom(editState, room, 'id')
   const [savingEdit, setSavingEdit] = useState(false)
   const meId = useAuthStore((s) => s.user?.id)
 
-  const [draft, setDraft] = useState('')
-  const [sending, setSending] = useState(false)
+  const [draft, setDraft] = useRoomDraft(room)
+  const [sending, setSending] = useRoomState(room, false)
   const [replyState, setReplyState] = useState<ReplyState | null>(null)
   const replyingTo = inRoom(replyState, room, 'message')
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
@@ -524,8 +526,8 @@ function ChatPane({
     }
   }, [])
   const nicknames = useServerNicknames(serverId)
-  const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
-  const [highlightChoice, setHighlight] = useState<number | null>(null)
+  const [mention, setMention] = useRoomState<{ query: string; start: number } | null>(room, null)
+  const [highlightChoice, setHighlight] = useRoomState<number | null>(room, null)
   const meUsername = useAuthStore((s) => s.user?.username)
   const meUser = useAuthStore((s) => s.user)
   // Chips de menção: quem está no chat, eu e os autores da lista (que podem
