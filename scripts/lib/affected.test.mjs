@@ -36,3 +36,13 @@ test('parseArgs: --base em qualquer posição', () => {
   assert.deepEqual(parseArgs(['pr', '--base', 'origin/main']), { mode: 'pr', base: 'origin/main' })
   assert.deepEqual(parseArgs(['--base', 'origin/main', 'full']), { mode: 'full', base: 'origin/main' })
 })
+
+// Modo com typo ("prr") ou --base sem valor rodavam loop calados e diziam verde.
+test('parseArgs: modo desconhecido é erro', () => {
+  assert.throws(() => parseArgs(['prr']), /modo desconhecido: prr/)
+})
+
+test('parseArgs: --base sem valor é erro', () => {
+  assert.throws(() => parseArgs(['pr', '--base']), /--base sem valor/)
+  assert.throws(() => parseArgs(['--base', '--x', 'pr']), /--base sem valor/)
+})

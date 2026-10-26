@@ -62,9 +62,8 @@ function full() {
 }
 
 function main() {
-  const args = parseArgs(process.argv.slice(2))
-  const mode = args.mode
-  const base = args.base ?? defaultBase()
+  const { mode, base: baseArg } = parseArgs(process.argv.slice(2))
+  const base = baseArg ?? defaultBase()
   process.chdir(ROOT)
   const files = Object.keys(changedLines(base))
   const { shared } = classify(files)
