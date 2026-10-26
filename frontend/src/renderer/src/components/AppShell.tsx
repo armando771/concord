@@ -19,18 +19,22 @@ import BoostBanner from './level/BoostBanner'
 import LevelUpScreen from './level/LevelUpScreen'
 import InviteConfirmModal from './invite/InviteConfirmModal'
 import LevelUpMilestone from './level/LevelUpMilestone'
+import { useFlushPendingLevelUp } from './level/useScreenCelebration'
 import BadgesModal from './badges/BadgesModal'
 import BadgeUnlockToast from './badges/BadgeUnlockToast'
 import QuickSwitcherModal from './friends/QuickSwitcherModal'
 import ShortcutsModal from './ShortcutsModal'
 import { useGlobalShortcuts } from './useGlobalShortcuts'
+import { useInviteLinkClicks } from './invite/useInviteLinkClicks'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { useUIStore } from '../store/uiStore'
 import { IS_WEB } from '../lib/config'
 
 function AppShell(): React.JSX.Element {
+  useFlushPendingLevelUp()
   useGlobalShortcuts()
+  useInviteLinkClicks()
   const quickSwitcherOpen = useUIStore((s) => s.quickSwitcherOpen)
   const setQuickSwitcherOpen = useUIStore((s) => s.setQuickSwitcherOpen)
   const location = useLocation()

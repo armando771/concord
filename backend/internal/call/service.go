@@ -87,6 +87,8 @@ type activeCall struct {
 
 	// Espectadores de tela: sharerID -> set de watcherUserIDs
 	screenWatchers map[string]map[string]struct{}
+	// Miniatura da tela de cada um, para o cartão de perfil (ver screen_preview.go).
+	screenPreviews map[string]*screenPreview
 }
 
 type Service struct {
@@ -584,6 +586,7 @@ func (s *Service) detachParticipant(callID, userID string) (remaining int, remov
 		delete(sharers, userID)
 	}
 	affectedSharers := dropScreenWatcherLocked(ac, userID)
+	delete(ac.screenPreviews, userID)
 	clearedSharer := false
 	if wasSharing {
 		clearedSharer = clearSharerWatchersLocked(ac, userID)
@@ -742,6 +745,7 @@ func (s *Service) SetScreenShare(ctx context.Context, callID string, userID stri
 		sharers[userID] = struct{}{}
 	} else {
 		delete(sharers, userID)
+		delete(ac.screenPreviews, userID)
 		clearedWatchers = clearSharerWatchersLocked(ac, userID)
 	}
 

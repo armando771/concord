@@ -1,5 +1,6 @@
 import type { Message, MentionEveryone } from '../api/messages'
 import type { ChosenStatus } from './presenceStatus'
+import { serverDisplayName } from './serverNames'
 
 // Menções @nick no chat de texto, mais @all/@here (menção em massa num canal
 // de servidor). Quem decide se @all/@here pinga é o backend, no campo
@@ -237,4 +238,42 @@ export function mentionSuggestions(
   const items = [...everyone, ...people]
   const defaultIndex = people.length > 0 ? everyone.length : q && items.length > 0 ? 0 : -1
   return { items, defaultIndex }
+}
+
+/** @nick (minúsculo, sem o "@") -> nome para mostrar no chip da menção. */
+export type MentionLabels = Record<string, string>
+
+/**
+ * Nome que o chip da menção mostra. O texto da mensagem continua "@nick";
+ * na tela vale o apelido no servidor, senão o nome de exibição (em DM e
+ * grupo, o nome de exibição). Só o nick sobra quando nada disso existe.
+ */
+export function mentionLabels(
+  people: { username: string; display_name?: string | null; nickname?: string | null }[]
+): MentionLabels {
+  const labels: MentionLabels = {}
+  for (const p of people) {
+    if (!p.username || isReserved(p.username)) continue
+    const key = p.username.toLowerCase()
+    // Primeira ocorrência manda (a lista de quem está no chat vem antes).
+    if (key in labels) continue
+    labels[key] = serverDisplayName({ nickname: p.nickname }, p)
+  }
+  return labels
+}
+
+/** Texto do chip: "@Nome" se o nick é conhecido; senão o "@nick" como veio. */
+export function mentionChipText(part: MessagePart, labels: MentionLabels | undefined): string {
+  if (!part.mention || !labels) return part.text
+  const name = labels[part.mention.toLowerCase()]
+  return name ? `@${name}` : part.text
+}
+
+/** Mesmos nomes? Deixa o MessageText memoizado não redesenhar à toa. */
+export function sameLabels(a: MentionLabels | undefined, b: MentionLabels | undefined): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  const keys = Object.keys(a)
+  if (keys.length !== Object.keys(b).length) return false
+  return keys.every((k) => a[k] === b[k])
 }

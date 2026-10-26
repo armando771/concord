@@ -5,6 +5,7 @@ import {
   endCall as endCallApi,
   getCallState,
   getCallToken,
+  putScreenPreview,
   type CallStateResponse
 } from '../api/calls'
 import { ApiError } from '../api/client'
@@ -24,6 +25,8 @@ import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
 import { micBlockReason, streamBlockReason } from '../lib/voicePermissions'
 import { addWatched, miniPlayerOnly, pruneWatched, resolveFocus } from '../lib/screenWatch'
+import { createPreviewSender } from '../lib/screenPreviewFlow'
+import { captureScreenPreview } from '../lib/screenSnapshot'
 import {
   applyLiveEvent,
   LIVE_GRACE_MS,
@@ -402,6 +405,12 @@ async function runScreenQualityQueue(): Promise<void> {
     useCallStore.setState({ pendingScreenQuality: null })
   }
 }
+
+/** Foto da própria tela para a prévia no cartão de perfil, só quando o servidor pede. */
+const sendScreenPreview = createPreviewSender({
+  capture: captureScreenPreview,
+  upload: putScreenPreview
+})
 
 // Som só da janela compartilhada (Windows), quando o helper nativo captura
 let windowAudio: WindowAudio | null = null
@@ -1758,6 +1767,15 @@ export const useCallStore = create<CallState>()((set, get) => {
               [p.sharer_id]: p.watchers
             }
           }))
+          return
+        }
+
+        case 'call:screen_preview_request': {
+          // Alguém abriu meu cartão de perfil: manda uma foto pequena da tela.
+          const p = payload as unknown as { call_id: string }
+          const stream = localScreenStream
+          if (!stream || get().callId !== p.call_id || !get().isScreenSharing) return
+          void sendScreenPreview(p.call_id, stream)
           return
         }
 
