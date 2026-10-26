@@ -9,10 +9,20 @@ import {
 } from '../api/calls'
 import { ApiError } from '../api/client'
 import { getAudioStream, getCameraStream, getDisplayStream } from '../lib/rtc'
+import {
+  rememberStreamQuality,
+  saveScreenQuality,
+  streamQuality,
+  type ScreenShareQuality
+} from '../lib/screenShareQuality'
 import type { MicHandle } from '../lib/noiseSuppression'
 import { CallMedia, type RemoteMedia } from '../lib/livekit'
+import { watchLocalSpeaking } from '../lib/localSpeaking'
+import { mergeLocalSpeaking, sameIds } from '../lib/voiceActivity'
+import { voiceServerId } from '../lib/voiceServer'
 import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
+import { micBlockReason, streamBlockReason } from '../lib/voicePermissions'
 import { addWatched, miniPlayerOnly, pruneWatched, resolveFocus } from '../lib/screenWatch'
 import {
   applyLiveEvent,
@@ -21,7 +31,7 @@ import {
   type LivePayload,
   type LiveRecord
 } from '../lib/liveBadge'
-import { callNotification, notifyDesktop } from '../lib/notifications'
+import { callNotification, knockNotification, notifyDesktop } from '../lib/notifications'
 import { playSound, setSoundOutput } from '../lib/sounds'
 import {
   abortWindowAudio,
@@ -32,13 +42,18 @@ import {
 import { loadAudioPrefs, resolveDeviceId, saveAudioPrefs } from '../lib/audioDevices'
 import { useChatStore } from './chatStore'
 import { useAuthStore } from './authStore'
+import { useServerStore } from './serverStore'
+import { serverDisplayName } from '../lib/serverNames'
 import { showToast } from './toastStore'
 
 import type { CallResume } from '../../../shared/callResume'
 
 import { useSoundboardStore } from './soundboardStore'
+import { useBoostStore } from './boostStore'
+import { useActivityStore } from './activityStore'
+import { useAnnotationStore } from './annotationStore'
 import { stopAllSoundboardAudio } from '../lib/soundboardPlayer'
-
+import { setVoiceOutputDevice } from '../lib/voiceOutput'
 
 export type CallStatus = 'idle' | 'ringing' | 'outgoing' | 'active'
 export type CallKind = 'dm' | 'channel'
@@ -83,17 +98,83 @@ interface VoicePayload {
   user_id: string
   muted: boolean
   deafened: boolean
+  /** Impostos por um moderador (silenciar/ensurdecer no servidor). */
+  server_muted?: boolean
+  server_deafened?: boolean
 }
 
 export interface VoiceState {
   muted: boolean
   deafened: boolean
+  serverMuted?: boolean
+  serverDeafened?: boolean
 }
 
 interface EndedPayload {
   call_id: string
 }
 
+/** Nome de quem está na call: numa call de canal, com o apelido daquele servidor. */
+function callName(
+  state: { type: CallKind | null; serverId: string | null },
+  user: { id: string; display_name?: string | null; username?: string | null } | undefined,
+  fallback?: string
+): string {
+  const nickname =
+    state.type === 'channel' && state.serverId && user
+      ? useServerStore.getState().nicknames?.[state.serverId]?.[user.id]
+      : undefined
+  return serverDisplayName({ nickname }, user, fallback)
+}
+
+interface LockPayload {
+  call_id: string
+  channel_id?: string | null
+  locked: boolean
+  by: CallUserInfo
+}
+
+interface KnockPayload {
+  call_id: string
+  channel_id?: string | null
+  user: CallUserInfo
+}
+
+interface KnockResolvedPayload {
+  call_id: string
+  user_id: string
+  accepted: boolean
+  reason: string
+  by?: CallUserInfo | null
+}
+
+interface KnockAnswerPayload {
+  call_id: string
+  channel_id?: string | null
+  server_id?: string | null
+  reason: 'accepted' | 'declined' | 'expired' | 'unlocked' | 'ended'
+  by?: CallUserInfo | null
+}
+
+/** Meu pedido para entrar numa sala trancada. */
+export interface KnockState {
+  channelId: string
+  callId: string
+  status: 'pending' | 'declined'
+}
+
+/** POST /calls respondeu 423: a sala do canal está trancada. */
+export class CallLockedError extends Error {
+  callId: string | null
+
+  constructor(callId: string | null) {
+    super('A sala está trancada.')
+    this.callId = callId
+  }
+}
+
+/** Quanto tempo o aviso "pedido recusado" fica no canal. */
+const KNOCK_DECLINED_MS = 4000
 function upsertParticipant(list: CallUserInfo[], user: CallUserInfo): CallUserInfo[] {
   return list.some((p) => p.id === user.id) ? list : [...list, user]
 }
@@ -117,6 +198,9 @@ interface CallState {
   /** stream de tela local enquanto isScreenSharing (reativo p/ preview) */
   localScreenStream: MediaStream | null
   isScreenSharing: boolean
+  screenShareQuality: ScreenShareQuality | null
+  /** Última troca pedida e ainda não concluída (null = nada pendente). */
+  pendingScreenQuality: ScreenShareQuality | null
   /** userId -> stream de câmera remota (Fase 4, DM) */
   videoStreams: Record<string, MediaStream>
   /** userId -> nome de quem está na sala de mídia (LiveKit), mesmo fora da lista do backend */
@@ -133,17 +217,27 @@ interface CallState {
   localCameraStream: MediaStream | null
   /** quem está compartilhando tela segundo o backend (registry) */
   screenSharers: string[]
+  /** sharerId -> lista de espectadores assistindo aquela tela */
+  screenWatchers: Record<string, CallUserInfo[]>
   /** microfone e saída escolhidos ('' = padrão do sistema) */
   inputDeviceId: string
   outputDeviceId: string
   /** userId -> mudo/ensurdecido dos outros participantes (evento call:voice) */
   voiceStates: Record<string, VoiceState>
-  /** userIds falando agora (detecção do LiveKit; inclui o próprio usuário) */
+  /**
+   * userIds falando agora: os outros pela detecção do LiveKit (servidor); o
+   * próprio usuário pela detecção local do microfone publicado (sem o atraso
+   * da ida e volta ao servidor), ou pelo servidor se a local não carregar.
+   */
   speakingIds: string[]
   /** tela em foco no layout expandido (estilo Go Live) */
   focusedScreenUserId: string | null
   muted: boolean
   deafened: boolean
+  /** Pode falar neste canal (SPEAK e não silenciado no servidor). */
+  canSpeak: boolean
+  /** Pode transmitir tela e câmera neste canal (STREAM). */
+  canStream: boolean
   startedAt: number | null
   /** Mute de antes de ensurdecer — volta a ele ao desensurdecer. */
   mutedBeforeDeafen: boolean
@@ -151,6 +245,21 @@ interface CallState {
   listVersion: number
   /** chamadas ativas por canal do servidor aberto (polling da sidebar) */
   serverCalls: Record<string, CallStateResponse>
+  /** a sala de voz em que estou está trancada */
+  locked: boolean
+  /** pedidos para entrar na minha sala trancada (aceitar/recusar) */
+  joinRequests: CallUserInfo[]
+  /** meu pedido para entrar numa sala trancada, se houver */
+  knock: KnockState | null
+  /** canal em que acabei de entrar por pedido aceito (a sidebar navega e limpa) */
+  admittedChannelId: string | null
+
+  toggleLock: () => void
+  /** Bate na porta da sala trancada do canal. */
+  requestJoin: (channelId: string) => void
+  cancelJoinRequest: () => void
+  respondJoinRequest: (userId: string, accept: boolean) => void
+  clearAdmittedChannel: () => void
 
   startDMCall: (conversationId: string, peer: CallUserInfo) => Promise<void>
   startChannelCall: (channelId: string, resume?: CallResume, signal?: AbortSignal) => Promise<void>
@@ -163,6 +272,7 @@ interface CallState {
   setOutputDevice: (deviceId: string) => void
   startScreenShare: () => Promise<void>
   stopScreenShare: () => void
+  updateScreenQuality: (quality: ScreenShareQuality) => void
   toggleCamera: () => Promise<void>
   setFocusedScreenUser: (userId: string | null) => void
   /** Começa a baixar e assistir a transmissão de alguém (e foca nela). */
@@ -175,7 +285,7 @@ interface CallState {
   focusWatchedScreen: (userId: string) => void
   setServerCalls: (map: Record<string, CallStateResponse>) => void
   joinVoiceChannel: (channelId: string) => Promise<void>
-  /** WS de chat reconectou: volta a se registrar na chamada de canal, se houver. */
+  /** WS de chat (re)conectou: ressincroniza a chamada (canal ou DM) e as listas de voz. */
   handleWsReconnect: () => void
   handleWsEvent: (event: WsEvent) => void
 }
@@ -183,14 +293,81 @@ interface CallState {
 /** Microfone da chamada (o stream processado + o que precisa ser fechado). */
 let localMic: MicHandle | null = null
 let transitioning = false
+let screenSharePending = false
 let callGeneration = 0
 /** Reentrada na chamada de canal em andamento (ver resyncChannelCall). */
 let resyncing = false
 /** Conexão com o servidor de mídia (LiveKit) da chamada atual. */
 let media: CallMedia | null = null
 
+/** Leitura sob demanda; o histórico pertence somente ao popover. */
+export async function readCallLatency(): Promise<number | null> {
+  const connection = media
+  const ms = await connection?.getLatency()
+  return connection === media ? (ms ?? null) : null
+}
+
+/** Quem está falando segundo o servidor (ActiveSpeakersChanged). */
+let serverSpeakers: string[] = []
+/** Fala do próprio usuário detectada aqui; null = sem detecção local. */
+let localSpeaking: boolean | null = null
+/** Detecção local em andamento (identifica callbacks de uma já parada). */
+let speakingWatch: { track: MediaStreamTrack; stop: () => void } | null = null
+
 // Compartilhamento de tela (não-reativo; o estado reativo é localScreenStream)
 let localScreenStream: MediaStream | null = null
+/** Troca de qualidade esperando a vez: só a mais recente fica na fila. */
+let screenQualityQueue: ScreenQualityRequest | null = null
+let screenQualityRunning = false
+
+interface ScreenQualityRequest {
+  stream: MediaStream
+  connection: CallMedia
+  callId: string | null
+  quality: ScreenShareQuality
+}
+
+const sameScreenQuality = (a: ScreenShareQuality | null, b: ScreenShareQuality): boolean =>
+  a?.resolution === b.resolution && a?.frameRate === b.frameRate
+
+/** A troca ainda vale: mesma transmissão, mesma conexão e mesma chamada. */
+function isCurrentScreen(request: ScreenQualityRequest): boolean {
+  return (
+    localScreenStream === request.stream &&
+    media === request.connection &&
+    useCallStore.getState().callId === request.callId
+  )
+}
+
+/**
+ * Aplica as trocas uma de cada vez. Enquanto uma está em andamento, cliques
+ * novos substituem a fila: só a escolha final chega ao servidor.
+ */
+async function runScreenQualityQueue(): Promise<void> {
+  screenQualityRunning = true
+  try {
+    while (screenQualityQueue) {
+      const request = screenQualityQueue
+      screenQualityQueue = null
+      if (!isCurrentScreen(request)) continue
+      try {
+        await request.connection.updateScreenQuality(request.stream, request.quality)
+        if (!isCurrentScreen(request)) continue
+        rememberStreamQuality(request.stream, request.quality)
+        saveScreenQuality(request.quality)
+        useCallStore.setState({ screenShareQuality: { ...request.quality } })
+      } catch {
+        if (isCurrentScreen(request)) {
+          showToast.error('Não foi possível alterar a qualidade da transmissão.')
+        }
+      }
+    }
+  } finally {
+    screenQualityRunning = false
+    useCallStore.setState({ pendingScreenQuality: null })
+  }
+}
+
 // Som só da janela compartilhada (Windows), quando o helper nativo captura
 let windowAudio: WindowAudio | null = null
 // Câmera local (não-reativa; o estado reativo é localCameraStream)
@@ -198,6 +375,12 @@ let localCameraStream: MediaStream | null = null
 
 /** call:live recentes, reaplicados sobre o polling da lista do servidor. */
 let recentLive: LiveRecord[] = []
+/** Limpa o aviso de pedido recusado. */
+let knockDeclinedTimer: ReturnType<typeof setTimeout> | null = null
+
+/** Ao reconectar, um 404 só fecha/troca a chamada se repetir (ver confirmGone). */
+const GONE_CHECKS = 3
+const GONE_CHECK_INTERVAL_MS = 2000
 
 const TOKEN_ATTEMPTS = 10
 const TOKEN_RETRY_DELAY_MS = 400
@@ -229,9 +412,56 @@ const EMPTY_MEDIA: RemoteMedia = {
   availableScreens: []
 }
 
+/** Microfone da chamada em andamento (null fora dela), para o medidor de sensibilidade. */
+export function getCallMicrophone(): MicHandle | null {
+  return localMic
+}
+
 export const useCallStore = create<CallState>()((set, get) => {
   const bumpList = (): void => {
     set((s) => ({ listVersion: s.listVersion + 1 }))
+  }
+
+  /**
+   * Junta servidor (os outros) e detecção local (eu). Mudo nunca está
+   * falando — nem quando a detecção local caiu e o servidor ainda me lista
+   * (ele demora a perceber o mute).
+   */
+  const publishSpeaking = (): void => {
+    const meId = useAuthStore.getState().user?.id ?? null
+    const local = get().muted ? false : localSpeaking
+    const next = mergeLocalSpeaking(serverSpeakers, meId, local)
+    if (!sameIds(get().speakingIds, next)) set({ speakingIds: next })
+  }
+
+  const stopLocalSpeaking = (): void => {
+    speakingWatch?.stop()
+    speakingWatch = null
+    localSpeaking = null
+  }
+
+  /** (Re)inicia a detecção local na track do microfone da chamada. */
+  const startLocalSpeaking = (): void => {
+    stopLocalSpeaking()
+    const mic = localMic
+    const track = mic?.stream.getAudioTracks()[0]
+    if (!mic || !track) return
+    const watch = { track, stop: () => {} }
+    speakingWatch = watch
+    localSpeaking = false
+    watch.stop = watchLocalSpeaking(mic, {
+      onChange: (speaking) => {
+        if (speakingWatch !== watch) return
+        localSpeaking = speaking
+        publishSpeaking()
+      },
+      onUnavailable: () => {
+        if (speakingWatch !== watch) return
+        localSpeaking = null
+        publishSpeaking()
+      }
+    })
+    publishSpeaking()
   }
 
   const applyRemoteMedia = ({ reconnecting, ...remote }: RemoteMedia): void => {
@@ -285,10 +515,34 @@ export const useCallStore = create<CallState>()((set, get) => {
         if (media === connection) showToast.info('Chamada reconectada.')
       },
       onActiveSpeakers: (userIds) => {
-        if (media === connection) set({ speakingIds: userIds })
+        if (media !== connection) return
+        serverSpeakers = userIds
+        publishSpeaking()
+      },
+      onRemovedByModerator: () => {
+        if (media !== connection) return
+        showToast.info('Um moderador desconectou você da chamada.')
+        get().endCall()
+      },
+      onPublishPermissions: (allowed) => {
+        if (media !== connection) return
+        set({ canSpeak: allowed.microphone, canStream: allowed.stream })
+        if (allowed.microphone) {
+          // Ganhou a fala (cargo novo, moderador liberou): publica o microfone.
+          void connection.ensureMic(get().muted).catch(() => {})
+        } else if (!get().muted) {
+          // Perdeu a fala: o microfone fecha no servidor, então mostra como mudo.
+          set({ muted: true })
+          applyMute(true)
+          publishSpeaking()
+          sendVoiceState()
+        }
       }
     })
     media = connection
+    // Mesma track que vai ser publicada; sobrevive à troca de sala (resync).
+    // Só reinicia se a detecção ficou presa a uma track antiga.
+    if (speakingWatch?.track !== mic) startLocalSpeaking()
 
     try {
       const { token } = await retry(() => getCallToken(callId), {
@@ -337,16 +591,22 @@ export const useCallStore = create<CallState>()((set, get) => {
   }
 
   /**
-   * Lê o estado da chamada no backend. `replace` troca a lista inteira (usado
-   * ao reentrar, quando a lista local pode ter ficado velha); senão só soma
-   * quem faltava (eventos call:joined podem ter chegado antes).
+   * Lê o estado da chamada no backend. `replace` (ao reentrar ou reconectar,
+   * quando o local pode ter ficado velho) faz o servidor valer: troca a lista
+   * de quem está no canal e o mudo/ensurdecido de todos; senão só soma quem
+   * faltava (eventos call:joined/call:voice podem ter chegado antes). Na DM a
+   * lista nunca encolhe: o outro lado é a própria chamada.
+   * 'gone': a chamada não existe mais no servidor.
    */
-  const loadCallState = async (callId: string, replace: boolean): Promise<void> => {
+  const loadCallState = async (
+    callId: string,
+    replace: boolean
+  ): Promise<'ok' | 'gone' | 'error'> => {
     const meId = useAuthStore.getState().user?.id
-    if (!meId) return
+    if (!meId) return 'error'
     try {
       const state = await getCallState(callId)
-      if (get().callId !== callId) return
+      if (get().callId !== callId) return 'error'
       const others = state.participants
         .filter((p) => p.user_id && p.user_id !== meId)
         .map((p) => ({
@@ -356,25 +616,86 @@ export const useCallStore = create<CallState>()((set, get) => {
           avatar_url: p.avatar_url ?? null
         }))
       const sharing = state.screen_sharing ?? []
+      useActivityStore.getState().hydrate(callId, state.activity ?? null)
+      const joinReqs = (state.join_requests ?? []).map((p) => ({
+        id: p.id,
+        username: p.username,
+        display_name: p.display_name,
+        avatar_url: p.avatar_url ?? null
+      }))
       set((s) => ({
+        locked: state.call?.locked ?? s.locked,
+        joinRequests: replace
+          ? joinReqs
+          : [
+              ...s.joinRequests,
+              ...joinReqs.filter((r) => !s.joinRequests.some((q) => q.id === r.id))
+            ],
         screenSharers: sharing,
+        screenWatchers: (state.screen_watchers as Record<string, CallUserInfo[]>) ?? s.screenWatchers,
         voiceStates: {
           ...Object.fromEntries(
             state.participants.map((p) => [
               p.user_id,
-              { muted: p.muted ?? false, deafened: p.deafened ?? false }
+              {
+                muted: p.muted ?? false,
+                deafened: p.deafened ?? false,
+                serverMuted: p.server_muted ?? false,
+                serverDeafened: p.server_deafened ?? false
+              }
             ])
           ),
           ...(replace ? {} : s.voiceStates)
         },
         focusedScreenUserId: s.focusedScreenUserId,
-        participants: replace
-          ? others
-          : [...s.participants, ...others.filter((p) => !s.participants.some((q) => q.id === p.id))]
+        participants:
+          replace && s.type === 'channel'
+            ? others
+            : [
+                ...s.participants,
+                ...others.filter((p) => !s.participants.some((q) => q.id === p.id))
+              ]
       }))
-    } catch {
+      return 'ok'
+    } catch (err) {
       // estado indisponível: a lista se forma pelos eventos call:joined
+      return err instanceof ApiError && err.status === 404 ? 'gone' : 'error'
     }
+  }
+
+  /** Reenvia ao servidor se estou transmitindo (ou não) — corrige o que se perdeu na queda. */
+  const sendScreenState = (callId: string): void => {
+    useChatStore
+      .getState()
+      .sendEvent('call:screen', { call_id: callId, active: localScreenStream !== null })
+  }
+
+  /**
+   * A chamada ainda existe no servidor? 'gone' só com 404; 403 (não sou mais
+   * participante) quer dizer que ela existe. Erro de rede: 'unknown'.
+   */
+  const probeCall = async (callId: string): Promise<'exists' | 'gone' | 'unknown'> => {
+    try {
+      await getCallState(callId)
+      return 'exists'
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return 'gone'
+      if (err instanceof ApiError && err.status === 403) return 'exists'
+      return 'unknown'
+    }
+  }
+
+  /**
+   * 404 ao reconectar só vale como "a chamada acabou" se repetir: um servidor
+   * que acabou de subir não pode derrubar a mídia de ninguém por engano.
+   */
+  const confirmGone = async (callId: string): Promise<boolean> => {
+    for (let i = 1; i < GONE_CHECKS; i++) {
+      await new Promise((r) => setTimeout(r, GONE_CHECK_INTERVAL_MS))
+      if (get().callId !== callId) return false
+      if ((await probeCall(callId)) !== 'gone') return false
+    }
+    return get().callId === callId
   }
 
   /**
@@ -382,30 +703,44 @@ export const useCallStore = create<CallState>()((set, get) => {
    * tolerância, mas a mídia (LiveKit) segue conectada — a pessoa continua
    * falando/transmitindo e some da lista de todo mundo. Ao reconectar (ou ao
    * saber que foi tirado), volta a se registrar na chamada do canal.
+   *
+   * Nunca troca de sala por engano: se o servidor diz que a chamada não existe,
+   * só entra numa nova (desconectando a mídia) depois de confirmar o 404 e se
+   * ninguém mais estiver na sala de mídia — senão separaria quem ainda conversa.
    */
   const resyncChannelCall = async (): Promise<void> => {
     const { status, type, channelId, callId } = get()
     if (status !== 'active' || type !== 'channel' || !channelId || !callId || resyncing) return
     resyncing = true
     try {
+      const probe = await probeCall(callId)
+      if (probe === 'unknown') return // servidor indisponível: a próxima reconexão tenta
+      if (probe === 'gone') {
+        const gone = await confirmGone(callId)
+        if (get().callId !== callId) return
+        // Confirmado, mas ainda há gente na sala de mídia: não separa ninguém.
+        if (gone && Object.keys(get().mediaPeers).length > 0) return
+        // Não confirmado: a chamada existe de novo, segue o caminho normal.
+      }
       // Idempotente: se ainda estou na chamada, nada muda no backend.
       const call = await startCallApi({ type: 'channel', channel_id: channelId })
       if (get().callId !== callId) return
       if (call.id !== callId) {
         // A chamada antiga acabou enquanto eu estava fora: segue na nova.
         useChatStore.getState().unsubscribeRoom(`call:${callId}`)
+        useBoostStore.getState().clearCall(callId)
         useChatStore.getState().subscribeRoom(`call:${call.id}`)
         media?.disconnect()
         media = null
+        serverSpeakers = []
         set({ callId: call.id, participants: [], ...EMPTY_MEDIA, watchedScreenIds: [] })
+        publishSpeaking()
         void connectMedia(call.id)
       }
       await loadCallState(call.id, true)
       if (get().callId !== call.id) return
       sendVoiceState()
-      if (localScreenStream) {
-        useChatStore.getState().sendEvent('call:screen', { call_id: call.id, active: true })
-      }
+      sendScreenState(call.id)
       bumpList()
     } catch {
       // segue com a mídia; a próxima reconexão tenta de novo
@@ -414,20 +749,59 @@ export const useCallStore = create<CallState>()((set, get) => {
     }
   }
 
+  /**
+   * DM depois de o WS de chat reconectar (ex.: deploy do servidor): eventos da
+   * queda se perderam. Atualiza o estado (mudo, tela) sem mexer na mídia e
+   * reenvia o meu. Só fecha a chamada se o servidor confirmar que ela acabou
+   * (404 repetido) e a outra pessoa já tiver saído da sala de mídia; o sinal
+   * normal de fim continua sendo o call:ended.
+   */
+  const resyncDmCall = async (): Promise<void> => {
+    const { status, type, callId } = get()
+    if (type !== 'dm' || !callId || status === 'idle') return
+    // Tocando, ainda não sou participante: o servidor responde 403 (nada muda)
+    // ou 404 se a chamada acabou (o reinício encerra as que só tocavam).
+    let result = await loadCallState(callId, true)
+    if (get().callId !== callId) return
+    if (result === 'gone') {
+      if (await confirmGone(callId)) {
+        const peerInMedia = get().participants.some((p) => p.id in get().mediaPeers)
+        if (get().status === 'active' && peerInMedia) return
+        cleanup()
+        bumpList()
+        return
+      }
+      if (get().callId !== callId) return
+      // O 404 passou (servidor acabando de subir): lê o estado de novo.
+      result = await loadCallState(callId, true)
+      if (get().callId !== callId) return
+    }
+    if (result !== 'ok' || get().status !== 'active') return
+    sendVoiceState()
+    sendScreenState(callId)
+  }
+
   const cleanup = (): void => {
     callGeneration++
     const callId = get().callId
-    if (callId) useChatStore.getState().unsubscribeRoom(`call:${callId}`)
+    if (callId) {
+      useChatStore.getState().unsubscribeRoom(`call:${callId}`)
+      useBoostStore.getState().clearCall(callId)
+    }
     media?.disconnect()
     media = null
+    stopLocalSpeaking()
+    serverSpeakers = []
     stopLocalStream()
     localScreenStream?.getTracks().forEach((t) => t.stop())
     localScreenStream = null
+    screenQualityQueue = null
     windowAudio?.stop()
     windowAudio = null
     localCameraStream?.getTracks().forEach((t) => t.stop())
     localCameraStream = null
     useSoundboardStore.getState().clearActivePlays()
+    useAnnotationStore.getState().cleanup()
     set({
       status: 'idle',
       callId: null,
@@ -440,8 +814,11 @@ export const useCallStore = create<CallState>()((set, get) => {
       ...EMPTY_MEDIA,
       localScreenStream: null,
       isScreenSharing: false,
+      screenShareQuality: null,
+      pendingScreenQuality: null,
       localCameraStream: null,
       screenSharers: [],
+      screenWatchers: {},
       speakingIds: [],
       voiceStates: {},
       watchedScreenIds: [],
@@ -449,8 +826,12 @@ export const useCallStore = create<CallState>()((set, get) => {
       focusedScreenUserId: null,
       muted: false,
       deafened: false,
+      canSpeak: true,
+      canStream: true,
       mutedBeforeDeafen: false,
-      startedAt: null
+      startedAt: null,
+      locked: false,
+      joinRequests: []
     })
   }
 
@@ -503,8 +884,11 @@ export const useCallStore = create<CallState>()((set, get) => {
     ...EMPTY_MEDIA,
     localScreenStream: null,
     isScreenSharing: false,
+    screenShareQuality: null,
+    pendingScreenQuality: null,
     localCameraStream: null,
     screenSharers: [],
+    screenWatchers: {},
     speakingIds: [],
     voiceStates: {},
     watchedScreenIds: [],
@@ -515,10 +899,54 @@ export const useCallStore = create<CallState>()((set, get) => {
     focusedScreenUserId: null,
     muted: false,
     deafened: false,
+    canSpeak: true,
+    canStream: true,
     mutedBeforeDeafen: false,
     startedAt: null,
     listVersion: 0,
     serverCalls: {},
+    locked: false,
+    joinRequests: [],
+    knock: null,
+    admittedChannelId: null,
+
+    toggleLock: () => {
+      const { callId, type, locked, status } = get()
+      if (!callId || type !== 'channel' || status !== 'active') return
+      useChatStore.getState().sendEvent('call:lock', { call_id: callId, locked: !locked })
+    },
+
+    requestJoin: (channelId: string) => {
+      const serverCalls = get().serverCalls
+      const call = serverCalls[channelId]?.call
+      if (!call) return
+      set({ knock: { channelId, callId: call.id, status: 'pending' } })
+      playSound('knock')
+      useChatStore.getState().sendEvent('call:knock', { call_id: call.id })
+    },
+
+    cancelJoinRequest: () => {
+      const { knock } = get()
+      if (!knock) return
+      useChatStore.getState().sendEvent('call:knock_cancel', { call_id: knock.callId })
+      set({ knock: null })
+    },
+
+    respondJoinRequest: (userId: string, accept: boolean) => {
+      const { callId, status } = get()
+      if (!callId || status !== 'active') return
+      // Remove otimista da lista de pedidos locais
+      set((s) => ({ joinRequests: s.joinRequests.filter((r) => r.id !== userId) }))
+      useChatStore.getState().sendEvent('call:knock_respond', {
+        call_id: callId,
+        user_id: userId,
+        accept
+      })
+    },
+
+    clearAdmittedChannel: () => {
+      set({ admittedChannelId: null })
+    },
 
     startDMCall: async (conversationId, peer) => {
       if (get().status !== 'idle' || transitioning) return
@@ -603,7 +1031,8 @@ export const useCallStore = create<CallState>()((set, get) => {
           muted,
           deafened: resume?.deafened ?? false,
           mutedBeforeDeafen: resume?.mutedBeforeDeafen ?? false,
-          startedAt: Date.now()
+          startedAt: Date.now(),
+          locked: call.locked ?? false
         })
         playSound('join')
         useChatStore.getState().subscribeRoom(`call:${call.id}`)
@@ -615,6 +1044,10 @@ export const useCallStore = create<CallState>()((set, get) => {
         bumpList()
       } catch (err) {
         stopLocalStream()
+        if (err instanceof ApiError && err.status === 423) {
+          const callId = (err.body?.call_id as string) ?? null
+          throw new CallLockedError(callId)
+        }
         if (resume) throw err
         showToast.error(err instanceof Error ? err.message : 'Não foi possível entrar na chamada.')
       } finally {
@@ -673,9 +1106,22 @@ export const useCallStore = create<CallState>()((set, get) => {
 
     toggleMute: () => {
       const next = !get().muted
+      // Sem permissão de falar (ou silenciado por um moderador) não dá para desmutar.
+      if (!next) {
+        const meId = useAuthStore.getState().user?.id
+        const blocked = micBlockReason({
+          canSpeak: get().canSpeak,
+          serverMuted: Boolean(meId && get().voiceStates[meId]?.serverMuted)
+        })
+        if (blocked) {
+          showToast.error(blocked)
+          return
+        }
+      }
       // Desmutar enquanto ensurdecido também tira o ensurdecer.
       set(next ? { muted: true } : { muted: false, deafened: false })
       applyMute(next)
+      publishSpeaking()
       sendVoiceState()
       playSound(next ? 'mute' : 'unmute')
     },
@@ -690,6 +1136,7 @@ export const useCallStore = create<CallState>()((set, get) => {
         set({ deafened: false, muted: get().mutedBeforeDeafen })
         applyMute(get().mutedBeforeDeafen)
       }
+      publishSpeaking()
       sendVoiceState()
       playSound(next ? 'deafen' : 'undeafen')
     },
@@ -714,6 +1161,8 @@ export const useCallStore = create<CallState>()((set, get) => {
       const track = next.stream.getAudioTracks()[0]
       track.enabled = !get().muted
       localMic = next
+      // A detecção segue o microfone publicado.
+      if (speakingWatch) startLocalSpeaking()
       try {
         await media?.replaceMic(track)
         // O SDK muta sozinho quando a track antiga morre (ex.: headset tirado).
@@ -727,69 +1176,100 @@ export const useCallStore = create<CallState>()((set, get) => {
     setOutputDevice: (deviceId) => {
       set({ outputDeviceId: deviceId })
       setSoundOutput(deviceId)
+      setVoiceOutputDevice(deviceId)
       saveAudioPrefs({ inputId: get().inputDeviceId, outputId: deviceId })
     },
 
     startScreenShare: async () => {
       const s = get()
-      if (s.status !== 'active' || s.isScreenSharing || transitioning) return
-      let stream: MediaStream
-      resetWindowAudio()
+      if (s.status !== 'active' || s.isScreenSharing || transitioning || screenSharePending) return
+      const blocked = streamBlockReason(s.canStream)
+      if (blocked) {
+        showToast.error(blocked)
+        return
+      }
+      screenSharePending = true
       try {
-        stream = await getDisplayStream()
-      } catch (err) {
-        abortWindowAudio()
-        // NotAllowedError: usuário cancelou o picker — sem toast.
-        if ((err as DOMException)?.name !== 'NotAllowedError') {
-          showToast.error('Não foi possível compartilhar a tela.')
+        let stream: MediaStream
+        resetWindowAudio()
+        try {
+          stream = await getDisplayStream()
+        } catch (err) {
+          abortWindowAudio()
+          // NotAllowedError: usuário cancelou o picker — sem toast.
+          if ((err as DOMException)?.name !== 'NotAllowedError') {
+            showToast.error('Não foi possível compartilhar a tela.')
+          }
+          return
         }
-        return
-      }
-      // Janela no Windows: o som vem do helper (só o app da janela).
-      const captured = await takeWindowAudio()
-      // A chamada pode ter acabado (ou mudado) com o seletor aberto.
-      if (get().callId !== s.callId || get().status !== 'active') {
-        captured?.stop()
-        stream.getTracks().forEach((t) => t.stop())
-        return
-      }
-      if (captured) {
-        // O som da janela substitui qualquer som de sistema da captura.
-        stream.getAudioTracks().forEach((t) => {
-          stream.removeTrack(t)
-          t.stop()
+        // Janela no Windows: o som vem do helper (só o app da janela).
+        const captured = await takeWindowAudio()
+        // A chamada pode ter acabado (ou mudado) com o seletor aberto.
+        if (get().callId !== s.callId || get().status !== 'active') {
+          captured?.stop()
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
+        if (captured) {
+          // O som da janela substitui qualquer som de sistema da captura.
+          stream.getAudioTracks().forEach((t) => {
+            stream.removeTrack(t)
+            t.stop()
+          })
+          windowAudio = captured
+          stream.addTrack(captured.track)
+        }
+
+        localScreenStream = stream
+        const meId = useAuthStore.getState().user?.id
+        const callId = get().callId
+        set((prev) => ({
+          isScreenSharing: true,
+          screenShareQuality: streamQuality(stream),
+          localScreenStream: stream,
+          screenSharers: meId
+            ? Array.from(new Set([...prev.screenSharers, meId]))
+            : prev.screenSharers,
+          focusedScreenUserId: prev.focusedScreenUserId ?? meId ?? null
+        }))
+
+        // Parar pela barra nativa do Electron / fim da fonte encerra o share.
+        stream.getVideoTracks().forEach((track) => {
+          track.addEventListener('ended', () => {
+            if (get().isScreenSharing) get().stopScreenShare()
+          })
         })
-        windowAudio = captured
-        stream.addTrack(captured.track)
+
+        useChatStore.getState().sendEvent('call:screen', { call_id: callId, active: true })
+
+        try {
+          await media?.publishScreen(stream)
+        } catch {
+          showToast.error('Não foi possível transmitir a tela.')
+          get().stopScreenShare()
+        }
+      } finally {
+        screenSharePending = false
       }
+    },
 
-      localScreenStream = stream
-      const meId = useAuthStore.getState().user?.id
-      const callId = get().callId
-      set((prev) => ({
-        isScreenSharing: true,
-        localScreenStream: stream,
-        screenSharers: meId
-          ? Array.from(new Set([...prev.screenSharers, meId]))
-          : prev.screenSharers,
-        focusedScreenUserId: prev.focusedScreenUserId ?? meId ?? null
-      }))
-
-      // Parar pela barra nativa do Electron / fim da fonte encerra o share.
-      stream.getVideoTracks().forEach((track) => {
-        track.addEventListener('ended', () => {
-          if (get().isScreenSharing) get().stopScreenShare()
-        })
-      })
-
-      useChatStore.getState().sendEvent('call:screen', { call_id: callId, active: true })
-
-      try {
-        await media?.publishScreen(stream)
-      } catch {
-        showToast.error('Não foi possível transmitir a tela.')
-        get().stopScreenShare()
-      }
+    updateScreenQuality: (quality) => {
+      const s = get()
+      const stream = localScreenStream
+      const connection = media
+      if (
+        s.status !== 'active' ||
+        !s.isScreenSharing ||
+        !stream ||
+        !connection ||
+        screenSharePending ||
+        transitioning
+      )
+        return
+      if (sameScreenQuality(s.pendingScreenQuality ?? s.screenShareQuality, quality)) return
+      screenQualityQueue = { stream, connection, callId: s.callId, quality: { ...quality } }
+      set({ pendingScreenQuality: { ...quality } })
+      if (!screenQualityRunning) void runScreenQualityQueue()
     },
 
     stopScreenShare: () => {
@@ -799,6 +1279,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       const callId = s.callId
       const stream = localScreenStream
       localScreenStream = null
+      screenQualityQueue = null
       windowAudio?.stop()
       windowAudio = null
 
@@ -806,6 +1287,8 @@ export const useCallStore = create<CallState>()((set, get) => {
 
       set((prev) => ({
         isScreenSharing: false,
+        screenShareQuality: null,
+        pendingScreenQuality: null,
         localScreenStream: null,
         screenSharers: prev.screenSharers.filter((id) => id !== meId),
         focusedScreenUserId: prev.focusedScreenUserId === meId ? null : prev.focusedScreenUserId
@@ -826,6 +1309,13 @@ export const useCallStore = create<CallState>()((set, get) => {
       const next = addWatched(s.watchedScreenIds, userId)
       set({ watchedScreenIds: next, focusedScreenUserId: userId })
       media?.setWatchedScreens(next)
+      if (s.callId) {
+        useChatStore.getState().sendEvent('call:screen_watch', {
+          call_id: s.callId,
+          sharer_id: userId,
+          watching: true
+        })
+      }
     },
 
     stopWatchingScreen: (userId) => {
@@ -836,6 +1326,13 @@ export const useCallStore = create<CallState>()((set, get) => {
         focusedScreenUserId: s.focusedScreenUserId === userId ? null : s.focusedScreenUserId
       })
       media?.setWatchedScreens(next)
+      if (s.callId) {
+        useChatStore.getState().sendEvent('call:screen_watch', {
+          call_id: s.callId,
+          sharer_id: userId,
+          watching: false
+        })
+      }
     },
 
     setStageVisible: (visible) => {
@@ -886,6 +1383,12 @@ export const useCallStore = create<CallState>()((set, get) => {
         return
       }
 
+      const blocked = streamBlockReason(s.canStream)
+      if (blocked) {
+        showToast.error(blocked)
+        return
+      }
+
       let stream: MediaStream
       try {
         stream = await getCameraStream()
@@ -927,6 +1430,13 @@ export const useCallStore = create<CallState>()((set, get) => {
 
     joinVoiceChannel: async (channelId) => {
       const s = get()
+      // Se a sala estiver trancada e o usuário não estiver nela, pede para entrar diretamente
+      const targetCall = s.serverCalls[channelId]?.call
+      if (targetCall?.locked && (s.status === 'idle' || s.channelId !== channelId)) {
+        s.requestJoin(channelId)
+        return
+      }
+
       if (s.status !== 'idle') {
         if (s.type !== 'channel') {
           throw new Error('Você já está em uma chamada.')
@@ -938,11 +1448,30 @@ export const useCallStore = create<CallState>()((set, get) => {
         // Entrar em outro canal de voz desconecta do atual.
         s.endCall()
       }
-      await get().startChannelCall(channelId)
+      try {
+        await get().startChannelCall(channelId)
+      } catch (err) {
+        if (err instanceof CallLockedError) {
+          if (err.callId) {
+            set({ knock: { channelId, callId: err.callId, status: 'pending' } })
+            playSound('knock')
+            useChatStore.getState().sendEvent('call:knock', { call_id: err.callId })
+          }
+          return
+        }
+        throw err
+      }
     },
 
     handleWsReconnect: () => {
       void resyncChannelCall()
+      void resyncDmCall()
+      // Listas dos canais de voz (quem está em cada um, LIVE) voltam a valer.
+      bumpList()
+      const { knock } = get()
+      if (knock && knock.status === 'pending') {
+        useChatStore.getState().sendEvent('call:knock', { call_id: knock.callId })
+      }
     },
 
     handleWsEvent: (event) => {
@@ -1004,7 +1533,19 @@ export const useCallStore = create<CallState>()((set, get) => {
 
         case 'call:voice': {
           const p = payload as unknown as VoicePayload
-          const state = { muted: p.muted, deafened: p.deafened }
+          const state = {
+            muted: p.muted,
+            deafened: p.deafened,
+            serverMuted: Boolean(p.server_muted),
+            serverDeafened: Boolean(p.server_deafened)
+          }
+          // Mesmo estado no formato da API (lista dos canais de voz do servidor).
+          const apiState = {
+            muted: p.muted,
+            deafened: p.deafened,
+            server_muted: Boolean(p.server_muted),
+            server_deafened: Boolean(p.server_deafened)
+          }
           set((s) => {
             // Lista dos canais de voz do servidor (inclusive de chamadas em que não estou).
             const serverCalls = { ...s.serverCalls }
@@ -1013,7 +1554,7 @@ export const useCallStore = create<CallState>()((set, get) => {
               serverCalls[channelId] = {
                 ...entry,
                 participants: entry.participants.map((q) =>
-                  q.user_id === p.user_id ? { ...q, ...state } : q
+                  q.user_id === p.user_id ? { ...q, ...apiState } : q
                 )
               }
             }
@@ -1029,15 +1570,45 @@ export const useCallStore = create<CallState>()((set, get) => {
         case 'call:screen': {
           const p = payload as unknown as ScreenSharePayload
           if (get().callId !== p.call_id || p.user.id === meId) return
+          set((s) => {
+            const nextWatchers = { ...s.screenWatchers }
+            if (!p.active) {
+              delete nextWatchers[p.user.id]
+            }
+            return {
+              screenSharers: p.active
+                ? Array.from(new Set([...s.screenSharers, p.user.id]))
+                : s.screenSharers.filter((id) => id !== p.user.id),
+              screenWatchers: nextWatchers,
+              // Transmissão nova começa pausada: só a que acabou perde o foco.
+              focusedScreenUserId:
+                !p.active && s.focusedScreenUserId === p.user.id ? null : s.focusedScreenUserId,
+              participants: upsertParticipant(s.participants, p.user)
+            }
+          })
+          return
+        }
+
+        case 'call:screen_watchers': {
+          const p = payload as unknown as {
+            call_id: string
+            sharer_id: string
+            watchers: CallUserInfo[]
+          }
+          if (get().callId !== p.call_id) return
           set((s) => ({
-            screenSharers: p.active
-              ? Array.from(new Set([...s.screenSharers, p.user.id]))
-              : s.screenSharers.filter((id) => id !== p.user.id),
-            // Transmissão nova começa pausada: só a que acabou perde o foco.
-            focusedScreenUserId:
-              !p.active && s.focusedScreenUserId === p.user.id ? null : s.focusedScreenUserId,
-            participants: upsertParticipant(s.participants, p.user)
+            screenWatchers: {
+              ...s.screenWatchers,
+              [p.sharer_id]: p.watchers
+            }
           }))
+          return
+        }
+
+        case 'call:screen_draw':
+        case 'call:screen_draw_clear':
+        case 'call:screen_draw_undo': {
+          useAnnotationStore.getState().handleWsEvent(event)
           return
         }
 
@@ -1083,17 +1654,27 @@ export const useCallStore = create<CallState>()((set, get) => {
             void resyncChannelCall()
             return
           }
-          showToast.info(`${p.user.display_name} saiu da chamada.`)
           if (get().type === 'channel') {
+            // Sem pop-up: o som e a lista de participantes já avisam.
             playSound('userLeave')
             // A mídia do participante some sozinha quando ele sai da sala do LiveKit.
-            set((s) => ({
-              participants: s.participants.filter((q) => q.id !== p.user.id),
-              screenSharers: s.screenSharers.filter((id) => id !== p.user.id)
-            }))
+            set((s) => {
+              const nextWatchers = { ...s.screenWatchers }
+              delete nextWatchers[p.user.id]
+              for (const [sid, list] of Object.entries(nextWatchers)) {
+                nextWatchers[sid] = list.filter((w) => w.id !== p.user.id)
+              }
+              return {
+                participants: s.participants.filter((q) => q.id !== p.user.id),
+                screenSharers: s.screenSharers.filter((id) => id !== p.user.id),
+                screenWatchers: nextWatchers
+              }
+            })
             bumpList()
             return
           }
+          // Na DM a saída do outro encerra a chamada: aqui o aviso faz falta.
+          showToast.info(`${callName(get(), p.user)} saiu da chamada.`)
           get().endCall()
           return
         }
@@ -1133,9 +1714,10 @@ export const useCallStore = create<CallState>()((set, get) => {
               if (get().channelId !== p.channel_id) return
               set({ muted: muted || deafened, deafened })
               applyMute(muted || deafened)
+              publishSpeaking()
               sendVoiceState()
               showToast.info(
-                `${p.moved_by.display_name || 'Um moderador'} moveu você para ${p.channel_name || 'outro canal'}.`
+                `${callName(get(), p.moved_by, 'Um moderador')} moveu você para ${p.channel_name || 'outro canal'}.`
               )
             })
           return
@@ -1150,6 +1732,101 @@ export const useCallStore = create<CallState>()((set, get) => {
           return
         }
 
+        case 'call:lock': {
+          const p = payload as unknown as LockPayload
+          set((s) => {
+            const serverCalls = { ...s.serverCalls }
+            for (const [chId, entry] of Object.entries(serverCalls)) {
+              if (entry.call?.id === p.call_id) {
+                serverCalls[chId] = {
+                  ...entry,
+                  call: entry.call ? { ...entry.call, locked: p.locked } : null
+                }
+              }
+            }
+            const isMyCall = s.callId === p.call_id
+            return {
+              serverCalls,
+              locked: isMyCall ? p.locked : s.locked
+            }
+          })
+          if (get().callId === p.call_id) {
+            playSound(p.locked ? 'lock' : 'unlock')
+            const byName = p.by.display_name || p.by.username || 'Alguém'
+            showToast.info(p.locked ? `${byName} trancou a sala.` : `${byName} destrancou a sala.`)
+          }
+          return
+        }
+
+        case 'call:knock': {
+          const p = payload as unknown as KnockPayload
+          if (get().callId !== p.call_id) return
+          playSound('knock')
+          notifyDesktop(knockNotification(p.user, get().serverId, get().channelId))
+          set((s) => ({
+            joinRequests: upsertParticipant(s.joinRequests, p.user)
+          }))
+          return
+        }
+
+        case 'call:knock_resolved': {
+          const p = payload as unknown as KnockResolvedPayload
+          if (get().callId !== p.call_id) return
+          set((s) => ({
+            joinRequests: s.joinRequests.filter((r) => r.id !== p.user_id)
+          }))
+          return
+        }
+
+        case 'call:knock_accepted': {
+          const p = payload as unknown as KnockAnswerPayload
+          const { knock } = get()
+          if (!knock || knock.callId !== p.call_id) return
+          if (knockDeclinedTimer) {
+            clearTimeout(knockDeclinedTimer)
+            knockDeclinedTimer = null
+          }
+          const chId = p.channel_id ?? knock.channelId
+          set({ knock: null, admittedChannelId: chId })
+          const byName = p.by?.display_name || p.by?.username
+          showToast.success(
+            byName
+              ? `${byName} permitiu sua entrada na sala!`
+              : 'Sua entrada na sala foi permitida!'
+          )
+          void get().joinVoiceChannel(chId)
+          return
+        }
+
+        case 'call:knock_declined': {
+          const p = payload as unknown as KnockAnswerPayload
+          const { knock } = get()
+          if (!knock || knock.callId !== p.call_id) return
+          if (p.reason === 'ended' || p.reason === 'unlocked') {
+            // A sala acabou ou destrancou: pode entrar livremente
+            if (knockDeclinedTimer) clearTimeout(knockDeclinedTimer)
+            set({ knock: null })
+            showToast.info(
+              p.reason === 'ended'
+                ? 'A chamada terminou. A sala agora está livre.'
+                : 'A sala foi destrancada!'
+            )
+            return
+          }
+          set({ knock: { ...knock, status: 'declined' } })
+          if (knockDeclinedTimer) clearTimeout(knockDeclinedTimer)
+          knockDeclinedTimer = setTimeout(() => {
+            set((s) => (s.knock?.callId === p.call_id ? { knock: null } : {}))
+          }, KNOCK_DECLINED_MS)
+          return
+        }
+
+        case 'call:knock_error': {
+          const message = (payload.message as string) ?? 'Não foi possível solicitar entrada.'
+          showToast.error(message)
+          return
+        }
+
         default:
           return
       }
@@ -1157,8 +1834,19 @@ export const useCallStore = create<CallState>()((set, get) => {
   }
 })
 
+// Atividades seguem a chamada atual: sair/trocar de chamada fecha o jogo aqui.
+useCallStore.subscribe((s) => {
+  useActivityStore
+    .getState()
+    .setCall(
+      s.status === 'idle' ? null : s.callId,
+      voiceServerId(s)
+    )
+})
+
 // Os efeitos sonoros saem no mesmo dispositivo escolhido para as vozes.
 setSoundOutput(useCallStore.getState().outputDeviceId)
+setVoiceOutputDevice(useCallStore.getState().outputDeviceId)
 
 // Dispositivo escolhido desconectado (ex.: tirou o headset): volta para o
 // padrão do sistema em vez de ficar sem microfone/som.

@@ -1,7 +1,11 @@
 import { useEffect, useMemo } from 'react'
+import { useMusicStore } from '../../store/musicStore'
+import MusicVideo from '../music/MusicVideo'
 import { useAuthStore } from '../../store/authStore'
 import { useServerStore } from '../../store/serverStore'
 import { mergeCallPeople } from '../../lib/callParticipants'
+import { serverDisplayName, withServerNames } from '../../lib/serverNames'
+import { useCallNicknames } from '../../store/useServerNames'
 import { sortVoiceMembers } from '../../lib/voiceOrder'
 import { useLevelStore } from '../../store/levelStore'
 import { streamAudioKey, useUserAudioStore } from '../../store/userAudioStore'
@@ -23,9 +27,12 @@ import StreamMosaic from './StreamMosaic'
  */
 function CallStage({
   gap = 'gap-6',
-  speaking
+  speaking,
+  serverId
 }: {
   gap?: string
+  /** servidor da call (habilita o vídeo do Maestro no palco) */
+  serverId?: string
   /** ids dos usuários falando agora (useSpeaking) */
   speaking?: Set<string>
 }): React.JSX.Element {
@@ -44,6 +51,15 @@ function CallStage({
   const watchScreen = useCallStore((s) => s.watchScreen)
   const stopWatchingScreen = useCallStore((s) => s.stopWatchingScreen)
   const setStageVisible = useCallStore((s) => s.setStageVisible)
+  const stageVideo = useMusicStore((s) => s.stageVideo)
+  const setStageVideo = useMusicStore((s) => s.setStageVideo)
+  const musicNow = useMusicStore((s) => s.state?.now ?? null)
+  const musicStage = stageVideo && !!serverId && !!musicNow?.item.has_video
+
+  // Música sem vídeo (ou Maestro saiu): desliga o vídeo no palco.
+  useEffect(() => {
+    if (stageVideo && !musicNow?.item.has_video) setStageVideo(false)
+  }, [stageVideo, musicNow?.item.has_video, setStageVideo])
 
   // Montado = tela da call visível (canal conectado ou DM expandida); fora
   // dela a transmissão assistida vira miniatura (ScreenMiniPlayer).
@@ -53,6 +69,7 @@ function CallStage({
   }, [setStageVisible])
   const focusedId = useCallStore((s) => s.focusedScreenUserId)
   const setFocused = useCallStore((s) => s.setFocusedScreenUser)
+  const screenWatchers = useCallStore((s) => s.screenWatchers)
   const localCameraStream = useCallStore((s) => s.localCameraStream)
   const videoStreams = useCallStore((s) => s.videoStreams)
   const levels = useLevelStore((s) => s.levels)
@@ -61,14 +78,19 @@ function CallStage({
   const channelEntry = useCallStore((s) => (s.channelId ? s.serverCalls[s.channelId] : undefined))
 
   const meId = me?.id ?? 'me'
+  // Call num canal de voz: cada um com o apelido daquele servidor.
+  const nicknames = useCallNicknames()
   // Lista do backend + quem está na sala de mídia (o backend pode ter perdido alguém).
   const participants = useMemo(
     () =>
-      mergeCallPeople(backendParticipants, mediaPeers, meId, (id) => {
-        const m = members.find((x) => x.user_id === id)
-        return m?.display_name || m?.username
-      }),
-    [backendParticipants, mediaPeers, meId, members]
+      withServerNames(
+        mergeCallPeople(backendParticipants, mediaPeers, meId, (id) => {
+          const m = members.find((x) => x.user_id === id)
+          return m?.display_name || m?.username
+        }),
+        nicknames
+      ),
+    [backendParticipants, mediaPeers, meId, members, nicknames]
   )
   // Mesma ordem da lista do canal na barra lateral (nível, entrada, nome). O
   // mosaico de vídeo tem a ordem que a pessoa arrumou e não passa por aqui.
@@ -89,7 +111,8 @@ function CallStage({
   const meInfo: CallUserInfo = {
     id: meId,
     username: me?.username ?? '',
-    display_name: me?.display_name ?? 'Você'
+    display_name: serverDisplayName({ nickname: nicknames?.[meId] }, me, 'Você'),
+    avatar_url: me?.avatar_url ?? null
   }
 
   const nameOf = (userId: string): CallUserInfo =>
@@ -121,6 +144,7 @@ function CallStage({
       user: nameOf(entry.userId),
       isScreen: true,
       size,
+      watchers: screenWatchers[entry.userId] ?? [],
       onContextMenu: streamMenuHandler(entry.userId, nameOf(entry.userId).display_name, meId),
       locallyMuted: localAudio[streamAudioKey(entry.userId)]?.muted ?? false
     }
@@ -150,7 +174,62 @@ function CallStage({
         onClick={() => setFocused(entry.userId)}
         onClose={entry.local ? undefined : () => stopWatchingScreen(entry.userId)}
         streamAudioUserId={entry.local ? undefined : entry.userId}
+        fullscreenable={!entry.local}
       />
+    )
+  }
+
+  // Vídeo da música em destaque (como uma tela em foco) + faixa com as pessoas.
+  if (musicStage && musicNow && serverId) {
+    return (
+      <div className="flex h-full w-full flex-col gap-4">
+        <div
+          data-music-video-stage
+          className="relative flex min-h-0 flex-1 items-center justify-center bg-black"
+        >
+          <MusicVideo
+            serverId={serverId}
+            item={musicNow.item}
+            startedAt={musicNow.started_at}
+            variant="stage"
+          />
+          <button
+            type="button"
+            onClick={() => setStageVideo(false)}
+            aria-label="Fechar"
+            className="absolute right-2 top-2 cursor-pointer rounded-full bg-black/60 p-1 text-white"
+          >
+            <XIcon className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center justify-center gap-3">
+          {screens.map((entry) => screenTile(entry, 'md'))}
+          <ParticipantTile
+            user={meInfo}
+            selfMuted={muted}
+            deafened={deafened}
+            speaking={meSpeaking}
+            size="md"
+            videoStream={localCameraStream}
+            mirror
+          />
+          {people
+            .filter((p) => !availableScreens.includes(p.id))
+            .map((p) => (
+              <ParticipantTile
+                key={p.id}
+                user={p}
+                selfMuted={voiceStates[p.id]?.muted}
+                onContextMenu={userMenuHandler(p.id, p.display_name, meId, p.username)}
+                locallyMuted={localAudio[p.id]?.muted ?? false}
+                deafened={voiceStates[p.id]?.deafened}
+                size="md"
+                speaking={speaking?.has(p.id) ?? false}
+                videoStream={videoStreams[p.id] ?? null}
+              />
+            ))}
+        </div>
+      </div>
     )
   }
 
@@ -172,6 +251,8 @@ function CallStage({
             onContextMenu={userMenuHandler(p.id, p.display_name, meId, p.username)}
             locallyMuted={localAudio[p.id]?.muted ?? false}
             deafened={voiceStates[p.id]?.deafened}
+            serverMuted={voiceStates[p.id]?.serverMuted}
+            serverDeafened={voiceStates[p.id]?.serverDeafened}
             speaking={speaking?.has(p.id) ?? false}
           />
         ))}
@@ -224,6 +305,8 @@ function CallStage({
           onContextMenu={userMenuHandler(userId, p.display_name, meId, p.username)}
           locallyMuted={localAudio[userId]?.muted ?? false}
           deafened={voiceStates[userId]?.deafened}
+          serverMuted={voiceStates[userId]?.serverMuted}
+          serverDeafened={voiceStates[userId]?.serverDeafened}
           speaking={speaking?.has(userId) ?? false}
           videoStream={stream}
           size="fill"
@@ -264,6 +347,8 @@ function CallStage({
                   onContextMenu={userMenuHandler(p.id, p.display_name, meId, p.username)}
                   locallyMuted={localAudio[p.id]?.muted ?? false}
                   deafened={voiceStates[p.id]?.deafened}
+                  serverMuted={voiceStates[p.id]?.serverMuted}
+                  serverDeafened={voiceStates[p.id]?.serverDeafened}
                   size="md"
                   speaking={speaking?.has(p.id) ?? false}
                 />
@@ -282,7 +367,7 @@ function CallStage({
           <button
             onClick={() => setFocused(null)}
             aria-label="Sair do modo foco"
-            title="Sair da tela cheia"
+            title="Sair do modo foco"
             className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
           >
             <ChevronDownIcon className="h-4 w-4" />
@@ -303,6 +388,8 @@ function CallStage({
           videoStream={focused.stream}
           isScreen
           size="fill"
+          watchers={screenWatchers[focused.userId] ?? []}
+          hasHeaderOffset={true}
           onContextMenu={streamMenuHandler(
             focused.userId,
             nameOf(focused.userId).display_name,
@@ -310,6 +397,7 @@ function CallStage({
           )}
           locallyMuted={localAudio[streamAudioKey(focused.userId)]?.muted ?? false}
           streamAudioUserId={focused.local ? undefined : focused.userId}
+          fullscreenable={!focused.local}
         />
       </div>
       <div className="flex shrink-0 flex-wrap items-center justify-center gap-3">
@@ -335,6 +423,8 @@ function CallStage({
               onContextMenu={userMenuHandler(p.id, p.display_name, meId, p.username)}
               locallyMuted={localAudio[p.id]?.muted ?? false}
               deafened={voiceStates[p.id]?.deafened}
+              serverMuted={voiceStates[p.id]?.serverMuted}
+              serverDeafened={voiceStates[p.id]?.serverDeafened}
               size="md"
               speaking={speaking?.has(p.id) ?? false}
               videoStream={videoStreams[p.id] ?? null}

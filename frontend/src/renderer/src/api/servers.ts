@@ -1,4 +1,6 @@
 import { request } from './client'
+import { uploadImage } from './users'
+import type { Role } from '../lib/permissions'
 
 export interface Server {
   id: string
@@ -14,16 +16,24 @@ export interface Server {
 export interface ServerMember {
   server_id: string
   user_id: string
+  /** Legado: "admin" se pode gerenciar canais. Os cargos de verdade estão em role_ids. */
   role: string
+  /** Cargos do membro (sem o @everyone). */
+  role_ids?: string[]
   joined_at?: string
   username?: string
   display_name?: string
   avatar_url?: string | null
+  is_bot?: boolean
+  /** Apelido neste servidor (null = sem; vale o display_name). */
+  nickname?: string | null
 }
 
 export interface GetServerResponse {
   server: Server
   members: ServerMember[]
+  /** Cargos do servidor, do mais alto para o mais baixo (o @everyone por último). */
+  roles?: Role[]
 }
 
 export interface CreateServerInput {
@@ -53,7 +63,8 @@ export async function inviteMember(serverId: string, userId: string): Promise<vo
   })
 }
 
-export async function updateServer(serverId: string, input: CreateServerInput): Promise<Server> {
+/** Só o nome: sem icon_url o backend mantém o ícone atual. */
+export async function updateServer(serverId: string, input: { name: string }): Promise<Server> {
   return request<Server>(`/servers/${serverId}`, {
     method: 'PUT',
     body: JSON.stringify(input)
@@ -71,21 +82,72 @@ export async function getInviteCode(serverId: string): Promise<{ code: string }>
   return request<{ code: string }>(`/servers/${serverId}/invite-code`)
 }
 
+/** "Gerar novo link": troca o código (o link antigo para de funcionar). */
+export async function rotateInviteCode(serverId: string): Promise<{ code: string }> {
+  return request<{ code: string }>(`/servers/${serverId}/invite-code/reset`, { method: 'POST' })
+}
+
 /** Entra no servidor do código. Já sendo membro, só devolve o servidor. */
 export async function joinServerByCode(code: string): Promise<Server> {
   return request<Server>('/invites/join', { method: 'POST', body: JSON.stringify({ code }) })
 }
 
-/** O dono torna alguém moderador ("admin") ou membro comum. */
-export async function setMemberRole(
+/** Quem tem KICK_MEMBERS expulsa o membro (ele pode voltar por convite). */
+export function kickMember(serverId: string, userId: string): Promise<void> {
+  return request<void>(`/servers/${serverId}/members/${userId}`, { method: 'DELETE' })
+}
+
+export interface NicknameResult {
+  server_id: string
+  user_id: string
+  nickname: string | null
+}
+
+/**
+ * Muda o apelido de alguém no servidor ("" tira). O próprio pede "Alterar
+ * apelido"; o dos outros, "Gerenciar apelidos" e cargo acima do dela.
+ */
+export function setMemberNickname(
   serverId: string,
   userId: string,
-  role: 'admin' | 'member'
-): Promise<ServerMember> {
-  return request<ServerMember>(`/servers/${serverId}/members/${userId}/role`, {
+  nickname: string
+): Promise<NicknameResult> {
+  return request<NicknameResult>(`/servers/${serverId}/members/${userId}/nickname`, {
     method: 'PUT',
-    body: JSON.stringify({ role })
+    body: JSON.stringify({ nickname })
   })
+}
+
+/** Sai do servidor (o dono não sai: apaga o servidor). */
+export function leaveServer(serverId: string): Promise<void> {
+  return request<void>(`/servers/${serverId}/leave`, { method: 'POST' })
+}
+
+export interface ServerBan {
+  server_id: string
+  user_id: string
+  username: string
+  display_name: string
+  avatar_url?: string | null
+  banned_by?: string | null
+  reason?: string | null
+  created_at: string
+}
+
+export function listBans(serverId: string): Promise<ServerBan[]> {
+  return request<ServerBan[]>(`/servers/${serverId}/bans`)
+}
+
+/** Bane o membro (vale também para quem já saiu). */
+export function banMember(serverId: string, userId: string, reason?: string): Promise<void> {
+  return request<void>(`/servers/${serverId}/bans`, {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId, reason: reason ?? '' })
+  })
+}
+
+export function unbanMember(serverId: string, userId: string): Promise<void> {
+  return request<void>(`/servers/${serverId}/bans/${userId}`, { method: 'DELETE' })
 }
 
 /** Dono/moderador: escolhe o canal principal (avisos do servidor). */
@@ -94,4 +156,18 @@ export async function setPrimaryChannel(serverId: string, channelId: string): Pr
     method: 'PUT',
     body: JSON.stringify({ channel_id: channelId })
   })
+}
+
+/** Ícone por upload (PNG, JPG, WebP ou GIF): o mesmo pipeline do avatar. */
+export function uploadServerIcon(
+  serverId: string,
+  file: Blob,
+  staticFrame?: Blob,
+  onProgress?: (fraction: number) => void
+): Promise<Server> {
+  return uploadImage<Server>(`/servers/${serverId}/icon`, 'icon', file, staticFrame, onProgress)
+}
+
+export async function removeServerIcon(serverId: string): Promise<Server> {
+  return request<Server>(`/servers/${serverId}/icon`, { method: 'DELETE' })
 }

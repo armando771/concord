@@ -131,3 +131,36 @@ func TestPresenceMapReportsEffectiveStatus(t *testing.T) {
 		}
 	}
 }
+
+func TestPublishAppUpdateReachesEveryClient(t *testing.T) {
+	h := hubWithStatuses(nil)
+	a := newTestClient(h, "a")
+	b := newTestClient(h, "b")
+	h.Register(a)
+	h.Register(b)
+	drain(t, a)
+	drain(t, b)
+
+	h.PublishAppUpdate("latest.yml", "0.7.0")
+
+	for _, c := range []*Client{a, b} {
+		select {
+		case raw := <-c.send:
+			var ev struct {
+				Type    string `json:"type"`
+				Payload struct {
+					File    string `json:"file"`
+					Version string `json:"version"`
+				} `json:"payload"`
+			}
+			if err := json.Unmarshal(raw, &ev); err != nil {
+				t.Fatal(err)
+			}
+			if ev.Type != "app:update" || ev.Payload.Version != "0.7.0" || ev.Payload.File != "latest.yml" {
+				t.Fatalf("evento %s", raw)
+			}
+		default:
+			t.Fatalf("%s não recebeu app:update", c.userID)
+		}
+	}
+}

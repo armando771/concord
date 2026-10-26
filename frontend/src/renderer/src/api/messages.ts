@@ -49,7 +49,15 @@ export interface Attachment {
   width?: number | null
   height?: number | null
   duration_ms?: number | null
+  /**
+   * Só nos anexos de comentários de propostas: endereço público do arquivo. Sem
+   * ele (chat) o arquivo é pedido com o token de mídia da sala.
+   */
+  url?: string | null
 }
+
+/** Menção em massa num canal: @all (todo mundo) ou @here (quem está online). */
+export type MentionEveryone = 'all' | 'here'
 
 export interface Message {
   id: string
@@ -63,9 +71,24 @@ export interface Message {
   content: string
   /** Mensagem do próprio servidor (ex.: "birthday"). */
   system_kind?: string | null
+  /**
+   * Quem o backend deixou pingar com @all/@here (só dono/moderador, com
+   * anti-spam). null = ninguém, mesmo com "@all" no texto.
+   */
+  mention_everyone?: MentionEveryone | null
   poll?: Poll | null
   attachments?: Attachment[] | null
   created_at: string
+  /** Quando o autor editou o texto pela última vez; ausente = nunca editada. */
+  edited_at?: string | null
+  /** Quando a mensagem foi fixada no canal; ausente = não fixada. */
+  pinned_at?: string | null
+}
+
+export interface PinnedMessage extends Message {
+  pinned_by?: MessageAuthor
+  pinned_by_id?: string
+  pinned_at: string
 }
 
 export interface PollAnswerInput {
@@ -105,8 +128,28 @@ export function sendChannelMessage(
   })
 }
 
+/** Edita o texto de uma mensagem sua (canal ou DM, pela sala). */
+export function editMessage(room: string, messageId: string, content: string): Promise<Message> {
+  return request<Message>(`${roomPath(room)}/messages/${messageId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ content })
+  })
+}
+
 export function deleteChannelMessage(channelId: string, messageId: string): Promise<void> {
   return request<void>(`/channels/${channelId}/messages/${messageId}`, { method: 'DELETE' })
+}
+
+export function listChannelPins(channelId: string): Promise<PinnedMessage[]> {
+  return request<PinnedMessage[]>(`/channels/${channelId}/pins`)
+}
+
+export function pinChannelMessage(channelId: string, messageId: string): Promise<PinnedMessage> {
+  return request<PinnedMessage>(`/channels/${channelId}/pins/${messageId}`, { method: 'PUT' })
+}
+
+export function unpinChannelMessage(channelId: string, messageId: string): Promise<void> {
+  return request<void>(`/channels/${channelId}/pins/${messageId}`, { method: 'DELETE' })
 }
 
 export function addChannelReaction(

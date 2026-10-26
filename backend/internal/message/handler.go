@@ -8,7 +8,7 @@ import (
 	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/friendship"
-	"gin-quickstart/backend/internal/server"
+	"gin-quickstart/backend/internal/permission"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,19 +18,35 @@ type Handler struct {
 	channelService      *channel.Service
 	conversationService *conversation.Service
 	friendService       *friendship.Service
-	serverService       *server.Service
+	perms               PermissionChecker
 	access              RoomAccess
+	commands            CommandHandler
 }
 
-func MessageHandler(service *Service, channelService *channel.Service, conversationService *conversation.Service, friendService *friendship.Service, serverService *server.Service) *Handler {
+func MessageHandler(service *Service, channelService *channel.Service, conversationService *conversation.Service, friendService *friendship.Service, perms PermissionChecker) *Handler {
 	return &Handler{
 		service:             service,
 		channelService:      channelService,
 		conversationService: conversationService,
 		friendService:       friendService,
-		serverService:       serverService,
-		access:              NewServiceRoomAccess(channelService, serverService, conversationService, friendService),
+		perms:               perms,
+		access:              NewServiceRoomAccess(channelService, perms, conversationService, friendService),
 	}
+}
+
+// requireChannel confere se userID tem want no canal; se não tiver, já
+// responde o erro (canal que a pessoa não vê é 404).
+func (h *Handler) requireChannel(c *gin.Context, channelID string, userID string, want int64) bool {
+	err := channelAccess(c.Request.Context(), h.perms, channelID, userID, permission.ViewChannel|want)
+	switch {
+	case err == nil:
+		return true
+	case errors.Is(err, ErrRoomNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": "channel not found", "code": "channel_not_found"})
+	default:
+		c.JSON(http.StatusForbidden, gin.H{"error": permission.ErrMissingPermission.Error(), "code": "missing_permission"})
+	}
+	return false
 }
 
 func (h *Handler) getUserID(c *gin.Context) (string, bool) {
@@ -53,6 +69,21 @@ func parseListParams(c *gin.Context) (limit int, before string) {
 	return
 }
 
+// CommandHandler recebe comandos digitados no chat (ex.: /play do Maestro).
+type CommandHandler interface {
+	HandleCommand(serverID, channelID, userID, content string) bool
+}
+
+func (h *Handler) SetCommandHandler(c CommandHandler) { h.commands = c }
+
+// tryCommand: comando reconhecido não é gravado como mensagem.
+func (h *Handler) tryCommand(serverID, channelID, userID, content string, attachmentIDs []string) bool {
+	if h.commands == nil || len(attachmentIDs) > 0 {
+		return false
+	}
+	return h.commands.HandleCommand(serverID, channelID, userID, content)
+}
+
 func (h *Handler) CreateChannelMessage(c *gin.Context) {
 	channelID := c.Param("channelId")
 
@@ -72,16 +103,19 @@ func (h *Handler) CreateChannelMessage(c *gin.Context) {
 		return
 	}
 
-	ch, err := h.channelService.FindByID(c.Request.Context(), channelID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "channel not found"})
+	want := permission.SendMessages
+	if len(input.AttachmentIDs) > 0 {
+		want |= permission.AttachFiles
+	}
+	if !h.requireChannel(c, channelID, userID, want) {
 		return
 	}
 
-	isMember, err := h.serverService.IsMember(c.Request.Context(), ch.ServerID, userID)
-	if err != nil || !isMember {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you are not a member of this server"})
-		return
+	if len(input.AttachmentIDs) == 0 && h.commands != nil {
+		if ch, err := h.channelService.FindByID(c.Request.Context(), channelID); err == nil && h.tryCommand(ch.ServerID, channelID, userID, input.Content, input.AttachmentIDs) {
+			c.JSON(http.StatusAccepted, gin.H{"command": true})
+			return
+		}
 	}
 
 	msg, err := h.service.CreateChannelMessage(c.Request.Context(), channelID, userID, input.Content, input.ReplyToID, input.AttachmentIDs)
@@ -101,15 +135,12 @@ func (h *Handler) ListChannelMessages(c *gin.Context) {
 		return
 	}
 
-	ch, err := h.channelService.FindByID(c.Request.Context(), channelID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "channel not found"})
+	if !h.requireChannel(c, channelID, userID, 0) {
 		return
 	}
-
-	isMember, err := h.serverService.IsMember(c.Request.Context(), ch.ServerID, userID)
-	if err != nil || !isMember {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you are not a member of this server"})
+	// Sem READ_MESSAGE_HISTORY o canal abre vazio: só vê o que chegar ao vivo.
+	if perms, err := h.perms.ChannelPerms(c.Request.Context(), channelID, userID); err != nil || !permission.Has(perms, permission.ReadHistory) {
+		c.JSON(http.StatusOK, []Message{})
 		return
 	}
 
@@ -134,11 +165,155 @@ func (h *Handler) DeleteChannelMessage(c *gin.Context) {
 	}
 
 	if err := h.service.DeleteChannelMessage(c.Request.Context(), channelID, messageID, userID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		switch {
+		case errors.Is(err, ErrNotAuthor):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "missing_permission"})
+		case errors.Is(err, ErrMessageNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "message deleted"})
+}
+
+func (h *Handler) ListChannelPins(c *gin.Context) {
+	channelID := c.Param("channelId")
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	if !h.requireChannel(c, channelID, userID, 0) {
+		return
+	}
+	if perms, err := h.perms.ChannelPerms(c.Request.Context(), channelID, userID); err != nil || !permission.Has(perms, permission.ReadHistory) {
+		c.JSON(http.StatusOK, []PinnedMessage{})
+		return
+	}
+
+	pins, err := h.service.ListChannelPins(c.Request.Context(), channelID, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list pinned messages"})
+		return
+	}
+
+	c.JSON(http.StatusOK, pins)
+}
+
+func (h *Handler) PinChannelMessage(c *gin.Context) {
+	channelID := c.Param("channelId")
+	messageID := c.Param("messageId")
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	if !h.requireChannel(c, channelID, userID, permission.ManageMessages) {
+		return
+	}
+
+	pinned, err := h.service.PinChannelMessage(c.Request.Context(), channelID, messageID, userID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrPinLimitReached):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "pin_limit_reached"})
+		case errors.Is(err, ErrMessageNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		case errors.Is(err, permission.ErrMissingPermission):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "missing_permission"})
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, pinned)
+}
+
+func (h *Handler) UnpinChannelMessage(c *gin.Context) {
+	channelID := c.Param("channelId")
+	messageID := c.Param("messageId")
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	if !h.requireChannel(c, channelID, userID, permission.ManageMessages) {
+		return
+	}
+
+	if err := h.service.UnpinChannelMessage(c.Request.Context(), channelID, messageID, userID); err != nil {
+		switch {
+		case errors.Is(err, ErrMessageNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		case errors.Is(err, permission.ErrMissingPermission):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "missing_permission"})
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "message unpinned"})
+}
+
+type editInput struct {
+	Content *string `json:"content"`
+}
+
+// bindEdit lê o corpo do PATCH; content é obrigatório (pode vir vazio).
+func bindEdit(c *gin.Context) (string, bool) {
+	var input editInput
+	if err := c.ShouldBindJSON(&input); err != nil || input.Content == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return "", false
+	}
+	return *input.Content, true
+}
+
+func respondEditError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, ErrNotEditAuthor):
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "not_author"})
+	case errors.Is(err, ErrMessageNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	case errors.Is(err, ErrContentRequired), errors.Is(err, ErrContentTooLong), errors.Is(err, ErrNotEditable):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to edit message"})
+	}
+}
+
+// EditChannelMessage: PATCH /channels/:channelId/messages/:messageId {content}.
+// Só o autor, e só se ainda pode escrever no canal.
+func (h *Handler) EditChannelMessage(c *gin.Context) {
+	channelID := c.Param("channelId")
+	messageID := c.Param("messageId")
+
+	content, ok := bindEdit(c)
+	if !ok {
+		return
+	}
+
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	if !h.requireChannel(c, channelID, userID, permission.SendMessages) {
+		return
+	}
+
+	msg, err := h.service.EditChannelMessage(c.Request.Context(), channelID, messageID, userID, content)
+	if err != nil {
+		respondEditError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, msg)
 }
 
 func (h *Handler) CreateConversationMessage(c *gin.Context) {
@@ -184,6 +359,8 @@ func (h *Handler) canSendToConversation(c *gin.Context, conversationID string, u
 		c.JSON(http.StatusNotFound, gin.H{"error": "conversation not found"})
 	case errors.Is(err, ErrNoRoomAccess):
 		c.JSON(http.StatusForbidden, gin.H{"error": "you are not a participant of this conversation"})
+	case errors.Is(err, ErrBlocked):
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "blocked"})
 	case errors.Is(err, ErrCannotMessage):
 		c.JSON(http.StatusForbidden, gin.H{"error": "you can only message friends or people from your servers"})
 	default:
@@ -217,6 +394,35 @@ func (h *Handler) ListConversationMessages(c *gin.Context) {
 	c.JSON(http.StatusOK, messages)
 }
 
+// EditConversationMessage: PATCH /conversations/:id/messages/:messageId
+// {content}. Só o autor, e só se ainda pode escrever na DM.
+func (h *Handler) EditConversationMessage(c *gin.Context) {
+	conversationID := c.Param("id")
+	messageID := c.Param("messageId")
+
+	content, ok := bindEdit(c)
+	if !ok {
+		return
+	}
+
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	if !h.canSendToConversation(c, conversationID, userID) {
+		return
+	}
+
+	msg, err := h.service.EditConversationMessage(c.Request.Context(), conversationID, messageID, userID, content)
+	if err != nil {
+		respondEditError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, msg)
+}
+
 func (h *Handler) DeleteConversationMessage(c *gin.Context) {
 	conversationID := c.Param("id")
 	messageID := c.Param("messageId")
@@ -243,7 +449,7 @@ func (h *Handler) AddChannelReaction(c *gin.Context) {
 		return
 	}
 
-	if !h.isChannelMember(c, channelID, userID) {
+	if !h.requireChannel(c, channelID, userID, permission.AddReactions) {
 		return
 	}
 
@@ -280,7 +486,7 @@ func (h *Handler) RemoveChannelReaction(c *gin.Context) {
 		return
 	}
 
-	if !h.isChannelMember(c, channelID, userID) {
+	if !h.requireChannel(c, channelID, userID, 0) {
 		return
 	}
 

@@ -1,4 +1,5 @@
 import { request } from './client'
+import type { RawCallActivity } from '../lib/activityState'
 
 export type CallType = 'dm' | 'channel'
 export type CallStatus = 'ringing' | 'active' | 'ended'
@@ -13,6 +14,8 @@ export interface CallInfo {
   status: CallStatus
   started_at: string
   ended_at?: string | null
+  /** sala de voz trancada: entrar exige aprovação de quem está dentro */
+  locked?: boolean
 }
 
 export interface CallParticipant {
@@ -22,6 +25,9 @@ export interface CallParticipant {
   joined_at: string
   muted?: boolean
   deafened?: boolean
+  /** Impostos por um moderador (silenciar/ensurdecer no servidor). */
+  server_muted?: boolean
+  server_deafened?: boolean
   id?: string
   username?: string
   display_name?: string
@@ -33,7 +39,16 @@ export interface CallStateResponse {
   participants: CallParticipant[]
   /** user_ids compartilhando tela neste momento (transitório) */
   screen_sharing?: string[]
+  /** Atividade aberta na chamada (só vem para quem está nela). */
+  activity?: RawCallActivity | null
+  /** Lista de quem assiste cada tela (sharer_id -> espectadores) */
+  screen_watchers?: Record<string, { id: string; username: string; display_name: string; avatar_url?: string | null }[]>
+  /** pedidos para entrar na sala trancada (só no estado visto por participantes) */
+  join_requests?: { id: string; username: string; display_name: string; avatar_url?: string | null }[]
 }
+
+/** Resposta 423 do POST /calls: a sala do canal está trancada. */
+export const CALL_LOCKED = 'call_locked'
 
 export interface StartCallInput {
   type: CallType
@@ -74,4 +89,25 @@ export function moveToVoiceChannel(userId: string, channelId: string): Promise<C
     method: 'POST',
     body: JSON.stringify({ user_id: userId, channel_id: channelId })
   })
+}
+
+/** Silencia (ou libera) alguém no servidor: ele não consegue falar até liberarem. */
+export function setServerMute(callId: string, userId: string, muted: boolean): Promise<void> {
+  return request<void>(`/calls/${callId}/participants/${userId}/server-mute`, {
+    method: 'POST',
+    body: JSON.stringify({ muted })
+  })
+}
+
+/** Ensurdece (ou libera) alguém no servidor: ele não ouve ninguém. */
+export function setServerDeafen(callId: string, userId: string, deafened: boolean): Promise<void> {
+  return request<void>(`/calls/${callId}/participants/${userId}/server-deafen`, {
+    method: 'POST',
+    body: JSON.stringify({ deafened })
+  })
+}
+
+/** Tira alguém da chamada (MOVE_MEMBERS). */
+export function disconnectParticipant(callId: string, userId: string): Promise<void> {
+  return request<void>(`/calls/${callId}/participants/${userId}`, { method: 'DELETE' })
 }

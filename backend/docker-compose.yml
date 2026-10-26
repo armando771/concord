@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:17
+    # Versão fixa: trocar a imagem recria o container (scripts/deploy-vps.sh
+    # só faz isso com --infra).
+    image: postgres:17.11
     container_name: concord-postgres
     restart: unless-stopped
 
@@ -27,6 +29,11 @@ services:
 
     environment:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+      # A sinalização (/rtc) chega pelo Caddy, que a manda direto para cá na
+      # VPS (deploy/Caddyfile); no PC de casa, pelo proxy /rtc do backend.
+      # Não edite o texto do LIVEKIT_CONFIG à toa (nem os comentários dentro
+      # dele): ele vira variável do container, e qualquer mudança exige
+      # recriar o LiveKit, o que derruba todas as chamadas.
       # node_ip = IP público por onde os amigos chegam (playit/VPS). Vazio no
       # dev: o LiveKit usa o IP da máquina. As portas rtc precisam ser IGUAIS
       # às portas públicas do túnel, porque o LiveKit anuncia a própria porta.
@@ -55,6 +62,17 @@ services:
         room:
           empty_timeout: 300
           max_participants: 25
+
+  # Opcional (Maestro): gera PO tokens para o yt-dlp quando o YouTube marca o
+  # IP do servidor como bot. Ligar: docker compose --profile music up -d
+  # e MUSIC_POT_URL=http://127.0.0.1:4416 no .env.
+  bgutil-pot:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    container_name: concord-bgutil-pot
+    profiles: ["music"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4416:4416"
 
 volumes:
   concord_postgres_data:

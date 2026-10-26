@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -61,6 +62,15 @@ func Migrate(db *pgxpool.Pool, dir string) error {
 		return err
 	}
 
+	applied, err := migrationHistory(ctx, db, migrations, current)
+	if err != nil {
+		return err
+	}
+	for _, m := range neverApplied(migrations, current, applied) {
+		log.Printf("AVISO!!! migration %s NUNCA RODOU e vai ser pulada: o banco já está na versão %06d. "+
+			"Renumere-a acima de %06d (veja \"Migrations\" em docs/HOSPEDAGEM.md).", m.fileName, current, current)
+	}
+
 	for _, migration := range migrations {
 		if migration.version <= current {
 			continue
@@ -73,6 +83,9 @@ func Migrate(db *pgxpool.Pool, dir string) error {
 
 		current = migration.version
 		if err := setCurrentVersion(ctx, db, current); err != nil {
+			return err
+		}
+		if err := recordApplied(ctx, db, current); err != nil {
 			return err
 		}
 
@@ -145,7 +158,77 @@ func loadMigrations(dir string) ([]migrationFile, error) {
 
 	sort.Slice(migrations, func(i, j int) bool { return migrations[i].version < migrations[j].version })
 
+	// Mesmo número em dois arquivos (duas branches que escolheram o mesmo):
+	// o migrador guarda só a última versão, então um deles nunca rodaria.
+	for i := 1; i < len(migrations); i++ {
+		if migrations[i].version == migrations[i-1].version {
+			return nil, fmt.Errorf("migrations %s e %s têm o mesmo número %06d: renumere uma delas",
+				migrations[i-1].fileName, migrations[i].fileName, migrations[i].version)
+		}
+	}
+
 	return migrations, nil
+}
+
+// neverApplied devolve as migrations com número até a versão atual do banco
+// que não estão no histórico: chegaram depois de uma de número maior já
+// aplicada e o migrador as pula.
+func neverApplied(migrations []migrationFile, current int, applied map[int]bool) []migrationFile {
+	var skipped []migrationFile
+	for _, m := range migrations {
+		if m.version <= current && !applied[m.version] {
+			skipped = append(skipped, m)
+		}
+	}
+	return skipped
+}
+
+// migrationHistory guarda cada versão aplicada (schema_migrations só tem a
+// última). Na primeira vez, considera aplicado tudo o que já estava no disco
+// até a versão atual.
+func migrationHistory(ctx context.Context, db *pgxpool.Pool, migrations []migrationFile, current int) (map[int]bool, error) {
+	existed, err := tableExists(ctx, db, "schema_migration_history")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := db.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migration_history (
+			version    BIGINT PRIMARY KEY,
+			applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`); err != nil {
+		return nil, fmt.Errorf("failed to create schema_migration_history table: %w", err)
+	}
+	if !existed {
+		for _, m := range migrations {
+			if m.version > current {
+				break
+			}
+			if err := recordApplied(ctx, db, m.version); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	rows, err := db.Query(ctx, `SELECT version FROM schema_migration_history`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	applied := map[int]bool{}
+	for rows.Next() {
+		var v int
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
+		}
+		applied[v] = true
+	}
+	return applied, rows.Err()
+}
+
+func recordApplied(ctx context.Context, db *pgxpool.Pool, version int) error {
+	_, err := db.Exec(ctx, `INSERT INTO schema_migration_history (version) VALUES ($1) ON CONFLICT DO NOTHING`, version)
+	return err
 }
 
 func parseVersion(fileName string) (int, error) {

@@ -22,6 +22,11 @@ type CallRouter interface {
 	IsParticipant(callID string, userID string) bool
 }
 
+// TypingRouter trata "typing" e "typing:stop" (Typing).
+type TypingRouter interface {
+	Handle(ctx context.Context, userID string, evType string, payload json.RawMessage)
+}
+
 type Client struct {
 	hub        *Hub
 	conn       *websocket.Conn
@@ -30,6 +35,9 @@ type Client struct {
 	rooms      map[string]struct{}
 	validator  subscribeValidator
 	callRouter CallRouter
+	typing     TypingRouter
+	// Cancela a leitura (e com isso fecha a conexão); usado no desligamento.
+	cancel context.CancelFunc
 }
 
 func (c *Client) readPump(ctx context.Context) {
@@ -82,7 +90,17 @@ func (c *Client) readPump(ctx context.Context) {
 			}
 
 			c.hub.Unsubscribe(c, p.Room)
-		case "call:invite", "call:accept", "call:decline", "call:leave", "call:screen", "call:voice", "call:soundboard":
+		case "typing", "typing:stop":
+			if c.typing != nil {
+				c.typing.Handle(ctx, c.userID, ev.Type, ev.Payload)
+			}
+		case "activity:set", "activity:clear":
+			c.hub.HandleActivity(c.userID, ev.Type, ev.Payload)
+		case "call:invite", "call:accept", "call:decline", "call:leave", "call:screen", "call:voice", "call:soundboard",
+			"call:activity", "call:activity:stop",
+			"call:lock", "call:knock", "call:knock_cancel", "call:knock_respond",
+			"call:screen_watch",
+			"call:screen_draw", "call:screen_draw_clear", "call:screen_draw_undo":
 			if c.callRouter != nil {
 				c.callRouter.HandleCallMessage(c.userID, ev.Type, ev.Payload)
 			}

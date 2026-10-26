@@ -1,95 +1,146 @@
-import { useEffect, useState } from 'react'
 import { useCallStore } from '../store/callStore'
+import { useNoiseSuppressionStore } from '../store/noiseSuppressionStore'
+import { useVoiceAudioStore } from '../store/voiceAudioStore'
+import { deviceOptions, type DeviceOption } from '../lib/audioDevices'
+import { thresholdDb } from '../lib/voiceActivity'
+import { CAN_CHOOSE_OUTPUT, useAudioDevices } from './useAudioDevices'
 import { NoiseSuppressionSettings } from './call/NoiseSuppressionPopover'
-
-function useAudioDevices(): MediaDeviceInfo[] {
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
-
-  useEffect(() => {
-    let cancelled = false
-    const refresh = async (): Promise<void> => {
-      let list = await navigator.mediaDevices.enumerateDevices()
-      // Sem permissão de microfone os nomes vêm vazios: pede uma vez e relista.
-      if (list.some((d) => d.kind === 'audioinput' && !d.label)) {
-        try {
-          const probe = await navigator.mediaDevices.getUserMedia({ audio: true })
-          probe.getTracks().forEach((t) => t.stop())
-          list = await navigator.mediaDevices.enumerateDevices()
-        } catch {
-          // sem permissão: fica com os ids sem nome
-        }
-      }
-      if (!cancelled) setDevices(list)
-    }
-    void refresh()
-    navigator.mediaDevices.addEventListener('devicechange', refresh)
-    return () => {
-      cancelled = true
-      navigator.mediaDevices.removeEventListener('devicechange', refresh)
-    }
-  }, [])
-
-  return devices
-}
+import SensitivityMeter from './call/SensitivityMeter'
+import Switch from './Switch'
 
 function DeviceSelect({
   label,
   value,
-  devices,
+  options,
   onChange
 }: {
   label: string
   value: string
-  devices: MediaDeviceInfo[]
+  options: DeviceOption[]
   onChange: (deviceId: string) => void
 }): React.JSX.Element {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-bold uppercase tracking-wide text-gray-400">{label}</span>
+      <span className="text-ds-sm font-medium text-gray-400">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+        className="glass-input !py-2 text-sm"
       >
-        <option value="">Padrão do sistema</option>
-        {devices
-          .filter((d) => d.deviceId && d.deviceId !== 'default')
-          .map((d, i) => (
-            <option key={d.deviceId} value={d.deviceId}>
-              {d.label || `Dispositivo ${i + 1}`}
-            </option>
-          ))}
+        {options.map((o) => (
+          <option key={o.id} value={o.id} className="bg-[#111214]">
+            {o.label}
+          </option>
+        ))}
       </select>
     </label>
   )
 }
 
-/** Seção "Voz" das configurações: microfone, saída, supressão de ruído e teste. */
+/** Volume de 0 a 150%: 100% é o normal; acima disso é boost (em amarelo). */
+function VolumeSlider({
+  label,
+  value,
+  onChange
+}: {
+  label: string
+  value: number
+  onChange: (volume: number) => void
+}): React.JSX.Element {
+  const percent = Math.round(value * 100)
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="flex items-center justify-between text-ds-sm font-medium text-gray-400">
+        {label}
+        <span className={percent > 100 ? 'text-[#f0b232]' : 'text-white'}>{percent}%</span>
+      </span>
+      <input
+        type="range"
+        min={0}
+        max={150}
+        step={1}
+        value={percent}
+        onChange={(e) => onChange(Number(e.target.value) / 100)}
+        className="w-full cursor-pointer accent-[#5865f2]"
+      />
+    </label>
+  )
+}
+
+/** Seção "Voz" das configurações: microfone, saída, volumes, detecção de voz e teste. */
 function VoiceSettings(): React.JSX.Element {
   const devices = useAudioDevices()
   const inputDeviceId = useCallStore((s) => s.inputDeviceId)
   const outputDeviceId = useCallStore((s) => s.outputDeviceId)
   const setInputDevice = useCallStore((s) => s.setInputDevice)
   const setOutputDevice = useCallStore((s) => s.setOutputDevice)
-  const canChooseOutput = 'setSinkId' in HTMLMediaElement.prototype
+  const inputVolume = useVoiceAudioStore((s) => s.inputVolume)
+  const outputVolume = useVoiceAudioStore((s) => s.outputVolume)
+  const setInputVolume = useVoiceAudioStore((s) => s.setInputVolume)
+  const setOutputVolume = useVoiceAudioStore((s) => s.setOutputVolume)
+  const detectionEnabled = useVoiceAudioStore((s) => s.detectionEnabled)
+  const setDetectionEnabled = useVoiceAudioStore((s) => s.setDetectionEnabled)
+  const sensitivity = useVoiceAudioStore((s) => s.sensitivity)
+  const setSensitivity = useVoiceAudioStore((s) => s.setSensitivity)
+  const rnnoiseAvailable = useNoiseSuppressionStore((s) => s.available)
+  const threshold = thresholdDb(sensitivity)
 
   return (
     <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
-      <p className="text-sm font-semibold text-white">Voz</p>
+      <p className="text-ds-md font-medium text-white">Voz</p>
       <DeviceSelect
         label="Microfone"
         value={inputDeviceId}
-        devices={devices.filter((d) => d.kind === 'audioinput')}
+        options={deviceOptions(devices, 'audioinput')}
         onChange={(id) => void setInputDevice(id)}
       />
-      {canChooseOutput && (
+      <VolumeSlider label="Volume de entrada" value={inputVolume} onChange={setInputVolume} />
+      {CAN_CHOOSE_OUTPUT && (
         <DeviceSelect
           label="Saída de áudio"
           value={outputDeviceId}
-          devices={devices.filter((d) => d.kind === 'audiooutput')}
+          options={deviceOptions(devices, 'audiooutput')}
           onChange={setOutputDevice}
         />
       )}
+      <VolumeSlider label="Volume de saída" value={outputVolume} onChange={setOutputVolume} />
+      <div className="space-y-3 border-t border-white/10 pt-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-ds-sm font-medium text-white">Detecção de voz</p>
+            <p className="text-xs text-gray-400">
+              Envia sua voz só quando ela passa da sensibilidade.
+            </p>
+          </div>
+          <Switch
+            checked={detectionEnabled}
+            onChange={setDetectionEnabled}
+            label="Detecção de voz"
+          />
+        </div>
+        <label className="flex flex-col gap-1.5">
+          <span className="flex items-center justify-between text-ds-sm font-medium text-gray-400">
+            Sensibilidade
+            <span className="text-white">{Math.round(threshold)} dB</span>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={sensitivity}
+            onChange={(e) => setSensitivity(Number(e.target.value))}
+            className="w-full cursor-pointer accent-[#5865f2]"
+          />
+          <span className="text-xs text-gray-400">Mais à direita, capta vozes mais baixas.</span>
+        </label>
+        <SensitivityMeter thresholdDb={threshold} />
+        {!rnnoiseAvailable && (
+          <p className="text-xs text-[#f0b232]">
+            O volume de entrada e a detecção de voz precisam do RNNoise, que não carregou neste
+            computador.
+          </p>
+        )}
+      </div>
       <div className="border-t border-white/10 pt-3">
         <NoiseSuppressionSettings />
       </div>

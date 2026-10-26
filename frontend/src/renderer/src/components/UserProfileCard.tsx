@@ -3,8 +3,12 @@ import router from '../router'
 import { useAuthStore } from '../store/authStore'
 import { useCallStore } from '../store/callStore'
 import { useChatStore } from '../store/chatStore'
-import { useFriendStore } from '../store/friendStore'
+import { useFriendStore, useRelationship } from '../store/friendStore'
+import { useUserMenuStore } from '../store/userMenuStore'
+import { getRelationship, type Relationship } from '../api/friends'
+import { friendRequestError } from '../lib/relationship'
 import { useLevelStore } from '../store/levelStore'
+import { useBadgeStore } from '../store/badgeStore'
 import { useProfileCardStore } from '../store/profileCardStore'
 import { useProfileStore } from '../store/profileStore'
 import { useServerStore } from '../store/serverStore'
@@ -12,23 +16,28 @@ import { useSettingsStore } from '../store/settingsStore'
 import { changeMyStatus } from '../store/meActions'
 import { showToast } from '../store/toastStore'
 import { formatMemberSince, placeProfileCard } from '../lib/profileCard'
+import { serverIdFromPath } from '../lib/serverNames'
+import { useServerAccess } from '../store/useServerAccess'
+import { useModerationStore } from '../store/moderationStore'
 import { levelTier } from '../lib/levels'
 import { voiceChannelOf } from '../lib/voiceMove'
+import { memberColor } from '../lib/memberGroups'
+import { roleColorCss, rolesOfMember } from '../lib/permissions'
 import { CHOSEN_STATUSES, STATUS_META, type PresenceStatus } from '../lib/presenceStatus'
 import LevelBadge from './level/LevelBadge'
+import BadgeRow from './badges/BadgeRow'
 import ProfileCardBody, { CARD_BG, type CardProfile } from './profile/ProfileCardBody'
 import StatusIcon from './StatusIcon'
-import { PencilIcon, VolumeIcon } from './icons'
+import { DotsIcon, PencilIcon, VolumeIcon } from './icons'
+import Avatar from './Avatar'
 
 const CARD_WIDTH = 300
 /** Altura aproximada do submenu de status (4 opções, duas com descrição). */
 const STATUS_MENU_HEIGHT = 230
 
-const ROLE_STYLE = {
-  owner: { label: 'Dono do servidor', color: '#f59e0b', avatar: 'bg-amber-600' },
-  admin: { label: 'Moderador', color: '#8b5cf6', avatar: 'bg-violet-600' },
-  member: { label: 'Membro', color: '#6366f1', avatar: 'bg-indigo-600' }
-} as const
+const OWNER_STYLE = { label: 'Dono do servidor', color: '#f59e0b', avatar: 'bg-amber-600' } as const
+/** Cor de quem não tem cargo colorido. */
+const NO_ROLE_COLOR = '#6366f1'
 
 function SectionTitle({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
@@ -133,20 +142,29 @@ function UserProfileCard(): React.JSX.Element | null {
   const me = useAuthStore((s) => s.user)
   const server = useServerStore((s) => s.currentServer)
   const member = useServerStore((s) => s.currentMembers.find((m) => m.user_id === target?.userId))
+  const serverRoles = useServerStore((s) => s.roles)
   const channels = useServerStore((s) => s.channels)
   const online = useChatStore((s) => (target ? Boolean(s.presence[target.userId]) : false))
   const knownStatus = useChatStore((s) => (target ? s.statuses[target.userId] : undefined))
   const serverCalls = useCallStore((s) => s.serverCalls)
   const level = useLevelStore((s) => (target ? s.levels[target.userId] : undefined))
   const ensureLevels = useLevelStore((s) => s.ensureLevels)
-  const isFriend = useFriendStore((s) => s.friends.some((f) => f.id === target?.userId))
+  const relationship = useRelationship(target?.userId)
   const sendRequest = useFriendStore((s) => s.sendRequest)
+  const accept = useFriendStore((s) => s.accept)
   const profile = useProfileStore((s) => (target ? s.profiles[target.userId] : undefined))
   const fetchProfile = useProfileStore((s) => s.fetchProfile)
   const openSettings = useSettingsStore((s) => s.openSettings)
+  const access = useServerAccess()
+  const askNickname = useModerationStore((s) => s.askNickname)
+  // Os badges chegam depois e podem mudar a altura do cartão.
+  const badgesLoaded = useBadgeStore((s) => (target ? Boolean(s.byUser[target.userId]) : false))
   const ref = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
   const [sending, setSending] = useState(false)
+  // Amigos e servidores em comum (só no cartão de outra pessoa).
+  const [loadedMutual, setMutual] = useState<{ userId: string; rel: Relationship } | null>(null)
+  const mutual = loadedMutual && loadedMutual.userId === target?.userId ? loadedMutual.rel : null
 
   const isMe = Boolean(target && target.userId === me?.id)
 
@@ -155,6 +173,19 @@ function UserProfileCard(): React.JSX.Element | null {
     ensureLevels([target.userId])
     if (target.userId !== useAuthStore.getState().user?.id) void fetchProfile(target.userId)
   }, [target, ensureLevels, fetchProfile])
+
+  useEffect(() => {
+    if (!target || target.userId === useAuthStore.getState().user?.id) return
+    let cancelled = false
+    getRelationship(target.userId)
+      .then((r) => {
+        if (!cancelled) setMutual({ userId: target.userId, rel: r })
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [target, relationship])
 
   // Mede o cartão e posiciona ao lado do item clicado, dentro da janela. O
   // perfil chega depois de abrir e muda a altura: mede de novo.
@@ -172,7 +203,7 @@ function UserProfileCard(): React.JSX.Element | null {
         { width: window.innerWidth, height: window.innerHeight }
       )
     )
-  }, [target, profile, me])
+  }, [target, profile, me, mutual, badgesLoaded])
 
   useEffect(() => {
     if (!target) return
@@ -198,15 +229,27 @@ function UserProfileCard(): React.JSX.Element | null {
   if (!target) return null
 
   const inServer = Boolean(server && member)
-  const roleKey =
-    server?.owner_id === target.userId ? 'owner' : member?.role === 'admin' ? 'admin' : 'member'
-  const role = ROLE_STYLE[roleKey]
+  // O apelido só vale com o servidor aberto na tela (em DM não existe).
+  const nicknameContext =
+    inServer && serverIdFromPath(router.state.location.pathname) === server?.id
+  const nickname = nicknameContext ? (member?.nickname ?? null) : null
+  const canNickname = nicknameContext && access.canChangeNickname(target.userId)
+  const isServerOwner = server?.owner_id === target.userId
+  const memberRoles = inServer ? rolesOfMember(serverRoles, member?.role_ids) : []
+  // O banner e o avatar sem foto usam a cor do cargo mais alto que tem cor.
+  const role = {
+    color: isServerOwner
+      ? OWNER_STYLE.color
+      : (roleColorCss(memberColor(serverRoles, member?.role_ids)) ?? NO_ROLE_COLOR),
+    avatar: isServerOwner ? OWNER_STYLE.avatar : 'bg-indigo-600'
+  }
   const tier = level !== undefined ? levelTier(level) : null
 
   const source = isMe ? me : profile
   const card: CardProfile = {
     id: target.userId,
     display_name: source?.display_name || member?.display_name || target.name,
+    nickname,
     username: source?.username || member?.username || target.username,
     avatar_url: source ? source.avatar_url : member?.avatar_url,
     banner_url: source?.banner_url,
@@ -231,6 +274,26 @@ function UserProfileCard(): React.JSX.Element | null {
     openSettings('profiles')
   }
 
+  const editNickname = (): void => {
+    if (!server) return
+    close()
+    askNickname({
+      serverId: server.id,
+      userId: target.userId,
+      name: nickname || card.display_name,
+      nickname,
+      displayName: card.display_name,
+      self: isMe
+    })
+  }
+  const nicknameButton = canNickname && (
+    <MenuButton
+      icon={<span className="text-ds-sm font-black leading-none">@</span>}
+      label="Alterar apelido"
+      onClick={editNickname}
+    />
+  )
+
   const copyId = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(target.userId)
@@ -250,22 +313,49 @@ function UserProfileCard(): React.JSX.Element | null {
     if (!card.username) return
     setSending(true)
     try {
-      await sendRequest(card.username)
-      showToast.success(`Pedido de amizade enviado para ${card.display_name}.`)
+      if (relationship === 'incoming') {
+        await accept(card.username)
+      } else {
+        const result = await sendRequest(card.username)
+        showToast.success(
+          result === 'accepted'
+            ? `Você e ${card.display_name} agora são amigos.`
+            : `Pedido de amizade enviado para ${card.display_name}.`
+        )
+      }
     } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Não foi possível enviar o pedido.')
+      showToast.error(friendRequestError(err))
     } finally {
       setSending(false)
     }
   }
 
-  const hasInfo = inServer || tier || salinhaSince || voiceChannel
+  const mutualFriends = mutual?.mutual_friends ?? []
+  const mutualServers = mutual?.mutual_servers ?? []
+  const hasInfo =
+    inServer ||
+    tier ||
+    salinhaSince ||
+    voiceChannel ||
+    mutualFriends.length > 0 ||
+    mutualServers.length > 0
+
+  const openMore = (e: React.MouseEvent<HTMLButtonElement>): void => {
+    const r = e.currentTarget.getBoundingClientRect()
+    useUserMenuStore.getState().open({
+      userId: target.userId,
+      name: nickname || card.display_name,
+      username: card.username,
+      x: r.left,
+      y: r.bottom + 4
+    })
+  }
 
   return (
     <div
       ref={ref}
       role="dialog"
-      aria-label={`Perfil de ${card.display_name}`}
+      aria-label={`Perfil de ${nickname || card.display_name}`}
       style={{
         width: CARD_WIDTH,
         left: pos?.left ?? -9999,
@@ -282,20 +372,48 @@ function UserProfileCard(): React.JSX.Element | null {
         fallbackBanner={fallbackBanner}
         avatarFallbackClassName={role.avatar}
         badge={<LevelBadge userId={target.userId} size="md" />}
+        badges={
+          <BadgeRow
+            userId={target.userId}
+            name={card.display_name}
+            avatarUrl={card.avatar_url}
+            onOpen={close}
+          />
+        }
         onEditProfile={isMe ? editProfile : undefined}
       >
         {hasInfo && (
           <div className="mt-3 flex flex-col gap-3 rounded-lg bg-black/30 p-3">
-            {inServer && (
+            {inServer && (isServerOwner || memberRoles.length > 0) && (
               <div>
-                <SectionTitle>Cargo</SectionTitle>
-                <span
-                  className="inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2 py-0.5 text-xs font-semibold"
-                  style={{ color: role.color }}
-                >
-                  <span className="h-2 w-2 rounded-full" style={{ background: role.color }} />
-                  {role.label}
-                </span>
+                <SectionTitle>{memberRoles.length > 1 ? 'Cargos' : 'Cargo'}</SectionTitle>
+                <div className="flex flex-wrap gap-1.5">
+                  {isServerOwner && (
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2 py-0.5 text-xs font-semibold"
+                      style={{ color: OWNER_STYLE.color }}
+                    >
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ background: OWNER_STYLE.color }}
+                      />
+                      {OWNER_STYLE.label}
+                    </span>
+                  )}
+                  {memberRoles.map((r) => {
+                    const color = roleColorCss(r.color) ?? '#99aab5'
+                    return (
+                      <span
+                        key={r.id}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2 py-0.5 text-xs font-semibold"
+                        style={{ color }}
+                      >
+                        <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+                        {r.name}
+                      </span>
+                    )
+                  })}
+                </div>
               </div>
             )}
 
@@ -326,6 +444,41 @@ function UserProfileCard(): React.JSX.Element | null {
               </div>
             )}
 
+            {mutualServers.length > 0 && (
+              <div>
+                <SectionTitle>
+                  {mutualServers.length === 1
+                    ? '1 servidor em comum'
+                    : `${mutualServers.length} servidores em comum`}
+                </SectionTitle>
+                <p className="truncate text-xs text-gray-200">
+                  {mutualServers.map((sv) => sv.name).join(', ')}
+                </p>
+              </div>
+            )}
+
+            {mutualFriends.length > 0 && (
+              <div>
+                <SectionTitle>
+                  {mutualFriends.length === 1
+                    ? '1 amigo em comum'
+                    : `${mutualFriends.length} amigos em comum`}
+                </SectionTitle>
+                <div className="flex items-center gap-1.5">
+                  {mutualFriends.slice(0, 6).map((f) => (
+                    <span key={f.id} title={f.display_name || f.username}>
+                      <Avatar
+                        userId={f.id}
+                        name={f.display_name || f.username}
+                        avatarUrl={f.avatar_url}
+                        size={20}
+                      />
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {voiceChannel && (
               <div>
                 <SectionTitle>Em call</SectionTitle>
@@ -346,6 +499,7 @@ function UserProfileCard(): React.JSX.Element | null {
                 label="Editar perfil"
                 onClick={editProfile}
               />
+              {nicknameButton}
               <div className="mx-2 my-1 h-px bg-white/10" />
               <StatusMenu status={status} />
             </div>
@@ -370,17 +524,37 @@ function UserProfileCard(): React.JSX.Element | null {
             >
               Enviar mensagem
             </button>
-            {!isFriend && card.username && (
+            {card.username && relationship !== 'friend' && relationship !== 'blocked' && (
               <button
                 type="button"
-                disabled={sending}
+                disabled={sending || relationship === 'outgoing'}
                 onClick={() => void addFriend()}
-                className="cursor-pointer rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/15 disabled:opacity-50"
+                className={`cursor-pointer rounded-lg px-3 py-2 text-xs font-semibold text-white transition-colors disabled:cursor-default disabled:opacity-60 ${
+                  relationship === 'incoming'
+                    ? 'bg-[#248046] hover:bg-[#1a6334]'
+                    : 'bg-white/10 hover:bg-white/15'
+                }`}
               >
-                Adicionar amigo
+                {relationship === 'outgoing'
+                  ? 'Pedido enviado'
+                  : relationship === 'incoming'
+                    ? 'Aceitar pedido'
+                    : 'Adicionar amigo'}
               </button>
             )}
+            <button
+              type="button"
+              aria-label="Mais"
+              title="Mais"
+              onClick={openMore}
+              className="flex cursor-pointer items-center justify-center rounded-lg bg-white/10 px-2.5 text-gray-200 transition-colors hover:bg-white/15"
+            >
+              <DotsIcon className="h-4 w-4" />
+            </button>
           </div>
+        )}
+        {!isMe && nicknameButton && (
+          <div className="mt-2 rounded-lg bg-black/30 p-1.5">{nicknameButton}</div>
         )}
       </ProfileCardBody>
     </div>

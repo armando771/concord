@@ -1,10 +1,14 @@
 import { useCallback, useState } from 'react'
 import { useCallStore } from '../../store/callStore'
+import { useActivityStore } from '../../store/activityStore'
 import {
+  ActivityIcon,
   CameraIcon,
   CameraOffIcon,
   HeadsetIcon,
   HeadsetOffIcon,
+  LockIcon,
+  LockOpenIcon,
   MicIcon,
   MicOffIcon,
   MonitorIcon,
@@ -12,14 +16,20 @@ import {
   SoundboardIcon
 } from '../icons'
 import SoundboardPopover from './SoundboardPopover'
+import ActivityPickerPopover from './ActivityPickerPopover'
+import ScreenQualityPopover from './ScreenQualityPopover'
 
 function VoiceControls(): React.JSX.Element {
   const muted = useCallStore((s) => s.muted)
   const deafened = useCallStore((s) => s.deafened)
   const sharing = useCallStore((s) => s.isScreenSharing)
   const connected = useCallStore((s) => s.status === 'active')
+  const canSpeak = useCallStore((s) => s.canSpeak)
+  const canStream = useCallStore((s) => s.canStream)
   const callType = useCallStore((s) => s.type)
   const cameraOn = useCallStore((s) => s.localCameraStream !== null)
+  const locked = useCallStore((s) => s.locked)
+  const toggleLock = useCallStore((s) => s.toggleLock)
   const toggleMute = useCallStore((s) => s.toggleMute)
   const toggleDeafen = useCallStore((s) => s.toggleDeafen)
   const toggleCamera = useCallStore((s) => s.toggleCamera)
@@ -30,6 +40,10 @@ function VoiceControls(): React.JSX.Element {
   const [soundboardAnchor, setSoundboardAnchor] = useState<HTMLElement | null>(null)
   const soundboardOpen = soundboardAnchor !== null
   const closeSoundboard = useCallback(() => setSoundboardAnchor(null), [])
+  const [activityAnchor, setActivityAnchor] = useState<HTMLElement | null>(null)
+  const activityOpen = activityAnchor !== null
+  const closeActivities = useCallback(() => setActivityAnchor(null), [])
+  const activityRunning = useActivityStore((s) => s.shared !== null || s.local !== null)
 
   const handleToggleScreen = (): void => {
     if (sharing) {
@@ -44,10 +58,16 @@ function VoiceControls(): React.JSX.Element {
       <button
         onClick={toggleMute}
         aria-label={muted ? 'Ativar Microfone' : 'Silenciar Microfone'}
-        title={muted ? 'Ativar Microfone' : 'Silenciar Microfone'}
+        title={
+          !canSpeak
+            ? 'Você não pode falar neste canal'
+            : muted
+              ? 'Ativar Microfone'
+              : 'Silenciar Microfone'
+        }
         className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-colors ${
           muted ? 'bg-white text-[#07080b]' : 'bg-white/5 text-gray-200 hover:bg-white/10'
-        }`}
+        } ${canSpeak ? '' : 'opacity-50'}`}
       >
         {muted ? <MicOffIcon className="h-5 w-5" /> : <MicIcon className="h-5 w-5" />}
       </button>
@@ -63,11 +83,17 @@ function VoiceControls(): React.JSX.Element {
       </button>
       <button
         onClick={() => void toggleCamera()}
-        disabled={!connected}
+        disabled={!connected || (!canStream && !cameraOn)}
         aria-label={cameraOn ? 'Desligar câmera' : 'Ligar câmera'}
-        title={cameraOn ? 'Desligar câmera' : 'Ligar câmera'}
+        title={
+          !canStream && !cameraOn
+            ? 'Você não pode transmitir neste canal'
+            : cameraOn
+              ? 'Desligar câmera'
+              : 'Ligar câmera'
+        }
         className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-          !connected
+          !connected || (!canStream && !cameraOn)
             ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
             : cameraOn
               ? 'cursor-pointer bg-[#23a55a] text-white hover:bg-[#1e8c4a]'
@@ -76,21 +102,46 @@ function VoiceControls(): React.JSX.Element {
       >
         {cameraOn ? <CameraIcon className="h-5 w-5" /> : <CameraOffIcon className="h-5 w-5" />}
       </button>
-      <button
-        onClick={handleToggleScreen}
-        disabled={!connected}
-        aria-label={sharing ? 'Parar de compartilhar tela' : 'Compartilhar tela'}
-        title={sharing ? 'Parar de compartilhar' : 'Compartilhar tela'}
-        className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-          !connected
-            ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
-            : sharing
-              ? 'cursor-pointer bg-[#23a55a] text-white hover:bg-[#1e8c4a]'
-              : 'cursor-pointer bg-white/5 text-gray-200 hover:bg-white/10'
-        }`}
-      >
-        <MonitorIcon className="h-5 w-5" />
-      </button>
+      <ScreenQualityPopover disabled={!connected}>
+        <button
+          onClick={handleToggleScreen}
+          disabled={!connected || (!canStream && !sharing)}
+          aria-label={sharing ? 'Parar de compartilhar tela' : 'Compartilhar tela'}
+          title={
+            !canStream && !sharing
+              ? 'Você não pode transmitir neste canal'
+              : sharing
+                ? undefined
+                : 'Compartilhar tela'
+          }
+          className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+            !connected || (!canStream && !sharing)
+              ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
+              : sharing
+                ? 'cursor-pointer bg-[#23a55a] text-white hover:bg-[#1e8c4a]'
+                : 'cursor-pointer bg-white/5 text-gray-200 hover:bg-white/10'
+          }`}
+        >
+          <MonitorIcon className="h-5 w-5" />
+        </button>
+      </ScreenQualityPopover>
+      {callType === 'channel' && (
+        <button
+          onClick={toggleLock}
+          disabled={!connected}
+          aria-label={locked ? 'Destrancar sala' : 'Trancar sala'}
+          title={locked ? 'Destrancar sala' : 'Trancar sala (pedir permissão para entrar)'}
+          className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+            !connected
+              ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
+              : locked
+                ? 'cursor-pointer bg-amber-500 text-black shadow-sm hover:bg-amber-400'
+                : 'cursor-pointer bg-white/5 text-gray-200 hover:bg-white/10'
+          }`}
+        >
+          {locked ? <LockIcon className="h-5 w-5" /> : <LockOpenIcon className="h-5 w-5" />}
+        </button>
+      )}
       {callType === 'channel' && (
         <button
           onClick={(e) => {
@@ -113,6 +164,27 @@ function VoiceControls(): React.JSX.Element {
         </button>
       )}
       <button
+        onClick={(e) => {
+          const button = e.currentTarget
+          setActivityAnchor((open) => (open ? null : button))
+        }}
+        disabled={!connected}
+        aria-label="Atividades"
+        aria-expanded={activityOpen}
+        title="Atividades"
+        className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+          !connected
+            ? 'cursor-not-allowed bg-white/5 text-gray-500 opacity-50'
+            : activityOpen
+              ? 'cursor-pointer bg-[#5865f2] text-white'
+              : activityRunning
+                ? 'cursor-pointer bg-[#5865f2]/25 text-white hover:bg-[#5865f2]/40'
+                : 'cursor-pointer bg-white/5 text-gray-200 hover:bg-white/10'
+        }`}
+      >
+        <ActivityIcon className="h-5 w-5" />
+      </button>
+      <button
         onClick={endCall}
         aria-label="Desconectar"
         title="Desconectar"
@@ -120,7 +192,12 @@ function VoiceControls(): React.JSX.Element {
       >
         <PhoneOffIcon className="h-5 w-5" />
       </button>
-      {soundboardAnchor && <SoundboardPopover anchor={soundboardAnchor} onClose={closeSoundboard} />}
+      {soundboardAnchor && (
+        <SoundboardPopover anchor={soundboardAnchor} onClose={closeSoundboard} />
+      )}
+      {activityAnchor && (
+        <ActivityPickerPopover anchor={activityAnchor} onClose={closeActivities} />
+      )}
     </div>
   )
 }

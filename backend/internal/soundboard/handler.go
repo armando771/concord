@@ -3,6 +3,7 @@ package soundboard
 import (
 	"context"
 	"errors"
+	"gin-quickstart/backend/internal/permission"
 	"io"
 	"log"
 	"mime"
@@ -31,8 +32,10 @@ type serverChecker interface {
 	IsMember(ctx context.Context, serverID, userID string) (bool, error)
 }
 
-type moderatorChecker interface {
-	IsAdminOrOwner(ctx context.Context, serverID, userID string) (bool, error)
+// permissionChecker devolve as permissões do membro no servidor
+// (permission.Service).
+type permissionChecker interface {
+	ServerPerms(ctx context.Context, serverID, userID string) (int64, error)
 }
 
 type spaceChecker interface {
@@ -48,15 +51,15 @@ type eventPublisher interface {
 }
 
 type Handler struct {
-	repo           soundRepo
-	store          *media.Store
-	space          spaceChecker
-	servers        serverChecker
-	moderators     moderatorChecker
-	tokens         mediaTokens
-	publisher      eventPublisher
-	maxSoundBytes  int64
-	maxPerServer   int
+	repo          soundRepo
+	store         *media.Store
+	space         spaceChecker
+	servers       serverChecker
+	permissions   permissionChecker
+	tokens        mediaTokens
+	publisher     eventPublisher
+	maxSoundBytes int64
+	maxPerServer  int
 }
 
 func NewHandler(
@@ -64,7 +67,7 @@ func NewHandler(
 	store *media.Store,
 	space spaceChecker,
 	servers serverChecker,
-	moderators moderatorChecker,
+	permissions permissionChecker,
 	tokens mediaTokens,
 	publisher eventPublisher,
 ) *Handler {
@@ -73,7 +76,7 @@ func NewHandler(
 		store:         store,
 		space:         space,
 		servers:       servers,
-		moderators:    moderators,
+		permissions:   permissions,
 		tokens:        tokens,
 		publisher:     publisher,
 		maxSoundBytes: MaxSoundBytes,
@@ -141,6 +144,16 @@ func (h *Handler) Upload(c *gin.Context) {
 	}
 	if !isMember {
 		c.JSON(http.StatusForbidden, gin.H{"error": ErrNotServerMember.Error()})
+		return
+	}
+
+	perms, err := h.permissions.ServerPerms(ctx, serverID, uploaderID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
+		return
+	}
+	if !permission.Has(perms, permission.UseSoundboard) {
+		c.JSON(http.StatusForbidden, gin.H{"error": permission.ErrMissingPermission.Error(), "code": "missing_permission"})
 		return
 	}
 
@@ -312,12 +325,12 @@ func (h *Handler) Delete(c *gin.Context) {
 
 	allowed := sound.UploaderID == actorID
 	if !allowed {
-		isMod, err := h.moderators.IsAdminOrOwner(ctx, serverID, actorID)
+		perms, err := h.permissions.ServerPerms(ctx, serverID, actorID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
 			return
 		}
-		allowed = isMod
+		allowed = permission.Has(perms, permission.ManageExpressions)
 	}
 	if !allowed {
 		c.JSON(http.StatusForbidden, gin.H{"error": ErrCannotDeleteSound.Error()})

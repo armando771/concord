@@ -5,10 +5,24 @@ interface ModalProps {
   open: boolean
   title?: string
   onClose?: () => void
+  /** Janela larga (editores com lista e painel lado a lado). */
+  wide?: boolean
+  /** Ainda mais larga (detalhe com conteúdo e conversa lado a lado). */
+  xl?: boolean
+  /** Painel opaco: para conteúdo longo, em que o vidro atrapalha a leitura. */
+  solid?: boolean
   children?: ReactNode
 }
 
-function Modal({ open, title, onClose, children }: ModalProps): React.JSX.Element | null {
+function Modal({
+  open,
+  title,
+  onClose,
+  wide = false,
+  xl = false,
+  solid = false,
+  children
+}: ModalProps): React.JSX.Element | null {
   const titleId = useId()
 
   if (!open) return null
@@ -16,7 +30,9 @@ function Modal({ open, title, onClose, children }: ModalProps): React.JSX.Elemen
   // Fora dos painéis com blur/transform, para que o viewport seja sempre a janela.
   return createPortal(
     <div
-      className="app-no-drag fixed inset-x-0 bottom-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      className={`app-no-drag fixed inset-x-0 bottom-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm ${
+        solid ? 'bg-black/70' : 'bg-black/50'
+      }`}
       style={{ top: 'var(--titlebar-height, 0px)' }}
       onClick={onClose}
     >
@@ -24,7 +40,11 @@ function Modal({ open, title, onClose, children }: ModalProps): React.JSX.Elemen
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
-        className="glass-card flex max-h-full min-h-0 w-full max-w-md flex-col overflow-hidden p-6"
+        className={`flex max-h-full min-h-0 w-full flex-col overflow-hidden p-6 ${
+          solid
+            ? 'rounded-2xl border border-white/10 bg-[#111320] shadow-2xl shadow-black/70'
+            : 'glass-card'
+        } ${xl ? 'max-w-5xl' : wide ? 'max-w-3xl' : 'max-w-md'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex shrink-0 items-center justify-between gap-4">

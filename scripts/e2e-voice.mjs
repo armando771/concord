@@ -137,7 +137,7 @@ async function openClient(user, initScript) {
   page.on('response', (r) => { if (r.status() === 404) console.log(`[${user.username}] 404:`, r.url()) })
   page.on('console', (m) => { if (m.type() === 'error') console.log(`[${user.username}] console:`, m.text()) })
   await page.goto(APP + '#/login')
-  await page.fill('input[type=email]', user.email)
+  await page.fill('input[autocomplete=username]', user.email)
   await page.fill('input[type=password]', user.password)
   await page.click('button[type=submit]')
   await page.waitForURL((u) => !u.hash.includes('login'))
@@ -180,15 +180,17 @@ try {
   await waitFor('ana ouve a bia', () => audioTracks(pageA), (t) => t.includes('live'))
   await waitFor('bia ouve a ana', () => audioTracks(pageB), (t) => t.includes('live'))
   // O microfone fake emite um bipe: o próprio usuário fica verde na lista do canal.
+  // Seu nome fica em negrito na lista (sem o "(você)").
   await waitFor('ana se vê falando (verde na lista do canal)', () => pageA.evaluate(() =>
-    [...document.querySelectorAll('span')].some((el) =>
-      el.textContent?.includes('(você)') &&
+    [...document.querySelectorAll('span.font-bold')].some((el) =>
+      el.textContent === 'ana' &&
       el.previousElementSibling?.className.includes('ring-[#23a55a]'))), (ok) => ok === true)
 
   // Mudo/ensurdecido aparece ao lado do nome para os outros (como no Discord).
   const voiceIcons = (page, name) => page.evaluate((n) => {
     const row = [...document.querySelectorAll('span')].find((el) => el.textContent === n)?.parentElement
-    const icons = row?.querySelector('[title]')
+    // O nome também tem title; os ícones ficam no fim da linha.
+    const icons = row?.querySelector('span.ml-auto [title]')
     return icons ? icons.getAttribute('title') : 'nenhum'
   }, name)
   await pageA.getByRole('button', { name: 'Silenciar Microfone' }).first().click()
@@ -219,6 +221,7 @@ try {
 
   // Troca de microfone no meio da chamada (Configurações → Voz).
   await pageA.getByRole('button', { name: 'Configurações do usuário' }).first().click()
+  await pageA.getByRole('button', { name: 'Voz e áudio', exact: true }).click()
   const micSelect = pageA.locator('label', { hasText: 'Microfone' }).locator('select')
   await micSelect.waitFor()
   const options = await waitFor('lista de microfones carregada', () =>
@@ -227,18 +230,20 @@ try {
   if (!other) throw new Error(`sem microfone alternativo: ${JSON.stringify(options)}`)
   await micSelect.selectOption({ label: other })
   await pageA.screenshot({ path: join(tmpdir(), 'concord-e2e-settings.png') })
-  await pageA.getByRole('button', { name: 'Fechar' }).click()
+  await pageA.getByRole('button', { name: 'Fechar configurações' }).click()
   await pageA.waitForTimeout(1500)
   await waitFor(`ana continua falando após trocar para "${other}"`, () => pageA.evaluate(() =>
-    [...document.querySelectorAll('span')].some((el) =>
-      el.textContent?.includes('(você)') &&
+    [...document.querySelectorAll('span.font-bold')].some((el) =>
+      el.textContent === 'ana' &&
       el.previousElementSibling?.className.includes('ring-[#23a55a]'))), (ok) => ok === true)
   await waitFor('bia continua ouvindo a ana', () => audioTracks(pageB), (t) => t.includes('live'))
 
   // Seletor do app: aba Aplicativos → a janela "Jogo".
-  await pageA.getByRole('button', { name: 'Compartilhar tela' }).click()
+  await pageA.getByRole('button', { name: 'Compartilhar tela' }).first().click()
   await pageA.getByRole('button', { name: 'Aplicativos' }).click()
   await pageA.getByRole('button', { name: 'Compartilhar', exact: true }).click()
+  // A live só é baixada quando alguém assiste.
+  await pageB.getByRole('button', { name: 'Assistir transmissão' }).click({ timeout: 20000 })
   await waitFor('bia recebe o som da janela como track separada', () => audioTracks(pageB), (t) => t.filter((s) => s === 'live').length >= 2)
   await waitFor('o som da janela chega com volume', () => pageB.evaluate(async () => {
     const ctx = new AudioContext()
@@ -265,7 +270,7 @@ try {
   await pageB.locator('video').first().waitFor({ timeout: 20000 })
   await pageB.locator('video').first().click({ button: 'right' })
   await pageB.getByRole('menu', { name: 'Transmissão de ana' }).waitFor()
-  await pageB.getByLabel('Volume da transmissão').fill('20')
+  await pageB.getByRole('menu', { name: 'Transmissão de ana' }).getByLabel('Volume da transmissão', { exact: true }).fill('20')
   await waitFor('bia baixa a live da ana para 20% (a voz dela continua 100%)', volumesOnB, (v) => Math.abs(v.live - 0.2) < 0.01 && v.voz === 1)
   await pageB.getByRole('menu', { name: 'Transmissão de ana' }).getByText('Silenciar transmissão').click()
   await waitFor('bia silencia a live da ana', volumesOnB, (v) => v.live === 0 && v.voz === 1)
@@ -290,7 +295,8 @@ try {
     return { w: +(w / a.width).toFixed(2), h: +((w / ar) / a.height).toFixed(2) }
   }), (r) => r !== null && (r.w >= 0.85 || r.h >= 0.7))
 
-  await pageB.getByRole('button', { name: 'Compartilhar tela' }).click()
+  await pageB.getByRole('button', { name: 'Compartilhar tela' }).first().click()
+  await pageA.getByRole('button', { name: 'Assistir transmissão' }).click({ timeout: 20000 })
   await waitFor('ana vê a tela da bia (duas telas ao mesmo tempo)', () => videoTracks(pageA), (t) => t.filter((v) => v.startsWith('live:') && !v.endsWith(':0x0')).length >= 2)
 
   await pageA.screenshot({ path: '/tmp/concord-e2e-ana.png' })

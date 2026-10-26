@@ -1,10 +1,12 @@
 import type { Message } from '../api/messages'
-import { mentionsUser } from './mentions'
+import { everyonePingsMe, mentionsUser } from './mentions'
 import { messagePreview } from './polls'
+import type { ChosenStatus } from './presenceStatus'
+import { serverDisplayName } from './serverNames'
 import type { SoundName } from './sounds'
 
 /** De onde veio o aviso: decide o som e o que as preferências controlam. */
-export type NotificationKind = 'message' | 'mention' | 'call'
+export type NotificationKind = 'message' | 'mention' | 'call' | 'friend_request'
 
 /** Preferências de notificação do usuário (Configurações → Notificações). */
 export interface NotificationPrefs {
@@ -38,37 +40,88 @@ function truncate(text: string): string {
   return text.length > MAX_BODY ? `${text.slice(0, MAX_BODY - 1)}…` : text
 }
 
-/** Notificação para uma DM recebida (mensagens de canal não notificam). */
-export function messageNotification(message: Message, meId: string): AppNotification | null {
+/**
+ * Notificação para uma DM recebida (mensagens de canal não notificam). Em DM
+ * em grupo, o título leva o nome do grupo e o clique abre o grupo.
+ */
+export function messageNotification(
+  message: Message,
+  meId: string,
+  group?: { name: string }
+): AppNotification | null {
   if (!message.conversation_id || message.author_id === meId) return null
+  const author = message.author?.display_name || message.author?.username || 'Nova mensagem'
   return {
     kind: 'message',
-    title: message.author?.display_name || message.author?.username || 'Nova mensagem',
+    title: group ? `${author} em ${group.name}` : author,
     body: truncate(messagePreview(message)),
-    route: `/dm/${message.author_id}`
+    route: group ? `/dm/c/${message.conversation_id}` : `/dm/${message.author_id}`
   }
 }
 
-/** Notificação para uma mensagem de canal que menciona você (@nick) ou responde sua mensagem. */
+/** Pedido de amizade recebido: abre a aba Pendentes. */
+export function friendRequestNotification(requester: {
+  display_name: string
+  username: string
+}): AppNotification {
+  return {
+    kind: 'friend_request',
+    title: 'Pedido de amizade',
+    body: `${requester.display_name || requester.username} quer ser seu amigo`,
+    route: '/friends?tab=pending'
+  }
+}
+
+/** Marcaram você num comentário de proposta: abre a proposta no quadro. */
+export function proposalMentionNotification(mention: {
+  proposal_id: string
+  proposal_title: string
+  author_name: string
+  snippet: string
+}): AppNotification {
+  return {
+    kind: 'mention',
+    title: `${mention.author_name} te marcou em "${mention.proposal_title}"`,
+    body: truncate(mention.snippet),
+    route: `/proposals?proposal=${mention.proposal_id}`
+  }
+}
+
+/**
+ * Notificação para uma mensagem de canal que menciona você (@nick), responde
+ * sua mensagem ou pinga o canal (@all/@here, pelo mention_everyone que o
+ * backend liberou). `status` é o escolhido por você: @here não pinga ausente.
+ * `nicknames`: apelidos do servidor (o autor aparece pelo apelido).
+ */
 export function mentionNotification(
   message: Message,
-  me: { id: string; username: string },
-  serverId: string | null
+  me: { id: string; username: string; status?: ChosenStatus },
+  serverId: string | null,
+  nicknames?: Record<string, string>
 ): AppNotification | null {
   if (!message.channel_id || !serverId || message.author_id === me.id) return null
   const isReplyToMe = message.reply_to?.author_id === me.id
   const isMention = mentionsUser(message.content, me.username)
-  if (!isMention && !isReplyToMe) return null
-  const author = message.author?.display_name || message.author?.username || 'Alguém'
+  const everyone = everyonePingsMe(message.mention_everyone, me.status)
+    ? message.mention_everyone
+    : null
+  if (!isMention && !isReplyToMe && !everyone) return null
+  const author = serverDisplayName(
+    { nickname: nicknames?.[message.author_id] },
+    message.author,
+    'Alguém'
+  )
   return {
     kind: 'mention',
     // Aviso do próprio servidor (ex.: aniversário) não é "Fulano mencionou você".
     title:
       message.system_kind === 'birthday'
         ? '🎂 Feliz aniversário!'
-        : isReplyToMe && !isMention
-          ? `${author} respondeu você`
-          : `${author} mencionou você`,
+        : isMention
+          ? `${author} mencionou você`
+          : isReplyToMe
+            ? `${author} respondeu você`
+            : `${author} mencionou @${everyone}`,
     body: truncate(messagePreview(message)),
     route: `/servers/${serverId}/channels/${message.channel_id}`
   }
@@ -88,13 +141,27 @@ export function callNotification(caller: {
   }
 }
 
+/** Alguém pediu para entrar na sala trancada em que estou (som próprio no callStore). */
+export function knockNotification(
+  requester: { display_name: string; username: string },
+  serverId: string | null,
+  channelId: string | null
+): AppNotification {
+  return {
+    kind: 'call',
+    title: `${requester.display_name || requester.username} quer entrar na sala`,
+    body: 'A sala está trancada — clique para aceitar ou recusar',
+    route: serverId && channelId ? `/servers/${serverId}/channels/${channelId}` : '/'
+  }
+}
+
 /** Som do aviso (null = sem som). Chamada tem toque próprio no callStore. */
 export function notificationSound(
   kind: NotificationKind,
   prefs: Pick<NotificationPrefs, 'sound'>
 ): SoundName | null {
   if (!prefs.sound || kind === 'call') return null
-  return kind === 'message' ? 'message' : 'mention'
+  return kind === 'mention' ? 'mention' : 'message'
 }
 
 export interface DesktopPayload {
@@ -104,6 +171,11 @@ export interface DesktopPayload {
   urgent?: boolean
   toast: boolean
   taskbar: boolean
+  /**
+   * A conversa do aviso não está na tela: o toast aparece mesmo com a janela
+   * em foco (a pessoa está no app, mas em outro chat ou na tela de amigos).
+   */
+  elsewhere?: boolean
 }
 
 /**
@@ -112,7 +184,8 @@ export interface DesktopPayload {
  */
 export function desktopPayload(
   notification: AppNotification,
-  prefs: NotificationPrefs
+  prefs: NotificationPrefs,
+  { elsewhere = false }: { elsewhere?: boolean } = {}
 ): DesktopPayload {
   const { title, body, route, urgent } = notification
   return {
@@ -121,8 +194,44 @@ export function desktopPayload(
     route,
     ...(urgent ? { urgent } : {}),
     toast: urgent ? true : prefs.desktop,
-    taskbar: urgent ? true : prefs.taskbar
+    taskbar: urgent ? true : prefs.taskbar,
+    ...(elsewhere ? { elsewhere } : {})
   }
+}
+
+/** Onde a pessoa está quando chega uma DM ou menção. */
+export interface ViewState {
+  /** A janela (ou a aba, no web) está visível e com foco. */
+  focused: boolean
+  /** A conversa da mensagem é a que está aberta na tela. */
+  viewingRoom: boolean
+}
+
+export interface MessageAlert {
+  /** Aviso para o processo main (ou para o aviso do navegador). */
+  payload: DesktopPayload
+  /** Som a tocar agora (null = em silêncio). */
+  sound: SoundName | null
+}
+
+/**
+ * O que fazer com uma DM ou menção que chegou. Nada se a pessoa está lendo
+ * essa conversa (janela em foco e conversa aberta), nem se as preferências
+ * (ou o "Não perturbe", já aplicado em prefs) desligaram tudo. Em qualquer
+ * outro caso avisa: janela sem foco ou em outro chat. Em outro chat com a
+ * janela em foco o payload vai com `elsewhere`, para o toast aparecer.
+ */
+export function messageAlert(
+  notification: AppNotification | null,
+  view: ViewState,
+  prefs: NotificationPrefs
+): MessageAlert | null {
+  if (!notification) return null
+  if (view.focused && view.viewingRoom) return null
+  const payload = desktopPayload(notification, prefs, { elsewhere: !view.viewingRoom })
+  const sound = notificationSound(notification.kind, prefs)
+  if (!payload.toast && !payload.taskbar && !sound) return null
+  return { payload, sound }
 }
 
 type DesktopNotifier = (payload: DesktopPayload) => void
@@ -143,8 +252,12 @@ export function notifyDesktop(
   notification: AppNotification,
   prefs: NotificationPrefs = DEFAULT_NOTIFICATION_PREFS
 ): void {
+  deliverDesktop(desktopPayload(notification, prefs))
+}
+
+/** Entrega um payload pronto (ver messageAlert) ao processo main ou ao navegador. */
+export function deliverDesktop(payload: DesktopPayload): void {
   if (typeof window === 'undefined') return
-  const payload = desktopPayload(notification, prefs)
   const background = window.api?.background
   if (background) background.notify(payload)
   else webNotifier?.(payload)

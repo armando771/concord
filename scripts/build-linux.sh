@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Gera AppImage x64 + latest-linux.yml, sem dependências/node_modules do host.
+# Gera, sem dependências/node_modules do host:
+#   - AppImage x64 + latest-linux.yml (electron-updater);
+#   - Salinha-<versão>-x64.tar.gz: o mesmo app + salinha-launcher, para a
+#     instalação por usuário sem FUSE (site/install.sh e o updater próprio do
+#     Linux em src/main/linuxUpdater.ts). O manifesto dele é do release-linux.sh.
 # Uso: scripts/build-linux.sh https://endereco-publico
 set -euo pipefail
 
@@ -27,8 +31,16 @@ docker run --rm --platform linux/amd64 \
     yarn install --frozen-lockfile --ignore-scripts
     yarn build
     yarn electron-builder --linux AppImage --x64 --publish never
-    cp dist/*.AppImage dist/latest-linux.yml /out/
-    chown "$HOST_UID:$HOST_GID" /out/*.AppImage /out/latest-linux.yml
+    VERSION="$(node -p "require(\"./package.json\").version")"
+    APP=dist/linux-unpacked
+    test -x "$APP/salinha"
+    install -m 755 build/linux/salinha-launcher "$APP/salinha-launcher"
+    install -m 644 build/icon.png "$APP/salinha.png"
+    printf "%s\n" "$VERSION" > "$APP/salinha-version"
+    tar --sort=name --owner=0 --group=0 --numeric-owner -C "$APP" \
+      -czf "dist/Salinha-$VERSION-x64.tar.gz" .
+    cp dist/*.AppImage "dist/Salinha-$VERSION-x64.tar.gz" dist/latest-linux.yml /out/
+    chown "$HOST_UID:$HOST_GID" /out/*.AppImage /out/*.tar.gz /out/latest-linux.yml
   '
 
-echo "AppImage gerado em frontend/dist (servidor: $SERVER_URL)"
+echo "AppImage e .tar.gz gerados em frontend/dist (servidor: $SERVER_URL)"

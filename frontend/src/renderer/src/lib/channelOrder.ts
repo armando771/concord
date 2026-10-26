@@ -1,56 +1,60 @@
-import type { Channel } from '../api/channels'
+// Ordem dos canais na barra lateral (arrastar e soltar dentro da seção de
+// texto ou de voz). Puro, sem React.
 
-/** Tipo usado no arrastar e soltar para reordenar canais do servidor. */
-export const CHANNEL_DRAG = 'application/x-concord-channel'
+type ChannelKind = 'text' | 'voice'
 
-export type DropPlacement = 'before' | 'after'
+/** Move o item do índice `from` para `to` (nova lista; índices limitados). */
+export function moveItem<T>(list: readonly T[], from: number, to: number): T[] {
+  const next = [...list]
+  if (from < 0 || from >= next.length) return next
+  const target = Math.max(0, Math.min(next.length - 1, to))
+  const [item] = next.splice(from, 1)
+  next.splice(target, 0, item)
+  return next
+}
 
 /**
- * Reordena os canais dentro da mesma seção (`text` ou `voice`).
- * Retorna `null` se o movimento for inválido ou não alterar a ordem atual.
+ * Onde a linha de soltar aparece, como índice de inserção (0..n, "antes do
+ * item i"): metade de cima da linha do canal = antes dele, de baixo = depois.
  */
-export function reorderChannelList(
-  channels: Channel[],
-  draggedId: string,
-  targetId: string,
-  placement: DropPlacement
-): { nextChannels: Channel[]; sectionIds: string[] } | null {
-  if (!draggedId || !targetId || draggedId === targetId) return null
+export function dropInsertionIndex(index: number, offsetY: number, height: number): number {
+  return offsetY < height / 2 ? index : index + 1
+}
 
-  const dragged = channels.find((c) => c.id === draggedId)
-  const target = channels.find((c) => c.id === targetId)
-  if (!dragged || !target) return null
+/** Índice de inserção → índice final do item arrastado (para moveItem). */
+export function insertionToTarget(from: number, insertion: number): number {
+  return insertion > from ? insertion - 1 : insertion
+}
 
-  const sectionType = dragged.type ?? 'text'
-  const targetType = target.type ?? 'text'
-  if (sectionType !== targetType) return null
+/** Soltar logo acima ou logo abaixo do próprio canal não muda nada. */
+export function isNoopDrop(from: number, insertion: number): boolean {
+  return insertion === from || insertion === from + 1
+}
 
-  const section = channels.filter((c) => (c.type ?? 'text') === sectionType)
-  const oldIds = section.map((c) => c.id)
+/**
+ * Aplica a ordem `ids` aos canais do tipo `type`, nos mesmos lugares da lista
+ * em que eles já estavam (os do outro tipo não mudam). Canal que não está em
+ * `ids` (acabou de ser criado) vai para o fim da seção. Sem mudança, devolve a
+ * mesma lista.
+ */
+export function applyChannelOrder<C extends { id: string; type?: string }>(
+  channels: C[],
+  type: ChannelKind,
+  ids: readonly string[]
+): C[] {
+  const isType = (c: C): boolean => (c.type ?? 'text') === type
+  const rank = new Map(ids.map((id, i) => [id, i]))
+  const section = channels.filter(isType)
+  const sorted = section
+    .map((c, i) => ({ c, key: rank.get(c.id) ?? ids.length + i }))
+    .sort((a, b) => a.key - b.key)
+    .map((x) => x.c)
+  if (sorted.every((c, i) => c === section[i])) return channels
+  let next = 0
+  return channels.map((c) => (isType(c) ? sorted[next++] : c))
+}
 
-  const withoutDragged = section.filter((c) => c.id !== draggedId)
-  const targetIndex = withoutDragged.findIndex((c) => c.id === targetId)
-  if (targetIndex === -1) return null
-
-  const insertIndex = placement === 'before' ? targetIndex : targetIndex + 1
-  const reorderedSection = [
-    ...withoutDragged.slice(0, insertIndex),
-    dragged,
-    ...withoutDragged.slice(insertIndex)
-  ].map((ch, idx) => ({ ...ch, position: idx }))
-
-  const sectionIds = reorderedSection.map((c) => c.id)
-  if (sectionIds.every((id, i) => id === oldIds[i])) {
-    return null
-  }
-
-  let sectionCursor = 0
-  const nextChannels = channels.map((ch) => {
-    if ((ch.type ?? 'text') === sectionType) {
-      return reorderedSection[sectionCursor++]
-    }
-    return ch
-  })
-
-  return { nextChannels, sectionIds }
+/** Tipo do dataTransfer no arrasto de canal (um por seção, minúsculo). */
+export function channelDragType(type: ChannelKind): string {
+  return `application/x-concord-channel-${type}`
 }

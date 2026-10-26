@@ -39,13 +39,37 @@ type Message struct {
 	Reactions      []ReactionSummary `json:"reactions,omitempty"`
 	Content        string            `json:"content"`
 	// Mensagem do próprio servidor (ex.: "birthday"); nil = mensagem comum.
-	SystemKind     *string           `json:"system_kind,omitempty"`
-	Poll           *Poll             `json:"poll,omitempty"`
-	Attachments    []Attachment      `json:"attachments,omitempty"`
-	CreatedAt      time.Time         `json:"created_at"`
+	SystemKind *string `json:"system_kind,omitempty"`
+	// "all"/"here" quando a mensagem pinga o canal (só dono/moderador, com
+	// anti-spam); nil = não pinga ninguém, mesmo com "@all" no texto.
+	MentionEveryone *string      `json:"mention_everyone"`
+	Poll            *Poll        `json:"poll,omitempty"`
+	Attachments     []Attachment `json:"attachments,omitempty"`
+	CreatedAt       time.Time    `json:"created_at"`
+	// Quando o autor editou o texto pela última vez; nil = nunca editada.
+	EditedAt *time.Time `json:"edited_at,omitempty"`
+	// Quando a mensagem foi fixada no canal; nil = não fixada.
+	PinnedAt *time.Time `json:"pinned_at,omitempty"`
+}
+
+type PinnedMessage struct {
+	Message
+	PinnedBy   *Author   `json:"pinned_by,omitempty"`
+	PinnedByID *string   `json:"pinned_by_id,omitempty"`
+	PinnedAt   time.Time `json:"pinned_at"`
 }
 
 type CreateEvent struct {
+	ChannelID      *string  `json:"channel_id,omitempty"`
+	ConversationID *string  `json:"conversation_id,omitempty"`
+	ServerID       string   `json:"server_id,omitempty"`
+	UserIDs        []string `json:"user_ids,omitempty"`
+	Message        Message  `json:"message"`
+}
+
+// UpdateEvent é o message:update (mensagem editada). Vai para as mesmas salas
+// do message:create.
+type UpdateEvent struct {
 	ChannelID      *string  `json:"channel_id,omitempty"`
 	ConversationID *string  `json:"conversation_id,omitempty"`
 	ServerID       string   `json:"server_id,omitempty"`
@@ -67,4 +91,16 @@ type ReactionEvent struct {
 	MessageID      string  `json:"message_id"`
 	UserID         string  `json:"user_id"`
 	Emoji          string  `json:"emoji"`
+}
+
+type PinEvent struct {
+	ChannelID string        `json:"channel_id"`
+	ServerID  string        `json:"server_id,omitempty"`
+	Message   PinnedMessage `json:"message"`
+}
+
+type UnpinEvent struct {
+	ChannelID string `json:"channel_id"`
+	ServerID  string `json:"server_id,omitempty"`
+	MessageID string `json:"message_id"`
 }

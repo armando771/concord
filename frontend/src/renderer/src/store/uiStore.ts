@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type FriendsTab = 'all' | 'pending' | 'add'
+export type FriendsTab = 'online' | 'all' | 'pending' | 'blocked' | 'add'
 
 const CALL_CONTROLS_KEY = 'concord:call-controls-hidden'
 
@@ -25,10 +25,17 @@ interface UIState {
   /** Barra de controles da chamada (mutar, câmera…) oculta. */
   callControlsHidden: boolean
   toggleCallControls: () => void
+  quickSwitcherOpen: boolean
+  setQuickSwitcherOpen: (open: boolean) => void
+  shortcutsModalOpen: boolean
+  setShortcutsModalOpen: (open: boolean) => void
+  /** Contador que o ChatPane observa: cada Ctrl+Shift+U soma 1. */
+  filePickerRequest: number
+  requestFilePicker: () => void
 }
 
 export const useUIStore = create<UIState>()((set) => ({
-  friendsTab: 'all',
+  friendsTab: 'online',
   setFriendsTab: (friendsTab) => set({ friendsTab }),
   serverInviteModalOpen: false,
   openServerInviteModal: () => set({ serverInviteModalOpen: true }),
@@ -46,5 +53,11 @@ export const useUIStore = create<UIState>()((set) => ({
         // Sem armazenamento: vale só até fechar o app.
       }
       return { callControlsHidden }
-    })
+    }),
+  quickSwitcherOpen: false,
+  setQuickSwitcherOpen: (quickSwitcherOpen) => set({ quickSwitcherOpen }),
+  shortcutsModalOpen: false,
+  setShortcutsModalOpen: (shortcutsModalOpen) => set({ shortcutsModalOpen }),
+  filePickerRequest: 0,
+  requestFilePicker: () => set((state) => ({ filePickerRequest: state.filePickerRequest + 1 }))
 }))

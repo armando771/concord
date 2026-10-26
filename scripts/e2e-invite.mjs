@@ -1,5 +1,5 @@
-// E2E do convite por código: Ana pega o código em "Convidar"; Bia (que não é
-// amiga dela) digita o código e entra no servidor sozinha.
+// E2E do convite por código: Ana pega o link em "Convidar"; Bia (que não é
+// amiga dela) cola o link e entra no servidor sozinha.
 // Uso: igual ao scripts/e2e-voice.mjs (backend rodando + renderer servido em APP).
 //   API=http://localhost:8080/api APP=http://localhost:5174/ node scripts/e2e-invite.mjs
 import { createRequire } from 'module'
@@ -63,7 +63,7 @@ async function login(user, initScript) {
   const page = await context.newPage()
   if (initScript) await page.addInitScript(initScript)
   await page.goto(APP + '#/login')
-  await page.fill('input[type=email]', user.email)
+  await page.fill('input[autocomplete=username]', user.email)
   await page.fill('input[type=password]', user.password)
   await page.click('button[type=submit]')
   await page.getByText('Adicionar amigo').first().waitFor({ timeout: 30000 })
@@ -71,16 +71,18 @@ async function login(user, initScript) {
 }
 
 try {
-  // Ana: Convidar → código → Copiar
+  // Ana: Convidar → link → Copiar
   const pageA = await login(ana, fakeDesktop)
   await pageA.goto(APP + `#/servers/${serverId}`)
   await pageA.getByRole('button', { name: 'Convidar', exact: true }).first().click()
-  const codeEl = pageA.getByLabel('Código de convite')
-  await pageA.waitForFunction(() => /^[A-Z2-9]{8}$/.test(document.querySelector('[aria-label="Código de convite"]')?.textContent ?? ''))
-  const code = (await codeEl.textContent()).trim()
-  check('ana vê o código do servidor', /^[A-Z2-9]{8}$/.test(code), code)
+  const linkRe = /^https:\/\/app-salinha\.bhrx\.com\.br\/convite\/[A-Z2-9]{8}$/
+  const linkEl = pageA.getByLabel('Link de convite')
+  await pageA.waitForFunction((re) => new RegExp(re).test(document.querySelector('[aria-label="Link de convite"]')?.value ?? ''), linkRe.source)
+  const link = await linkEl.inputValue()
+  const code = link.split('/').pop()
+  check('ana vê o link de convite do servidor', linkRe.test(link), link)
   await pageA.getByRole('button', { name: 'Copiar' }).click()
-  check('copiar põe o código na área de transferência', (await pageA.evaluate(() => navigator.clipboard.readText())) === code)
+  check('copiar põe o link na área de transferência', (await pageA.evaluate(() => navigator.clipboard.readText())) === link)
 
   // Mesmo código ao abrir de novo (não muda a cada vez)
   const again = (await api(`/servers/${serverId}/invite-code`, { token: ana.token })).body.code
@@ -88,14 +90,14 @@ try {
   check('quem não é membro não vê o código', (await api(`/servers/${serverId}/invite-code`, { token: bia.token })).status === 403)
   check('código errado é recusado', (await api('/invites/join', { token: bia.token, method: 'POST', body: { code: 'ZZZZZZZZ' } })).status === 404)
 
-  // Bia: + → Entrar com código (digitando em minúsculas, com espaço)
+  // Bia: + → Entrar com código (colando o link inteiro)
   const pageB = await login(bia)
   await pageB.getByRole('button', { name: 'Adicionar servidor' }).click()
-  const typed = `${code.slice(0, 4).toLowerCase()} ${code.slice(4).toLowerCase()}`
-  await pageB.getByLabel('Código de convite').fill(typed)
+  const typed = `  ${link}  `
+  await pageB.getByLabel('Código ou link de convite').fill(typed)
   await pageB.getByRole('button', { name: 'Entrar', exact: true }).click()
   await pageB.waitForURL((u) => u.hash.includes(`/servers/${serverId}`), { timeout: 15000 })
-  check('bia entra no servidor com o código digitado', true, typed)
+  check('bia entra no servidor com o link colado', true, typed)
   await pageB.getByTitle(`Turma ${run}`).first().waitFor({ timeout: 10000 })
   check('o servidor aparece na lista da bia', true)
 
@@ -106,8 +108,8 @@ try {
 
   // Qualquer membro pode convidar: a Bia (membro comum) vê o botão e o código
   await pageB.getByRole('button', { name: 'Convidar', exact: true }).first().click()
-  await pageB.waitForFunction(() => /^[A-Z2-9]{8}$/.test(document.querySelector('[aria-label="Código de convite"]')?.textContent ?? ''))
-  check('membro comum também vê o código para convidar', (await pageB.getByLabel('Código de convite').first().textContent()).trim() === code)
+  await pageB.waitForFunction((re) => new RegExp(re).test(document.querySelector('[aria-label="Link de convite"]')?.value ?? ''), linkRe.source)
+  check('membro comum também vê o link para convidar', (await pageB.getByLabel('Link de convite').first().inputValue()) === link)
   await pageB.getByRole('button', { name: 'Fechar' }).click()
 
   // Moderador: a Ana (dona) clica com o botão direito na Bia e promove

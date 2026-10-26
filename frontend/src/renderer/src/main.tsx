@@ -3,6 +3,10 @@ import './assets/main.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { PREVIEW_BOOST_CALL_ID } from './lib/boost'
+import { useBoostStore } from './store/boostStore'
+import { useCallStore } from './store/callStore'
+import { AppErrorBoundary } from './components/AppErrorScreen'
 import { useLevelStore } from './store/levelStore'
 
 // Soltar um arquivo fora do chat não pode fazer o Electron abrir o arquivo no
@@ -10,15 +14,27 @@ import { useLevelStore } from './store/levelStore'
 window.addEventListener('dragover', (e) => e.preventDefault())
 window.addEventListener('drop', (e) => e.preventDefault())
 
-// Dev: `__salinhaLevelUp(85)` no console toca a animação de subir de nível.
+// Dev: `__salinhaLevelUp(85)` no console toca a animação de subir de nível;
+// `__salinhaLevelUp('marco')` toca o pr�ximo marco depois do seu n�vel.
+// `__salinhaBoost(175)` liga um buff de XP falso (125/150/175/200) na sua call.
 if (import.meta.env.DEV) {
-  ;(window as unknown as { __salinhaLevelUp: (level: number) => void }).__salinhaLevelUp = (
-    level
-  ) => useLevelStore.getState().previewLevelUp(level)
+  const dev = window as unknown as {
+    __salinhaLevelUp: (level: number | 'marco') => void
+    __salinhaBoost: (percent: number) => void
+  }
+  dev.__salinhaLevelUp = (level) => {
+    const store = useLevelStore.getState()
+    if (level === 'marco') store.previewNextMilestone()
+    else store.previewLevelUp(level)
+  }
+  dev.__salinhaBoost = (percent) =>
+    useBoostStore.getState().previewBoost(useCallStore.getState().callId ?? PREVIEW_BOOST_CALL_ID, percent)
 }
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
   </StrictMode>
 )

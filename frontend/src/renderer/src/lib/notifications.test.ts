@@ -4,13 +4,16 @@ import {
   callNotification,
   DEFAULT_NOTIFICATION_PREFS,
   desktopPayload,
+  friendRequestNotification,
   mentionNotification,
+  messageAlert,
   messageNotification,
   notificationSound,
   notifyDesktop,
   setWebNotifier
 } from './notifications'
 import type { Message } from '../api/messages'
+import { prefsForStatus } from './presenceStatus'
 
 const dm = (over: Partial<Message> = {}): Message => ({
   id: 'm1',
@@ -73,6 +76,15 @@ describe('mentionNotification', () => {
     })
   })
 
+  it('quem tem apelido no servidor aparece pelo apelido', () => {
+    expect(mentionNotification(inChannel(), me, 'srv1', { ana: 'Aninha' })?.title).toBe(
+      'Aninha mencionou você'
+    )
+    expect(mentionNotification(inChannel(), me, 'srv1', { outra: 'X' })?.title).toBe(
+      'Ana mencionou você'
+    )
+  })
+
   it('resposta a uma mensagem minha em canal vira notificação que abre o canal', () => {
     expect(
       mentionNotification(
@@ -104,6 +116,75 @@ describe('mentionNotification', () => {
 
   it('DM já tem a própria notificação', () => {
     expect(mentionNotification(dm({ content: '@fulano oi' }), me, null)).toBeNull()
+  })
+
+  it('@all pinga todo mundo do canal, pelo campo mention_everyone', () => {
+    expect(
+      mentionNotification(inChannel({ content: '@all bora', mention_everyone: 'all' }), me, 'srv1')
+    ).toEqual({
+      kind: 'mention',
+      title: 'Ana mencionou @all',
+      body: '@all bora',
+      route: '/servers/srv1/channels/ch1'
+    })
+    expect(
+      mentionNotification(
+        inChannel({ content: '@all bora', mention_everyone: 'all' }),
+        { ...me, status: 'idle' },
+        'srv1'
+      )?.title
+    ).toBe('Ana mencionou @all')
+  })
+
+  it('@here só pinga quem está online', () => {
+    const msg = inChannel({ content: '@here alguém?', mention_everyone: 'here' })
+    expect(mentionNotification(msg, { ...me, status: 'online' }, 'srv1')?.title).toBe(
+      'Ana mencionou @here'
+    )
+    expect(mentionNotification(msg, { ...me, status: 'idle' }, 'srv1')).toBeNull()
+    expect(mentionNotification(msg, { ...me, status: 'invisible' }, 'srv1')).toBeNull()
+  })
+
+  it('"@all" no texto sem mention_everyone (autor sem permissão) não pinga', () => {
+    expect(mentionNotification(inChannel({ content: '@all bora' }), me, 'srv1')).toBeNull()
+    expect(
+      mentionNotification(inChannel({ content: '@all bora', mention_everyone: null }), me, 'srv1')
+    ).toBeNull()
+  })
+
+  it('quem mandou o @all não pinga a si mesmo', () => {
+    expect(
+      mentionNotification(
+        inChannel({ author_id: 'eu', content: '@all', mention_everyone: 'all' }),
+        me,
+        'srv1'
+      )
+    ).toBeNull()
+  })
+
+  it('menção pessoal junto com @all continua "mencionou você"', () => {
+    expect(
+      mentionNotification(
+        inChannel({ content: '@all e @fulano', mention_everyone: 'all' }),
+        me,
+        'srv1'
+      )?.title
+    ).toBe('Ana mencionou você')
+  })
+
+  it('resposta a mim com @all continua "respondeu você"', () => {
+    expect(
+      mentionNotification(
+        inChannel({
+          content: '@all fechado!',
+          mention_everyone: 'all',
+          reply_to_id: 'm0',
+          reply_to: { id: 'm0', author_id: 'eu', content: 'alguém aí?' }
+        }),
+        me,
+        'srv1'
+      )?.title
+    ).toBe('Ana respondeu você')
   })
 })
 
@@ -178,5 +259,125 @@ describe('notifyDesktop', () => {
   it('sem Electron e sem aviso ligado, não faz nada', () => {
     vi.stubGlobal('window', {})
     expect(() => notifyDesktop(dm, prefs)).not.toThrow()
+  })
+})
+
+describe('DM em grupo e pedido de amizade', () => {
+  it('mensagem de grupo leva o nome do grupo e abre o grupo', () => {
+    const n = messageNotification(
+      {
+        id: 'm',
+        author_id: 'ana',
+        conversation_id: 'g1',
+        content: 'oi',
+        created_at: '',
+        author: { id: 'ana', username: 'ana', display_name: 'Ana' }
+      } as Message,
+      'eu',
+      { name: 'Galera' }
+    )
+    expect(n).toMatchObject({ title: 'Ana em Galera', route: '/dm/c/g1' })
+  })
+
+  it('pedido de amizade abre Pendente e toca o som de mensagem', () => {
+    const n = friendRequestNotification({ username: 'bia', display_name: 'Bia' })
+    expect(n).toMatchObject({ kind: 'friend_request', route: '/friends?tab=pending' })
+    expect(notificationSound(n.kind, { sound: true })).toBe('message')
+  })
+})
+
+describe('messageAlert (quando a DM ou menção avisa)', () => {
+  const me = { id: 'eu', username: 'fulano' }
+  const dmNote = messageNotification(dm(), me.id)
+  const mention = mentionNotification(
+    dm({ conversation_id: null, channel_id: 'ch1', content: 'oi @fulano' }),
+    me,
+    'srv1'
+  )
+  const everyone = mentionNotification(
+    dm({ conversation_id: null, channel_id: 'ch1', content: '@all bora', mention_everyone: 'all' }),
+    me,
+    'srv1'
+  )
+  const on = DEFAULT_NOTIFICATION_PREFS
+  const away = { focused: false, viewingRoom: false }
+  const awayOnRoom = { focused: false, viewingRoom: true }
+  const otherChat = { focused: true, viewingRoom: false }
+  const reading = { focused: true, viewingRoom: true }
+
+  it('janela sem foco: avisa e toca o som, com a conversa aberta ou não', () => {
+    for (const view of [away, awayOnRoom]) {
+      expect(messageAlert(dmNote, view, on)?.sound).toBe('message')
+      expect(messageAlert(mention, view, on)?.sound).toBe('mention')
+      expect(messageAlert(everyone, view, on)?.sound).toBe('mention')
+      expect(messageAlert(mention, view, on)?.payload).toMatchObject({ toast: true, taskbar: true })
+    }
+    expect(messageAlert(mention, away, on)?.payload.elsewhere).toBe(true)
+    expect(messageAlert(mention, awayOnRoom, on)?.payload.elsewhere).toBeUndefined()
+  })
+
+  it('janela em foco mas em outro chat (ou na tela de amigos): avisa mesmo assim', () => {
+    for (const note of [dmNote, mention, everyone]) {
+      const alert = messageAlert(note, otherChat, on)
+      expect(alert?.payload).toMatchObject({ toast: true, elsewhere: true })
+      expect(alert?.sound).not.toBeNull()
+    }
+  })
+
+  it('lendo a própria conversa com a janela em foco: nada', () => {
+    expect(messageAlert(dmNote, reading, on)).toBeNull()
+    expect(messageAlert(mention, reading, on)).toBeNull()
+    expect(messageAlert(everyone, reading, on)).toBeNull()
+  })
+
+  it('"Não perturbe" silencia tudo, em qualquer tela', () => {
+    const dnd = prefsForStatus(on, 'dnd')
+    for (const view of [away, awayOnRoom, otherChat]) {
+      expect(messageAlert(dmNote, view, dnd)).toBeNull()
+      expect(messageAlert(mention, view, dnd)).toBeNull()
+    }
+  })
+
+  it('segue as preferências: sem som, sem toast, sem barra de tarefas', () => {
+    expect(
+      messageAlert(mention, otherChat, { desktop: true, taskbar: true, sound: false })
+    ).toEqual({
+      payload: expect.objectContaining({ toast: true }),
+      sound: null
+    })
+    expect(
+      messageAlert(mention, otherChat, { desktop: false, taskbar: true, sound: true })?.payload
+    ).toMatchObject({ toast: false, taskbar: true })
+    expect(messageAlert(mention, away, { desktop: false, taskbar: false, sound: false })).toBeNull()
+  })
+
+  it('mensagem minha (ou sem menção) não vira aviso', () => {
+    const mine = dm({ author_id: 'eu' })
+    expect(messageAlert(messageNotification(mine, me.id), away, on)).toBeNull()
+    const ownMention = dm({
+      author_id: 'eu',
+      conversation_id: null,
+      channel_id: 'ch1',
+      content: '@all oi',
+      mention_everyone: 'all'
+    })
+    expect(messageAlert(mentionNotification(ownMention, me, 'srv1'), away, on)).toBeNull()
+    const plain = dm({ conversation_id: null, channel_id: 'ch1', content: 'oi gente' })
+    expect(messageAlert(mentionNotification(plain, me, 'srv1'), away, on)).toBeNull()
+  })
+
+  it('@here não pinga quem está ausente, mesmo fora da conversa', () => {
+    const here = dm({
+      conversation_id: null,
+      channel_id: 'ch1',
+      content: '@here',
+      mention_everyone: 'here'
+    })
+    expect(
+      messageAlert(mentionNotification(here, { ...me, status: 'idle' }, 'srv1'), away, on)
+    ).toBeNull()
+    expect(
+      messageAlert(mentionNotification(here, { ...me, status: 'online' }, 'srv1'), away, on)
+    ).not.toBeNull()
   })
 })

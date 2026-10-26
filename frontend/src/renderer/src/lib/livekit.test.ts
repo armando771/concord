@@ -7,7 +7,7 @@ interface FakePublication {
   isDesired: boolean
   isSubscribed: boolean
   isMuted: boolean
-  track: undefined
+  track: { getRTCStatsReport: () => Promise<RTCStatsReport | undefined> } | undefined
   setSubscribed: (v: boolean) => void
 }
 
@@ -22,7 +22,13 @@ const lk = vi.hoisted(() => {
     state = 'disconnected'
     remoteParticipants = new Map<string, unknown>()
     listeners = new Map<string, Array<(...args: unknown[]) => void>>()
-    localParticipant = {
+    localParticipant: {
+      trackPublications: Map<string, FakePublication>
+      publishTrack: ReturnType<typeof vi.fn>
+      getTrackPublication: ReturnType<typeof vi.fn>
+      permissions?: { canPublish?: boolean; canPublishSources?: number[] }
+    } = {
+      trackPublications: new Map(),
       publishTrack: vi.fn(async () => ({ mute: vi.fn(async () => {}) })),
       getTrackPublication: vi.fn()
     }
@@ -51,7 +57,7 @@ vi.mock('livekit-client', () => ({
   // RoomEvent.X === 'X'
   RoomEvent: new Proxy({}, { get: (_, key) => key }),
   ConnectionState: { Connected: 'connected', Reconnecting: 'reconnecting' },
-  DisconnectReason: { CLIENT_INITIATED: 1 },
+  DisconnectReason: { CLIENT_INITIATED: 1, PARTICIPANT_REMOVED: 4 },
   AudioPresets: { musicHighQualityStereo: {} },
   Track: {
     Source: {
@@ -65,6 +71,7 @@ vi.mock('livekit-client', () => ({
 }))
 
 import { CallMedia, type RemoteMedia } from './livekit'
+import { rememberScreenSource, rememberStreamQuality } from './screenShareQuality'
 
 function publication(source: string): FakePublication {
   const pub: FakePublication = {
@@ -113,6 +120,46 @@ function createMedia(): CallMedia {
 beforeEach(() => {
   lk.rooms.length = 0
   emitted = []
+})
+
+describe('CallMedia — latência sob demanda', () => {
+  it('não consulta tracks fora de uma conexão ativa', async () => {
+    expect(await createMedia().getLatency()).toBeNull()
+  })
+
+  it('lê estatísticas públicas de uma track remota quando não publica microfone', async () => {
+    const media = createMedia()
+    room().state = 'connected'
+    const participant = addParticipant('ana', 'microphone')
+    const getRTCStatsReport = vi.fn(
+      async () =>
+        new Map([
+          ['rtt', { type: 'remote-inbound-rtp', roundTripTime: 0.042 }]
+        ]) as unknown as RTCStatsReport
+    )
+    pubOf(participant, 'microphone').track = { getRTCStatsReport }
+    expect(await media.getLatency()).toBe(42)
+    expect(getRTCStatsReport).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignora track removida e resultado atrasado durante reconexão', async () => {
+    const media = createMedia()
+    room().state = 'connected'
+    const participant = addParticipant('ana', 'microphone')
+    pubOf(participant, 'microphone').track = {
+      getRTCStatsReport: vi.fn().mockRejectedValue(new Error('removed'))
+    }
+    expect(await media.getLatency()).toBeNull()
+    pubOf(participant, 'microphone').track = {
+      getRTCStatsReport: async () => {
+        room().state = 'reconnecting'
+        return new Map([
+          ['rtt', { type: 'remote-inbound-rtp', roundTripTime: 0.1 }]
+        ]) as unknown as RTCStatsReport
+      }
+    }
+    expect(await media.getLatency()).toBeNull()
+  })
 })
 
 describe('CallMedia — assinatura seletiva', () => {
@@ -195,5 +242,238 @@ describe('CallMedia — assinatura seletiva', () => {
     room().emit('TrackPublished')
 
     expect(pubOf(ana, 'screen_share').isDesired).toBe(false)
+  })
+})
+
+function mediaWithPermissionHandler(onPublishPermissions: () => void): CallMedia {
+  return new CallMedia({
+    onRemoteMedia: (m) => emitted.push(m),
+    onConnectionLost: vi.fn(),
+    onReconnecting: vi.fn(),
+    onReconnected: vi.fn(),
+    onActiveSpeakers: vi.fn(),
+    onPublishPermissions
+  })
+}
+
+describe('CallMedia — permissões de publicação', () => {
+  const NO_MIC = { canPublish: true, canPublishSources: [1, 3, 4] }
+
+  it('sem permissão de falar entra na sala e não publica o microfone', async () => {
+    const onPublishPermissions = vi.fn()
+    const media = mediaWithPermissionHandler(onPublishPermissions)
+    room().localParticipant.permissions = NO_MIC
+
+    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+
+    expect(room().localParticipant.publishTrack).not.toHaveBeenCalled()
+    expect(onPublishPermissions).toHaveBeenLastCalledWith({ microphone: false, stream: true })
+  })
+
+  it('com permissão publica o microfone normalmente', async () => {
+    const media = createMedia()
+    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, true)
+    expect(room().localParticipant.publishTrack).toHaveBeenCalledTimes(1)
+  })
+
+  it('ganhar a permissão depois publica o microfone', async () => {
+    const onPublishPermissions = vi.fn()
+    const media = mediaWithPermissionHandler(onPublishPermissions)
+    room().localParticipant.permissions = NO_MIC
+    const mic = {} as MediaStreamTrack
+    await media.connect('ws://x', 'tok', mic, false)
+
+    room().localParticipant.permissions = { canPublish: true, canPublishSources: [1, 2, 3, 4] }
+    room().emit('ParticipantPermissionsChanged', undefined, room().localParticipant)
+    await media.ensureMic(false)
+
+    expect(onPublishPermissions).toHaveBeenLastCalledWith({ microphone: true, stream: true })
+    expect(room().localParticipant.publishTrack).toHaveBeenCalledTimes(1)
+    expect(room().localParticipant.publishTrack.mock.calls[0][0]).toBe(mic)
+  })
+
+  it('não publica o microfone duas vezes', async () => {
+    const media = createMedia()
+    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    room().localParticipant.getTrackPublication.mockReturnValue({})
+    await media.ensureMic(false)
+    expect(room().localParticipant.publishTrack).toHaveBeenCalledTimes(1)
+  })
+
+  it('permissões de outro participante não contam', async () => {
+    const onPublishPermissions = vi.fn()
+    const media = mediaWithPermissionHandler(onPublishPermissions)
+    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    onPublishPermissions.mockClear()
+    room().emit('ParticipantPermissionsChanged', undefined, { identity: 'ana' })
+    expect(onPublishPermissions).not.toHaveBeenCalled()
+  })
+
+  it('sem permissão de transmitir, tela e câmera recusam', async () => {
+    const media = createMedia()
+    room().localParticipant.permissions = { canPublish: true, canPublishSources: [2] }
+    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    const stream = {
+      getVideoTracks: () => [{}],
+      getAudioTracks: () => []
+    } as unknown as MediaStream
+    await expect(media.publishScreen(stream)).rejects.toThrow('no_stream_permission')
+    await expect(media.publishCamera(stream)).rejects.toThrow('no_stream_permission')
+  })
+})
+
+describe('CallMedia — qualidade de tela', () => {
+  async function activeScreen() {
+    const media = createMedia()
+    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    const video = {
+      readyState: 'live',
+      getSettings: () => ({ width: 3840, height: 2160 }),
+      getConstraints: () => ({ width: { max: 1920 }, height: { max: 1080 } }),
+      applyConstraints: vi.fn(async () => {}),
+      stop: vi.fn()
+    }
+    rememberScreenSource(video as unknown as MediaStreamTrack)
+    // A captura atual já foi reduzida: aumentar deve usar as dimensões originais.
+    video.getSettings = () => ({ width: 1280, height: 720 })
+    let parameters = { encodings: [{ maxBitrate: 4_000_000, maxFramerate: 30, active: true }] }
+    const sender = {
+      getParameters: () => structuredClone(parameters),
+      setParameters: vi.fn(async (next) => {
+        parameters = next
+      })
+    }
+    const track = { mediaStreamTrack: video, sender, publishOptions: { simulcast: false } }
+    const pub = { videoTrack: track }
+    room().localParticipant.getTrackPublication.mockReturnValue(pub)
+    room().localParticipant.publishTrack.mockClear()
+    const stream = { getVideoTracks: () => [video] } as unknown as MediaStream
+    return { media, stream, video, sender, track }
+  }
+
+  it('altera captura e envio mantendo a publicação e os espectadores', async () => {
+    const { media, stream, video, sender, track } = await activeScreen()
+    await media.updateScreenQuality(stream, { resolution: '1080p', frameRate: 60 })
+    expect(video.applyConstraints).toHaveBeenCalledWith({
+      width: { max: 1920 },
+      height: { max: 1080 },
+      frameRate: { ideal: 60, max: 60 }
+    })
+    expect(sender.getParameters().encodings[0]).toMatchObject({
+      maxBitrate: 8_000_000,
+      maxFramerate: 60,
+      active: true
+    })
+    expect(track.publishOptions).toMatchObject({
+      screenShareEncoding: { maxBitrate: 8_000_000, maxFramerate: 60 }
+    })
+    expect(room().localParticipant.getTrackPublication('screen_share').options).toMatchObject({
+      screenShareEncoding: { maxBitrate: 8_000_000, maxFramerate: 60 }
+    })
+    expect(room().localParticipant.publishTrack).not.toHaveBeenCalled()
+    expect(video.stop).not.toHaveBeenCalled()
+    await media.updateScreenQuality(stream, { resolution: 'source', frameRate: 30 })
+    expect(video.applyConstraints).toHaveBeenLastCalledWith({ frameRate: { ideal: 30, max: 30 } })
+  })
+
+  it('restaura a captura se o envio recusar a atualização, sem parar o vídeo', async () => {
+    const { media, stream, video, sender, track } = await activeScreen()
+    sender.setParameters.mockRejectedValueOnce(new Error('encoder'))
+    await expect(
+      media.updateScreenQuality(stream, { resolution: '720p', frameRate: 60 })
+    ).rejects.toThrow('encoder')
+    expect(video.applyConstraints).toHaveBeenLastCalledWith(video.getConstraints())
+    expect(track.publishOptions).toEqual({ simulcast: false })
+    expect(video.stop).not.toHaveBeenCalled()
+  })
+
+  it('não altera uma publicação encerrada ou reconectando', async () => {
+    const { media, stream, video, sender } = await activeScreen()
+    room().state = 'reconnecting'
+    await expect(
+      media.updateScreenQuality(stream, { resolution: '720p', frameRate: 60 })
+    ).rejects.toThrow('screen_not_available')
+    expect(video.applyConstraints).not.toHaveBeenCalled()
+    expect(sender.setParameters).not.toHaveBeenCalled()
+  })
+
+  it('descarta uma alteração se a publicação mudar durante a aplicação', async () => {
+    const { media, stream, video, sender } = await activeScreen()
+    video.applyConstraints.mockImplementationOnce(async () => {
+      room().localParticipant.getTrackPublication.mockReturnValue(undefined)
+    })
+    await expect(
+      media.updateScreenQuality(stream, { resolution: '720p', frameRate: 60 })
+    ).rejects.toThrow('screen_changed')
+    expect(sender.setParameters).not.toHaveBeenCalled()
+    expect(video.stop).not.toHaveBeenCalled()
+  })
+
+  it('publica e republica com o encoding escolhido, sem alterar o áudio', async () => {
+    const media = createMedia()
+    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    room().localParticipant.publishTrack.mockClear()
+    const video = { getSettings: () => ({ width: 1920, height: 1080 }) }
+    const audio = {}
+    const stream = {
+      getVideoTracks: () => [video],
+      getAudioTracks: () => [audio]
+    } as unknown as MediaStream
+    rememberStreamQuality(stream, { resolution: '1080p', frameRate: 60 })
+    await media.publishScreen(stream)
+    await media.publishScreen(stream)
+    expect(room().localParticipant.publishTrack).toHaveBeenCalledWith(video, {
+      source: 'screen_share',
+      name: 'screen',
+      simulcast: false,
+      screenShareEncoding: { maxBitrate: 8_000_000, maxFramerate: 60 }
+    })
+    expect(room().localParticipant.publishTrack).toHaveBeenCalledWith(
+      audio,
+      expect.objectContaining({
+        source: 'screen_share_audio',
+        forceStereo: true
+      })
+    )
+  })
+})
+
+describe('CallMedia — desconectado por moderador', () => {
+  function mediaWithRemovedHandler(): {
+    onRemovedByModerator: ReturnType<typeof vi.fn>
+    onConnectionLost: ReturnType<typeof vi.fn>
+  } {
+    const onRemovedByModerator = vi.fn()
+    const onConnectionLost = vi.fn()
+    void new CallMedia({
+      onRemoteMedia: (m) => emitted.push(m),
+      onConnectionLost,
+      onReconnecting: vi.fn(),
+      onReconnected: vi.fn(),
+      onActiveSpeakers: vi.fn(),
+      onRemovedByModerator
+    })
+    return { onRemovedByModerator, onConnectionLost }
+  }
+
+  it('avisa que foi removido, sem tratar como queda de conexão', () => {
+    const { onRemovedByModerator, onConnectionLost } = mediaWithRemovedHandler()
+    room().emit('Disconnected', 4)
+    expect(onRemovedByModerator).toHaveBeenCalledTimes(1)
+    expect(onConnectionLost).not.toHaveBeenCalled()
+  })
+
+  it('outra desconexão continua sendo queda de conexão', () => {
+    const { onRemovedByModerator, onConnectionLost } = mediaWithRemovedHandler()
+    room().emit('Disconnected', 7)
+    expect(onConnectionLost).toHaveBeenCalledTimes(1)
+    expect(onRemovedByModerator).not.toHaveBeenCalled()
+  })
+
+  it('sair por conta própria não avisa nada', () => {
+    const { onRemovedByModerator, onConnectionLost } = mediaWithRemovedHandler()
+    room().emit('Disconnected', 1)
+    expect(onRemovedByModerator).not.toHaveBeenCalled()
+    expect(onConnectionLost).not.toHaveBeenCalled()
   })
 })

@@ -1,40 +1,48 @@
 import { useEffect, useRef } from 'react'
-import { useCallStore } from '../../store/callStore'
 import { outputVolume, useUserAudioStore } from '../../store/userAudioStore'
+import { routeStreamToOutput, type VoiceRoute } from '../../lib/voiceOutput'
 
 function RemoteAudio({
   stream,
   muted,
-  userId
+  userId,
+  gain = 1
 }: {
   stream: MediaStream
   muted: boolean
   /** Voz de alguém: aplica o volume/silenciar escolhido para essa pessoa. */
   userId?: string
+  /** Multiplicador do volume (ex.: música que abaixa quando alguém fala). */
+  gain?: number
 }): React.JSX.Element {
   const ref = useRef<HTMLAudioElement | null>(null)
-  const outputDeviceId = useCallStore((s) => s.outputDeviceId)
+  const routeRef = useRef<VoiceRoute | null>(null)
   const volume = useUserAudioStore((s) => (userId ? outputVolume(s.get(userId)) : 1))
+  // Ensurdecido = volume 0 (a saída geral aplica o volume de saída por cima).
+  const level = muted ? 0 : volume * gain
+  const levelRef = useRef(level)
 
+  useEffect(() => {
+    levelRef.current = level
+    routeRef.current?.setVolume(level)
+  }, [level])
+
+  // O <audio> fica mudo e só segura o fluxo; o som sai pelo Web Audio (voiceOutput).
   useEffect(() => {
     const el = ref.current
-    if (!el) return
-    el.srcObject = stream
-    void el.play().catch(() => {})
+    if (el) {
+      el.srcObject = stream
+      void el.play().catch(() => {})
+    }
+    const route = routeStreamToOutput(stream, levelRef.current)
+    routeRef.current = route
+    return () => {
+      route.stop()
+      routeRef.current = null
+    }
   }, [stream])
 
-  useEffect(() => {
-    if (ref.current) ref.current.volume = volume
-  }, [volume])
-
-  // Saída escolhida nas configurações ('' = padrão do sistema).
-  useEffect(() => {
-    const el = ref.current as
-      (HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }) | null
-    void el?.setSinkId?.(outputDeviceId).catch(() => {})
-  }, [outputDeviceId])
-
-  return <audio ref={ref} autoPlay muted={muted} data-audio={userId} className="hidden" />
+  return <audio ref={ref} autoPlay muted data-audio={userId} className="hidden" />
 }
 
 export default RemoteAudio

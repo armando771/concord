@@ -1,0 +1,90 @@
+import { useEffect, useState } from 'react'
+import type { CallUserInfo } from '../../store/callStore'
+import { useAnnotationStore } from '../../store/annotationStore'
+import { AutoHide } from '../../lib/fullscreenControls'
+import { FullscreenExitIcon, PencilIcon } from '../icons'
+import { StreamVolume } from './StreamAudioControls'
+import ScreenWatchersOverlay from './ScreenWatchersOverlay'
+
+/**
+ * Camada por cima do vídeo em tela cheia: barra mínima (nome, volume, sair)
+ * que some após ~2,5 s sem mexer o mouse e volta ao mexer.
+ */
+function FullscreenOverlay({
+  name,
+  userId,
+  onExit,
+  watchers
+}: {
+  name: string
+  userId: string
+  onExit: () => void
+  watchers?: CallUserInfo[]
+}): React.JSX.Element {
+  const [visible, setVisible] = useState(true)
+  const [autoHide] = useState(() => new AutoHide(setVisible))
+  const isDrawing = useAnnotationStore((s) => Boolean(s.drawingActive[userId]))
+  const toggleDrawing = useAnnotationStore((s) => s.toggleDrawing)
+
+  useEffect(() => {
+    autoHide.start()
+    return () => autoHide.stop()
+  }, [autoHide])
+
+  return (
+    <div
+      onMouseMove={() => autoHide.show()}
+      className={`absolute inset-0 z-30 ${visible ? '' : 'cursor-none'}`}
+    >
+      {watchers && watchers.length > 0 && (
+        <div
+          className={`absolute left-5 top-5 z-40 transition-opacity duration-200 ${
+            visible ? 'opacity-100' : 'pointer-events-none opacity-0'
+          }`}
+        >
+          <ScreenWatchersOverlay watchers={watchers} />
+        </div>
+      )}
+
+      <div
+        onMouseEnter={() => autoHide.hold()}
+        onMouseLeave={() => autoHide.release()}
+        onFocus={() => autoHide.show()}
+        onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => e.stopPropagation()}
+        className={`absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/80 to-transparent px-5 pb-4 pt-10 transition-opacity duration-200 ${
+          visible ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+      >
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">{name}</span>
+        <button
+          type="button"
+          onClick={() => toggleDrawing(userId)}
+          aria-label="Anotações na transmissão"
+          title={isDrawing ? 'Fechar anotações' : 'Anotar / Desenhar na transmissão (Epic Pen)'}
+          className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg transition-colors ${
+            isDrawing
+              ? 'bg-[#23a55a] text-white shadow-md ring-1 ring-white/30'
+              : 'bg-black/60 text-gray-100 hover:bg-white/15'
+          }`}
+        >
+          <PencilIcon className="h-4 w-4" />
+        </button>
+        <div className="flex items-center gap-2 rounded-lg bg-black/60 px-2 py-1">
+          <StreamVolume userId={userId} />
+        </div>
+        <button
+          type="button"
+          onClick={onExit}
+          aria-label="Sair da tela cheia"
+          title="Sair da tela cheia"
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg bg-black/60 text-gray-100 transition-colors hover:bg-white/15"
+        >
+          <FullscreenExitIcon className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export default FullscreenOverlay

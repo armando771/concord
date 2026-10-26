@@ -1,7 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
+import type { OverlayFrame, OverlayLayout } from '../renderer/src/lib/overlayLayout'
 import type { CallResume, PendingCallResume } from '../shared/callResume'
+import type { AppMetrics } from '../shared/appMetrics'
 
 interface ScreenSourceInfo {
   id: string
@@ -13,6 +15,11 @@ interface ScreenSourceInfo {
 
 // Custom APIs for renderer
 const api = {
+  appMetrics: {
+    sample(reset = false): Promise<AppMetrics | null> {
+      return ipcRenderer.invoke('app-metrics:sample', reset)
+    }
+  },
   screenPicker: {
     /** Main avisa que um pedido de getDisplayMedia está aguardando seleção. */
     onShow(cb: () => void): () => void {
@@ -28,6 +35,18 @@ const api = {
     },
     cancel(): void {
       ipcRenderer.send('screen-picker:cancel')
+    }
+  },
+  screenShare: {
+    /** A janela compartilhada sumiu da tela (minimizada): a live congela. */
+    onWindowHidden(cb: () => void): () => void {
+      const listener = (): void => cb()
+      ipcRenderer.on('screen-share:window-hidden', listener)
+      return () => ipcRenderer.removeListener('screen-share:window-hidden', listener)
+    },
+    /** O compartilhamento acabou: para de vigiar a janela. */
+    ended(): void {
+      ipcRenderer.send('screen-share:ended')
     }
   },
   screenAudio: {
@@ -53,6 +72,10 @@ const api = {
     status(): Promise<{ version: string; ready: boolean } | null> {
       return ipcRenderer.invoke('update:status')
     },
+    /** true = esta instalação não se atualiza sozinha (Linux sem AppImage). */
+    autoUpdateUnavailable(): Promise<boolean> {
+      return ipcRenderer.invoke('update:unavailable')
+    },
     /** Existe versão nova (pode ainda estar baixando). */
     onAvailable(cb: (version: string) => void): () => void {
       const listener = (_e: unknown, version: string): void => cb(version)
@@ -77,6 +100,17 @@ const api = {
     /** Instala (baixando antes, se precisar) e reinicia o app. */
     install(): void {
       ipcRenderer.send('update:install')
+    },
+    /** Checa atualização agora (servidor avisou de versão nova / WS reconectou). */
+    checkNow(): void {
+      ipcRenderer.send('update:check-now')
+    },
+    /**
+     * Linux: o app abriu sem o sandbox do Chromium (motivo) — só na primeira
+     * vez; depois null.
+     */
+    sandboxNotice(): Promise<string | null> {
+      return ipcRenderer.invoke('update:sandbox-notice')
     }
   },
   background: {
@@ -86,7 +120,8 @@ const api = {
     },
     /**
      * Notificação nativa e aviso na barra de tarefas (só se a janela não
-     * estiver à vista). `toast`/`taskbar` = preferências do usuário.
+     * estiver à vista; o toast também com ela em foco se `elsewhere`).
+     * `toast`/`taskbar` = preferências do usuário.
      */
     notify(payload: {
       title: string
@@ -95,6 +130,7 @@ const api = {
       urgent?: boolean
       toast?: boolean
       taskbar?: boolean
+      elsewhere?: boolean
     }): void {
       ipcRenderer.send('notify', payload)
     },
@@ -123,6 +159,71 @@ const api = {
       return () => ipcRenderer.removeListener('navigate', listener)
     }
   },
+  inviteLinks: {
+    /** Convite do salinha://convite/<código> ainda não aberto (uma vez só), ou null. */
+    takePending(): Promise<string | null> {
+      return ipcRenderer.invoke('invite:take-pending')
+    },
+    /** Chegou um convite (o app já estava aberto): busque com takePending. */
+    onPending(cb: () => void): () => void {
+      const listener = (): void => cb()
+      ipcRenderer.on('invite:open', listener)
+      return () => ipcRenderer.removeListener('invite:open', listener)
+    }
+  },
+  games: {
+    /** Liga/desliga a detecção de jogos (Em atividade). Só Windows. */
+    watch(enabled: boolean): void {
+      ipcRenderer.send('games:watch', enabled)
+    },
+    current(): Promise<{ name: string; startedAt: number; appId?: number; iconHash?: string } | null> {
+      return ipcRenderer.invoke('games:current')
+    },
+    /** O jogo em andamento mudou (null = parou). Retorna unsubscribe. */
+    onChange(cb: (game: { name: string; startedAt: number; appId?: number; iconHash?: string } | null) => void): () => void {
+      const listener = (_e: unknown, game: { name: string; startedAt: number; appId?: number; iconHash?: string } | null): void =>
+        cb(game)
+      ipcRenderer.on('games:current', listener)
+      return () => ipcRenderer.removeListener('games:current', listener)
+    }
+  },
+  activities: {
+    /** Abre o jogo numa janela própria; false = link recusado pelo main. */
+    open(activityId: string, url: string): Promise<boolean> {
+      return ipcRenderer.invoke('activity:open', activityId, url)
+    },
+    close(): void {
+      ipcRenderer.send('activity:close')
+    },
+    /** A janela do jogo fechou (pelo usuário ou pelo app). */
+    onClosed(cb: (activityId: string) => void): () => void {
+      const listener = (_e: unknown, activityId: string): void => cb(activityId)
+      ipcRenderer.on('activity:closed', listener)
+      return () => ipcRenderer.removeListener('activity:closed', listener)
+    }
+  },
+  keybinds: {
+    /** Atalhos de voz com o app em segundo plano; devolve, por ação, se ficou valendo. */
+    setGlobal(list: { id: string; binding: string }[]): Promise<Record<string, boolean>> {
+      return ipcRenderer.invoke('keybinds:set-global', list)
+    },
+    /** Gravando um atalho nas configurações: solta os globais enquanto isso. */
+    suspend(on: boolean): void {
+      ipcRenderer.send('keybinds:suspend', on)
+    },
+    /** Um atalho global foi acionado (id da ação). */
+    onFire(cb: (id: string) => void): () => void {
+      const listener = (_e: unknown, id: string): void => cb(id)
+      ipcRenderer.on('keybinds:fire', listener)
+      return () => ipcRenderer.removeListener('keybinds:fire', listener)
+    },
+    /** Os globais voltaram depois de uma suspensão: de novo o que ficou valendo. */
+    onStatus(cb: (status: Record<string, boolean>) => void): () => void {
+      const listener = (_e: unknown, status: Record<string, boolean>): void => cb(status)
+      ipcRenderer.on('keybinds:status', listener)
+      return () => ipcRenderer.removeListener('keybinds:status', listener)
+    }
+  },
   overlay: {
     /** Overlay de jogo existe nesta plataforma (só Windows). */
     supported: process.platform === 'win32',
@@ -130,15 +231,59 @@ const api = {
     setState(snapshot: OverlaySnapshot): void {
       ipcRenderer.send('overlay:state', snapshot)
     },
-    /** Página do overlay: último estado conhecido ao abrir. */
-    current(): Promise<OverlaySnapshot | null> {
-      return ipcRenderer.invoke('overlay:current')
+    /**
+     * Página do overlay: avisa que carregou (chamar depois de assinar onUpdate e
+     * onEditing) e recebe o último estado e se está no modo de edição.
+     */
+    ready(): Promise<{
+      snapshot: OverlaySnapshot | null
+      editing: boolean
+      frame: OverlayFrame | null
+    }> {
+      return ipcRenderer.invoke('overlay:ready')
+    },
+    /** Página do overlay: onde a janela está na área de trabalho (muda ao mover/editar). */
+    onFrame(cb: (frame: OverlayFrame) => void): () => void {
+      const listener = (_e: unknown, frame: OverlayFrame): void => cb(frame)
+      ipcRenderer.on('overlay:frame', listener)
+      return () => ipcRenderer.removeListener('overlay:frame', listener)
+    },
+    /** Página do overlay: tamanho medido da lista, para a janela ficar só em volta dela. */
+    reportBox(size: { width: number; height: number }): void {
+      ipcRenderer.send('overlay:box', size)
     },
     /** Página do overlay: novos estados. */
     onUpdate(cb: (snapshot: OverlaySnapshot) => void): () => void {
       const listener = (_e: unknown, snapshot: OverlaySnapshot): void => cb(snapshot)
       ipcRenderer.on('overlay:update', listener)
       return () => ipcRenderer.removeListener('overlay:update', listener)
+    },
+    /** Página do overlay: modo de edição (Shift+Tab) ligado/desligado. */
+    onEditing(cb: (editing: boolean) => void): () => void {
+      const listener = (_e: unknown, editing: boolean): void => cb(editing)
+      ipcRenderer.on('overlay:editing', listener)
+      return () => ipcRenderer.removeListener('overlay:editing', listener)
+    },
+    /** Página do overlay: posição/tamanho novos, ao soltar o mouse. */
+    saveLayout(layout: OverlayLayout): void {
+      ipcRenderer.send('overlay:layout', layout)
+    },
+    /** Configurações: o atalho está livre? null = atalho inválido. */
+    checkShortcut(accelerator: string): Promise<{ accelerator: string; taken: boolean } | null> {
+      return ipcRenderer.invoke('overlay:check-shortcut', accelerator)
+    },
+    /** Configurações: resultado de segurar o atalho no jogo (outro programa pode ter). */
+    onShortcutStatus(cb: (status: { accelerator: string; taken: boolean }) => void): () => void {
+      const listener = (_e: unknown, status: { accelerator: string; taken: boolean }): void =>
+        cb(status)
+      ipcRenderer.on('overlay:shortcut-status', listener)
+      return () => ipcRenderer.removeListener('overlay:shortcut-status', listener)
+    },
+    /** Renderer principal: posição/tamanho editados no jogo, para salvar. */
+    onLayout(cb: (layout: OverlayLayout) => void): () => void {
+      const listener = (_e: unknown, layout: OverlayLayout): void => cb(layout)
+      ipcRenderer.on('overlay:layout', listener)
+      return () => ipcRenderer.removeListener('overlay:layout', listener)
     }
   }
 }

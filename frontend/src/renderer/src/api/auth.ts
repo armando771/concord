@@ -17,6 +17,9 @@ export interface RegisterInput {
 }
 
 export interface LoginInput {
+  /** E-mail ou nome de usuário (com ou sem "@" na frente). */
+  login: string
+  /** Campo antigo; mesmo valor de login, para backends ainda não atualizados. */
   email: string
   password: string
 }
@@ -32,6 +35,32 @@ export function login(input: LoginInput): Promise<AuthResponse> {
   return rawRequest<AuthResponse>('/auth/login', {
     method: 'POST',
     body: JSON.stringify(input)
+  })
+}
+
+export function verifyEmail(token: string): Promise<void> {
+  return rawRequest<void>('/auth/verify-email', {
+    method: 'POST',
+    body: JSON.stringify({ token })
+  })
+}
+
+/** Reenvia o e-mail de confirmação; sent=false quando já estava confirmado. */
+export function resendVerification(): Promise<{ sent: boolean }> {
+  return request<{ sent: boolean }>('/auth/resend-verification', { method: 'POST' })
+}
+
+export function forgotPassword(email: string): Promise<void> {
+  return rawRequest<void>('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email })
+  })
+}
+
+export function resetPassword(token: string, password: string): Promise<void> {
+  return rawRequest<void>('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, password })
   })
 }
 

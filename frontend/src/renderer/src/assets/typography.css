@@ -1,0 +1,82 @@
+/* Fonte e escala de texto do Discord, usadas pelo app (main.css) e pelo
+   overlay (overlay/overlay.css). Importar depois de 'tailwindcss'.
+
+   Outfit (OFL, empacotada local: CSP do desktop e uso offline) no lugar da
+   gg sans do Discord, que é proprietária: é a livre mais parecida (altura-x
+   e de maiúscula iguais, medidas no discord.com/app). A licença vai junto
+   no build (assets/OFL.txt, ver vite.renderer.shared.ts). */
+@import '@fontsource-variable/outfit';
+
+@theme {
+  /* Pilha do Discord (--font-primary) com a Outfit no lugar da gg sans; emoji
+     por último para nomes de canal/servidor com emoji (🐺) em qualquer SO. */
+  --font-sans:
+    'Outfit Variable', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
+  /* --font-code do Discord sem a gg mono (proprietária). */
+  --font-mono:
+    'Source Code Pro', Consolas, 'Andale Mono WT', 'Andale Mono', 'Lucida Console',
+    'Lucida Sans Typewriter', 'DejaVu Sans Mono', 'Bitstream Vera Sans Mono', 'Liberation Mono',
+    'Nimbus Mono L', Monaco, 'Courier New', Courier, monospace;
+
+  /* Escala de texto do Discord (variantes text-* e heading-* do cliente web,
+     tamanho / altura de linha). text-ds-chat é a mensagem: 16px / 22px.
+
+     A Outfit é ~4% mais larga que a gg sans em qualquer tamanho; -0.02em de
+     tracking deixa a largura igual (medido). Vai em cada token, em em, para
+     valer no tamanho de cada texto (no body, em em, viraria px fixo herdado).
+     Um tracking-* no mesmo elemento continua mandando. */
+  --text-ds-xxs: 0.625rem;
+  --text-ds-xxs--line-height: 0.75rem;
+  --text-ds-xxs--letter-spacing: -0.02em;
+  --text-ds-xs: 0.75rem;
+  --text-ds-xs--line-height: 1rem;
+  --text-ds-xs--letter-spacing: -0.02em;
+  --text-ds-sm: 0.875rem;
+  --text-ds-sm--line-height: 1.125rem;
+  --text-ds-sm--letter-spacing: -0.02em;
+  --text-ds-md: 1rem;
+  --text-ds-md--line-height: 1.25rem;
+  --text-ds-md--letter-spacing: -0.02em;
+  --text-ds-chat: 1rem;
+  --text-ds-chat--line-height: 1.375rem;
+  --text-ds-chat--letter-spacing: -0.02em;
+  --text-ds-lg: 1.25rem;
+  --text-ds-lg--line-height: 1.5rem;
+  --text-ds-lg--letter-spacing: -0.02em;
+  --text-ds-xl: 1.5rem;
+  --text-ds-xl--line-height: 2rem;
+  --text-ds-xl--letter-spacing: -0.02em;
+  --text-ds-xxl: 2rem;
+  --text-ds-xxl--line-height: 2.5rem;
+  --text-ds-xxl--letter-spacing: -0.02em;
+
+  /* O mesmo ajuste na escala padrão do Tailwind (telas ainda não migradas). */
+  --text-xs--letter-spacing: -0.02em;
+  --text-sm--letter-spacing: -0.02em;
+  --text-base--letter-spacing: -0.02em;
+  --text-lg--letter-spacing: -0.02em;
+  --text-xl--letter-spacing: -0.02em;
+  --text-2xl--letter-spacing: -0.02em;
+  --text-3xl--letter-spacing: -0.02em;
+  --text-4xl--letter-spacing: -0.02em;
+  --text-5xl--letter-spacing: -0.02em;
+}
+
+@layer base {
+  /* Texto sem classe de tamanho herda o tracking já resolvido do pai (que está
+     no mesmo tamanho); a raiz em 16px. */
+  html {
+    font-family: var(--font-sans);
+    letter-spacing: -0.02em;
+  }
+
+  /* O espaço da Outfit é mais estreito que o da gg sans (0,208 x 0,220 em).
+     word-spacing não tem token no Tailwind e nada no app o muda: vai em todo
+     elemento, em em, para acompanhar o tamanho de cada texto. */
+  *,
+  ::before,
+  ::after {
+    word-spacing: 0.03em;
+  }
+}

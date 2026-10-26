@@ -3,8 +3,10 @@ package message
 import (
 	"context"
 	"errors"
+	"gin-quickstart/backend/internal/permission"
 	"log"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -15,6 +17,7 @@ var (
 	ErrContentRequired = errors.New("content is required")
 	ErrMessageNotFound = errors.New("message not found")
 	ErrNotAuthor       = errors.New("only the author can delete this message")
+	ErrMessageHidden   = errors.New("message not found")
 	ErrInvalidReply    = errors.New("invalid reply target")
 	ErrInvalidEmoji    = errors.New("invalid emoji reaction")
 )
@@ -22,9 +25,12 @@ var (
 type EventPublisher interface {
 	PublishMessageCreate(event CreateEvent)
 	PublishMessageDelete(event DeleteEvent)
+	PublishMessageUpdate(event UpdateEvent)
 	PublishPollUpdate(event PollUpdateEvent)
 	PublishReactionAdd(event ReactionEvent)
 	PublishReactionRemove(event ReactionEvent)
+	PublishMessagePin(event PinEvent)
+	PublishMessageUnpin(event UnpinEvent)
 }
 
 type ChannelResolver interface {
@@ -33,6 +39,8 @@ type ChannelResolver interface {
 
 type ConversationResolver interface {
 	ConversationParticipantIDs(ctx context.Context, conversationID string) ([]string, error)
+	// RevealConversation reabre a DM para quem tinha fechado.
+	RevealConversation(ctx context.Context, conversationID string) error
 }
 
 // FileRemover apaga o arquivo de um anexo do disco (media.Store).
@@ -42,19 +50,25 @@ type FileRemover interface {
 
 type Service struct {
 	repository      *Repository
+	edits           editStore
 	publisher       EventPublisher
 	channelResolver ChannelResolver
 	convResolver    ConversationResolver
 	files           FileRemover
+	perms           PermissionChecker
+	mentionLimiter  *mentionLimiter
 }
 
-func MessageService(repository *Repository, publisher EventPublisher, channelResolver ChannelResolver, convResolver ConversationResolver, files FileRemover) *Service {
+func MessageService(repository *Repository, publisher EventPublisher, channelResolver ChannelResolver, convResolver ConversationResolver, files FileRemover, perms PermissionChecker) *Service {
 	return &Service{
 		repository:      repository,
+		edits:           repository,
 		publisher:       publisher,
 		channelResolver: channelResolver,
 		convResolver:    convResolver,
 		files:           files,
+		perms:           perms,
+		mentionLimiter:  newMentionLimiter(mentionEveryoneCooldown, time.Now),
 	}
 }
 
@@ -84,14 +98,23 @@ func SameRoomTarget(target *Message, channelID string, conversationID string) bo
 }
 
 func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, authorID string, content string, replyToID *string, attachmentIDs []string) (*Message, error) {
-	msg, err := s.create(ctx, channelID, "", authorID, content, replyToID, attachmentIDs)
-	if err != nil {
+	if err := validateNewMessage(content, attachmentIDs); err != nil {
 		return nil, err
 	}
 
 	serverID := ""
 	if s.channelResolver != nil {
 		serverID, _ = s.channelResolver.ChannelServerID(ctx, channelID)
+	}
+
+	mentionEveryone := s.resolveMentionEveryone(ctx, serverID, channelID, authorID, content)
+	msg, err := s.create(ctx, channelID, "", authorID, content, replyToID, attachmentIDs, mentionEveryone)
+	if err != nil {
+		// Mensagem que não saiu não gasta a vez do anti-spam.
+		if mentionEveryone != nil {
+			s.mentionLimiter.Release(authorID, channelID)
+		}
+		return nil, err
 	}
 
 	s.publisher.PublishMessageCreate(CreateEvent{
@@ -104,13 +127,18 @@ func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, au
 }
 
 func (s *Service) CreateConversationMessage(ctx context.Context, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string) (*Message, error) {
-	msg, err := s.create(ctx, "", conversationID, authorID, content, replyToID, attachmentIDs)
+	// Em DM @all/@here é texto puro.
+	msg, err := s.create(ctx, "", conversationID, authorID, content, replyToID, attachmentIDs, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	var userIDs []string
 	if s.convResolver != nil {
+		// Mensagem nova reabre a DM para quem tinha fechado (como no Discord).
+		if err := s.convResolver.RevealConversation(ctx, conversationID); err != nil {
+			log.Printf("[message] reveal conversation %s: %v", conversationID, err)
+		}
 		userIDs, _ = s.convResolver.ConversationParticipantIDs(ctx, conversationID)
 	}
 
@@ -123,7 +151,7 @@ func (s *Service) CreateConversationMessage(ctx context.Context, conversationID 
 	return msg, nil
 }
 
-func (s *Service) create(ctx context.Context, channelID string, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string) (*Message, error) {
+func (s *Service) create(ctx context.Context, channelID string, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string, mentionEveryone *string) (*Message, error) {
 	if err := validateNewMessage(content, attachmentIDs); err != nil {
 		return nil, err
 	}
@@ -141,12 +169,13 @@ func (s *Service) create(ctx context.Context, channelID string, conversationID s
 	}
 
 	msg := &Message{
-		ID:             uuid.New().String(),
-		AuthorID:       authorID,
-		ChannelID:      &channelID,
-		ConversationID: &conversationID,
-		ReplyToID:      normalizedReplyID,
-		Content:        content,
+		ID:              uuid.New().String(),
+		AuthorID:        authorID,
+		ChannelID:       &channelID,
+		ConversationID:  &conversationID,
+		ReplyToID:       normalizedReplyID,
+		Content:         content,
+		MentionEveryone: mentionEveryone,
 	}
 
 	if channelID == "" {
@@ -206,6 +235,25 @@ func (s *Service) ListConversationMessages(ctx context.Context, conversationID s
 	return messages, nil
 }
 
+// canModerate: no canal, apaga (ou encerra enquete) quem vê o canal e é o
+// autor, ou tem MANAGE_MESSAGES.
+func (s *Service) canModerate(ctx context.Context, channelID string, authorID string, userID string) error {
+	if s.perms == nil {
+		if authorID != userID {
+			return ErrNotAuthor
+		}
+		return nil
+	}
+	perms, err := s.perms.ChannelPerms(ctx, channelID, userID)
+	if err != nil || perms&permission.ViewChannel == 0 {
+		return ErrMessageNotFound
+	}
+	if authorID != userID && !permission.Has(perms, permission.ManageMessages) {
+		return ErrNotAuthor
+	}
+	return nil
+}
+
 func (s *Service) DeleteChannelMessage(ctx context.Context, channelID string, messageID string, userID string) error {
 	msg, err := s.repository.FindByID(ctx, messageID)
 	if err != nil {
@@ -216,8 +264,8 @@ func (s *Service) DeleteChannelMessage(ctx context.Context, channelID string, me
 		return ErrMessageNotFound
 	}
 
-	if msg.AuthorID != userID {
-		return ErrNotAuthor
+	if err := s.canModerate(ctx, channelID, msg.AuthorID, userID); err != nil {
+		return err
 	}
 
 	if err := s.deleteWithFiles(ctx, messageID); err != nil {
@@ -423,4 +471,94 @@ func (s *Service) CreateSystemChannelMessage(ctx context.Context, channelID stri
 	})
 
 	return full, nil
+}
+
+// canManageChannelMessages verifica se o usuário pode gerenciar mensagens no canal (permissão MANAGE_MESSAGES ou dono).
+func (s *Service) canManageChannelMessages(ctx context.Context, channelID string, userID string) error {
+	if s.perms == nil {
+		return nil
+	}
+	perms, err := s.perms.ChannelPerms(ctx, channelID, userID)
+	if err != nil || perms&permission.ViewChannel == 0 {
+		return ErrMessageNotFound
+	}
+	if !permission.Has(perms, permission.ManageMessages) {
+		return permission.ErrMissingPermission
+	}
+	return nil
+}
+
+func (s *Service) ListChannelPins(ctx context.Context, channelID string, userID string) ([]PinnedMessage, error) {
+	if s.perms != nil {
+		perms, err := s.perms.ChannelPerms(ctx, channelID, userID)
+		if err != nil || perms&permission.ViewChannel == 0 {
+			return nil, ErrMessageNotFound
+		}
+	}
+	return s.repository.ListPinnedMessages(ctx, channelID)
+}
+
+func (s *Service) PinChannelMessage(ctx context.Context, channelID string, messageID string, userID string) (*PinnedMessage, error) {
+	msg, err := s.repository.FindByID(ctx, messageID)
+	if err != nil {
+		return nil, ErrMessageNotFound
+	}
+	if msg.ChannelID == nil || *msg.ChannelID != channelID {
+		return nil, ErrMessageNotFound
+	}
+	if err := s.canManageChannelMessages(ctx, channelID, userID); err != nil {
+		return nil, err
+	}
+
+	pinned, err := s.repository.PinMessage(ctx, channelID, messageID, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	serverID := ""
+	if s.channelResolver != nil {
+		serverID, _ = s.channelResolver.ChannelServerID(ctx, channelID)
+	}
+
+	if s.publisher != nil {
+		s.publisher.PublishMessagePin(PinEvent{
+			ChannelID: channelID,
+			ServerID:  serverID,
+			Message:   *pinned,
+		})
+	}
+
+	return pinned, nil
+}
+
+func (s *Service) UnpinChannelMessage(ctx context.Context, channelID string, messageID string, userID string) error {
+	msg, err := s.repository.FindByID(ctx, messageID)
+	if err != nil {
+		return ErrMessageNotFound
+	}
+	if msg.ChannelID == nil || *msg.ChannelID != channelID {
+		return ErrMessageNotFound
+	}
+	if err := s.canManageChannelMessages(ctx, channelID, userID); err != nil {
+		return err
+	}
+
+	if err := s.repository.UnpinMessage(ctx, channelID, messageID); err != nil {
+		return err
+	}
+
+	serverID := ""
+	if s.channelResolver != nil {
+		serverID, _ = s.channelResolver.ChannelServerID(ctx, channelID)
+	}
+
+	if s.publisher != nil {
+		s.publisher.PublishMessageUnpin(UnpinEvent{
+			ChannelID: channelID,
+			ServerID:  serverID,
+			MessageID: messageID,
+		})
+	}
+
+	return nil
 }

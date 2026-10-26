@@ -7,11 +7,14 @@ export interface ProfileLink {
   url: string
 }
 
-export interface User {
+/**
+ * Outra pessoa (busca, amigos, eventos): o backend nunca manda o e-mail de
+ * ninguém além do da própria conta.
+ */
+export interface PublicUser {
   id: string
   username: string
   display_name: string
-  email: string
   avatar_url?: string | null
   // Perfil (Configurações → Perfis). Opcionais: listas de amigos e sessões
   // salvas antes do perfil existir não trazem.
@@ -24,6 +27,13 @@ export interface User {
   status?: ChosenStatus
   created_at: string
   updated_at: string
+}
+
+/** A própria conta (/users/me e /users/me/*): com o e-mail. */
+export interface User extends PublicUser {
+  email: string
+  /** false até a pessoa abrir o link do e-mail de confirmação. */
+  email_verified?: boolean
 }
 
 interface AuthState {

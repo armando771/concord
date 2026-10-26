@@ -7,7 +7,10 @@
     "src/main/**/*",
     "src/preload/**/*",
     "src/renderer/src/lib/serverUrl.ts",
-    "src/renderer/src/lib/overlayState.ts"
+    "src/renderer/src/lib/overlayState.ts",
+    "src/renderer/src/lib/overlayLayout.ts",
+    "src/renderer/src/lib/overlayShortcut.ts",
+    "src/renderer/src/lib/inviteLink.ts"
   ],
   "compilerOptions": {
     "composite": true,

@@ -133,7 +133,8 @@ interface FakeGain {
     setValueAtTime: (v: number) => void
     setTargetAtTime: (v: number) => void
   }
-  connect: (next: unknown) => unknown
+  connect: ReturnType<typeof vi.fn>
+  disconnect: ReturnType<typeof vi.fn>
 }
 
 const fake = {
@@ -154,10 +155,30 @@ function fakeGain(): FakeGain {
         g.gain.value = v
       }
     },
-    connect: (next) => next
+    connect: vi.fn((next: unknown) => next),
+    disconnect: vi.fn()
   }
   return g
 }
+
+/** AudioWorkletNode da detecção de fala (o do RNNoise é mockado à parte). */
+class FakeWorkletNode {
+  static instances: FakeWorkletNode[] = []
+  port = {
+    onmessage: null as ((e: { data: boolean }) => void) | null,
+    close: vi.fn(),
+    postMessage: vi.fn()
+  }
+  connect = vi.fn((next: unknown) => next)
+  disconnect = vi.fn()
+  constructor(
+    public ctx: unknown,
+    public name: string
+  ) {
+    FakeWorkletNode.instances.push(this)
+  }
+}
+vi.stubGlobal('AudioWorkletNode', FakeWorkletNode)
 
 class FakeAudioContext {
   state = 'running'
@@ -175,9 +196,17 @@ class FakeAudioContext {
     this.gains.push(g)
     return g
   }
-  createMediaStreamDestination = (): { stream: { getTracks: () => unknown[] } } => ({
-    stream: { getTracks: () => [this.outTrack] }
+  createAnalyser = (): {
+    fftSize: number
+    connect: ReturnType<typeof vi.fn>
+    getFloatTimeDomainData: (buf: Float32Array) => void
+  } => ({
+    fftSize: 2048,
+    connect: vi.fn((next: unknown) => next),
+    getFloatTimeDomainData: (buf) => buf.fill(0.5)
   })
+  destination = { stream: { getTracks: () => [this.outTrack] } }
+  createMediaStreamDestination = (): { stream: { getTracks: () => unknown[] } } => this.destination
   resume = async (): Promise<void> => {}
 }
 
@@ -191,9 +220,14 @@ vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: fake.getUserMedia } }
 
 const { openMicrophone } = await import('./noiseSuppression')
 const { useNoiseSuppressionStore } = await import('../store/noiseSuppressionStore')
+const { useVoiceAudioStore } = await import('../store/voiceAudioStore')
 
-/** [wet, dry] do último contexto criado. */
-const gains = (): number[] => fake.contexts.at(-1)!.gains.map((g) => g.gain.value)
+/** [wet, dry] do último contexto criado (os dois primeiros ganhos do grafo). */
+const wetDry = (): number[] =>
+  fake.contexts
+    .at(-1)!
+    .gains.slice(0, 2)
+    .map((g) => g.gain.value)
 
 describe('openMicrophone', () => {
   beforeEach(() => {
@@ -210,7 +244,7 @@ describe('openMicrophone', () => {
       audio: expect.objectContaining({ deviceId: { exact: 'mic-usb' }, noiseSuppression: false }),
       video: false
     })
-    expect(gains()).toEqual([1, 0])
+    expect(wetDry()).toEqual([1, 0])
   })
 
   it('microfone estéreo vira mono antes do RNNoise', async () => {
@@ -222,9 +256,9 @@ describe('openMicrophone', () => {
     const mic = await openMicrophone()
     const stream = mic.stream
     useNoiseSuppressionStore.getState().setEnabled(false)
-    expect(gains()).toEqual([0, 1])
+    expect(wetDry()).toEqual([0, 1])
     useNoiseSuppressionStore.getState().setEnabled(true)
-    expect(gains()).toEqual([1, 0])
+    expect(wetDry()).toEqual([1, 0])
     expect(mic.stream).toBe(stream)
     mic.stop()
   })
@@ -239,7 +273,7 @@ describe('openMicrophone', () => {
     expect(fake.contexts[0].close).toHaveBeenCalled()
     // Depois de fechado, o toggle não mexe mais nele.
     useNoiseSuppressionStore.getState().setEnabled(false)
-    expect(gains()).toEqual([1, 0])
+    expect(wetDry()).toEqual([1, 0])
   })
 
   it('se o RNNoise não carrega: libera tudo e usa a supressão do Chromium', async () => {
@@ -257,6 +291,100 @@ describe('openMicrophone', () => {
       video: false
     })
     expect(useNoiseSuppressionStore.getState().available).toBe(false)
+    mic.stop()
+  })
+})
+
+describe('openMicrophone — detecção de fala, portão e volume de entrada', () => {
+  beforeEach(() => {
+    fake.contexts.length = 0
+    FakeWorkletNode.instances.length = 0
+    fake.addModule.mockReset().mockResolvedValue(undefined)
+    fake.getUserMedia.mockReset().mockImplementation(async () => rawStream())
+    useNoiseSuppressionStore.setState({ enabled: true, available: true })
+    useVoiceAudioStore.setState({ inputVolume: 1, detectionEnabled: true, sensitivity: 60 })
+  })
+
+  it('o detector fica no caminho do áudio, depois do ganho de entrada, sem outro AudioContext', async () => {
+    const mic = await openMicrophone()
+    expect(fake.contexts).toHaveLength(1)
+    const ctx = fake.contexts[0] as unknown as FakeAudioContext
+    const vad = FakeWorkletNode.instances[0]
+    expect(vad.name).toBe('concord-voice-activity')
+    expect(vad.ctx).toBe(ctx)
+    const inputGain = ctx.gains[2]
+    expect(inputGain.connect).toHaveBeenCalledWith(vad)
+    // O que passa pelo portão é o que vai para o destino (o worklet é quem fecha o portão).
+    expect(vad.connect).toHaveBeenCalledWith(ctx.destination)
+    mic.stop()
+  })
+
+  it('watchSpeaking recebe a fala e para de receber quando é parado', async () => {
+    const mic = await openMicrophone()
+    const vad = FakeWorkletNode.instances[0]
+    const changes: boolean[] = []
+    const tap = mic.watchSpeaking!((s) => changes.push(s))
+    await tap.ready
+
+    vad.port.onmessage!({ data: true })
+    tap.stop()
+    vad.port.onmessage!({ data: false })
+    expect(changes).toEqual([true])
+    mic.stop()
+  })
+
+  it('sem o worklet de detecção o microfone segue, sem portão nem watchSpeaking', async () => {
+    fake.addModule.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('CSP'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const mic = await openMicrophone()
+    expect(mic.watchSpeaking).toBeUndefined()
+    expect(mic.stream).toBeDefined()
+    const ctx = fake.contexts[0] as unknown as FakeAudioContext
+    expect(ctx.gains[2].connect).toHaveBeenCalledWith(ctx.destination)
+    mic.stop()
+  })
+
+  it('volume de entrada e detecção/sensibilidade chegam ao grafo, ao vivo', async () => {
+    useVoiceAudioStore.setState({ inputVolume: 1.5 })
+    const mic = await openMicrophone()
+    const ctx = fake.contexts[0] as unknown as FakeAudioContext
+    const inputGain = ctx.gains[2]
+    const vad = FakeWorkletNode.instances[0]
+    expect(inputGain.gain.value).toBe(1.5)
+    expect(vad.port.postMessage).toHaveBeenLastCalledWith({
+      config: expect.objectContaining({ onDb: -40, offDb: -46 }),
+      gate: true
+    })
+
+    useVoiceAudioStore.getState().setInputVolume(0.5)
+    expect(inputGain.gain.value).toBe(0.5)
+
+    useVoiceAudioStore.getState().setDetectionEnabled(false)
+    expect(vad.port.postMessage).toHaveBeenLastCalledWith({
+      config: expect.objectContaining({ onDb: -40 }),
+      gate: false
+    })
+
+    useVoiceAudioStore.getState().setSensitivity(100)
+    expect(vad.port.postMessage).toHaveBeenLastCalledWith({
+      config: expect.objectContaining({ onDb: -60, offDb: -66 }),
+      gate: false
+    })
+    mic.stop()
+  })
+
+  it('o medidor lê o nível em dBFS, antes do portão', async () => {
+    const mic = await openMicrophone()
+    // Amostras a 0,5 dão RMS de −6 dBFS.
+    expect(mic.readLevel!()).toBeCloseTo(-6.02, 1)
+    mic.stop()
+  })
+
+  it('no fallback do Chromium não há detecção no contexto', async () => {
+    fake.addModule.mockRejectedValueOnce(new Error('CSP'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const mic = await openMicrophone()
+    expect(mic.watchSpeaking).toBeUndefined()
     mic.stop()
   })
 })

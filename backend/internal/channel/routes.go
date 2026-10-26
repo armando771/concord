@@ -10,9 +10,10 @@ func ChannelRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin
 		channels.POST("/", handler.Create)
 		channels.GET("", handler.ListByServer)
 		channels.GET("/", handler.ListByServer)
-		channels.PUT("", handler.Reorder)
-		channels.PUT("/", handler.Reorder)
+		channels.PUT("/order", handler.Reorder)
 		channels.PUT("/:channelId", handler.Update)
 		channels.DELETE("/:channelId", handler.Delete)
+		channels.PUT("/:channelId/overwrites/:type/:targetId", handler.SetOverwrite)
+		channels.DELETE("/:channelId/overwrites/:type/:targetId", handler.DeleteOverwrite)
 	}
 }

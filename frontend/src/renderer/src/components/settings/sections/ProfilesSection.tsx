@@ -52,7 +52,7 @@ function Field({
   return (
     <div className="border-b border-white/10 pb-6">
       <div className="mb-2 flex items-baseline justify-between gap-2">
-        <p className="text-xs font-bold uppercase tracking-wide text-gray-300">{label}</p>
+        <p className="text-ds-sm font-medium text-gray-300">{label}</p>
         {counter && (
           <span
             className={`text-[11px] ${counter.used > counter.max ? 'text-[#f23f43]' : 'text-gray-500'}`}
@@ -73,7 +73,7 @@ function SecondaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>): 
     <button
       type="button"
       {...props}
-      className="cursor-pointer rounded-md bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+      className="cursor-pointer rounded-md bg-white/10 px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
     />
   )
 }
@@ -108,7 +108,10 @@ function ProfilesSection(): React.JSX.Element | null {
   const [saving, setSaving] = useState(false)
   const [progress, setProgress] = useState<number | null>(null)
   const [shaking, setShaking] = useState(false)
-  const fileInputs = { avatar: useRef<HTMLInputElement>(null), banner: useRef<HTMLInputElement>(null) }
+  const fileInputs = {
+    avatar: useRef<HTMLInputElement>(null),
+    banner: useRef<HTMLInputElement>(null)
+  }
 
   const dirty = isDirty(draft, saved)
   const errors = profileErrors(draft)
@@ -250,7 +253,7 @@ function ProfilesSection(): React.JSX.Element | null {
               <button
                 type="button"
                 onClick={() => fileInputs.avatar.current?.click()}
-                className="cursor-pointer rounded-md bg-[#5865f2] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#4752c4]"
+                className="cursor-pointer rounded-md bg-[#5865f2] px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-[#4752c4]"
               >
                 Alterar avatar
               </button>
@@ -267,7 +270,7 @@ function ProfilesSection(): React.JSX.Element | null {
               <button
                 type="button"
                 onClick={() => fileInputs.banner.current?.click()}
-                className="cursor-pointer rounded-md bg-[#5865f2] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#4752c4]"
+                className="cursor-pointer rounded-md bg-[#5865f2] px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-[#4752c4]"
               >
                 Alterar banner
               </button>
@@ -372,7 +375,12 @@ function ProfilesSection(): React.JSX.Element | null {
                       />
                       <button
                         type="button"
-                        onClick={() => set('links', links.filter((_, j) => j !== i))}
+                        onClick={() =>
+                          set(
+                            'links',
+                            links.filter((_, j) => j !== i)
+                          )
+                        }
                         aria-label={`Remover link ${i + 1}`}
                         className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
                       >
@@ -406,7 +414,7 @@ function ProfilesSection(): React.JSX.Element | null {
 
         {/* Prévia */}
         <div className="w-full shrink-0 lg:sticky lg:top-0 lg:w-[300px]">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-300">Prévia</p>
+          <p className="mb-2 text-ds-sm font-medium text-gray-300">Prévia</p>
           <div
             className="rounded-xl border border-white/10 text-sm text-gray-200 shadow-2xl"
             style={{ background: CARD_BG }}
@@ -489,7 +497,7 @@ function ProfilesSection(): React.JSX.Element | null {
                 onClick={() => void save()}
                 disabled={saving || invalid}
                 title={invalid ? 'Corrija os campos em vermelho' : undefined}
-                className="cursor-pointer rounded-md bg-[#248046] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#1a6334] disabled:cursor-not-allowed disabled:opacity-50"
+                className="cursor-pointer rounded-md bg-[#248046] px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-[#1a6334] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving
                   ? progress !== null

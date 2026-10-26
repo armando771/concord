@@ -10,11 +10,21 @@ func MessageRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin
 		channels.POST("/", handler.CreateChannelMessage)
 		channels.GET("", handler.ListChannelMessages)
 		channels.GET("/", handler.ListChannelMessages)
+		channels.PATCH("/:messageId", handler.EditChannelMessage)
 		channels.DELETE("/:messageId", handler.DeleteChannelMessage)
 		channels.POST("/:messageId/reactions", handler.AddChannelReaction)
 		channels.DELETE("/:messageId/reactions", handler.RemoveChannelReaction)
 		channels.PUT("/:messageId/poll/votes", handler.VoteChannelPoll)
 		channels.POST("/:messageId/poll/end", handler.EndChannelPoll)
+	}
+
+	channelPins := router.Group("/channels/:channelId/pins")
+	channelPins.Use(authMiddleware)
+	{
+		channelPins.GET("", handler.ListChannelPins)
+		channelPins.GET("/", handler.ListChannelPins)
+		channelPins.PUT("/:messageId", handler.PinChannelMessage)
+		channelPins.DELETE("/:messageId", handler.UnpinChannelMessage)
 	}
 
 	channelPolls := router.Group("/channels/:channelId/polls")
@@ -31,6 +41,7 @@ func MessageRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin
 		conversations.POST("/", handler.CreateConversationMessage)
 		conversations.GET("", handler.ListConversationMessages)
 		conversations.GET("/", handler.ListConversationMessages)
+		conversations.PATCH("/:messageId", handler.EditConversationMessage)
 		conversations.DELETE("/:messageId", handler.DeleteConversationMessage)
 		channelsReactions := conversations.Group("/:messageId/reactions")
 		{

@@ -74,6 +74,7 @@ const media = vi.hoisted(() => ({
   events: [] as string[],
   connect: vi.fn(),
   publishScreen: vi.fn(),
+  updateScreenQuality: vi.fn(),
   publishCamera: vi.fn(),
   setWatchedScreens: vi.fn()
 }))
@@ -82,6 +83,7 @@ vi.mock('../lib/livekit', () => ({
     handlers: unknown
     connect = media.connect
     publishScreen = media.publishScreen
+    updateScreenQuality = media.updateScreenQuality
     publishCamera = media.publishCamera
     setWatchedScreens = media.setWatchedScreens
     setMicMuted = vi.fn(async (muted: boolean) => {
@@ -89,6 +91,7 @@ vi.mock('../lib/livekit', () => ({
     })
     unpublish = vi.fn(async () => {})
     replaceMic = vi.fn(async () => {})
+    ensureMic = vi.fn(async () => {})
     disconnect = vi.fn()
     constructor(handlers: unknown) {
       this.handlers = handlers
@@ -117,11 +120,28 @@ vi.mock('./chatStore', () => ({ useChatStore: { getState: () => chat } }))
 vi.mock('./authStore', () => ({
   useAuthStore: { getState: () => ({ user: { id: 'eu' } }) }
 }))
-vi.mock('./toastStore', () => ({ showToast: { error: vi.fn(), info: vi.fn() } }))
+vi.mock('./toastStore', () => ({ showToast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
 const sounds = vi.hoisted(() => ({ playSound: vi.fn(), setSoundOutput: vi.fn() }))
 vi.mock('../lib/sounds', () => sounds)
 
+/** Detecção local de fala: grava cada watch (microfone, handlers, stop). */
+interface FakeWatch {
+  mic: { stream: MediaStream }
+  handlers: { onChange: (speaking: boolean) => void; onUnavailable: () => void }
+  stop: ReturnType<typeof vi.fn>
+}
+const vad = vi.hoisted(() => ({ watches: [] as FakeWatch[] }))
+vi.mock('../lib/localSpeaking', () => ({
+  watchLocalSpeaking: (mic: FakeWatch['mic'], handlers: FakeWatch['handlers']) => {
+    const stop = vi.fn()
+    vad.watches.push({ mic, handlers, stop })
+    return stop
+  }
+}))
+
 import { useCallStore } from './callStore'
+import { ApiError } from '../api/client'
+import { showToast } from './toastStore'
 
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0))
 
@@ -150,14 +170,120 @@ beforeEach(() => {
   vi.clearAllMocks()
   media.instances.length = 0
   media.events.length = 0
+  vad.watches.length = 0
   rtc.getAudioStream.mockImplementation(async () => fakeMic())
   api.startCall.mockResolvedValue({ id: 'call-1' })
   media.connect.mockResolvedValue(undefined)
   media.publishScreen.mockResolvedValue(undefined)
+  media.updateScreenQuality.mockResolvedValue(undefined)
   media.publishCamera.mockResolvedValue(undefined)
 })
 
 describe('callStore — mídia via LiveKit', () => {
+  it('troca qualidade sem encerrar a transmissão nem anunciar saída aos espectadores', async () => {
+    await joinChannel()
+    const stream = fakeStream('video', 'audio')
+    rtc.getDisplayStream.mockResolvedValueOnce(stream)
+    await useCallStore.getState().startScreenShare()
+    chat.sendEvent.mockClear()
+    const watched = useCallStore.getState().watchedScreenIds
+    const sharers = useCallStore.getState().screenSharers
+    useCallStore.getState().updateScreenQuality({ resolution: '720p', frameRate: 60 })
+    await flush()
+    expect(media.updateScreenQuality).toHaveBeenCalledWith(stream, {
+      resolution: '720p',
+      frameRate: 60
+    })
+    expect(useCallStore.getState()).toMatchObject({
+      isScreenSharing: true,
+      localScreenStream: stream,
+      pendingScreenQuality: null,
+      screenShareQuality: { resolution: '720p', frameRate: 60 },
+      screenSharers: sharers,
+      watchedScreenIds: watched
+    })
+    expect(chat.sendEvent).not.toHaveBeenCalled()
+    expect(media.publishScreen).toHaveBeenCalledTimes(1)
+    expect(allStopped(stream)).toBe(false)
+  })
+
+  it('ignora escolha igual à qualidade atual', async () => {
+    await joinChannel()
+    rtc.getDisplayStream.mockResolvedValueOnce(fakeStream('video'))
+    await useCallStore.getState().startScreenShare()
+    useCallStore.getState().updateScreenQuality({ resolution: '1080p', frameRate: 30 })
+    await flush()
+    expect(media.updateScreenQuality).not.toHaveBeenCalled()
+    expect(useCallStore.getState().pendingScreenQuality).toBeNull()
+  })
+
+  it('aplica a última escolha sem perder trocas feitas durante uma atualização', async () => {
+    await joinChannel()
+    const stream = fakeStream('video')
+    rtc.getDisplayStream.mockResolvedValueOnce(stream)
+    await useCallStore.getState().startScreenShare()
+    const waiting = deferred<void>()
+    media.updateScreenQuality.mockReturnValueOnce(waiting.promise)
+    const store = useCallStore.getState()
+    store.updateScreenQuality({ resolution: '720p', frameRate: 60 })
+    store.updateScreenQuality({ resolution: '1080p', frameRate: 60 })
+    store.updateScreenQuality({ resolution: 'source', frameRate: 30 })
+    expect(useCallStore.getState().pendingScreenQuality).toEqual({
+      resolution: 'source',
+      frameRate: 30
+    })
+    expect(media.updateScreenQuality).toHaveBeenCalledTimes(1)
+    waiting.resolve()
+    await flush()
+    expect(media.updateScreenQuality).toHaveBeenCalledTimes(2)
+    expect(media.updateScreenQuality).toHaveBeenLastCalledWith(stream, {
+      resolution: 'source',
+      frameRate: 30
+    })
+    expect(useCallStore.getState()).toMatchObject({
+      pendingScreenQuality: null,
+      screenShareQuality: { resolution: 'source', frameRate: 30 }
+    })
+  })
+
+  it('descarta a conclusão de uma troca depois de parar a transmissão', async () => {
+    await joinChannel()
+    rtc.getDisplayStream.mockResolvedValueOnce(fakeStream('video'))
+    await useCallStore.getState().startScreenShare()
+    const waiting = deferred<void>()
+    media.updateScreenQuality.mockReturnValueOnce(waiting.promise)
+    useCallStore.getState().updateScreenQuality({ resolution: '720p', frameRate: 60 })
+    expect(useCallStore.getState().pendingScreenQuality).toEqual({
+      resolution: '720p',
+      frameRate: 60
+    })
+    useCallStore.getState().stopScreenShare()
+    waiting.resolve()
+    await flush()
+    expect(useCallStore.getState()).toMatchObject({
+      isScreenSharing: false,
+      screenShareQuality: null,
+      pendingScreenQuality: null
+    })
+    expect(showToast.error).not.toHaveBeenCalled()
+  })
+
+  it('mantém a qualidade ativa e a transmissão quando a atualização falha', async () => {
+    await joinChannel()
+    rtc.getDisplayStream.mockResolvedValueOnce(fakeStream('video'))
+    await useCallStore.getState().startScreenShare()
+    const previous = useCallStore.getState().screenShareQuality
+    media.updateScreenQuality.mockRejectedValueOnce(new Error('encoder'))
+    useCallStore.getState().updateScreenQuality({ resolution: '720p', frameRate: 60 })
+    await flush()
+    expect(useCallStore.getState()).toMatchObject({
+      isScreenSharing: true,
+      screenShareQuality: previous,
+      pendingScreenQuality: null
+    })
+    expect(showToast.error).toHaveBeenCalled()
+  })
+
   it('retoma ensurdecido sem publicar áudio e restaura o mute anterior ao desensurdecer', async () => {
     const mic = fakeMic()
     rtc.getAudioStream.mockResolvedValue(mic)
@@ -212,6 +338,8 @@ describe('callStore — mídia via LiveKit', () => {
     rtc.getDisplayStream.mockReturnValue(picked.promise)
 
     const sharing = useCallStore.getState().startScreenShare()
+    await useCallStore.getState().startScreenShare()
+    expect(rtc.getDisplayStream).toHaveBeenCalledTimes(1)
     useCallStore.getState().endCall()
     const stream = fakeStream('video', 'audio')
     picked.resolve(stream)
@@ -290,8 +418,9 @@ describe('callStore — mídia via LiveKit', () => {
     expect(useCallStore.getState().muted).toBe(false)
   })
 
-  it('marca quem está falando, incluindo o próprio usuário', async () => {
+  it('sem detecção local, marca quem está falando pelo servidor, incluindo o próprio usuário', async () => {
     await joinChannel()
+    vad.watches[0].handlers.onUnavailable()
     const handlers = media.instances[0].handlers as { onActiveSpeakers: (ids: string[]) => void }
 
     handlers.onActiveSpeakers(['eu', 'ana'])
@@ -363,10 +492,47 @@ describe('callStore — mídia via LiveKit', () => {
       payload: { call_id: 'call-1', user_id: 'ana', muted: true, deafened: true }
     })
 
-    expect(useCallStore.getState().voiceStates.ana).toEqual({ muted: true, deafened: true })
+    expect(useCallStore.getState().voiceStates.ana).toEqual({
+      muted: true,
+      deafened: true,
+      serverMuted: false,
+      serverDeafened: false
+    })
     expect(useCallStore.getState().serverCalls['canal-1'].participants[0]).toMatchObject({
       muted: true,
       deafened: true
+    })
+  })
+
+  it('mostra o que um moderador impôs (silenciar/ensurdecer no servidor)', async () => {
+    await joinChannel()
+    useCallStore.getState().setServerCalls({
+      'canal-1': {
+        call: { id: 'call-1' } as never,
+        participants: [{ call_id: 'call-1', user_id: 'ana', role: 'member', joined_at: '' }]
+      }
+    })
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:voice',
+      payload: {
+        call_id: 'call-1',
+        user_id: 'ana',
+        muted: false,
+        deafened: false,
+        server_muted: true,
+        server_deafened: false
+      }
+    })
+
+    expect(useCallStore.getState().voiceStates.ana).toMatchObject({
+      muted: false,
+      serverMuted: true,
+      serverDeafened: false
+    })
+    expect(useCallStore.getState().serverCalls['canal-1'].participants[0]).toMatchObject({
+      server_muted: true,
+      server_deafened: false
     })
   })
 
@@ -547,10 +713,12 @@ describe('callStore — reentrada após queda do WS', () => {
   it('volta a entrar e recarrega a lista quando o backend me tira da chamada', async () => {
     await joinChannel()
     api.startCall.mockClear()
-    api.getCallState.mockResolvedValueOnce({
+    const state = {
       call: null,
       participants: [participant('eu'), participant('ana'), participant('bia')]
-    } as never)
+    }
+    // Primeiro confere que a chamada existe, depois lê a lista.
+    api.getCallState.mockResolvedValueOnce(state as never).mockResolvedValueOnce(state as never)
 
     useCallStore.getState().handleWsEvent({
       type: 'call:left',
@@ -579,6 +747,101 @@ describe('callStore — reentrada após queda do WS', () => {
     expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'call-1', active: true })
   })
 
+  it('reconectar o WS (deploy) não toca som nem reconecta a mídia', async () => {
+    await joinChannel()
+    sounds.playSound.mockClear()
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(sounds.playSound).not.toHaveBeenCalled()
+    expect(media.instances).toHaveLength(1)
+    expect(media.instances[0].disconnect).not.toHaveBeenCalled()
+    expect(useCallStore.getState().status).toBe('active')
+  })
+
+  it('ao reconectar, reenvia o mudo e que não estou transmitindo (o servidor pode ter ficado velho)', async () => {
+    await joinChannel()
+    useCallStore.getState().toggleMute()
+    chat.sendEvent.mockClear()
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:voice', {
+      call_id: 'call-1',
+      muted: true,
+      deafened: false
+    })
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'call-1', active: false })
+  })
+
+  it('ao reconectar, o mudo dos outros vem do servidor', async () => {
+    await joinChannel()
+    useCallStore.getState().handleWsEvent({
+      type: 'call:voice',
+      payload: { call_id: 'call-1', user_id: 'ana', muted: false, deafened: false }
+    })
+    // Na queda, a ana mutou e o evento se perdeu.
+    const state = {
+      call: null,
+      participants: [participant('eu'), { ...participant('ana'), muted: true }]
+    }
+    api.getCallState.mockResolvedValueOnce(state as never).mockResolvedValueOnce(state as never)
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(useCallStore.getState().voiceStates.ana).toMatchObject({ muted: true, deafened: false })
+  })
+
+  it('canal: 404 ao reconectar não cria chamada nova enquanto há gente na sala de mídia', async () => {
+    await joinChannel()
+    onRemoteMedia({ ...empty, mediaPeers: { ana: 'Ana' } })
+    api.startCall.mockClear()
+    vi.useFakeTimers()
+    try {
+      api.getCallState.mockRejectedValue(
+        Object.assign(new ApiError(404, 'call not found'), { status: 404 }) as never
+      )
+
+      useCallStore.getState().handleWsReconnect()
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(api.startCall).not.toHaveBeenCalled()
+      expect(media.instances[0].disconnect).not.toHaveBeenCalled()
+      expect(useCallStore.getState().callId).toBe('call-1')
+    } finally {
+      api.getCallState.mockReset()
+      api.getCallState.mockImplementation(async () => ({ call: null, participants: [] }))
+      vi.useRealTimers()
+    }
+  })
+
+  it('canal: um 404 passageiro não troca de sala', async () => {
+    await joinChannel()
+    api.startCall.mockClear()
+    vi.useFakeTimers()
+    try {
+      api.getCallState.mockRejectedValueOnce(
+        Object.assign(new ApiError(404, 'call not found'), { status: 404 }) as never
+      )
+
+      useCallStore.getState().handleWsReconnect()
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      // Passado o 404, segue como sempre: reentra na mesma chamada, mídia intacta.
+      expect(api.startCall).toHaveBeenCalledTimes(1)
+      expect(media.instances[0].disconnect).not.toHaveBeenCalled()
+      expect(useCallStore.getState().callId).toBe('call-1')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('não faz nada ao reconectar o WS fora de chamada', async () => {
     useCallStore.getState().handleWsReconnect()
     await flush()
@@ -597,6 +860,118 @@ describe('callStore — reentrada após queda do WS', () => {
       mediaPeers: { caio: 'Caio' }
     })
     expect(useCallStore.getState().mediaPeers).toEqual({ caio: 'Caio' })
+  })
+})
+
+describe('callStore — DM após queda do WS', () => {
+  const ana = { id: 'ana', username: 'ana', display_name: 'Ana' }
+
+  async function inDmWithAna(): Promise<void> {
+    api.startCall.mockResolvedValue({ id: 'dm-1' })
+    await useCallStore.getState().startDMCall('conversa-1', ana)
+    useCallStore.getState().handleWsEvent({
+      type: 'call:accept',
+      payload: { call_id: 'dm-1', user: ana }
+    })
+    await flush()
+    await flush()
+  }
+
+  it('reenvia mudo e tela e lê o estado, sem reconectar a mídia nem tirar a outra pessoa', async () => {
+    await inDmWithAna()
+    expect(useCallStore.getState().status).toBe('active')
+    useCallStore.getState().toggleMute()
+    chat.sendEvent.mockClear()
+    api.getCallState.mockClear()
+    api.getCallState.mockResolvedValueOnce({
+      call: null,
+      participants: [{ user_id: 'eu' }, { user_id: 'ana', username: 'ana', deafened: true }]
+    } as never)
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(api.getCallState).toHaveBeenCalledWith('dm-1')
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:voice', {
+      call_id: 'dm-1',
+      muted: true,
+      deafened: false
+    })
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'dm-1', active: false })
+    expect(useCallStore.getState().voiceStates.ana).toMatchObject({ muted: false, deafened: true })
+    expect(useCallStore.getState().participants.map((p) => p.id)).toEqual(['ana'])
+    expect(media.instances).toHaveLength(1)
+    expect(api.startCall).toHaveBeenCalledTimes(1)
+  })
+
+  const notFound = (): Error => Object.assign(new ApiError(404, 'call not found'), { status: 404 })
+
+  it('DM que acabou durante a queda fecha a chamada (404 confirmado e a outra pessoa fora da mídia)', async () => {
+    await inDmWithAna()
+    vi.useFakeTimers()
+    try {
+      api.getCallState.mockRejectedValue(notFound() as never)
+
+      useCallStore.getState().handleWsReconnect()
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(useCallStore.getState().status).toBe('idle')
+      expect(useCallStore.getState().callId).toBeNull()
+    } finally {
+      api.getCallState.mockReset()
+      api.getCallState.mockImplementation(async () => ({ call: null, participants: [] }))
+      vi.useRealTimers()
+    }
+  })
+
+  it('um 404 passageiro (servidor acabando de subir) não derruba a DM', async () => {
+    await inDmWithAna()
+    vi.useFakeTimers()
+    try {
+      api.getCallState.mockRejectedValueOnce(notFound() as never)
+      chat.sendEvent.mockClear()
+
+      useCallStore.getState().handleWsReconnect()
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(useCallStore.getState().status).toBe('active')
+      expect(media.instances[0].disconnect).not.toHaveBeenCalled()
+      // E reenvia o próprio estado como numa reconexão normal.
+      expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'dm-1', active: false })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('404 repetido mas a outra pessoa ainda na sala de mídia: a DM continua', async () => {
+    await inDmWithAna()
+    onRemoteMedia({ ...empty, mediaPeers: { ana: 'Ana' } })
+    vi.useFakeTimers()
+    try {
+      api.getCallState.mockRejectedValue(notFound() as never)
+
+      useCallStore.getState().handleWsReconnect()
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(useCallStore.getState().status).toBe('active')
+      expect(media.instances[0].disconnect).not.toHaveBeenCalled()
+    } finally {
+      api.getCallState.mockReset()
+      api.getCallState.mockImplementation(async () => ({ call: null, participants: [] }))
+      vi.useRealTimers()
+    }
+  })
+
+  it('erro passageiro ao ler o estado mantém a DM', async () => {
+    await inDmWithAna()
+    api.getCallState.mockRejectedValueOnce(new Error('rede') as never)
+
+    useCallStore.getState().handleWsReconnect()
+    await flush()
+    await flush()
+
+    expect(useCallStore.getState().status).toBe('active')
   })
 })
 
@@ -911,5 +1286,446 @@ describe('callStore — movido de canal por um moderador', () => {
     expect(s.watchedScreenIds).toEqual([])
     expect(s.availableScreens).toEqual([])
     expect(s.focusedScreenUserId).toBeNull()
+  })
+})
+
+describe('callStore — detecção local da própria fala', () => {
+  const speakers = (i = 0): ((ids: string[]) => void) =>
+    (media.instances[i].handlers as { onActiveSpeakers: (ids: string[]) => void }).onActiveSpeakers
+
+  it('começa ao entrar na chamada, no microfone publicado', async () => {
+    const mic = fakeMic()
+    rtc.getAudioStream.mockResolvedValueOnce(mic)
+    await joinChannel()
+
+    expect(vad.watches).toHaveLength(1)
+    expect(vad.watches[0].mic).toBe(mic)
+    expect(media.connect).toHaveBeenCalledWith(
+      'ws://servidor',
+      'tok',
+      mic.stream.getAudioTracks()[0],
+      false
+    )
+  })
+
+  it('o próprio anel vem só da detecção local; os outros, do servidor', async () => {
+    await joinChannel()
+    const watch = vad.watches[0]
+
+    watch.handlers.onChange(true)
+    expect(useCallStore.getState().speakingIds).toEqual(['eu'])
+
+    // O servidor atrasado ainda me lista: não segura o anel.
+    watch.handlers.onChange(false)
+    speakers()(['eu', 'ana'])
+    expect(useCallStore.getState().speakingIds).toEqual(['ana'])
+
+    watch.handlers.onChange(true)
+    expect(useCallStore.getState().speakingIds).toEqual(['ana', 'eu'])
+  })
+
+  it('reinicia no microfone novo ao trocar de dispositivo e ignora o antigo', async () => {
+    const first = fakeMic()
+    const second = fakeMic()
+    rtc.getAudioStream.mockResolvedValueOnce(first).mockResolvedValueOnce(second)
+    await joinChannel()
+    const old = vad.watches[0]
+
+    await useCallStore.getState().setInputDevice('mic-usb')
+
+    expect(old.stop).toHaveBeenCalledTimes(1)
+    expect(vad.watches).toHaveLength(2)
+    expect(vad.watches[1].mic).toBe(second)
+    // Callback atrasado do watch parado não acende nada.
+    old.handlers.onChange(true)
+    expect(useCallStore.getState().speakingIds).toEqual([])
+    vad.watches[1].handlers.onChange(true)
+    expect(useCallStore.getState().speakingIds).toEqual(['eu'])
+  })
+
+  it('para ao sair da chamada e não reacende com callback atrasado', async () => {
+    await joinChannel()
+    const watch = vad.watches[0]
+    watch.handlers.onChange(true)
+
+    useCallStore.getState().endCall()
+
+    expect(watch.stop).toHaveBeenCalledTimes(1)
+    watch.handlers.onChange(true)
+    expect(useCallStore.getState().speakingIds).toEqual([])
+  })
+
+  it('para quando o servidor manda call:error da chamada', async () => {
+    await joinChannel()
+    const watch = vad.watches[0]
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:error',
+      payload: { call_id: 'call-1', message: 'erro' }
+    })
+
+    expect(watch.stop).toHaveBeenCalledTimes(1)
+    expect(useCallStore.getState().status).toBe('idle')
+  })
+
+  it('DM: não começa enquanto só toca; começa ao aceitar e para ao desligar', async () => {
+    const invite = (): void =>
+      useCallStore.getState().handleWsEvent({
+        type: 'call:invite',
+        payload: {
+          call_id: 'dm-1',
+          type: 'dm',
+          initiator: { id: 'ana', username: 'ana', display_name: 'Ana' }
+        }
+      })
+    invite()
+    expect(useCallStore.getState().status).toBe('ringing')
+    useCallStore.getState().declineCall()
+    expect(vad.watches).toHaveLength(0)
+
+    invite()
+    await useCallStore.getState().acceptCall()
+    await flush()
+    await flush()
+    expect(vad.watches).toHaveLength(1)
+    useCallStore.getState().endCall()
+    expect(vad.watches[0].stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('mudo nunca está falando, nem com a detecção local acesa', async () => {
+    await joinChannel()
+    vad.watches[0].handlers.onChange(true)
+
+    useCallStore.getState().toggleMute()
+    expect(useCallStore.getState().speakingIds).toEqual([])
+    // Ainda mudo: nem a detecção local nem o servidor acendem.
+    vad.watches[0].handlers.onChange(true)
+    speakers()(['eu'])
+    expect(useCallStore.getState().speakingIds).toEqual([])
+
+    useCallStore.getState().toggleMute()
+    expect(useCallStore.getState().speakingIds).toEqual(['eu'])
+  })
+
+  it('ensurdecido nunca está falando', async () => {
+    await joinChannel()
+    vad.watches[0].handlers.onChange(true)
+
+    useCallStore.getState().toggleDeafen()
+    expect(useCallStore.getState().speakingIds).toEqual([])
+    vad.watches[0].handlers.onChange(true)
+    expect(useCallStore.getState().speakingIds).toEqual([])
+  })
+
+  it('sem detecção local, mutar esconde o próprio anel que o servidor ainda mostra', async () => {
+    await joinChannel()
+    vad.watches[0].handlers.onUnavailable()
+    speakers()(['eu', 'ana'])
+    expect(useCallStore.getState().speakingIds).toEqual(['eu', 'ana'])
+
+    useCallStore.getState().toggleMute()
+    expect(useCallStore.getState().speakingIds).toEqual(['ana'])
+    speakers()(['eu', 'ana'])
+    expect(useCallStore.getState().speakingIds).toEqual(['ana'])
+  })
+
+  it('movido por moderador: troca o watch e aplica o mute de antes ao anel', async () => {
+    await joinChannel()
+    const old = vad.watches[0]
+    useCallStore.getState().toggleMute()
+    api.startCall.mockResolvedValue({ id: 'call-2', server_id: 'srv-1' })
+    const state = deferred<{ call: null; participants: never[] }>()
+    api.getCallState.mockReturnValueOnce(state.promise)
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:moved',
+      payload: {
+        from_call_id: 'call-1',
+        channel_id: 'canal-2',
+        channel_name: 'Outro',
+        user: { id: 'eu', username: 'eu', display_name: 'Eu' },
+        moved_by: { id: 'mod', username: 'mod', display_name: 'Mod' }
+      }
+    })
+    await flush()
+    await flush()
+
+    expect(old.stop).toHaveBeenCalledTimes(1)
+    expect(vad.watches).toHaveLength(2)
+    // Entre entrar na sala nova e reaplicar o mute, o servidor me lista.
+    vad.watches[1].handlers.onUnavailable()
+    speakers(1)(['eu'])
+    expect(useCallStore.getState().speakingIds).toEqual(['eu'])
+
+    state.resolve({ call: null, participants: [] })
+    await flush()
+    await flush()
+    expect(useCallStore.getState().muted).toBe(true)
+    expect(useCallStore.getState().speakingIds).toEqual([])
+  })
+})
+
+// ─── Permissões de voz (cargos) ─────────────────────────────────────────────
+
+const mediaHandlers = (): {
+  onPublishPermissions: (allowed: { microphone: boolean; stream: boolean }) => void
+} => media.instances[0].handlers as never
+
+describe('callStore — permissões de voz', () => {
+  it('começa podendo falar e transmitir', async () => {
+    await joinChannel()
+    expect(useCallStore.getState()).toMatchObject({ canSpeak: true, canStream: true })
+  })
+
+  it('perder a permissão de falar muda para mudo e avisa a chamada', async () => {
+    await joinChannel()
+    chat.sendEvent.mockClear()
+
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+
+    expect(useCallStore.getState()).toMatchObject({ canSpeak: false, muted: true, canStream: true })
+    expect(chat.sendEvent).toHaveBeenLastCalledWith('call:voice', {
+      call_id: 'call-1',
+      muted: true,
+      deafened: false
+    })
+  })
+
+  it('sem permissão de falar não dá para desmutar', async () => {
+    await joinChannel()
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+    vi.mocked(showToast.error).mockClear()
+
+    useCallStore.getState().toggleMute()
+
+    expect(useCallStore.getState().muted).toBe(true)
+    expect(showToast.error).toHaveBeenCalledWith(expect.stringMatching(/permissão para falar/))
+  })
+
+  it('silenciado por moderador explica o motivo certo', async () => {
+    await joinChannel()
+    useCallStore.getState().handleWsEvent({
+      type: 'call:voice',
+      payload: {
+        call_id: 'call-1',
+        user_id: 'eu',
+        muted: true,
+        deafened: false,
+        server_muted: true,
+        server_deafened: false
+      }
+    })
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+    vi.mocked(showToast.error).mockClear()
+
+    useCallStore.getState().toggleMute()
+
+    expect(showToast.error).toHaveBeenCalledWith(expect.stringMatching(/moderador/))
+  })
+
+  it('ganhar a permissão publica o microfone, mas não desmuta sozinho', async () => {
+    await joinChannel()
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+
+    mediaHandlers().onPublishPermissions({ microphone: true, stream: true })
+
+    expect(useCallStore.getState()).toMatchObject({ canSpeak: true, muted: true })
+    expect(media.instances[0].ensureMic).toHaveBeenCalledWith(true)
+    useCallStore.getState().toggleMute()
+    expect(useCallStore.getState().muted).toBe(false)
+  })
+
+  it('sem permissão de transmitir, tela e câmera nem abrem', async () => {
+    await joinChannel()
+    mediaHandlers().onPublishPermissions({ microphone: true, stream: false })
+    vi.mocked(showToast.error).mockClear()
+
+    await useCallStore.getState().startScreenShare()
+    await useCallStore.getState().toggleCamera()
+
+    expect(rtc.getDisplayStream).not.toHaveBeenCalled()
+    expect(rtc.getCameraStream).not.toHaveBeenCalled()
+    expect(showToast.error).toHaveBeenCalledTimes(2)
+    expect(showToast.error).toHaveBeenCalledWith(expect.stringMatching(/transmitir/))
+  })
+
+  it('desconectado por um moderador: avisa e encerra a chamada', async () => {
+    await joinChannel()
+    const handlers = media.instances[0].handlers as { onRemovedByModerator: () => void }
+
+    handlers.onRemovedByModerator()
+
+    expect(showToast.info).toHaveBeenCalledWith(expect.stringMatching(/moderador desconectou/))
+    expect(useCallStore.getState().status).toBe('idle')
+  })
+
+  it('sair da chamada devolve as permissões ao padrão', async () => {
+    await joinChannel()
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: false })
+
+    useCallStore.getState().endCall()
+
+    expect(useCallStore.getState()).toMatchObject({ canSpeak: true, canStream: true })
+  })
+})
+
+describe('callStore — salas trancadas e pedidos de entrada', () => {
+  it('toggleLock envia evento call:lock com inversão do estado atual', async () => {
+    await joinChannel()
+    expect(useCallStore.getState().locked).toBe(false)
+
+    useCallStore.getState().toggleLock()
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:lock', {
+      call_id: 'call-1',
+      locked: true
+    })
+  })
+
+  it('evento call:lock atualiza o estado local e serverCalls', () => {
+    useCallStore.getState().setServerCalls({
+      'canal-1': {
+        call: {
+          id: 'call-1',
+          type: 'channel',
+          channel_id: 'canal-1',
+          initiator_id: 'ana',
+          status: 'active',
+          started_at: '',
+          locked: false
+        },
+        participants: []
+      }
+    })
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:lock',
+      payload: {
+        call_id: 'call-1',
+        channel_id: 'canal-1',
+        locked: true,
+        by: { id: 'ana', username: 'ana', display_name: 'Ana' }
+      }
+    })
+
+    expect(useCallStore.getState().serverCalls['canal-1']?.call?.locked).toBe(true)
+  })
+
+  it('receber call:knock adiciona participante aos joinRequests', async () => {
+    await joinChannel()
+    const joao = { id: 'joao', username: 'joao', display_name: 'João' }
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:knock',
+      payload: {
+        call_id: 'call-1',
+        user: joao
+      }
+    })
+
+    expect(useCallStore.getState().joinRequests).toEqual([joao])
+
+    // call:knock_resolved remove o usuário de joinRequests
+    useCallStore.getState().handleWsEvent({
+      type: 'call:knock_resolved',
+      payload: {
+        call_id: 'call-1',
+        user_id: 'joao',
+        accepted: true,
+        reason: 'accepted'
+      }
+    })
+
+    expect(useCallStore.getState().joinRequests).toEqual([])
+  })
+
+  it('call:knock_accepted conecta automaticamente ao canal', async () => {
+    useCallStore.setState({
+      knock: { channelId: 'canal-trancado', callId: 'call-x', status: 'pending' }
+    })
+    api.startCall.mockResolvedValue({ id: 'call-x', server_id: 'srv-1', locked: true })
+
+    useCallStore.getState().handleWsEvent({
+      type: 'call:knock_accepted',
+      payload: {
+        call_id: 'call-x',
+        channel_id: 'canal-trancado',
+        server_id: 'srv-1',
+        reason: 'accepted',
+        by: { id: 'mod', username: 'mod', display_name: 'Mod' }
+      }
+    })
+
+    await flush()
+    await flush()
+
+    expect(useCallStore.getState().knock).toBeNull()
+    expect(useCallStore.getState().callId).toBe('call-x')
+    expect(useCallStore.getState().admittedChannelId).toBe('canal-trancado')
+  })
+
+  describe('espectadores da transmissão (screenWatchers)', () => {
+    it('watchScreen envia call:screen_watch e stopWatchingScreen cancela', async () => {
+      await joinChannel()
+      onRemoteMedia({ ...empty, availableScreens: ['ana'] })
+      chat.sendEvent.mockClear()
+
+      useCallStore.getState().watchScreen('ana')
+
+      expect(chat.sendEvent).toHaveBeenCalledWith('call:screen_watch', {
+        call_id: 'call-1',
+        sharer_id: 'ana',
+        watching: true
+      })
+
+      chat.sendEvent.mockClear()
+      useCallStore.getState().stopWatchingScreen('ana')
+
+      expect(chat.sendEvent).toHaveBeenCalledWith('call:screen_watch', {
+        call_id: 'call-1',
+        sharer_id: 'ana',
+        watching: false
+      })
+    })
+
+    it('recebe call:screen_watchers e atualiza os espectadores', async () => {
+      await joinChannel()
+
+      useCallStore.getState().handleWsEvent({
+        type: 'call:screen_watchers',
+        payload: {
+          call_id: 'call-1',
+          sharer_id: 'ana',
+          watchers: [
+            { id: 'bia', username: 'bia', display_name: 'Bia' },
+            { id: 'carlos', username: 'carlos', display_name: 'Carlos' }
+          ]
+        }
+      })
+
+      expect(useCallStore.getState().screenWatchers['ana']).toEqual([
+        { id: 'bia', username: 'bia', display_name: 'Bia' },
+        { id: 'carlos', username: 'carlos', display_name: 'Carlos' }
+      ])
+    })
+
+    it('quando sharer encerra tela (call:screen active:false), limpa seus espectadores', async () => {
+      await joinChannel()
+      useCallStore.setState({
+        screenWatchers: {
+          ana: [{ id: 'bia', username: 'bia', display_name: 'Bia' }]
+        }
+      })
+
+      useCallStore.getState().handleWsEvent({
+        type: 'call:screen',
+        payload: {
+          call_id: 'call-1',
+          active: false,
+          user: { id: 'ana', username: 'ana', display_name: 'Ana' }
+        }
+      })
+
+      expect(useCallStore.getState().screenWatchers['ana']).toBeUndefined()
+    })
   })
 })

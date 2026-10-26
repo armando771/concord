@@ -59,6 +59,11 @@ func (h *Handler) Create(c *gin.Context) {
 			return
 		}
 		call, err := h.service.StartChannel(ctx, userID.(string), input.ChannelID)
+		if errors.Is(err, ErrLocked) && call != nil {
+			// Sala trancada: o cliente usa o call_id para pedir para entrar.
+			c.JSON(http.StatusLocked, gin.H{"error": ErrLocked.Error(), "call_id": call.ID})
+			return
+		}
 		if err != nil {
 			c.JSON(mapStartError(err), gin.H{"error": err.Error()})
 			return
@@ -109,7 +114,8 @@ func (h *Handler) Active(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusOK, states)
+		// Só os canais de voz que a pessoa vê.
+		c.JSON(http.StatusOK, h.service.VisibleStates(ctx, id, userID.(string), states))
 		return
 	} else {
 		ch, err := h.service.channelService.FindByID(ctx, id)
@@ -117,8 +123,7 @@ func (h *Handler) Active(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "channel not found"})
 			return
 		}
-		isMember, err := h.service.serverService.IsMember(ctx, ch.ServerID, userID.(string))
-		if err != nil || !isMember {
+		if !h.service.CanViewChannel(ctx, ch.ID, userID.(string)) {
 			c.JSON(http.StatusForbidden, gin.H{"error": ErrNotMember.Error()})
 			return
 		}
@@ -165,7 +170,10 @@ func (h *Handler) State(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": ErrNotAllowed.Error()})
 		return
 	}
+	state.JoinRequests = h.service.joinRequestsOf(callID)
 
+	// Só aqui (participante conferido): quem entra depois já vê a atividade.
+	state.Activity = h.service.ActivityFor(callID, userID.(string))
 	c.JSON(http.StatusOK, state)
 }
 
@@ -213,7 +221,7 @@ func (h *Handler) Token(c *gin.Context) {
 	// backend, ex.: queda do WS) aparecer com nome e não como "Usuário".
 	name := h.service.mediaName(c.Request.Context(), userID.(string))
 
-	token, err := h.tokens.Issue(callID, userID.(string), name)
+	token, err := h.tokens.Issue(callID, userID.(string), name, h.service.GrantFor(c.Request.Context(), callID, userID.(string)))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to issue media token"})
 		return
@@ -251,7 +259,7 @@ func (h *Handler) Move(c *gin.Context) {
 
 func mapMoveError(err error) int {
 	switch {
-	case errors.Is(err, ErrNotModerator), errors.Is(err, ErrCannotMoveOwner):
+	case errors.Is(err, ErrNotModerator), errors.Is(err, ErrCannotMoveOwner), errors.Is(err, ErrCannotActOnMember), errors.Is(err, ErrTargetCannotJoin):
 		return http.StatusForbidden
 	case errors.Is(err, ErrNotInVoice), errors.Is(err, ErrSameChannel), errors.Is(err, ErrNotVoiceChannel):
 		return http.StatusBadRequest
@@ -264,13 +272,95 @@ func mapStartError(err error) int {
 	switch {
 	case errors.Is(err, ErrNotFound):
 		return http.StatusNotFound
+	case errors.Is(err, ErrLocked):
+		return http.StatusLocked
 	case errors.Is(err, ErrBusy),
 		errors.Is(err, ErrCalleeOffline),
 		errors.Is(err, ErrNotParticipant),
+		errors.Is(err, ErrBlocked),
 		errors.Is(err, ErrNotMember),
 		errors.Is(err, ErrInvalidType):
 		return http.StatusBadRequest
+	case errors.Is(err, ErrNoConnect):
+		return http.StatusForbidden
 	default:
 		return http.StatusInternalServerError
 	}
+}
+
+// respondModeration traduz os erros das ações de moderação de voz.
+func respondModeration(c *gin.Context, err error) {
+	status, code := http.StatusInternalServerError, "internal"
+	switch {
+	case errors.Is(err, ErrMissingPermission):
+		status, code = http.StatusForbidden, "missing_permission"
+	case errors.Is(err, ErrCannotActOnMember):
+		status, code = http.StatusForbidden, "role_hierarchy"
+	case errors.Is(err, ErrNotMember):
+		status, code = http.StatusForbidden, "not_member"
+	case errors.Is(err, ErrNotFound), errors.Is(err, ErrTargetNotInCall):
+		status, code = http.StatusNotFound, "not_found"
+	case errors.Is(err, ErrNotChannelCall):
+		status, code = http.StatusBadRequest, "invalid"
+	}
+	msg := err.Error()
+	if status == http.StatusInternalServerError {
+		msg = "internal error"
+	}
+	c.JSON(status, gin.H{"error": msg, "code": code})
+}
+
+// ServerMute: POST /calls/:id/participants/:userId/server-mute {muted}.
+func (h *Handler) ServerMute(c *gin.Context) {
+	h.serverVoice(c, func(ctx *gin.Context, actor string, on bool) error {
+		return h.service.SetServerMute(ctx.Request.Context(), ctx.Param("id"), actor, ctx.Param("userId"), on)
+	})
+}
+
+// ServerDeafen: POST /calls/:id/participants/:userId/server-deafen {deafened}.
+func (h *Handler) ServerDeafen(c *gin.Context) {
+	h.serverVoice(c, func(ctx *gin.Context, actor string, on bool) error {
+		return h.service.SetServerDeafen(ctx.Request.Context(), ctx.Param("id"), actor, ctx.Param("userId"), on)
+	})
+}
+
+func (h *Handler) serverVoice(c *gin.Context, apply func(*gin.Context, string, bool) error) {
+	var input struct {
+		Muted    *bool `json:"muted"`
+		Deafened *bool `json:"deafened"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil || (input.Muted == nil && input.Deafened == nil) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+	on := false
+	if input.Muted != nil {
+		on = *input.Muted
+	} else {
+		on = *input.Deafened
+	}
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if err := apply(c, userID.(string), on); err != nil {
+		respondModeration(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// Disconnect: DELETE /calls/:id/participants/:userId (MOVE_MEMBERS).
+func (h *Handler) Disconnect(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if err := h.service.DisconnectParticipant(c.Request.Context(), c.Param("id"), userID.(string), c.Param("userId")); err != nil {
+		respondModeration(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

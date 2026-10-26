@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 
+	"gin-quickstart/backend/internal/permission"
+
 	"github.com/google/uuid"
 )
 
 var (
-	ErrNameRequired        = errors.New("name is required")
-	ErrChannelNotFound     = errors.New("channel not found")
-	ErrInvalidChannelOrder = errors.New("invalid channel order")
+	ErrNameRequired    = errors.New("name is required")
+	ErrChannelNotFound = errors.New("channel not found")
 )
 
 type EventPublisher interface {
@@ -18,32 +19,41 @@ type EventPublisher interface {
 	PublishChannelUpdate(event CreateEvent)
 	PublishChannelDelete(event DeleteEvent)
 	PublishChannelReorder(event ReorderEvent)
+	// PublishPermissionsChanged: quem vê o quê mudou (o app busca os canais
+	// de novo e o servidor tira das salas quem perdeu acesso).
+	PublishPermissionsChanged(serverID string)
 }
 
-type Store interface {
-	Create(ctx context.Context, ch *Channel) error
+// store é o que o Service usa do Repository (nos testes, um fake em memória).
+type store interface {
+	Create(ctx context.Context, ch *Channel, overwrites []permission.Overwrite) error
 	FindByID(ctx context.Context, id string) (*Channel, error)
 	Update(ctx context.Context, id string, name string) error
-	Reorder(ctx context.Context, serverID string, channelIDs []string) error
 	Delete(ctx context.Context, id string) error
 	ListByServerID(ctx context.Context, serverID string) ([]Channel, error)
-	IsMember(ctx context.Context, serverID string, userID string) (bool, error)
-	IsAdminOrOwner(ctx context.Context, serverID string, userID string) (bool, error)
+	Reorder(ctx context.Context, serverID string, chType string, ids []string) error
+	SetOverwrite(ctx context.Context, channelID string, o permission.Overwrite) error
+	DeleteOverwrite(ctx context.Context, channelID, targetType, targetID string) error
 }
 
 type Service struct {
-	repository Store
+	repository store
 	publisher  EventPublisher
 }
 
-func ChannelService(repository Store, publisher EventPublisher) *Service {
+func ChannelService(repository *Repository, publisher EventPublisher) *Service {
+	return newService(repository, publisher)
+}
+
+func newService(repository store, publisher EventPublisher) *Service {
 	return &Service{
 		repository: repository,
 		publisher:  publisher,
 	}
 }
 
-func (s *Service) Create(ctx context.Context, ch *Channel) error {
+// Create cria o canal já com as sobrescritas (canal privado).
+func (s *Service) Create(ctx context.Context, ch *Channel, overwrites ...permission.Overwrite) error {
 	if ch.Name == "" {
 		return ErrNameRequired
 	}
@@ -54,8 +64,12 @@ func (s *Service) Create(ctx context.Context, ch *Channel) error {
 
 	ch.ID = uuid.New().String()
 
-	if err := s.repository.Create(ctx, ch); err != nil {
+	if err := s.repository.Create(ctx, ch, overwrites); err != nil {
 		return err
+	}
+	ch.Overwrites = append([]permission.Overwrite{}, overwrites...)
+	for i := range ch.Overwrites {
+		ch.Overwrites[i].ChannelID = ch.ID
 	}
 
 	if s.publisher != nil {
@@ -101,40 +115,6 @@ func (s *Service) Update(ctx context.Context, id string, name string) (*Channel,
 	return updated, nil
 }
 
-func (s *Service) Reorder(ctx context.Context, serverID string, channelIDs []string) ([]Channel, error) {
-	if len(channelIDs) == 0 {
-		return nil, ErrInvalidChannelOrder
-	}
-	seen := make(map[string]struct{}, len(channelIDs))
-	for _, id := range channelIDs {
-		if id == "" {
-			return nil, ErrInvalidChannelOrder
-		}
-		if _, dup := seen[id]; dup {
-			return nil, ErrInvalidChannelOrder
-		}
-		seen[id] = struct{}{}
-	}
-
-	if err := s.repository.Reorder(ctx, serverID, channelIDs); err != nil {
-		return nil, err
-	}
-
-	channels, err := s.repository.ListByServerID(ctx, serverID)
-	if err != nil {
-		return nil, err
-	}
-
-	if s.publisher != nil {
-		s.publisher.PublishChannelReorder(ReorderEvent{
-			ServerID: serverID,
-			Channels: channels,
-		})
-	}
-
-	return channels, nil
-}
-
 func (s *Service) Delete(ctx context.Context, id string) error {
 	ch, err := s.repository.FindByID(ctx, id)
 	if err != nil {
@@ -155,14 +135,62 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// Reorder muda a ordem dos canais de um tipo (texto ou voz) do servidor; ids
+// tem que ser exatamente os canais daquela seção. Avisa a sala do servidor.
+func (s *Service) Reorder(ctx context.Context, serverID string, chType string, ids []string, requestID string) error {
+	if chType != TypeText && chType != TypeVoice {
+		return ErrInvalidType
+	}
+	if len(requestID) > MaxRequestIDLength {
+		return ErrInvalidRequestID
+	}
+	if ids == nil {
+		ids = []string{}
+	}
+
+	if err := s.repository.Reorder(ctx, serverID, chType, ids); err != nil {
+		return err
+	}
+
+	if s.publisher != nil {
+		s.publisher.PublishChannelReorder(ReorderEvent{
+			ServerID:   serverID,
+			Type:       chType,
+			ChannelIDs: ids,
+			RequestID:  requestID,
+		})
+	}
+
+	return nil
+}
+
 func (s *Service) ListByServerID(ctx context.Context, serverID string) ([]Channel, error) {
 	return s.repository.ListByServerID(ctx, serverID)
 }
 
-func (s *Service) IsMember(ctx context.Context, serverID string, userID string) (bool, error) {
-	return s.repository.IsMember(ctx, serverID, userID)
+// SetOverwrite grava a sobrescrita e avisa o servidor (o canal muda para quem
+// ganhou ou perdeu acesso).
+func (s *Service) SetOverwrite(ctx context.Context, ch *Channel, o permission.Overwrite) error {
+	o.ChannelID = ch.ID
+	if err := s.repository.SetOverwrite(ctx, ch.ID, o); err != nil {
+		return err
+	}
+	s.publishPermissions(ch)
+	return nil
 }
 
-func (s *Service) IsAdminOrOwner(ctx context.Context, serverID string, userID string) (bool, error) {
-	return s.repository.IsAdminOrOwner(ctx, serverID, userID)
+func (s *Service) DeleteOverwrite(ctx context.Context, ch *Channel, targetType, targetID string) error {
+	if err := s.repository.DeleteOverwrite(ctx, ch.ID, targetType, targetID); err != nil {
+		return err
+	}
+	s.publishPermissions(ch)
+	return nil
+}
+
+func (s *Service) publishPermissions(ch *Channel) {
+	if s.publisher == nil {
+		return
+	}
+	s.publisher.PublishChannelUpdate(CreateEvent{ServerID: ch.ServerID, Channel: *ch})
+	s.publisher.PublishPermissionsChanged(ch.ServerID)
 }

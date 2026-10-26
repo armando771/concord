@@ -5,6 +5,13 @@ import { openMicrophone, type MicHandle } from './noiseSuppression'
 import { pickerError, resetPickerCancel } from './screenPickerCancel'
 import { displayMediaOptions, retryWithoutAudio } from './displayMedia'
 import { IS_WEB } from './config'
+import { requestScreenQuality } from '../store/screenQualityStore'
+import {
+  loadScreenQuality,
+  rememberScreenSource,
+  rememberStreamQuality,
+  screenVideoConstraints
+} from './screenShareQuality'
 
 /** Microfone local (com RNNoise). `deviceId` vazio = padrão do sistema. */
 export function getAudioStream(deviceId = ''): Promise<MicHandle> {
@@ -18,8 +25,16 @@ export function getAudioStream(deviceId = ''): Promise<MicHandle> {
 // quando o usuário cancela.
 export async function getDisplayStream(): Promise<MediaStream> {
   resetPickerCancel()
+  // Web: confirmar o modal precede o seletor nativo. Desktop: a qualidade é
+  // escolhida no picker que atende ao pedido já pendente do Electron.
+  const requestedQuality = IS_WEB ? await requestScreenQuality() : null
   const capture = (audio: boolean): Promise<MediaStream> =>
-    navigator.mediaDevices.getDisplayMedia(displayMediaOptions(IS_WEB, { audio }))
+    navigator.mediaDevices.getDisplayMedia(
+      displayMediaOptions(IS_WEB, {
+        audio,
+        frameRate: requestedQuality?.frameRate ?? 60
+      })
+    )
   const stream = await capture(true)
     .catch((err: unknown) => {
       // Navegador sem captura de som de tela: compartilha só o vídeo.
@@ -29,8 +44,25 @@ export async function getDisplayStream(): Promise<MediaStream> {
     .catch((err: unknown) => {
       throw pickerError(err)
     })
+  const quality = requestedQuality ?? loadScreenQuality()
+  stream.getVideoTracks().forEach(rememberScreenSource)
+  try {
+    await Promise.all(
+      stream
+        .getVideoTracks()
+        .map((track) =>
+          track.applyConstraints(screenVideoConstraints(quality, track.getSettings()))
+        )
+    )
+  } catch (err) {
+    stream.getTracks().forEach((track) => track.stop())
+    window.api?.screenShare?.ended()
+    throw err
+  }
+  rememberStreamQuality(stream, quality)
   stream.getVideoTracks().forEach((track) => {
     track.contentHint = 'detail'
+    track.addEventListener('ended', () => window.api?.screenShare?.ended())
   })
   stream.getAudioTracks().forEach((track) => {
     track.contentHint = 'music'

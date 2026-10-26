@@ -4,11 +4,17 @@ import Background from './components/Background'
 import ToastContainer from './components/ToastContainer'
 import BackgroundBridge from './components/BackgroundBridge'
 import OverlayBridge from './components/OverlayBridge'
-import UpdateNotice from './components/UpdateNotice'
+import GameActivityBridge from './components/GameActivityBridge'
+import UpdateBridge from './components/UpdateBridge'
+import SandboxNotice from './components/SandboxNotice'
+import AutoUpdateUnavailableNotice from './components/AutoUpdateUnavailableNotice'
 import UpdateCallBridge from './components/UpdateCallBridge'
 import UserContextMenu from './components/UserContextMenu'
 import UserProfileCard from './components/UserProfileCard'
+import FriendActionsHost from './components/friends/FriendActionsHost'
 import SettingsScreen from './components/settings/SettingsScreen'
+import ServerSettingsScreen from './components/serverSettings/ServerSettingsScreen'
+import ModerationHost from './components/ModerationHost'
 import TitleBar from './components/TitleBar'
 import WebNotificationBridge from './components/WebNotificationBridge'
 import WebLeaveGuard from './components/WebLeaveGuard'
@@ -32,13 +38,19 @@ function App(): React.JSX.Element {
           {/* Só no Electron: bandeja, overlay de jogo e atualizações. */}
           <BackgroundBridge />
           <OverlayBridge />
-          <UpdateNotice />
+          <GameActivityBridge />
+          <UpdateBridge />
+          <SandboxNotice />
+          <AutoUpdateUnavailableNotice />
           <UpdateCallBridge />
         </>
       )}
       <UserContextMenu />
       <UserProfileCard />
+      <FriendActionsHost />
       <SettingsScreen />
+      <ServerSettingsScreen />
+      <ModerationHost />
       {customTitleBar ? (
         <div className="flex h-full flex-col">
           <TitleBar />

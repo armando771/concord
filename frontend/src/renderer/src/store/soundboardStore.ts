@@ -325,7 +325,6 @@ export const useSoundboardStore = create<SoundboardState>()((set, get) => {
           void playSoundboardClip({
             soundId: p.sound.id,
             volume,
-            outputDeviceId: callState.outputDeviceId,
             onEnded: () => clearUserPlay(userId, playToken)
           })
         }

@@ -11,7 +11,7 @@ import { useNearViewport } from './useNearViewport'
 function ImageAttachment({ attachment }: { attachment: Attachment }): React.JSX.Element {
   const boxRef = useRef<HTMLButtonElement>(null)
   const near = useNearViewport(boxRef)
-  const { src, onError, failed } = useMediaSrc(attachment.id, near)
+  const { src, onError, failed } = useMediaSrc(attachment.id, near, attachment.url)
   const [open, setOpen] = useState(false)
   const box = fitMedia(attachment.width, attachment.height)
 
@@ -52,7 +52,7 @@ function ImageAttachment({ attachment }: { attachment: Attachment }): React.JSX.
 /** Vídeo: nada é pedido ao servidor até o clique no play. */
 function VideoAttachment({ attachment }: { attachment: Attachment }): React.JSX.Element {
   const [activated, setActivated] = useState(false)
-  const { src, onError, failed } = useMediaSrc(attachment.id, activated)
+  const { src, onError, failed } = useMediaSrc(attachment.id, activated, attachment.url)
   // Token vencido no meio do vídeo: recarrega com token novo do mesmo ponto.
   const resumeAt = useRef(0)
   const box = fitMedia(attachment.width, attachment.height)

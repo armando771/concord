@@ -1,31 +1,77 @@
 package server
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"net/http"
 
 	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/friendship"
+	"gin-quickstart/backend/internal/permission"
 	"gin-quickstart/backend/internal/user"
 
 	"github.com/gin-gonic/gin"
 )
 
-type Handler struct {
-	service         *Service
-	friendService   *friendship.Service
-	userService     *user.Service
-	channelService  *channel.Service
+// PermissionChecker: o membro tem os bits no servidor (permission.Service).
+type PermissionChecker interface {
+	Require(ctx context.Context, serverID, userID string, want int64) error
 }
 
-func ServerHandler(service *Service, friendService *friendship.Service, userService *user.Service, channelService *channel.Service) *Handler {
+// RoleLister: cargos do servidor para a resposta de GET /servers/:id.
+type RoleLister interface {
+	List(ctx context.Context, serverID, userID string) ([]permission.Role, error)
+}
+
+// ImageUploader recebe o ícone do servidor (o mesmo upload do avatar).
+type ImageUploader interface {
+	UploadImage(c *gin.Context, apply user.ImageApply)
+	RemoveMediaURL(url *string)
+}
+
+// IconSetter grava o ícone novo (nil tira), avisa os membros e devolve o
+// ícone antigo para apagar o arquivo.
+type IconSetter interface {
+	SetIcon(ctx context.Context, serverID string, url *string) (*Server, *string, error)
+}
+
+type Handler struct {
+	images         ImageUploader
+	icons          IconSetter
+	service        *Service
+	friendService  *friendship.Service
+	userService    *user.Service
+	channelService *channel.Service
+	perms          PermissionChecker
+	roles          RoleLister
+	moderation     *Moderation
+	nicknames      *Nicknames
+	previews       InvitePreviewer
+}
+
+func ServerHandler(service *Service, friendService *friendship.Service, userService *user.Service, channelService *channel.Service, perms PermissionChecker, roles RoleLister, moderation *Moderation, nicknames *Nicknames, images ImageUploader) *Handler {
 	return &Handler{
+		images:         images,
+		icons:          service,
 		service:        service,
 		friendService:  friendService,
 		userService:    userService,
 		channelService: channelService,
+		perms:          perms,
+		roles:          roles,
+		moderation:     moderation,
+		nicknames:      nicknames,
+		previews:       service,
 	}
+}
+
+// respondPermission responde os erros de permissão (true se respondeu).
+func respondPermission(c *gin.Context, err error) bool {
+	if status, code, ok := permission.HTTPError(err); ok {
+		c.JSON(status, gin.H{"error": err.Error(), "code": code})
+		return true
+	}
+	return false
 }
 
 func (h *Handler) Create(c *gin.Context) {
@@ -79,8 +125,10 @@ func (h *Handler) Update(c *gin.Context) {
 	serverID := c.Param("id")
 
 	var input struct {
-		Name    string `json:"name"`
-		IconURL string `json:"icon_url"`
+		Name string `json:"name"`
+		// Sem icon_url o ícone fica como está (o app troca o ícone por
+		// upload; só apps antigos mandam a URL).
+		IconURL *string `json:"icon_url"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -94,18 +142,11 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	srv, err := h.service.FindByID(c.Request.Context(), serverID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
-		return
-	}
-
-	if srv.OwnerID != userID.(string) {
-		isAdmin, err := h.isAdmin(c.Request.Context(), serverID, userID.(string))
-		if err != nil || !isAdmin {
-			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can edit the server"})
-			return
+	if err := h.perms.Require(c.Request.Context(), serverID, userID.(string), permission.ManageServer); err != nil {
+		if !respondPermission(c, err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
 		}
+		return
 	}
 
 	updated, err := h.service.Update(c.Request.Context(), serverID, input.Name, input.IconURL)
@@ -163,18 +204,11 @@ func (h *Handler) SetPrimaryChannel(c *gin.Context) {
 		return
 	}
 
-	srv, err := h.service.FindByID(c.Request.Context(), serverID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
-		return
-	}
-
-	if srv.OwnerID != userID.(string) {
-		isAdmin, err := h.isAdmin(c.Request.Context(), serverID, userID.(string))
-		if err != nil || !isAdmin {
-			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can change the primary channel"})
-			return
+	if err := h.perms.Require(c.Request.Context(), serverID, userID.(string), permission.ManageServer); err != nil {
+		if !respondPermission(c, err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
 		}
+		return
 	}
 
 	updated, err := h.service.SetPrimaryChannel(c.Request.Context(), serverID, input.ChannelID)
@@ -188,19 +222,6 @@ func (h *Handler) SetPrimaryChannel(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, updated)
-}
-
-func (h *Handler) isAdmin(ctx context.Context, serverID string, userID string) (bool, error) {
-	members, err := h.service.ListMembers(ctx, serverID)
-	if err != nil {
-		return false, err
-	}
-	for _, m := range members {
-		if m.UserID == userID && m.Role == "admin" {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 func (h *Handler) ListByUser(c *gin.Context) {
@@ -246,9 +267,16 @@ func (h *Handler) GetByID(c *gin.Context) {
 		return
 	}
 
+	roles, err := h.roles.List(c.Request.Context(), serverID, userID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list roles"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"server":  server,
 		"members": members,
+		"roles":   roles,
 	})
 }
 
@@ -270,19 +298,12 @@ func (h *Handler) InviteMember(c *gin.Context) {
 		return
 	}
 
-	server, err := h.service.FindByID(c.Request.Context(), serverID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
-		return
-	}
-
-	// Qualquer membro pode convidar.
-	if server.OwnerID != userID.(string) {
-		isMember, err := h.service.IsMember(c.Request.Context(), serverID, userID.(string))
-		if err != nil || !isMember {
-			c.JSON(http.StatusForbidden, gin.H{"error": "you are not a member of this server"})
-			return
+	// Quem tem CREATE_INVITE (por padrão, todo membro) convida.
+	if err := h.perms.Require(c.Request.Context(), serverID, userID.(string), permission.CreateInvite); err != nil {
+		if !respondPermission(c, err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
 		}
+		return
 	}
 
 	areFriends, err := h.friendService.AreFriends(c.Request.Context(), userID.(string), input.UserID)
@@ -309,6 +330,10 @@ func (h *Handler) InviteMember(c *gin.Context) {
 	}
 
 	if err := h.service.InviteUser(c.Request.Context(), serverID, userID.(string), input.UserID); err != nil {
+		if errors.Is(err, ErrBanned) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "esse usuário está banido do servidor", "code": "banned"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to invite user"})
 		return
 	}
@@ -366,6 +391,10 @@ func (h *Handler) AcceptInvite(c *gin.Context) {
 	}
 
 	if err := h.service.AcceptInvite(c.Request.Context(), inviteID, userID.(string)); err != nil {
+		if errors.Is(err, ErrBanned) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "banned"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -394,6 +423,13 @@ func (h *Handler) InviteCode(c *gin.Context) {
 	userID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.perms.Require(c.Request.Context(), c.Param("id"), userID.(string), permission.CreateInvite); err != nil {
+		if !respondPermission(c, err) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get invite code"})
+		}
 		return
 	}
 
@@ -426,6 +462,10 @@ func (h *Handler) JoinByCode(c *gin.Context) {
 	}
 
 	server, err := h.service.JoinByCode(c.Request.Context(), input.Code, userID.(string))
+	if errors.Is(err, ErrBanned) {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "banned"})
+		return
+	}
 	if errors.Is(err, ErrInvalidCode) {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
@@ -438,34 +478,71 @@ func (h *Handler) JoinByCode(c *gin.Context) {
 	c.JSON(http.StatusOK, server)
 }
 
-func (h *Handler) SetMemberRole(c *gin.Context) {
-	var input struct {
-		Role string `json:"role"`
+// requireManageServer confere a permissão de editar o servidor antes de
+// qualquer upload (false se já respondeu).
+func (h *Handler) requireManageServer(c *gin.Context) bool {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return false
 	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+	if err := h.perms.Require(c.Request.Context(), c.Param("id"), userID.(string), permission.ManageServer); err != nil {
+		if !respondPermission(c, err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
+		}
+		return false
+	}
+	return true
+}
+
+// UploadIcon troca o ícone por uma imagem ou GIF enviado (mesmo pipeline do
+// avatar: tipo, tamanho e quadro estático do GIF).
+func (h *Handler) UploadIcon(c *gin.Context) {
+	if !h.requireManageServer(c) {
 		return
 	}
+	serverID := c.Param("id")
+	h.images.UploadImage(c, func(ctx context.Context, _ string, url *string) (*string, bool) {
+		updated, old, err := h.icons.SetIcon(ctx, serverID, url)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
+			return nil, false
+		}
+		c.JSON(http.StatusOK, updated)
+		return old, true
+	})
+}
 
+// DeleteIcon tira o ícone do servidor e apaga o arquivo antigo.
+func (h *Handler) DeleteIcon(c *gin.Context) {
+	if !h.requireManageServer(c) {
+		return
+	}
+	updated, old, err := h.icons.SetIcon(c.Request.Context(), c.Param("id"), nil)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
+		return
+	}
+	h.images.RemoveMediaURL(old)
+	c.JSON(http.StatusOK, updated)
+}
+
+func (h *Handler) EnableMusicBot(c *gin.Context)  { h.setMusicBot(c, true) }
+func (h *Handler) DisableMusicBot(c *gin.Context) { h.setMusicBot(c, false) }
+
+func (h *Handler) setMusicBot(c *gin.Context, enabled bool) {
 	userID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-
-	member, err := h.service.SetMemberRole(
-		c.Request.Context(), c.Param("id"), userID.(string), c.Param("userId"), input.Role,
-	)
-	switch {
-	case errors.Is(err, ErrOnlyOwner), errors.Is(err, ErrOwnerRole):
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
-	case errors.Is(err, ErrInvalidRole):
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-	case errors.Is(err, ErrNotServerMember):
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-	case err != nil:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to change role"})
-	default:
-		c.JSON(http.StatusOK, member)
+	if err := h.service.SetMusicBot(c.Request.Context(), c.Param("id"), userID.(string), enabled); err != nil {
+		if errors.Is(err, ErrOnlyOwnerBot) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
+		return
 	}
+	c.Status(http.StatusNoContent)
 }

@@ -27,6 +27,9 @@ type Call struct {
 	Status         string     `json:"status"`
 	StartedAt      time.Time  `json:"started_at"`
 	EndedAt        *time.Time `json:"ended_at,omitempty"`
+	// Locked: sala de voz trancada — só entra quem for aceito por alguém de
+	// dentro. Transitório (memória), não é persistido.
+	Locked bool `json:"locked"`
 }
 
 type CallParticipant struct {
@@ -35,6 +38,13 @@ type CallParticipant struct {
 	Role     string     `json:"role"`
 	JoinedAt time.Time  `json:"joined_at"`
 	LeftAt   *time.Time `json:"left_at,omitempty"`
+	// Estado de voz/tela guardado para o reinício do backend (RestoreActive).
+	Muted         bool `json:"muted"`
+	Deafened      bool `json:"deafened"`
+	ScreenSharing bool `json:"screen_sharing"`
+	// Silenciado/ensurdecido por um moderador.
+	ServerMuted    bool `json:"server_muted"`
+	ServerDeafened bool `json:"server_deafened"`
 }
 
 type UserInfo struct {
@@ -71,11 +81,19 @@ type StateEvent struct {
 }
 
 // ScreenEvent sinaliza que um participante começou ("active": true) ou parou
-// de compartilhar tela na chamada. Transitório — não é persistido.
+// de compartilhar tela na chamada. O estado fica salvo em call_participants
+// para voltar depois de um reinício do backend.
 type ScreenEvent struct {
 	CallID string   `json:"call_id"`
 	User   UserInfo `json:"user"`
 	Active bool     `json:"active"`
+}
+
+// ScreenWatchersEvent avisa a lista de quem está assistindo à transmissão de um usuário.
+type ScreenWatchersEvent struct {
+	CallID   string     `json:"call_id"`
+	SharerID string     `json:"sharer_id"`
+	Watchers []UserInfo `json:"watchers"`
 }
 
 type EndedEvent struct {
@@ -116,6 +134,9 @@ type VoiceEvent struct {
 	UserID    string  `json:"user_id"`
 	Muted     bool    `json:"muted"`
 	Deafened  bool    `json:"deafened"`
+	// Impostos por um moderador; o app soma ao mudo/ensurdecido do próprio.
+	ServerMuted    bool `json:"server_muted"`
+	ServerDeafened bool `json:"server_deafened"`
 }
 
 type VoicePayload struct {
@@ -129,8 +150,51 @@ type ScreenPayload struct {
 	Active bool   `json:"active"`
 }
 
+// ScreenWatchPayload sinaliza que o participante começou ou parou de assistir à transmissão de SharerID.
+type ScreenWatchPayload struct {
+	CallID   string `json:"call_id"`
+	SharerID string `json:"sharer_id"`
+	Watching bool   `json:"watching"`
+}
+
 type LeavePayload struct {
 	CallID string `json:"call_id"`
+}
+
+// Epic Pen / Screen Annotation models
+
+type DrawPoint struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+type DrawStroke struct {
+	ID        string      `json:"id"`
+	SharerID  string      `json:"sharer_id"`
+	UserID    string      `json:"user_id"`
+	Tool      string      `json:"tool"` // "pen", "highlighter", "laser"
+	Color     string      `json:"color"`
+	Width     float64     `json:"width"`
+	Points    []DrawPoint `json:"points"`
+	CreatedAt int64       `json:"created_at"`
+	FadeOut   bool        `json:"fade_out,omitempty"`
+}
+
+type ScreenDrawPayload struct {
+	CallID   string     `json:"call_id"`
+	SharerID string     `json:"sharer_id"`
+	Stroke   DrawStroke `json:"stroke"`
+}
+
+type ScreenDrawClearPayload struct {
+	CallID   string `json:"call_id"`
+	SharerID string `json:"sharer_id"`
+}
+
+type ScreenDrawUndoPayload struct {
+	CallID   string `json:"call_id"`
+	SharerID string `json:"sharer_id"`
+	StrokeID string `json:"stroke_id"`
 }
 
 func marshalEvent(typ string, payload interface{}) []byte {

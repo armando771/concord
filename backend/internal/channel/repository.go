@@ -3,6 +3,10 @@ package channel
 import (
 	"context"
 
+	"gin-quickstart/backend/internal/permission"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -16,18 +20,23 @@ func ChannelRepository(db *pgxpool.Pool) *Repository {
 	}
 }
 
-func (r *Repository) Create(ctx context.Context, ch *Channel) error {
-	return r.db.QueryRow(
+// Create insere o canal e as sobrescritas dele numa transação: um canal
+// privado nunca existe, nem por um instante, sem o deny do @everyone.
+func (r *Repository) Create(ctx context.Context, ch *Channel, overwrites []permission.Overwrite) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	err = tx.QueryRow(
 		ctx,
 		`
-		INSERT INTO channels (id, server_id, name, type, position, created_by)
+		INSERT INTO channels (id, server_id, name, type, created_by, position)
 		VALUES (
-			$1,
-			$2,
-			$3,
-			$4,
-			COALESCE((SELECT MAX(position) + 1 FROM channels WHERE server_id = $2 AND type = $4), 0),
-			$5
+			$1, $2, $3, $4::varchar, $5,
+			-- Canal novo vai para o fim da seção dele.
+			(SELECT COALESCE(MAX(position) + 1, 0) FROM channels WHERE server_id = $2 AND type = $4::varchar)
 		)
 		RETURNING
 			id,
@@ -54,6 +63,46 @@ func (r *Repository) Create(ctx context.Context, ch *Channel) error {
 		&ch.CreatedAt,
 		&ch.UpdatedAt,
 	)
+	if err != nil {
+		return err
+	}
+	for _, o := range overwrites {
+		if err := setOverwrite(ctx, tx, ch.ID, o); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+type execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+func setOverwrite(ctx context.Context, db execer, channelID string, o permission.Overwrite) error {
+	_, err := db.Exec(
+		ctx,
+		`
+		INSERT INTO channel_overwrites (channel_id, target_type, target_id, allow, deny)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (channel_id, target_type, target_id) DO UPDATE SET allow = EXCLUDED.allow, deny = EXCLUDED.deny
+		`,
+		channelID, o.TargetType, o.TargetID, o.Allow, o.Deny,
+	)
+	return err
+}
+
+// SetOverwrite cria ou troca a sobrescrita de um cargo/membro no canal.
+func (r *Repository) SetOverwrite(ctx context.Context, channelID string, o permission.Overwrite) error {
+	return setOverwrite(ctx, r.db, channelID, o)
+}
+
+func (r *Repository) DeleteOverwrite(ctx context.Context, channelID, targetType, targetID string) error {
+	_, err := r.db.Exec(
+		ctx,
+		`DELETE FROM channel_overwrites WHERE channel_id = $1 AND target_type = $2 AND target_id = $3`,
+		channelID, targetType, targetID,
+	)
+	return err
 }
 
 func (r *Repository) FindByID(ctx context.Context, id string) (*Channel, error) {
@@ -113,32 +162,6 @@ func (r *Repository) Update(ctx context.Context, id string, name string) error {
 		return ErrChannelNotFound
 	}
 	return nil
-}
-
-func (r *Repository) Reorder(ctx context.Context, serverID string, channelIDs []string) error {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	for i, channelID := range channelIDs {
-		tag, err := tx.Exec(
-			ctx,
-			`UPDATE channels SET position = $1, updated_at = NOW() WHERE id = $2 AND server_id = $3`,
-			i,
-			channelID,
-			serverID,
-		)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return ErrChannelNotFound
-		}
-	}
-
-	return tx.Commit(ctx)
 }
 
 func (r *Repository) Delete(ctx context.Context, id string) error {
@@ -201,30 +224,46 @@ func (r *Repository) ListByServerID(ctx context.Context, serverID string) ([]Cha
 	return channels, nil
 }
 
-func (r *Repository) IsMember(ctx context.Context, serverID string, userID string) (bool, error) {
-	var exists bool
-	err := r.db.QueryRow(
-		ctx,
-		`SELECT EXISTS(SELECT 1 FROM server_members WHERE server_id = $1 AND user_id = $2)`,
-		serverID,
-		userID,
-	).Scan(&exists)
-	return exists, err
-}
+// Reorder grava a nova ordem dos canais de um tipo do servidor numa transação:
+// trava os canais da seção, confere que ids é exatamente eles (ValidateOrder)
+// e grava position = índice em ids.
+func (r *Repository) Reorder(ctx context.Context, serverID string, chType string, ids []string) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
 
-func (r *Repository) IsAdminOrOwner(ctx context.Context, serverID string, userID string) (bool, error) {
-	var allowed bool
-	err := r.db.QueryRow(
+	rows, err := tx.Query(
+		ctx,
+		`SELECT id FROM channels WHERE server_id = $1 AND type = $2 FOR UPDATE`,
+		serverID,
+		chType,
+	)
+	if err != nil {
+		return err
+	}
+	current, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return err
+	}
+
+	if err := ValidateOrder(current, ids); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(
 		ctx,
 		`
-		SELECT EXISTS(
-			SELECT 1 FROM servers WHERE id = $1 AND owner_id = $2
-			UNION ALL
-			SELECT 1 FROM server_members WHERE server_id = $1 AND user_id = $2 AND role = 'admin'
-		)
+		UPDATE channels AS c
+		SET position = o.ord - 1
+		FROM unnest($1::text[]) WITH ORDINALITY AS o(id, ord)
+		WHERE c.id = o.id::uuid
 		`,
-		serverID,
-		userID,
-	).Scan(&allowed)
-	return allowed, err
+		ids,
+	); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }

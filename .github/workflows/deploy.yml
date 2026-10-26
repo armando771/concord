@@ -1,5 +1,4 @@
-# Deploy automático: a cada push/merge na main, testa tudo e, se passar,
-# publica na VPS o backend, a página de download (site/), o app web
+# Deploy automático: a cada push/merge na main publica na VPS o backend, a página de download (site/), o app web
 # (frontend/dist-web) e uma versão nova do app desktop (os apps abertos
 # mostram "Nova atualização disponível").
 #
@@ -8,8 +7,10 @@
 #     VPS_SSH_KEY      chave SSH privada de deploy (acesso à VPS)
 #     VPS_KNOWN_HOSTS  linha(s) de known_hosts da VPS (ssh-keyscan)
 #     RELEASE_KEY      chave Ed25519 que assina as atualizações (backend/.release-key)
+#     TECH_TEAM_USER_IDS  (opcional) ids, separados por vírgula, de quem move os
+#                      cards das propostas; o deploy grava no .env da VPS
 #   Variables:
-#     DEPLOY_ENABLED   "true" para ligar o deploy (sem isso, só roda os testes)
+#     DEPLOY_ENABLED   "true" para ligar o deploy (sem isso, nada roda)
 #     VPS_HOST         ex.: root@1.2.3.4
 #     PUBLIC_URL       ex.: https://1-2-3-4.sslip.io
 #     SITE_URL         (opcional) página de download a conferir (padrão: https://salinha.bhrx.com.br)
@@ -27,42 +28,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: backend/go.mod
-          cache-dependency-path: backend/go.sum
-      - name: Backend
-        working-directory: backend
-        run: go test ./...
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-      - name: App desktop
-        working-directory: frontend
-        run: |
-          npm i -g yarn@1.22.22
-          yarn install --frozen-lockfile --ignore-scripts
-          yarn typecheck
-          yarn test
-      - name: App web (build)
-        working-directory: frontend
-        run: yarn build:web
-      - name: Scripts
-        run: node --test scripts/*.test.mjs
-
-      - name: Helper de áudio (Rust)
-        working-directory: native/concord-audio
-        run: cargo test
-
+  # Por enquanto (fase de desenvolvimento) os testes não rodam no Actions, para
+  # economizar minutos: rode-os localmente (README). Só a conferência das
+  # migrations continua, dentro do deploy, porque uma migration pulada em
+  # produção não tem volta.
   deploy:
-    needs: test
-    if: vars.DEPLOY_ENABLED == 'true'
+    # Só a main vai para a VPS (workflow_dispatch numa branch ou tag antiga não:
+    # um binário antigo não sobe com o socket do systemd ativo).
+    if: github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     env:
       PUBLIC_URL: ${{ vars.PUBLIC_URL }}
@@ -71,6 +44,11 @@ jobs:
       WEB_URL: ${{ vars.WEB_URL }}
     steps:
       - uses: actions/checkout@v7
+
+      # Número de migration repetido seria pulado em silêncio no banco
+      # (docs/HOSPEDAGEM.md).
+      - name: Migrations (números)
+        run: node scripts/check-migrations.mjs
 
       - uses: actions/setup-go@v7
         with:
@@ -125,33 +103,43 @@ jobs:
       - name: App desktop (instalador assinado)
         run: scripts/release-win.sh "${{ steps.version.outputs.version }}"
 
-      - name: App desktop Linux (AppImage assinado)
+      - name: App desktop Linux (AppImage e .tar.gz assinados)
         run: scripts/release-linux.sh "${{ steps.version.outputs.version }}"
 
       - name: Publicar na VPS (backend + página de download + app web + atualização do app)
+        env:
+          TECH_TEAM_USER_IDS: ${{ secrets.TECH_TEAM_USER_IDS }}
         run: scripts/deploy-vps.sh "$VPS_HOST"
 
       - name: Conferir
         run: |
           curl -fsS "${PUBLIC_URL%/}/updates/latest.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
           curl -fsS "${PUBLIC_URL%/}/updates/latest-linux.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
-          for manifest in latest.yml latest-linux.yml; do
+          curl -fsS "${PUBLIC_URL%/}/updates/latest-linux-tar.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
+          for manifest in latest.yml latest-linux.yml latest-linux-tar.yml; do
             path=$(curl -fsS "${PUBLIC_URL%/}/updates/$manifest" | awk '/^path:/ {print $2}' | tr -d "\"'")
             test -n "$path"
             curl -fsSI "${PUBLIC_URL%/}/updates/$path"
             curl -fsS "${PUBLIC_URL%/}/updates/$path.sig" | grep -q .
           done
           test "$(curl -s -o /dev/null -w '%{http_code}' "${PUBLIC_URL%/}/rtc/validate")" = 401
+          curl -fsS "${PUBLIC_URL%/}/healthz" | grep -q '"ok"'
           if [[ -n "$SITE_URL" ]]; then
             curl -fsS "${SITE_URL%/}/" | grep -q 'data-download'
             curl -fsS "${SITE_URL%/}/updates/latest.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
             curl -fsS "${SITE_URL%/}/updates/latest-linux.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
+            curl -fsS "${SITE_URL%/}/updates/latest-linux-tar.yml" | grep -q "version: ${{ steps.version.outputs.version }}"
+            curl -fsS "${SITE_URL%/}/install.sh" | grep -q 'latest-linux-tar.yml'
+            # A chave pública embutida é a mesma que assina as atualizações.
+            curl -fsS "${SITE_URL%/}/install.sh" | grep -A20 "^SALINHA_PUBKEY='" | grep -q "$(openssl pkey -in backend/.release-key -pubout | sed -n 2p)"
             echo "Página de download no ar em ${SITE_URL%/}"
           fi
           if [[ -n "$WEB_URL" ]]; then
             curl -fsS "${WEB_URL%/}/" | grep -q '<div id="root">'
             # Rota funda: o Caddy devolve o index.html (fallback de SPA).
             curl -fsS "${WEB_URL%/}/friends" | grep -q '<div id="root">'
+            # Link de convite (/convite/<código>) também é rota do app.
+            curl -fsS "${WEB_URL%/}/convite/ABCD2345" | grep -q '<div id="root">'
             test "$(curl -s -o /dev/null -w '%{http_code}' "${WEB_URL%/}/api/users/me")" = 401
             test "$(curl -s -o /dev/null -w '%{http_code}' "${WEB_URL%/}/rtc/validate")" = 401
             echo "App web no ar em ${WEB_URL%/}"

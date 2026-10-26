@@ -2,6 +2,9 @@ package server
 
 import (
 	"context"
+	"fmt"
+
+	"gin-quickstart/backend/internal/permission"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -119,11 +122,32 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Server, error) {
 	return s, nil
 }
 
+// memberRoleIDsColumn: ids dos cargos do membro (alias "sm" de server_members).
+const memberRoleIDsColumn = `COALESCE(
+			(SELECT array_agg(mr.role_id::text) FROM member_roles mr WHERE mr.server_id = sm.server_id AND mr.user_id = sm.user_id),
+			'{}'
+		)`
+
+// legacyRoleColumn: o campo "role" que os apps antigos leem — "admin" para o
+// dono e para quem tem MANAGE_CHANNELS ou ADMINISTRATOR (por um cargo ou pelo
+// @everyone).
+var legacyRoleColumn = fmt.Sprintf(`CASE WHEN EXISTS (
+				SELECT 1 FROM servers so WHERE so.id = sm.server_id AND so.owner_id = sm.user_id
+			) OR EXISTS (
+				SELECT 1 FROM roles r
+				WHERE r.server_id = sm.server_id AND (r.permissions & %d) <> 0
+				AND (r.is_default OR r.id IN (
+					SELECT mr.role_id FROM member_roles mr WHERE mr.server_id = sm.server_id AND mr.user_id = sm.user_id
+				))
+			) THEN 'admin' ELSE 'member' END`, permission.ManageChannels|permission.Administrator)
+
 // primaryChannelColumn: o canal principal escolhido ou, sem escolha (ou se ele
-// foi apagado), o primeiro canal de texto do servidor. Precisa do alias "s".
+// foi apagado), o canal de texto mais antigo do servidor. De propósito não
+// segue a ordem da barra lateral (channels.position): reordenar canais não muda
+// para onde vão os avisos. Precisa do alias "s".
 const primaryChannelColumn = `COALESCE(
 			s.primary_channel_id,
-			(SELECT c.id FROM channels c WHERE c.server_id = s.id AND c.type = 'text' ORDER BY c.position, c.created_at, c.id LIMIT 1)
+			(SELECT c.id FROM channels c WHERE c.server_id = s.id AND c.type = 'text' ORDER BY c.created_at, c.id LIMIT 1)
 		)`
 
 // SetPrimaryChannel escolhe o canal principal; o canal tem que ser de texto e
@@ -160,6 +184,23 @@ func (r *Repository) Update(ctx context.Context, id string, name string, iconURL
 		id,
 	)
 	return err
+}
+
+// SetIcon troca o ícone (nil tira) e devolve o antigo (para apagar o arquivo).
+func (r *Repository) SetIcon(ctx context.Context, id string, url *string) (*string, error) {
+	var old *string
+	err := r.db.QueryRow(
+		ctx,
+		`
+		UPDATE servers s SET icon_url = COALESCE($2, ''), updated_at = NOW()
+		FROM (SELECT icon_url FROM servers WHERE id = $1 FOR UPDATE) prev
+		WHERE s.id = $1
+		RETURNING prev.icon_url
+		`,
+		id,
+		url,
+	).Scan(&old)
+	return old, err
 }
 
 func (r *Repository) Delete(ctx context.Context, id string) error {
@@ -225,13 +266,16 @@ func (r *Repository) ListMembers(ctx context.Context, serverID string) ([]Server
 			u.username,
 			u.display_name,
 			u.avatar_url,
-			sm.role,
+			u.is_bot,
+			sm.nickname,
+			`+legacyRoleColumn+`,
+			`+memberRoleIDsColumn+`,
 			sm.joined_at,
 			sm.updated_at
 		FROM server_members sm
 		JOIN users u ON u.id = sm.user_id
 		WHERE sm.server_id = $1
-		ORDER BY sm.role, sm.joined_at
+		ORDER BY sm.joined_at
 		`,
 		serverID,
 	)
@@ -249,7 +293,10 @@ func (r *Repository) ListMembers(ctx context.Context, serverID string) ([]Server
 			&m.Username,
 			&m.DisplayName,
 			&m.AvatarURL,
+			&m.IsBot,
+			&m.Nickname,
 			&m.Role,
+			&m.RoleIDs,
 			&m.JoinedAt,
 			&m.UpdatedAt,
 		); err != nil {
@@ -263,6 +310,21 @@ func (r *Repository) ListMembers(ctx context.Context, serverID string) ([]Server
 	}
 
 	return members, nil
+}
+
+// SetNickname grava (ou tira, com nil) o apelido do membro no servidor.
+func (r *Repository) SetNickname(ctx context.Context, serverID, userID string, nickname *string) (bool, error) {
+	tag, err := r.db.Exec(
+		ctx,
+		`UPDATE server_members SET nickname = $3, updated_at = NOW() WHERE server_id = $1 AND user_id = $2`,
+		serverID,
+		userID,
+		nickname,
+	)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 func (r *Repository) IsMember(ctx context.Context, serverID string, userID string) (bool, error) {
@@ -287,7 +349,10 @@ func (r *Repository) FindMemberByUserID(ctx context.Context, serverID string, us
 			u.username,
 			u.display_name,
 			u.avatar_url,
-			sm.role,
+			u.is_bot,
+			sm.nickname,
+			`+legacyRoleColumn+`,
+			`+memberRoleIDsColumn+`,
 			sm.joined_at,
 			sm.updated_at
 		FROM server_members sm
@@ -302,7 +367,10 @@ func (r *Repository) FindMemberByUserID(ctx context.Context, serverID string, us
 		&m.Username,
 		&m.DisplayName,
 		&m.AvatarURL,
+		&m.IsBot,
+		&m.Nickname,
 		&m.Role,
+		&m.RoleIDs,
 		&m.JoinedAt,
 		&m.UpdatedAt,
 	)
@@ -558,27 +626,40 @@ func (r *Repository) SetInviteCodeIfMissing(ctx context.Context, serverID string
 	return err
 }
 
+// SetInviteCode troca o código do servidor ("Gerar novo link").
+func (r *Repository) SetInviteCode(ctx context.Context, serverID string, code string) error {
+	_, err := r.db.Exec(ctx, `UPDATE servers SET invite_code = $2 WHERE id = $1`, serverID, code)
+	return err
+}
+
 func (r *Repository) FindIDByInviteCode(ctx context.Context, code string) (string, error) {
 	var id string
 	err := r.db.QueryRow(ctx, `SELECT id FROM servers WHERE invite_code = $1`, code).Scan(&id)
 	return id, err
 }
 
-func (r *Repository) UpdateMemberRole(ctx context.Context, serverID string, userID string, role string) error {
-	tag, err := r.db.Exec(
+// InvitePreview: servidor do código e os ids dos membros (para contar e ver
+// quem está online). Sem servidor com esse código, pgx.ErrNoRows.
+func (r *Repository) InvitePreview(ctx context.Context, code string) (*InvitePreview, []string, error) {
+	p := &InvitePreview{}
+	var iconURL *string
+	var memberIDs []string
+	err := r.db.QueryRow(
 		ctx,
-		`UPDATE server_members SET role = $3, updated_at = NOW() WHERE server_id = $1 AND user_id = $2`,
-		serverID,
-		userID,
-		role,
-	)
+		`SELECT
+			s.id,
+			s.name,
+			NULLIF(s.icon_url, ''),
+			COALESCE((SELECT array_agg(sm.user_id::text) FROM server_members sm WHERE sm.server_id = s.id), '{}')
+		FROM servers s
+		WHERE s.invite_code = $1`,
+		code,
+	).Scan(&p.ServerID, &p.Name, &iconURL, &memberIDs)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotServerMember
-	}
-	return nil
+	p.IconURL = iconURL
+	return p, memberIDs, nil
 }
 
 // SharesServer: os dois estão em pelo menos um servidor em comum.
@@ -595,4 +676,40 @@ func (r *Repository) SharesServer(ctx context.Context, userA string, userB strin
 		userB,
 	).Scan(&shares)
 	return shares, err
+}
+
+// MutualServers: servidores em que os dois estão (cartão de perfil).
+func (r *Repository) MutualServers(ctx context.Context, userA string, userB string) ([]MutualServer, error) {
+	rows, err := r.db.Query(
+		ctx,
+		`SELECT s.id, s.name, s.icon_url
+		FROM servers s
+		JOIN server_members a ON a.server_id = s.id AND a.user_id = $1
+		JOIN server_members b ON b.server_id = s.id AND b.user_id = $2
+		ORDER BY s.name`,
+		userA,
+		userB,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	servers := []MutualServer{}
+	for rows.Next() {
+		var s MutualServer
+		if err := rows.Scan(&s.ID, &s.Name, &s.IconURL); err != nil {
+			return nil, err
+		}
+		servers = append(servers, s)
+	}
+	return servers, rows.Err()
+}
+
+// AddMemberIfMissing põe alguém no servidor sem falhar se já estiver lá.
+func (r *Repository) AddMemberIfMissing(ctx context.Context, serverID string, userID string, role string) error {
+	_, err := r.db.Exec(ctx,
+		`INSERT INTO server_members (server_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+		serverID, userID, role)
+	return err
 }

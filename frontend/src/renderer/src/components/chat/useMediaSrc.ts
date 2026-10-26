@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { API_BASE_URL } from '../../lib/config'
 import { mediaFileUrl } from '../../lib/attachments'
+import { profileMediaSrc } from '../../lib/profileMedia'
 import { ensureMediaToken, invalidateMediaToken } from '../../store/mediaToken'
 
 /**
@@ -11,15 +12,18 @@ import { ensureMediaToken, invalidateMediaToken } from '../../store/mediaToken'
  */
 export function useMediaSrc(
   attachmentId: string,
-  active: boolean
+  active: boolean,
+  /** Anexo de comentário de proposta: arquivo público, sem token. */
+  directUrl?: string | null
 ): { src: string | null; onError: () => void; failed: boolean } {
   const [src, setSrc] = useState<string | null>(null)
   const [usedToken, setUsedToken] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
   const [retried, setRetried] = useState(false)
+  const [directFailed, setDirectFailed] = useState(false)
 
   useEffect(() => {
-    if (!active || src || failed) return
+    if (directUrl || !active || src || failed) return
     let cancelled = false
     ensureMediaToken()
       .then((token) => {
@@ -33,7 +37,7 @@ export function useMediaSrc(
     return () => {
       cancelled = true
     }
-  }, [active, src, failed, attachmentId])
+  }, [directUrl, active, src, failed, attachmentId])
 
   const onError = useCallback(() => {
     if (retried) {
@@ -45,5 +49,12 @@ export function useMediaSrc(
     setSrc(null)
   }, [retried, usedToken])
 
+  if (directUrl) {
+    return {
+      src: active && !directFailed ? profileMediaSrc(directUrl, API_BASE_URL) : null,
+      onError: () => setDirectFailed(true),
+      failed: directFailed
+    }
+  }
   return { src, onError, failed }
 }

@@ -33,3 +33,41 @@ func TestMiddlewareRejectsMediaTokenAsBearer(t *testing.T) {
 		}
 	}
 }
+
+// Rotas públicas que mostram mais a quem está logado (prévia do convite):
+// token de acesso válido vira userID; sem token ou inválido, segue anônimo.
+func TestOptionalAuthMiddleware(t *testing.T) {
+	t.Setenv("JWT_SECRET", "segredo-de-teste")
+	gin.SetMode(gin.TestMode)
+	s := AuthService(nil)
+	router := gin.New()
+	router.GET("/x", OptionalAuthMiddleware(s), func(c *gin.Context) {
+		c.String(http.StatusOK, c.GetString("userID"))
+	})
+
+	accessToken, err := s.GenerateAccessToken("u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mediaToken, _, err := s.GenerateMediaToken("u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for header, want := range map[string]string{
+		"":                      "",
+		"Bearer " + accessToken: "u1",
+		"Bearer " + mediaToken:  "",
+		"Bearer lixo":           "",
+		"Basic " + accessToken:  "",
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/x", nil)
+		if header != "" {
+			req.Header.Set("Authorization", header)
+		}
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK || rec.Body.String() != want {
+			t.Errorf("%q: (%d, %q), want (200, %q)", header, rec.Code, rec.Body.String(), want)
+		}
+	}
+}
