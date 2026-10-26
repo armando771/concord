@@ -4,15 +4,16 @@
 //   node scripts/publish-changelog.mjs --check <notas.md>
 //
 // Lê `changelog/next.md` (seções "## Novidades" e "## Correções" em bullets),
-// faz o PUT idempotente em <url-base>/api/changelog/<versão> e, só se deu
-// certo, deixa o arquivo vazio para a próxima release.
-import { readFileSync, writeFileSync } from 'node:fs'
+// e faz o PUT idempotente em <url-base>/api/changelog/<versão>. O arquivo
+// acumula entre deploys (o CI não o esvazia no git): o servidor guarda na
+// versão só as notas que nenhuma versão anterior trouxe.
+import { readFileSync } from 'node:fs'
 
 export const EMPTY_NOTES = '## Novidades\n\n## Correções\n'
 
 // Mesmos limites de backend/internal/changelog/changelog.go: o erro aparece
 // aqui, antes do merge, e não no PUT depois que a versão já está no ar.
-export const MAX_ENTRIES = 100
+export const MAX_ENTRIES = 1000
 export const MAX_ENTRY_TEXT = 1000
 
 const SECTIONS = { novidades: 'feature', correções: 'fix', correcoes: 'fix' }
@@ -77,8 +78,7 @@ async function main([version, file, baseUrl]) {
     body: JSON.stringify({ entries })
   })
   if (!res.ok) throw new Error(await publishError(version, res))
-  writeFileSync(file, EMPTY_NOTES)
-  console.log(`changelog ${version}: ${entries.length} entradas publicadas`)
+  console.log(`changelog ${version}: ${entries.length} entradas enviadas (o servidor ignora as já publicadas)`)
 }
 
 if (process.argv[1]?.endsWith('publish-changelog.mjs')) {
