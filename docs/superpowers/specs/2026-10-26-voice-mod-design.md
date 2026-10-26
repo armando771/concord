@@ -12,7 +12,8 @@ para comportar Sons e Voz (e o que vier depois).
 - Sliders: **Tom** (-12 a +12 semitons), **Timbre** (-1 a 1), **Intensidade** (0 a 1).
 - Configuração dentro da Mesa de Áudio (popover), seção "Voz".
 - Layout da Mesa de Áudio: barra lateral de ícones à esquerda (opção B), seções
-  **Sons** e **Voz**. O volume da mesa continua fixo no cabeçalho.
+  **Sons** e **Voz**. O volume da mesa vai para dentro da seção Sons (ele só
+  afeta os sons).
 - Sem vozes que imitem pessoas reais. Só efeitos e vozes de personagem genéricas.
 
 ## Áudio
