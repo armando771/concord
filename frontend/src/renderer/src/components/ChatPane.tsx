@@ -40,7 +40,7 @@ import PollCard from './poll/PollCard'
 import CreatePollModal from './poll/CreatePollModal'
 import MessageAttachments from './chat/MessageAttachments'
 import { PaperclipIcon, PollIcon, PinIcon } from './icons'
-import { usePinStore } from '../store/pinStore'
+import { selectPins, usePinStore } from '../store/pinStore'
 import {
   ACCEPT_ATTRIBUTE,
   canSubmit,
@@ -812,7 +812,8 @@ function ChatPane({
     }
   }
 
-  const pins = usePinStore((s) => (channelId ? s.pinsByChannel[channelId] ?? [] : []))
+  // selectPins: sem fixadas devolve sempre o mesmo array (senão: React #185).
+  const pins = usePinStore(selectPins(channelId ?? ''))
   const loadPins = usePinStore((s) => s.loadPins)
 
   useEffect(() => {
