@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_NAME_STYLE } from './nameStyle'
 import {
   draftFromProfile,
   hasErrors,
@@ -117,5 +118,27 @@ describe('imageFileError', () => {
   it('recusa outros tipos e arquivos grandes', () => {
     expect(imageFileError({ type: 'application/pdf', size: 1000 })).toBeTruthy()
     expect(imageFileError({ type: 'image/png', size: 12 * 1024 * 1024 })).toBeTruthy()
+  })
+})
+
+describe('estilo do nome no rascunho', () => {
+  it('rascunho vem com o estilo salvo, ou o padrão', () => {
+    expect(draftFromProfile({ display_name: 'a' }).name_style).toEqual(DEFAULT_NAME_STYLE)
+    const style = { font: 'tempo', effect: 'neon', colors: ['#00ffaa'] }
+    expect(draftFromProfile({ display_name: 'a', name_style: style }).name_style).toEqual(style)
+  })
+
+  it('estilo inválido do servidor vira o padrão', () => {
+    const draft = draftFromProfile({
+      display_name: 'a',
+      name_style: { font: 'nope', effect: 'nope', colors: ['x'] }
+    })
+    expect(draft.name_style).toEqual(DEFAULT_NAME_STYLE)
+  })
+
+  it('mudar só o estilo deixa o perfil sujo e vai no payload', () => {
+    const edited = { ...saved(), name_style: { font: 'bit8', effect: 'solid', colors: [] } }
+    expect(isDirty(edited, saved())).toBe(true)
+    expect(profilePayload(edited).name_style).toEqual(edited.name_style)
   })
 })

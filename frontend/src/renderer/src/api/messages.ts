@@ -1,10 +1,12 @@
 import { request } from './client'
+import type { NameStyle } from '../lib/nameStyle'
 
 export interface MessageAuthor {
   id: string
   username: string
   display_name: string
   avatar_url?: string | null
+  name_style?: NameStyle
 }
 
 export interface ReplyPreview {

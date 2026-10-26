@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -93,7 +94,7 @@ func TestStartActivityGoesOnlyToParticipants(t *testing.T) {
 	var p activityPayload
 	_ = json.Unmarshal(events["user:user-2"][0], &p)
 	want := activityPayload{CallID: "call-1", ActivityID: "krunker", URL: "https://krunker.io/?game=FRA:abc12", StartedBy: UserInfo{ID: "user-1"}}
-	if p != want {
+	if !reflect.DeepEqual(p, want) {
 		t.Fatalf("payload = %+v, want %+v", p, want)
 	}
 	for target := range eventsOfType(pub, "call:activity") {

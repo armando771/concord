@@ -10,10 +10,15 @@ import MusicEphemeralList from './music/MusicEphemeralList'
 import SlashSuggestions from './music/SlashSuggestions'
 import { useMusicStore } from '../store/musicStore'
 import Avatar from './Avatar'
+import StyledName from './StyledName'
 import { useUserLook } from '../store/profileStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import { userMenuHandler } from '../store/userMenuStore'
-import { useServerNickname, useServerNicknames } from '../store/useServerNames'
+import {
+  useServerMemberColor,
+  useServerNickname,
+  useServerNicknames
+} from '../store/useServerNames'
 import { serverDisplayName } from '../lib/serverNames'
 import { useFriendStore } from '../store/friendStore'
 import { applyMention, mentionQuery, mentionSuggestions, messageMentionsMe } from '../lib/mentions'
@@ -180,7 +185,9 @@ function MessageItem({
   })
   const nickname = useServerNickname(serverId, message.author_id)
   const name = serverDisplayName({ nickname }, { display_name: look.name })
+  const nameColor = useServerMemberColor(serverId, message.author_id)
   const replyNickname = useServerNickname(serverId, message.reply_to?.author_id)
+  const replyAuthorColor = useServerMemberColor(serverId, message.reply_to?.author_id)
   const openProfile = profileCardHandler(message.author_id, name, author?.username, 'right')
   const [hover, setHover] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -237,6 +244,7 @@ function MessageItem({
       {hasReplyReference && (
         <ReplyReference
           authorName={message.reply_to ? replyAuthorName : null}
+          authorColor={replyAuthorColor}
           content={message.reply_to?.content ?? ''}
           onJump={() => message.reply_to && onJumpToMessage(message.reply_to.id)}
         />
@@ -256,9 +264,16 @@ function MessageItem({
             <button
               type="button"
               onClick={openProfile}
-              className="cursor-pointer text-ds-chat font-medium text-white hover:underline"
+              style={nameColor ? { color: nameColor } : undefined}
+              className={`cursor-pointer text-ds-chat font-medium hover:underline ${
+                nameColor ? '' : 'text-white'
+              }`}
             >
-              {name}
+              {nickname ? (
+                name
+              ) : (
+                <StyledName name={name} userId={message.author_id} style={author?.name_style} />
+              )}
             </button>
             <span className="text-ds-xs font-medium text-gray-500">
               {formatTime(message.created_at)}
@@ -797,6 +812,34 @@ function ChatPane({
     }
   }
 
+  const pins = usePinStore((s) => (channelId ? s.pinsByChannel[channelId] ?? [] : []))
+  const loadPins = usePinStore((s) => s.loadPins)
+
+  useEffect(() => {
+    if (channelId) {
+      void loadPins(channelId)
+    }
+  }, [channelId, loadPins])
+
+  const latestPin = pins[0]
+  const latestPinAuthorName = serverDisplayName(
+    { nickname: latestPin ? nicknames?.[latestPin.author_id] : undefined },
+    latestPin?.author
+  )
+  const latestPinPreview =
+    latestPin?.content.trim() ||
+    (latestPin?.attachments?.length
+      ? latestPin.attachments[0].kind === 'image'
+        ? '📷 Imagem'
+        : latestPin.attachments[0].kind === 'video'
+        ? '🎥 Vídeo'
+        : latestPin.attachments[0].kind === 'audio'
+        ? '🎵 Áudio'
+        : '📎 Anexo'
+      : latestPin?.poll
+      ? '📊 Enquete: ' + latestPin.poll.question
+      : 'Mensagem fixada')
+
   const replyTargetAuthor = serverDisplayName(
     { nickname: replyingTo ? nicknames?.[replyingTo.author_id] : undefined },
     replyingTo?.author
@@ -817,6 +860,44 @@ function ChatPane({
           Solte os arquivos para enviar
         </div>
       )}
+
+      {/* Barra com a última mensagem fixada no topo do canal */}
+      {latestPin && (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => handleJumpToMessage(latestPin.id)}
+          onKeyDown={(e) => e.key === 'Enter' && handleJumpToMessage(latestPin.id)}
+          title="Clique para ir até a mensagem fixada"
+          className="group relative z-10 flex shrink-0 cursor-pointer items-center justify-between border-b border-white/6 bg-[#18191c]/80 px-4 py-2 backdrop-blur transition hover:bg-[#1f2024]"
+        >
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-amber-400/15 text-amber-400">
+              <PinIcon className="h-3.5 w-3.5" />
+            </span>
+            <div className="flex min-w-0 items-center gap-1.5 text-ds-xs">
+              <span className="shrink-0 font-semibold text-white">
+                {latestPinAuthorName}:
+              </span>
+              <span className="truncate text-gray-300">
+                {latestPinPreview}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2 pl-3">
+            {pins.length > 1 && (
+              <span className="rounded bg-white/5 px-2 py-0.5 text-[10px] font-medium text-gray-400">
+                +{pins.length - 1} fixada{pins.length - 1 > 1 ? 's' : ''}
+              </span>
+            )}
+            <span className="text-[11px] font-medium text-violet-400 opacity-80 group-hover:opacity-100 group-hover:underline">
+              Ir para mensagem →
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Sem o scroll anchoring do navegador: a âncora do loadOlder é a única. */}
       <div
         ref={scrollRef}

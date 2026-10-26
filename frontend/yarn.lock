@@ -680,6 +680,66 @@
   resolved "https://registry.yarnpkg.com/@fontsource-variable/outfit/-/outfit-5.3.0.tgz#1106061dd413b77faf72a8acfb635b01fc33d362"
   integrity sha512-fPb5XnYK0k7SbR++HEmm4+ZqDszmLKQ+sPRUr8oQ/KNC0vy6r6hazJFe8iYozv4cqlHbvJ/JECkJWrfDodUMVQ==
 
+"@fontsource/bitter@^5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@fontsource/bitter/-/bitter-5.3.0.tgz#82d63d11fb77a07ff5b9a9e1f18916d1daaec1c2"
+  integrity sha512-RYfrDnaja7v6FO8AwknA5aw/BuVgLBJvwLIShkS42XUIxMbvi/yp47Ax/Xnn9OTVIGFiTXCbVsH0O9HhTTDtqA==
+
+"@fontsource/bungee@^5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@fontsource/bungee/-/bungee-5.3.0.tgz#0443b7b48671bc3cdc748bbbbb4e737c0a4b479e"
+  integrity sha512-vKwbDE7yMrqfGxgFan+diPLwgWp9j4FGYaLm+OhUoqYO6Pr02QIi/p0KiTW0E/7uiXqfTd6cMj+/E4h2sc3Ocg==
+
+"@fontsource/caveat@^5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@fontsource/caveat/-/caveat-5.3.0.tgz#b44c8fe760f6a1af6979e1b8e323d8e788253a31"
+  integrity sha512-eHTfzQxFSW9ABERRLNruHoNJmKed2J7pqTUc5lp4a4POMgXGKpxmWj3d9Hz10kmAg6iuTTLe6UagbA4bnsmfQw==
+
+"@fontsource/chango@^5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@fontsource/chango/-/chango-5.3.0.tgz#76c673ed69aa9a1af1e47ec377e2845184255531"
+  integrity sha512-hLTfPRsmkyQixOvYAYOL1aDwfZ18IaBaOOtHhBHWYkzL0AfUMFVoKfBwqhnkcXz/IKCZf98YwoXLiWG4qUU3ig==
+
+"@fontsource/cinzel-decorative@^5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@fontsource/cinzel-decorative/-/cinzel-decorative-5.3.0.tgz#fe446869648a97baee148b1186f1e3436ad88bb1"
+  integrity sha512-9T6Fsv6l+5CUjvKWcTlMtkAYR/C8p2ll0bgT5krOU+DTLJRmaZYpXzcRoxPvENA6+uApa+Yyn0Ft/hdq083iVA==
+
+"@fontsource/grenze-gotisch@^5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@fontsource/grenze-gotisch/-/grenze-gotisch-5.3.0.tgz#e360daf8c45c2d911895477515e7acdecc04b4c3"
+  integrity sha512-hIgb3TJWnwjiaf8FWMYfPe5PvHHnSv+VYUJI40Fj0KhjWhBhBl4LTsGrkr4MSjo6mG+znR2tBz5L++4wkEgI1A==
+
+"@fontsource/jetbrains-mono@^5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@fontsource/jetbrains-mono/-/jetbrains-mono-5.3.0.tgz#87bfd849f24b536ed72e89b56ae0d42223697f74"
+  integrity sha512-fqDfB5I9f1p1TV486aUgB9t8zP84P0O1FtQR5Ol9vjwPy+S+EIGlVYm1cvj2W5shcZMTg2nZFdVMoH5wFu8a1A==
+
+"@fontsource/montserrat@^5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@fontsource/montserrat/-/montserrat-5.3.0.tgz#218a998a485d41f358d6bacf9edb70e282fadf7a"
+  integrity sha512-iQPDtZOnmM5ih4JBGaMSXisRap0ixb9bAUw2hDtY7EjVfaqiiNlKtVuJl9XclxUwtwMMHNcWXfQR6zI9x05+Tg==
+
+"@fontsource/oswald@^5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@fontsource/oswald/-/oswald-5.3.0.tgz#0a470c8ffef665fd99f1df50349b610317bb658a"
+  integrity sha512-16r2aHActe0pH+9FLdk/74/YxXM7HpGak05kAzx3RvSToiJwGvyhv6GvckPz+YuZmvL1nxWbEop2jAXRcXYPRg==
+
+"@fontsource/pacifico@^5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@fontsource/pacifico/-/pacifico-5.3.0.tgz#8bcbbb8f7b76de6c6b9500b66e5547430e3b26f7"
+  integrity sha512-bWv0fHR1n36p7scRn+maaEaVeQCOq9yvfVfjyAeUzKrK4Y/3qiRAEj4hJgfxj/sjgZZGkeHyKPrbWdDaZtpCVw==
+
+"@fontsource/press-start-2p@^5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@fontsource/press-start-2p/-/press-start-2p-5.3.0.tgz#b58edabdadab0fab5ce4e37407715955b7d42981"
+  integrity sha512-gxWFxdeDglPhEYSwEeooomcaFK8kSQYLQwVxfnOJeYRj2sPEHXjpVtFgEaYfqzOjuAJGrIcJOipu2KY5YkbyuQ==
+
+"@fontsource/zilla-slab@^5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@fontsource/zilla-slab/-/zilla-slab-5.3.0.tgz#d2e98620da3dbce6e5eaa9ab6847c4411c476153"
+  integrity sha512-xbdDx5OESJDQqp3GIp4pjBgI+qpcg4AxnHLN15ekfJbG+ZYaOXg3uBjDpYlkuPQpey91afxHBNaqZgzluJ2FWA==
+
 "@humanfs/core@^0.19.2":
   version "0.19.2"
   resolved "https://registry.yarnpkg.com/@humanfs/core/-/core-0.19.2.tgz#a8272ca03b2acf492670222b2320b6c421bfde60"

@@ -61,7 +61,7 @@ vi.mock('./authStore', () => ({
     })
   }
 }))
-vi.mock('./serverStore', () => ({ useServerStore: { getState: () => ({}) } }))
+vi.mock('./serverStore', () => ({ useServerStore: { getState: () => ({ channels: [] }) } }))
 vi.mock('./friendStore', () => ({ useFriendStore: { getState: () => ({ blocked: [] }) } }))
 vi.stubGlobal('document', { hasFocus: () => env.focused, visibilityState: 'visible' })
 vi.mock('./callStore', () => ({ useCallStore: { getState: () => ({}) } }))

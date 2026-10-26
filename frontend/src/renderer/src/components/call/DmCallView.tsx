@@ -15,6 +15,7 @@ import CallStage from './CallStage'
 import { formatDuration, useElapsed } from './callUtils'
 import useSpeaking from './useSpeaking'
 import Avatar from '../Avatar'
+import StyledName from '../StyledName'
 
 function DmCallView({ children }: { children?: React.ReactNode }): React.JSX.Element | null {
   const status = useCallStore((s) => s.status)
@@ -60,7 +61,9 @@ function DmCallView({ children }: { children?: React.ReactNode }): React.JSX.Ele
               }`}
             />
             <div className="min-w-0 leading-tight">
-              <p className="truncate text-sm font-bold text-white">{peer.display_name}</p>
+              <p className="truncate text-sm font-bold text-white">
+                <StyledName name={peer.display_name} userId={peer.id} style={peer.name_style} />
+              </p>
               <p className="text-[11px] text-gray-400">{statusLabel}</p>
             </div>
           </div>

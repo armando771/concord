@@ -3,6 +3,7 @@ import { API_BASE_URL } from '../lib/config'
 import { useAuthStore, type ProfileLink, type PublicUser, type User } from '../store/authStore'
 import type { ChosenStatus, PresenceStatus } from '../lib/presenceStatus'
 import type { ProfileFields } from '../lib/profileValidation'
+import type { NameStyle } from '../lib/nameStyle'
 
 export function getMe(): Promise<User> {
   return request<User>('/users/me')
@@ -25,6 +26,8 @@ export interface PublicProfile {
   status_text: string
   links: ProfileLink[]
   status: PresenceStatus
+  is_bot?: boolean
+  name_style?: NameStyle
   created_at: string
 }
 

@@ -20,6 +20,7 @@ import { isMaestroIdentity, T18 } from '../../lib/music'
 import ScreenWatchersOverlay from './ScreenWatchersOverlay'
 import ScreenAnnotationCanvas from './ScreenAnnotationCanvas'
 import ScreenAnnotationToolbar from './ScreenAnnotationToolbar'
+import StyledName from '../StyledName'
 
 export function VideoFill({
   stream,
@@ -338,7 +339,9 @@ function ParticipantTile({
           serverDeafened={serverDeafened}
           className="h-3 w-3"
         />
-        <span className="truncate text-xs font-semibold text-white">{user.display_name}</span>
+        <span className="truncate text-xs font-semibold text-white">
+          <StyledName name={user.display_name} userId={user.id} style={user.name_style} />
+        </span>
         {isMaestroIdentity(user.id) && (
           <span className="rounded bg-violet-400/30 px-1 text-[9px] font-bold uppercase text-violet-100">
             {T18.tag}

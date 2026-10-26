@@ -1,0 +1,15 @@
+/* Fontes do estilo de nome (lib/nameStyle.ts). Só o subset latin, um peso por
+   família: o instalador não incha. Todas OFL; as licenças vão no build
+   (vite.renderer.shared.ts). */
+@import '@fontsource/bitter/latin-400.css';
+@import '@fontsource/pacifico/latin-400.css';
+@import '@fontsource/chango/latin-400.css';
+@import '@fontsource/montserrat/latin-500.css';
+@import '@fontsource/cinzel-decorative/latin-700.css';
+@import '@fontsource/press-start-2p/latin-400.css';
+@import '@fontsource/grenze-gotisch/latin-500.css';
+@import '@fontsource/caveat/latin-500.css';
+@import '@fontsource/zilla-slab/latin-500.css';
+@import '@fontsource/oswald/latin-500.css';
+@import '@fontsource/jetbrains-mono/latin-500.css';
+@import '@fontsource/bungee/latin-400.css';

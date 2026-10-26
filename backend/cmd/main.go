@@ -18,6 +18,7 @@ import (
 	"gin-quickstart/backend/internal/birthday"
 	"gin-quickstart/backend/internal/bot"
 	"gin-quickstart/backend/internal/call"
+	"gin-quickstart/backend/internal/changelog"
 	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/clientip"
 	"gin-quickstart/backend/internal/conversation"
@@ -418,6 +419,13 @@ func main() {
 			return music.UserRef{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, AvatarURL: u.AvatarURL}, nil
 		},
 		PostPublic: func(ctx context.Context, textChannelID, content string) error {
+			// As mensagens públicas do Maestro saem no canal "bot" do servidor;
+			// sem ele (não deveria ocorrer) ficam no canal onde o comando foi dado.
+			if origin, err := channelService.FindByID(ctx, textChannelID); err == nil {
+				if sys, err := channelService.SystemChannel(ctx, origin.ServerID); err == nil {
+					textChannelID = sys.ID
+				}
+			}
 			_, err := messageService.CreateSystemChannelMessage(ctx, textChannelID, bot.UserID, content, music.SystemKind)
 			return err
 		},
@@ -520,6 +528,7 @@ func main() {
 	notifysettings.Routes(api, notifySettingsHandler, authMiddleware)
 	proposal.ProposalRoutes(api, proposalHandler, authMiddleware, requireVerified)
 	birthday.BirthdayRoutes(api, birthdayHandler, authMiddleware)
+	changelog.Routes(api, changelog.NewHandler(changelog.NewRepository(db), os.Getenv("CHANGELOG_TOKEN")), authMiddleware)
 	music.Routes(api, music.NewHandler(musicManager, authService), authMiddleware)
 
 	// Presence (protected)

@@ -1,6 +1,10 @@
 package server
 
-import "time"
+import (
+	"time"
+
+	"gin-quickstart/backend/internal/namestyle"
+)
 
 type Server struct {
 	ID      string `json:"id"`
@@ -20,6 +24,7 @@ type ServerMember struct {
 	Username    string  `json:"username"`
 	DisplayName string  `json:"display_name"`
 	AvatarURL   *string `json:"avatar_url,omitempty"`
+	NameStyle   namestyle.Style `json:"name_style"`
 	// Nickname: apelido neste servidor (null = sem; vale o display_name).
 	Nickname *string `json:"nickname"`
 	IsBot    bool    `json:"is_bot"`

@@ -41,6 +41,9 @@ func (f *fakeStore) Create(context.Context, *Channel, []permission.Overwrite) er
 func (f *fakeStore) FindByID(context.Context, string) (*Channel, error) {
 	return nil, ErrChannelNotFound
 }
+func (f *fakeStore) FindSystemByServerID(context.Context, string) (*Channel, error) {
+	return nil, ErrChannelNotFound
+}
 func (f *fakeStore) Update(context.Context, string, string) error { return nil }
 func (f *fakeStore) Delete(context.Context, string) error         { return nil }
 func (f *fakeStore) ListByServerID(context.Context, string) ([]Channel, error) {

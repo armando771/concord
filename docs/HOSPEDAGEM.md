@@ -768,7 +768,12 @@ Para ligar, em **Settings → Secrets and variables → Actions**:
     sem espaços, de quem move os cards das propostas. O deploy grava (ou troca)
     essa linha em `/opt/concord/.env` antes de reiniciar o backend. Vazio ou
     ausente, o `.env` da VPS fica como está. O `.env` da VPS continua sendo
-    intocado para o resto.
+    intocado para o resto;
+  - `CHANGELOG_TOKEN` (opcional): segredo com que o deploy publica as notas da
+    versão em `PUT /api/changelog/<versão>` (gere com `openssl rand -hex 24`;
+    só letras e números). O deploy grava a mesma linha no `.env` da VPS e o
+    passo "Changelog" usa o secret. Sem ele a publicação fica desligada (o
+    servidor responde 503) e a leitura do changelog segue funcionando.
 - **Variables:**
   - `DEPLOY_ENABLED=true`;
   - `VPS_HOST=root@<ip>`;

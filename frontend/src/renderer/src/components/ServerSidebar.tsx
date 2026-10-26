@@ -66,6 +66,7 @@ import { setPrimaryChannel } from '../api/servers'
 import { primaryChannelId } from '../lib/primaryChannel'
 import ResizeHandle from './ResizeHandle'
 import { useResizableWidth } from './useResizableWidth'
+import StyledName from './StyledName'
 
 /**
  * Nomes longos quebram linha em vez de cortar com "…" (o canal "predador-🐺-vs…"
@@ -501,7 +502,7 @@ export function ServerSidebar(): React.JSX.Element {
                 <StarIcon className="h-3.5 w-3.5 text-amber-400" />
               </button>
             )}
-          {canManageChannels && (
+          {canManageChannels && !ch.is_system && (
             <button
               onClick={() => {
                 setChannelMenuFor(null)
@@ -515,7 +516,7 @@ export function ServerSidebar(): React.JSX.Element {
               <PencilIcon className="h-3.5 w-3.5" />
             </button>
           )}
-          {access.canInChannel(ch.id, Perm.MANAGE_ROLES) && (
+          {access.canInChannel(ch.id, Perm.MANAGE_ROLES) && !ch.is_system && (
             <button
               onClick={() => {
                 setChannelMenuFor(null)
@@ -527,7 +528,7 @@ export function ServerSidebar(): React.JSX.Element {
               <LockIcon className="h-3.5 w-3.5" />
             </button>
           )}
-          {canManageChannels && (
+          {canManageChannels && !ch.is_system && (
             <button
               onClick={() => {
                 setChannelMenuFor(null)
@@ -1000,7 +1001,11 @@ export function ServerSidebar(): React.JSX.Element {
                                   isMe ? 'font-bold text-white' : 'font-medium text-gray-300'
                                 }`}
                               >
-                                {name}
+                                {nicknames?.[p.user_id] ? (
+                                  name
+                                ) : (
+                                  <StyledName name={name} userId={p.user_id} style={p.name_style} />
+                                )}
                               </span>
                               {/* Selo de nível só na lista de membros da direita; aqui o
                                   nível só ordena a lista (ver voiceOrder). */}

@@ -4,6 +4,7 @@ import { useCallStore } from '../../store/callStore'
 import { PhoneIcon, PhoneOffIcon } from '../icons'
 import Button from '../Button'
 import Avatar from '../Avatar'
+import StyledName from '../StyledName'
 
 function useRingtone(ringing: boolean): void {
   const ctxRef = useRef<AudioContext | null>(null)
@@ -76,7 +77,9 @@ function IncomingCallModal(): React.JSX.Element | null {
           animate="always"
           className="mx-auto mb-4"
         />
-        <p className="text-lg font-bold text-white">{peer.display_name}</p>
+        <p className="text-lg font-bold text-white">
+          <StyledName name={peer.display_name} userId={peer.id} style={peer.name_style} />
+        </p>
         <p className="mb-6 text-xs text-gray-400">@{peer.username}</p>
         <p className="mb-6 animate-pulse text-sm font-semibold text-gray-300">Chamada de voz...</p>
         <div className="flex items-center justify-center gap-3">

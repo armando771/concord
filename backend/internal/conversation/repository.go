@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"gin-quickstart/backend/internal/namestyle"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -193,7 +195,7 @@ func (r *Repository) Members(ctx context.Context, conversationID string) ([]Othe
 	rows, err := r.db.Query(
 		ctx,
 		`
-		SELECT u.id, u.username, u.display_name, u.avatar_url
+		SELECT u.id, u.username, u.display_name, u.avatar_url, ` + namestyle.Expr("u") + `
 		FROM conversation_members cm
 		JOIN users u ON u.id = cm.user_id
 		WHERE cm.conversation_id = $1
@@ -209,7 +211,7 @@ func (r *Repository) Members(ctx context.Context, conversationID string) ([]Othe
 	members := []OtherUser{}
 	for rows.Next() {
 		var m OtherUser
-		if err := rows.Scan(&m.ID, &m.Username, &m.DisplayName, &m.AvatarURL); err != nil {
+		if err := rows.Scan(&m.ID, &m.Username, &m.DisplayName, &m.AvatarURL, &m.NameStyle); err != nil {
 			return nil, err
 		}
 		members = append(members, m)
@@ -347,7 +349,8 @@ func (r *Repository) ListByUserID(ctx context.Context, userID string) ([]Summary
 					'id', u.id,
 					'username', u.username,
 					'display_name', u.display_name,
-					'avatar_url', u.avatar_url
+					'avatar_url', u.avatar_url,
+					'name_style', ` + namestyle.Expr("u") + `
 				) ORDER BY cm2.joined_at, u.username), '[]')
 				FROM conversation_members cm2
 				JOIN users u ON u.id = cm2.user_id

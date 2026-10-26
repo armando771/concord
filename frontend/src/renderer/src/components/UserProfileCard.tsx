@@ -167,6 +167,7 @@ function UserProfileCard(): React.JSX.Element | null {
   const mutual = loadedMutual && loadedMutual.userId === target?.userId ? loadedMutual.rel : null
 
   const isMe = Boolean(target && target.userId === me?.id)
+  const isBot = Boolean(profile?.is_bot || member?.is_bot)
 
   useEffect(() => {
     if (!target) return
@@ -249,6 +250,7 @@ function UserProfileCard(): React.JSX.Element | null {
   const card: CardProfile = {
     id: target.userId,
     display_name: source?.display_name || member?.display_name || target.name,
+    name_style: source?.name_style ?? member?.name_style,
     nickname,
     username: source?.username || member?.username || target.username,
     avatar_url: source ? source.avatar_url : member?.avatar_url,
@@ -257,11 +259,15 @@ function UserProfileCard(): React.JSX.Element | null {
     pronouns: source?.pronouns,
     bio: source?.bio,
     status_text: source?.status_text,
-    links: source?.links?.map((l) => l.url) ?? []
+    links: source?.links?.map((l) => l.url) ?? [],
+    is_bot: isBot
   }
-  const status: PresenceStatus = isMe
-    ? (me?.status ?? 'online')
-    : (knownStatus ?? profile?.status ?? (online ? 'online' : 'offline'))
+  // O Maestro não tem websocket: está sempre online.
+  const status: PresenceStatus = isBot
+    ? 'online'
+    : isMe
+      ? (me?.status ?? 'online')
+      : (knownStatus ?? profile?.status ?? (online ? 'online' : 'offline'))
 
   const salinhaSince = formatMemberSince(source?.created_at)
   const serverSince = inServer ? formatMemberSince(member?.joined_at) : null
@@ -515,7 +521,7 @@ function UserProfileCard(): React.JSX.Element | null {
               />
             </div>
           </>
-        ) : (
+        ) : isBot ? null : (
           <div className="mt-3 flex gap-2">
             <button
               type="button"

@@ -25,6 +25,30 @@ asarUnpack:
 extraResources:
   - from: node_modules/@fontsource-variable/outfit/LICENSE
     to: licenses/Outfit-OFL.txt
+  - from: node_modules/@fontsource/bitter/LICENSE
+    to: licenses/bitter-OFL.txt
+  - from: node_modules/@fontsource/pacifico/LICENSE
+    to: licenses/pacifico-OFL.txt
+  - from: node_modules/@fontsource/chango/LICENSE
+    to: licenses/chango-OFL.txt
+  - from: node_modules/@fontsource/montserrat/LICENSE
+    to: licenses/montserrat-OFL.txt
+  - from: node_modules/@fontsource/cinzel-decorative/LICENSE
+    to: licenses/cinzel-decorative-OFL.txt
+  - from: node_modules/@fontsource/press-start-2p/LICENSE
+    to: licenses/press-start-2p-OFL.txt
+  - from: node_modules/@fontsource/grenze-gotisch/LICENSE
+    to: licenses/grenze-gotisch-OFL.txt
+  - from: node_modules/@fontsource/caveat/LICENSE
+    to: licenses/caveat-OFL.txt
+  - from: node_modules/@fontsource/zilla-slab/LICENSE
+    to: licenses/zilla-slab-OFL.txt
+  - from: node_modules/@fontsource/oswald/LICENSE
+    to: licenses/oswald-OFL.txt
+  - from: node_modules/@fontsource/jetbrains-mono/LICENSE
+    to: licenses/jetbrains-mono-OFL.txt
+  - from: node_modules/@fontsource/bungee/LICENSE
+    to: licenses/bungee-OFL.txt
 win:
   executableName: Salinha
   # Helper do som da janela compartilhada (gerado por scripts/build-win.sh)

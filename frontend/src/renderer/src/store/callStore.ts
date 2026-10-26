@@ -54,6 +54,7 @@ import { useActivityStore } from './activityStore'
 import { useAnnotationStore } from './annotationStore'
 import { stopAllSoundboardAudio } from '../lib/soundboardPlayer'
 import { setVoiceOutputDevice } from '../lib/voiceOutput'
+import type { NameStyle } from '../lib/nameStyle'
 
 export type CallStatus = 'idle' | 'ringing' | 'outgoing' | 'active'
 export type CallKind = 'dm' | 'channel'
@@ -63,6 +64,8 @@ export interface CallUserInfo {
   username: string
   display_name: string
   avatar_url?: string | null
+  /** null = apelido de servidor em uso (sem estilo). */
+  name_style?: NameStyle | null
 }
 
 interface InvitePayload {
@@ -613,7 +616,8 @@ export const useCallStore = create<CallState>()((set, get) => {
           id: p.user_id,
           username: p.username ?? '',
           display_name: p.display_name ?? p.username ?? 'Usuário',
-          avatar_url: p.avatar_url ?? null
+          avatar_url: p.avatar_url ?? null,
+          name_style: p.name_style
         }))
       const sharing = state.screen_sharing ?? []
       useActivityStore.getState().hydrate(callId, state.activity ?? null)

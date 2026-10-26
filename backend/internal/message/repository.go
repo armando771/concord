@@ -4,6 +4,8 @@ import (
 	"context"
 	"slices"
 
+	"gin-quickstart/backend/internal/namestyle"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -18,12 +20,13 @@ func MessageRepository(db *pgxpool.Pool) *Repository {
 	}
 }
 
-const messageColumns = `
+var messageColumns = `
 	m.id,
 	m.author_id,
 	u.username,
 	u.display_name,
 	u.avatar_url,
+	` + namestyle.Expr("u") + `,
 	m.channel_id,
 	m.conversation_id,
 	m.reply_to_id,
@@ -37,6 +40,7 @@ const messageColumns = `
 	ru.username,
 	ru.display_name,
 	ru.avatar_url,
+	` + namestyle.Expr("ru") + `,
 	rm.content
 `
 
@@ -85,6 +89,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Message, error) 
 	msg := &Message{Author: &Author{}}
 	var replyID, replyAuthorID, replyUsername, replyDisplayName, replyContent *string
 	var replyAvatarURL *string
+	var replyStyle namestyle.Style
 
 	err := r.db.QueryRow(
 		ctx,
@@ -100,6 +105,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Message, error) 
 		&msg.Author.Username,
 		&msg.Author.DisplayName,
 		&msg.Author.AvatarURL,
+		&msg.Author.NameStyle,
 		&msg.ChannelID,
 		&msg.ConversationID,
 		&msg.ReplyToID,
@@ -113,6 +119,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Message, error) 
 		&replyUsername,
 		&replyDisplayName,
 		&replyAvatarURL,
+		&replyStyle,
 		&replyContent,
 	)
 	if err != nil {
@@ -129,6 +136,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Message, error) 
 				Username:    *replyUsername,
 				DisplayName: *replyDisplayName,
 				AvatarURL:   replyAvatarURL,
+				NameStyle:   replyStyle,
 			},
 			Content: *replyContent,
 		}
@@ -407,6 +415,7 @@ func scanMessages(rows rowScanner) ([]Message, error) {
 		var msg Message
 		var replyID, replyAuthorID, replyUsername, replyDisplayName, replyContent *string
 		var replyAvatarURL *string
+		var replyStyle namestyle.Style
 
 		msg.Author = &Author{}
 		if err := rows.Scan(
@@ -415,6 +424,7 @@ func scanMessages(rows rowScanner) ([]Message, error) {
 			&msg.Author.Username,
 			&msg.Author.DisplayName,
 			&msg.Author.AvatarURL,
+			&msg.Author.NameStyle,
 			&msg.ChannelID,
 			&msg.ConversationID,
 			&msg.ReplyToID,
@@ -428,6 +438,7 @@ func scanMessages(rows rowScanner) ([]Message, error) {
 			&replyUsername,
 			&replyDisplayName,
 			&replyAvatarURL,
+			&replyStyle,
 			&replyContent,
 		); err != nil {
 			return nil, err
@@ -443,6 +454,7 @@ func scanMessages(rows rowScanner) ([]Message, error) {
 					Username:    *replyUsername,
 					DisplayName: *replyDisplayName,
 					AvatarURL:   replyAvatarURL,
+					NameStyle:   replyStyle,
 				},
 				Content: *replyContent,
 			}

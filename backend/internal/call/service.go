@@ -1213,6 +1213,7 @@ func (s *Service) userInfo(ctx context.Context, userID string) (UserInfo, error)
 		Username:    u.Username,
 		DisplayName: u.DisplayName,
 		AvatarURL:   u.AvatarURL,
+		NameStyle:   u.NameStyle,
 	}, nil
 }
 
