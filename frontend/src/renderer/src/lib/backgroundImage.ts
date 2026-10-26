@@ -1,6 +1,6 @@
-/** Maior lado da imagem de fundo guardada (a câmera é processada em ~960x540). */
-export const BG_MAX_W = 1280
-export const BG_MAX_H = 720
+/** Tamanho máximo da imagem de fundo guardada: a câmera é processada em ~960x540, mais que isso só pesa no localStorage. */
+export const BG_MAX_W = 960
+export const BG_MAX_H = 540
 /** Teto do arquivo escolhido, antes de reduzir. */
 export const BG_MAX_FILE_BYTES = 15 * 1024 * 1024
 
@@ -16,6 +16,20 @@ export function fitWithin(
   return { width: Math.max(1, Math.round(w * k)), height: Math.max(1, Math.round(h * k)) }
 }
 
+/** Teto de um GIF (vai inteiro para o IndexedDB: não dá para reduzir sem perder a animação). */
+export const GIF_MAX_FILE_BYTES = 10 * 1024 * 1024
+
+export type BackgroundFile = { kind: 'image'; dataUrl: string } | { kind: 'gif'; blob: Blob }
+
+/** Lê o arquivo escolhido: GIF segue inteiro (animado), outras imagens viram JPEG reduzido. */
+export async function readBackgroundFile(file: File): Promise<BackgroundFile> {
+  if (file.type === 'image/gif') {
+    if (file.size > GIF_MAX_FILE_BYTES) throw new Error('O GIF é grande demais (máx. 10 MB).')
+    return { kind: 'gif', blob: file }
+  }
+  return { kind: 'image', dataUrl: await imageFileToBackground(file) }
+}
+
 /** Lê uma imagem escolhida pelo usuário e devolve um JPEG reduzido como data URL. */
 export async function imageFileToBackground(file: File): Promise<string> {
   if (!file.type.startsWith('image/')) throw new Error('Escolha um arquivo de imagem.')
@@ -29,7 +43,7 @@ export async function imageFileToBackground(file: File): Promise<string> {
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('Não foi possível ler a imagem.')
     ctx.drawImage(bitmap, 0, 0, width, height)
-    return canvas.toDataURL('image/jpeg', 0.85)
+    return canvas.toDataURL('image/jpeg', 0.82)
   } finally {
     bitmap.close()
   }

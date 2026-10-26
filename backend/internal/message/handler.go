@@ -2,6 +2,7 @@ package message
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -151,6 +152,7 @@ func (h *Handler) ListChannelMessages(c *gin.Context) {
 
 	messages, err := h.service.ListChannelMessages(c.Request.Context(), channelID, userID, limit, before)
 	if err != nil {
+		log.Printf("[message] list messages error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list messages"})
 		return
 	}
@@ -404,6 +406,7 @@ func (h *Handler) ListConversationMessages(c *gin.Context) {
 
 	messages, err := h.service.ListConversationMessages(c.Request.Context(), conversationID, userID, limit, before)
 	if err != nil {
+		log.Printf("[message] list messages error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list messages"})
 		return
 	}

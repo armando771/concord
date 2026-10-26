@@ -2,7 +2,15 @@
 // busca do topo.
 
 export type SettingsSectionId =
-  'account' | 'profiles' | 'privacy' | 'appearance' | 'voice' | 'keybinds' | 'notifications' | 'app'
+  | 'account'
+  | 'profiles'
+  | 'privacy'
+  | 'appearance'
+  | 'voice'
+  | 'video'
+  | 'keybinds'
+  | 'notifications'
+  | 'app'
 
 export interface SettingsSection {
   id: SettingsSectionId
@@ -71,6 +79,23 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: 'Voz e áudio',
     group: 'app',
     keywords: ['voz', 'microfone', 'saída', 'fone', 'ruído', 'rnnoise', 'teste do microfone']
+  },
+  {
+    id: 'video',
+    label: 'Vídeo',
+    group: 'app',
+    keywords: [
+      'vídeo',
+      'câmera',
+      'camera',
+      'webcam',
+      'fundo',
+      'plano de fundo',
+      'desfoque',
+      'borrar',
+      'prévia',
+      'imagem'
+    ]
   },
   {
     id: 'keybinds',

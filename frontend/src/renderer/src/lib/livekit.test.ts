@@ -322,6 +322,43 @@ describe('CallMedia — permissões de publicação', () => {
   })
 })
 
+describe('CallMedia — trocar a câmera publicada', () => {
+  const streamOf = (track: unknown): MediaStream =>
+    ({ getVideoTracks: () => [track], getAudioTracks: () => [] }) as unknown as MediaStream
+
+  it('substitui a track na publicação existente, sem despublicar', async () => {
+    const media = createMedia()
+    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    room().localParticipant.publishTrack.mockClear() // o connect publicou o microfone
+    const replaceTrack = vi.fn(async () => {})
+    room().localParticipant.getTrackPublication.mockImplementation((source: string) =>
+      source === 'camera' ? { track: { replaceTrack } } : undefined
+    )
+    const next = {}
+    await media.replaceCamera(streamOf(next))
+    expect(replaceTrack).toHaveBeenCalledWith(next, true)
+    expect(room().localParticipant.publishTrack).not.toHaveBeenCalled()
+  })
+
+  it('sem câmera publicada não faz nada', async () => {
+    const media = createMedia()
+    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    room().localParticipant.publishTrack.mockClear()
+    room().localParticipant.getTrackPublication.mockReturnValue(undefined)
+    await expect(media.replaceCamera(streamOf({}))).resolves.toBeUndefined()
+    expect(room().localParticipant.publishTrack).not.toHaveBeenCalled()
+  })
+
+  it('stream sem vídeo é ignorado', async () => {
+    const media = createMedia()
+    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    const replaceTrack = vi.fn()
+    room().localParticipant.getTrackPublication.mockReturnValue({ track: { replaceTrack } })
+    await media.replaceCamera({ getVideoTracks: () => [] } as unknown as MediaStream)
+    expect(replaceTrack).not.toHaveBeenCalled()
+  })
+})
+
 describe('CallMedia — qualidade de tela', () => {
   async function activeScreen() {
     const media = createMedia()

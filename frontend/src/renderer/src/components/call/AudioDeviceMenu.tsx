@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useCallStore } from '../../store/callStore'
 import { useSettingsStore } from '../../store/settingsStore'
+import { useVideoSettingsStore } from '../../store/videoSettingsStore'
+import { useVideoModalStore } from '../../store/videoModalStore'
 import { deviceOptions } from '../../lib/audioDevices'
 import { nextMenuIndex } from '../../lib/menuNav'
 import { CAN_CHOOSE_OUTPUT, useAudioDevices } from '../useAudioDevices'
@@ -12,12 +14,27 @@ const GAP = 8
 const MARGIN = 8
 const ITEM_SELECTOR = '[role="menuitemradio"], [role="menuitem"]'
 
-export type AudioDeviceKind = 'input' | 'output'
+const TITLES: Record<AudioDeviceKind, string> = {
+  input: 'Dispositivo de entrada',
+  output: 'Dispositivo de saída',
+  camera: 'Câmera'
+}
+const DEVICE_KINDS: Record<AudioDeviceKind, MediaDeviceKind> = {
+  input: 'audioinput',
+  output: 'audiooutput',
+  camera: 'videoinput'
+}
+
+const ACTION_CLASS =
+  'flex w-full cursor-pointer items-center rounded px-2 py-1.5 text-left text-ds-sm font-medium text-gray-300 outline-none transition-colors hover:bg-brand hover:text-white focus-visible:bg-brand focus-visible:text-white'
+
+export type AudioDeviceKind = 'input' | 'output' | 'camera'
 
 /**
- * Menu da setinha ao lado do microfone/fone (como no Discord): escolhe o
- * dispositivo de entrada ou de saída sem abrir as Configurações. Usa as mesmas
- * ações do store que Configurações → Voz.
+ * Menu da setinha ao lado do microfone/fone/câmera (como no Discord): escolhe o
+ * dispositivo de entrada, de saída ou a câmera sem abrir as Configurações. Usa
+ * as mesmas ações do store que Configurações → Voz e Vídeo; o da câmera também
+ * abre o "Mudar fundo de vídeo".
  *
  * Teclado: abre com o foco no dispositivo marcado; setas, Home e End andam
  * entre os itens; Esc ou Tab fecham e devolvem o foco à setinha.
@@ -36,14 +53,19 @@ function AudioDeviceMenu({
   const moved = useRef(false)
   // Sem o "pedido de permissão" das Configurações: um clique não abre o prompt.
   const devices = useAudioDevices({ probe: false })
-  const selected = useCallStore((s) => (kind === 'input' ? s.inputDeviceId : s.outputDeviceId))
+  const inputId = useCallStore((s) => s.inputDeviceId)
+  const outputId = useCallStore((s) => s.outputDeviceId)
+  const cameraId = useVideoSettingsStore((s) => s.cameraId)
+  const selected = kind === 'input' ? inputId : kind === 'output' ? outputId : cameraId
   const setInputDevice = useCallStore((s) => s.setInputDevice)
   const setOutputDevice = useCallStore((s) => s.setOutputDevice)
+  const setCameraDevice = useCallStore((s) => s.setCameraDevice)
   const openSettings = useSettingsStore((s) => s.openSettings)
+  const openBackground = useVideoModalStore((s) => s.openBackground)
 
-  const title = kind === 'input' ? 'Dispositivo de entrada' : 'Dispositivo de saída'
-  const canChoose = kind === 'input' || CAN_CHOOSE_OUTPUT
-  const options = deviceOptions(devices, kind === 'input' ? 'audioinput' : 'audiooutput')
+  const title = TITLES[kind]
+  const canChoose = kind !== 'output' || CAN_CHOOSE_OUTPUT
+  const options = deviceOptions(devices, DEVICE_KINDS[kind])
   // Dispositivo escolhido foi desconectado: o áudio está no padrão, marca ele.
   const checkedId = options.some((o) => o.id === selected) ? selected : ''
 
@@ -106,7 +128,8 @@ function AudioDeviceMenu({
 
   const choose = (id: string): void => {
     if (kind === 'input') void setInputDevice(id)
-    else setOutputDevice(id)
+    else if (kind === 'output') setOutputDevice(id)
+    else void setCameraDevice(id)
     closeToAnchor()
   }
 
@@ -151,17 +174,31 @@ function AudioDeviceMenu({
         </p>
       )}
       <div className="my-1 border-t border-subtle" />
+      {kind === 'camera' && (
+        <button
+          type="button"
+          role="menuitem"
+          tabIndex={-1}
+          onClick={() => {
+            onClose()
+            openBackground()
+          }}
+          className={ACTION_CLASS}
+        >
+          Mudar fundo de vídeo
+        </button>
+      )}
       <button
         type="button"
         role="menuitem"
         tabIndex={-1}
         onClick={() => {
           onClose()
-          openSettings('voice')
+          openSettings(kind === 'camera' ? 'video' : 'voice')
         }}
-        className="flex w-full cursor-pointer items-center rounded px-2 py-1.5 text-left text-ds-sm font-medium text-gray-300 outline-none transition-colors hover:bg-brand hover:text-white focus-visible:bg-brand focus-visible:text-white"
+        className={ACTION_CLASS}
       >
-        Configurações de voz
+        {kind === 'camera' ? 'Configurações de vídeo' : 'Configurações de voz'}
       </button>
     </div>,
     document.body

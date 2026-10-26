@@ -296,6 +296,18 @@ export class CallMedia {
     await publication.track.replaceTrack(track, true)
   }
 
+  /**
+   * Troca a câmera publicada (outro dispositivo ou o stream do efeito de fundo)
+   * sem despublicar: SID e assinantes continuam. Sem câmera publicada não faz nada.
+   */
+  async replaceCamera(stream: MediaStream): Promise<void> {
+    const [video] = stream.getVideoTracks()
+    const publication = this.room.localParticipant.getTrackPublication(Track.Source.Camera)
+    if (!video || !publication?.track) return
+    // userProvidedTrack: o SDK não para a track antiga — o store é o dono.
+    await publication.track.replaceTrack(video, true)
+  }
+
   async publishScreen(stream: MediaStream): Promise<void> {
     if (!this.connected) return
     if (!this.canPublish('screen_share')) throw new Error('no_stream_permission')
