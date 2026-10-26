@@ -64,6 +64,12 @@ mais curtos: até 5 s e 2 MB. O volume é o da mesa de áudio, como no Discord.
 
 ## Consequências
 
+- Quem entra também ouve o próprio som: o `call:joined` da minha entrada não
+  chega ao ouvinte (ele ignora o evento de quem sou eu), então o `startChannelCall`
+  chama `playOwnJoinSound` (`call/lib/entranceSoundOwn.ts`), que lê a URL do
+  perfil no `authStore` e toca no lugar do "join" padrão, com as mesmas regras
+  (ensurdecido ou falha: toca o "join").
+
 - O som de entrada vale em todos os servidores; não dá para escolher um por
   servidor. Se for preciso, um ADR novo pode adicionar a escolha por servidor.
 - Não dá para usar um som que já está na mesa de áudio sem subir o arquivo de
