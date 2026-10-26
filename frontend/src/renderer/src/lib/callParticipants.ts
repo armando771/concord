@@ -1,4 +1,5 @@
 import { isMaestroIdentity } from './music'
+import type { NameStyle } from './nameStyle'
 
 // Quem aparece no palco da chamada. A lista do backend pode perder alguém que
 // continua na sala de mídia (ex.: o WS de chat caiu além da tolerância e o
@@ -9,6 +10,7 @@ export interface CallPerson {
   username: string
   display_name: string
   avatar_url?: string | null
+  name_style?: NameStyle | null
   is_bot?: boolean
 }
 

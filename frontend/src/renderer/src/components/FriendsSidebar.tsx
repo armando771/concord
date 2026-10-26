@@ -21,6 +21,8 @@ import { conversationRoute, conversationTitle } from '../lib/conversations'
 import { hideConversation, leaveGroup, type ConversationSummary } from '../api/conversations'
 import ConfirmModal from './friends/ConfirmModal'
 import { GameLine } from './ActivityLine'
+import StyledName from './StyledName'
+import type { NameStyle } from '../lib/nameStyle'
 
 const SIDEBAR_BG = '#0b0c10'
 
@@ -47,8 +49,16 @@ function DmAvatar({
 }
 
 /** Nome da conversa, já com a troca mais nova (user:update). */
-function DmName({ userId, name }: { userId: string; name: string }): React.JSX.Element {
-  return <>{useUserLook(userId, { name }).name}</>
+function DmName({
+  userId,
+  name,
+  style
+}: {
+  userId: string
+  name: string
+  style?: NameStyle
+}): React.JSX.Element {
+  return <StyledName name={useUserLook(userId, { name }).name} userId={userId} style={style} />
 }
 
 function ConversationRow({
@@ -116,7 +126,11 @@ function ConversationRow({
           }`}
         >
           {!isGroup && other ? (
-            <DmName userId={other.id} name={other.display_name || other.username} />
+            <DmName
+              userId={other.id}
+              name={other.display_name || other.username}
+              style={other.name_style}
+            />
           ) : (
             title
           )}

@@ -34,6 +34,11 @@ describe('StyledName', () => {
     expect(html).toContain('Bitter')
     expect(html).not.toContain('Press Start')
   })
+  it('style null = apelido em uso: ignora até o perfil ao vivo', () => {
+    profiles.u1 = { name_style: { font: 'tempo', effect: 'solid', colors: [] } }
+    const html = renderToStaticMarkup(<StyledName name="Apelido" userId="u1" style={null} />)
+    expect(html).toBe('<span>Apelido</span>')
+  })
   it('sem perfil conhecido cai no estilo recebido', () => {
     const html = renderToStaticMarkup(
       <StyledName name="Mugis" userId="u2" style={{ font: 'bit8', effect: 'solid', colors: [] }} />

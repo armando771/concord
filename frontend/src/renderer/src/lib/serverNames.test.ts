@@ -127,7 +127,8 @@ describe('withServerNames (palco, lista da call e overlay)', () => {
 
   it('troca o nome de quem tem apelido no servidor da call', () => {
     expect(withServerNames(people, { a: 'Aninha' })).toEqual([
-      { id: 'a', username: 'ana', display_name: 'Aninha' },
+      // name_style null: apelido de servidor não leva o estilo do nome de exibição.
+      { id: 'a', username: 'ana', display_name: 'Aninha', name_style: null },
       { id: 'b', username: 'bia', display_name: 'Bia' }
     ])
   })

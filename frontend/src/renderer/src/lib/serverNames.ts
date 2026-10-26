@@ -74,7 +74,8 @@ export function withServerNames<T extends { id: string; username?: string; displ
   if (!nicknames || !people.some((p) => nicknames[p.id])) return people
   return people.map((p) =>
     nicknames[p.id]
-      ? { ...p, display_name: serverDisplayName({ nickname: nicknames[p.id] }, p) }
+      ? // Apelido de servidor não leva o estilo do nome de exibição.
+        { ...p, display_name: serverDisplayName({ nickname: nicknames[p.id] }, p), name_style: null }
       : p
   )
 }

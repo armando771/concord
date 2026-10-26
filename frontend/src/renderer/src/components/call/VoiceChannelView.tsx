@@ -109,7 +109,8 @@ function VoiceChannelView({ channelId }: { channelId: string }): React.JSX.Eleme
                     id: p.user_id,
                     username: p.username ?? '',
                     display_name: serverDisplayName({ nickname: nicknames?.[p.user_id] }, p),
-                    avatar_url: p.avatar_url ?? null
+                    avatar_url: p.avatar_url ?? null,
+                    name_style: nicknames?.[p.user_id] ? null : p.name_style
                   }}
                   isScreen={(serverCalls[channelId]?.screen_sharing ?? []).includes(p.user_id)}
                 />

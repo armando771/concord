@@ -1,6 +1,7 @@
 import { request } from './client'
 import { uploadImage } from './users'
 import type { Role } from '../lib/permissions'
+import type { NameStyle } from '../lib/nameStyle'
 
 export interface Server {
   id: string
@@ -24,6 +25,7 @@ export interface ServerMember {
   username?: string
   display_name?: string
   avatar_url?: string | null
+  name_style?: NameStyle
   is_bot?: boolean
   /** Apelido neste servidor (null = sem; vale o display_name). */
   nickname?: string | null

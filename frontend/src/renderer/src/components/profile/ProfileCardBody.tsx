@@ -10,6 +10,8 @@ import GameIcon from '../GameIcon'
 import { Elapsed } from '../ActivityCard'
 import { useActivity } from '../../store/presenceActivityStore'
 import LinkIcon from './LinkIcon'
+import StyledName from '../StyledName'
+import type { NameStyle } from '../../lib/nameStyle'
 
 /** Fundo do cartão: recorta o avatar e a bolinha de status. */
 export const CARD_BG = '#111214'
@@ -17,6 +19,7 @@ export const CARD_BG = '#111214'
 export interface CardProfile {
   id?: string
   display_name: string
+  name_style?: NameStyle
   /** Apelido no servidor aberto: aparece em destaque, com o nome de verdade embaixo. */
   nickname?: string | null
   username?: string
@@ -150,7 +153,15 @@ function ProfileCardBody({
 
         <div className="mt-2">
           <p className="truncate text-xl font-bold text-white">
-            {profile.nickname || profile.display_name || ' '}
+            {profile.nickname ? (
+              profile.nickname
+            ) : (
+              <StyledName
+                name={profile.display_name || ' '}
+                userId={profile.id}
+                style={profile.name_style}
+              />
+            )}
             {isMe && !preview && (
               <span className="ml-1.5 text-xs font-medium text-gray-400">(você)</span>
             )}
@@ -160,7 +171,11 @@ function ProfileCardBody({
               className="truncate text-ds-sm font-semibold text-gray-200"
               title="Nome de exibição (fora deste servidor)"
             >
-              {profile.display_name}
+              <StyledName
+                name={profile.display_name}
+                userId={profile.id}
+                style={profile.name_style}
+              />
             </p>
           )}
           {(profile.username || profile.pronouns || badges) && (

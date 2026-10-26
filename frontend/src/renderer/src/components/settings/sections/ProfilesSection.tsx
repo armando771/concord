@@ -433,6 +433,7 @@ function ProfilesSection(): React.JSX.Element | null {
               isMe
               profile={{
                 display_name: draft.display_name.trim() || user.username,
+                name_style: draft.name_style,
                 username: user.username,
                 avatar_url: avatarUrl,
                 banner_url: bannerUrl,
