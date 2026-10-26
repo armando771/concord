@@ -58,4 +58,12 @@ describe('GroupMemberRow', () => {
     expect(render({ canRemove: true })).toContain('aria-label="Remover do grupo"')
     expect(render()).not.toContain('Remover do grupo')
   })
+
+  it('o botão de remover não some do toque nem do teclado (antes era display:none até o hover)', () => {
+    const button = /<button[^>]*aria-label="Remover do grupo"[^>]*>/.exec(render({ canRemove: true }))?.[0] ?? ''
+    expect(button).not.toBe('')
+    expect(button.split(/[\s"]+/)).not.toContain('hidden')
+    expect(button).toContain('[@media(hover:hover)]:sr-only')
+    expect(button).toContain('focus-visible:not-sr-only')
+  })
 })

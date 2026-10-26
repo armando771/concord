@@ -87,4 +87,16 @@ describe('ConversationRow', () => {
     expect(render(dm, { active: true })).toContain('bg-fg/10')
     expect(render(dm)).not.toContain('bg-fg/10')
   })
+
+  it('o botão de fechar não some do toque nem do teclado (antes era display:none até o hover)', () => {
+    const button = /<button[^>]*aria-label="Fechar DM"[^>]*>/.exec(render(dm))?.[0] ?? ''
+    expect(button).not.toBe('')
+    expect(button.split(/[\s"]+/)).not.toContain('hidden')
+    expect(button).toContain('[@media(hover:hover)]:sr-only')
+    expect(button).toContain('focus-visible:not-sr-only')
+  })
+
+  it('a contagem de não lidas só some no hover real (no toque ela fica ao lado do X)', () => {
+    expect(render(dm, { unread: 3 })).toContain('[@media(hover:hover)]:group-hover:hidden')
+  })
 })

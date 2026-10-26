@@ -132,7 +132,7 @@ function ConversationTail({
   return (
     <>
       {unread > 0 && (
-        <span className="shrink-0 rounded-full bg-danger-strong px-1.5 text-[11px] font-bold text-white group-hover:hidden">
+        <span className="shrink-0 rounded-full bg-danger-strong px-1.5 text-[11px] font-bold text-white [@media(hover:hover)]:group-hover:hidden">
           {unread > 99 ? '99+' : unread}
         </span>
       )}
@@ -144,7 +144,7 @@ function ConversationTail({
           e.stopPropagation()
           onClose()
         }}
-        className="hidden shrink-0 cursor-pointer text-gray-400 hover:text-strong group-hover:block"
+        className="shrink-0 cursor-pointer text-gray-400 hover:text-strong [@media(hover:hover)]:sr-only [@media(hover:hover)]:group-hover:not-sr-only focus-visible:not-sr-only"
       >
         <XIcon className="h-4 w-4" />
       </button>

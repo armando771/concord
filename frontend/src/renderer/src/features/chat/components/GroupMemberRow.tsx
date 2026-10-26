@@ -63,7 +63,7 @@ function GroupMemberRow({
             e.stopPropagation()
             onRemove()
           }}
-          className="hidden cursor-pointer text-gray-400 hover:text-danger group-hover:block"
+          className="cursor-pointer text-gray-400 hover:text-danger [@media(hover:hover)]:sr-only [@media(hover:hover)]:group-hover:not-sr-only focus-visible:not-sr-only"
         >
           <XIcon className="h-4 w-4" />
         </button>
