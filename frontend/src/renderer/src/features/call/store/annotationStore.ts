@@ -26,6 +26,8 @@ export interface AnnotationState {
   color: string
   width: number
   drawingActive: Record<string, boolean>
+  /** Lives cujos desenhos EU escondi (só local; só guarda `true`). */
+  hiddenSharers: Record<string, boolean>
   strokes: Record<string, DrawStroke[]>
   myStrokeIds: Record<string, string[]>
 
@@ -34,6 +36,10 @@ export interface AnnotationState {
   setWidth: (width: number) => void
   toggleDrawing: (sharerId: string) => void
   setDrawingActive: (sharerId: string, active: boolean) => void
+  /** Esconde/mostra, só para mim, os desenhos daquela transmissão. */
+  toggleHidden: (sharerId: string) => void
+  /** Esquece o "ocultar" das lives que não estão mais no ar. */
+  pruneHidden: (activeSharerIds: string[]) => void
 
   addStroke: (
     callId: string,
@@ -74,11 +80,29 @@ export const selectMyStrokeIds =
   (s: Pick<AnnotationState, 'myStrokeIds'>): string[] =>
     s.myStrokeIds[sharerId] ?? NO_STROKE_IDS
 
+/**
+ * Traços a desenhar: nenhum com os desenhos ocultos (a referência vazia é
+ * sempre a mesma, então o canvas nem re-renderiza com traços que chegam).
+ */
+export const selectVisibleStrokes =
+  (sharerId: string) =>
+  (s: Pick<AnnotationState, 'strokes' | 'hiddenSharers'>): DrawStroke[] =>
+    s.hiddenSharers[sharerId] ? NO_STROKES : (s.strokes[sharerId] ?? NO_STROKES)
+
+/** Cópia do mapa de ocultos sem a transmissão (volta ao padrão: mostrar). */
+function withoutHidden(hidden: Record<string, boolean>, sharerId: string): Record<string, boolean> {
+  if (!hidden[sharerId]) return hidden
+  const next = { ...hidden }
+  delete next[sharerId]
+  return next
+}
+
 export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   tool: 'pen',
   color: '#ef4444',
   width: 4,
   drawingActive: {},
+  hiddenSharers: {},
   strokes: {},
   myStrokeIds: {},
 
@@ -86,21 +110,36 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   setColor: (color) => set({ color }),
   setWidth: (width) => set({ width }),
 
-  toggleDrawing: (sharerId) =>
-    set((s) => ({
-      drawingActive: {
-        ...s.drawingActive,
-        [sharerId]: !s.drawingActive[sharerId]
-      }
-    })),
+  // Começar a desenhar mostra os desenhos de novo: ninguém desenha às cegas.
+  toggleDrawing: (sharerId) => get().setDrawingActive(sharerId, !get().drawingActive[sharerId]),
 
   setDrawingActive: (sharerId, active) =>
     set((s) => ({
       drawingActive: {
         ...s.drawingActive,
         [sharerId]: active
-      }
+      },
+      hiddenSharers: active ? withoutHidden(s.hiddenSharers, sharerId) : s.hiddenSharers
     })),
+
+  // Esconde tudo daquela live para mim (inclusive meus traços) e sai do modo desenho.
+  toggleHidden: (sharerId) =>
+    set((s) =>
+      s.hiddenSharers[sharerId]
+        ? { hiddenSharers: withoutHidden(s.hiddenSharers, sharerId) }
+        : {
+            hiddenSharers: { ...s.hiddenSharers, [sharerId]: true },
+            drawingActive: { ...s.drawingActive, [sharerId]: false }
+          }
+    ),
+
+  pruneHidden: (activeSharerIds) =>
+    set((s) => {
+      const kept = Object.entries(s.hiddenSharers).filter(([id]) => activeSharerIds.includes(id))
+      return kept.length === Object.keys(s.hiddenSharers).length
+        ? s
+        : { hiddenSharers: Object.fromEntries(kept) }
+    }),
 
   addStroke: (callId, sharerId, partial) => {
     const meId = useAuthStore.getState().user?.id ?? 'me'
@@ -280,14 +319,16 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
         return {
           strokes: nextStrokes,
           myStrokeIds: nextMy,
-          drawingActive: nextActive
+          drawingActive: nextActive,
+          hiddenSharers: withoutHidden(s.hiddenSharers, sharerId)
         }
       })
     } else {
       set({
         strokes: {},
         myStrokeIds: {},
-        drawingActive: {}
+        drawingActive: {},
+        hiddenSharers: {}
       })
     }
   }

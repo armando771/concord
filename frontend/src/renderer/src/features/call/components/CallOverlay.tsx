@@ -1,5 +1,6 @@
 import { useCallStore } from '../store/callStore'
 import { useMusicDucking } from '../../music/hooks/useMusicDucking'
+import { useForgetEndedLives } from '../hooks/useForgetEndedLives'
 import RemoteAudio from './RemoteAudio'
 import { remoteAudioEntries } from '../lib/remoteAudioEntries'
 
@@ -14,6 +15,7 @@ function CallOverlay(): React.JSX.Element | null {
   const screenAudioStreams = useCallStore((s) => s.screenAudioStreams)
   const deafened = useCallStore((s) => s.deafened)
   const musicGain = useMusicDucking()
+  useForgetEndedLives()
 
   if (status === 'idle' || status === 'ringing') return null
 

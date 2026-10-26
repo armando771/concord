@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { CallUserInfo } from '../store/callStore'
-import { useAnnotationStore } from '../store/annotationStore'
 import { AutoHide } from '../lib/fullscreenControls'
-import { FullscreenExitIcon, PencilIcon } from '../../../shared/ui/icons'
+import { FullscreenExitIcon } from '../../../shared/ui/icons'
 import { StreamVolume } from './StreamAudioControls'
+import { FullscreenAnnotationButtons } from './AnnotationVisibilityButton'
 import ScreenWatchersOverlay from './ScreenWatchersOverlay'
 
 /**
@@ -24,8 +24,6 @@ function FullscreenOverlay({
 }): React.JSX.Element {
   const [visible, setVisible] = useState(true)
   const [autoHide] = useState(() => new AutoHide(setVisible))
-  const isDrawing = useAnnotationStore((s) => Boolean(userId && s.drawingActive[userId]))
-  const toggleDrawing = useAnnotationStore((s) => s.toggleDrawing)
 
   useEffect(() => {
     autoHide.start()
@@ -58,21 +56,7 @@ function FullscreenOverlay({
         }`}
       >
         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-strong">{name}</span>
-        {userId && (
-          <button
-            type="button"
-            onClick={() => toggleDrawing(userId)}
-            aria-label="Anotações na transmissão"
-            title={isDrawing ? 'Fechar anotações' : 'Anotar / Desenhar na transmissão (Epic Pen)'}
-            className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg transition-colors ${
-              isDrawing
-                ? 'bg-success-strong text-white shadow-md ring-1 ring-fg/30'
-                : 'bg-black/60 text-gray-100 hover:bg-white/15 on-media'
-            }`}
-          >
-            <PencilIcon className="h-4 w-4" />
-          </button>
-        )}
+        {userId && <FullscreenAnnotationButtons sharerId={userId} />}
         {userId && (
           <div className="flex items-center gap-2 rounded-lg bg-black/60 px-2 py-1 on-media">
             <StreamVolume userId={userId} />
