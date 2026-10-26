@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { SETTINGS_SECTIONS, filterSections } from './settingsNav'
+import {
+  SETTINGS_SECTIONS,
+  accountName,
+  currentSettingsSection,
+  filterSections
+} from './settingsNav'
 
 const ids = (query: string): string[] => filterSections(query).map((s) => s.id)
 
@@ -40,5 +45,25 @@ describe('filterSections', () => {
 
   it('sem resultado volta vazio', () => {
     expect(ids('xyzzy')).toEqual([])
+  })
+})
+
+describe('accountName', () => {
+  it('prefere o nome de exibição, depois o @', () => {
+    expect(accountName({ display_name: 'Ana Souza', username: 'ana' })).toBe('Ana Souza')
+    expect(accountName({ display_name: '', username: 'ana' })).toBe('ana')
+  })
+
+  it('sem conta, é vazio', () => {
+    expect(accountName(null)).toBe('')
+    expect(accountName(undefined)).toBe('')
+  })
+})
+
+describe('currentSettingsSection', () => {
+  it('devolve a seção pedida, ou a primeira se ela não existe (ex.: some no navegador)', () => {
+    expect(currentSettingsSection(SETTINGS_SECTIONS, 'voice').id).toBe('voice')
+    const semApp = SETTINGS_SECTIONS.filter((s) => s.id !== 'app')
+    expect(currentSettingsSection(semApp, 'app').id).toBe(semApp[0].id)
   })
 })
