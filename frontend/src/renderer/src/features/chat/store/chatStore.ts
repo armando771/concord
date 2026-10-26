@@ -37,6 +37,7 @@ import { applyReactionAdd, applyReactionRemove } from '../lib/emotes'
 import { applyPollUpdate, messagePreview, type PollUpdate } from '../lib/polls'
 import { mergeMissedMessages, newestMessage } from '../lib/missedMessages'
 import { mergeMessages } from '../lib/messageOrder'
+import { withMessagePage } from '../lib/messagePages'
 import { applyMessageUpdate } from '../lib/messageEdit'
 import { APP_UPDATE_EVENT, requestUpdateCheck } from '../../updates/lib/appUpdate'
 import type { ConversationSummary } from '../api/conversations'
@@ -433,14 +434,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       if (useAuthStore.getState().accessToken !== token) return
       if (!openRooms.has(room)) return
       openRooms.set(room, { loaded: true })
-      set((state) => ({
-        messagesByRoom: {
-          ...state.messagesByRoom,
-          // Pode já ter mensagem ao vivo que chegou durante o carregamento.
-          [room]: mergeMessages(state.messagesByRoom[room] ?? [], fetched)
-        },
-        hasMoreByRoom: { ...state.hasMoreByRoom, [room]: fetched.length >= MESSAGE_LIMIT }
-      }))
+      set((state) => withMessagePage(state, room, fetched))
     } catch (err) {
       console.error(`[chatStore] openRoom ${room} failed:`, err)
     } finally {
@@ -482,19 +476,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const fetched = await fetch(before)
       if (useAuthStore.getState().accessToken !== token) return
       if (!openRooms.has(room)) return
-      // Nada mais antigo (o histórico tinha um múltiplo exato da página):
-      // acabou, senão o scroll infinito deixaria o topo "carregando" para sempre.
-      if (fetched.length === 0) {
-        set((state) => ({ hasMoreByRoom: { ...state.hasMoreByRoom, [room]: false } }))
-        return
-      }
-      set((state) => ({
-        messagesByRoom: {
-          ...state.messagesByRoom,
-          [room]: mergeMessages(state.messagesByRoom[room] ?? [], fetched)
-        },
-        hasMoreByRoom: { ...state.hasMoreByRoom, [room]: fetched.length >= MESSAGE_LIMIT }
-      }))
+      // Página vazia também encerra o histórico (total múltiplo da página),
+      // senão o scroll infinito deixaria o topo "carregando" para sempre.
+      set((state) => withMessagePage(state, room, fetched))
     } catch (err) {
       console.error(`[chatStore] loadOlder ${room} failed:`, err)
     }
@@ -772,13 +756,7 @@ loadOlderUntil: async (room, messageId, maxPages = JUMP_MAX_PAGES) => {
           // histórico, não mensagem nova; nada vira não lido.
           entry.loaded = true
           for (const m of latest) notifiedMessages.add(m.id)
-          set((state) => ({
-            messagesByRoom: {
-              ...state.messagesByRoom,
-              [room]: mergeMessages(state.messagesByRoom[room] ?? [], latest)
-            },
-            hasMoreByRoom: { ...state.hasMoreByRoom, [room]: latest.length >= MESSAGE_LIMIT }
-          }))
+          set((state) => withMessagePage(state, room, latest))
           return
         }
         set((state) => {
