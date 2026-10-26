@@ -6,7 +6,7 @@
 #       AppImage montado: atualiza pelo electron-updater.
 #   Salinha-<v>-x64.tar.gz (+ .sig) + latest-linux-tar.yml
 #       Instalação por usuário sem FUSE (site/install.sh) e AppImage extraído:
-#       atualiza pelo updater próprio (frontend/src/main/linuxUpdater.ts).
+#       atualiza pelo updater próprio (frontend/src/main/updates/linuxUpdater.ts).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

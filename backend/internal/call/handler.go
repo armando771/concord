@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"gin-quickstart/backend/internal/livekit"
+	"gin-quickstart/backend/internal/platform/livekit"
 
 	"github.com/gin-gonic/gin"
 )

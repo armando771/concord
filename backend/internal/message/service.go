@@ -23,6 +23,7 @@ var (
 	ErrInvalidReply        = errors.New("invalid reply target")
 	ErrInvalidEmoji        = errors.New("invalid emoji reaction")
 	ErrInvalidSticker      = errors.New("invalid sticker or sticker does not belong to this server")
+	ErrInvalidGifURL       = errors.New("invalid gif url")
 )
 
 type EventPublisher interface {
@@ -114,7 +115,34 @@ func SameRoomTarget(target *Message, channelID string, conversationID string) bo
 	return false
 }
 
+func normalizeMediaPointers(stickerID *string, gifURL *string) (*string, *string, error) {
+	if stickerID != nil {
+		trimmed := strings.TrimSpace(*stickerID)
+		if trimmed == "" {
+			stickerID = nil
+		} else {
+			stickerID = &trimmed
+		}
+	}
+	if gifURL != nil {
+		trimmed := strings.TrimSpace(*gifURL)
+		if trimmed == "" {
+			gifURL = nil
+		} else if len(trimmed) > 1024 || (!strings.HasPrefix(trimmed, "https://") && !strings.HasPrefix(trimmed, "http://")) {
+			return nil, nil, ErrInvalidGifURL
+		} else {
+			gifURL = &trimmed
+		}
+	}
+	return stickerID, gifURL, nil
+}
+
 func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, authorID string, content string, replyToID *string, attachmentIDs []string, stickerID *string, gifURL *string, gifMetadata *GifMetadata) (*Message, error) {
+	var err error
+	stickerID, gifURL, err = normalizeMediaPointers(stickerID, gifURL)
+	if err != nil {
+		return nil, err
+	}
 	hasMedia := len(attachmentIDs) > 0 || stickerID != nil || gifURL != nil
 	if err := validateNewMessageWithMedia(content, attachmentIDs, hasMedia); err != nil {
 		return nil, err
@@ -152,6 +180,11 @@ func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, au
 }
 
 func (s *Service) CreateConversationMessage(ctx context.Context, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string, stickerID *string, gifURL *string, gifMetadata *GifMetadata) (*Message, error) {
+	var err error
+	stickerID, gifURL, err = normalizeMediaPointers(stickerID, gifURL)
+	if err != nil {
+		return nil, err
+	}
 	hasMedia := len(attachmentIDs) > 0 || stickerID != nil || gifURL != nil
 	if err := validateNewMessageWithMedia(content, attachmentIDs, hasMedia); err != nil {
 		return nil, err

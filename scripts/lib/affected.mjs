@@ -1,0 +1,65 @@
+// Mapeia arquivos alterados (caminhos relativos à raiz do repo) para o que
+// precisa ser testado. Só funções puras: quem roda os comandos é o CLI.
+import { existsSync } from 'node:fs'
+import path from 'node:path'
+
+// Código usado por quase todo o resto: mexeu aqui, roda a suíte inteira.
+export const SHARED = [
+  'backend/cmd/',
+  'backend/go.mod',
+  'backend/internal/platform/',
+  'backend/internal/permission/',
+  'frontend/package.json',
+  'frontend/src/renderer/src/shared/',
+  'frontend/src/preload/'
+]
+
+const isGo = (f) => f.startsWith('backend/') && f.endsWith('.go')
+const isTs = (f) => f.startsWith('frontend/src/') && /\.(ts|tsx)$/.test(f)
+const isScript = (f) => f.startsWith('scripts/') && f.endsWith('.mjs')
+
+export function classify(files) {
+  return {
+    go: files.filter(isGo),
+    ts: files.filter(isTs),
+    scripts: files.filter(isScript),
+    shared: files.some((f) => SHARED.some((prefix) => f.startsWith(prefix)))
+  }
+}
+
+// goPackages: pacotes (relativos a backend/, no formato ./x/y) dos arquivos Go.
+export const goPackages = (goFiles) =>
+  [...new Set(goFiles.map((f) => './' + path.posix.dirname(f.slice('backend/'.length))))].sort()
+
+// parseGoList lê `go list -f '{{.ImportPath}}|{{join .Imports ","}}|...'`
+// e devolve { pacote: [pacotes que ele importa, inclusive nos testes] }.
+export function parseGoList(text) {
+  const graph = {}
+  for (const line of text.split('\n').filter(Boolean)) {
+    const [pkg, ...lists] = line.trim().split('|')
+    graph[pkg] = lists.flatMap((list) => list.split(',')).filter(Boolean)
+  }
+  return graph
+}
+
+// dependents: os pacotes alterados + todos que dependem deles (fecho reverso).
+export function dependents(graph, changed) {
+  const result = new Set(changed)
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const [pkg, imports] of Object.entries(graph)) {
+      if (!result.has(pkg) && imports.some((dep) => result.has(dep))) {
+        result.add(pkg)
+        grew = true
+      }
+    }
+  }
+  return [...result].sort()
+}
+
+// scriptTests: x.mjs → x.test.mjs ao lado (se existir); testes alterados entram direto.
+export function scriptTests(scriptFiles, exists = existsSync) {
+  const tests = scriptFiles.map((f) => (f.endsWith('.test.mjs') ? f : f.replace(/\.mjs$/, '.test.mjs')))
+  return [...new Set(tests.filter((f) => exists(f)))].sort()
+}

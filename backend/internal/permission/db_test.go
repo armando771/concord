@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"gin-quickstart/backend/internal/channel"
-	"gin-quickstart/backend/internal/database"
+	"gin-quickstart/backend/internal/platform/database"
 	"gin-quickstart/backend/internal/permission"
 	"gin-quickstart/backend/internal/role"
 	"gin-quickstart/backend/internal/server"

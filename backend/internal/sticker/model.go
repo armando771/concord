@@ -62,11 +62,13 @@ func sanitizeName(raw string) (string, error) {
 	return clean, nil
 }
 
-func marshalEvent(name string, payload any) []byte {
-	body, _ := json.Marshal(payload)
-	envelope, _ := json.Marshal(map[string]any{
-		"event": name,
-		"data":  json.RawMessage(body),
+func marshalEvent(typ string, payload any) []byte {
+	data, err := json.Marshal(map[string]any{
+		"type":    typ,
+		"payload": payload,
 	})
-	return envelope
+	if err != nil {
+		return nil
+	}
+	return data
 }

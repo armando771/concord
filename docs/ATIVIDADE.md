@@ -9,7 +9,7 @@ de membros, amigos, DMs, barra do usuário, painel de voz e perfil) e na coluna
 
 ## Fluxo
 
-1. **Detecção (só Electron no Windows).** `frontend/src/main/gameDetector.ts`
+1. **Detecção (só Electron no Windows).** `frontend/src/main/activity/gameDetector.ts`
    lista os processos (`tasklist`) a cada 15 s e procura executáveis do
    catálogo `frontend/src/shared/gameCatalog.ts`. Processo fora do catálogo
    nunca sai do PC. Para incluir um jogo, adicione uma entrada em `GAMES`.
@@ -26,7 +26,7 @@ de membros, amigos, DMs, barra do usuário, painel de voz e perfil) e na coluna
    renderer (`games:current`); exposto como `window.api.games`.
 3. **Publicação.** `GameActivityBridge` + `presenceActivityStore` mandam
    `activity:set` / `activity:clear` pelo WebSocket (e de novo ao reconectar).
-4. **Servidor.** `internal/websocket/activity.go` guarda só em memória (some
+4. **Servidor.** `internal/platform/websocket/activity.go` guarda só em memória (some
    quando a última conexão cai) e envia `presence:activity` para o próprio
    usuário, amigos e membros de servidores em comum, sem bloqueados
    (`SQLAudience`). Invisível esconde a atividade.

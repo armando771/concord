@@ -5,8 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"gin-quickstart/backend/internal/namestyle"
-
 	"github.com/jackc/pgx/v5"
 )
 
@@ -16,28 +14,7 @@ var (
 
 const MaxPinnedMessagesPerChannel = 50
 
-var pinnedMessageColumns = `
-	m.id,
-	m.author_id,
-	u.username,
-	u.display_name,
-	u.avatar_url,
-	` + namestyle.Expr("u") + `,
-	m.channel_id,
-	m.conversation_id,
-	m.reply_to_id,
-	m.content,
-	m.system_kind,
-	m.mention_everyone,
-	m.created_at,
-	m.edited_at,
-	rm.id,
-	rm.author_id,
-	ru.username,
-	ru.display_name,
-	ru.avatar_url,
-	` + namestyle.Expr("ru") + `,
-	rm.content,
+var pinnedMessageColumns = messageColumns + `,
 	cpm.pinned_at,
 	cpm.pinned_by,
 	pu.username,
@@ -51,6 +28,7 @@ const pinnedMessageFrom = `
 	JOIN users u ON u.id = m.author_id
 	LEFT JOIN messages rm ON rm.id = m.reply_to_id
 	LEFT JOIN users ru ON ru.id = rm.author_id
+	LEFT JOIN server_stickers stk ON stk.id = m.sticker_id
 	LEFT JOIN users pu ON pu.id = cpm.pinned_by
 `
 
@@ -204,59 +182,21 @@ func scanPinnedRows(source interface{}) ([]PinnedMessage, error) {
 
 	scanOne := func(s singleOrMultiRow) (*PinnedMessage, error) {
 		var pin PinnedMessage
-		pin.Author = &Author{}
-		var replyID, replyAuthorID, replyUsername, replyDisplayName, replyContent *string
-		var replyAvatarURL *string
-		var replyStyle namestyle.Style
 		var pinnedByID, pinnedByUsername, pinnedByDisplayName, pinnedByAvatarURL *string
 
-		if err := s.Scan(
-			&pin.ID,
-			&pin.AuthorID,
-			&pin.Author.Username,
-			&pin.Author.DisplayName,
-			&pin.Author.AvatarURL,
-			&pin.Author.NameStyle,
-			&pin.ChannelID,
-			&pin.ConversationID,
-			&pin.ReplyToID,
-			&pin.Content,
-			&pin.SystemKind,
-			&pin.MentionEveryone,
-			&pin.CreatedAt,
-			&pin.EditedAt,
-			&replyID,
-			&replyAuthorID,
-			&replyUsername,
-			&replyDisplayName,
-			&replyAvatarURL,
-			&replyStyle,
-			&replyContent,
+		msg, err := scanMessageRow(
+			s,
 			&pin.PinnedAt,
 			&pinnedByID,
 			&pinnedByUsername,
 			&pinnedByDisplayName,
 			&pinnedByAvatarURL,
-		); err != nil {
+		)
+		if err != nil {
 			return nil, err
 		}
-		pin.Author.ID = pin.AuthorID
+		pin.Message = msg
 		pin.Message.PinnedAt = &pin.PinnedAt
-
-		if replyID != nil && replyAuthorID != nil && replyUsername != nil && replyDisplayName != nil && replyContent != nil {
-			pin.ReplyTo = &ReplyPreview{
-				ID:       *replyID,
-				AuthorID: *replyAuthorID,
-				Author: &Author{
-					ID:          *replyAuthorID,
-					Username:    *replyUsername,
-					DisplayName: *replyDisplayName,
-					AvatarURL:   replyAvatarURL,
-					NameStyle:   replyStyle,
-				},
-				Content: *replyContent,
-			}
-		}
 
 		if pinnedByID != nil {
 			pin.PinnedByID = pinnedByID

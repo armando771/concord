@@ -4,7 +4,7 @@ import {
   buildWebConnectSrc,
   buildWebMediaSrc,
   WEB_EXTRA_CSP
-} from './src/renderer/src/lib/serverUrl'
+} from './src/renderer/src/shared/lib/serverUrl'
 import { cspPlugin, rendererShared } from './vite.renderer.shared'
 
 // Salinha no navegador (yarn build:web → dist-web/). O mesmo renderer do app

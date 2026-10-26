@@ -375,6 +375,10 @@ func (r *Repository) ListByUserID(ctx context.Context, userID string) ([]Summary
 			SELECT m.id, m.author_id, COALESCE(
 				NULLIF(m.content, ''),
 				'📊 ' || p.question,
+				CASE
+					WHEN m.sticker_id IS NOT NULL THEN '💟 Figurinha'
+					WHEN m.gif_url IS NOT NULL THEN '👾 GIF'
+				END,
 				(
 					SELECT CASE
 						WHEN COUNT(*) = 0 THEN NULL
