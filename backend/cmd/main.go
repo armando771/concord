@@ -342,6 +342,7 @@ func main() {
 	uploadSpace := media.NewSpace(uploadsDir, media.ReserveFromEnv(os.Getenv("UPLOADS_MIN_FREE_GB")))
 	roomAccess := message.NewServiceRoomAccess(channelService, permissionService, conversationService, friendshipService)
 	attachmentHandler := message.NewAttachmentHandler(messageRepository, uploads, uploadSpace, roomAccess, authService)
+	searchHandler := message.NewSearchHandler(messageRepository, permissionService, roomAccess)
 
 	// Boas-vindas no canal "avisos" para todo usuário novo no servidor.
 	serverService.OnMemberJoined(func(ctx context.Context, serverID string, member server.ServerMember) {
@@ -554,6 +555,7 @@ func main() {
 	conversation.ConversationRoutes(api, conversationHandler, authMiddleware)
 	message.MessageRoutes(api, messageHandler, authMiddleware)
 	message.AttachmentRoutes(api, attachmentHandler, authMiddleware)
+	message.SearchRoutes(api, searchHandler, authMiddleware)
 	call.CallRoutes(api, callHandler, authMiddleware)
 	soundboard.Routes(api, soundboardHandler, authMiddleware)
 	level.LevelRoutes(api, levelHandler, authMiddleware)

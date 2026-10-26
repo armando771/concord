@@ -75,6 +75,9 @@ import { prefsForStatus, presenceStatusOf, type PresenceStatus } from '../lib/pr
 
 export type RoomKey = string
 
+/** Até onde o pulo para uma mensagem antiga volta: 40 páginas (2000 mensagens). */
+export const JUMP_MAX_PAGES = 40
+
 interface ChatState {
   messagesByRoom: Record<RoomKey, Message[]>
   hasMoreByRoom: Record<RoomKey, boolean>
@@ -99,6 +102,11 @@ interface ChatState {
   openServer: (serverId: string) => void
   closeServer: (serverId: string) => void
   loadOlder: (room: RoomKey) => Promise<void>
+  /**
+   * Carrega páginas antigas até a mensagem aparecer na lista (pular para um
+   * resultado da busca ou uma resposta antiga). true = está na lista.
+   */
+  loadOlderUntil: (room: RoomKey, messageId: string, maxPages?: number) => Promise<boolean>
   sendToRoom: (
     room: RoomKey,
     content: string,
@@ -391,6 +399,18 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     } catch (err) {
       console.error(`[chatStore] loadOlder ${room} failed:`, err)
     }
+  },
+
+  loadOlderUntil: async (room, messageId, maxPages = JUMP_MAX_PAGES) => {
+    const has = (): boolean => (get().messagesByRoom[room] ?? []).some((m) => m.id === messageId)
+    for (let i = 0; i < maxPages && !has(); i++) {
+      if (!openRooms.has(room) || !(get().hasMoreByRoom[room] ?? false)) break
+      const oldest = get().messagesByRoom[room]?.[0]?.id
+      await get().loadOlder(room)
+      // Nada novo (erro ou fim): não adianta insistir.
+      if (get().messagesByRoom[room]?.[0]?.id === oldest) break
+    }
+    return has()
   },
 
   sendToRoom: async (room, content, attachmentIds = [], replyToId) => {

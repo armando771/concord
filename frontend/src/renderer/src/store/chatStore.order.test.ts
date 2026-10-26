@@ -266,3 +266,46 @@ describe('ordem das mensagens no chatStore', () => {
     expect(contents()).toEqual(['m1', 'm2', 'v2'])
   })
 })
+
+describe('loadOlderUntil (pular para mensagem antiga)', () => {
+  it('carrega páginas antigas até a mensagem aparecer', async () => {
+    const opening = useChatStore.getState().openRoom(ROOM)
+    await respond(page(101, 150))
+    await opening
+    const target = msg(20)
+    const jumping = useChatStore.getState().loadOlderUntil(ROOM, target.id)
+    await respond(page(51, 100))
+    await respond(page(1, 50))
+    expect(await jumping).toBe(true)
+    expect(contents()).toEqual(range(1, 150))
+    expect(api.pending).toHaveLength(0)
+  })
+
+  it('já carregada: não pede nada', async () => {
+    const opening = useChatStore.getState().openRoom(ROOM)
+    await respond(page(1, 50))
+    await opening
+    expect(await useChatStore.getState().loadOlderUntil(ROOM, msg(10).id)).toBe(true)
+    expect(api.pending).toHaveLength(0)
+  })
+
+  it('para no começo da conversa e no limite de páginas', async () => {
+    const opening = useChatStore.getState().openRoom(ROOM)
+    await respond(page(51, 100))
+    await opening
+    const missing = useChatStore.getState().loadOlderUntil(ROOM, 'sumiu')
+    await respond(page(31, 50)) // página incompleta: acabou o histórico
+    expect(await missing).toBe(false)
+    expect(api.pending).toHaveLength(0)
+
+    useChatStore.getState().reset()
+    const again = useChatStore.getState().openRoom(ROOM)
+    await respond(page(151, 200))
+    await again
+    const capped = useChatStore.getState().loadOlderUntil(ROOM, 'sumiu', 2)
+    await respond(page(101, 150))
+    await respond(page(51, 100))
+    expect(await capped).toBe(false)
+    expect(api.pending).toHaveLength(0)
+  })
+})
