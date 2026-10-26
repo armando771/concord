@@ -62,25 +62,33 @@
    Classe .on-media: texto claro por cima de vídeo/imagem/véu preto, em qualquer tema.
    Os cinzas do Tailwind (text-gray-50…600) também seguem o tema: ver main.css.
 
-   Fonte do Discord Escuro e Claro: variáveis públicas do cliente web
+   Fonte do Discord Claro: variáveis públicas do cliente web
    (https://discord.com/app, build 649389, arquivo
-   /assets/952007.87dea5a700fabeaf.css, classes .theme-dark e .theme-light,
-   lidas em 26/10/2026). Nome do Discord ao lado de cada valor.
+   /assets/952007.87dea5a700fabeaf.css, classe .theme-light, lidas em
+   26/10/2026). Nome do Discord ao lado de cada valor.
+
+   Fonte do Discord Escuro: pixels. As variáveis .theme-dark do cliente web
+   (cinzas #2c2d32 a #3f4048) são de outra variante e saíam bem mais claras que
+   o app de verdade; os valores abaixo são a moda dos pixels dos prints do
+   cliente desktop (DM completa, modais, painel do usuário), conferidos por
+   scripts/e2e-cores-discord.mjs (ΔE2000 ≤ 2) e lib/themes.test.ts. Único desvio:
+   --text-faint, que fica um pouco mais claro que o #81828a do Discord para
+   passar AA nos cartões e modais.
    ========================================================================== */
 
 :root,
 [data-theme='discord-dark'] {
   color-scheme: dark;
-  --bg-app: #2c2d32;
-  --bg-tertiary: #2c2d32; /* --background-base-lowest */
-  --bg-secondary: #323339; /* --background-base-lower, --channel-background-default */
-  --bg-primary: #393a41; /* --chat-background-default, --background-surface-high */
-  --bg-members: #36373e; /* --background-base-low */
-  --bg-surface: #3c3d45; /* --background-surface-higher */
-  --bg-floating: #3f4048; /* --background-surface-highest */
-  --bg-modal: #393a41; /* --modal-background */
-  --bg-input: #2c2d32; /* --background-base-lowest */
-  --bg-accent: #41434a; /* --background-accent */
+  --bg-app: #121214; /* moldura da janela */
+  --bg-tertiary: #121214; /* trilho de servidores */
+  --bg-secondary: #121214; /* barra lateral (canais, DMs) */
+  --bg-primary: #1a1a1e; /* chat */
+  --bg-members: #222327; /* painel de perfil e de busca */
+  --bg-surface: #242429; /* painel do usuário e cartões (medido #202024 e #242428) */
+  --bg-floating: #252429; /* menus e popovers */
+  --bg-modal: #242429; /* modais */
+  --bg-input: #222327; /* caixa de mensagem */
+  --bg-accent: #323237; /* botões e peças em modais */
   --bg-hover: rgba(151, 151, 159, 0.122); /* --interactive-background-hover */
   --bg-active: rgba(151, 151, 159, 0.161); /* --interactive-background-active */
   --bg-selected: rgba(151, 151, 159, 0.2); /* --interactive-background-selected */
@@ -88,26 +96,26 @@
   --border-subtle: rgba(151, 151, 159, 0.122); /* --border-subtle */
   --border-normal: rgba(151, 151, 159, 0.2); /* --border-normal */
   --border-strong: rgba(151, 151, 159, 0.439); /* --border-strong */
-  --text-strong: #ffffff; /* --text-strong */
-  --text-normal: #f3f3f4; /* --text-default */
-  --text-secondary: #c5c6ca; /* --text-subtle */
-  --text-muted: #abacb2; /* --text-muted */
-  --text-faint: #abacb2; /* --text-muted (o Discord não tem texto mais apagado) */
-  --text-link: #76aff6; /* --text-link */
+  --text-strong: #fbfbfb; /* medido */
+  --text-normal: #efeff1; /* medido */
+  --text-secondary: #abacb2; /* medido */
+  --text-muted: #96979e; /* medido */
+  --text-faint: #8a8b92; /* Discord: #81828a, que não passa AA (4:1) em cartões e modais */
+  --text-link: #4d96ee; /* medido */
   --text-brand: #94a8ff; /* --text-brand */
-  --text-positive: #7ecb94; /* --text-feedback-positive */
+  --text-positive: #5eb479; /* medido */
   --text-danger: #ffa09b; /* --text-feedback-critical */
   --text-warning: #fcb529; /* --text-feedback-warning */
-  --interactive-normal: #c5c6ca; /* --interactive-text-default */
-  --interactive-hover: #ffffff; /* --interactive-text-hover */
-  --interactive-active: #ffffff; /* --interactive-text-active */
+  --interactive-normal: #96979e; /* medido */
+  --interactive-hover: #efeff1; /* medido */
+  --interactive-active: #efeff1; /* medido (DM selecionada) */
   --interactive-muted: #4e5058; /* --interactive-muted */
   --brand: #5865f2; /* --background-brand, --brand-500 */
   --brand-hover: #4752c4; /* --brand-560 */
-  --green: #23a55a; /* --status-positive */
+  --green: #45a366; /* medido (bolinha online) */
   --green-strong: #248046; /* --status-positive-background */
   --green-strong-hover: #1a6334;
-  --red: #f23f43; /* --status-danger */
+  --red: #da3e44; /* medido (microfone mudo) */
   --red-strong: #da373c;
   --red-strong-hover: #a12d2f;
   --yellow: #f0b232; /* --status-warning */

@@ -19,7 +19,7 @@ import {
 import StyledName from './StyledName'
 
 /** Fundo do painel do usuário (também o recorte do status no avatar). */
-const BAR_BG = 'var(--bg-tertiary)'
+const BAR_BG = 'var(--bg-surface)'
 
 /**
  * Microfone ou fone com a setinha do lado (como no Discord): o botão liga e

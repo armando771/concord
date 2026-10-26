@@ -42,7 +42,7 @@ const webHeadPlugin: Plugin = {
       attrs: { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
       injectTo: 'head'
     },
-    { tag: 'meta', attrs: { name: 'theme-color', content: '#2c2d32' }, injectTo: 'head' }
+    { tag: 'meta', attrs: { name: 'theme-color', content: '#121214' }, injectTo: 'head' }
   ]
 }
 
