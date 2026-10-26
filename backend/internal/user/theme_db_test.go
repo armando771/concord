@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"gin-quickstart/backend/internal/database"
+	"gin-quickstart/backend/internal/platform/database"
 	"gin-quickstart/backend/internal/profiletheme"
 
 	"github.com/google/uuid"

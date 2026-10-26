@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"gin-quickstart/backend/internal/channel"
-	"gin-quickstart/backend/internal/livekit"
+	"gin-quickstart/backend/internal/platform/livekit"
 	"gin-quickstart/backend/internal/permission"
 )
 

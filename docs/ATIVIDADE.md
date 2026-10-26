@@ -26,7 +26,7 @@ de membros, amigos, DMs, barra do usuário, painel de voz e perfil) e na coluna
    renderer (`games:current`); exposto como `window.api.games`.
 3. **Publicação.** `GameActivityBridge` + `presenceActivityStore` mandam
    `activity:set` / `activity:clear` pelo WebSocket (e de novo ao reconectar).
-4. **Servidor.** `internal/websocket/activity.go` guarda só em memória (some
+4. **Servidor.** `internal/platform/websocket/activity.go` guarda só em memória (some
    quando a última conexão cai) e envia `presence:activity` para o próprio
    usuário, amigos e membros de servidores em comum, sem bloqueados
    (`SQLAudience`). Invisível esconde a atividade.

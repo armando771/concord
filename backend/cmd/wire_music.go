@@ -1,0 +1,71 @@
+package main
+
+import (
+	"context"
+
+	"gin-quickstart/backend/internal/bot"
+	"gin-quickstart/backend/internal/music"
+
+	"github.com/gin-gonic/gin"
+)
+
+// wireMusic: Maestro (bot de música), um player LiveKit por canal de voz.
+func (a *app) wireMusic() {
+	a.musicManager = music.NewManager(music.ConfigFromEnv(a.liveKitPort), music.ManagerDeps{
+		Locate: func(userID string) (music.Location, bool) {
+			l, ok := a.callService.VoiceLocationOf(userID)
+			return music.Location{CallID: l.CallID, ChannelID: l.ChannelID, ServerID: l.ServerID}, ok
+		},
+		Humans:          a.callService.ParticipantIDs,
+		IsMember:        a.isServerMember,
+		BotEnabled:      func(ctx context.Context, serverID string) bool { return a.isServerMember(ctx, serverID, bot.UserID) },
+		ChannelName:     a.channelName,
+		User:            a.musicUser,
+		PostPublic:      a.postMusicMessage,
+		SendToUser:      a.hub.SendToUser,
+		BroadcastToCall: a.hub.BroadcastToCall,
+		BroadcastToRoom: a.hub.BroadcastToRoom,
+		Tokens:          a.liveKitTokens,
+	})
+	a.callService.OnParticipantLeft(a.musicManager.OnParticipantLeft)
+	a.callService.OnCallEnded(a.musicManager.OnCallEnded)
+	a.serverService.OnMusicBotDisabled(a.musicManager.CloseServer)
+	a.messageHandler.SetCommandHandler(a.musicManager)
+
+	a.route(func(_ *gin.Engine, api *gin.RouterGroup) {
+		music.Routes(api, music.NewHandler(a.musicManager, a.authService), a.authMiddleware)
+	})
+}
+
+func (a *app) isServerMember(ctx context.Context, serverID, userID string) bool {
+	ok, err := a.serverService.IsMember(ctx, serverID, userID)
+	return err == nil && ok
+}
+
+func (a *app) channelName(ctx context.Context, channelID string) string {
+	ch, err := a.channelService.FindByID(ctx, channelID)
+	if err != nil {
+		return ""
+	}
+	return ch.Name
+}
+
+func (a *app) musicUser(ctx context.Context, userID string) (music.UserRef, error) {
+	u, err := a.userService.FindByID(ctx, userID)
+	if err != nil {
+		return music.UserRef{}, err
+	}
+	return music.UserRef{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, AvatarURL: u.AvatarURL}, nil
+}
+
+// postMusicMessage: as mensagens públicas do Maestro saem no canal "bot" do
+// servidor; sem ele (não deveria ocorrer) ficam no canal onde o comando foi dado.
+func (a *app) postMusicMessage(ctx context.Context, textChannelID, content string) error {
+	if origin, err := a.channelService.FindByID(ctx, textChannelID); err == nil {
+		if sys, err := a.channelService.SystemChannel(ctx, origin.ServerID); err == nil {
+			textChannelID = sys.ID
+		}
+	}
+	_, err := a.messageService.CreateSystemChannelMessage(ctx, textChannelID, bot.UserID, content, music.SystemKind)
+	return err
+}

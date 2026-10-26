@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"gin-quickstart/backend/internal/livekit"
+	"gin-quickstart/backend/internal/platform/livekit"
 
 	"github.com/gin-gonic/gin"
 	"github.com/livekit/protocol/auth"

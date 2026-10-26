@@ -1,6 +1,6 @@
 import type { Attachment, AttachmentKind } from '../api/messages'
 
-// Limites iguais aos do backend (internal/media e internal/message).
+// Limites iguais aos do backend (internal/platform/media e internal/message).
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 export const MAX_ATTACHMENTS_PER_MESSAGE = 10
 

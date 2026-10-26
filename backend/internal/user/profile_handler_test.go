@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"gin-quickstart/backend/internal/media"
+	"gin-quickstart/backend/internal/platform/media"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"

@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
-	"gin-quickstart/backend/internal/ratelimit"
+	"gin-quickstart/backend/internal/platform/ratelimit"
 	"gin-quickstart/backend/internal/user"
 )
 
@@ -264,7 +264,7 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 	// Antes de qualquer busca ou bcrypt: conta o IP e já reserva a tentativa
 	// do identificador. c.ClientIP() só confia nos proxies configurados
-	// (internal/clientip).
+	// (internal/platform/clientip).
 	if retry, allowed := h.guard.begin(c.ClientIP(), limited); !allowed {
 		tooManyAttempts(c, retry)
 		return
