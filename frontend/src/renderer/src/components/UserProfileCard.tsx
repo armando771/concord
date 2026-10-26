@@ -22,11 +22,15 @@ import { useModerationStore } from '../store/moderationStore'
 import { levelTier } from '../lib/levels'
 import { voiceChannelOf } from '../lib/voiceMove'
 import { memberColor } from '../lib/memberGroups'
-import { roleColorCss, rolesOfMember } from '../lib/permissions'
+import { Perm, roleColorCss, rolesOfMember } from '../lib/permissions'
+import { isUserLive, liveTarget, type MyCall } from '../lib/screenPreview'
+import { requestWatchStream } from '../store/streamJoinStore'
 import { CHOSEN_STATUSES, STATUS_META, type PresenceStatus } from '../lib/presenceStatus'
 import LevelBadge from './level/LevelBadge'
 import BadgeRow from './badges/BadgeRow'
 import ProfileCardBody, { CARD_BG, type CardProfile } from './profile/ProfileCardBody'
+import LiveStreamPreview from './profile/LiveStreamPreview'
+import LiveBadge from './call/LiveBadge'
 import StatusIcon from './StatusIcon'
 import { DotsIcon, PencilIcon, VolumeIcon } from './icons'
 import Avatar from './Avatar'
@@ -147,6 +151,12 @@ function UserProfileCard(): React.JSX.Element | null {
   const online = useChatStore((s) => (target ? Boolean(s.presence[target.userId]) : false))
   const knownStatus = useChatStore((s) => (target ? s.statuses[target.userId] : undefined))
   const serverCalls = useCallStore((s) => s.serverCalls)
+  const callStatus = useCallStore((s) => s.status)
+  const callId = useCallStore((s) => s.callId)
+  const callType = useCallStore((s) => s.type)
+  const callChannelId = useCallStore((s) => s.channelId)
+  const screenSharers = useCallStore((s) => s.screenSharers)
+  const availableScreens = useCallStore((s) => s.availableScreens)
   const level = useLevelStore((s) => (target ? s.levels[target.userId] : undefined))
   const ensureLevels = useLevelStore((s) => s.ensureLevels)
   const relationship = useRelationship(target?.userId)
@@ -168,6 +178,27 @@ function UserProfileCard(): React.JSX.Element | null {
 
   const isMe = Boolean(target && target.userId === me?.id)
   const isBot = Boolean(profile?.is_bot || member?.is_bot)
+
+  // Transmitindo agora: selo LIVE e, se dá para assistir, a prévia com o botão.
+  const myCall: MyCall = {
+    status: callStatus,
+    callId,
+    type: callType,
+    channelId: callChannelId,
+    screenSharers,
+    availableScreens
+  }
+  const live = target ? isUserLive(target.userId, myCall, serverCalls) : false
+  const stream = target
+    ? liveTarget({
+        userId: target.userId,
+        meId: me?.id,
+        call: myCall,
+        serverCalls,
+        canConnect: (channelId) => access.canInChannel(channelId, Perm.VIEW_CHANNEL | Perm.CONNECT)
+      })
+    : null
+  const streamKey = stream ? `${stream.kind}:${stream.callId}` : ''
 
   useEffect(() => {
     if (!target) return
@@ -204,7 +235,7 @@ function UserProfileCard(): React.JSX.Element | null {
         { width: window.innerWidth, height: window.innerHeight }
       )
     )
-  }, [target, profile, me, mutual, badgesLoaded])
+  }, [target, profile, me, mutual, badgesLoaded, streamKey, live])
 
   useEffect(() => {
     if (!target) return
@@ -346,6 +377,18 @@ function UserProfileCard(): React.JSX.Element | null {
     mutualFriends.length > 0 ||
     mutualServers.length > 0
 
+  const watchStream = (): void => {
+    if (!stream) return
+    close()
+    requestWatchStream({
+      userId: target.userId,
+      name: nickname || card.display_name,
+      target: stream,
+      channelName:
+        stream.kind === 'join' ? channels.find((c) => c.id === stream.channelId)?.name : undefined
+    })
+  }
+
   const openMore = (e: React.MouseEvent<HTMLButtonElement>): void => {
     const r = e.currentTarget.getBoundingClientRect()
     useUserMenuStore.getState().open({
@@ -388,6 +431,16 @@ function UserProfileCard(): React.JSX.Element | null {
         }
         onEditProfile={isMe ? editProfile : undefined}
       >
+        {stream && (
+          <LiveStreamPreview
+            key={`${stream.callId}:${target.userId}`}
+            userId={target.userId}
+            name={nickname || card.display_name}
+            target={stream}
+            onWatch={watchStream}
+          />
+        )}
+
         {hasInfo && (
           <div className="mt-3 flex flex-col gap-3 rounded-lg bg-black/30 p-3">
             {inServer && (isServerOwner || memberRoles.length > 0) && (
@@ -490,7 +543,8 @@ function UserProfileCard(): React.JSX.Element | null {
                 <SectionTitle>Em call</SectionTitle>
                 <p className="flex items-center gap-1.5 text-xs text-gray-200">
                   <VolumeIcon className="h-3.5 w-3.5 text-[#23a55a]" />
-                  {voiceChannel.name}
+                  <span className="min-w-0 truncate">{voiceChannel.name}</span>
+                  {live && <LiveBadge />}
                 </p>
               </div>
             )}

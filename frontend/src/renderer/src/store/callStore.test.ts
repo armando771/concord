@@ -104,9 +104,12 @@ const api = vi.hoisted(() => ({
   startCall: vi.fn(),
   endCall: vi.fn(async () => ({ message: 'ok' })),
   getCallState: vi.fn(async () => ({ call: null, participants: [] })),
-  getCallToken: vi.fn(async () => ({ token: 'tok' }))
+  getCallToken: vi.fn(async () => ({ token: 'tok' })),
+  putScreenPreview: vi.fn(async () => {})
 }))
 vi.mock('../api/calls', () => api)
+const snapshot = vi.hoisted(() => ({ captureScreenPreview: vi.fn(async () => 'FOTO') }))
+vi.mock('../lib/screenSnapshot', () => snapshot)
 vi.mock('../api/client', () => ({ ApiError: class extends Error {} }))
 vi.mock('../lib/config', () => ({ LIVEKIT_URL: 'ws://servidor' }))
 
@@ -1203,6 +1206,42 @@ describe('callStore — miniatura da transmissão', () => {
     useCallStore.getState().focusWatchedScreen('bia')
 
     expect(useCallStore.getState().focusedScreenUserId).toBeNull()
+  })
+})
+
+describe('callStore — prévia da transmissão no perfil', () => {
+  it('manda a foto da própria tela só quando o servidor pede e estou transmitindo', async () => {
+    let t = 1_000_000
+    const now = vi.spyOn(Date, 'now').mockImplementation(() => (t += 10_000))
+    try {
+      await joinChannel()
+      const request = (callId: string): void =>
+        useCallStore.getState().handleWsEvent({
+          type: 'call:screen_preview_request',
+          payload: { call_id: callId }
+        } as never)
+
+      // Sem transmitir: nada.
+      request('call-1')
+      await flush()
+      expect(snapshot.captureScreenPreview).not.toHaveBeenCalled()
+
+      const stream = fakeStream('video')
+      rtc.getDisplayStream.mockResolvedValueOnce(stream)
+      await useCallStore.getState().startScreenShare()
+
+      // Pedido de outra chamada: nada.
+      request('outra')
+      await flush()
+      expect(snapshot.captureScreenPreview).not.toHaveBeenCalled()
+
+      request('call-1')
+      await flush()
+      expect(snapshot.captureScreenPreview).toHaveBeenCalledWith(stream)
+      expect(api.putScreenPreview).toHaveBeenCalledWith('call-1', 'FOTO')
+    } finally {
+      now.mockRestore()
+    }
   })
 })
 
