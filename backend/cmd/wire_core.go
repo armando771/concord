@@ -77,10 +77,16 @@ func (a *app) wireCore() {
 	})
 }
 
+// loginIndexChecker é o pedaço do user.Service que o boot confere.
+type loginIndexChecker interface {
+	LoginIndexes(ctx context.Context) (hasUsername, hasEmail bool, err error)
+	CaseConflicts(ctx context.Context) (usernameGroups, emailGroups int, err error)
+}
+
 // checkLoginIndexes: a migration 000025 não falha com usernames que só
 // diferem na caixa: cai num índice comum. Aqui isso aparece no log (só
 // contagens). E se a 000025 nem rodou (pulada por ordem de aplicação), ERROR no log.
-func checkLoginIndexes(users *user.Service) {
+func checkLoginIndexes(users loginIndexChecker) {
 	if hasUsername, hasEmail, err := users.LoginIndexes(context.Background()); err != nil {
 		log.Printf("[user] check login indexes: %v", err)
 	} else if msg := user.MissingLoginIndexesError(hasUsername, hasEmail); msg != "" {

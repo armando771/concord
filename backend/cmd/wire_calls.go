@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 	"time"
@@ -15,16 +16,12 @@ import (
 
 // wireCalls: LiveKit e o ciclo de vida das chamadas (a mídia nunca passa pelo Go).
 func (a *app) wireCalls() {
-	liveKitKey, liveKitSecret := os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET")
-	if liveKitKey == "" || liveKitSecret == "" {
-		log.Fatal("LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be set")
-	}
+	liveKitKey, liveKitSecret, err := liveKitCredentials()
+	must(err, "")
 	a.liveKitTokens = livekit.NewTokenIssuer(liveKitKey, liveKitSecret)
 	a.liveKitPort = envOr("LIVEKIT_PORT", "7880")
 	rtcProxy, err := livekit.NewRTCProxy("http://127.0.0.1:" + a.liveKitPort)
-	if err != nil {
-		log.Fatalf("invalid LiveKit address: %v", err)
-	}
+	must(err, "invalid LiveKit address")
 
 	a.callService = call.CallService(call.CallRepository(a.db), a.hub, a.conversationService, a.serverService, a.channelService, a.userService, a.hub.IsOnline)
 	a.callService.SetSoundLookup(soundboard.NewCallLookup(a.soundboardRepository))
@@ -43,9 +40,7 @@ func (a *app) wireCalls() {
 	// recarregar as chamadas o servidor não fica pronto (a porta nem abre):
 	// tenta de novo por até 30 s e então desiste (o systemd reinicia e o
 	// deploy volta ao binário anterior).
-	if err := restoreCalls(a.ctx, a.callService, 30*time.Second); err != nil {
-		log.Fatalf("não foi possível recarregar as chamadas: %v", err)
-	}
+	must(restoreCalls(a.ctx, a.callService, 30*time.Second), "não foi possível recarregar as chamadas")
 
 	a.route(func(router *gin.Engine, api *gin.RouterGroup) {
 		call.CallRoutes(api, callHandler, a.authMiddleware)
@@ -53,6 +48,15 @@ func (a *app) wireCalls() {
 		router.Any("/rtc", rtcProxy)
 		router.Any("/rtc/*path", rtcProxy)
 	})
+}
+
+// liveKitCredentials: sem chave e segredo do LiveKit o backend não sobe.
+func liveKitCredentials() (key, secret string, err error) {
+	key, secret = os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET")
+	if key == "" || secret == "" {
+		return "", "", errors.New("LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be set")
+	}
+	return key, secret, nil
 }
 
 // restoreCalls repete RestoreActive até dar certo ou passar `wait`.

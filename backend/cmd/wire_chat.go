@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"gin-quickstart/backend/internal/auth"
+	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/giphy"
 	"gin-quickstart/backend/internal/message"
@@ -37,7 +38,9 @@ func (a *app) wireChat() {
 	attachmentHandler := message.NewAttachmentHandler(messageRepository, uploads, a.uploadSpace, a.roomAccess, a.authService)
 	searchHandler := message.NewSearchHandler(messageRepository, a.permissionService, a.roomAccess)
 
-	a.serverService.OnMemberJoined(a.welcomeNewMember)
+	a.serverService.OnMemberJoined(func(ctx context.Context, serverID string, member server.ServerMember) {
+		welcomeMember(ctx, a.channelService, a.messageService, serverID, member)
+	})
 
 	// Mesa de áudio (Soundboard) compartilhada por servidor
 	soundboardUploads := mustStore(filepath.Join(a.uploadsDir, "soundboard"), "soundboard uploads dir")
@@ -74,18 +77,27 @@ func (a *app) wireChat() {
 	})
 }
 
-// welcomeNewMember: boas-vindas no canal "avisos" para todo usuário novo no servidor.
-func (a *app) welcomeNewMember(ctx context.Context, serverID string, member server.ServerMember) {
+// noticesFinder e systemPoster: o que welcomeMember usa dos serviços de canal e mensagem.
+type noticesFinder interface {
+	NoticesChannel(ctx context.Context, serverID string) (*channel.Channel, error)
+}
+
+type systemPoster interface {
+	CreateSystemChannelMessage(ctx context.Context, channelID, authorID, content, kind string) (*message.Message, error)
+}
+
+// welcomeMember: boas-vindas no canal "avisos" para todo usuário novo no servidor.
+func welcomeMember(ctx context.Context, notices noticesFinder, poster systemPoster, serverID string, member server.ServerMember) {
 	if member.Username == "" {
 		return
 	}
-	ch, err := a.channelService.NoticesChannel(ctx, serverID)
+	ch, err := notices.NoticesChannel(ctx, serverID)
 	if err != nil {
 		log.Printf("[server] canal de avisos do servidor %s: %v", serverID, err)
 		return
 	}
 	content := server.RandomWelcomeMessage(member.Username)
-	if _, err := a.messageService.CreateSystemChannelMessage(ctx, ch.ID, member.UserID, content, server.WelcomeSystemKind); err != nil {
+	if _, err := poster.CreateSystemChannelMessage(ctx, ch.ID, member.UserID, content, server.WelcomeSystemKind); err != nil {
 		log.Printf("[server] mensagem de boas-vindas no servidor %s: %v", serverID, err)
 	}
 }
