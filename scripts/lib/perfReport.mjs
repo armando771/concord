@@ -51,7 +51,12 @@ export function groupSamples(samples, discardSec = DISCARD_SEC) {
 }
 
 const total = (procs, field) => Object.values(procs).reduce((sum, p) => sum + (p[field] ?? 0), 0)
-const hasCpu = (s) => Object.values(s.procs).some((p) => p.cpu !== null)
+// CPU total só vale quando todos os processos da amostra têm CPU: um tipo que acabou de
+// reaparecer vem com null, e somá-lo como 0 subestimaria a amostra.
+const hasCpu = (s) => {
+  const procs = Object.values(s.procs)
+  return procs.length > 0 && procs.every((p) => p.cpu !== null)
+}
 const present = (v) => v !== null && v !== undefined
 
 function summarizeProcs(samples) {
@@ -96,11 +101,15 @@ export function summarizeGroup(samples) {
 
 export function summarize(text) {
   const { lines, corrupt } = parseJsonl(text)
-  const samples = lines.filter((l) => l.kind === 'sample')
+  const startup = lines.find((l) => l.kind === 'startup') ?? null
+  // Antes da janela pronta o app ainda está abrindo (e a janela ainda não foi mostrada):
+  // essas amostras são do boot, não de um contexto de uso.
+  const bootEnd = (startup?.readyToShowMs ?? 0) / 1000
+  const samples = lines.filter((l) => l.kind === 'sample' && l.t >= bootEnd)
   const groups = {}
   for (const [key, group] of groupSamples(samples)) groups[key] = summarizeGroup(group)
   return {
-    startup: lines.find((l) => l.kind === 'startup') ?? null,
+    startup,
     groups,
     corrupt,
     ended: lines.some((l) => l.kind === 'end')

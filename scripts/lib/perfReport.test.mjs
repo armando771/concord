@@ -79,6 +79,23 @@ test('summarizeGroup: média, p95 e RAM somam todos os processos; cpu null é ig
   assert.equal(summary.fpsP5, 60)
 })
 
+test('summarizeGroup: amostra em que algum processo está sem CPU não entra na média de CPU', () => {
+  const partial = sample(0, 'visible', 2, {
+    procs: { Tab: { cpu: 2, memMB: 100 }, GPU: { cpu: null, memMB: 50 } }
+  })
+  const full = range(1, 30).map((t) => sample(t, 'visible', 2))
+  assert.equal(summarizeGroup([partial, ...full]).cpuMean, 3)
+})
+
+test('summarize: amostras anteriores à janela pronta (boot) são ignoradas', () => {
+  const boot = range(0, 15).map((t) => sample(t, 'tray', 9))
+  const real = range(15, 60).map((t) => sample(t, 'visible', 2))
+  const startup = { kind: 'startup', appReadyMs: 200, readyToShowMs: 14500, usableMs: null }
+  const result = summarize(jsonl([startup, ...boot, ...real]))
+  assert.equal(result.groups.tray, undefined)
+  assert.equal(result.groups.visible.n, 35)
+})
+
 test('summarizeGroup: amostra pequena abaixo de 30', () => {
   assert.equal(summarizeGroup(range(0, 29).map((t) => sample(t))).small, true)
   assert.equal(summarizeGroup(range(0, 30).map((t) => sample(t))).small, false)
@@ -105,7 +122,8 @@ test('summarize: arquivo sem end (crash) e linha corrompida', () => {
   assert.equal(result.ended, false)
   assert.equal(result.corrupt, 1)
   assert.equal(result.startup.usableMs, 2000)
-  assert.equal(result.groups.visible.n, 40)
+  // 50 amostras, menos t=0 e t=1 (antes da janela pronta, 1,2 s) e os 10 s de descarte
+  assert.equal(result.groups.visible.n, 38)
 })
 
 test('summarize: end marca o arquivo como completo', () => {
