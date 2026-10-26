@@ -1,8 +1,8 @@
-import { app, BrowserWindow, ipcMain, session, shell } from 'electron'
+import { BrowserWindow, ipcMain, session, shell } from 'electron'
 import { findActivity, isAllowedActivityUrl } from '../shared/activities'
 import {
+  activityPageScript,
   activityPermissionAllowed,
-  activityUserAgent,
   activityWindowOptions,
   canNavigateActivity,
   createExternalOpenGate,
@@ -23,6 +23,8 @@ let current: string | null = null
 // (recarregar tiraria a pessoa da sala).
 let loadedUrl: string | null = null
 const preparedSessions = new Set<string>()
+/** Mundo isolado dos scripts da janela (não é o da página nem o do preload). */
+const ACTIVITY_WORLD_ID = 1001
 
 function prepareSession(activityId: string, partition: string): void {
   if (preparedSessions.has(partition)) return
@@ -55,8 +57,12 @@ function createActivityWindow(
   if (!options || !activity) return null
   prepareSession(activityId, activity.partition)
 
+  // User agent padrão do Electron, sem disfarce. O Cloudflare Turnstile (a
+  // verificação de segurança do Krunker) reconhece o Electron por outros sinais
+  // da página: um user agent de "Chrome" puro não bate com eles e vira desafio
+  // ("Security check failed"). E o webContents.setUserAgent nem chega ao iframe
+  // do Turnstile (outra origem), que ficaria com um user agent diferente.
   const created = new BrowserWindow(options)
-  created.webContents.setUserAgent(activityUserAgent(app.userAgentFallback))
   const title = options.title ?? activity.name
   // O título fica "Krunker.io — Salinha" (a página tentaria trocar).
   created.on('page-title-updated', (event) => {
@@ -64,6 +70,15 @@ function createActivityWindow(
     created.setTitle(title)
   })
   created.once('ready-to-show', () => created.show())
+  // Ajustes do jogo na página (mundo isolado; ver activityPageScript).
+  created.webContents.on('dom-ready', () => {
+    const script = activityPageScript(activityId, created.webContents.getURL())
+    if (script) {
+      void created.webContents
+        .executeJavaScriptInIsolatedWorld(ACTIVITY_WORLD_ID, [{ code: script }])
+        .catch(() => {})
+    }
+  })
 
   // Novas janelas (links, login social) vão para o navegador, como no app —
   // mas só logo depois de um clique/tecla da pessoa e no máximo uma a cada 3 s

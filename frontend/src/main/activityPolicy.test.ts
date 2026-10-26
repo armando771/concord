@@ -1,14 +1,55 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  activityPageScript,
   activityPermissionAllowed,
-  activityUserAgent,
   activityWindowOptions,
   canNavigateActivity,
   createExternalOpenGate,
   createRoomTracker,
+  dismissKrunkerClientNotice,
   isUserGestureInput,
+  KRUNKER_CLIENT_NOTICE,
   opensExternally
 } from './activityPolicy'
+
+const NOTICE_TEXT =
+  'We are discontinuing this version of the Krunker Client. If you want to update your client to the latest version. Please download and install the new client'
+
+/** O pedaço do DOM do Krunker que o script usa (#genericPop e #popupBack). */
+function fakeKrunkerPage(): {
+  doc: Document
+  pop: { style: { display: string }; textContent: string }
+  click: ReturnType<typeof vi.fn>
+  mutate: () => void
+  MutationObserver: unknown
+} {
+  const pop = { style: { display: '' }, textContent: '' }
+  const click = vi.fn(() => {
+    // clearPops() do jogo: esconde e esvazia o popup.
+    pop.style.display = 'none'
+    pop.textContent = ''
+  })
+  const callbacks: (() => void)[] = []
+  class FakeMutationObserver {
+    constructor(callback: () => void) {
+      callbacks.push(callback)
+    }
+    observe = vi.fn()
+  }
+  const elements: Record<string, unknown> = { genericPop: pop, popupBack: { click } }
+  const doc = { getElementById: (id: string) => elements[id] ?? null } as unknown as Document
+  return {
+    doc,
+    pop,
+    click,
+    mutate: () => callbacks.forEach((cb) => cb()),
+    MutationObserver: FakeMutationObserver
+  }
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 describe('activityPolicy', () => {
   it('janela do Krunker: moldura normal, sessão própria, sem node nem preload', () => {
@@ -56,12 +97,53 @@ describe('activityPolicy', () => {
     expect(opensExternally('não é url')).toBe(false)
   })
 
-  it('user agent sem Electron nem o nome do app', () => {
-    const ua =
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) salinha/0.6.0 Chrome/140.0.0.0 Electron/44.9.3 Safari/537.36'
-    expect(activityUserAgent(ua)).toBe(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
-    )
+  it('aviso de cliente descontinuado do Krunker é fechado como um clique fora', () => {
+    const page = fakeKrunkerPage()
+    vi.stubGlobal('MutationObserver', page.MutationObserver)
+    dismissKrunkerClientNotice(page.doc, KRUNKER_CLIENT_NOTICE)
+    expect(page.click).not.toHaveBeenCalled()
+    // O jogo abre o aviso depois de carregar.
+    page.pop.textContent = NOTICE_TEXT
+    page.pop.style.display = 'block'
+    page.mutate()
+    expect(page.click).toHaveBeenCalledTimes(1)
+    expect(page.pop.style.display).toBe('none')
+    page.mutate()
+    expect(page.click).toHaveBeenCalledTimes(1)
+  })
+
+  it('outros popups do Krunker continuam abertos', () => {
+    const page = fakeKrunkerPage()
+    vi.stubGlobal('MutationObserver', page.MutationObserver)
+    page.pop.textContent = 'Claim your reward'
+    page.pop.style.display = 'block'
+    dismissKrunkerClientNotice(page.doc, KRUNKER_CLIENT_NOTICE)
+    page.mutate()
+    expect(page.click).not.toHaveBeenCalled()
+    // Texto do aviso ainda no DOM mas escondido: nada a fechar.
+    page.pop.textContent = NOTICE_TEXT
+    page.pop.style.display = 'none'
+    page.mutate()
+    expect(page.click).not.toHaveBeenCalled()
+  })
+
+  it('página sem o popup (o Krunker mudou): o script não faz nada', () => {
+    const doc = { getElementById: () => null } as unknown as Document
+    expect(() => dismissKrunkerClientNotice(doc, KRUNKER_CLIENT_NOTICE)).not.toThrow()
+  })
+
+  it('script da página: só no site do Krunker, e roda sozinho como texto', () => {
+    expect(activityPageScript('outro-jogo', 'https://krunker.io/')).toBeNull()
+    expect(activityPageScript('krunker', 'https://krunker.io.evil.com/')).toBeNull()
+    expect(activityPageScript('krunker', 'about:blank')).toBeNull()
+    const script = activityPageScript('krunker', 'https://krunker.io/?game=FRA:abc12')
+    expect(script).not.toBeNull()
+    // Como na página: só document e os globais do navegador.
+    const page = fakeKrunkerPage()
+    page.pop.textContent = NOTICE_TEXT
+    page.pop.style.display = 'block'
+    new Function('document', 'MutationObserver', script!)(page.doc, page.MutationObserver)
+    expect(page.click).toHaveBeenCalledTimes(1)
   })
 
   it('navegação same-origin com URL longa continua na janela (limite de 512 é só do link da sala)', () => {
