@@ -24,6 +24,7 @@ import (
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/database"
 	"gin-quickstart/backend/internal/friendship"
+	"gin-quickstart/backend/internal/giphy"
 	"gin-quickstart/backend/internal/health"
 	"gin-quickstart/backend/internal/httplog"
 	"gin-quickstart/backend/internal/level"
@@ -38,6 +39,7 @@ import (
 	"gin-quickstart/backend/internal/role"
 	"gin-quickstart/backend/internal/server"
 	"gin-quickstart/backend/internal/soundboard"
+	"gin-quickstart/backend/internal/sticker"
 	"gin-quickstart/backend/internal/updates"
 	"gin-quickstart/backend/internal/user"
 	"gin-quickstart/backend/internal/websocket"
@@ -125,7 +127,7 @@ func (n salinhaBotNotifier) Notify(ctx context.Context, userID, text string) err
 	if err != nil {
 		return err
 	}
-	_, err = n.messages.CreateConversationMessage(ctx, conv.ID, bot.SalinhaBotID, text, nil, nil)
+	_, err = n.messages.CreateConversationMessage(ctx, conv.ID, bot.SalinhaBotID, text, nil, nil, nil, nil, nil)
 	return err
 }
 
@@ -368,6 +370,18 @@ func main() {
 	soundboardRepository := soundboard.NewRepository(db)
 	soundboardHandler := soundboard.NewHandler(soundboardRepository, soundboardUploads, uploadSpace, serverService, permissionService, authService, hub)
 
+	// Figurinhas (Stickers) compartilhadas por servidor
+	stickersUploads, err := media.NewStore(filepath.Join(uploadsDir, "stickers"))
+	if err != nil {
+		log.Fatalf("failed to open stickers uploads dir: %v", err)
+	}
+	stickerRepository := sticker.NewRepository(db)
+	stickerHandler := sticker.NewHandler(stickerRepository, stickersUploads, uploadSpace, serverService, permissionService, authService, hub)
+	messageService.SetStickerChecker(stickerRepository)
+
+	// GIFs (Giphy)
+	giphyHandler := giphy.NewHandler(os.Getenv("GIPHY_API_KEY"))
+
 	// Perfil (avatar/banner numa subpasta que a limpeza dos anexos não varre)
 	profileMediaDir := filepath.Join(uploadsDir, user.ProfileMediaDir)
 	profileMedia, err := media.NewStore(profileMediaDir)
@@ -560,6 +574,8 @@ func main() {
 	message.SearchRoutes(api, searchHandler, authMiddleware)
 	call.CallRoutes(api, callHandler, authMiddleware)
 	soundboard.Routes(api, soundboardHandler, authMiddleware)
+	sticker.Routes(api, stickerHandler, authMiddleware)
+	giphy.Routes(api, giphyHandler, authMiddleware)
 	level.LevelRoutes(api, levelHandler, authMiddleware)
 	badge.BadgeRoutes(api, badgeHandler, authMiddleware)
 	notifysettings.Routes(api, notifySettingsHandler, authMiddleware)
