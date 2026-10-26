@@ -45,6 +45,7 @@ vi.mock('./serverStore', () => ({
   useServerStore: {
     getState: () => ({
       currentServer: null,
+      channels: [],
       fetchServers: vi.fn(async () => {}),
       fetchChannels: vi.fn()
     })

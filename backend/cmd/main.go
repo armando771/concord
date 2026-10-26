@@ -418,6 +418,13 @@ func main() {
 			return music.UserRef{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, AvatarURL: u.AvatarURL}, nil
 		},
 		PostPublic: func(ctx context.Context, textChannelID, content string) error {
+			// As mensagens públicas do Maestro saem no canal "bot" do servidor;
+			// sem ele (não deveria ocorrer) ficam no canal onde o comando foi dado.
+			if origin, err := channelService.FindByID(ctx, textChannelID); err == nil {
+				if sys, err := channelService.SystemChannel(ctx, origin.ServerID); err == nil {
+					textChannelID = sys.ID
+				}
+			}
 			_, err := messageService.CreateSystemChannelMessage(ctx, textChannelID, bot.UserID, content, music.SystemKind)
 			return err
 		},

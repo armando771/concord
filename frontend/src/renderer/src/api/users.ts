@@ -25,6 +25,7 @@ export interface PublicProfile {
   status_text: string
   links: ProfileLink[]
   status: PresenceStatus
+  is_bot?: boolean
   created_at: string
 }
 
