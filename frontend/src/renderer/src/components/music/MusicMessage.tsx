@@ -2,6 +2,7 @@ import type { Message } from '../../api/messages'
 import { splitMentions } from '../../lib/mentions'
 import { MAESTRO_NAME, splitBold, T18 } from '../../lib/music'
 import MaestroAvatar from './MaestroAvatar'
+import MentionChip from '../chat/MentionChip'
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -19,9 +20,11 @@ export function MaestroText({ text }: { text: string }): React.JSX.Element {
         ) : (
           splitMentions(part.text).map((m, j) =>
             m.mention ? (
-              <span key={`${i}-${j}`} className="rounded bg-brand/30 px-0.5 font-medium text-brand">
-                {m.text}
-              </span>
+              <MentionChip
+                key={`${i}-${j}`}
+                mention={m.mention}
+                displayText={m.text}
+              />
             ) : (
               <span key={`${i}-${j}`}>{m.text}</span>
             )
