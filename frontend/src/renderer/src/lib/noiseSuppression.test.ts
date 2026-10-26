@@ -221,6 +221,7 @@ vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: fake.getUserMedia } }
 const { openMicrophone } = await import('./noiseSuppression')
 const { useNoiseSuppressionStore } = await import('../store/noiseSuppressionStore')
 const { useVoiceAudioStore } = await import('../store/voiceAudioStore')
+const { useVoiceModStore } = await import('../store/voiceModStore')
 
 /** [wet, dry] do último contexto criado (os dois primeiros ganhos do grafo). */
 const wetDry = (): number[] =>
@@ -316,6 +317,19 @@ describe('openMicrophone — detecção de fala, portão e volume de entrada', (
     expect(inputGain.connect).toHaveBeenCalledWith(vad)
     // O que passa pelo portão é o que vai para o destino (o worklet é quem fecha o portão).
     expect(vad.connect).toHaveBeenCalledWith(ctx.destination)
+    mic.stop()
+  })
+
+  it('sem o voice mod (o fake não tem createDelay) o microfone segue e o store marca indisponível', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    useVoiceModStore.setState({ available: true })
+    const mic = await openMicrophone()
+    expect(useVoiceModStore.getState().available).toBe(false)
+    expect(mic.setVoiceMod).toBeUndefined()
+    expect(mic.stream).toBeDefined()
+    // O detector continua depois do ganho de entrada.
+    const ctx = fake.contexts[0] as unknown as FakeAudioContext
+    expect(ctx.gains[2].connect).toHaveBeenCalledWith(FakeWorkletNode.instances[0])
     mic.stop()
   })
 

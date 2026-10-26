@@ -1,6 +1,7 @@
 import type { Message } from '../api/messages'
 import { splitMentions } from '../lib/mentions'
 import { useServerStore } from '../store/serverStore'
+import MentionChip from './chat/MentionChip'
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -19,9 +20,11 @@ function SystemMessage({ message }: { message: Message }): React.JSX.Element {
   const renderText = (text: string, offset: number): React.ReactNode[] =>
     splitMentions(text).map((part, i) =>
       part.mention ? (
-        <span key={`${offset}-${i}`} className="rounded bg-brand/30 px-0.5 font-medium text-brand">
-          {part.text}
-        </span>
+        <MentionChip
+          key={`${offset}-${i}`}
+          mention={part.mention}
+          displayText={part.text}
+        />
       ) : (
         <span key={`${offset}-${i}`}>{part.text}</span>
       )
@@ -48,9 +51,9 @@ function SystemMessage({ message }: { message: Message }): React.JSX.Element {
         <p className="whitespace-pre-wrap break-words text-ds-chat text-gray-100">
           {at >= 0 ? (
             <>
-              {renderText(message.content.slice(0, at), 0)}O servidor{' '}
-              <strong className="font-bold text-strong">{serverName}</strong>
-              {renderText(message.content.slice(at + marker.length), 1)}
+              {renderText(message.content.slice(0, at), 0)}
+              <strong className="font-semibold text-amber-300">{marker}</strong>
+              {renderText(message.content.slice(at + marker.length), at + marker.length)}
             </>
           ) : (
             renderText(message.content, 0)

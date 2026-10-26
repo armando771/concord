@@ -2,6 +2,7 @@ import { memo, useMemo } from 'react'
 import type { MentionEveryone } from '../../api/messages'
 import { messageParts } from '../../lib/linkify'
 import { mentionChipText, sameLabels, type MentionLabels } from '../../lib/mentions'
+import MentionChip from './MentionChip'
 
 /** Host de verdade do link (em punycode: "аpple.com" cirílico aparece xn--…). */
 function hostOf(href: string): string {
@@ -55,9 +56,11 @@ function MessageText({
             {part.text}
           </a>
         ) : part.mention ? (
-          <span key={i} className="rounded bg-brand/30 px-0.5 font-medium text-brand">
-            {mentionChipText(part, mentionLabels)}
-          </span>
+          <MentionChip
+            key={i}
+            mention={part.mention}
+            displayText={mentionChipText(part, mentionLabels)}
+          />
         ) : (
           part.text
         )

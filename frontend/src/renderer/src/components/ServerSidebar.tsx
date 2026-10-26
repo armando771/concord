@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useServerNicknames } from '../store/useServerNames'
@@ -134,6 +134,29 @@ export function ServerSidebar(): React.JSX.Element {
   const [creatingChannel, setCreatingChannel] = useState(false)
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null)
   const [channelMenuFor, setChannelMenuFor] = useState<string | null>(null)
+  const channelMenuRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (channelMenuFor === null) return
+    const onDown = (e: MouseEvent): void => {
+      const target = e.target as Element | null
+      if (
+        !target ||
+        channelMenuRef.current?.contains(target) ||
+        target.closest('[data-channel-menu-button]')
+      )
+        return
+      setChannelMenuFor(null)
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setChannelMenuFor(null)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [channelMenuFor])
   const [deletingChannel, setDeletingChannel] = useState<Channel | null>(null)
   const [deletingChannelId, setDeletingChannelId] = useState<string | null>(null)
   const [deleteServerOpen, setDeleteServerOpen] = useState(false)
@@ -434,6 +457,7 @@ export function ServerSidebar(): React.JSX.Element {
   const channelMenuButton = (ch: Channel, onHover = false): React.JSX.Element => (
     <button
       onClick={() => setChannelMenuFor(channelMenuFor === ch.id ? null : ch.id)}
+      data-channel-menu-button=""
       aria-label="Opções do canal"
       title="Opções do canal"
       className={`absolute right-1.5 top-1.5 z-10 flex h-5 items-center rounded-md px-0.5 text-gray-500 transition-[color,background-color,opacity] hover:bg-fg/10 hover:text-strong cursor-pointer ${
@@ -469,90 +493,90 @@ export function ServerSidebar(): React.JSX.Element {
       void reorderSection(type, index, to)
     }
     return (
-      <>
-        <div className="fixed inset-0 z-20" onClick={() => setChannelMenuFor(null)} />
-        <div className="absolute right-1.5 top-full z-30 mt-1 flex w-48 flex-col rounded-xl border border-subtle bg-floating p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in">
-          {currentServer && (ch.type ?? 'text') === 'text' && (
+      <div
+        ref={channelMenuRef}
+        className="absolute right-1.5 top-full z-30 mt-1 flex w-48 flex-col rounded-xl border border-subtle bg-floating p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in"
+      >
+        {currentServer && (ch.type ?? 'text') === 'text' && (
+          <button
+            onClick={() => {
+              setChannelMenuFor(null)
+              openNotifyModal({ serverId: currentServer.id, channelId: ch.id, name: ch.name })
+            }}
+            className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-fg/10 cursor-pointer"
+          >
+            <span>Notificações do canal</span>
+          </button>
+        )}
+        {/* Alternativa ao arrastar (teclado/leitor de tela). */}
+        {canManageChannels && index > 0 && (
+          <button
+            onClick={move(index - 1)}
+            className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-fg/10 cursor-pointer"
+          >
+            <span>Mover para cima</span>
+            <ChevronUpIcon className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {canManageChannels && index >= 0 && index < section.length - 1 && (
+          <button
+            onClick={move(index + 1)}
+            className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-fg/10 cursor-pointer"
+          >
+            <span>Mover para baixo</span>
+            <ChevronDownIcon className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {access.can(Perm.MANAGE_SERVER) &&
+          (ch.type ?? 'text') === 'text' &&
+          ch.id !== primaryId && (
             <button
-              onClick={() => {
-                setChannelMenuFor(null)
-                openNotifyModal({ serverId: currentServer.id, channelId: ch.id, name: ch.name })
-              }}
+              onClick={() => void makePrimary(ch)}
               className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-fg/10 cursor-pointer"
             >
-              <span>Notificações do canal</span>
+              <span>Definir como principal</span>
+              <StarIcon className="h-3.5 w-3.5 text-amber-400" />
             </button>
           )}
-          {/* Alternativa ao arrastar (teclado/leitor de tela). */}
-          {canManageChannels && index > 0 && (
-            <button
-              onClick={move(index - 1)}
-              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-fg/10 cursor-pointer"
-            >
-              <span>Mover para cima</span>
-              <ChevronUpIcon className="h-3.5 w-3.5" />
-            </button>
-          )}
-          {canManageChannels && index >= 0 && index < section.length - 1 && (
-            <button
-              onClick={move(index + 1)}
-              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-fg/10 cursor-pointer"
-            >
-              <span>Mover para baixo</span>
-              <ChevronDownIcon className="h-3.5 w-3.5" />
-            </button>
-          )}
-          {access.can(Perm.MANAGE_SERVER) &&
-            (ch.type ?? 'text') === 'text' &&
-            ch.id !== primaryId && (
-              <button
-                onClick={() => void makePrimary(ch)}
-                className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-fg/10 cursor-pointer"
-              >
-                <span>Definir como principal</span>
-                <StarIcon className="h-3.5 w-3.5 text-amber-400" />
-              </button>
-            )}
-          {canManageChannels && !ch.is_system && (
-            <button
-              onClick={() => {
-                setChannelMenuFor(null)
-                setChannelName(ch.name)
-                setEditingChannel(ch)
-                openCreateChannelModal()
-              }}
-              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-fg/10 cursor-pointer"
-            >
-              <span>Editar canal</span>
-              <PencilIcon className="h-3.5 w-3.5" />
-            </button>
-          )}
-          {access.canInChannel(ch.id, Perm.MANAGE_ROLES) && !ch.is_system && (
-            <button
-              onClick={() => {
-                setChannelMenuFor(null)
-                setPermissionsFor(ch)
-              }}
-              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-fg/10 cursor-pointer"
-            >
-              <span>Permissões</span>
-              <LockIcon className="h-3.5 w-3.5" />
-            </button>
-          )}
-          {canManageChannels && !ch.is_system && (
-            <button
-              onClick={() => {
-                setChannelMenuFor(null)
-                setDeletingChannel(ch)
-              }}
-              className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-red-400 hover:bg-red-500/15 cursor-pointer"
-            >
-              <span>Deletar canal</span>
-              <TrashIcon className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-      </>
+        {canManageChannels && !ch.is_system && (
+          <button
+            onClick={() => {
+              setChannelMenuFor(null)
+              setChannelName(ch.name)
+              setEditingChannel(ch)
+              openCreateChannelModal()
+            }}
+            className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-fg/10 cursor-pointer"
+          >
+            <span>Editar canal</span>
+            <PencilIcon className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {access.canInChannel(ch.id, Perm.MANAGE_ROLES) && !ch.is_system && (
+          <button
+            onClick={() => {
+              setChannelMenuFor(null)
+              setPermissionsFor(ch)
+            }}
+            className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-gray-200 hover:bg-fg/10 cursor-pointer"
+          >
+            <span>Permissões</span>
+            <LockIcon className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {canManageChannels && !ch.is_system && (
+          <button
+            onClick={() => {
+              setChannelMenuFor(null)
+              setDeletingChannel(ch)
+            }}
+            className="flex items-center justify-between rounded-lg px-2.5 py-2 text-ds-sm font-medium text-red-400 hover:bg-red-500/15 cursor-pointer"
+          >
+            <span>Deletar canal</span>
+            <TrashIcon className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
     )
   }
 

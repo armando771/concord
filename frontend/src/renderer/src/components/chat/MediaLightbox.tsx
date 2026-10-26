@@ -5,11 +5,13 @@ import { createPortal } from 'react-dom'
 function MediaLightbox({
   src,
   alt,
-  onClose
+  onClose,
+  onContextMenu
 }: {
   src: string
   alt: string
   onClose: () => void
+  onContextMenu?: (e: React.MouseEvent) => void
 }): React.JSX.Element {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -25,6 +27,7 @@ function MediaLightbox({
       aria-label={alt}
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80"
       onClick={onClose}
+      onContextMenu={onContextMenu}
     >
       <img
         src={src}

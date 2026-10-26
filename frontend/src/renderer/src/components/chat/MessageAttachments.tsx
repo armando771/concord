@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import type { Attachment } from '../../api/messages'
 import { fitMedia, formatBytes } from '../../lib/attachments'
+import { imageMenuHandler } from '../../store/imageMenuStore'
 import { PlayIcon } from '../icons'
 import AudioPlayer from './AudioPlayer'
 import MediaLightbox from './MediaLightbox'
@@ -8,12 +9,19 @@ import { useMediaSrc } from './useMediaSrc'
 import { useNearViewport } from './useNearViewport'
 
 /** Imagem/gif: espaço reservado já no tamanho final; baixa só perto da tela. */
-function ImageAttachment({ attachment }: { attachment: Attachment }): React.JSX.Element {
+function ImageAttachment({
+  attachment,
+  copyImages
+}: {
+  attachment: Attachment
+  copyImages: boolean
+}): React.JSX.Element {
   const boxRef = useRef<HTMLButtonElement>(null)
   const near = useNearViewport(boxRef)
   const { src, onError, failed } = useMediaSrc(attachment.id, near, attachment.url)
   const [open, setOpen] = useState(false)
   const box = fitMedia(attachment.width, attachment.height)
+  const onMenu = copyImages ? imageMenuHandler(attachment.id, attachment.content_type) : undefined
 
   return (
     <>
@@ -21,6 +29,7 @@ function ImageAttachment({ attachment }: { attachment: Attachment }): React.JSX.
         ref={boxRef}
         type="button"
         onClick={() => src && !failed && setOpen(true)}
+        onContextMenu={onMenu}
         title={attachment.filename}
         style={{ width: box.width, height: box.height }}
         className="relative max-w-full cursor-zoom-in overflow-hidden rounded-md bg-fg/5"
@@ -43,7 +52,12 @@ function ImageAttachment({ attachment }: { attachment: Attachment }): React.JSX.
         )}
       </button>
       {open && src && (
-        <MediaLightbox src={src} alt={attachment.filename} onClose={() => setOpen(false)} />
+        <MediaLightbox
+          src={src}
+          alt={attachment.filename}
+          onClose={() => setOpen(false)}
+          onContextMenu={onMenu}
+        />
       )}
     </>
   )
@@ -107,18 +121,27 @@ function VideoAttachment({ attachment }: { attachment: Attachment }): React.JSX.
   )
 }
 
-/** Anexos de uma mensagem: imagens e vídeos lado a lado, áudios um por linha. */
-function MessageAttachments({ attachments }: { attachments: Attachment[] }): React.JSX.Element {
+/**
+ * Anexos de uma mensagem: imagens e vídeos lado a lado, áudios um por linha.
+ * copyImages liga o "Copiar imagem" no botão direito das imagens (chat).
+ */
+function MessageAttachments({
+  attachments,
+  copyImages = false
+}: {
+  attachments: Attachment[]
+  copyImages?: boolean
+}): React.JSX.Element {
   const visual = attachments.filter((a) => a.kind !== 'audio')
   const audios = attachments.filter((a) => a.kind === 'audio')
 
   return (
-    <div className="mt-1 flex flex-col gap-2">
+    <div data-message-media className="mt-1 flex flex-col gap-2">
       {visual.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {visual.map((a) =>
             a.kind === 'image' ? (
-              <ImageAttachment key={a.id} attachment={a} />
+              <ImageAttachment key={a.id} attachment={a} copyImages={copyImages} />
             ) : (
               <VideoAttachment key={a.id} attachment={a} />
             )

@@ -180,6 +180,18 @@ export function mediaFileUrl(apiBaseUrl: string, attachmentId: string, token: st
   return `${apiBaseUrl}/media/${attachmentId}?token=${encodeURIComponent(token)}`
 }
 
+/** Tipo MIME sem parâmetros e em minúsculas ("image/png; x=1" → "image/png"). */
+export function baseMime(contentType: string): string {
+  return contentType.split(';')[0].trim().toLowerCase()
+}
+
+/** Formatos copiáveis. GIF fica de fora: a conversão para PNG perderia a animação. */
+const COPYABLE_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp']
+
+export function canCopyImage(contentType: string): boolean {
+  return COPYABLE_IMAGE_TYPES.includes(baseMime(contentType))
+}
+
 /**
  * Duração (s) para o player: a do elemento quando é finita; senão a salva no
  * envio (a gravação webm do Chromium vem com duração Infinity).
