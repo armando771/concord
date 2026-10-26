@@ -67,6 +67,24 @@ interface WsClientConfig {
   onLost?: (info: { attempt: number; planned: boolean }) => void
 }
 
+type WsListener = (event: WsEvent) => void
+
+const listeners = new Set<WsListener>()
+
+/**
+ * Ouvinte extra dos eventos do servidor, chamado depois do `onEvent` do
+ * cliente (quem já tratou o evento atualizou o estado). Para quem só reage a
+ * um evento sem passar pelo despachante do chatStore. Devolve o "desligar".
+ */
+export function onWsEvent(listener: WsListener): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+function emitWsEvent(event: WsEvent): void {
+  listeners.forEach((listener) => listener(event))
+}
+
 export class WsClient {
   private config: WsClientConfig
   private ws: WebSocket | null = null
@@ -160,6 +178,7 @@ export class WsClient {
       try {
         const data = JSON.parse(event.data as string) as WsEvent
         this.config.onEvent(data)
+        emitWsEvent(data)
       } catch {
         // ignore malformed frames
       }

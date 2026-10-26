@@ -13,17 +13,20 @@ type User struct {
 	DisplayName string `json:"display_name"`
 	// Email nunca vai no JSON de User: User aparece para outras pessoas
 	// (busca, amigos, eventos). A própria pessoa recebe Self().
-	Email        string          `json:"-"`
-	PasswordHash string          `json:"-"`
-	AvatarURL    *string         `json:"avatar_url,omitempty"`
-	BannerURL    *string         `json:"banner_url,omitempty"`
-	BannerColor  *string         `json:"banner_color,omitempty"`
-	Pronouns     string          `json:"pronouns"`
-	Bio          string          `json:"bio"`
-	StatusText   string          `json:"status_text"`
-	Links        []ProfileLink   `json:"links"`
-	Status       string          `json:"status"`
-	NameStyle    namestyle.Style `json:"name_style"`
+	Email        string  `json:"-"`
+	PasswordHash string  `json:"-"`
+	AvatarURL    *string `json:"avatar_url,omitempty"`
+	BannerURL    *string `json:"banner_url,omitempty"`
+	BannerColor  *string `json:"banner_color,omitempty"`
+	// EntranceSoundURL: som que toca para quem está na call quando a pessoa
+	// entra (nil = o som padrão do app).
+	EntranceSoundURL *string         `json:"entrance_sound_url,omitempty"`
+	Pronouns         string          `json:"pronouns"`
+	Bio              string          `json:"bio"`
+	StatusText       string          `json:"status_text"`
+	Links            []ProfileLink   `json:"links"`
+	Status           string          `json:"status"`
+	NameStyle        namestyle.Style `json:"name_style"`
 	// ProfileTheme: borda, fundo e efeito do cartão de perfil.
 	ProfileTheme profiletheme.Theme `json:"profile_theme"`
 	// Privacidade: só a própria pessoa vê (vai no SelfUser).

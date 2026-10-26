@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"gin-quickstart/backend/internal/namestyle"
 	"gin-quickstart/backend/internal/profiletheme"
 
 	"github.com/jackc/pgx/v5"
@@ -32,6 +31,7 @@ const userColumns = `
 	avatar_url,
 	banner_url,
 	banner_color,
+	entrance_sound_url,
 	pronouns,
 	bio,
 	status_text,
@@ -64,6 +64,7 @@ func scanUser(row pgx.Row) (*User, error) {
 		&user.AvatarURL,
 		&user.BannerURL,
 		&user.BannerColor,
+		&user.EntranceSoundURL,
 		&user.Pronouns,
 		&user.Bio,
 		&user.StatusText,
@@ -362,48 +363,6 @@ func (r *Repository) UpdateProfile(ctx context.Context, id string, in ProfileInp
 	))
 }
 
-// themeField e themeColors: tema nil vira NULL (COALESCE mantém o salvo).
-func themeField(t *profiletheme.Theme, get func(*profiletheme.Theme) string) *string {
-	if t == nil {
-		return nil
-	}
-	v := get(t)
-	return &v
-}
-
-// Lista vazia grava '{}' (nunca NULL): o tema validado sempre traz slices.
-func themeColors(t *profiletheme.Theme, get func(*profiletheme.Theme) []string) []string {
-	if t == nil {
-		return nil
-	}
-	if c := get(t); c != nil {
-		return c
-	}
-	return []string{}
-}
-
-func styleFont(s *namestyle.Style) *string {
-	if s == nil {
-		return nil
-	}
-	return &s.Font
-}
-
-func styleEffect(s *namestyle.Style) *string {
-	if s == nil {
-		return nil
-	}
-	return &s.Effect
-}
-
-// styleColors: nil vira NULL (COALESCE mantém); um slice vazio grava '{}'.
-func styleColors(s *namestyle.Style) []string {
-	if s == nil {
-		return nil
-	}
-	return s.Colors
-}
-
 // SetAvatar troca a URL do avatar e devolve a anterior (para apagar o arquivo).
 func (r *Repository) SetAvatar(ctx context.Context, id string, url *string) (*User, *string, error) {
 	return r.swapMedia(ctx, id, "avatar_url", url)
@@ -414,8 +373,13 @@ func (r *Repository) SetBanner(ctx context.Context, id string, url *string) (*Us
 	return r.swapMedia(ctx, id, "banner_url", url)
 }
 
+// SetEntranceSound troca a URL do som de entrada e devolve a anterior.
+func (r *Repository) SetEntranceSound(ctx context.Context, id string, url *string) (*User, *string, error) {
+	return r.swapMedia(ctx, id, "entrance_sound_url", url)
+}
+
 // swapMedia lê a URL antiga e grava a nova na mesma transação. column vem
-// sempre de SetAvatar/SetBanner, nunca do cliente.
+// sempre de SetAvatar/SetBanner/SetEntranceSound, nunca do cliente.
 func (r *Repository) swapMedia(ctx context.Context, id, column string, url *string) (*User, *string, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
