@@ -15,6 +15,7 @@ import Avatar from '../Avatar'
 import Button from '../Button'
 import MediaLightbox from '../chat/MediaLightbox'
 import Modal from '../Modal'
+import AssigneeBadge from './AssigneeBadge'
 import MoveSelect from './MoveSelect'
 import NewProposalModal from './NewProposalModal'
 import ProposalComments from './ProposalComments'
@@ -131,6 +132,12 @@ function ProposalDetailModal({
                   <span>{p.yes_votes} sim</span>
                   <span>{p.no_votes} não</span>
                 </div>
+              </div>
+            )}
+
+            {p.assignee && p.status !== 'voting' && (
+              <div className="flex">
+                <AssigneeBadge assignee={p.assignee} meId={meId} />
               </div>
             )}
 

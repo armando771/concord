@@ -25,8 +25,9 @@ type fakeStore struct {
 	catt     map[string]*fakeCAtt
 	// menções: comment -> user -> visto
 	mentions  map[string]map[string]bool
-	blocked   map[string]bool // usuários que não podem ser marcados
-	mentionOK map[string]bool // usuários que existem
+	blocked   map[string]bool   // usuários que não podem ser marcados
+	mentionOK map[string]bool   // usuários que existem
+	github    map[string]string // usuário -> login do GitHub
 }
 
 type fakeImage struct{ uploader, proposal string }
@@ -40,6 +41,7 @@ func newFakeStore() *fakeStore {
 		mentions:  map[string]map[string]bool{},
 		blocked:   map[string]bool{},
 		mentionOK: map[string]bool{"u1": true, "u2": true, "u3": true, "tech": true},
+		github:    map[string]string{},
 	}
 }
 
@@ -177,8 +179,13 @@ func (f *fakeStore) Delete(_ context.Context, id string) error {
 	return nil
 }
 
-func (f *fakeStore) SetStatus(_ context.Context, id, userID, status string) error {
+func (f *fakeStore) SetStatus(_ context.Context, id, userID, status, assigneeID string) error {
 	p := f.items[id]
+	p.Assignee = &UserRef{ID: assigneeID, Name: "nome-" + assigneeID}
+	p.AssigneeGithub = nil
+	if login, ok := f.github[assigneeID]; ok {
+		p.AssigneeGithub = &login
+	}
 	if p.Status == StatusVoting {
 		reason, by := CloseManual, userID
 		p.CloseReason, p.ClosedByName = &reason, &by
@@ -224,6 +231,41 @@ func (f *fakeStore) WithoutIssue(context.Context) ([]Proposal, error) {
 func (f *fakeStore) SetIssue(_ context.Context, id string, number int, url string) error {
 	f.items[id].GithubIssueNumber = &number
 	f.items[id].GithubIssueURL = &url
+	open := IssueOpen
+	f.items[id].IssueState = &open
+	f.items[id].IssueAssignee = nil
+	return nil
+}
+
+func (f *fakeStore) NeedingIssueSync(context.Context) ([]Proposal, error) {
+	var out []Proposal
+	for _, p := range f.items {
+		if !p.IssueInSync() {
+			out = append(out, *f.view(p, nil))
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeStore) SetIssueSynced(_ context.Context, id, state string, assignee *string) error {
+	f.items[id].IssueState = &state
+	f.items[id].IssueAssignee = assignee
+	return nil
+}
+
+func (f *fakeStore) GithubUsername(_ context.Context, userID string) (*string, error) {
+	if login, ok := f.github[userID]; ok {
+		return &login, nil
+	}
+	return nil, nil
+}
+
+func (f *fakeStore) SetGithubUsername(_ context.Context, userID string, login *string) error {
+	if login == nil {
+		delete(f.github, userID)
+	} else {
+		f.github[userID] = *login
+	}
 	return nil
 }
 
@@ -374,14 +416,55 @@ func (f *fakeFiles) Remove(name string) error {
 type fakeIssues struct {
 	calls int
 	fail  bool
+	// limited: o limite da API acabou (todas as chamadas recusam).
+	limited bool
+	updates []fakeIssueUpdate
+	// rejectAssignee: o GitHub recusa este login (422).
+	rejectAssignee string
+}
+
+type fakeIssueUpdate struct {
+	number   int
+	state    string
+	assignee string
 }
 
 func (f *fakeIssues) CreateIssue(context.Context, Proposal) (int, string, error) {
 	f.calls++
+	if f.limited {
+		return 0, "", &RateLimitError{Until: t0.Add(time.Hour)}
+	}
 	if f.fail {
 		return 0, "", errors.New("github fora do ar")
 	}
 	return 7, "https://github.com/o/r/issues/7", nil
+}
+
+func (f *fakeIssues) UpdateIssue(_ context.Context, number int, state string, assignee *string) (bool, error) {
+	if f.limited {
+		return false, &RateLimitError{Until: t0.Add(time.Hour)}
+	}
+	u := fakeIssueUpdate{number: number, state: state}
+	if assignee != nil {
+		u.assignee = *assignee
+		if *assignee == f.rejectAssignee {
+			u.assignee = ""
+			f.updates = append(f.updates, u)
+			return false, nil
+		}
+	}
+	f.updates = append(f.updates, u)
+	return true, nil
+}
+
+type fakeNotifier struct{ sent map[string][]string }
+
+func (f *fakeNotifier) Notify(_ context.Context, userID, text string) error {
+	if f.sent == nil {
+		f.sent = map[string][]string{}
+	}
+	f.sent[userID] = append(f.sent[userID], text)
+	return nil
 }
 
 func newTestService(issues IssueCreator) (*Service, *fakeStore, *fakePublisher) {
@@ -579,23 +662,23 @@ func TestSetStatusOnlyTech(t *testing.T) {
 	p, _ := s.Create(ctx, "u1", "Algo para o time", "", nil)
 	st.items[p.ID].Status = StatusProposed
 
-	if _, err := s.SetStatus(ctx, p.ID, "u1", StatusInProgress); !errors.Is(err, ErrForbidden) {
+	if _, err := s.SetStatus(ctx, p.ID, "u1", StatusInProgress, false); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("não-tech: got %v", err)
 	}
-	got, err := s.SetStatus(ctx, p.ID, "tech", StatusInProgress)
+	got, err := s.SetStatus(ctx, p.ID, "tech", StatusInProgress, false)
 	if err != nil || got.Status != StatusInProgress {
 		t.Fatalf("mover: %+v %v", got, err)
 	}
-	if got, err = s.SetStatus(ctx, p.ID, "tech", StatusDone); err != nil || got.Status != StatusDone {
+	if got, err = s.SetStatus(ctx, p.ID, "tech", StatusDone, false); err != nil || got.Status != StatusDone {
 		t.Fatalf("pular coluna é permitido: %+v %v", got, err)
 	}
-	if _, err = s.SetStatus(ctx, p.ID, "tech", StatusDone); !errors.Is(err, ErrInvalidStatus) {
+	if _, err = s.SetStatus(ctx, p.ID, "tech", StatusDone, false); !errors.Is(err, ErrInvalidStatus) {
 		t.Fatalf("mesma coluna: got %v", err)
 	}
-	if _, err = s.SetStatus(ctx, p.ID, "tech", StatusVoting); !errors.Is(err, ErrInvalidStatus) {
+	if _, err = s.SetStatus(ctx, p.ID, "tech", StatusVoting, false); !errors.Is(err, ErrInvalidStatus) {
 		t.Fatalf("voltar para votação: got %v", err)
 	}
-	if _, err = s.SetStatus(ctx, p.ID, "tech", "lixo"); !errors.Is(err, ErrInvalidStatus) {
+	if _, err = s.SetStatus(ctx, p.ID, "tech", "lixo", false); !errors.Is(err, ErrInvalidStatus) {
 		t.Fatalf("status desconhecido: got %v", err)
 	}
 }
@@ -606,7 +689,7 @@ func TestSetStatusEarlyOpensIssue(t *testing.T) {
 	ctx := context.Background()
 	p, _ := s.Create(ctx, "u1", "Ainda em votação", "", nil)
 
-	got, err := s.SetStatus(ctx, p.ID, "tech", StatusProposed)
+	got, err := s.SetStatus(ctx, p.ID, "tech", StatusProposed, false)
 	if err != nil || got.Status != StatusProposed {
 		t.Fatalf("mover antes do prazo: %+v %v", got, err)
 	}
@@ -618,7 +701,7 @@ func TestSetStatusEarlyOpensIssue(t *testing.T) {
 	}
 
 	// Mover de novo não recria a issue.
-	if _, err := s.SetStatus(ctx, p.ID, "tech", StatusInProgress); err != nil {
+	if _, err := s.SetStatus(ctx, p.ID, "tech", StatusInProgress, false); err != nil {
 		t.Fatal(err)
 	}
 	if issues.calls != 1 {
@@ -632,7 +715,7 @@ func TestSetStatusIssueFailureKeepsMove(t *testing.T) {
 	ctx := context.Background()
 	p, _ := s.Create(ctx, "u1", "GitHub fora do ar", "", nil)
 
-	got, err := s.SetStatus(ctx, p.ID, "tech", StatusProposed)
+	got, err := s.SetStatus(ctx, p.ID, "tech", StatusProposed, false)
 	if err != nil || got.Status != StatusProposed || got.GithubIssueURL != nil {
 		t.Fatalf("o card fica movido mesmo sem issue: %+v %v", got, err)
 	}
@@ -648,7 +731,7 @@ func TestSetStatusRejectedHasNoIssue(t *testing.T) {
 	s, _, _ := newTestService(issues)
 	ctx := context.Background()
 	p, _ := s.Create(ctx, "u1", "Vai ser recusada", "", nil)
-	if _, err := s.SetStatus(ctx, p.ID, "tech", StatusRejected); err != nil {
+	if _, err := s.SetStatus(ctx, p.ID, "tech", StatusRejected, false); err != nil {
 		t.Fatal(err)
 	}
 	if issues.calls != 0 {
@@ -780,7 +863,7 @@ func TestSetStatusEarlyRecordsWhoClosed(t *testing.T) {
 	ctx := context.Background()
 	p, _ := s.Create(ctx, "u1", "Encerrada na mão", "", nil)
 
-	if _, err := s.SetStatus(ctx, p.ID, "tech", StatusInProgress); err != nil {
+	if _, err := s.SetStatus(ctx, p.ID, "tech", StatusInProgress, false); err != nil {
 		t.Fatal(err)
 	}
 	got := st.items[p.ID]
@@ -793,7 +876,7 @@ func TestSetStatusEarlyRecordsWhoClosed(t *testing.T) {
 
 	// Mover de novo não troca quem encerrou a votação.
 	st.items[p.ID].ClosedByName = ptr("alguém")
-	if _, err := s.SetStatus(ctx, p.ID, "tech", StatusDone); err != nil {
+	if _, err := s.SetStatus(ctx, p.ID, "tech", StatusDone, false); err != nil {
 		t.Fatal(err)
 	}
 	if *st.items[p.ID].ClosedByName != "alguém" {
@@ -805,11 +888,11 @@ func TestMovedAtGrowsWithEachMove(t *testing.T) {
 	s, _, _ := newTestService(nil)
 	ctx := context.Background()
 	p, _ := s.Create(ctx, "u1", "Sobe ao topo", "", nil)
-	first, err := s.SetStatus(ctx, p.ID, "tech", StatusProposed)
+	first, err := s.SetStatus(ctx, p.ID, "tech", StatusProposed, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := s.SetStatus(ctx, p.ID, "tech", StatusInProgress)
+	second, err := s.SetStatus(ctx, p.ID, "tech", StatusInProgress, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -825,7 +908,7 @@ func TestVoteRefusedAfterEarlyMove(t *testing.T) {
 	if _, err := s.Vote(ctx, p.ID, "u2", true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SetStatus(ctx, p.ID, "tech", StatusProposed); err != nil {
+	if _, err := s.SetStatus(ctx, p.ID, "tech", StatusProposed, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Vote(ctx, p.ID, "u3", true); !errors.Is(err, ErrVotingClosed) {

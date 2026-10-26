@@ -7,6 +7,7 @@ import { useChatStore, usePresenceStatus } from '../store/chatStore'
 import { useUserLook } from '../store/profileStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import { STATUS_META } from '../lib/presenceStatus'
+import { BOT_DM_NOTICE, BOT_DM_PERMISSIONS, isBotUser } from '../lib/bots'
 import Avatar from '../components/Avatar'
 import StyledName from '../components/StyledName'
 import { useCallStore } from '../store/callStore'
@@ -79,9 +80,14 @@ function DmChat(): React.JSX.Element {
   const status = usePresenceStatus(userId)
   const look = useUserLook(userId, { name: otherName, avatarUrl: other?.avatar_url })
   const blocked = useRelationship(userId) === 'blocked'
-  const blockedReason = blocked
-    ? 'Você bloqueou esta pessoa. Desbloqueie para mandar mensagens.'
-    : undefined
+  // DM com bot (Salinha Bot): só leitura, sem chamada.
+  const withBot = isBotUser(userId)
+  const blockedReason = withBot
+    ? BOT_DM_NOTICE
+    : blocked
+      ? 'Você bloqueou esta pessoa. Desbloqueie para mandar mensagens.'
+      : undefined
+  const chatPermissions = withBot ? BOT_DM_PERMISSIONS : undefined
 
   const openMenu = (e: React.MouseEvent): void => {
     if (!userId || userId === me?.id) return
@@ -134,7 +140,7 @@ function DmChat(): React.JSX.Element {
           {STATUS_META[status].label}
         </span>
         <div className="ml-auto">
-          {inCallWithUser ? (
+          {withBot ? null : inCallWithUser ? (
             <button
               className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-[#f23f43] text-white transition-colors hover:bg-[#d83a3e]"
               onClick={endCall}
@@ -182,6 +188,7 @@ function DmChat(): React.JSX.Element {
               placeholder={`Mensagem para @${otherHandle || otherName}`}
               mentionable={dmMentionable}
               disabledReason={blockedReason}
+              permissions={chatPermissions}
             />
           </DmCallView>
         ) : (
@@ -190,6 +197,7 @@ function DmChat(): React.JSX.Element {
             placeholder={`Mensagem para @${otherHandle || otherName}`}
             mentionable={dmMentionable}
             disabledReason={blockedReason}
+            permissions={chatPermissions}
           />
         )
       ) : (

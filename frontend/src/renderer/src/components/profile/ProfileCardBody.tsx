@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { API_BASE_URL } from '../../lib/config'
+import { MAESTRO_USER_ID } from '../../lib/music'
 import { profileMediaSrc } from '../../lib/profileMedia'
 import { detectProvider, linkLabel, splitLinks } from '../../lib/profileLinks'
 import type { PresenceStatus } from '../../lib/presenceStatus'
@@ -30,7 +31,7 @@ export interface CardProfile {
   bio?: string
   status_text?: string
   links?: string[]
-  /** Bot (Maestro): selo BOT e banner animado próprio. */
+  /** Bot (Maestro, Salinha Bot): selo BOT; o Maestro tem banner animado próprio. */
   is_bot?: boolean
 }
 
@@ -68,8 +69,10 @@ function ProfileCardBody({
   preview = false,
   children
 }: ProfileCardBodyProps): React.JSX.Element {
+  // O banner animado é do Maestro; o Salinha Bot fica com o gradiente padrão.
   const bannerSrc =
-    profileMediaSrc(profile.banner_url, API_BASE_URL) ?? (profile.is_bot ? maestroBanner : null)
+    profileMediaSrc(profile.banner_url, API_BASE_URL) ??
+    (profile.is_bot && profile.id === MAESTRO_USER_ID ? maestroBanner : null)
   const note = profile.status_text?.trim()
   const bio = profile.bio?.trim()
   const game = useActivity(preview ? undefined : profile.id)
