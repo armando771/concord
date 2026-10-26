@@ -18,6 +18,17 @@ vi.mock('../../call/components/CallActivityBadge', () => ({
 
 vi.mock('../../activity/components/ActivityLine', () => ({ GameBadge: () => null }))
 
+// O chatStore de verdade puxa o resto do app (e o áudio); aqui só as contagens.
+const chat = vi.hoisted(() => ({
+  state: { unreadByRoom: {}, mentionsByRoom: {} } as Record<string, unknown>
+}))
+vi.mock('../../chat/store/chatStore', () => ({
+  useChatStore: Object.assign((sel: (s: unknown) => unknown) => sel(chat.state), {
+    getState: () => chat.state,
+    setState: (patch: Record<string, unknown>) => (chat.state = { ...chat.state, ...patch })
+  })
+}))
+
 // SSR lê o estado atual do zustand (mesmo truque do ImageContextMenu.test).
 vi.spyOn(React, 'useSyncExternalStore').mockImplementation((_subscribe, getSnapshot) =>
   getSnapshot()
@@ -128,13 +139,14 @@ describe('VoiceChannelRow', () => {
       screenSharers: []
     })
     useMusicStore.setState({ presence: {} })
+    chat.state = { unreadByRoom: {}, mentionsByRoom: {} }
   })
 
   it('canal vazio: só o nome e o convite para conectar', () => {
     const html = render()
     expect(html).toContain('papo-de-voz')
     expect(html).toContain('title="Conectar ao canal de voz"')
-    expect(html).toContain('pr-2.5')
+    expect(html).toContain('pr-7 sm:pr-7')
     expect(html).not.toContain('(restrito)')
     expect(html).not.toContain('mb-1 ml-4')
   })
@@ -181,7 +193,10 @@ describe('VoiceChannelRow', () => {
   it('sala trancada: pedido enviado e pedido recusado', () => {
     inCall([participant('ana')], { locked: true })
     setCall({ knock: { channelId: 'v1', callId: 'c1', status: 'pending' } })
-    expect(render()).toContain('Pedido enviado...')
+    const pending = render()
+    expect(pending).toContain('Pedido enviado...')
+    // O "Cancelar pedido" fica no canto do balão do chat: ele sai enquanto isso.
+    expect(pending).not.toContain('Abrir chat')
     setCall({ knock: { channelId: 'v1', callId: 'c1', status: 'declined' } })
     expect(render()).toContain('Pedido recusado')
   })
@@ -189,5 +204,27 @@ describe('VoiceChannelRow', () => {
   it('o Maestro aparece como mais alguém no canal', () => {
     useMusicStore.setState({ presence: { s1: ['v1'] } })
     expect(render()).toContain('data-maestro-tile')
+  })
+
+  it('balão "Abrir chat": sempre no toque, no hover do sm em diante', () => {
+    const html = render()
+    expect(html).toContain('aria-label="Abrir chat"')
+    expect(html).toContain('sm:opacity-0 sm:group-hover/voicech:opacity-100')
+    expect(html).toContain('right-1.5')
+  })
+
+  it('com o "•••", o balão fica à esquerda dele', () => {
+    const html = render({ renderMenuButton: () => <span data-menu="" /> })
+    expect(html).toContain('right-7')
+    expect(html).toContain('pr-12 sm:pr-12')
+  })
+
+  it('não lidas do chat do canal aparecem na linha; menção ganha', () => {
+    chat.state = { unreadByRoom: { 'channel:v1': 3 }, mentionsByRoom: {} }
+    expect(render()).toContain('title="Mensagens não lidas no chat"')
+    chat.state = { unreadByRoom: { 'channel:v1': 3 }, mentionsByRoom: { 'channel:v1': 1 } }
+    const html = render()
+    expect(html).toContain('title="Menções no chat"')
+    expect(html).toContain('>1</span>')
   })
 })

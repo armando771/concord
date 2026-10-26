@@ -47,8 +47,11 @@ export interface VoiceRowLook {
 /** Classes do botão do canal de voz. */
 export function voiceRowClass(look: VoiceRowLook): string {
   const dim = look.canConnect ? '' : 'opacity-60'
-  // Sem gente, o "•••" fica sempre à direita: guarda o espaço dele.
-  const pad = look.hasMenu && !look.hasPeople ? 'pr-7' : 'pr-2.5'
+  // À direita ficam o balão "Abrir chat" e o "•••" (moderadores). Na tela
+  // estreita (toque) eles estão sempre lá; do sm em diante só no hover, e com
+  // gente no canal tomam o lugar da contagem, que some.
+  const buttons = look.hasMenu ? 'pr-12' : 'pr-7'
+  const pad = `${buttons} ${look.hasPeople ? 'sm:pr-2.5' : `sm:${buttons}`}`
   let tone = 'text-gray-400 hover:bg-fg/6 hover:text-gray-200'
   if (look.dropActive) tone = 'bg-brand/25 text-strong ring-2 ring-brand'
   else if (look.connectedHere) tone = 'text-strong hover:bg-fg/6'

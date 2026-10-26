@@ -20,7 +20,21 @@ vi.mock('./ParticipantTile', () => ({
     <span data-tile={user.display_name} data-tela={isScreen ? 'sim' : 'nao'} />
   )
 }))
+vi.mock('../../chat/components/VoiceChatPanel', () => ({
+  default: ({ channelId }: { channelId: string }) => <aside data-chat={channelId} />
+}))
 vi.mock('../../levels/hooks/useMyBoost', () => ({ useMyBoostPercent: () => call.state.boost }))
+
+// O chatStore de verdade puxa o resto do app (e o áudio); aqui só as contagens.
+const chat = vi.hoisted(() => ({
+  state: { unreadByRoom: {}, mentionsByRoom: {} } as Record<string, unknown>
+}))
+vi.mock('../../chat/store/chatStore', () => ({
+  useChatStore: Object.assign((sel: (s: unknown) => unknown) => sel(chat.state), {
+    getState: () => chat.state,
+    setState: (patch: Record<string, unknown>) => (chat.state = { ...chat.state, ...patch })
+  })
+}))
 
 // SSR lê o estado atual do zustand (mesmo truque do ImageContextMenu.test).
 vi.spyOn(React, 'useSyncExternalStore').mockImplementation((_subscribe, getSnapshot) =>
@@ -28,6 +42,8 @@ vi.spyOn(React, 'useSyncExternalStore').mockImplementation((_subscribe, getSnaps
 )
 
 import { useMusicStore } from '../../music/store/musicStore'
+import { useChatStore } from '../../chat/store/chatStore'
+import { useVoiceChatPanelStore } from '../../chat/store/voiceChatPanelStore'
 import { useServerStore } from '../../servers/store/serverStore'
 import VoiceChannelView from './VoiceChannelView'
 
@@ -69,6 +85,8 @@ describe('VoiceChannelView', () => {
     }
     useServerStore.setState({ currentServer: { id: 's1' } as never, currentMembers: [] })
     useMusicStore.setState({ presence: {} })
+    useVoiceChatPanelStore.setState({ channelId: null })
+    useChatStore.setState({ unreadByRoom: {}, mentionsByRoom: {} })
   })
 
   it('canal vazio, eu fora: convida a entrar', () => {
@@ -115,5 +133,29 @@ describe('VoiceChannelView', () => {
       muted: true
     }
     expect(render()).not.toContain('boost-aura')
+  })
+
+  it('o botão do chat aparece conectado ou não e mostra as não lidas', () => {
+    useChatStore.setState({ unreadByRoom: { 'channel:v1': 4 } })
+    const html = render()
+    expect(html).toContain('aria-label="Abrir chat"')
+    expect(html).toContain('aria-pressed="false"')
+    expect(html).toContain('>4</span>')
+    expect(html).not.toContain('data-chat')
+  })
+
+  it('com o chat deste canal aberto: painel à direita e botão para fechar', () => {
+    useVoiceChatPanelStore.setState({ channelId: 'v1' })
+    useChatStore.setState({ unreadByRoom: { 'channel:v1': 4 } })
+    const html = render()
+    expect(html).toContain('data-chat="v1"')
+    expect(html).toContain('aria-label="Fechar chat"')
+    expect(html).toContain('aria-pressed="true"')
+    expect(html).not.toContain('>4</span>')
+  })
+
+  it('chat aberto de outro canal de voz não aparece aqui', () => {
+    useVoiceChatPanelStore.setState({ channelId: 'v2' })
+    expect(render()).not.toContain('data-chat')
   })
 })

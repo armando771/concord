@@ -43,9 +43,13 @@ describe('voiceRowClass', () => {
     connectedHere: false
   }
 
+  const pads = (look: VoiceRowLook): string[] =>
+    voiceRowClass(look)
+      .split(' ')
+      .filter((c) => /^(sm:)?pr-/.test(c))
+
   it('canal comum', () => {
     const cls = voiceRowClass(base)
-    expect(cls).toContain('pr-2.5')
     expect(cls).toContain('text-gray-400')
     expect(cls).not.toContain('opacity-60')
   })
@@ -54,9 +58,16 @@ describe('voiceRowClass', () => {
     expect(voiceRowClass({ ...base, canConnect: false })).toContain('opacity-60')
   })
 
-  it('com "•••" e sem gente guarda o espaço do menu', () => {
-    expect(voiceRowClass({ ...base, hasMenu: true })).toContain('pr-7')
-    expect(voiceRowClass({ ...base, hasMenu: true, hasPeople: true })).toContain('pr-2.5')
+  // O balão "Abrir chat" fica sempre visível na tela estreita (toque) e só no
+  // hover do sm em diante: o nome não pode passar por baixo dele.
+  it('guarda o espaço do balão do chat (e do "•••")', () => {
+    expect(pads(base)).toEqual(['pr-7', 'sm:pr-7'])
+    expect(pads({ ...base, hasMenu: true })).toEqual(['pr-12', 'sm:pr-12'])
+  })
+
+  it('com gente, no sm os botões ficam no lugar da contagem (que some no hover)', () => {
+    expect(pads({ ...base, hasPeople: true })).toEqual(['pr-7', 'sm:pr-2.5'])
+    expect(pads({ ...base, hasMenu: true, hasPeople: true })).toEqual(['pr-12', 'sm:pr-2.5'])
   })
 
   it('arrastando alguém por cima ganha do conectado', () => {
