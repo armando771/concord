@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"gin-quickstart/backend/internal/namestyle"
+	"gin-quickstart/backend/internal/profiletheme"
 )
 
 type User struct {
@@ -12,17 +13,19 @@ type User struct {
 	DisplayName string `json:"display_name"`
 	// Email nunca vai no JSON de User: User aparece para outras pessoas
 	// (busca, amigos, eventos). A própria pessoa recebe Self().
-	Email        string        `json:"-"`
-	PasswordHash string        `json:"-"`
-	AvatarURL    *string       `json:"avatar_url,omitempty"`
-	BannerURL    *string       `json:"banner_url,omitempty"`
-	BannerColor  *string       `json:"banner_color,omitempty"`
-	Pronouns     string        `json:"pronouns"`
-	Bio          string        `json:"bio"`
-	StatusText   string        `json:"status_text"`
-	Links        []ProfileLink `json:"links"`
-	Status       string        `json:"status"`
+	Email        string          `json:"-"`
+	PasswordHash string          `json:"-"`
+	AvatarURL    *string         `json:"avatar_url,omitempty"`
+	BannerURL    *string         `json:"banner_url,omitempty"`
+	BannerColor  *string         `json:"banner_color,omitempty"`
+	Pronouns     string          `json:"pronouns"`
+	Bio          string          `json:"bio"`
+	StatusText   string          `json:"status_text"`
+	Links        []ProfileLink   `json:"links"`
+	Status       string          `json:"status"`
 	NameStyle    namestyle.Style `json:"name_style"`
+	// ProfileTheme: borda, fundo e efeito do cartão de perfil.
+	ProfileTheme profiletheme.Theme `json:"profile_theme"`
 	// Privacidade: só a própria pessoa vê (vai no SelfUser).
 	FriendRequestPolicy string `json:"-"`
 	AllowServerDMs      bool   `json:"-"`
@@ -30,8 +33,8 @@ type User struct {
 	// EmailVerifiedAt: nulo = e-mail não confirmado. Só a própria pessoa vê
 	// (SelfUser.EmailVerified).
 	EmailVerifiedAt *time.Time `json:"-"`
-	CreatedAt    time.Time     `json:"created_at"`
-	UpdatedAt    time.Time     `json:"updated_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 // SelfUser é a conta vista pela própria pessoa (/users/me e /users/me/*):
@@ -96,9 +99,10 @@ type PublicProfile struct {
 	Links       []ProfileLink `json:"links"`
 	Status      string        `json:"status"`
 	// IsBot: o Maestro. Aparece com o selo BOT e sempre online.
-	IsBot     bool      `json:"is_bot"`
-	NameStyle namestyle.Style `json:"name_style"`
-	CreatedAt time.Time `json:"created_at"`
+	IsBot        bool               `json:"is_bot"`
+	NameStyle    namestyle.Style    `json:"name_style"`
+	ProfileTheme profiletheme.Theme `json:"profile_theme"`
+	CreatedAt    time.Time          `json:"created_at"`
 }
 
 // Public monta o perfil público com o status já calculado por quem chama.
@@ -108,18 +112,19 @@ func (u *User) Public(status string) PublicProfile {
 		links = []ProfileLink{}
 	}
 	return PublicProfile{
-		ID:          u.ID,
-		Username:    u.Username,
-		DisplayName: u.DisplayName,
-		AvatarURL:   u.AvatarURL,
-		BannerURL:   u.BannerURL,
-		BannerColor: u.BannerColor,
-		Pronouns:    u.Pronouns,
-		Bio:         u.Bio,
-		StatusText:  u.StatusText,
-		Links:       links,
-		Status:      status,
-		NameStyle:   u.NameStyle,
-		CreatedAt:   u.CreatedAt,
+		ID:           u.ID,
+		Username:     u.Username,
+		DisplayName:  u.DisplayName,
+		AvatarURL:    u.AvatarURL,
+		BannerURL:    u.BannerURL,
+		BannerColor:  u.BannerColor,
+		Pronouns:     u.Pronouns,
+		Bio:          u.Bio,
+		StatusText:   u.StatusText,
+		Links:        links,
+		Status:       status,
+		NameStyle:    u.NameStyle,
+		ProfileTheme: u.ProfileTheme,
+		CreatedAt:    u.CreatedAt,
 	}
 }

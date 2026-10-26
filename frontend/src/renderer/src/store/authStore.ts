@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import { AUTH_STORAGE_KEY } from '../lib/authRefresh'
 import type { ChosenStatus } from '../lib/presenceStatus'
 import type { NameStyle } from '../lib/nameStyle'
+import type { ProfileTheme } from '../lib/profileTheme'
 
 export interface ProfileLink {
   url: string
@@ -28,6 +29,8 @@ export interface PublicUser {
   status?: ChosenStatus
   /** Fonte e efeito do nome de exibição (ausente = padrão). */
   name_style?: NameStyle
+  /** Borda, fundo e efeito do cartão de perfil (ausente = padrão). */
+  profile_theme?: ProfileTheme
   created_at: string
   updated_at: string
 }

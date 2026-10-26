@@ -31,6 +31,8 @@ import { CHOSEN_STATUSES, STATUS_META, type PresenceStatus } from '../lib/presen
 import LevelBadge from './level/LevelBadge'
 import BadgeRow from './badges/BadgeRow'
 import ProfileCardBody, { CARD_BG, type CardProfile } from './profile/ProfileCardBody'
+import ProfileCardFrame from './profile/ProfileCardFrame'
+import { profileThemeLook, resolveProfileTheme } from '../lib/profileTheme'
 import LiveStreamPreview from './profile/LiveStreamPreview'
 import LiveBadge from './call/LiveBadge'
 import StatusIcon from './StatusIcon'
@@ -102,7 +104,7 @@ function StatusMenu({ status }: { status: PresenceStatus }): React.JSX.Element {
         <div className={`absolute left-full z-10 pl-3 ${upward ? 'bottom-0' : 'top-0'}`}>
           <div
             role="menu"
-            className="w-64 rounded-lg border border-white/10 p-1.5 shadow-2xl"
+            className="pt-ink-keep w-64 rounded-lg border border-white/10 p-1.5 shadow-2xl"
             style={{ background: CARD_BG }}
           >
             {CHOSEN_STATUSES.map((s) => (
@@ -302,8 +304,11 @@ function UserProfileCard(): React.JSX.Element | null {
     bio: source?.bio,
     status_text: source?.status_text,
     links: source?.links?.map((l) => l.url) ?? [],
-    is_bot: isBot
+    is_bot: isBot,
+    profile_theme: source?.profile_theme
   }
+  const theme = resolveProfileTheme(card.profile_theme)
+  const look = profileThemeLook(theme)
   // O Maestro não tem websocket: está sempre online.
   const status: PresenceStatus = isBot
     ? 'online'
@@ -412,8 +417,10 @@ function UserProfileCard(): React.JSX.Element | null {
   }
 
   return (
-    <div
+    <ProfileCardFrame
       ref={ref}
+      look={look}
+      effect={theme.effect}
       role="dialog"
       aria-label={`Perfil de ${nickname || card.display_name}`}
       style={{
@@ -421,12 +428,14 @@ function UserProfileCard(): React.JSX.Element | null {
         left: pos?.left ?? -9999,
         top: pos?.top ?? 0,
         visibility: pos ? 'visible' : 'hidden',
-        background: CARD_BG
+        // O tema troca o padding-box; "fixed" ganha do relative da moldura.
+        position: 'fixed'
       }}
-      className="fixed z-[60] rounded-xl border border-white/10 text-sm text-gray-200 shadow-2xl"
+      className="z-[60] text-sm text-gray-200 shadow-2xl"
     >
       <ProfileCardBody
         profile={card}
+        surface={look.surface}
         status={status}
         isMe={isMe}
         fallbackBanner={fallbackBanner}
@@ -648,7 +657,7 @@ function UserProfileCard(): React.JSX.Element | null {
           <div className="mt-2 rounded-lg bg-black/30 p-1.5">{nicknameButton}</div>
         )}
       </ProfileCardBody>
-    </div>
+    </ProfileCardFrame>
   )
 }
 

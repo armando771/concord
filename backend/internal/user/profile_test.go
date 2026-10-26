@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"gin-quickstart/backend/internal/namestyle"
+	"gin-quickstart/backend/internal/profiletheme"
 )
 
 func strPtr(s string) *string { return &s }
@@ -162,5 +163,32 @@ func TestValidateProfileNameStyle(t *testing.T) {
 	out, err = ValidateProfile(in)
 	if err != nil || out.NameStyle != nil {
 		t.Fatalf("sem estilo deve continuar nil: %+v, %v", out.NameStyle, err)
+	}
+}
+
+func TestValidateProfileTheme(t *testing.T) {
+	in := validInput()
+	in.ProfileTheme = &profiletheme.Theme{
+		Border: "neon", BorderColors: []string{"#00FFAA"},
+		Background: "gradient", BackgroundColors: []string{"#1E1B4B", "#0F172A"},
+		Effect: "snow",
+	}
+	out, err := ValidateProfile(in)
+	if err != nil {
+		t.Fatalf("erro inesperado: %v", err)
+	}
+	if out.ProfileTheme == nil || out.ProfileTheme.BorderColors[0] != "#00ffaa" || out.ProfileTheme.BackgroundColors[1] != "#0f172a" {
+		t.Fatalf("tema = %+v", out.ProfileTheme)
+	}
+
+	in.ProfileTheme = &profiletheme.Theme{Border: "rainbow", Background: "solid", BackgroundColors: []string{"url(x)"}, Effect: "none"}
+	if _, err := ValidateProfile(in); !errors.Is(err, ErrInvalidProfile) {
+		t.Fatalf("err = %v, want ErrInvalidProfile", err)
+	}
+
+	in.ProfileTheme = nil
+	out, err = ValidateProfile(in)
+	if err != nil || out.ProfileTheme != nil {
+		t.Fatalf("sem tema deve continuar nil: %+v, %v", out.ProfileTheme, err)
 	}
 }
