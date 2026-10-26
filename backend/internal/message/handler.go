@@ -115,7 +115,7 @@ func (h *Handler) CreateChannelMessage(c *gin.Context) {
 		return
 	}
 
-	if len(input.AttachmentIDs) == 0 && h.commands != nil {
+	if len(input.AttachmentIDs) == 0 && input.StickerID == nil && input.GifURL == nil && h.commands != nil {
 		if ch, err := h.channelService.FindByID(c.Request.Context(), channelID); err == nil && h.tryCommand(ch.ServerID, channelID, userID, input.Content, input.AttachmentIDs) {
 			c.JSON(http.StatusAccepted, gin.H{"command": true})
 			return

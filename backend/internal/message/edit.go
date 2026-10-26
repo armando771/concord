@@ -60,7 +60,8 @@ func (s *Service) editMessage(ctx context.Context, channelID string, conversatio
 	if err != nil {
 		return nil, false, err
 	}
-	if err := validateContent(content, len(attachmentIDs) > 0); err != nil {
+	hasMedia := len(attachmentIDs) > 0 || current.StickerID != nil || current.GifURL != nil
+	if err := validateContent(content, hasMedia); err != nil {
 		return nil, false, err
 	}
 

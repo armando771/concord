@@ -195,6 +195,17 @@ func TestEditValidatesContentLikeCreate(t *testing.T) {
 	if msg.Content != "" || len(msg.Attachments) != 1 {
 		t.Fatalf("mensagem = %+v, want sem texto e com o anexo", msg)
 	}
+
+	withGif := channelMsg("g1", "ana", "olha esse gif")
+	withGif.GifURL = strPtr("https://media.giphy.com/media/test/giphy.gif")
+	store.msgs["g1"] = withGif
+	gifEdited, err := s.EditChannelMessage(ctx, "geral", "g1", "ana", "")
+	if err != nil {
+		t.Fatalf("mensagem com GIF pode ficar sem texto: err = %v", err)
+	}
+	if gifEdited.Content != "" || gifEdited.GifURL == nil {
+		t.Fatalf("mensagem com GIF editada = %+v", gifEdited)
+	}
 }
 
 func TestCreateValidatesLength(t *testing.T) {

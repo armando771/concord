@@ -1288,6 +1288,28 @@ loadOlderUntil: async (room, messageId, maxPages = JUMP_MAX_PAGES) => {
     }
 
     if (useStickerStore.getState().handleWsEvent(event)) {
+      if (event.type === 'sticker:deleted') {
+        const stickerId = payload.sticker_id as string | undefined
+        if (stickerId) {
+          set((state) => {
+            let changed = false
+            const nextMessagesByRoom: Record<RoomKey, Message[]> = {}
+            for (const [room, list] of Object.entries(state.messagesByRoom)) {
+              if (list.some((m) => m.sticker_id === stickerId || m.sticker?.id === stickerId)) {
+                changed = true
+                nextMessagesByRoom[room] = list.map((m) =>
+                  m.sticker_id === stickerId || m.sticker?.id === stickerId
+                    ? { ...m, sticker_id: null, sticker: null }
+                    : m
+                )
+              } else {
+                nextMessagesByRoom[room] = list
+              }
+            }
+            return changed ? { messagesByRoom: nextMessagesByRoom } : {}
+          })
+        }
+      }
       return
     }
 
