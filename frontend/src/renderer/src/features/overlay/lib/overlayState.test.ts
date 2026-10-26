@@ -61,9 +61,22 @@ describe('buildOverlaySnapshot', () => {
     )
     expect(s.members.map((m) => m.avatarUrl)).toEqual([
       'http://srv:8080/api/profile-media/u1',
-      'http://srv:8080/api/profile-media/a_u2',
+      'http://srv:8080/api/profile-media/a_u2/static',
       'https://cdn.x/b.png',
       null
+    ])
+  })
+
+  it('GIF só tem versão animada à parte (anima só quem fala, poupa FPS do jogo)', () => {
+    const s = buildOverlaySnapshot(
+      input({
+        me: { id: 'eu', username: 'nico', display_name: 'Nico', avatar_url: '/api/profile-media/u1' },
+        participants: [{ ...ana, avatar_url: '/api/profile-media/a_u2' }]
+      })
+    )
+    expect(s.members.map((m) => m.avatarAnimatedUrl)).toEqual([
+      null,
+      'http://srv:8080/api/profile-media/a_u2'
     ])
   })
 

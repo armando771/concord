@@ -3,15 +3,20 @@
 // lê estes tipos.
 
 import { normalizeOverlayLayout, type OverlayLayout } from './overlayLayout'
-import { profileMediaSrc } from '../../profile/lib/profileMedia'
+import { isAnimatedMedia, profileMediaSrc } from '../../profile/lib/profileMedia'
 import { normalizeOverlayShortcut, OVERLAY_SHORTCUT_DEFAULT } from './overlayShortcut'
 
 export interface OverlayMember {
   id: string
   name: string
   initial: string
-  /** URL absoluta do avatar (GIF animado inclusive); null = mostra a inicial. */
+  /** URL absoluta do avatar, parada se for GIF; null = mostra a inicial. */
   avatarUrl: string | null
+  /**
+   * O GIF em movimento (só se o avatar anima), usado por quem fala: GIF rodando o
+   * tempo todo faz o DWM recompor a janela sobre o jogo e custa FPS.
+   */
+  avatarAnimatedUrl: string | null
   self: boolean
   muted: boolean
   deafened: boolean
@@ -162,7 +167,10 @@ export function buildOverlaySnapshot(
       id: person.id,
       name,
       initial: name.charAt(0).toUpperCase(),
-      avatarUrl: profileMediaSrc(person.avatar_url, input.mediaBase),
+      avatarUrl: profileMediaSrc(person.avatar_url, input.mediaBase, { animate: false }),
+      avatarAnimatedUrl: isAnimatedMedia(person.avatar_url)
+        ? profileMediaSrc(person.avatar_url, input.mediaBase)
+        : null,
       self,
       muted,
       deafened,
