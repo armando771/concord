@@ -11,32 +11,35 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 )
 
 func main() {
 	coverPath := flag.String("cover", "", "coverprofile gerado por go test -coverprofile")
 	flag.Parse()
-
-	blocks, err := loadProfile(*coverPath)
-	if err != nil {
+	if err := run(*coverPath, flag.Args(), os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	out := []Func{}
-	for _, path := range flag.Args() {
+}
+
+// run mede os arquivos e escreve o JSON em out.
+func run(coverPath string, paths []string, out io.Writer) error {
+	blocks, err := loadProfile(coverPath)
+	if err != nil {
+		return err
+	}
+	all := []Func{}
+	for _, path := range paths {
 		funcs, err := parseFile(path)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return err
 		}
 		for i := range funcs {
 			funcs[i].Coverage = coverage(funcs[i], blocks)
 		}
-		out = append(out, funcs...)
+		all = append(all, funcs...)
 	}
-	if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	return json.NewEncoder(out).Encode(all)
 }

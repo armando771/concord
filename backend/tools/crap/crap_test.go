@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -93,5 +95,35 @@ func TestLoadProfileJuntaBlocosRepetidos(t *testing.T) {
 	}
 	if len(blocks) != 2 || !blocks[0].covered || blocks[1].covered {
 		t.Errorf("blocks: %+v", blocks)
+	}
+}
+
+func TestRunGeraJSONComCobertura(t *testing.T) {
+	// Como o scripts/crap.mjs: caminhos relativos à pasta do módulo.
+	t.Chdir(filepath.Dir(writeSample(t)))
+	profile := filepath.Join(t.TempDir(), "cover.out")
+	if err := os.WriteFile(profile, []byte("mode: set\nx/sample.go:5.1,5.30 1 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	if err := run(profile, []string{"sample.go"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	var funcs []Func
+	if err := json.Unmarshal([]byte(out.String()), &funcs); err != nil {
+		t.Fatal(err)
+	}
+	if len(funcs) != 2 || funcs[0].Coverage != 1 || funcs[1].Coverage != 0 {
+		t.Errorf("funcs: %+v", funcs)
+	}
+}
+
+func TestRunErros(t *testing.T) {
+	var out strings.Builder
+	if err := run(filepath.Join(t.TempDir(), "nao-existe.out"), nil, &out); err == nil {
+		t.Error("profile inexistente é erro")
+	}
+	if err := run("", []string{filepath.Join(t.TempDir(), "nao-existe.go")}, &out); err == nil {
+		t.Error("arquivo inexistente é erro")
 	}
 }

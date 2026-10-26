@@ -42,7 +42,7 @@ export function defaultBase() {
 // só movido (rename sem mudança) não aparece: mover não é tocar no código.
 export function changedLines(base = defaultBase()) {
   const mergeBase = git(['merge-base', base, 'HEAD']).trim()
-  const changes = parseDiff(git(['diff', '-U0', '--no-color', '-M', mergeBase]))
+  const changes = parseDiff(git(['diff', '-U0', '--no-color', '-M30%', mergeBase]))
   for (const file of git(['ls-files', '--others', '--exclude-standard']).split('\n').filter(Boolean)) {
     const lines = readFileSync(file, 'utf8').split('\n').length
     changes[file] = [[1, lines]]
@@ -54,7 +54,7 @@ export function changedLines(base = defaultBase()) {
 export function renames(base = defaultBase()) {
   const mergeBase = git(['merge-base', base, 'HEAD']).trim()
   const map = {}
-  for (const line of git(['diff', '-M', '--name-status', mergeBase]).split('\n')) {
+  for (const line of git(['diff', '-M30%', '--name-status', mergeBase]).split('\n')) {
     const [status, from, to] = line.split('\t')
     if (status?.startsWith('R')) map[to] = from
   }
