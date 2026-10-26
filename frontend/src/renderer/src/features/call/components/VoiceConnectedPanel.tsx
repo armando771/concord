@@ -21,6 +21,7 @@ import {
   SoundboardIcon
 } from '../../../shared/ui/icons'
 import GameIcon from '../../activity/components/GameIcon'
+import GameBroadcastButton, { canBroadcastGame } from '../../activity/components/GameBroadcastButton'
 import ActivityPickerPopover from './ActivityPickerPopover'
 import NoiseSuppressionPopover from './NoiseSuppressionPopover'
 import ConnectionStatsPopover from './ConnectionStatsPopover'
@@ -187,12 +188,16 @@ function VoiceConnectedPanel(): React.JSX.Element | null {
     <div className="shrink-0 border-t border-subtle bg-primary px-2 pb-2 pt-1.5">
       {myGame && (
         <p className="mb-1.5 flex items-center gap-2 border-b border-subtle pb-1.5 text-ds-md font-semibold text-strong">
-          <GameIcon
-            name={myGame.name}
-            appId={myGame.app_id}
-            iconHash={myGame.icon_hash}
-            className="h-4 w-4 shrink-0"
-          />
+          {canBroadcastGame() ? (
+            <GameBroadcastButton game={myGame.name} />
+          ) : (
+            <GameIcon
+              name={myGame.name}
+              appId={myGame.app_id}
+              iconHash={myGame.icon_hash}
+              className="h-4 w-4 shrink-0"
+            />
+          )}
           <span className="truncate">{myGame.name}</span>
         </p>
       )}

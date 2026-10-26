@@ -16,6 +16,12 @@ import trayIcon from '../../resources/tray.png?asset'
 import trayIcon2x from '../../resources/tray-2x.png?asset'
 import { displayAudioMode, warnWindowAudioFallback } from './screen/displayMedia'
 import { PendingDisplayRequest } from './screen/displayPicker'
+import {
+  PreferredSource,
+  exeProcessNames,
+  listProcessWindows,
+  pickGameWindow
+} from './screen/gameWindow'
 import { checkScreenCastPortal } from './screen/screenPortal'
 import { portalMissingMessage, screenShareFlow } from '../shared/screenShareFlow'
 import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './window/background'
@@ -54,6 +60,8 @@ const pendingDisplay = new PendingDisplayRequest((err) =>
   logAudio(`recusar o compartilhamento falhou: ${String(err)}`)
 )
 let pendingAudioRequested = false
+// Janela do jogo em atividade escolhida pelo card (pula o modal de seleção).
+const preferredSource = new PreferredSource()
 
 const WINDOW_WATCH_MS = 2000
 let windowWatch: NodeJS.Timeout | null = null
@@ -125,7 +133,25 @@ function registerScreenShareHandlers(): void {
       void shareFromPortal()
       return
     }
+    const preferred = preferredSource.take()
+    if (preferred) {
+      void shareSource(preferred)
+      return
+    }
     mainWindow?.webContents.send('screen-picker:show')
+  })
+
+  // Card do jogo: acha a janela dele; se achar, o próximo getDisplayMedia a usa.
+  ipcMain.handle('screen-share:prefer-game', async (_event, gameName: unknown) => {
+    preferredSource.clear()
+    if (typeof gameName !== 'string' || flow !== 'app') return null
+    const [sources, hwnds] = await Promise.all([
+      desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 } }),
+      listProcessWindows(exeProcessNames(gameName))
+    ])
+    const id = pickGameWindow(sources, hwnds, gameName)
+    if (id) preferredSource.set(id)
+    return id
   })
 
   // O som não vai junto no Linux (o loopback do Electron é só do Windows).

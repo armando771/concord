@@ -28,6 +28,7 @@ export interface ScreenAudioApi {
 export interface ScreenShareApi {
   flow: ScreenShareFlow
   portalStatus(): Promise<{ status: PortalStatus; message: string }>
+  preferGameWindow(gameName: string): Promise<string | null>
   onWindowHidden(cb: () => void): () => void
   ended(): void
 }

@@ -57,6 +57,10 @@ const api = {
       ipcRenderer.on('screen-share:window-hidden', listener)
       return () => ipcRenderer.removeListener('screen-share:window-hidden', listener)
     },
+    /** Acha a janela do jogo; id da fonte = o próximo compartilhamento a usa, sem o modal. */
+    preferGameWindow(gameName: string): Promise<string | null> {
+      return ipcRenderer.invoke('screen-share:prefer-game', gameName)
+    },
     /** O compartilhamento acabou: para de vigiar a janela. */
     ended(): void {
       ipcRenderer.send('screen-share:ended')
