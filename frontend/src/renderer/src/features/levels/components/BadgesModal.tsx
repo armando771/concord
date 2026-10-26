@@ -11,15 +11,16 @@ import {
   progressPercent,
   rarityMeta,
   remainingText,
-  splitBadges,
+  selectedBadge,
   publicStatText,
-  statText
+  statText,
+  visibleBadges
 } from '../lib/badges'
 import { trapTab } from '../../../shared/lib/focusTrap'
-import Avatar from '../../../shared/ui/Avatar'
 import { LockIcon } from '../../../shared/ui/icons'
 import BadgeIcon from './BadgeIcon'
-import { BadgeDetailSkeleton, BadgeGridSkeleton } from '../../../shared/ui/skeleton/layouts'
+import BadgesAside from './BadgesAside'
+import { BadgeDetailSkeleton } from '../../../shared/ui/skeleton/layouts'
 
 function RarityChip({ badge }: { badge: Badge }): React.JSX.Element {
   if (badge.tier === 0) {
@@ -51,64 +52,6 @@ function RarityChip({ badge }: { badge: Badge }): React.JSX.Element {
       <span aria-hidden="true">▲</span>
       {meta.label}
     </span>
-  )
-}
-
-function Tile({
-  badge,
-  selected,
-  locked,
-  onSelect
-}: {
-  badge: Badge
-  selected: boolean
-  locked?: boolean
-  onSelect: () => void
-}): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      title={locked ? badge.name : `${badge.tier_name} · ${badge.name}`}
-      className={`flex aspect-square cursor-pointer items-center justify-center rounded-xl border transition-colors ${
-        selected ? 'border-brand bg-brand/15' : 'border-transparent bg-fg/5 hover:bg-fg/10'
-      }`}
-    >
-      <BadgeIcon
-        category={badge.category}
-        tier={badge.tier}
-        rarity={badge.rarity}
-        size={34}
-        locked={locked}
-      />
-    </button>
-  )
-}
-
-function Grid({
-  badges,
-  selected,
-  locked,
-  onSelect
-}: {
-  badges: Badge[]
-  selected: string | undefined
-  locked?: boolean
-  onSelect: (category: string) => void
-}): React.JSX.Element {
-  return (
-    <div className="grid grid-cols-4 gap-2">
-      {badges.map((b) => (
-        <Tile
-          key={b.category}
-          badge={b}
-          locked={locked}
-          selected={selected === b.category}
-          onSelect={() => onSelect(b.category)}
-        />
-      ))}
-    </div>
   )
 }
 
@@ -309,10 +252,8 @@ function BadgesModal(): React.JSX.Element | null {
   if (!target) return null
 
   const isMe = target.userId === me?.id
-  const { earned, available } = splitBadges(badges ?? [])
-  const visible = isMe ? [...earned, ...available] : earned
-  const wanted = picked?.target === target ? picked.category : target.category
-  const selected = visible.find((b) => b.category === wanted) ?? visible[0]
+  const { earned, available, visible } = visibleBadges(badges, isMe)
+  const selected = selectedBadge(visible, target, picked)
   const select = (category: string): void => setPicked({ target, category })
 
   const viewMine = (): void => {
@@ -338,68 +279,18 @@ function BadgesModal(): React.JSX.Element | null {
         onClick={(e) => e.stopPropagation()}
         className="flex h-[min(600px,100%)] w-full max-w-[760px] overflow-hidden rounded-2xl border border-subtle text-gray-200 shadow-2xl"
       >
-        <aside className="flex w-[290px] shrink-0 flex-col bg-secondary">
-          <div className="min-h-0 flex-1 overflow-y-auto p-6">
-            <div className="flex items-center gap-2.5">
-              {!isMe && (
-                <Avatar
-                  userId={target.userId}
-                  name={target.name}
-                  avatarUrl={target.avatarUrl}
-                  size={28}
-                />
-              )}
-              <h2 id={titleId} className="min-w-0 truncate text-xl font-bold text-strong">
-                {isMe ? 'Seus badges' : `Badges de ${target.name}`}
-              </h2>
-            </div>
-            <p className="mt-1.5 text-sm leading-snug text-gray-400">
-              {isMe
-                ? 'Veja seus badges e descubra quais você ainda pode desbloquear.'
-                : `Explore os badges de ${target.name} ou veja os seus para descobrir o que dá para desbloquear.`}
-            </p>
-
-            {!badges ? (
-              <BadgeGridSkeleton />
-            ) : (
-              <>
-                {earned.length > 0 ? (
-                  <div className="mt-5">
-                    <Grid badges={earned} selected={selected?.category} onSelect={select} />
-                  </div>
-                ) : (
-                  <p className="mt-5 text-sm text-gray-500">
-                    {isMe ? 'Você ainda não tem badges.' : 'Nenhum badge ainda.'}
-                  </p>
-                )}
-                {isMe && available.length > 0 && (
-                  <div className="mt-6">
-                    <p className="mb-2.5 text-sm font-semibold text-strong">
-                      Disponíveis para desbloquear
-                    </p>
-                    <Grid
-                      badges={available}
-                      locked
-                      selected={selected?.category}
-                      onSelect={select}
-                    />
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-          {!isMe && me && (
-            <div className="border-t border-subtle p-4">
-              <button
-                type="button"
-                onClick={viewMine}
-                className="w-full cursor-pointer rounded-lg bg-fg/10 px-3 py-2 text-sm font-semibold text-strong transition-colors hover:bg-fg/15"
-              >
-                Ver seus badges
-              </button>
-            </div>
-          )}
-        </aside>
+        <BadgesAside
+          target={target}
+          isMe={isMe}
+          titleId={titleId}
+          badges={badges}
+          earned={earned}
+          available={available}
+          selected={selected}
+          onSelect={select}
+          canViewMine={Boolean(me)}
+          onViewMine={viewMine}
+        />
 
         <section className="relative min-w-0 flex-1 overflow-y-auto bg-primary p-6">
           <button
