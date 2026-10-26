@@ -912,19 +912,23 @@ function ChatPane({
   // Mensagem fora da tela (resposta antiga, resultado da busca): carrega as
   // páginas antigas até ela, com a mesma âncora do "Carregar mensagens
   // anteriores" (a tela não pula enquanto carrega), e então rola até ela.
+  const shownMessage = (messageId: string): HTMLElement | null => {
+    const node = document.getElementById(`msg-${messageId}`)
+    return node && scrollRef.current?.contains(node) ? node : null
+  }
+
   const handleJumpToMessage = async (messageId: string): Promise<void> => {
-    const shown = (): HTMLElement | null => {
-      const node = document.getElementById(`msg-${messageId}`)
-      return node && scrollRef.current?.contains(node) ? node : null
-    }
-    const el = shown()
+    const el = shownMessage(messageId)
     if (el) {
       showMessage(el, messageId)
       return
     }
     const startedRoom = room
     const found = await loadOlderUntil(messageId)
-    if (roomRef.current !== startedRoom) return
+    if (roomRef.current === startedRoom) showAfterLoading(messageId, found)
+  }
+
+  const showAfterLoading = (messageId: string, found: boolean): void => {
     if (!found) {
       showToast.info('Não encontrei essa mensagem: ela pode ter sido apagada ou ser antiga demais.')
       return
@@ -932,7 +936,7 @@ function ChatPane({
     // Espera o React desenhar a página que chegou.
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
-        const node = shown()
+        const node = shownMessage(messageId)
         if (node) showMessage(node, messageId)
       })
     )
