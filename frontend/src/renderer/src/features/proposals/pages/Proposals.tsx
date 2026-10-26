@@ -68,7 +68,6 @@ function Proposals(): React.JSX.Element {
   const [now, setNow] = useState(() => Date.now())
   const [creating, setCreating] = useState(false)
   const [showRejected, setShowRejected] = useState(false)
-  const [actionsOpen, setActionsOpen] = useState(false)
   const navigate = useNavigate()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -212,45 +211,20 @@ function Proposals(): React.JSX.Element {
           <DiamondIcon className="h-6 w-6 text-violet-400" />
           <span className="text-base font-bold tracking-wide text-strong">Propostas</span>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setActionsOpen((v) => !v)}
-              aria-expanded={actionsOpen}
-              aria-label={actionsOpen ? 'Ocultar ações' : 'Mostrar ações'}
-              title={actionsOpen ? 'Ocultar ações' : 'Mostrar ações'}
-              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+            {isTech && <GithubUsernameButton />}
+            <Button variant="ghost" onClick={() => setShowRejected((v) => !v)}>
+              {showRejected ? 'Ocultar recusadas' : `Ver recusadas (${rejectedCount})`}
+            </Button>
+            <Button
+              variant="ghost"
+              className="inline-flex items-center"
+              onClick={() => navigate('/changelog')}
             >
-              <svg
-                className={`h-4 w-4 transition-transform ${actionsOpen ? 'rotate-180' : ''}`}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M9 6l6 6-6 6" />
-              </svg>
-            </button>
-            {actionsOpen && (
-              <>
-                {isTech && <GithubUsernameButton />}
-                <Button variant="ghost" onClick={() => setShowRejected((v) => !v)}>
-                  {showRejected ? 'Ocultar recusadas' : `Ver recusadas (${rejectedCount})`}
-                </Button>
-                <Button onClick={() => setCreating(true)}>Nova proposta</Button>
-              </>
-            )}
+              <ChangelogIcon className="mr-1.5 h-4 w-4" />
+              Novidades
+            </Button>
+            <Button onClick={() => setCreating(true)}>Nova proposta</Button>
           </div>
-          <Button
-            variant="ghost"
-            className="ml-auto inline-flex items-center"
-            onClick={() => navigate('/changelog')}
-            title="Novidades"
-          >
-            <ChangelogIcon className="mr-1.5 h-4 w-4" />
-            Novidades
-          </Button>
         </header>
 
         {loading ? (
