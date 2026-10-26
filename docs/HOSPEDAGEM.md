@@ -763,7 +763,12 @@ Para ligar, em **Settings → Secrets and variables → Actions**:
 - **Secrets:**
   - `VPS_SSH_KEY`: uma chave SSH só para o deploy, autorizada na VPS;
   - `VPS_KNOWN_HOSTS`: saída de `ssh-keyscan <ip>`;
-  - `RELEASE_KEY`: conteúdo do `backend/.release-key`.
+  - `RELEASE_KEY`: conteúdo do `backend/.release-key`;
+  - `TECH_TEAM_USER_IDS` (opcional): ids de usuário, separados por vírgula e
+    sem espaços, de quem move os cards das propostas. O deploy grava (ou troca)
+    essa linha em `/opt/concord/.env` antes de reiniciar o backend. Vazio ou
+    ausente, o `.env` da VPS fica como está. O `.env` da VPS continua sendo
+    intocado para o resto.
 - **Variables:**
   - `DEPLOY_ENABLED=true`;
   - `VPS_HOST=root@<ip>`;

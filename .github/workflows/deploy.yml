@@ -7,6 +7,8 @@
 #     VPS_SSH_KEY      chave SSH privada de deploy (acesso à VPS)
 #     VPS_KNOWN_HOSTS  linha(s) de known_hosts da VPS (ssh-keyscan)
 #     RELEASE_KEY      chave Ed25519 que assina as atualizações (backend/.release-key)
+#     TECH_TEAM_USER_IDS  (opcional) ids, separados por vírgula, de quem move os
+#                      cards das propostas; o deploy grava no .env da VPS
 #   Variables:
 #     DEPLOY_ENABLED   "true" para ligar o deploy (sem isso, nada roda)
 #     VPS_HOST         ex.: root@1.2.3.4
@@ -105,6 +107,8 @@ jobs:
         run: scripts/release-linux.sh "${{ steps.version.outputs.version }}"
 
       - name: Publicar na VPS (backend + página de download + app web + atualização do app)
+        env:
+          TECH_TEAM_USER_IDS: ${{ secrets.TECH_TEAM_USER_IDS }}
         run: scripts/deploy-vps.sh "$VPS_HOST"
 
       - name: Conferir

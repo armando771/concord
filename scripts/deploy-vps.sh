@@ -14,7 +14,9 @@
 # Reiniciar não derruba chamadas: o backend recarrega as chamadas ativas, e a
 # mídia e a sinalização (/rtc, que o Caddy manda direto para o LiveKit —
 # deploy/Caddyfile) seguem no LiveKit. O Caddyfile da VPS não é enviado (use
-# scripts/apply-caddyfile.sh). O .env da VPS (/opt/concord/.env) não é tocado.
+# scripts/apply-caddyfile.sh). O .env da VPS (/opt/concord/.env) só recebe as
+# variáveis de SYNCED_ENV (abaixo) que vierem preenchidas no ambiente do
+# deploy; o resto dele não é tocado.
 # A mídia do chat (/opt/concord/uploads) nunca é enviada nem apagada.
 #
 # Nada que está no ar é trocado antes de o binário novo passar nas checagens:
@@ -188,6 +190,37 @@ else
   echo "AVISO: não consegui configurar o timer de atualização do yt-dlp (o deploy segue)" >&2
 fi
 REMOTE
+
+# Configuração que o deploy grava no .env da VPS (no Actions, vem dos Secrets;
+# veja docs/HOSPEDAGEM.md). Só entra o que vier preenchido: variável vazia ou
+# ausente deixa a linha do .env como está. Roda antes do restart abaixo, que é
+# quando o backend lê o .env. Os valores só podem ter caracteres seguros, para
+# um secret mal colado não injetar linhas no .env.
+SYNCED_ENV=(TECH_TEAM_USER_IDS)
+for name in "${SYNCED_ENV[@]}"; do
+  value="${!name:-}"
+  [[ -n "$value" ]] || continue
+  if [[ ! "$value" =~ ^[A-Za-z0-9,._:/@+-]+$ ]]; then
+    echo "ERRO: $name tem caracteres que não podem ir para o .env (só letras, números e , . _ : / @ + -); nada foi alterado" >&2
+    exit 1
+  fi
+  remote DIR="$DIR" NAME="$name" VALUE="$value" <<'REMOTE'
+set -euo pipefail
+cd "$DIR"
+touch .env
+tmp=$(mktemp .env.XXXXXX)
+# Troca a linha NOME=... (a primeira; repetidas somem) ou acrescenta no fim.
+awk -v name="$NAME" -v value="$VALUE" '
+  $0 ~ "^(export[ \t]+)?" name "=" { if (!done) print name "=" value; done = 1; next }
+  { print }
+  END { if (!done) print name "=" value }
+' .env >"$tmp"
+chmod --reference=.env "$tmp"
+chown --reference=.env "$tmp" 2>/dev/null || true
+mv "$tmp" .env
+echo "$NAME gravado no .env da VPS"
+REMOTE
+done
 
 # Checa o binário novo e aplica as migrations novas ANTES de reiniciar, com o
 # antigo ainda no ar (por isso as migrations precisam ser compatíveis com ele —
