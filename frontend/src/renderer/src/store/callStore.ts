@@ -1654,8 +1654,8 @@ export const useCallStore = create<CallState>()((set, get) => {
             void resyncChannelCall()
             return
           }
-          showToast.info(`${callName(get(), p.user)} saiu da chamada.`)
           if (get().type === 'channel') {
+            // Sem pop-up: o som e a lista de participantes já avisam.
             playSound('userLeave')
             // A mídia do participante some sozinha quando ele sai da sala do LiveKit.
             set((s) => {
@@ -1673,6 +1673,8 @@ export const useCallStore = create<CallState>()((set, get) => {
             bumpList()
             return
           }
+          // Na DM a saída do outro encerra a chamada: aqui o aviso faz falta.
+          showToast.info(`${callName(get(), p.user)} saiu da chamada.`)
           get().endCall()
           return
         }
