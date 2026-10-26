@@ -2,13 +2,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useUIStore } from '../../../shared/store/uiStore'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useChatStore } from '../store/chatStore'
-import { useSearchStore } from '../store/searchStore'
 import type { Message } from '../api/messages'
 import { showToast } from '../../../shared/store/toastStore'
 import SystemMessage from './SystemMessage'
 import MusicMessage from '../../music/components/MusicMessage'
-import MusicEphemeralList from '../../music/components/MusicEphemeralList'
-import SlashSuggestions from '../../music/components/SlashSuggestions'
 import { useMusicStore } from '../../music/store/musicStore'
 import Avatar from '../../../shared/ui/Avatar'
 import StyledName from '../../profile/components/StyledName'
@@ -26,7 +23,6 @@ import {
   applyMention,
   mentionLabels,
   mentionQuery,
-  mentionSuggestions,
   messageMentionsMe,
   type MentionLabels
 } from '../lib/mentions'
@@ -44,17 +40,15 @@ import MessageActionsBar from './MessageActionsBar'
 import ReactionChips from './ReactionChips'
 import ReplyReference from './ReplyReference'
 import { copyText } from '../../../shared/lib/clipboard'
-import { messagePreview } from '../lib/polls'
 import PollCard from './PollCard'
 import CreatePollModal from './CreatePollModal'
 import MessageAttachments from './MessageAttachments'
 import MessageSticker from './MessageSticker'
 import MessageGif from './MessageGif'
-import UnifiedMediaPickerPopover from './UnifiedMediaPickerPopover'
 import type { ServerSticker } from '../api/stickers'
 import type { GiphyItem } from '../api/giphy'
-import { PaperclipIcon, PollIcon, PinIcon, SmileyIcon } from '../../../shared/ui/icons'
-import { selectPins, usePinStore } from '../store/pinStore'
+import { PollIcon, PinIcon, SmileyIcon } from '../../../shared/ui/icons'
+import { usePinStore } from '../store/pinStore'
 import {
   ACCEPT_ATTRIBUTE,
   canSubmit,
@@ -64,12 +58,10 @@ import {
 } from '../lib/attachments'
 import { uploadAttachment } from '../api/attachments'
 import { ApiError } from '../../../shared/api/client'
-import VoiceRecordButton from './VoiceRecordButton'
 import ComposerAttachments from './ComposerAttachments'
 import { useAttachmentDraft } from '../hooks/useAttachmentDraft'
 import { useTypingSender } from '../hooks/useTypingSender'
 import TypingIndicator from './TypingIndicator'
-import PendingMessages from './PendingMessages'
 import {
   afterSendFailure,
   canRestoreHere,
@@ -79,17 +71,42 @@ import {
 import {
   ATTACH_DENIED,
   DIRECT_CHAT_PERMISSIONS,
-  sendDeniedReason,
   type ChatPermissions
 } from '../lib/chatPermissions'
 import { actionErrorMessage } from '../../servers/lib/permissionErrors'
-import { MessageListSkeleton } from '../../../shared/ui/skeleton/layouts'
 import { permissionError } from '../../servers/lib/permissions'
 import { bottomScrollPlan, JUMP_HIGHLIGHT_MS } from '../lib/scrollAnchor'
 import { useOlderMessages } from '../hooks/useOlderMessages'
 import { useInfiniteScrollOlder } from '../hooks/useInfiniteScrollOlder'
 import { useAutoFocusComposer } from '../hooks/useAutoFocusComposer'
 import OlderMessagesLoader from './OlderMessagesLoader'
+import PinnedMessageBar from './PinnedMessageBar'
+import MentionSuggestionList from './MentionSuggestionList'
+import {
+  DropOverlay,
+  EmptyRoomNotice,
+  MessageListTail,
+  RoomLoadingGate
+} from './MessageListStates'
+import {
+  AttachButton,
+  ChannelSlashSuggestions,
+  ComposerGate,
+  MediaPicker,
+  ReplyBar,
+  SubmitButton,
+  VoiceButton
+} from './ComposerParts'
+import { useRoomMessages } from '../hooks/useRoomMessages'
+import { useChannelPins } from '../hooks/useChannelPins'
+import { useJumpRequests } from '../hooks/useJumpRequests'
+import {
+  composerDisabledReason,
+  composerPlaceholder,
+  inRoom,
+  mentionMenu,
+  messageAuthorName
+} from '../lib/chatPaneView'
 
 const NO_MENTIONABLE: Mentionable[] = []
 
@@ -441,14 +458,8 @@ function ChatPane({
   canDeleteMessages = true
 }: ChatPaneProps): React.JSX.Element {
   // Sem SEND_MESSAGES o campo de mensagem dá lugar ao aviso.
-  const disabledReason = disabledReasonProp ?? sendDeniedReason(permissions)
-  const messagesByRoom = useChatStore((s) => s.messagesByRoom)
-  const hasMoreByRoom = useChatStore((s) => s.hasMoreByRoom)
-  const loadingByRoom = useChatStore((s) => s.loadingByRoom)
-  const messages = messagesByRoom[room] ?? []
-  const pendingCount = useChatStore((s) => s.pendingByRoom[room]?.length ?? 0)
-  const hasMore = hasMoreByRoom[room] ?? false
-  const loading = loadingByRoom[room] ?? true
+  const disabledReason = composerDisabledReason(disabledReasonProp, permissions)
+  const { messages, hasMore, loading, pendingCount } = useRoomMessages(room)
   const openRoom = useChatStore((s) => s.openRoom)
   const sendToRoom = useChatStore((s) => s.sendToRoom)
   const deleteFromRoom = useChatStore((s) => s.deleteFromRoom)
@@ -461,14 +472,14 @@ function ChatPane({
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false)
   // Mensagem aberta na edição, por sala (o ServerView reaproveita o ChatPane).
   const [editState, setEditState] = useState<{ room: string; id: string } | null>(null)
-  const editingId = editState?.room === room ? editState.id : null
+  const editingId = inRoom(editState, room, 'id')
   const [savingEdit, setSavingEdit] = useState(false)
   const meId = useAuthStore((s) => s.user?.id)
 
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [replyState, setReplyState] = useState<{ room: string; message: Message } | null>(null)
-  const replyingTo = replyState?.room === room ? replyState.message : null
+  const replyingTo = inRoom(replyState, room, 'message')
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const highlightTimer = useRef<number | undefined>(undefined)
   useEffect(() => () => window.clearTimeout(highlightTimer.current), [])
@@ -521,7 +532,7 @@ function ChatPane({
   const meUser = useAuthStore((s) => s.user)
   // Chips de menção: quem está no chat, eu e os autores da lista (que podem
   // ter saído do servidor). Em servidor vale o apelido; em DM, o nome.
-  const roomMessages = messagesByRoom[room]
+  const roomMessages = messages
   const labels = useMemo(
     () =>
       mentionLabels([
@@ -541,15 +552,14 @@ function ChatPane({
       ]),
     [mentionable, meUser, roomMessages, nicknames]
   )
-  // Tab/Enter pegam o item padrão (sempre uma pessoa, se houver) até a
-  // pessoa navegar com as setas.
-  const { items: suggestions, defaultIndex } = mention
-    ? mentionSuggestions(mention.query, mentionable, canMentionEveryone, {
-        exclude: meUsername,
-        max: MAX_SUGGESTIONS
-      })
-    : { items: [], defaultIndex: -1 }
-  const highlight = highlightChoice ?? defaultIndex
+  const { suggestions, highlight } = mentionMenu(
+    mention,
+    highlightChoice,
+    mentionable,
+    canMentionEveryone,
+    meUsername,
+    MAX_SUGGESTIONS
+  )
 
   const pickMention = (username: string): void => {
     const el = inputRef.current
@@ -710,7 +720,8 @@ function ChatPane({
   })
   const olderSentinelRef = useInfiniteScrollOlder({
     scrollRef,
-    active: hasMore && !loading,
+    hasMore,
+    loading,
     resetKey: `${room}:${messages[0]?.id}`,
     onReachTop: () => void loadOlder()
   })
@@ -951,29 +962,15 @@ function ChatPane({
     )
   }
 
-  // Clique num resultado da busca: pula quando a sala já carregou.
-  const pendingJump = useSearchStore((s) => s.pendingJump)
-  useEffect(() => {
-    if (!pendingJump || pendingJump.room !== room || loading) return
-    useSearchStore.getState().clearJump()
-    void handleJumpToMessage(pendingJump.messageId)
-    // handleJumpToMessage muda a cada render; o gatilho é o pedido de pulo.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingJump, room, loading])
+  // Busca e evento concord:jump-to-message: pula quando a sala já carregou.
+  useJumpRequests({
+    room,
+    loading,
+    onJump: (messageId) => void handleJumpToMessage(messageId)
+  })
 
-  useEffect(() => {
-    const onJump = (e: Event): void => {
-      const detail = (e as CustomEvent<{ messageId: string }>).detail
-      if (detail?.messageId) {
-        void handleJumpToMessage(detail.messageId)
-      }
-    }
-    window.addEventListener('concord:jump-to-message', onJump)
-    return () => window.removeEventListener('concord:jump-to-message', onJump)
-  }, [room])
-
-  const isChannel = room.startsWith('channel:')
-  const channelId = isChannel ? room.slice('channel:'.length) : null
+  const { channelId, pins } = useChannelPins(room)
+  const isChannel = channelId !== null
 
   const handleTogglePin = async (message: Message): Promise<void> => {
     if (!channelId) return
@@ -984,43 +981,7 @@ function ChatPane({
     }
   }
 
-  // selectPins: sem fixadas devolve sempre o mesmo array (senão: React #185).
-  const pins = usePinStore(selectPins(channelId ?? ''))
-  const loadPins = usePinStore((s) => s.loadPins)
-
-  useEffect(() => {
-    if (channelId) {
-      void loadPins(channelId)
-    }
-  }, [channelId, loadPins])
-
-  const latestPin = pins[0]
-  const latestPinAuthorName = serverDisplayName(
-    { nickname: latestPin ? nicknames?.[latestPin.author_id] : undefined },
-    latestPin?.author
-  )
-  const latestPinPreview =
-    latestPin?.sticker
-      ? `💟 Figurinha :${latestPin.sticker.name}:`
-      : latestPin?.gif_url
-      ? '👾 GIF'
-      : latestPin?.content?.trim() ||
-    (latestPin?.attachments?.length
-      ? latestPin.attachments[0].kind === 'image'
-        ? '📷 Imagem'
-        : latestPin.attachments[0].kind === 'video'
-          ? '🎥 Vídeo'
-          : latestPin.attachments[0].kind === 'audio'
-            ? '🎵 Áudio'
-            : '📎 Anexo'
-      : latestPin?.poll
-        ? '📊 Enquete: ' + latestPin.poll.question
-        : 'Mensagem fixada')
-
-  const replyTargetAuthor = serverDisplayName(
-    { nickname: replyingTo ? nicknames?.[replyingTo.author_id] : undefined },
-    replyingTo?.author
-  )
+  const replyTargetAuthor = messageAuthorName(replyingTo, nicknames)
 
   return (
     <div
@@ -1032,44 +993,13 @@ function ChatPane({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {dragging && (
-        <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-violet-400/70 bg-black/60 text-sm font-semibold text-white on-media">
-          Solte os arquivos para enviar
-        </div>
-      )}
+      <DropOverlay visible={dragging} />
 
-      {/* Barra com a última mensagem fixada no topo do canal */}
-      {latestPin && (
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => void handleJumpToMessage(latestPin.id)}
-          onKeyDown={(e) => e.key === 'Enter' && void handleJumpToMessage(latestPin.id)}
-          title="Clique para ir até a mensagem fixada"
-          className="group relative z-10 flex shrink-0 cursor-pointer items-center justify-between border-b border-subtle bg-floating px-4 py-2 backdrop-blur transition hover:bg-surface"
-        >
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-amber-400/15 text-amber-400">
-              <PinIcon className="h-3.5 w-3.5" />
-            </span>
-            <div className="flex min-w-0 items-center gap-1.5 text-ds-xs">
-              <span className="shrink-0 font-semibold text-strong">{latestPinAuthorName}:</span>
-              <span className="truncate text-gray-300">{latestPinPreview}</span>
-            </div>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2 pl-3">
-            {pins.length > 1 && (
-              <span className="rounded bg-fg/5 px-2 py-0.5 text-[10px] font-medium text-gray-400">
-                +{pins.length - 1} fixada{pins.length - 1 > 1 ? 's' : ''}
-              </span>
-            )}
-            <span className="text-[11px] font-medium text-violet-400 opacity-80 group-hover:opacity-100 group-hover:underline">
-              Ir para mensagem →
-            </span>
-          </div>
-        </div>
-      )}
+      <PinnedMessageBar
+        pins={pins}
+        nicknames={nicknames}
+        onJump={(id) => void handleJumpToMessage(id)}
+      />
 
       {/* Sem o scroll anchoring do navegador: a âncora do loadOlder é a única. */}
       <div
@@ -1077,17 +1007,10 @@ function ChatPane({
         className="flex-1 overflow-y-auto [overflow-anchor:none]"
         onScroll={handleScroll}
       >
-        {loading ? (
-          // closeRoom apaga a lista ao sair do canal: carregando é sempre a primeira carga.
-          <MessageListSkeleton />
-        ) : (
+        <RoomLoadingGate loading={loading}>
           <div ref={contentRef} className="flex min-h-full flex-col justify-end py-4">
-            {hasMore && <OlderMessagesLoader ref={olderSentinelRef} loading={loadingOlder} />}
-            {messages.length === 0 && (
-              <div className="flex items-center justify-center py-8 text-center text-sm text-gray-500">
-                Nenhuma mensagem por aqui ainda. Seja o primeiro a escrever!
-              </div>
-            )}
+            <OlderMessagesLoader ref={olderSentinelRef} visible={hasMore} loading={loadingOlder} />
+            <EmptyRoomNotice empty={messages.length === 0} />
             {messages.map((m, i) => (
               <MessageItem
                 key={m.id}
@@ -1115,105 +1038,51 @@ function ChatPane({
                 onTogglePin={() => void handleTogglePin(m)}
               />
             ))}
-            <PendingMessages room={room} />
-            <MusicEphemeralList room={room} serverId={serverId ?? null} />
-            <div ref={bottomRef} />
+            <MessageListTail room={room} serverId={serverId} bottomRef={bottomRef} />
           </div>
-        )}
+        </RoomLoadingGate>
       </div>
 
       <div className="relative shrink-0 px-4">
-        {suggestions.length > 0 && (
-          <ul
-            role="listbox"
-            aria-label="Marcar alguém"
-            className="absolute bottom-full left-4 right-4 mb-2 overflow-hidden rounded-lg border border-subtle bg-floating py-1 shadow-2xl"
-          >
-            {suggestions.map((m, i) => (
-              <li
-                key={`${m.kind}:${m.username}`}
-                role="option"
-                aria-selected={i === highlight}
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  pickMention(m.username)
-                }}
-                onMouseEnter={() => setHighlight(i)}
-                className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm ${
-                  i === highlight ? 'bg-brand/30 text-strong' : 'text-gray-300'
-                }`}
-              >
-                {m.kind === 'everyone' ? (
-                  <>
-                    <span className="font-semibold">@{m.username}</span>
-                    <span className="text-xs text-gray-400">{m.description}</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="font-semibold">{serverDisplayName(m, m)}</span>
-                    <span className="text-xs text-gray-400">@{m.username}</span>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+        <MentionSuggestionList
+          suggestions={suggestions}
+          highlight={highlight}
+          onPick={pickMention}
+          onHighlight={setHighlight}
+        />
         <ComposerAttachments drafts={drafts} onRemove={removeAttachment} />
-        {replyingTo && (
-          <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg border border-subtle bg-floating px-3 py-1.5 text-ds-sm text-gray-300">
-            <div className="min-w-0 truncate">
-              Respondendo a <span className="font-semibold text-strong">@{replyTargetAuthor}</span>
-              <span className="ml-2 text-gray-400">{messagePreview(replyingTo)}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setReplyState(null)}
-              title="Cancelar resposta (Esc)"
-              className="shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-        {disabledReason ? (
-          <div className="rounded-xl border border-subtle bg-input px-4 py-3 text-center text-sm text-gray-400">
-            {disabledReason}
-          </div>
-        ) : (
+        <ReplyBar
+          replyingTo={replyingTo}
+          authorName={replyTargetAuthor}
+          onCancel={() => setReplyState(null)}
+        />
+        <ComposerGate disabledReason={disabledReason}>
           <div className="relative">
-            {mediaPickerOpen && (
-              <UnifiedMediaPickerPopover
-                serverId={serverId}
-                onSelectEmoji={handleSelectEmoji}
-                onSelectGif={handleSendGif}
-                onSelectSticker={handleSendSticker}
-                onClose={() => setMediaPickerOpen(false)}
-              />
-            )}
+            <MediaPicker
+              open={mediaPickerOpen}
+              serverId={serverId}
+              onSelectEmoji={handleSelectEmoji}
+              onSelectGif={handleSendGif}
+              onSelectSticker={handleSendSticker}
+              onClose={() => setMediaPickerOpen(false)}
+            />
             <form
             onSubmit={handleSubmit}
             className="relative flex items-center gap-2 rounded-xl border border-subtle bg-input px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
           >
-            {room.startsWith('channel:') && !mention && (
-              <SlashSuggestions
-                input={draft}
-                onPick={(text) => {
-                  setDraft(text)
-                  inputRef.current?.focus()
-                }}
-              />
-            )}
-            {permissions.canAttach && (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                title="Anexar arquivo"
-                aria-label="Anexar arquivo"
-                className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
-              >
-                <PaperclipIcon className="h-5 w-5" />
-              </button>
-            )}
+            <ChannelSlashSuggestions
+              isChannel={isChannel}
+              mentionOpen={mention !== null}
+              input={draft}
+              onPick={(text) => {
+                setDraft(text)
+                inputRef.current?.focus()
+              }}
+            />
+            <AttachButton
+              show={permissions.canAttach}
+              onClick={() => fileInputRef.current?.click()}
+            />
             <input
               ref={fileInputRef}
               type="file"
@@ -1246,7 +1115,7 @@ function ChatPane({
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               onBlur={() => setMention(null)}
-              placeholder={replyingTo ? `Responder a @${replyTargetAuthor}...` : placeholder}
+              placeholder={composerPlaceholder(replyingTo !== null, replyTargetAuthor, placeholder)}
               maxLength={2000}
               className="min-w-0 flex-1 bg-transparent text-ds-chat text-strong placeholder:text-gray-500 outline-none"
             />
@@ -1259,23 +1128,20 @@ function ChatPane({
             >
               <SmileyIcon className="h-5 w-5" />
             </button>
-            {permissions.canAttach && (
-              <VoiceRecordButton key={room} disabled={sendingVoice} onRecorded={handleRecorded} />
-            )}
-            <button
-              type="submit"
-              disabled={sending || !submittable}
-              className="cursor-pointer rounded-lg bg-brand px-3 py-1.5 text-ds-sm font-medium text-white transition-all hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {attachmentState.uploading
-                ? 'Enviando arquivos...'
-                : sending
-                  ? 'Enviando...'
-                  : 'Enviar'}
-            </button>
+            <VoiceButton
+              show={permissions.canAttach}
+              room={room}
+              disabled={sendingVoice}
+              onRecorded={handleRecorded}
+            />
+            <SubmitButton
+              sending={sending}
+              submittable={submittable}
+              uploading={attachmentState.uploading}
+            />
           </form>
           </div>
-        )}
+        </ComposerGate>
         <TypingIndicator room={room} serverId={serverId} />
       </div>
       <CreatePollModal

@@ -10,11 +10,15 @@ const ROWS = messageSkeletonRows(3, 23)
  */
 export default function OlderMessagesLoader({
   ref,
+  visible,
   loading
 }: {
   ref: React.Ref<HTMLDivElement>
+  /** Há páginas antigas por vir. */
+  visible: boolean
   loading: boolean
-}): React.JSX.Element {
+}): React.JSX.Element | null {
+  if (!visible) return null
   return (
     <div ref={ref} aria-busy={loading} className="flex flex-col py-2">
       <span role="status" className="sr-only">

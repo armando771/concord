@@ -12,13 +12,16 @@ import { reachedTop, TOP_PRELOAD_MARGIN, topWatchTargets } from '../lib/infinite
  */
 export function useInfiniteScrollOlder({
   scrollRef,
-  active,
+  hasMore,
+  loading,
   resetKey,
   onReachTop
 }: {
   scrollRef: React.RefObject<HTMLElement | null>
-  /** Há páginas antigas e a sala já carregou. */
-  active: boolean
+  /** Há páginas antigas por vir. */
+  hasMore: boolean
+  /** A sala ainda carrega a primeira página. */
+  loading: boolean
   /** Muda quando entra página nova (ex.: sala + id da primeira mensagem). */
   resetKey: string
   /** Quem chama evita carregar duas vezes em paralelo. */
@@ -28,7 +31,7 @@ export function useInfiniteScrollOlder({
   const reach = useEffectEvent(onReachTop)
 
   useEffect(() => {
-    const targets = topWatchTargets(active, scrollRef.current, sentinelRef.current)
+    const targets = topWatchTargets(hasMore && !loading, scrollRef.current, sentinelRef.current)
     if (!targets) return
     const observer = new IntersectionObserver(
       (entries) => {
@@ -38,7 +41,7 @@ export function useInfiniteScrollOlder({
     )
     observer.observe(targets.target)
     return () => observer.disconnect()
-  }, [active, resetKey, scrollRef])
+  }, [hasMore, loading, resetKey, scrollRef])
 
   return sentinelRef
 }
