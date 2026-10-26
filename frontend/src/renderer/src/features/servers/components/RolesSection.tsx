@@ -5,14 +5,13 @@ import { showToast } from '../../../shared/store/toastStore'
 import { actionErrorMessage } from '../lib/permissionErrors'
 import { canGrant, parseColorCss, roleColorCss, type Role } from '../lib/permissions'
 import { moveRoleId } from '../lib/roleList'
-import { serverDisplayName } from '../lib/serverNames'
-import Avatar from '../../../shared/ui/Avatar'
 import Button from '../../../shared/ui/Button'
 import Input from '../../../shared/ui/Input'
 import Switch from '../../../shared/ui/Switch'
 import ConfirmModal from '../../friends/components/ConfirmModal'
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from '../../../shared/ui/icons'
 import PermissionSwitches from './PermissionSwitches'
+import RoleMembers from './RoleMembers'
 
 type Tab = 'display' | 'permissions' | 'members'
 
@@ -79,8 +78,8 @@ function RolesSection(): React.JSX.Element {
   }
 
   return (
-    <div className="flex gap-6">
-      <div className="w-[230px] shrink-0">
+    <div className="flex flex-col gap-6 md:flex-row">
+      <div className="w-full md:w-[230px] md:shrink-0">
         <Button
           variant="primary"
           className="mb-3 flex w-full items-center justify-center gap-1.5 py-1.5 text-xs"
@@ -118,7 +117,7 @@ function RolesSection(): React.JSX.Element {
                 )}
               </button>
               {!role.is_default && !role.is_system && (
-                <span className="flex shrink-0 flex-col opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                <span className="flex shrink-0 flex-col transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-within:opacity-100">
                   <button
                     type="button"
                     aria-label={`Subir ${role.name}`}
@@ -370,108 +369,6 @@ function RoleEditor({ serverId, role }: { serverId: string; role: Role }): React
           regras dos canais que usavam este cargo são removidas.
         </p>
       </ConfirmModal>
-    </div>
-  )
-}
-
-function RoleMembers({
-  serverId,
-  role,
-  manageable
-}: {
-  serverId: string
-  role: Role
-  manageable: boolean
-}): React.JSX.Element {
-  const members = useServerStore((s) => s.currentMembers)
-  const addMemberRole = useServerStore((s) => s.addMemberRole)
-  const removeMemberRole = useServerStore((s) => s.removeMemberRole)
-  const [query, setQuery] = useState('')
-
-  const nameOf = (m: (typeof members)[number]): string => serverDisplayName(m, m)
-  const withRole = members.filter((m) => m.role_ids?.includes(role.id))
-  const term = query.trim().toLowerCase()
-  const candidates = members
-    .filter((m) => !m.role_ids?.includes(role.id))
-    .filter((m) => !term || nameOf(m).toLowerCase().includes(term))
-    .slice(0, 8)
-
-  const run = async (action: () => Promise<void>): Promise<void> => {
-    try {
-      await action()
-    } catch (err) {
-      showToast.error(actionErrorMessage(err, 'Não foi possível mudar o cargo da pessoa.'))
-    }
-  }
-
-  return (
-    <div className="space-y-6">
-      {manageable && !role.is_system && (
-        <div>
-          <Input
-            label="Adicionar membros"
-            placeholder="Buscar por nome"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          {term && (
-            <ul className="mt-2 divide-y divide-subtle rounded-lg border border-subtle">
-              {candidates.length === 0 && (
-                <li className="px-3 py-2 text-xs text-gray-500">Ninguém encontrado.</li>
-              )}
-              {candidates.map((m) => (
-                <li key={m.user_id} className="flex items-center justify-between gap-3 px-3 py-2">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <Avatar
-                      userId={m.user_id}
-                      name={nameOf(m)}
-                      avatarUrl={m.avatar_url}
-                      size={24}
-                    />
-                    <span className="truncate text-sm text-strong">{nameOf(m)}</span>
-                  </span>
-                  <Button
-                    variant="secondary"
-                    className="px-3 py-1 text-xs"
-                    onClick={() => void run(() => addMemberRole(serverId, m.user_id, role.id))}
-                  >
-                    Adicionar
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      <div>
-        <h3 className="mb-2 text-ds-sm font-medium text-gray-400">
-          Com este cargo — {withRole.length}
-        </h3>
-        {withRole.length === 0 ? (
-          <p className="text-sm text-gray-500">Ninguém tem este cargo ainda.</p>
-        ) : (
-          <ul className="divide-y divide-subtle rounded-lg border border-subtle">
-            {withRole.map((m) => (
-              <li key={m.user_id} className="flex items-center justify-between gap-3 px-3 py-2">
-                <span className="flex min-w-0 items-center gap-2">
-                  <Avatar userId={m.user_id} name={nameOf(m)} avatarUrl={m.avatar_url} size={24} />
-                  <span className="truncate text-sm text-strong">{nameOf(m)}</span>
-                </span>
-                {manageable && !role.is_system && (
-                  <button
-                    type="button"
-                    onClick={() => void run(() => removeMemberRole(serverId, m.user_id, role.id))}
-                    className="cursor-pointer text-xs font-semibold text-red-400 hover:text-red-300"
-                  >
-                    Remover
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
     </div>
   )
 }

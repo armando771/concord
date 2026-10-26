@@ -263,6 +263,31 @@ export function splitBadges(badges: Badge[]): { earned: Badge[]; available: Badg
   }
 }
 
+/**
+ * O que o modal de badges mostra: no próprio perfil, os ganhos e os que dá
+ * para desbloquear; no dos outros, só os ganhos.
+ */
+export function visibleBadges(
+  badges: Badge[] | undefined,
+  isMe: boolean
+): { earned: Badge[]; available: Badge[]; visible: Badge[] } {
+  const { earned, available } = splitBadges(badges ?? [])
+  return { earned, available, visible: isMe ? [...earned, ...available] : earned }
+}
+
+/**
+ * O badge aberto no detalhe: o clicado (só vale para esta abertura do modal),
+ * senão o pedido ao abrir, senão o primeiro.
+ */
+export function selectedBadge<T extends { category?: string }>(
+  visible: Badge[],
+  target: T,
+  picked: { target: T; category: string } | null
+): Badge | undefined {
+  const wanted = picked?.target === target ? picked.category : target.category
+  return visible.find((b) => b.category === wanted) ?? visible[0]
+}
+
 /** Quantos badges (categorias) o aviso de desbloqueio tem, não tiers. */
 export function unlockCount(unlocks: BadgeUnlockEvent['unlocks']): number {
   return new Set(unlocks.map((u) => u.category)).size

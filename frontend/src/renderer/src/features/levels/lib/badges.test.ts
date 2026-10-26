@@ -13,7 +13,9 @@ import {
   remainingText,
   splitBadges,
   statText,
-  unlockCount
+  unlockCount,
+  selectedBadge,
+  visibleBadges
 } from './badges'
 
 const HOUR = 3600
@@ -353,5 +355,46 @@ describe('holoPointer', () => {
       rx: 0,
       ry: 0
     })
+  })
+})
+
+describe('visibleBadges e selectedBadge (modal de badges)', () => {
+  const mk = (category: string, tier: number, obtainable = true): Badge =>
+    ({ category, name: category, tier, obtainable, tiers: [] }) as unknown as Badge
+  const ganho = mk('voz', 2)
+  const livre = mk('chat', 0)
+  const todos = [ganho, livre]
+
+  it('no próprio perfil aparecem os ganhos e os que dá para desbloquear', () => {
+    const v = visibleBadges(todos, true)
+    expect(v.earned).toEqual([ganho])
+    expect(v.available).toEqual([livre])
+    expect(v.visible).toEqual([ganho, livre])
+  })
+
+  it('no perfil dos outros, só os ganhos', () => {
+    expect(visibleBadges(todos, false).visible).toEqual([ganho])
+  })
+
+  it('sem badges carregados, tudo vazio', () => {
+    expect(visibleBadges(undefined, true).visible).toEqual([])
+  })
+
+  type Alvo = { userId: string; name: string; category?: string }
+
+  it('o escolhido vale só para a abertura em que foi escolhido', () => {
+    const target: Alvo = { userId: 'u1', name: 'Ana', category: 'voz' }
+    const outro: Alvo = { userId: 'u2', name: 'Bia' }
+    const v = [ganho, livre]
+    expect(selectedBadge(v, target, { target, category: 'chat' })).toBe(livre)
+    expect(selectedBadge(v, target, { target: outro, category: 'chat' })).toBe(ganho)
+  })
+
+  it('sem escolha usa o do alvo, e se ele não existe, o primeiro', () => {
+    const v = [ganho, livre]
+    const alvo = (category?: string): Alvo => ({ userId: 'u1', name: 'A', category })
+    expect(selectedBadge(v, alvo('chat'), null)).toBe(livre)
+    expect(selectedBadge(v, alvo('nada'), null)).toBe(ganho)
+    expect(selectedBadge([], alvo(), null)).toBeUndefined()
   })
 })

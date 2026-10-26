@@ -143,3 +143,18 @@ export function filterSections(
     [s.label, ...s.keywords].some((text) => normalize(text).includes(q))
   )
 }
+
+/** Nome mostrado na conta: o de exibição, ou o @ se não houver. */
+export function accountName(
+  user: { display_name?: string; username?: string } | null | undefined
+): string {
+  return user?.display_name || user?.username || ''
+}
+
+/** A seção pedida; se ela não existe (some em algumas versões), a primeira. */
+export function currentSettingsSection(
+  sections: SettingsSection[],
+  id: SettingsSectionId
+): SettingsSection {
+  return sections.find((s) => s.id === id) ?? sections[0]
+}
