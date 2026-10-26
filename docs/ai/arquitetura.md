@@ -39,7 +39,7 @@ Regras:
 ```
 main/                       processo main do Electron, por responsabilidade:
   index.ts                  entrada
-  activity/ app/ overlay/ screen/ updates/ window/
+  activity/ app/ overlay/ perf/ screen/ updates/ window/
 preload/                    ponte window.api (contextBridge)
 renderer/src/
   main.tsx                  entrada do app

@@ -3,6 +3,7 @@ import router from './router'
 import Background from '../shared/ui/Background'
 import ToastContainer from '../shared/ui/ToastContainer'
 import BackgroundBridge from './BackgroundBridge'
+import PerfBridge from './PerfBridge'
 import OverlayBridge from '../features/overlay/components/OverlayBridge'
 import GameActivityBridge from '../features/activity/components/GameActivityBridge'
 import UpdateBridge from '../features/updates/components/UpdateBridge'
@@ -40,6 +41,7 @@ function App(): React.JSX.Element {
         <>
           {/* Só no Electron: bandeja, overlay de jogo e atualizações. */}
           <BackgroundBridge />
+          <PerfBridge />
           <OverlayBridge />
           <GameActivityBridge />
           <UpdateBridge />
