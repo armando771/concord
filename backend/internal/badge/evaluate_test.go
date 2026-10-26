@@ -174,7 +174,7 @@ func TestEvaluateReportsFreshUnlocksWithTheirTime(t *testing.T) {
 		"conta/1": created.AddDate(0, 1, 0),
 		"conta/2": created.AddDate(0, 3, 0),
 		"conta/3": created.AddDate(0, 6, 0),
-		// Fundador: desde que criou a conta.
+		// Pioneiro: desde que criou a conta.
 		"fundador/1": created,
 	}
 	if len(fresh) != len(want) {
@@ -248,7 +248,7 @@ func hasBadge(badges []Badge, key string) bool {
 func TestEvaluateCreatorIsOnlyForDevs(t *testing.T) {
 	badges, fresh := Evaluate(Stats{CreatedAt: FounderCutoff}, nil, now)
 	if hasBadge(badges, "criador") {
-		t.Fatal("non-dev sees the Criador da Salinha badge")
+		t.Fatal("non-dev sees the Fundador (dev) badge")
 	}
 	for _, u := range fresh {
 		if u.Category == "criador" {
@@ -258,7 +258,7 @@ func TestEvaluateCreatorIsOnlyForDevs(t *testing.T) {
 
 	badges, fresh = Evaluate(Stats{CreatedAt: FounderCutoff, IsDev: true}, nil, now)
 	c := find(t, badges, "criador")
-	if c.Tier != 1 || c.Rarity != RarityMythic || c.TierName != "Criador da Salinha" || !c.Obtainable || c.Progress != 1 || c.NextThreshold != nil {
+	if c.Tier != 1 || c.Rarity != RarityMythic || c.TierName != "Fundador" || !c.Obtainable || c.Progress != 1 || c.NextThreshold != nil {
 		t.Fatalf("dev criador = %+v", c)
 	}
 	if c.UnlockedAt == nil || !c.UnlockedAt.Equal(now) {
@@ -301,7 +301,7 @@ func TestPublicViewOfCreatorHasNoNumbers(t *testing.T) {
 			pub = &b
 		}
 	}
-	if pub == nil || pub.Rarity != RarityMythic || pub.TierName != "Criador da Salinha" || pub.UnlockedAt == "" {
+	if pub == nil || pub.Rarity != RarityMythic || pub.TierName != "Fundador" || pub.UnlockedAt == "" {
 		t.Fatalf("public criador = %+v", pub)
 	}
 }

@@ -126,7 +126,7 @@ func newTestService() (*Service, *fakeStore, *fakePublisher, *fakeCalls, *fakeOn
 
 func TestBadgesAnnouncesNewTiersOnlyOnce(t *testing.T) {
 	s, st, pub, _, _ := newTestService()
-	// Conta criada no corte: sem Fundador, sem idade.
+	// Conta criada no corte: sem Pioneiro, sem idade.
 	st.stats["ana"] = Stats{CreatedAt: FounderCutoff, MessagesSent: 60}
 
 	res, err := s.Badges(context.Background(), "ana", "ana")
@@ -167,7 +167,7 @@ func TestAnnounceSortsRarestFirst(t *testing.T) {
 	}
 	first := pub.events[0].Unlocks[0]
 	if first.Category != "fundador" {
-		t.Fatalf("first unlock = %+v, want the legendary Fundador", first)
+		t.Fatalf("first unlock = %+v, want the legendary Pioneiro", first)
 	}
 }
 
@@ -178,7 +178,7 @@ func TestAnnounceSortsMythicAboveLegendary(t *testing.T) {
 		t.Fatal(err)
 	}
 	if first := pub.events[0].Unlocks[0]; first.Category != "criador" || first.Rarity != RarityMythic {
-		t.Fatalf("first unlock = %+v, want the mythic Criador da Salinha", first)
+		t.Fatalf("first unlock = %+v, want the mythic Fundador", first)
 	}
 }
 

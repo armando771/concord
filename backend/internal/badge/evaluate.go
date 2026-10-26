@@ -25,7 +25,7 @@ type Stats struct {
 	OwnedServers          int64
 	// Cards do quadro de propostas criados pela pessoa que ainda existem.
 	Proposals int64
-	// Está em dev_badge_users (Criador da Salinha).
+	// Está em dev_badge_users (Fundador).
 	IsDev bool
 }
 
@@ -66,7 +66,7 @@ type Badge struct {
 	NextAt *time.Time `json:"next_at,omitempty"`
 	// Do tier atual até o próximo, de 0 a 1 (1 no último tier).
 	Progress float64 `json:"progress"`
-	// false quando não dá mais para conseguir (Fundador depois do corte).
+	// false quando não dá mais para conseguir (Pioneiro depois do corte).
 	Obtainable bool       `json:"obtainable"`
 	Tiers      []TierInfo `json:"tiers"`
 }
@@ -139,7 +139,7 @@ func valueOf(c Category, s Stats, now time.Time) int64 {
 	return 0
 }
 
-// unlockTime é quando o tier foi alcançado. Na idade da conta e no Fundador
+// unlockTime é quando o tier foi alcançado. Na idade da conta e no Pioneiro
 // dá para saber a data exata; no resto vale o momento em que o servidor viu.
 func unlockTime(c Category, tier int, s Stats, now time.Time) time.Time {
 	switch c.Key {

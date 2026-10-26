@@ -252,7 +252,7 @@ describe('visão pública (perfil de outra pessoa)', () => {
       category: 'fundador',
       unit: 'founder',
       tier: 1,
-      tiers: [{ tier: 1, name: 'Fundador', threshold: 1, rarity: 'lendario' }]
+      tiers: [{ tier: 1, name: 'Pioneiro', threshold: 1, rarity: 'lendario' }]
     })
     expect(publicStatText(f)).toBe('Chegou nas primeiras semanas')
   })
@@ -279,17 +279,17 @@ describe('unlockCount', () => {
   })
 })
 
-describe('raridade mítica (Criador da Salinha)', () => {
+describe('raridade mítica (Fundador dos devs)', () => {
   const dev = badge({
     category: 'criador',
-    name: 'Criador da Salinha',
+    name: 'Fundador',
     unit: 'dev',
     value: 1,
     tier: 1,
-    tier_name: 'Criador da Salinha',
+    tier_name: 'Fundador',
     rarity: 'mitico',
     progress: 1,
-    tiers: [{ tier: 1, name: 'Criador da Salinha', threshold: 1, rarity: 'mitico' }]
+    tiers: [{ tier: 1, name: 'Fundador', threshold: 1, rarity: 'mitico' }]
   })
 
   it('fica acima de lendário', () => {
@@ -302,7 +302,7 @@ describe('raridade mítica (Criador da Salinha)', () => {
     expect(RARITY.mitico.color).not.toBe(RARITY.lendario.color)
   })
 
-  it('vem antes do Fundador na fileira do perfil', () => {
+  it('vem antes do Pioneiro na fileira do perfil', () => {
     const { shown } = profileBadgeRow([
       badge({ category: 'fundador', unit: 'founder', tier: 1, rarity: 'lendario' }),
       badge({ category: 'voz', tier: 1, rarity: 'comum' }),
@@ -312,7 +312,7 @@ describe('raridade mítica (Criador da Salinha)', () => {
   })
 
   it('rótulo não repete o nome quando o tier se chama igual ao badge', () => {
-    expect(badgeLabel(dev)).toBe('Criador da Salinha')
+    expect(badgeLabel(dev)).toBe('Fundador')
     expect(badgeLabel({ name: 'Tempo em call', tier_name: 'Locutor' })).toBe(
       'Locutor (Tempo em call)'
     )

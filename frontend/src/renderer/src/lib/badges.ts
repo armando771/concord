@@ -29,8 +29,8 @@ export function rarityMeta(rarity: BadgeRarity | undefined): RarityMeta {
 }
 
 /**
- * "Locutor (Tempo em call)"; quando o tier tem o nome do badge (Fundador,
- * Criador da Salinha), só o nome, sem repetir.
+ * "Locutor (Tempo em call)"; quando o tier tem o nome do badge (Pioneiro,
+ * Fundador), só o nome, sem repetir.
  */
 export function badgeLabel(b: Pick<Badge, 'name' | 'tier_name'>): string {
   return !b.tier_name || b.tier_name === b.name ? b.name : `${b.tier_name} (${b.name})`

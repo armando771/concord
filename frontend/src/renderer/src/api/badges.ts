@@ -1,6 +1,6 @@
 import { request } from './client'
 
-/** mitico: acima de lendário, só nos badges concedidos à mão (Criador da Salinha). */
+/** mitico: acima de lendário, só nos badges concedidos à mão (Fundador). */
 export type BadgeRarity = 'comum' | 'raro' | 'epico' | 'lendario' | 'mitico'
 
 export type BadgeUnit =
@@ -45,7 +45,7 @@ export interface Badge {
   next_at?: string
   /** Do tier atual até o próximo, de 0 a 1. */
   progress?: number
-  /** false: não dá mais para conseguir (Fundador depois do corte). */
+  /** false: não dá mais para conseguir (Pioneiro depois do corte). */
   obtainable?: boolean
   tiers: BadgeTier[]
 }
