@@ -202,3 +202,17 @@ export function nameStyleCss(style: NameStyle): NameStyleCss {
   }
   return { className, style: css, ...(copy ? { copy } : {}), ...(letters ? { letters } : {}) }
 }
+
+/** Efeitos cuja sombra sai para a direita do texto. */
+const SHADOW_TO_THE_RIGHT = ['pop', 'shadow3d']
+
+/**
+ * Espaço depois da última letra. Fontes decorativas (e sombras deslocadas)
+ * desenham além da largura de avanço do texto, e o `truncate` das listas
+ * (overflow hidden, com a largura justa do nome) cortava essa ponta: a última
+ * letra aparecia pela metade. O nome padrão não muda.
+ */
+export function nameEndPadding(style: NameStyle): CSSProperties {
+  const overhangs = style.font !== 'default' || SHADOW_TO_THE_RIGHT.includes(style.effect)
+  return overhangs ? { paddingInlineEnd: '0.2em' } : {}
+}

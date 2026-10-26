@@ -12,3 +12,8 @@
 
 ## Correções
 - Perfil e servidor: agora dá para arrastar e dar zoom (recortar) o avatar, o banner e o ícone também quando a imagem é um GIF. A animação continua.
+- Janela estreita: os avisos e os pedidos para entrar na sala não saem mais da tela, o seletor de atividades cabe, e os avisos de instalação no Linux não ficam um em cima do outro nem cobrem o microfone e o fone.
+- Perfil: nomes com fonte decorativa não perdem mais a ponta da última letra nas listas de membros, amigos e DMs.
+- Mensagens diretas: ao trocar de conversa, a tela não mostra mais a conversa anterior, que deixava mandar mensagem para a pessoa errada.
+- Chat: o texto que você está digitando agora fica guardado em cada canal e conversa, e não passa mais de um para o outro.
+- Sair da conta agora encerra a chamada em andamento.
