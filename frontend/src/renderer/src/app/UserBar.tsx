@@ -7,6 +7,7 @@ import { STATUS_META } from '../features/friends/lib/presenceStatus'
 import Avatar from '../shared/ui/Avatar'
 import { useActivity } from '../features/activity/store/presenceActivityStore'
 import AudioDeviceMenu, { type AudioDeviceKind } from '../features/call/components/AudioDeviceMenu'
+import { openOnContextMenu } from '../features/call/lib/anchorMenu'
 import { showVoicePanel, userBarSpeaking, userBarSubtitle } from '../features/call/lib/voicePanel'
 import {
   ChevronDownIcon,
@@ -23,7 +24,7 @@ const BAR_BG = 'var(--bg-surface)'
 
 /**
  * Microfone ou fone com a setinha do lado (como no Discord): o botão liga e
- * desliga; a setinha abre o menu do dispositivo. Vermelho quando desligado.
+ * desliga; a setinha ou o clique direito abrem o menu do dispositivo e do volume. Vermelho quando desligado.
  * Com a sidebar no mínimo a setinha some (o menu segue em Configurações → Voz).
  */
 function AudioToggle({
@@ -56,6 +57,7 @@ function AudioToggle({
       <button
         type="button"
         onClick={onToggle}
+        onContextMenu={openOnContextMenu(onMenu)}
         aria-label={label}
         title={title}
         className={`flex h-8 w-7 cursor-pointer items-center justify-center rounded-l-md transition-colors @max-[239px]:rounded-md ${tone} ${

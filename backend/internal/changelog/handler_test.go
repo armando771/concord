@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -110,11 +111,46 @@ func TestPublishStoresTheRelease(t *testing.T) {
 	}
 }
 
+func entryBody(text string) string {
+	b, _ := json.Marshal(Publication{Entries: []Entry{{Kind: KindFeature, Text: text}}})
+	return string(b)
+}
+
+// Regressão da 0.6.43: o limite contava bytes, e uma nota de 535 caracteres
+// (559 bytes por causa dos acentos) voltou 400 no deploy.
+func TestPublishCountsCharactersNotBytes(t *testing.T) {
+	st := &fakeStore{}
+	accented := strings.Repeat("é", maxEntryText)
+	w := serve(t, st, "tok", http.MethodPut, "/api/changelog/0.6.3", "tok", entryBody(accented), false)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestPublishCountsSummaryCharactersNotBytes(t *testing.T) {
+	st := &fakeStore{}
+	body := `{"summary":"` + strings.Repeat("é", maxSummary) + `","entries":[]}`
+	w := serve(t, st, "tok", http.MethodPut, "/api/changelog/0.6.3", "tok", body, false)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestPublishAcceptsTheLongestNoteSoFar(t *testing.T) {
+	st := &fakeStore{}
+	w := serve(t, st, "tok", http.MethodPut, "/api/changelog/0.6.3", "tok", entryBody(strings.Repeat("ã", 535)), false)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestPublishRejectsBadInput(t *testing.T) {
 	cases := map[string]struct{ path, body string }{
 		"versão inválida": {"/api/changelog/abc", goodBody},
 		"kind inválido":   {"/api/changelog/0.6.3", `{"entries":[{"kind":"x","text":"a"}]}`},
 		"texto vazio":     {"/api/changelog/0.6.3", `{"entries":[{"kind":"fix","text":"  "}]}`},
+		"texto longo":     {"/api/changelog/0.6.3", entryBody(strings.Repeat("a", maxEntryText+1))},
+		"summary longo":   {"/api/changelog/0.6.3", `{"summary":"` + strings.Repeat("a", maxSummary+1) + `"}`},
 		"json quebrado":   {"/api/changelog/0.6.3", `{`},
 	}
 	for name, tc := range cases {

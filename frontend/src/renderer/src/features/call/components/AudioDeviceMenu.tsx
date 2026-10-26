@@ -8,6 +8,7 @@ import { deviceOptions } from '../lib/audioDevices'
 import { nextMenuIndex } from '../../../shared/lib/menuNav'
 import { CAN_CHOOSE_OUTPUT, useAudioDevices } from '../hooks/useAudioDevices'
 import { CheckIcon } from '../../../shared/ui/icons'
+import DeviceVolume from './DeviceVolume'
 
 const MENU_WIDTH = 260
 const GAP = 8
@@ -31,8 +32,9 @@ const ACTION_CLASS =
 export type AudioDeviceKind = 'input' | 'output' | 'camera'
 
 /**
- * Menu da setinha ao lado do microfone/fone/câmera (como no Discord): escolhe o
- * dispositivo de entrada, de saída ou a câmera sem abrir as Configurações. Usa
+ * Menu da setinha (ou do clique direito) no microfone/fone/câmera (como no Discord):
+ * escolhe o dispositivo, ajusta o volume de entrada/saída ou troca a câmera sem
+ * abrir as Configurações. Usa
  * as mesmas ações do store que Configurações → Voz e Vídeo; o da câmera também
  * abre o "Mudar fundo de vídeo".
  *
@@ -174,6 +176,12 @@ function AudioDeviceMenu({
         </p>
       )}
       <div className="my-1 border-t border-subtle" />
+      {kind !== 'camera' && (
+        <>
+          <DeviceVolume kind={kind} />
+          <div className="my-1 border-t border-subtle" />
+        </>
+      )}
       {kind === 'camera' && (
         <button
           type="button"

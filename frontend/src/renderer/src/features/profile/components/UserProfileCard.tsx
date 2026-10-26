@@ -33,6 +33,7 @@ import BadgeRow from '../../levels/components/BadgeRow'
 import ProfileCardBody, { CARD_BG, type CardProfile } from './ProfileCardBody'
 import { ProfileInfoSkeleton } from '../../../shared/ui/skeleton/layouts'
 import ProfileCardFrame from './ProfileCardFrame'
+import ProfileRoleChips, { TierName } from './ProfileRoleChips'
 import { profileThemeLook, resolveProfileTheme } from '../lib/profileTheme'
 import LiveStreamPreview from './LiveStreamPreview'
 import LiveBadge from '../../call/components/LiveBadge'
@@ -541,33 +542,12 @@ function UserProfileCard(): React.JSX.Element | null {
             {inServer && (isServerOwner || memberRoles.length > 0) && (
               <div>
                 <SectionTitle>{memberRoles.length > 1 ? 'Cargos' : 'Cargo'}</SectionTitle>
-                <div className="flex flex-wrap gap-1.5">
-                  {isServerOwner && (
-                    <span
-                      className="inline-flex items-center gap-1.5 rounded-md bg-fg/5 px-2 py-0.5 text-xs font-semibold"
-                      style={{ color: OWNER_STYLE.color }}
-                    >
-                      <span
-                        className="h-2 w-2 rounded-full"
-                        style={{ background: OWNER_STYLE.color }}
-                      />
-                      {OWNER_STYLE.label}
-                    </span>
-                  )}
-                  {memberRoles.map((r) => {
-                    const color = roleColorCss(r.color) ?? '#99aab5'
-                    return (
-                      <span
-                        key={r.id}
-                        className="inline-flex items-center gap-1.5 rounded-md bg-fg/5 px-2 py-0.5 text-xs font-semibold"
-                        style={{ color }}
-                      >
-                        <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-                        {r.name}
-                      </span>
-                    )
-                  })}
-                </div>
+                <ProfileRoleChips
+                  roles={memberRoles}
+                  owner={isServerOwner ? OWNER_STYLE : undefined}
+                  background={theme.background_colors}
+                  ink={look.ink}
+                />
               </div>
             )}
 
@@ -575,7 +555,13 @@ function UserProfileCard(): React.JSX.Element | null {
               <div>
                 <SectionTitle>Nível de voz</SectionTitle>
                 <p className="text-xs text-gray-200">
-                  Nível {level} · <span style={{ color: tier.color }}>Faixa {tier.name}</span>
+                  Nível {level} ·{' '}
+                  <TierName
+                    name={tier.name}
+                    color={tier.color}
+                    background={theme.background_colors}
+                    ink={look.ink}
+                  />
                 </p>
               </div>
             )}
