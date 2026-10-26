@@ -99,7 +99,8 @@ func (c *Client) readPump(ctx context.Context) {
 		case "call:invite", "call:accept", "call:decline", "call:leave", "call:screen", "call:voice", "call:soundboard",
 			"call:activity", "call:activity:stop",
 			"call:lock", "call:knock", "call:knock_cancel", "call:knock_respond",
-			"call:screen_watch":
+			"call:screen_watch",
+			"call:screen_draw", "call:screen_draw_clear", "call:screen_draw_undo":
 			if c.callRouter != nil {
 				c.callRouter.HandleCallMessage(c.userID, ev.Type, ev.Payload)
 			}
