@@ -829,9 +829,9 @@ maior aplicada antes dela faz a 000025 nunca rodar). Ela é idempotente: rode
 `psql "$DATABASE_URL" -f /opt/concord/migrations/000025_add_login_lower_indexes.up.sql`
 e reinicie o backend.
 
-## Badge Criador da Salinha (devs)
+## Badge Fundador (devs)
 
-O badge mítico **Criador da Salinha** é só dos devs. Quem ganha fica na
+O badge mítico **Fundador** é só dos devs. Quem ganha fica na
 tabela `dev_badge_users` (migration 000057), que começa vazia: não há id de
 usuário no código. O badge aparece no próximo carregamento dos badges da
 pessoa (abrir o perfil ou até 5 minutos online), com o aviso de badge novo.

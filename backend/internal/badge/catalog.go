@@ -8,7 +8,7 @@ const (
 	RarityRare      = "raro"
 	RarityEpic      = "epico"
 	RarityLegendary = "lendario"
-	// Acima de lendário: só badges concedidos à mão (Criador da Salinha).
+	// Acima de lendário: só badges concedidos à mão (Fundador).
 	RarityMythic = "mitico"
 )
 
@@ -27,7 +27,7 @@ const (
 )
 
 // FounderCutoff: quem criou a conta antes desta data (horário de Brasília)
-// ganha o badge Fundador. Depois dela ninguém mais consegue.
+// ganha o badge Pioneiro. Depois dela ninguém mais consegue.
 var FounderCutoff = time.Date(2026, 11, 1, 0, 0, 0, 0, time.FixedZone("BRT", -3*60*60))
 
 // Tier é um degrau da categoria. Threshold está na unidade da categoria
@@ -147,21 +147,21 @@ var Catalog = []Category{
 	},
 	{
 		Key:         "criador",
-		Name:        "Criador da Salinha",
-		Description: "Faz parte do time que constrói o Salinha. Não dá para conquistar: é dos devs.",
+		Name:        "Fundador",
+		Description: "Um dos criadores da Salinha. Não dá para conquistar: é dos devs.",
 		Unit:        UnitDev,
 		Tiers: []Tier{
-			{"Criador da Salinha", 1, RarityMythic},
+			{"Fundador", 1, RarityMythic},
 		},
 		Exclusive: true,
 	},
 	{
 		Key:         "fundador",
-		Name:        "Fundador",
-		Description: "Criou a conta nas primeiras semanas do Salinha, antes de 1º de novembro de 2026.",
+		Name:        "Pioneiro",
+		Description: "Entrou na Salinha nos primeiros dias, antes de 1º de novembro de 2026.",
 		Unit:        UnitFounder,
 		Tiers: []Tier{
-			{"Fundador", 1, RarityLegendary},
+			{"Pioneiro", 1, RarityLegendary},
 		},
 	},
 	{

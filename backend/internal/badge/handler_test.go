@@ -48,7 +48,7 @@ func TestHandlerOwnerGetsTheFullView(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
 		t.Fatal(err)
 	}
-	// Criador da Salinha só aparece para os devs.
+	// Fundador (dev) só aparece para os devs.
 	if !res.Self || len(res.Badges) != len(Catalog)-1 {
 		t.Fatalf("owner body = %s", w.Body.String())
 	}
@@ -104,7 +104,7 @@ func TestHandlerOthersSeeTheDevBadgeWithoutNumbers(t *testing.T) {
 			dev = b
 		}
 	}
-	if dev == nil || dev["rarity"] != RarityMythic || dev["tier_name"] != "Criador da Salinha" {
+	if dev == nil || dev["rarity"] != RarityMythic || dev["tier_name"] != "Fundador" {
 		t.Fatalf("criador = %v (body %s)", dev, w.Body.String())
 	}
 	for _, k := range []string{"value", "progress", "next_threshold", "obtainable", "is_dev"} {

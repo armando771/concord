@@ -22,7 +22,7 @@ func BadgeRepository(db *pgxpool.Pool) *Repository {
 // Stats junta os números da pessoa numa query só: contadores prontos, um
 // COUNT de servidores pelo índice de owner_id, um COUNT dos cards de propostas
 // pelo índice de author_id (Contribuinte) e se ela está em dev_badge_users
-// (Criador da Salinha).
+// (Fundador).
 func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 	var s Stats
 	err := r.db.QueryRow(
