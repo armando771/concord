@@ -215,6 +215,8 @@ interface CallState {
   localCameraStream: MediaStream | null
   /** quem está compartilhando tela segundo o backend (registry) */
   screenSharers: string[]
+  /** sharerId -> lista de espectadores assistindo aquela tela */
+  screenWatchers: Record<string, CallUserInfo[]>
   /** microfone e saída escolhidos ('' = padrão do sistema) */
   inputDeviceId: string
   outputDeviceId: string
@@ -623,6 +625,7 @@ export const useCallStore = create<CallState>()((set, get) => {
               ...joinReqs.filter((r) => !s.joinRequests.some((q) => q.id === r.id))
             ],
         screenSharers: sharing,
+        screenWatchers: (state.screen_watchers as Record<string, CallUserInfo[]>) ?? s.screenWatchers,
         voiceStates: {
           ...Object.fromEntries(
             state.participants.map((p) => [
@@ -807,6 +810,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       pendingScreenQuality: null,
       localCameraStream: null,
       screenSharers: [],
+      screenWatchers: {},
       speakingIds: [],
       voiceStates: {},
       watchedScreenIds: [],
@@ -876,6 +880,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     pendingScreenQuality: null,
     localCameraStream: null,
     screenSharers: [],
+    screenWatchers: {},
     speakingIds: [],
     voiceStates: {},
     watchedScreenIds: [],
@@ -1295,6 +1300,13 @@ export const useCallStore = create<CallState>()((set, get) => {
       const next = addWatched(s.watchedScreenIds, userId)
       set({ watchedScreenIds: next, focusedScreenUserId: userId })
       media?.setWatchedScreens(next)
+      if (s.callId) {
+        useChatStore.getState().sendEvent('call:screen_watch', {
+          call_id: s.callId,
+          sharer_id: userId,
+          watching: true
+        })
+      }
     },
 
     stopWatchingScreen: (userId) => {
@@ -1305,6 +1317,13 @@ export const useCallStore = create<CallState>()((set, get) => {
         focusedScreenUserId: s.focusedScreenUserId === userId ? null : s.focusedScreenUserId
       })
       media?.setWatchedScreens(next)
+      if (s.callId) {
+        useChatStore.getState().sendEvent('call:screen_watch', {
+          call_id: s.callId,
+          sharer_id: userId,
+          watching: false
+        })
+      }
     },
 
     setStageVisible: (visible) => {
@@ -1542,14 +1561,37 @@ export const useCallStore = create<CallState>()((set, get) => {
         case 'call:screen': {
           const p = payload as unknown as ScreenSharePayload
           if (get().callId !== p.call_id || p.user.id === meId) return
+          set((s) => {
+            const nextWatchers = { ...s.screenWatchers }
+            if (!p.active) {
+              delete nextWatchers[p.user.id]
+            }
+            return {
+              screenSharers: p.active
+                ? Array.from(new Set([...s.screenSharers, p.user.id]))
+                : s.screenSharers.filter((id) => id !== p.user.id),
+              screenWatchers: nextWatchers,
+              // Transmissão nova começa pausada: só a que acabou perde o foco.
+              focusedScreenUserId:
+                !p.active && s.focusedScreenUserId === p.user.id ? null : s.focusedScreenUserId,
+              participants: upsertParticipant(s.participants, p.user)
+            }
+          })
+          return
+        }
+
+        case 'call:screen_watchers': {
+          const p = payload as unknown as {
+            call_id: string
+            sharer_id: string
+            watchers: CallUserInfo[]
+          }
+          if (get().callId !== p.call_id) return
           set((s) => ({
-            screenSharers: p.active
-              ? Array.from(new Set([...s.screenSharers, p.user.id]))
-              : s.screenSharers.filter((id) => id !== p.user.id),
-            // Transmissão nova começa pausada: só a que acabou perde o foco.
-            focusedScreenUserId:
-              !p.active && s.focusedScreenUserId === p.user.id ? null : s.focusedScreenUserId,
-            participants: upsertParticipant(s.participants, p.user)
+            screenWatchers: {
+              ...s.screenWatchers,
+              [p.sharer_id]: p.watchers
+            }
           }))
           return
         }
@@ -1600,10 +1642,18 @@ export const useCallStore = create<CallState>()((set, get) => {
           if (get().type === 'channel') {
             playSound('userLeave')
             // A mídia do participante some sozinha quando ele sai da sala do LiveKit.
-            set((s) => ({
-              participants: s.participants.filter((q) => q.id !== p.user.id),
-              screenSharers: s.screenSharers.filter((id) => id !== p.user.id)
-            }))
+            set((s) => {
+              const nextWatchers = { ...s.screenWatchers }
+              delete nextWatchers[p.user.id]
+              for (const [sid, list] of Object.entries(nextWatchers)) {
+                nextWatchers[sid] = list.filter((w) => w.id !== p.user.id)
+              }
+              return {
+                participants: s.participants.filter((q) => q.id !== p.user.id),
+                screenSharers: s.screenSharers.filter((id) => id !== p.user.id),
+                screenWatchers: nextWatchers
+              }
+            })
             bumpList()
             return
           }

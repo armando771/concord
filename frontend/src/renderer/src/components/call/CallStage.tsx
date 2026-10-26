@@ -69,6 +69,7 @@ function CallStage({
   }, [setStageVisible])
   const focusedId = useCallStore((s) => s.focusedScreenUserId)
   const setFocused = useCallStore((s) => s.setFocusedScreenUser)
+  const screenWatchers = useCallStore((s) => s.screenWatchers)
   const localCameraStream = useCallStore((s) => s.localCameraStream)
   const videoStreams = useCallStore((s) => s.videoStreams)
   const levels = useLevelStore((s) => s.levels)
@@ -143,6 +144,7 @@ function CallStage({
       user: nameOf(entry.userId),
       isScreen: true,
       size,
+      watchers: screenWatchers[entry.userId] ?? [],
       onContextMenu: streamMenuHandler(entry.userId, nameOf(entry.userId).display_name, meId),
       locallyMuted: localAudio[streamAudioKey(entry.userId)]?.muted ?? false
     }
@@ -386,6 +388,8 @@ function CallStage({
           videoStream={focused.stream}
           isScreen
           size="fill"
+          watchers={screenWatchers[focused.userId] ?? []}
+          hasHeaderOffset={true}
           onContextMenu={streamMenuHandler(
             focused.userId,
             nameOf(focused.userId).display_name,
