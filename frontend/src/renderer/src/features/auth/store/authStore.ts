@@ -22,6 +22,8 @@ export interface PublicUser {
   // salvas antes do perfil existir não trazem.
   banner_url?: string | null
   banner_color?: string | null
+  /** Som que toca na call quando a pessoa entra (ausente = o padrão). */
+  entrance_sound_url?: string | null
   pronouns?: string
   bio?: string
   status_text?: string

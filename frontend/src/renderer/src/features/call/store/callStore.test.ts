@@ -985,14 +985,17 @@ describe('callStore — mídia via LiveKit', () => {
     expect(sounds.playSound).toHaveBeenLastCalledWith('leave')
   })
 
-  it('toca som quando alguém entra e sai da minha chamada', async () => {
+  it('toca som quando alguém sai da minha chamada; o de entrada é do entranceSound', async () => {
     await joinChannel()
     const ana = { id: 'ana', username: 'ana', display_name: 'Ana' }
 
     useCallStore
       .getState()
       .handleWsEvent({ type: 'call:joined', payload: { call_id: 'call-1', user: ana } })
-    expect(sounds.playSound).toHaveBeenLastCalledWith('userJoin')
+    // O som de quem entra (o personalizado ou o padrão) toca em
+    // lib/entranceSoundListener: aqui não, senão tocariam os dois.
+    expect(sounds.playSound).not.toHaveBeenCalledWith('userJoin')
+    expect(useCallStore.getState().participants.some((p) => p.id === 'ana')).toBe(true)
 
     useCallStore
       .getState()

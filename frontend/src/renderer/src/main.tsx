@@ -9,9 +9,13 @@ import { useCallStore } from './features/call/store/callStore'
 import { AppErrorBoundary } from './shared/ui/AppErrorScreen'
 import { useLevelStore } from './features/levels/store/levelStore'
 import { startThemeSync } from './features/settings/store/themeStore'
+import { startEntranceSounds } from './features/call/lib/entranceSoundStart'
 
 // Tema salvo antes do primeiro render: o app já abre com as cores certas.
 startThemeSync()
+
+// Som de quem entra na call (o som de entrada da pessoa ou o padrão).
+startEntranceSounds()
 
 // Soltar um arquivo fora do chat não pode fazer o Electron abrir o arquivo no
 // lugar do app (o chat trata o próprio drop).
