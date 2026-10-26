@@ -20,12 +20,12 @@ import {
 import {
   Perm,
   canGrant,
-  channelPermissionGroups,
   everyoneRole,
   roleColorCss,
   type ChannelKind,
   type ChannelOverwrite
 } from '../lib/permissions'
+import { channelPermissionGroups } from '../lib/permissionCatalog'
 import Button from '../../../shared/ui/Button'
 import Input from '../../../shared/ui/Input'
 import Modal from '../../../shared/ui/Modal'

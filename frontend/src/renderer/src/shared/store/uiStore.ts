@@ -19,9 +19,6 @@ interface UIState {
   serverInviteModalOpen: boolean
   openServerInviteModal: () => void
   closeServerInviteModal: () => void
-  createChannelModalOpen: boolean
-  openCreateChannelModal: () => void
-  closeCreateChannelModal: () => void
   /** Barra de controles da chamada (mutar, câmera…) oculta. */
   callControlsHidden: boolean
   toggleCallControls: () => void
@@ -40,9 +37,6 @@ export const useUIStore = create<UIState>()((set) => ({
   serverInviteModalOpen: false,
   openServerInviteModal: () => set({ serverInviteModalOpen: true }),
   closeServerInviteModal: () => set({ serverInviteModalOpen: false }),
-  createChannelModalOpen: false,
-  openCreateChannelModal: () => set({ createChannelModalOpen: true }),
-  closeCreateChannelModal: () => set({ createChannelModalOpen: false }),
   callControlsHidden: loadCallControlsHidden(),
   toggleCallControls: () =>
     set((state) => {
