@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"gin-quickstart/backend/internal/namestyle"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -34,6 +36,9 @@ const userColumns = `
 	status_text,
 	links,
 	status,
+	name_font,
+	name_effect,
+	name_colors,
 	friend_request_policy,
 	allow_server_dms,
 	active,
@@ -58,6 +63,9 @@ func scanUser(row pgx.Row) (*User, error) {
 		&user.StatusText,
 		&user.Links,
 		&user.Status,
+		&user.NameStyle.Font,
+		&user.NameStyle.Effect,
+		&user.NameStyle.Colors,
 		&user.FriendRequestPolicy,
 		&user.AllowServerDMs,
 		&user.Active,
@@ -212,6 +220,9 @@ func (r *Repository) SearchByUsername(ctx context.Context, query string, exclude
 			username,
 			display_name,
 			avatar_url,
+			name_font,
+			name_effect,
+			name_colors,
 			created_at,
 			updated_at
 		FROM users
@@ -240,6 +251,9 @@ func (r *Repository) SearchByUsername(ctx context.Context, query string, exclude
 			&u.Username,
 			&u.DisplayName,
 			&u.AvatarURL,
+			&u.NameStyle.Font,
+			&u.NameStyle.Effect,
+			&u.NameStyle.Colors,
 			&u.CreatedAt,
 			&u.UpdatedAt,
 		); err != nil {
@@ -305,7 +319,11 @@ func (r *Repository) UpdateProfile(ctx context.Context, id string, in ProfileInp
 		`
 		UPDATE users
 		SET display_name = $2, pronouns = $3, bio = $4, status_text = $5,
-			banner_color = $6, links = $7, updated_at = NOW()
+			banner_color = $6, links = $7,
+			name_font = COALESCE($8, name_font),
+			name_effect = COALESCE($9, name_effect),
+			name_colors = COALESCE($10, name_colors),
+			updated_at = NOW()
 		WHERE id = $1
 		RETURNING `+userColumns,
 		id,
@@ -315,7 +333,32 @@ func (r *Repository) UpdateProfile(ctx context.Context, id string, in ProfileInp
 		in.StatusText,
 		in.BannerColor,
 		in.Links,
+		styleFont(in.NameStyle),
+		styleEffect(in.NameStyle),
+		styleColors(in.NameStyle),
 	))
+}
+
+func styleFont(s *namestyle.Style) *string {
+	if s == nil {
+		return nil
+	}
+	return &s.Font
+}
+
+func styleEffect(s *namestyle.Style) *string {
+	if s == nil {
+		return nil
+	}
+	return &s.Effect
+}
+
+// styleColors: nil vira NULL (COALESCE mantém); um slice vazio grava '{}'.
+func styleColors(s *namestyle.Style) []string {
+	if s == nil {
+		return nil
+	}
+	return s.Colors
 }
 
 // SetAvatar troca a URL do avatar e devolve a anterior (para apagar o arquivo).

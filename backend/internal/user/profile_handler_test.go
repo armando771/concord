@@ -48,6 +48,9 @@ func (r *fakeProfileRepo) UpdateProfile(_ context.Context, id string, in Profile
 	}
 	u.DisplayName, u.Pronouns, u.Bio, u.StatusText = in.DisplayName, in.Pronouns, in.Bio, in.StatusText
 	u.BannerColor, u.Links = in.BannerColor, in.Links
+	if in.NameStyle != nil {
+		u.NameStyle = *in.NameStyle
+	}
 	copied := *u
 	return &copied, nil
 }
@@ -455,5 +458,32 @@ func TestOwnProfileResponsesKeepOwnEmail(t *testing.T) {
 		if strings.Contains(rec.Body.String(), "b@x.com") {
 			t.Errorf("%s com e-mail de outra pessoa: %s", what, rec.Body.String())
 		}
+	}
+}
+
+func TestUpdateProfileNameStyle(t *testing.T) {
+	e := newProfileEnv(t)
+	body := `{"display_name":"Mugis","links":[],"name_style":{"font":"bit8","effect":"neon","colors":["#00FFAA"]}}`
+	rec := e.do(t, http.MethodPut, "/api/users/me/profile", []byte(body), "application/json")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	u := decodeUser(t, rec)
+	if u.NameStyle.Font != "bit8" || u.NameStyle.Effect != "neon" || u.NameStyle.Colors[0] != "#00ffaa" {
+		t.Fatalf("name_style = %+v", u.NameStyle)
+	}
+	if e.events.published[0].NameStyle.Font != "bit8" {
+		t.Fatalf("o evento público tem de levar o estilo: %+v", e.events.published[0])
+	}
+
+	// Cliente antigo (sem name_style) não apaga o estilo.
+	rec = e.do(t, http.MethodPut, "/api/users/me/profile", []byte(`{"display_name":"Mugis","links":[]}`), "application/json")
+	if rec.Code != http.StatusOK || decodeUser(t, rec).NameStyle.Font != "bit8" {
+		t.Fatalf("estilo foi perdido: %s", rec.Body.String())
+	}
+
+	rec = e.do(t, http.MethodPut, "/api/users/me/profile", []byte(`{"display_name":"Mugis","links":[],"name_style":{"font":"x","effect":"solid","colors":[]}}`), "application/json")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
 	}
 }
