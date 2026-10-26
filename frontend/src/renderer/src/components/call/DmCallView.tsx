@@ -74,7 +74,7 @@ function DmCallView({ children }: { children?: React.ReactNode }): React.JSX.Ele
               title={muted ? 'Ativar Microfone' : 'Silenciar Microfone'}
               className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors ${
                 muted
-                  ? 'bg-white text-black'
+                  ? 'bg-[var(--text-strong)] text-[var(--bg-primary)]'
                   : 'bg-fg/5 text-gray-300 hover:bg-fg/10 hover:text-strong'
               }`}
             >
@@ -105,7 +105,7 @@ function DmCallView({ children }: { children?: React.ReactNode }): React.JSX.Ele
               title={deafened ? 'Ativar Audio' : 'Silenciar Audio'}
               className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors ${
                 deafened
-                  ? 'bg-white text-black'
+                  ? 'bg-[var(--text-strong)] text-[var(--bg-primary)]'
                   : 'bg-fg/5 text-gray-300 hover:bg-fg/10 hover:text-strong'
               }`}
             >

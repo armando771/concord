@@ -111,7 +111,7 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
             }}
             className={`cursor-pointer border-b-2 px-3 pb-2 text-sm font-semibold transition-colors ${
               tab === 'screen'
-                ? 'border-white text-strong'
+                ? 'border-[var(--text-strong)] text-strong'
                 : 'border-transparent text-gray-400 hover:text-gray-200'
             }`}
           >
@@ -124,7 +124,7 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
             }}
             className={`cursor-pointer border-b-2 px-3 pb-2 text-sm font-semibold transition-colors ${
               tab === 'window'
-                ? 'border-white text-strong'
+                ? 'border-[var(--text-strong)] text-strong'
                 : 'border-transparent text-gray-400 hover:text-gray-200'
             }`}
           >

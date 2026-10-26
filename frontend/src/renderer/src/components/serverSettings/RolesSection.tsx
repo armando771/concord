@@ -279,7 +279,7 @@ function RoleEditor({ serverId, role }: { serverId: string; role: Role }): React
                   aria-label="Sem cor"
                   title="Sem cor"
                   className={`h-7 w-7 cursor-pointer rounded-full border text-xs text-gray-400 ${
-                    color === null ? 'border-white' : 'border-normal'
+                    color === null ? 'border-[var(--text-strong)]' : 'border-normal'
                   }`}
                 >
                   ∅
@@ -291,7 +291,7 @@ function RoleEditor({ serverId, role }: { serverId: string; role: Role }): React
                     onClick={() => setColor(c)}
                     aria-label={`Cor ${roleColorCss(c)}`}
                     className={`h-7 w-7 cursor-pointer rounded-full border-2 ${
-                      color === c ? 'border-white' : 'border-transparent'
+                      color === c ? 'border-[var(--text-strong)]' : 'border-transparent'
                     }`}
                     style={{ background: roleColorCss(c) }}
                   />

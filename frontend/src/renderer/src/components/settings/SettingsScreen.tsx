@@ -178,7 +178,7 @@ function SettingsContent(): React.JSX.Element {
             type="button"
             onClick={close}
             aria-label="Fechar configurações"
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-2 border-gray-500 text-gray-400 transition-colors hover:border-white hover:text-strong"
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-2 border-gray-500 text-gray-400 transition-colors hover:border-[var(--text-strong)] hover:text-strong"
           >
             <XIcon className="h-4 w-4" />
           </button>

@@ -181,7 +181,7 @@ function ServerRail(): React.JSX.Element {
         {/* Início: botão com a marca da Salinha */}
         <div className="relative flex items-center justify-center">
           <span
-            className={`absolute -left-3.5 w-2 rounded-r-full bg-white transition-all duration-200 ${
+            className={`absolute -left-3.5 w-2 rounded-r-full bg-[var(--text-strong)] transition-all duration-200 ${
               isHome ? 'h-10' : 'h-0 group-hover/home:h-5'
             }`}
           />
@@ -293,7 +293,7 @@ function ServerRail(): React.JSX.Element {
             return (
               <div key={srv.id} className="relative flex items-center justify-center group/srv">
                 <span
-                  className={`absolute -left-3.5 w-2 rounded-r-full bg-white transition-all duration-200 ${
+                  className={`absolute -left-3.5 w-2 rounded-r-full bg-[var(--text-strong)] transition-all duration-200 ${
                     isActive ? 'h-10' : 'h-0 group-hover/srv:h-5'
                   }`}
                 />

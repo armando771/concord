@@ -66,7 +66,9 @@ function VoiceControls(): React.JSX.Element {
               : 'Silenciar Microfone'
         }
         className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-colors ${
-          muted ? 'bg-white text-black' : 'bg-fg/5 text-gray-200 hover:bg-fg/10'
+          muted
+            ? 'bg-[var(--text-strong)] text-[var(--bg-primary)]'
+            : 'bg-fg/5 text-gray-200 hover:bg-fg/10'
         } ${canSpeak ? '' : 'opacity-50'}`}
       >
         {muted ? <MicOffIcon className="h-5 w-5" /> : <MicIcon className="h-5 w-5" />}
@@ -76,7 +78,9 @@ function VoiceControls(): React.JSX.Element {
         aria-label={deafened ? 'Ativar Audio' : 'Silenciar Audio'}
         title={deafened ? 'Ativar Audio' : 'Silenciar Audio'}
         className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-colors ${
-          deafened ? 'bg-white text-black' : 'bg-fg/5 text-gray-200 hover:bg-fg/10'
+          deafened
+            ? 'bg-[var(--text-strong)] text-[var(--bg-primary)]'
+            : 'bg-fg/5 text-gray-200 hover:bg-fg/10'
         }`}
       >
         {deafened ? <HeadsetOffIcon className="h-5 w-5" /> : <HeadsetIcon className="h-5 w-5" />}
