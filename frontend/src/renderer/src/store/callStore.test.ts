@@ -76,6 +76,7 @@ const media = vi.hoisted(() => ({
   publishScreen: vi.fn(),
   updateScreenQuality: vi.fn(),
   publishCamera: vi.fn(),
+  replaceCamera: vi.fn(async () => {}),
   setWatchedScreens: vi.fn()
 }))
 vi.mock('../lib/livekit', () => ({
@@ -85,6 +86,7 @@ vi.mock('../lib/livekit', () => ({
     publishScreen = media.publishScreen
     updateScreenQuality = media.updateScreenQuality
     publishCamera = media.publishCamera
+    replaceCamera = media.replaceCamera
     setWatchedScreens = media.setWatchedScreens
     setMicMuted = vi.fn(async (muted: boolean) => {
       media.events.push(`mic(${muted})`)
@@ -142,7 +144,12 @@ vi.mock('../lib/localSpeaking', () => ({
   }
 }))
 
+const bgPipeline = vi.hoisted(() => ({ create: vi.fn() }))
+vi.mock('../lib/backgroundPipeline', () => ({ createBackgroundPipeline: bgPipeline.create }))
+
 import { useCallStore } from './callStore'
+import { useVideoSettingsStore } from './videoSettingsStore'
+import { useVideoModalStore } from './videoModalStore'
 import { ApiError } from '../api/client'
 import { showToast } from './toastStore'
 
@@ -169,6 +176,13 @@ async function joinChannel(): Promise<void> {
 }
 
 beforeEach(() => {
+  useVideoSettingsStore.setState({
+    cameraId: '',
+    alwaysPreview: false,
+    background: { mode: 'none', image: null },
+    customs: []
+  })
+  useVideoModalStore.getState().close()
   useCallStore.getState().endCall()
   vi.clearAllMocks()
   media.instances.length = 0
@@ -366,6 +380,311 @@ describe('callStore — mídia via LiveKit', () => {
 
     expect(useCallStore.getState().localCameraStream).toBeNull()
     expect(allStopped(stream)).toBe(true)
+  })
+
+  describe('fundo de vídeo da câmera', () => {
+    type FakePipeline = {
+      stream: MediaStream
+      raw: MediaStream
+      setSource: ReturnType<typeof vi.fn>
+      destroy: ReturnType<typeof vi.fn>
+      detach: ReturnType<typeof vi.fn>
+      onError?: (e: 'segmenter') => void
+    }
+    let pipelines: FakePipeline[]
+    beforeEach(() => {
+      pipelines = []
+      bgPipeline.create.mockImplementation(
+        (raw: MediaStream, _effect: unknown, _env: unknown, onError?: (e: 'segmenter') => void) => {
+          const p: FakePipeline = {
+            stream: fakeStream('video'),
+            raw,
+            setSource: vi.fn(),
+            destroy: vi.fn(),
+            detach: vi.fn(() => raw),
+            onError
+          }
+          pipelines.push(p)
+          return p
+        }
+      )
+      media.replaceCamera.mockResolvedValue(undefined)
+      media.publishCamera.mockResolvedValue(undefined)
+    })
+    const blur = (): void =>
+      useVideoSettingsStore.getState().setBackground({ mode: 'blur', image: null })
+    async function cameraOn(raw = fakeStream('video')): Promise<MediaStream> {
+      rtc.getCameraStream.mockResolvedValue(raw)
+      await useCallStore.getState().toggleCamera()
+      return raw
+    }
+
+    it('sem fundo: publica a câmera crua e não cria pipeline', async () => {
+      await joinChannel()
+      const raw = await cameraOn()
+      expect(bgPipeline.create).not.toHaveBeenCalled()
+      expect(useCallStore.getState().localCameraStream).toBe(raw)
+      expect(media.publishCamera).toHaveBeenCalledWith(raw)
+    })
+
+    it('com fundo: prévia e sala recebem o stream processado', async () => {
+      blur()
+      await joinChannel()
+      const raw = await cameraOn()
+      expect(bgPipeline.create).toHaveBeenCalledWith(
+        raw,
+        expect.any(Function),
+        undefined,
+        expect.any(Function)
+      )
+      expect(useCallStore.getState().localCameraStream).toBe(pipelines[0].stream)
+      expect(media.publishCamera).toHaveBeenCalledWith(pipelines[0].stream)
+    })
+
+    it('imagem escolhida que sumiu não liga o pipeline', async () => {
+      useVideoSettingsStore.setState({
+        background: { mode: 'image', image: { kind: 'custom', id: 'x' } }
+      })
+      await joinChannel()
+      await cameraOn()
+      expect(bgPipeline.create).not.toHaveBeenCalled()
+    })
+
+    it('o efeito enxerga o fundo escolhido a cada quadro', async () => {
+      blur()
+      await joinChannel()
+      await cameraOn()
+      const getEffect = bgPipeline.create.mock.calls[0][1] as () => {
+        mode: string
+        image: string | null
+      }
+      expect(getEffect()).toEqual({ mode: 'blur', image: null, blob: null })
+      const id = useVideoSettingsStore.getState().addCustom('data:image/jpeg;base64,AAA')
+      expect(id).toBeTruthy()
+      expect(getEffect()).toEqual({
+        mode: 'image',
+        image: 'data:image/jpeg;base64,AAA',
+        blob: null
+      })
+    })
+
+    it('abre a câmera escolhida nas configurações', async () => {
+      useVideoSettingsStore.getState().setCameraId('cam-2')
+      await joinChannel()
+      await cameraOn()
+      expect(rtc.getCameraStream).toHaveBeenCalledWith('cam-2')
+    })
+
+    it('desligar a câmera encerra o pipeline', async () => {
+      blur()
+      await joinChannel()
+      await cameraOn()
+      await useCallStore.getState().toggleCamera()
+      await flush()
+      expect(useCallStore.getState().localCameraStream).toBeNull()
+      expect(pipelines[0].destroy).toHaveBeenCalledTimes(1)
+    })
+
+    it('encerrar a chamada encerra o pipeline', async () => {
+      blur()
+      await joinChannel()
+      await cameraOn()
+      useCallStore.getState().endCall()
+      expect(pipelines[0].destroy).toHaveBeenCalledTimes(1)
+    })
+
+    it('pipeline que não monta cai para a câmera crua, com aviso, e não insiste', async () => {
+      blur()
+      await joinChannel()
+      bgPipeline.create.mockImplementation(() => {
+        throw new Error('sem canvas')
+      })
+      vi.mocked(showToast.error).mockClear()
+      const raw = await cameraOn()
+      expect(useCallStore.getState().localCameraStream).toBe(raw)
+      expect(media.publishCamera).toHaveBeenCalledWith(raw)
+      expect(showToast.error).toHaveBeenCalledWith(expect.stringMatching(/fundo/))
+      await useCallStore.getState().toggleCamera()
+      await cameraOn(fakeStream('video'))
+      expect(bgPipeline.create).toHaveBeenCalledTimes(1)
+      // escolher outro fundo volta a tentar
+      useVideoSettingsStore.getState().setBackground({ mode: 'none', image: null })
+      blur()
+      await useCallStore.getState().toggleCamera()
+      await cameraOn(fakeStream('video'))
+      expect(bgPipeline.create).toHaveBeenCalledTimes(2)
+    })
+
+    it('modelo que não carrega volta para a câmera crua, sem desligar a câmera', async () => {
+      blur()
+      await joinChannel()
+      const raw = await cameraOn()
+      vi.mocked(showToast.error).mockClear()
+      pipelines[0].onError?.('segmenter')
+      await flush()
+      await flush()
+      expect(pipelines[0].detach).toHaveBeenCalled()
+      expect(media.replaceCamera).toHaveBeenCalledWith(raw)
+      expect(useCallStore.getState().localCameraStream).toBe(raw)
+      expect(showToast.error).toHaveBeenCalledWith(expect.stringMatching(/fundo/))
+    })
+
+    it('ligar o fundo com a câmera aberta troca o stream sem reabrir a câmera', async () => {
+      await joinChannel()
+      const raw = await cameraOn()
+      rtc.getCameraStream.mockClear()
+      blur()
+      await flush()
+      await flush()
+      expect(rtc.getCameraStream).not.toHaveBeenCalled()
+      expect(bgPipeline.create).toHaveBeenCalledWith(
+        raw,
+        expect.any(Function),
+        undefined,
+        expect.any(Function)
+      )
+      expect(media.replaceCamera).toHaveBeenCalledWith(pipelines[0].stream)
+      expect(useCallStore.getState().localCameraStream).toBe(pipelines[0].stream)
+    })
+
+    it('desligar o fundo com a câmera aberta volta para a câmera crua', async () => {
+      blur()
+      await joinChannel()
+      const raw = await cameraOn()
+      useVideoSettingsStore.getState().setBackground({ mode: 'none', image: null })
+      await flush()
+      await flush()
+      expect(pipelines[0].detach).toHaveBeenCalledTimes(1)
+      expect(pipelines[0].destroy).not.toHaveBeenCalled()
+      expect(media.replaceCamera).toHaveBeenLastCalledWith(raw)
+      expect(useCallStore.getState().localCameraStream).toBe(raw)
+      expect(raw.getTracks().every((t) => !(t as unknown as { stopped: boolean }).stopped)).toBe(
+        true
+      )
+    })
+
+    it('trocar de desfoque para imagem não recria nada', async () => {
+      blur()
+      await joinChannel()
+      await cameraOn()
+      media.replaceCamera.mockClear()
+      useVideoSettingsStore.getState().addCustom('data:image/jpeg;base64,AAA')
+      await flush()
+      expect(bgPipeline.create).toHaveBeenCalledTimes(1)
+      expect(media.replaceCamera).not.toHaveBeenCalled()
+    })
+
+    it('GIF salvo que termina de carregar com a câmera aberta liga o efeito', async () => {
+      useVideoSettingsStore.setState({
+        background: { mode: 'image', image: { kind: 'custom', id: 'g1' } },
+        customs: [{ id: 'g1', dataUrl: '', animated: true }]
+      })
+      await joinChannel()
+      await cameraOn()
+      expect(bgPipeline.create).not.toHaveBeenCalled()
+      // o IndexedDB respondeu: o GIF ganhou o blob: da sessão
+      useVideoSettingsStore.setState({
+        customs: [{ id: 'g1', dataUrl: 'blob:test/0', animated: true }]
+      })
+      await flush()
+      await flush()
+      expect(bgPipeline.create).toHaveBeenCalledTimes(1)
+      expect(media.replaceCamera).toHaveBeenCalledWith(pipelines[0].stream)
+    })
+
+    it('"sempre ver prévia" abre a prévia em vez de ligar a câmera', async () => {
+      useVideoSettingsStore.getState().setAlwaysPreview(true)
+      await joinChannel()
+      rtc.getCameraStream.mockResolvedValue(fakeStream('video'))
+      await useCallStore.getState().toggleCamera()
+      expect(useVideoModalStore.getState().mode).toBe('preview')
+      expect(rtc.getCameraStream).not.toHaveBeenCalled()
+      await useCallStore.getState().toggleCamera({ skipPreview: true })
+      expect(rtc.getCameraStream).toHaveBeenCalledTimes(1)
+      expect(useCallStore.getState().localCameraStream).not.toBeNull()
+    })
+
+    it('"sempre ver prévia" não atrapalha desligar a câmera', async () => {
+      await joinChannel()
+      await cameraOn()
+      useVideoSettingsStore.getState().setAlwaysPreview(true)
+      await useCallStore.getState().toggleCamera()
+      expect(useCallStore.getState().localCameraStream).toBeNull()
+      expect(useVideoModalStore.getState().mode).toBeNull()
+    })
+
+    describe('trocar de câmera', () => {
+      it('sem câmera ligada só guarda a escolha', async () => {
+        await joinChannel()
+        await useCallStore.getState().setCameraDevice('cam-2')
+        expect(useVideoSettingsStore.getState().cameraId).toBe('cam-2')
+        expect(rtc.getCameraStream).not.toHaveBeenCalled()
+      })
+
+      it('ao vivo, sem efeito: troca a track publicada e para a câmera antiga', async () => {
+        await joinChannel()
+        const old = await cameraOn()
+        const next = fakeStream('video')
+        rtc.getCameraStream.mockResolvedValue(next)
+        await useCallStore.getState().setCameraDevice('cam-2')
+        expect(rtc.getCameraStream).toHaveBeenLastCalledWith('cam-2')
+        expect(media.replaceCamera).toHaveBeenCalledWith(next)
+        expect(allStopped(old)).toBe(true)
+        expect(allStopped(next)).toBe(false)
+        expect(useCallStore.getState().localCameraStream).toBe(next)
+      })
+
+      it('ao vivo, com efeito: o pipeline troca a fonte e nada é republicado', async () => {
+        blur()
+        await joinChannel()
+        await cameraOn()
+        media.replaceCamera.mockClear()
+        const next = fakeStream('video')
+        rtc.getCameraStream.mockResolvedValue(next)
+        await useCallStore.getState().setCameraDevice('cam-2')
+        expect(pipelines[0].setSource).toHaveBeenCalledWith(next)
+        expect(media.replaceCamera).not.toHaveBeenCalled()
+        expect(useCallStore.getState().localCameraStream).toBe(pipelines[0].stream)
+      })
+
+      it('câmera que não abre: avisa, mantém a atual e volta a escolha', async () => {
+        await joinChannel()
+        const old = await cameraOn()
+        rtc.getCameraStream.mockRejectedValue(new Error('ocupada'))
+        vi.mocked(showToast.error).mockClear()
+        await useCallStore.getState().setCameraDevice('cam-2')
+        expect(useVideoSettingsStore.getState().cameraId).toBe('')
+        expect(useCallStore.getState().localCameraStream).toBe(old)
+        expect(allStopped(old)).toBe(false)
+        expect(showToast.error).toHaveBeenCalledWith(expect.stringMatching(/câmera/))
+      })
+
+      it('falha ao publicar a nova: para a nova, mantém a atual', async () => {
+        await joinChannel()
+        const old = await cameraOn()
+        const next = fakeStream('video')
+        rtc.getCameraStream.mockResolvedValue(next)
+        media.replaceCamera.mockRejectedValueOnce(new Error('x'))
+        await useCallStore.getState().setCameraDevice('cam-2')
+        expect(allStopped(next)).toBe(true)
+        expect(allStopped(old)).toBe(false)
+        expect(useCallStore.getState().localCameraStream).toBe(old)
+      })
+
+      it('a câmera nova chega depois de a chamada acabar: é parada', async () => {
+        await joinChannel()
+        await cameraOn()
+        const opening = deferred<MediaStream>()
+        rtc.getCameraStream.mockReturnValue(opening.promise)
+        const changing = useCallStore.getState().setCameraDevice('cam-2')
+        await flush() // a troca já começou a abrir a câmera nova
+        useCallStore.getState().endCall()
+        const next = fakeStream('video')
+        opening.resolve(next)
+        await changing
+        expect(allStopped(next)).toBe(true)
+      })
+    })
   })
 
   it('falha ao publicar a tela depois de conectar não derruba a chamada', async () => {

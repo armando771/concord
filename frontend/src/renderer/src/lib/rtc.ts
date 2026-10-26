@@ -85,12 +85,21 @@ export async function getDisplayStream(): Promise<MediaStream> {
   return stream
 }
 
-// Câmera local. Só vídeo — o microfone já vem de getAudioStream().
-export async function getCameraStream(): Promise<MediaStream> {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-    audio: false
-  })
+// Câmera local. Só vídeo — o microfone já vem de getAudioStream(). `deviceId`
+// '' = padrão do sistema; se a câmera escolhida sumiu, abre a padrão.
+export async function getCameraStream(deviceId = ''): Promise<MediaStream> {
+  const video = { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
+  let stream: MediaStream
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: deviceId ? { ...video, deviceId: { exact: deviceId } } : video,
+      audio: false
+    })
+  } catch (err) {
+    const gone = (err as DOMException)?.name === 'OverconstrainedError'
+    if (!deviceId || !gone) throw err
+    stream = await navigator.mediaDevices.getUserMedia({ video, audio: false })
+  }
   stream.getVideoTracks().forEach((track) => {
     track.contentHint = 'motion'
   })

@@ -13,6 +13,7 @@ import ScreenMiniPlayer from './call/ScreenMiniPlayer'
 import ActivityPanel from './call/ActivityPanel'
 import ScreenSharePickerModal from './call/ScreenSharePickerModal'
 import ScreenQualityModal from './call/ScreenQualityModal'
+import VideoBackgroundModal from './video/VideoBackgroundModal'
 import { usesNativePicker } from '../lib/displayMedia'
 import JoinRequestsStack from './call/JoinRequestsStack'
 import LevelUpBanner from './level/LevelUpBanner'
@@ -78,6 +79,7 @@ function AppShell(): React.JSX.Element {
           pergunta a qualidade antes. */}
       {!nativePicker && <ScreenSharePickerModal />}
       {nativePicker && <ScreenQualityModal />}
+      <VideoBackgroundModal />
       <LevelUpScreen />
       <InviteConfirmModal />
       <LevelUpMilestone />

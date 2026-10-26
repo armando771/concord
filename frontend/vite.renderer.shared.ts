@@ -82,6 +82,6 @@ export function rendererShared(
     },
     plugins: [react(), tailwindcss(), fontLicensePlugin, ...extraPlugins],
     // O WASM do RNNoise entra inline (lib/noiseSuppression.ts).
-    assetsInclude: ['**/*.wasm']
+    assetsInclude: ['**/*.wasm', '**/*.tflite']
   }
 }
