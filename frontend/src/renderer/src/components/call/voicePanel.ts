@@ -41,8 +41,9 @@ export function showVoicePanel(status: CallStatus): boolean {
   return status === 'active' || status === 'outgoing'
 }
 
-export function voicePanelHeading(status: CallStatus): string {
-  return status === 'outgoing' ? 'Chamando...' : 'Voz conectada'
+/** `connection`: título da conexão de voz (callConnectionView), na chamada ativa. */
+export function voicePanelHeading(status: CallStatus, connection: string): string {
+  return status === 'outgoing' ? 'Chamando...' : connection
 }
 
 /** Linha embaixo do nome na barra do usuário. */

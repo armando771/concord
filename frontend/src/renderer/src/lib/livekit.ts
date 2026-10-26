@@ -20,6 +20,15 @@ import { pruneWatched } from './screenWatch'
 import { canPublishSource, type PublishSource } from './mediaPermissions'
 import { reportLatency } from './connectionStats'
 import {
+  asCallQuality,
+  inboundCounters,
+  lossBetween,
+  reportOutboundLoss,
+  type CallQuality,
+  type PacketCounters,
+  type QualityDetails
+} from './connectionQuality'
+import {
   screenEncoding,
   screenSource,
   screenVideoConstraints,
@@ -52,8 +61,15 @@ export interface RemoteMedia {
 
 export interface CallMediaHandlers {
   onRemoteMedia: (media: RemoteMedia) => void
-  /** Queda que o LiveKit não conseguiu recuperar (não chamado em disconnect()). */
-  onConnectionLost: () => void
+  /**
+   * Queda que o LiveKit não conseguiu recuperar (não chamado em disconnect()).
+   * `reason`: DisconnectReason do SDK, quando ele informa.
+   */
+  onConnectionLost: (reason?: number) => void
+  /** O canal de controle com o servidor de voz abriu; falta a mídia (WebRTC). */
+  onSignalConnected?: () => void
+  /** Qualidade da conexão de alguém mudou (identity = userId, inclusive o próprio). */
+  onConnectionQuality?: (userId: string, quality: CallQuality) => void
   onReconnecting: () => void
   onReconnected: () => void
   /** Quem está falando agora (identity = userId), incluindo o próprio usuário. */
@@ -78,6 +94,8 @@ export class CallMedia {
   private refreshQueued = false
   /** Microfone da chamada, guardado para publicar quando a permissão de falar chegar. */
   private micTrack: MediaStreamTrack | null = null
+  /** Última leitura dos pacotes recebidos de cada pessoa (perda entre leituras). */
+  private inbound = new Map<string, PacketCounters>()
 
   constructor(private readonly handlers: CallMediaHandlers) {
     this.room = new Room({
@@ -124,6 +142,16 @@ export class CallMedia {
         if (participant && participant !== this.room.localParticipant) return
         this.emitPublishPermissions()
       })
+      .on(RoomEvent.SignalConnected, () => {
+        if (!this.closing) this.handlers.onSignalConnected?.()
+      })
+      .on(
+        RoomEvent.ConnectionQualityChanged,
+        (quality: unknown, participant?: { identity?: string }) => {
+          if (this.closing || !participant?.identity) return
+          this.handlers.onConnectionQuality?.(participant.identity, asCallQuality(quality))
+        }
+      )
       .on(RoomEvent.Reconnecting, () => this.handlers.onReconnecting())
       .on(RoomEvent.Reconnected, () => {
         // Assina de novo o que eu assistia e só então poda quem de fato parou.
@@ -140,7 +168,7 @@ export class CallMedia {
           this.handlers.onRemovedByModerator?.()
           return
         }
-        this.handlers.onConnectionLost()
+        this.handlers.onConnectionLost(reason)
       })
   }
 
@@ -181,6 +209,48 @@ export class CallMedia {
       }
     }
     return null
+  }
+
+  /**
+   * Perda de pacotes e latência para o tooltip de conexão ruim. `selfId`: eu
+   * (perda do que envio + latência até o servidor); os demais: perda do áudio
+   * deles que chega até mim, desde a leitura anterior.
+   */
+  async getQualityDetails(
+    userIds: string[],
+    selfId: string | null
+  ): Promise<Record<string, QualityDetails>> {
+    const out: Record<string, QualityDetails> = {}
+    if (this.closing || this.room.state !== ConnectionState.Connected) return out
+    for (const userId of userIds) {
+      try {
+        if (userId === selfId) {
+          const mic = this.room.localParticipant.getTrackPublication(Track.Source.Microphone)
+          const report = await mic?.track?.getRTCStatsReport()
+          out[userId] = {
+            lossPercent: report ? reportOutboundLoss(report) : null,
+            latencyMs: await this.getLatency()
+          }
+          continue
+        }
+        const participant = this.room.remoteParticipants.get(userId)
+        const mic = participant?.getTrackPublication(Track.Source.Microphone)
+        const report = await mic?.track?.getRTCStatsReport()
+        const counters = report ? inboundCounters(report) : null
+        if (!counters) {
+          this.inbound.delete(userId)
+          out[userId] = { lossPercent: null, latencyMs: null }
+          continue
+        }
+        const lossPercent = lossBetween(this.inbound.get(userId) ?? null, counters)
+        this.inbound.set(userId, counters)
+        out[userId] = { lossPercent, latencyMs: null }
+      } catch {
+        // Track trocada no meio da leitura: fica sem número desta vez.
+      }
+      if (this.closing) return {}
+    }
+    return out
   }
 
   /** Pode publicar essa fonte, segundo as permissões que o servidor deu. */

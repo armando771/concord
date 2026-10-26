@@ -25,6 +25,7 @@ import ScreenWatchersOverlay from './ScreenWatchersOverlay'
 import ScreenAnnotationCanvas from './ScreenAnnotationCanvas'
 import ScreenAnnotationToolbar from './ScreenAnnotationToolbar'
 import StyledName from '../StyledName'
+import ConnectionQualityBars from './ConnectionQualityBars'
 import CallActivityBadge from './CallActivityBadge'
 
 export function VideoFill({
@@ -355,6 +356,9 @@ function ParticipantTile({
           <span className="rounded bg-violet-400/30 px-1 text-[9px] font-bold uppercase text-violet-100">
             {T18.tag}
           </span>
+        )}
+        {!isScreen && !isMaestroIdentity(user.id) && (
+          <ConnectionQualityBars userId={user.id} name={user.display_name} className="h-3 w-3" />
         )}
       </div>
     </div>

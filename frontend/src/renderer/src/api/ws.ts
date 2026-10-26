@@ -59,8 +59,12 @@ interface WsClientConfig {
    * aberto antes desde o connect() — eventos da queda podem ter se perdido.
    */
   onOpen?: (reconnected: boolean) => void
-  /** Conexão caiu (ou uma tentativa de reconectar falhou) sem ser por disconnect(). */
-  onLost?: () => void
+  /**
+   * Conexão caiu (ou uma tentativa de reconectar falhou) sem ser por
+   * disconnect(). `attempt`: a tentativa agendada agora (1 = a primeira);
+   * `planned`: o servidor avisou que estava reiniciando (1012).
+   */
+  onLost?: (info: { attempt: number; planned: boolean }) => void
 }
 
 export class WsClient {
@@ -94,6 +98,19 @@ export class WsClient {
       this.ws.close()
       this.ws = null
     }
+  }
+
+  /** "Tentar agora": pula a espera do backoff (sem efeito se já conectado ou conectando). */
+  retryNow(): void {
+    if (this.closedByUser) return
+    if (
+      this.ws &&
+      (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)
+    ) {
+      return
+    }
+    this.clearRetry()
+    this.open()
   }
 
   isConnected(): boolean {
@@ -149,11 +166,14 @@ export class WsClient {
     }
 
     ws.onclose = (event: CloseEvent) => {
-      if (this.ws === ws) this.ws = null
+      // Conexão antiga (disconnect() e connect() logo em seguida): a nova já
+      // está no lugar; o fechamento atrasado desta não é queda.
+      if (this.ws !== ws) return
+      this.ws = null
       if (this.closedByUser) return
       if (isPlannedRestart(event.code)) this.serverRestarting = true
-      this.config.onLost?.()
       this.scheduleReconnect()
+      this.config.onLost?.({ attempt: this.attempt, planned: this.serverRestarting })
     }
 
     ws.onerror = () => {
