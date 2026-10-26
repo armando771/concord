@@ -34,7 +34,7 @@ function fakeKrunkerPage(): {
     constructor(callback: () => void) {
       callbacks.push(callback)
     }
-    observe(): void {}
+    observe = vi.fn()
   }
   const elements: Record<string, unknown> = { genericPop: pop, popupBack: { click } }
   const doc = { getElementById: (id: string) => elements[id] ?? null } as unknown as Document
@@ -133,7 +133,7 @@ describe('activityPolicy', () => {
   })
 
   it('script da página: só no site do Krunker, e roda sozinho como texto', () => {
-    expect(activityPageScript('survev', 'https://survev.io/')).toBeNull()
+    expect(activityPageScript('outro-jogo', 'https://krunker.io/')).toBeNull()
     expect(activityPageScript('krunker', 'https://krunker.io.evil.com/')).toBeNull()
     expect(activityPageScript('krunker', 'about:blank')).toBeNull()
     const script = activityPageScript('krunker', 'https://krunker.io/?game=FRA:abc12')
