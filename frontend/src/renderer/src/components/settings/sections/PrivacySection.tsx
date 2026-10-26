@@ -12,6 +12,7 @@ import { useSettingsStore } from '../../../store/settingsStore'
 import { useUIStore } from '../../../store/uiStore'
 import { showToast } from '../../../store/toastStore'
 import router from '../../../router'
+import { SettingsSectionsSkeleton } from '../../skeleton/layouts'
 
 const POLICIES: { id: FriendRequestPolicy; title: string; description: string }[] = [
   { id: 'everyone', title: 'Todos', description: 'Qualquer pessoa com seu nome de usuário.' },
@@ -78,7 +79,7 @@ export function PrivacySection(): React.JSX.Element {
     void router.navigate('/friends')
   }
 
-  if (!privacy) return <p className="text-ds-md text-gray-500">Carregando…</p>
+  if (!privacy) return <SettingsSectionsSkeleton sections={[4, 1, 1]} />
 
   return (
     <div className="flex flex-col gap-8">

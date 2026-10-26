@@ -22,6 +22,7 @@ import { hideConversation, leaveGroup, type ConversationSummary } from '../api/c
 import ConfirmModal from './friends/ConfirmModal'
 import { GameLine } from './ActivityLine'
 import StyledName from './StyledName'
+import { DmListSkeleton } from './skeleton/layouts'
 import type { NameStyle } from '../lib/nameStyle'
 
 const SIDEBAR_BG = '#0b0c10'
@@ -186,7 +187,7 @@ export function FriendsSidebar(): React.JSX.Element {
   const loadAll = useFriendStore((s) => s.loadAll)
   const setFriendsTab = useUIStore((s) => s.setFriendsTab)
   const conversations = useChatStore((s) => s.conversations)
-  const conversationsLoading = useChatStore((s) => s.conversationsLoading)
+  const conversationsLoaded = useChatStore((s) => s.conversationsLoaded)
   const unreadByRoom = useChatStore((s) => s.unreadByRoom)
   const fetchConversations = useChatStore((s) => s.fetchConversations)
   const setQuickSwitcherOpen = useUIStore((s) => s.setQuickSwitcherOpen)
@@ -282,10 +283,8 @@ export function FriendsSidebar(): React.JSX.Element {
               </button>
             </div>
             <div className="mt-1 flex flex-col gap-0.5">
-              {conversationsLoading && conversations.length === 0 && (
-                <p className="px-2 py-1 text-ds-sm italic text-gray-500">Carregando...</p>
-              )}
-              {!conversationsLoading && conversations.length === 0 && (
+              {!conversationsLoaded && conversations.length === 0 && <DmListSkeleton />}
+              {conversationsLoaded && conversations.length === 0 && (
                 <p className="px-2 py-1 text-ds-sm italic text-gray-500">Nenhuma conversa ainda.</p>
               )}
               {conversations.map((conv) => (

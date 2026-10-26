@@ -77,9 +77,3 @@ export function InviteBackdrop({
     </div>
   )
 }
-
-export function InviteSpinner(): React.JSX.Element {
-  return (
-    <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/20 border-t-violet-500" />
-  )
-}

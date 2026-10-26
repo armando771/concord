@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { serverIconSrc } from '../lib/serverIcon'
 import Button from '../components/Button'
 import { InboxIcon } from '../components/icons'
+import { InviteListSkeleton } from '../components/skeleton/layouts'
 import { useInviteStore } from '../store/inviteStore'
 import { useServerStore } from '../store/serverStore'
 import { showToast } from '../store/toastStore'
@@ -64,11 +65,11 @@ function Invites(): React.JSX.Element {
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <p className="mb-2 text-ds-sm font-mediumr text-gray-400">
-            Convites pendentes — {invites.length}
+            Convites pendentes{loading ? '' : ` — ${invites.length}`}
           </p>
 
           {loading ? (
-            <div className="py-8 text-center text-sm text-gray-400">Carregando convites...</div>
+            <InviteListSkeleton />
           ) : invites.length === 0 ? (
             <div className="py-12 text-center text-sm text-gray-400">
               Nenhum convite pendente no momento. Quando alguém te convidar para um servidor, ele

@@ -28,6 +28,7 @@ import { ActivityCard } from '../components/ActivityCard'
 import { playingFriends } from '../lib/presenceActivity'
 import { usePresenceActivityStore } from '../store/presenceActivityStore'
 import type { PendingRequest } from '../api/friends'
+import { PersonListSkeleton } from '../components/skeleton/layouts'
 
 const MAIN_BG = '#07080b'
 
@@ -423,7 +424,7 @@ function Friends(): React.JSX.Element {
   const friends = useFriendStore((s) => s.friends)
   const pending = useFriendStore((s) => s.pending)
   const blocked = useFriendStore((s) => s.blocked)
-  const loading = useFriendStore((s) => s.loading)
+  const loaded = useFriendStore((s) => s.loaded)
   const loadAll = useFriendStore((s) => s.loadAll)
   const statuses = useChatStore((s) => s.statuses)
   const presence = useChatStore((s) => s.presence)
@@ -482,6 +483,11 @@ function Friends(): React.JSX.Element {
       )
     }
 
+    // Primeira carga: o esqueleto no lugar da lista (nas releituras ficam os dados antigos).
+    if (!loaded && friends.length + pending.length + blocked.length === 0) {
+      return <PersonListSkeleton actions={tab === 'blocked' ? 1 : 2} />
+    }
+
     if (tab === 'pending') {
       if (incoming.length + outgoing.length === 0) {
         return (
@@ -524,9 +530,6 @@ function Friends(): React.JSX.Element {
       )
     }
 
-    if (loading && friends.length === 0) {
-      return <p className="mt-6 text-ds-md text-gray-500">Carregando…</p>
-    }
     if ((tab === 'online' ? online : friends).length === 0) {
       return (
         <EmptyState

@@ -1,4 +1,10 @@
 import { useEffect, useState } from 'react'
+import {
+  ChannelHeaderSkeleton,
+  ComposerSkeleton,
+  MemberListSkeleton,
+  MessageListSkeleton
+} from '../components/skeleton/layouts'
 import { userMenuHandler } from '../store/userMenuStore'
 import { profileCardHandler } from '../store/profileCardStore'
 import InviteCodeBox from '../components/InviteCodeBox'
@@ -239,9 +245,19 @@ export function ServerView(): React.JSX.Element {
 
   // currentServer ainda é o anterior no 1º render após clicar noutro servidor.
   if (loading || !currentServer || currentServer.id !== id) {
+    // O mesmo desenho da tela pronta (coluna central e lista de membros), em skeleton.
     return (
-      <div className="flex h-full w-full items-center justify-center bg-[#07080b]/90 text-gray-400">
-        <p className="text-ds-md">Carregando servidor...</p>
+      <div className="flex h-full w-full overflow-hidden bg-[#07080b]/90 text-gray-100">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-r border-white/6">
+          <ChannelHeaderSkeleton />
+          <div className="min-h-0 flex-1">
+            <MessageListSkeleton label="Carregando servidor…" />
+          </div>
+          <ComposerSkeleton />
+        </div>
+        <MembersAside>
+          <MemberListSkeleton />
+        </MembersAside>
       </div>
     )
   }

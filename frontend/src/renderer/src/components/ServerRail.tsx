@@ -30,12 +30,14 @@ import ServerIconPicker from './serverSettings/ServerIconPicker'
 import type { MediaChange } from '../lib/profileValidation'
 import { joinServerByCode } from '../api/servers'
 import { parseInviteInput } from '../lib/inviteLink'
+import { ServerRailSkeleton } from './skeleton/layouts'
 
 function ServerRail(): React.JSX.Element {
   const location = useLocation()
   const navigate = useNavigate()
 
   const servers = useServerStore((s) => s.servers)
+  const serversLoaded = useServerStore((s) => s.serversLoaded)
   const fetchServers = useServerStore((s) => s.fetchServers)
   const addServer = useServerStore((s) => s.addServer)
   const setServerIcon = useServerStore((s) => s.setServerIcon)
@@ -282,6 +284,8 @@ function ServerRail(): React.JSX.Element {
         {/* O padding dá espaço aos selos (voz, não lidas), que ficam metade para fora do
             ícone: sem ele o overflow da lista corta os selos. */}
         <div className="-my-1 flex flex-col gap-2 overflow-y-auto no-scrollbar px-2 py-2">
+          {/* Só na primeira carga: depois a lista é trocada por baixo, sem piscar. */}
+          {!serversLoaded && servers.length === 0 && <ServerRailSkeleton />}
           {servers.map((srv) => {
             const isActive = location.pathname === `/servers/${srv.id}`
             const initialChar = srv.name.charAt(0).toUpperCase()

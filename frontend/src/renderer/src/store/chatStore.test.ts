@@ -213,3 +213,50 @@ describe('chatStore — reconexão (deploy)', () => {
     expect(messagesApi.listChannelMessages).not.toHaveBeenCalled()
   })
 })
+
+describe('chatStore — conversationsLoaded (skeleton só na primeira carga)', () => {
+  it('começa falso e vira verdadeiro com a primeira lista, mesmo vazia', async () => {
+    expect(useChatStore.getState().conversationsLoaded).toBe(false)
+    await useChatStore.getState().fetchConversations()
+    expect(useChatStore.getState().conversationsLoaded).toBe(true)
+  })
+
+  it('reler as conversas não volta ao skeleton', async () => {
+    await useChatStore.getState().fetchConversations()
+    const seen: boolean[] = []
+    const stop = useChatStore.subscribe((s) => seen.push(s.conversationsLoaded))
+    await useChatStore.getState().fetchConversations()
+    stop()
+    expect(seen.every(Boolean)).toBe(true)
+  })
+
+  it('erro ao buscar também encerra o skeleton', async () => {
+    const { listConversations } = await import('../api/conversations')
+    vi.mocked(listConversations).mockRejectedValueOnce(new Error('rede fora'))
+    vi.spyOn(console, 'error').mockImplementationOnce(() => {})
+    await useChatStore.getState().fetchConversations()
+    expect(useChatStore.getState().conversationsLoaded).toBe(true)
+  })
+
+  it('reset (sair da conta) volta à primeira carga', async () => {
+    await useChatStore.getState().fetchConversations()
+    useChatStore.getState().reset()
+    expect(useChatStore.getState().conversationsLoaded).toBe(false)
+  })
+})
+
+describe('chatStore — sala em carregamento', () => {
+  it('carregando só até a lista chegar; fechar a sala apaga a lista (volta ao skeleton)', async () => {
+    let resolve: (v: Record<string, unknown>[]) => void = () => {}
+    messagesApi.listChannelMessages.mockReturnValue(
+      new Promise<Record<string, unknown>[]>((r) => (resolve = r))
+    )
+    const opening = useChatStore.getState().openRoom('channel:z')
+    expect(useChatStore.getState().loadingByRoom['channel:z']).toBe(true)
+    expect(useChatStore.getState().messagesByRoom['channel:z']).toBeUndefined()
+    resolve(page(msg('z1', 1, 'z')))
+    await opening
+    expect(useChatStore.getState().loadingByRoom['channel:z']).toBe(false)
+    expect(ids('channel:z')).toEqual(['z1'])
+  })
+})

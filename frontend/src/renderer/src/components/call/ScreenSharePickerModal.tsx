@@ -7,6 +7,7 @@ import { notePickerCancelled } from '../../lib/screenPickerCancel'
 import { loadScreenQuality, saveScreenQuality } from '../../lib/screenShareQuality'
 import ScreenQualityControls from './ScreenQualityControls'
 import { trapTab } from '../../lib/focusTrap'
+import { ScreenSourceGridSkeleton } from '../skeleton/layouts'
 
 /**
  * Picker de fonte para compartilhamento de tela (estilo Discord).
@@ -22,6 +23,8 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
   const [quality, setQuality] = useState(loadScreenQuality)
   const dialogRef = useRef<HTMLDivElement>(null)
   const [sources, setSources] = useState<ScreenSourceInfo[]>([])
+  // Listar as fontes demora (miniaturas): antes disso não dá para dizer "nenhuma opção".
+  const [sourcesLoaded, setSourcesLoaded] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [tab, setTab] = useState<'screen' | 'window'>('screen')
 
@@ -29,6 +32,7 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
     if (!screenPicker) return
     const off = screenPicker.onShow(() => {
       setSelected(null)
+      setSourcesLoaded(false)
       setQuality(loadScreenQuality())
       setTab('screen')
       setOpen(true)
@@ -44,6 +48,7 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
       .then((all) => {
         if (cancelled) return
         setSources(all)
+        setSourcesLoaded(true)
         const firstScreen = all.find((s) => s.displayId !== '')
         if (firstScreen) setSelected(firstScreen.id)
       })
@@ -133,7 +138,8 @@ function ScreenSharePickerModal(): React.JSX.Element | null {
         </div>
 
         <div className="mt-5 grid max-h-[46vh] grid-cols-2 gap-3 overflow-y-auto pr-1">
-          {visible.length === 0 && (
+          {!sourcesLoaded && <ScreenSourceGridSkeleton />}
+          {sourcesLoaded && visible.length === 0 && (
             <p className="col-span-2 py-8 text-center text-sm text-gray-500">
               Nenhuma opção disponível.
             </p>

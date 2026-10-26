@@ -61,6 +61,46 @@
   }
 }
 
+/* Skeleton de carregamento. Os tokens usam a cor do texto do contexto
+   (currentColor): um tema claro ou escuro acompanha sozinho, e um tema pode
+   trocar --skeleton-base / --skeleton-shine direto. */
+:root {
+  --skeleton-base: color-mix(in srgb, currentColor 7%, transparent);
+  --skeleton-shine: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+@layer components {
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--skeleton-base);
+  }
+
+  /* O brilho é uma faixa que anda por cima (só transform: roda no compositor). */
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, var(--skeleton-shine), transparent);
+    animation: skeleton-shimmer 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Sem movimento: fica a cor parada, sem o brilho. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+    display: none;
+  }
+}
+
 @layer components {
   .glass-panel {
     background: var(--glass-onyx-bg);

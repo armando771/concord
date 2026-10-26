@@ -18,6 +18,7 @@ import {
 } from '../icons'
 import SoundboardUploadModal from './SoundboardUploadModal'
 import { formatKeyboardShortcut } from './useSoundboardHotkeys'
+import { SoundboardSkeleton } from '../skeleton/layouts'
 
 const POPOVER_WIDTH = 380
 const GAP = 10
@@ -139,6 +140,10 @@ function SoundboardPopover({
     serverId ? (s.soundsByServer[serverId] ?? EMPTY_SOUNDS) : EMPTY_SOUNDS
   )
   const loading = useSoundboardStore((s) => (serverId ? Boolean(s.loadingByServer[serverId]) : false))
+  // Já buscou este servidor alguma vez: reabrir mostra os sons na hora.
+  const soundsLoaded = useSoundboardStore((s) =>
+    serverId ? s.soundsByServer[serverId] !== undefined : false
+  )
   const volume = useSoundboardStore((s) => s.volume)
   const favorites = useSoundboardStore((s) => s.favorites)
   const keybinds = useSoundboardStore((s) => s.keybinds)
@@ -333,8 +338,8 @@ function SoundboardPopover({
 
         {/* Lista de sons */}
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-          {loading && sounds.length === 0 ? (
-            <p className="py-8 text-center text-xs text-gray-400">Carregando sons…</p>
+          {loading && !soundsLoaded ? (
+            <SoundboardSkeleton />
           ) : filtered.length === 0 ? (
             <div className="rounded-xl border border-dashed border-white/10 py-8 text-center">
               <p className="text-xs font-medium text-gray-300">

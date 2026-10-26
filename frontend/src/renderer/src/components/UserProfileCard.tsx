@@ -27,6 +27,7 @@ import { CHOSEN_STATUSES, STATUS_META, type PresenceStatus } from '../lib/presen
 import LevelBadge from './level/LevelBadge'
 import BadgeRow from './badges/BadgeRow'
 import ProfileCardBody, { CARD_BG, type CardProfile } from './profile/ProfileCardBody'
+import { ProfileInfoSkeleton } from './skeleton/layouts'
 import StatusIcon from './StatusIcon'
 import { DotsIcon, PencilIcon, VolumeIcon } from './icons'
 import Avatar from './Avatar'
@@ -165,6 +166,9 @@ function UserProfileCard(): React.JSX.Element | null {
   // Amigos e servidores em comum (só no cartão de outra pessoa).
   const [loadedMutual, setMutual] = useState<{ userId: string; rel: Relationship } | null>(null)
   const mutual = loadedMutual && loadedMutual.userId === target?.userId ? loadedMutual.rel : null
+  // Quem já respondeu (mesmo com erro): o skeleton não fica para sempre se a chamada falhar.
+  const [profileSettled, setProfileSettled] = useState<string | null>(null)
+  const [mutualSettled, setMutualSettled] = useState<string | null>(null)
 
   const isMe = Boolean(target && target.userId === me?.id)
   const isBot = Boolean(profile?.is_bot || member?.is_bot)
@@ -172,7 +176,14 @@ function UserProfileCard(): React.JSX.Element | null {
   useEffect(() => {
     if (!target) return
     ensureLevels([target.userId])
-    if (target.userId !== useAuthStore.getState().user?.id) void fetchProfile(target.userId)
+    if (target.userId === useAuthStore.getState().user?.id) return
+    let cancelled = false
+    void fetchProfile(target.userId).finally(() => {
+      if (!cancelled) setProfileSettled(target.userId)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [target, ensureLevels, fetchProfile])
 
   useEffect(() => {
@@ -183,6 +194,9 @@ function UserProfileCard(): React.JSX.Element | null {
         if (!cancelled) setMutual({ userId: target.userId, rel: r })
       })
       .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setMutualSettled(target.userId)
+      })
     return () => {
       cancelled = true
     }
@@ -204,7 +218,7 @@ function UserProfileCard(): React.JSX.Element | null {
         { width: window.innerWidth, height: window.innerHeight }
       )
     )
-  }, [target, profile, me, mutual, badgesLoaded])
+  }, [target, profile, me, mutual, badgesLoaded, profileSettled, mutualSettled])
 
   useEffect(() => {
     if (!target) return
@@ -336,6 +350,9 @@ function UserProfileCard(): React.JSX.Element | null {
     }
   }
 
+  // Primeira carga de cada parte: o cartão abre na hora com o que já se sabe.
+  const profileLoading = !isMe && !profile && profileSettled !== target.userId
+  const mutualLoading = !isMe && !mutual && mutualSettled !== target.userId
   const mutualFriends = mutual?.mutual_friends ?? []
   const mutualServers = mutual?.mutual_servers ?? []
   const hasInfo =
@@ -344,7 +361,8 @@ function UserProfileCard(): React.JSX.Element | null {
     salinhaSince ||
     voiceChannel ||
     mutualFriends.length > 0 ||
-    mutualServers.length > 0
+    mutualServers.length > 0 ||
+    mutualLoading
 
   const openMore = (e: React.MouseEvent<HTMLButtonElement>): void => {
     const r = e.currentTarget.getBoundingClientRect()
@@ -387,6 +405,7 @@ function UserProfileCard(): React.JSX.Element | null {
           />
         }
         onEditProfile={isMe ? editProfile : undefined}
+        loading={profileLoading}
       >
         {hasInfo && (
           <div className="mt-3 flex flex-col gap-3 rounded-lg bg-black/30 p-3">
@@ -494,6 +513,9 @@ function UserProfileCard(): React.JSX.Element | null {
                 </p>
               </div>
             )}
+
+            {/* Amigos e servidores em comum vêm de outra chamada. */}
+            {mutualLoading && <ProfileInfoSkeleton sections={2} />}
           </div>
         )}
 

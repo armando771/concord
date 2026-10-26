@@ -4,9 +4,9 @@ import Button from '../components/Button'
 import {
   InviteBackdrop,
   InviteServerIcon,
-  InviteServerInfo,
-  InviteSpinner
+  InviteServerInfo
 } from '../components/invite/InviteServerInfo'
+import { ButtonSkeleton, InvitePreviewSkeleton } from '../components/skeleton/layouts'
 import { useInvitePreview } from '../components/invite/useInvitePreview'
 import { IS_WEB } from '../lib/config'
 import { watchAppLaunch } from '../lib/appLaunch'
@@ -85,9 +85,13 @@ function InviteCard({ code }: { code: string }): React.JSX.Element {
       <InviteBackdrop iconUrl={preview?.icon_url} className="fixed inset-0" />
       <div className="relative w-full max-w-[480px] rounded-2xl border border-white/10 bg-[#1e1f24]/95 p-8 shadow-2xl shadow-black/60 backdrop-blur">
         {state.status === 'loading' && (
-          <div className="flex justify-center py-16">
-            <InviteSpinner />
-          </div>
+          <>
+            <InvitePreviewSkeleton />
+            <div className="mt-8 flex flex-col gap-3">
+              <ButtonSkeleton />
+              <ButtonSkeleton />
+            </div>
+          </>
         )}
 
         {state.status === 'error' && (

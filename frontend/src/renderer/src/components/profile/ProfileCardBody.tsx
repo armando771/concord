@@ -12,6 +12,8 @@ import { Elapsed } from '../ActivityCard'
 import { useActivity } from '../../store/presenceActivityStore'
 import LinkIcon from './LinkIcon'
 import StyledName from '../StyledName'
+import { Skeleton } from '../skeleton/Skeleton'
+import { ProfileBioSkeleton } from '../skeleton/layouts'
 import type { NameStyle } from '../../lib/nameStyle'
 
 /** Fundo do cartão: recorta o avatar e a bolinha de status. */
@@ -50,6 +52,11 @@ interface ProfileCardBodyProps {
   onEditProfile?: () => void
   /** Prévia do editor: o avatar não usa o profileStore (mostra o rascunho). */
   preview?: boolean
+  /**
+   * O perfil completo (banner, nota, Sobre mim) ainda não chegou: o cartão já
+   * mostra o que se sabe (nome, @usuário) e o resto aparece em skeleton.
+   */
+  loading?: boolean
   children?: ReactNode
 }
 
@@ -67,6 +74,7 @@ function ProfileCardBody({
   badges,
   onEditProfile,
   preview = false,
+  loading = false,
   children
 }: ProfileCardBodyProps): React.JSX.Element {
   // O banner animado é do Maestro; o Salinha Bot fica com o gradiente padrão.
@@ -93,6 +101,12 @@ function ProfileCardBody({
       >
         {bannerSrc && (
           <img src={bannerSrc} alt="" draggable={false} className="h-full w-full object-cover" />
+        )}
+        {loading && !bannerSrc && !profile.banner_color && (
+          // Opaco: o degradê de cargo por baixo ainda não vale (o perfil pode ter banner).
+          <div className="h-full w-full" style={{ background: CARD_BG }}>
+            <Skeleton className="h-full w-full rounded-none" />
+          </div>
         )}
       </div>
 
@@ -215,6 +229,7 @@ function ProfileCardBody({
             </p>
           </div>
         )}
+        {loading && !bio && <ProfileBioSkeleton />}
         {bio && (
           <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-snug text-gray-200">
             {splitLinks(bio).map((part, i) =>

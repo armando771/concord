@@ -18,6 +18,7 @@ import { trapTab } from '../../lib/focusTrap'
 import Avatar from '../Avatar'
 import { LockIcon } from '../icons'
 import BadgeIcon from './BadgeIcon'
+import { BadgeDetailSkeleton, BadgeGridSkeleton } from '../skeleton/layouts'
 
 function RarityChip({ badge }: { badge: Badge }): React.JSX.Element {
   if (badge.tier === 0) {
@@ -341,7 +342,7 @@ function BadgesModal(): React.JSX.Element | null {
             </p>
 
             {!badges ? (
-              <p className="mt-6 text-sm text-gray-500">Carregando…</p>
+              <BadgeGridSkeleton />
             ) : (
               <>
                 {earned.length > 0 ? (
@@ -394,12 +395,12 @@ function BadgesModal(): React.JSX.Element | null {
           </button>
           {selected ? (
             <Detail badge={selected} isMe={isMe} ownerName={target.name} />
+          ) : !badges ? (
+            <BadgeDetailSkeleton />
           ) : (
-            badges && (
-              <div className="flex h-full items-center justify-center text-sm text-gray-500">
-                {isMe ? 'Fique em call e converse para ganhar o primeiro.' : 'Nada por aqui ainda.'}
-              </div>
-            )
+            <div className="flex h-full items-center justify-center text-sm text-gray-500">
+              {isMe ? 'Fique em call e converse para ganhar o primeiro.' : 'Nada por aqui ainda.'}
+            </div>
           )}
         </section>
       </div>

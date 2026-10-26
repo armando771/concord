@@ -25,6 +25,11 @@ import {
 } from '../api/conversations'
 import { conversationTitle, otherMembers } from '../lib/conversations'
 import { imageFileError } from '../lib/profileValidation'
+import {
+  ChannelHeaderSkeleton,
+  ComposerSkeleton,
+  MessageListSkeleton
+} from '../components/skeleton/layouts'
 
 const MAIN_BG = '#07080b'
 
@@ -97,7 +102,7 @@ function GroupChat(): React.JSX.Element {
   const navigate = useNavigate()
   const meId = useAuthStore((s) => s.user?.id)
   const conversations = useChatStore((s) => s.conversations)
-  const conversationsLoading = useChatStore((s) => s.conversationsLoading)
+  const conversationsLoaded = useChatStore((s) => s.conversationsLoaded)
   const fetchConversations = useChatStore((s) => s.fetchConversations)
   const loadFriends = useFriendStore((s) => s.loadAll)
   const conv = conversations.find((c) => c.id === conversationId)
@@ -117,12 +122,24 @@ function GroupChat(): React.JSX.Element {
   }, [loadFriends, fetchConversations])
 
   if (!conv || conv.type !== 'group') {
+    // Antes da primeira resposta da lista ainda não dá para saber se existe.
+    if (!conversationsLoaded) {
+      return (
+        <div className="flex h-full flex-1 flex-col" style={{ background: MAIN_BG }}>
+          <ChannelHeaderSkeleton />
+          <div className="min-h-0 flex-1">
+            <MessageListSkeleton label="Abrindo conversa…" />
+          </div>
+          <ComposerSkeleton />
+        </div>
+      )
+    }
     return (
       <div
         className="flex h-full flex-1 items-center justify-center text-ds-md text-gray-400"
         style={{ background: MAIN_BG }}
       >
-        {conversationsLoading ? 'Abrindo conversa...' : 'Conversa não encontrada.'}
+        Conversa não encontrada.
       </div>
     )
   }

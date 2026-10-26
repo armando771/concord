@@ -14,6 +14,7 @@ import { browserPermission, requestBrowserPermission } from '../lib/browserNotif
 import LevelUpPreview from './level/LevelUpPreview'
 import Switch from './Switch'
 import MutedNotifications from './MutedNotifications'
+import { SettingsCardSkeleton } from './skeleton/layouts'
 
 /** Linha com título, descrição e o interruptor, como nas configurações do Discord. */
 export function Toggle({
@@ -134,7 +135,7 @@ export function BirthdaySettings(): React.JSX.Element {
     }
   }
 
-  if (!birthday) return <div className="rounded-xl border border-white/10 bg-white/5 p-4" />
+  if (!birthday) return <SettingsCardSkeleton />
 
   const error = birthdayError(birthday)
 
