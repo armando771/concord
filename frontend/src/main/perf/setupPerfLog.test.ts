@@ -114,4 +114,33 @@ describe('setupPerfLog', () => {
     electron.appListeners.get('before-quit')!()
     expect(readLog()[0]).toMatchObject({ fps: null })
   })
+
+  it('janela minimizada e depois ocultada vira tray (isMinimized continua true)', () => {
+    vi.stubEnv('SALINHA_PERF_LOG', '1')
+    const handlers: Record<string, Array<() => void>> = {}
+    const on = (event: string, cb: () => void): void => {
+      handlers[event] = [...(handlers[event] ?? []), cb]
+    }
+    const evented = {
+      isDestroyed: () => false,
+      isMinimized: () => true,
+      isVisible: () => false,
+      webContents,
+      on,
+      once: on
+    } as unknown as BrowserWindow
+
+    setupPerfLog(() => evented)
+    electron.appListeners.get('browser-window-created')!({}, evented)
+    handlers.show.forEach((cb) => cb())
+    vi.advanceTimersByTime(1000)
+    handlers.hide.forEach((cb) => cb())
+    vi.advanceTimersByTime(1000)
+    electron.appListeners.get('before-quit')!()
+
+    const states = readLog()
+      .filter((l) => l.kind === 'sample')
+      .map((l) => (l.ctx as { window: string }).window)
+    expect(states).toEqual(['minimized', 'tray'])
+  })
 })

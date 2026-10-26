@@ -6,20 +6,30 @@ import { appendLog } from '../app/appLog'
 import { isPerfLogEnabled } from './perfFlag'
 import { PerfRecorder } from './perfRecorder'
 import { PerfSession } from './perfSession'
-import { windowState } from './windowState'
+import { trackHidden, windowState } from './windowState'
 
 const SAMPLE_MS = 1000
 const nowMs = (): number => process.uptime() * 1000
 
 type GetWindow = () => BrowserWindow | null
 
-/** O ready-to-show da janela principal (a de overlay também dispara; só a principal conta). */
-function watchReadyToShow(getWindow: GetWindow, session: PerfSession): void {
+/**
+ * Acompanha as janelas criadas: o ready-to-show da principal (a de overlay também
+ * dispara; só a principal conta) e se ela está oculta na bandeja. Devolve a pergunta
+ * "a janela principal está oculta?".
+ */
+function watchWindows(getWindow: GetWindow, session: PerfSession): () => boolean {
+  const hiddenOf = new WeakMap<BrowserWindow, () => boolean>()
   app.on('browser-window-created', (_event, win) => {
+    hiddenOf.set(win, trackHidden(win))
     win.once('ready-to-show', () => {
       if (win === getWindow()) session.mark('readyToShow', nowMs())
     })
   })
+  return () => {
+    const win = getWindow()
+    return win ? (hiddenOf.get(win)?.() ?? false) : true
+  }
 }
 
 /** Relatórios do renderer: mesma checagem de origem do app-metrics:sample. */
@@ -41,10 +51,10 @@ function startRecording(getWindow: GetWindow): boolean {
   }
   const session = new PerfSession((line) => recorder.write(line), cpus().length)
   session.mark('appReady', nowMs())
-  watchReadyToShow(getWindow, session)
+  const isHidden = watchWindows(getWindow, session)
   listenReports(getWindow, session)
   const timer = setInterval(
-    () => session.sample(app.getAppMetrics(), windowState(getWindow()), nowMs()),
+    () => session.sample(app.getAppMetrics(), windowState(getWindow(), isHidden()), nowMs()),
     SAMPLE_MS
   )
   app.once('before-quit', () => {

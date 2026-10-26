@@ -42,15 +42,28 @@ describe('PerfSession.sample', () => {
     })
   })
 
-  it('usa o último relatório quando é recente', () => {
+  it('usa o último relatório quando é recente e a janela está visível', () => {
     session.receive(report(), 1000)
-    session.sample([tab(1)], 'tray', 2500)
+    session.sample([tab(1)], 'visible', 2500)
     expect(lines[0]).toMatchObject({
-      ctx: { window: 'tray', route: '/channels/:id', inCall: true },
+      ctx: { window: 'visible', route: '/channels/:id', inCall: true },
       fps: 60,
       loaf: { count: 1, maxMs: 80, totalMs: 80 }
     })
   })
+
+  it.each(['minimized', 'tray'] as const)(
+    'janela %s: fps e loaf ficam null (o rAF é limitado a 1 Hz e viraria falso quadro longo)',
+    (window) => {
+      session.receive(report(), 1000)
+      session.sample([tab(1)], window, 2500)
+      expect(lines[0]).toMatchObject({
+        ctx: { window, route: '/channels/:id', inCall: true },
+        fps: null,
+        loaf: null
+      })
+    }
+  )
 
   it('relatório com mais de 2 s zera fps/loaf mas mantém a rota', () => {
     session.receive(report(), 1000)
