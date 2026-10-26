@@ -18,6 +18,15 @@ func MessageRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin
 		channels.POST("/:messageId/poll/end", handler.EndChannelPoll)
 	}
 
+	channelPins := router.Group("/channels/:channelId/pins")
+	channelPins.Use(authMiddleware)
+	{
+		channelPins.GET("", handler.ListChannelPins)
+		channelPins.GET("/", handler.ListChannelPins)
+		channelPins.PUT("/:messageId", handler.PinChannelMessage)
+		channelPins.DELETE("/:messageId", handler.UnpinChannelMessage)
+	}
+
 	channelPolls := router.Group("/channels/:channelId/polls")
 	channelPolls.Use(authMiddleware)
 	{

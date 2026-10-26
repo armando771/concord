@@ -45,6 +45,9 @@ import ChannelPermissionsModal from './ChannelPermissionsModal'
 import ConfirmModal from './friends/ConfirmModal'
 import Switch from './Switch'
 import Avatar from './Avatar'
+import MaestroAvatar from './music/MaestroAvatar'
+import { MAESTRO_NAME, maestroIdentity, T18 } from '../lib/music'
+import { useMusicStore } from '../store/musicStore'
 import {
   ChevronDownIcon,
   ChevronUpIcon,
@@ -69,6 +72,7 @@ import { useResizableWidth } from './useResizableWidth'
  * aparecia pela metade). `anywhere` também quebra palavra gigante sem hífen.
  */
 const WRAP_NAME = 'break-words [overflow-wrap:anywhere]'
+const NO_CHANNELS: string[] = []
 
 export function ServerSidebar(): React.JSX.Element {
   const navigate = useNavigate()
@@ -77,6 +81,11 @@ export function ServerSidebar(): React.JSX.Element {
   const user = useAuthStore((s) => s.user)
   const currentServer = useServerStore((s) => s.currentServer)
   const nicknames = useServerNicknames(currentServer?.id)
+  // Canais de voz em que o Maestro está tocando (aparece na lista do canal).
+  const maestroChannels = useMusicStore(
+    (s) => (currentServer ? s.presence[currentServer.id] : undefined) ?? NO_CHANNELS
+  )
+  const openMusicPanel = useMusicStore((s) => s.openPanel)
   const roles = useServerStore((s) => s.roles)
   const channels = useServerStore((s) => s.channels)
   const createChannel = useServerStore((s) => s.createChannel)
@@ -949,7 +958,7 @@ export function ServerSidebar(): React.JSX.Element {
                           </div>
                         ))}
                     </div>
-                    {participants.length > 0 && (
+                    {(participants.length > 0 || maestroChannels.includes(ch.id)) && (
                       <div className="mb-1 ml-4 flex flex-col gap-0.5">
                         {participants.map((p) => {
                           const name = serverDisplayName({ nickname: nicknames?.[p.user_id] }, p)
@@ -1013,6 +1022,32 @@ export function ServerSidebar(): React.JSX.Element {
                             </div>
                           )
                         })}
+                        {/* O Maestro aparece como mais alguém no canal; clicar nele
+                            abre o painel "Tocando agora" (não o perfil). */}
+                        {maestroChannels.includes(ch.id) && (
+                          <div
+                            onContextMenu={userMenuHandler(
+                              maestroIdentity(ch.id),
+                              MAESTRO_NAME,
+                              user?.id
+                            )}
+                            onClick={() => {
+                              openMusicPanel()
+                              if (currentServer?.id && channelId !== ch.id) {
+                                navigate(`/servers/${currentServer.id}/channels/${ch.id}`)
+                              }
+                            }}
+                            className="group/voiceuser relative flex cursor-pointer items-center gap-2 overflow-hidden rounded-md px-2 py-1 transition-colors hover:bg-white/[0.06]"
+                          >
+                            <MaestroAvatar size={24} />
+                            <span className="min-w-0 truncate text-ds-sm font-medium text-gray-300 transition-colors group-hover/voiceuser:text-white">
+                              {MAESTRO_NAME}
+                            </span>
+                            <span className="ml-auto mr-1 rounded bg-violet-400/30 px-1 text-[9px] font-bold uppercase text-violet-100">
+                              {T18.tag}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

@@ -18,12 +18,19 @@ import (
 
 const pumpLead = 200 * time.Millisecond
 
+// maxOpusPacket é o maior frame que o SDK do LiveKit aceita (limite de
+// pacote RTP do pion). Acima disso ele para de escrever a faixa de vez.
+const maxOpusPacket = 1200
+
 // EncoderArgs: PCM do mixer → Opus 320 kbps estéreo em páginas Ogg de 20 ms.
+// CBR de propósito: em VBR os ataques da música geram frames acima de
+// maxOpusPacket, e o SDK do LiveKit para a faixa na primeira recusa. Em CBR
+// todo frame de 20 ms tem ~800 bytes, com a mesma qualidade.
 func EncoderArgs() []string {
 	return []string{
 		"-hide_banner", "-loglevel", "error",
 		"-f", "f32le", "-ar", "48000", "-ac", "2", "-i", "pipe:0",
-		"-c:a", "libopus", "-b:a", "320k", "-vbr", "constrained", "-application", "audio",
+		"-c:a", "libopus", "-b:a", "320k", "-vbr", "off", "-application", "audio",
 		"-frame_duration", "20", "-page_duration", "20000", "-flush_packets", "1",
 		"-f", "ogg", "pipe:1",
 	}

@@ -57,6 +57,8 @@ import { useNotifySettingsStore } from './notifySettingsStore'
 import { mentionKindOf, muteDecision } from '../lib/notificationMute'
 import { useSoundboardStore } from './soundboardStore'
 import { useMusicStore } from './musicStore'
+import { usePinStore } from './pinStore'
+import type { PinnedMessage } from '../api/messages'
 import { useActivityStore } from './activityStore'
 import { useTypingStore } from './typingStore'
 import { usePresenceActivityStore } from './presenceActivityStore'
@@ -906,6 +908,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (event.type === 'message:update') {
       const msg = payload.message as Message | undefined
       if (msg?.id) {
+        usePinStore.getState().onMessageUpdate(msg)
         const room = msg.channel_id
           ? `channel:${msg.channel_id}`
           : `conversation:${msg.conversation_id}`
@@ -916,6 +919,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     if (event.type === 'message:delete') {
       const messageId = payload.message_id as string
+      if (messageId) {
+        usePinStore.getState().onMessageDelete(messageId)
+      }
       const channelId = payload.channel_id as string | undefined
       const conversationId = payload.conversation_id as string | undefined
       const serverId = (payload.server_id as string) || null
@@ -940,6 +946,42 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           unreadByServer: nextServerUnread
         }
       })
+      return
+    }
+
+    if (event.type === 'channel:pin:add') {
+      const channelId = payload.channel_id as string
+      const pinMsg = payload.message as PinnedMessage | undefined
+      if (channelId && pinMsg?.id) {
+        usePinStore.getState().onPinAdd(channelId, pinMsg)
+        const room = `channel:${channelId}`
+        set((state) => ({
+          messagesByRoom: {
+            ...state.messagesByRoom,
+            [room]: (state.messagesByRoom[room] ?? []).map((m) =>
+              m.id === pinMsg.id ? { ...m, pinned_at: pinMsg.pinned_at } : m
+            )
+          }
+        }))
+      }
+      return
+    }
+
+    if (event.type === 'channel:pin:remove') {
+      const channelId = payload.channel_id as string
+      const messageId = payload.message_id as string
+      if (channelId && messageId) {
+        usePinStore.getState().onPinRemove(channelId, messageId)
+        const room = `channel:${channelId}`
+        set((state) => ({
+          messagesByRoom: {
+            ...state.messagesByRoom,
+            [room]: (state.messagesByRoom[room] ?? []).map((m) =>
+              m.id === messageId ? { ...m, pinned_at: null } : m
+            )
+          }
+        }))
+      }
       return
     }
 

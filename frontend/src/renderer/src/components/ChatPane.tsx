@@ -34,7 +34,8 @@ import { messagePreview } from '../lib/polls'
 import PollCard from './poll/PollCard'
 import CreatePollModal from './poll/CreatePollModal'
 import MessageAttachments from './chat/MessageAttachments'
-import { PaperclipIcon, PollIcon } from './icons'
+import { PaperclipIcon, PollIcon, PinIcon } from './icons'
+import { usePinStore } from '../store/pinStore'
 import {
   ACCEPT_ATTRIBUTE,
   canSubmit,
@@ -138,8 +139,12 @@ function MessageItem({
   isEditing,
   savingEdit,
   canReact,
-  canModerate
+  canModerate,
+  canPin,
+  onTogglePin
 }: {
+  canPin?: boolean
+  onTogglePin?: () => void
   message: Message
   /** Canal de servidor: autor e resposta com o apelido daquele servidor. */
   serverId?: string
@@ -263,6 +268,12 @@ function MessageItem({
                 (editada)
               </span>
             )}
+            {message.pinned_at && (
+              <span className="flex items-center gap-0.5 text-ds-xs text-amber-400 font-medium" title="Mensagem fixada">
+                <PinIcon className="h-3 w-3" />
+                <span>fixada</span>
+              </span>
+            )}
           </div>
           {isEditing ? (
             <MessageEditor
@@ -306,6 +317,9 @@ function MessageItem({
             onReply={onReply}
             onCopy={message.content ? onCopy : undefined}
             onEdit={editable && !isEditing ? onStartEdit : undefined}
+            canPin={canPin}
+            isPinned={Boolean(message.pinned_at)}
+            onTogglePin={onTogglePin}
             onDelete={isMine || canModerate ? onDelete : undefined}
             deleteTitle={isMine ? 'Excluir mensagem' : 'Excluir mensagem (moderação)'}
           />
@@ -760,6 +774,29 @@ function ChatPane({
     }, 1600)
   }
 
+  useEffect(() => {
+    const onJump = (e: Event) => {
+      const detail = (e as CustomEvent<{ messageId: string }>).detail
+      if (detail?.messageId) {
+        handleJumpToMessage(detail.messageId)
+      }
+    }
+    window.addEventListener('concord:jump-to-message', onJump)
+    return () => window.removeEventListener('concord:jump-to-message', onJump)
+  }, [room])
+
+  const isChannel = room.startsWith('channel:')
+  const channelId = isChannel ? room.slice('channel:'.length) : null
+
+  const handleTogglePin = async (message: Message) => {
+    if (!channelId) return
+    if (message.pinned_at) {
+      await usePinStore.getState().unpin(channelId, message.id)
+    } else {
+      await usePinStore.getState().pin(channelId, message.id)
+    }
+  }
+
   const replyTargetAuthor = serverDisplayName(
     { nickname: replyingTo ? nicknames?.[replyingTo.author_id] : undefined },
     replyingTo?.author
@@ -828,6 +865,8 @@ function ChatPane({
                 savingEdit={savingEdit && editingId === m.id}
                 canReact={permissions.canReact}
                 canModerate={permissions.canModerate}
+                canPin={isChannel && permissions.canModerate}
+                onTogglePin={() => void handleTogglePin(m)}
               />
             ))}
             <MusicEphemeralList room={room} serverId={serverId ?? null} />

@@ -4,6 +4,7 @@ import { useCallStore } from '../../store/callStore'
 import { useMusicStore } from '../../store/musicStore'
 import { MAESTRO_NAME } from '../../lib/music'
 import MusicPanel from '../music/MusicPanel'
+import { useMusicWatching } from '../music/useMusicWatching'
 import { useServerStore } from '../../store/serverStore'
 import { useServerNicknames } from '../../store/useServerNames'
 import { serverDisplayName } from '../../lib/serverNames'
@@ -45,6 +46,7 @@ function VoiceChannelView({ channelId }: { channelId: string }): React.JSX.Eleme
 
   const elapsed = useElapsed(connectedHere ? startedAt : null)
   const speaking = useSpeaking()
+  useMusicWatching(connectedHere ? serverId : null)
 
   useEffect(() => {
     if (!connectedHere || !serverId) return

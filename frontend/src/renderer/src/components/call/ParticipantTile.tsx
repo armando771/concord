@@ -1,19 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CallUserInfo } from '../../store/callStore'
 import { useSoundboardStore } from '../../store/soundboardStore'
+import { useMusicStore } from '../../store/musicStore'
 import VoiceStateIcons from './VoiceStateIcons'
 import StreamAudioControls from './StreamAudioControls'
 import FullscreenOverlay from './FullscreenOverlay'
 import { useStreamFullscreen } from './useStreamFullscreen'
 import { ClickDisambiguator, isInteractiveTarget } from '../../lib/fullscreenControls'
-import { VolumeOffIcon, XIcon } from '../icons'
+import { VolumeOffIcon, XIcon, PencilIcon } from '../icons'
 import { useAuthStore } from '../../store/authStore'
+import { useCallStore } from '../../store/callStore'
+import { useAnnotationStore } from '../../store/annotationStore'
 import { useLevelStore } from '../../store/levelStore'
 import { levelUpEffects } from '../../lib/levels'
 import LevelUpBurst from '../level/LevelUpBurst'
 import Avatar from '../Avatar'
 import MaestroAvatar from '../music/MaestroAvatar'
 import { isMaestroIdentity, T18 } from '../../lib/music'
+import ScreenWatchersOverlay from './ScreenWatchersOverlay'
+import ScreenAnnotationCanvas from './ScreenAnnotationCanvas'
+import ScreenAnnotationToolbar from './ScreenAnnotationToolbar'
 
 export function VideoFill({
   stream,
@@ -78,13 +84,15 @@ function ParticipantTile({
   size = 'lg',
   isScreen = false,
   mirror = false,
-  onClick,
+  onClick: onClickProp,
   onContextMenu,
   locallyMuted = false,
   action,
   onClose,
   streamAudioUserId,
-  fullscreenable = false
+  fullscreenable = false,
+  watchers,
+  hasHeaderOffset = false
 }: {
   user: CallUserInfo
   speaking?: boolean
@@ -113,7 +121,14 @@ function ParticipantTile({
   streamAudioUserId?: string
   /** Transmissão assistida: botão e duplo clique de tela cheia (só com vídeo). */
   fullscreenable?: boolean
+  /** Espectadores assistindo à transmissão (ao vivo). */
+  watchers?: CallUserInfo[]
+  /** Espaço para não cobrir botões do cabeçalho da transmissão focada. */
+  hasHeaderOffset?: boolean
 }): React.JSX.Element {
+  // Clicar no Maestro na call abre o painel "Tocando agora" (vídeo, fila…).
+  const openMusicPanel = useMusicStore((s) => s.openPanel)
+  const onClick = onClickProp ?? (isMaestroIdentity(user.id) ? openMusicPanel : undefined)
   const activeSound = useSoundboardStore((s) => (isScreen ? undefined : s.activePlays[user.id]))
   const isPlayingSound = Boolean(activeSound)
   // 'fill': o maior retângulo com a proporção do vídeo que cabe no container
@@ -130,6 +145,10 @@ function ParticipantTile({
   const meId = useAuthStore((s) => s.user?.id)
   const celebration = useLevelStore((s) => (isScreen ? undefined : s.celebrations[user.id]))
   const levelFx = celebration ? levelUpEffects(celebration.level, celebration.previous) : null
+
+  const callId = useCallStore((s) => s.callId)
+  const isDrawing = useAnnotationStore((s) => Boolean(s.drawingActive[user.id]))
+  const toggleDrawing = useAnnotationStore((s) => s.toggleDrawing)
 
   const canFullscreen = fullscreenable && !!videoStream && !!streamAudioUserId
   const {
@@ -227,28 +246,66 @@ function ParticipantTile({
           <span className="h-1.5 w-1.5 shrink-0 animate-ping rounded-full bg-[#23a55a]" />
         </div>
       )}
-      {onClose && !inFullscreen && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onClose()
-          }}
-          aria-label="Fechar transmissão"
-          title="Fechar transmissão"
-          className="absolute right-2 top-2 z-10 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
-        >
-          <XIcon className="h-3.5 w-3.5" />
-        </button>
+      {isScreen && !inFullscreen && watchers && watchers.length > 0 && (
+        <ScreenWatchersOverlay
+          watchers={watchers}
+          className={`absolute top-2 ${hasHeaderOffset ? 'left-22' : 'left-2'}`}
+        />
       )}
-      {isScreen && !inFullscreen && (
-        <div
-          className={`absolute top-2 flex items-center gap-1.5 rounded-md bg-[#f23f43] px-1.5 py-0.5 ${
-            onClose ? 'right-11' : 'right-2'
-          }`}
-        >
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-          <span className="text-[10px] font-bold uppercase tracking-wide text-white">Ao vivo</span>
-        </div>
+      <div className="absolute right-2 top-2 z-10 flex items-center gap-1.5">
+        {isScreen && !inFullscreen && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleDrawing(user.id)
+            }}
+            aria-label="Anotações na transmissão"
+            title={isDrawing ? 'Fechar anotações' : 'Anotar / Desenhar na transmissão (Epic Pen)'}
+            className={`flex h-6 items-center gap-1 rounded-md px-1.5 text-xs font-semibold backdrop-blur-sm transition-colors cursor-pointer ${
+              isDrawing
+                ? 'bg-[#23a55a] text-white shadow-md ring-1 ring-white/30'
+                : 'bg-black/60 text-gray-200 hover:bg-black/80 hover:text-white'
+            }`}
+          >
+            <PencilIcon className="h-3.5 w-3.5" />
+            <span className="text-[11px] font-medium hidden sm:inline">Desenhar</span>
+          </button>
+        )}
+        {isScreen && !inFullscreen && (
+          <div className="flex items-center gap-1.5 rounded-md bg-[#f23f43] px-1.5 py-0.5">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+            <span className="text-[10px] font-bold uppercase tracking-wide text-white">Ao vivo</span>
+          </div>
+        )}
+        {onClose && !inFullscreen && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onClose()
+            }}
+            aria-label="Fechar transmissão"
+            title="Fechar transmissão"
+            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-gray-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
+          >
+            <XIcon className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+      {isScreen && (
+        <ScreenAnnotationCanvas
+          sharerId={user.id}
+          callId={callId ?? ''}
+          isDrawingMode={isDrawing}
+        />
+      )}
+      {isScreen && isDrawing && (
+        <ScreenAnnotationToolbar
+          sharerId={user.id}
+          callId={callId ?? ''}
+          onClose={() => toggleDrawing(user.id)}
+          className="absolute bottom-12 left-1/2 -translate-x-1/2"
+        />
       )}
       {streamAudioUserId && videoStream && !inFullscreen && (
         <StreamAudioControls
@@ -261,6 +318,7 @@ function ParticipantTile({
           name={user.display_name}
           userId={streamAudioUserId}
           onExit={toggleFullscreen}
+          watchers={watchers}
         />
       )}
       <div

@@ -17,7 +17,8 @@ import Input from '../components/Input'
 import Modal from '../components/Modal'
 import ChatPane from '../components/ChatPane'
 import VoiceChannelView from '../components/call/VoiceChannelView'
-import { UserPlusIcon, SearchIcon, VolumeIcon } from '../components/icons'
+import { UserPlusIcon, SearchIcon, VolumeIcon, PinIcon } from '../components/icons'
+import PinnedMessagesPopover from '../components/chat/PinnedMessagesPopover'
 import LevelBadge from '../components/level/LevelBadge'
 import LevelRowShimmer from '../components/level/LevelRowShimmer'
 import LevelUpBurst from '../components/level/LevelUpBurst'
@@ -175,6 +176,7 @@ export function ServerView(): React.JSX.Element {
 
   const [inviteFilter, setInviteFilter] = useState('')
   const [invitingId, setInvitingId] = useState<string | null>(null)
+  const [pinsOpen, setPinsOpen] = useState(false)
 
   useEffect(() => {
     return () => closeInviteModal()
@@ -195,6 +197,7 @@ export function ServerView(): React.JSX.Element {
 
   // Guarda o canal de texto aberto para voltar nele ao reabrir o servidor.
   useEffect(() => {
+    setPinsOpen(false)
     if (!id || !channelId) return
     const ch = channels.find((c) => c.id === channelId && c.server_id === id)
     if (ch && (ch.type ?? 'text') === 'text') rememberServerChannel(id, channelId)
@@ -281,7 +284,7 @@ export function ServerView(): React.JSX.Element {
       {/* Central Server View Column */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-r border-white/6">
         {/* Top Channel Header Bar */}
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/6 px-4">
+        <header className="relative flex h-14 shrink-0 items-center justify-between border-b border-white/6 px-4">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex min-w-0 items-center gap-2 text-gray-300">
               {activeChannel?.type === 'voice' ? (
@@ -299,6 +302,20 @@ export function ServerView(): React.JSX.Element {
           </div>
 
           <div className="flex items-center gap-2">
+            {activeChannel?.type !== 'voice' && channelId && (
+              <button
+                type="button"
+                onClick={() => setPinsOpen((v) => !v)}
+                title="Mensagens Fixadas"
+                className={`flex h-8 w-8 items-center justify-center rounded-lg border transition ${
+                  pinsOpen
+                    ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
+                    : 'border-white/10 bg-white/5 text-gray-400 hover:border-white/20 hover:text-white'
+                }`}
+              >
+                <PinIcon className="h-4 w-4" />
+              </button>
+            )}
             {/* Quem tem CREATE_INVITE convida (por padrão, todo membro) */}
             {access.can(Perm.CREATE_INVITE) && (
               <Button
@@ -311,6 +328,14 @@ export function ServerView(): React.JSX.Element {
               </Button>
             )}
           </div>
+
+          {pinsOpen && channelId && (
+            <PinnedMessagesPopover
+              channelId={channelId}
+              canModerate={chatPermissions.canModerate}
+              onClose={() => setPinsOpen(false)}
+            />
+          )}
         </header>
 
         {channelId && activeChannel?.type === 'voice' ? (

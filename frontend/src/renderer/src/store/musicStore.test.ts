@@ -16,6 +16,18 @@ describe('musicStore', () => {
     useMusicStore.setState({ state: null, ephemeral: [], presence: {}, serverOffsetMs: 0 })
   })
 
+  it('painel do Maestro abre ao clicar nele e fecha ao sair da call', () => {
+    const store = useMusicStore.getState()
+    expect(useMusicStore.getState().panelOpen).toBe(false)
+    store.openPanel()
+    expect(useMusicStore.getState().panelOpen).toBe(true)
+    store.closePanel()
+    expect(useMusicStore.getState().panelOpen).toBe(false)
+    store.openPanel()
+    store.clearState()
+    expect(useMusicStore.getState().panelOpen).toBe(false)
+  })
+
   it('guarda o estado e o desvio do relógio do servidor', () => {
     useMusicStore.getState().handleWsEvent({ type: 'music:state', payload: state })
     const s = useMusicStore.getState()

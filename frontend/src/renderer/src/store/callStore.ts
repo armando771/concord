@@ -51,7 +51,9 @@ import type { CallResume } from '../../../shared/callResume'
 import { useSoundboardStore } from './soundboardStore'
 import { useBoostStore } from './boostStore'
 import { useActivityStore } from './activityStore'
+import { useAnnotationStore } from './annotationStore'
 import { stopAllSoundboardAudio } from '../lib/soundboardPlayer'
+import { setVoiceOutputDevice } from '../lib/voiceOutput'
 
 export type CallStatus = 'idle' | 'ringing' | 'outgoing' | 'active'
 export type CallKind = 'dm' | 'channel'
@@ -215,6 +217,8 @@ interface CallState {
   localCameraStream: MediaStream | null
   /** quem está compartilhando tela segundo o backend (registry) */
   screenSharers: string[]
+  /** sharerId -> lista de espectadores assistindo aquela tela */
+  screenWatchers: Record<string, CallUserInfo[]>
   /** microfone e saída escolhidos ('' = padrão do sistema) */
   inputDeviceId: string
   outputDeviceId: string
@@ -406,6 +410,11 @@ const EMPTY_MEDIA: RemoteMedia = {
   videoStreams: {},
   mediaPeers: {},
   availableScreens: []
+}
+
+/** Microfone da chamada em andamento (null fora dela), para o medidor de sensibilidade. */
+export function getCallMicrophone(): MicHandle | null {
+  return localMic
 }
 
 export const useCallStore = create<CallState>()((set, get) => {
@@ -623,6 +632,7 @@ export const useCallStore = create<CallState>()((set, get) => {
               ...joinReqs.filter((r) => !s.joinRequests.some((q) => q.id === r.id))
             ],
         screenSharers: sharing,
+        screenWatchers: (state.screen_watchers as Record<string, CallUserInfo[]>) ?? s.screenWatchers,
         voiceStates: {
           ...Object.fromEntries(
             state.participants.map((p) => [
@@ -791,6 +801,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     localCameraStream?.getTracks().forEach((t) => t.stop())
     localCameraStream = null
     useSoundboardStore.getState().clearActivePlays()
+    useAnnotationStore.getState().cleanup()
     set({
       status: 'idle',
       callId: null,
@@ -807,6 +818,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       pendingScreenQuality: null,
       localCameraStream: null,
       screenSharers: [],
+      screenWatchers: {},
       speakingIds: [],
       voiceStates: {},
       watchedScreenIds: [],
@@ -876,6 +888,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     pendingScreenQuality: null,
     localCameraStream: null,
     screenSharers: [],
+    screenWatchers: {},
     speakingIds: [],
     voiceStates: {},
     watchedScreenIds: [],
@@ -1163,6 +1176,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     setOutputDevice: (deviceId) => {
       set({ outputDeviceId: deviceId })
       setSoundOutput(deviceId)
+      setVoiceOutputDevice(deviceId)
       saveAudioPrefs({ inputId: get().inputDeviceId, outputId: deviceId })
     },
 
@@ -1295,6 +1309,13 @@ export const useCallStore = create<CallState>()((set, get) => {
       const next = addWatched(s.watchedScreenIds, userId)
       set({ watchedScreenIds: next, focusedScreenUserId: userId })
       media?.setWatchedScreens(next)
+      if (s.callId) {
+        useChatStore.getState().sendEvent('call:screen_watch', {
+          call_id: s.callId,
+          sharer_id: userId,
+          watching: true
+        })
+      }
     },
 
     stopWatchingScreen: (userId) => {
@@ -1305,6 +1326,13 @@ export const useCallStore = create<CallState>()((set, get) => {
         focusedScreenUserId: s.focusedScreenUserId === userId ? null : s.focusedScreenUserId
       })
       media?.setWatchedScreens(next)
+      if (s.callId) {
+        useChatStore.getState().sendEvent('call:screen_watch', {
+          call_id: s.callId,
+          sharer_id: userId,
+          watching: false
+        })
+      }
     },
 
     setStageVisible: (visible) => {
@@ -1542,15 +1570,45 @@ export const useCallStore = create<CallState>()((set, get) => {
         case 'call:screen': {
           const p = payload as unknown as ScreenSharePayload
           if (get().callId !== p.call_id || p.user.id === meId) return
+          set((s) => {
+            const nextWatchers = { ...s.screenWatchers }
+            if (!p.active) {
+              delete nextWatchers[p.user.id]
+            }
+            return {
+              screenSharers: p.active
+                ? Array.from(new Set([...s.screenSharers, p.user.id]))
+                : s.screenSharers.filter((id) => id !== p.user.id),
+              screenWatchers: nextWatchers,
+              // Transmissão nova começa pausada: só a que acabou perde o foco.
+              focusedScreenUserId:
+                !p.active && s.focusedScreenUserId === p.user.id ? null : s.focusedScreenUserId,
+              participants: upsertParticipant(s.participants, p.user)
+            }
+          })
+          return
+        }
+
+        case 'call:screen_watchers': {
+          const p = payload as unknown as {
+            call_id: string
+            sharer_id: string
+            watchers: CallUserInfo[]
+          }
+          if (get().callId !== p.call_id) return
           set((s) => ({
-            screenSharers: p.active
-              ? Array.from(new Set([...s.screenSharers, p.user.id]))
-              : s.screenSharers.filter((id) => id !== p.user.id),
-            // Transmissão nova começa pausada: só a que acabou perde o foco.
-            focusedScreenUserId:
-              !p.active && s.focusedScreenUserId === p.user.id ? null : s.focusedScreenUserId,
-            participants: upsertParticipant(s.participants, p.user)
+            screenWatchers: {
+              ...s.screenWatchers,
+              [p.sharer_id]: p.watchers
+            }
           }))
+          return
+        }
+
+        case 'call:screen_draw':
+        case 'call:screen_draw_clear':
+        case 'call:screen_draw_undo': {
+          useAnnotationStore.getState().handleWsEvent(event)
           return
         }
 
@@ -1596,17 +1654,27 @@ export const useCallStore = create<CallState>()((set, get) => {
             void resyncChannelCall()
             return
           }
-          showToast.info(`${callName(get(), p.user)} saiu da chamada.`)
           if (get().type === 'channel') {
+            // Sem pop-up: o som e a lista de participantes já avisam.
             playSound('userLeave')
             // A mídia do participante some sozinha quando ele sai da sala do LiveKit.
-            set((s) => ({
-              participants: s.participants.filter((q) => q.id !== p.user.id),
-              screenSharers: s.screenSharers.filter((id) => id !== p.user.id)
-            }))
+            set((s) => {
+              const nextWatchers = { ...s.screenWatchers }
+              delete nextWatchers[p.user.id]
+              for (const [sid, list] of Object.entries(nextWatchers)) {
+                nextWatchers[sid] = list.filter((w) => w.id !== p.user.id)
+              }
+              return {
+                participants: s.participants.filter((q) => q.id !== p.user.id),
+                screenSharers: s.screenSharers.filter((id) => id !== p.user.id),
+                screenWatchers: nextWatchers
+              }
+            })
             bumpList()
             return
           }
+          // Na DM a saída do outro encerra a chamada: aqui o aviso faz falta.
+          showToast.info(`${callName(get(), p.user)} saiu da chamada.`)
           get().endCall()
           return
         }
@@ -1778,6 +1846,7 @@ useCallStore.subscribe((s) => {
 
 // Os efeitos sonoros saem no mesmo dispositivo escolhido para as vozes.
 setSoundOutput(useCallStore.getState().outputDeviceId)
+setVoiceOutputDevice(useCallStore.getState().outputDeviceId)
 
 // Dispositivo escolhido desconectado (ex.: tirou o headset): volta para o
 // padrão do sistema em vez de ficar sem microfone/som.
