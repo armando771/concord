@@ -33,11 +33,14 @@ function whenServersLoaded(onLoaded: () => void): () => void {
 
 function buildReport(stats: FrameStats, loafSupported: boolean): PerfReport {
   const { fps, loaf } = stats.take(performance.now())
+  // Oculta o rAF é limitado: FPS e LoAF dessa janela não representam o app (o main também
+  // só os aceita com a janela visível).
+  const measurable = !document.hidden
   return {
     kind: 'report',
     ctx: buildPerfContext(router.state.location.pathname, useCallStore.getState()),
-    fps: document.hidden ? null : fps,
-    loaf: loafSupported ? loaf : null
+    fps: measurable ? fps : null,
+    loaf: measurable && loafSupported ? loaf : null
   }
 }
 

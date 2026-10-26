@@ -16,7 +16,8 @@ type GetWindow = () => BrowserWindow | null
 /**
  * Acompanha as janelas criadas: o ready-to-show da principal (a de overlay também
  * dispara; só a principal conta) e se ela está oculta na bandeja. Devolve a pergunta
- * "a janela principal está oculta?".
+ * "a janela principal está oculta?". O rastreador também entra nas outras janelas
+ * (overlay, atividade): é inofensivo e o WeakMap não as segura.
  */
 function watchWindows(getWindow: GetWindow, session: PerfSession): () => boolean {
   const hiddenOf = new WeakMap<BrowserWindow, () => boolean>()
@@ -57,7 +58,8 @@ function startRecording(getWindow: GetWindow): boolean {
     () => session.sample(app.getAppMetrics(), windowState(getWindow(), isHidden()), nowMs()),
     SAMPLE_MS
   )
-  app.once('before-quit', () => {
+  // 'quit' e não 'before-quit': este último pode ser cancelado e o app seguir vivo.
+  app.once('quit', () => {
     clearInterval(timer)
     recorder.close(Math.round(nowMs() / 100) / 10)
   })

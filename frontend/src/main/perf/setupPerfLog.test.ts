@@ -84,7 +84,7 @@ describe('setupPerfLog', () => {
 
     electron.listeners.get('perf:report')!(fromWindow, report)
     vi.advanceTimersByTime(1000)
-    electron.appListeners.get('before-quit')!()
+    electron.appListeners.get('quit')!()
 
     const lines = readLog()
     expect(lines[0]).toMatchObject({
@@ -102,7 +102,7 @@ describe('setupPerfLog', () => {
     electron.listeners.get('perf:report')!({ sender: {}, senderFrame: webContents.mainFrame }, report)
     electron.listeners.get('perf:report')!({ sender: webContents, senderFrame: {} }, report)
     vi.advanceTimersByTime(1000)
-    electron.appListeners.get('before-quit')!()
+    electron.appListeners.get('quit')!()
     expect(readLog()[0]).toMatchObject({ ctx: { route: '' }, fps: null })
   })
 
@@ -111,7 +111,7 @@ describe('setupPerfLog', () => {
     setupPerfLog(() => win)
     electron.listeners.get('perf:report')!(fromWindow, { kind: 'report', ctx: 7 })
     vi.advanceTimersByTime(1000)
-    electron.appListeners.get('before-quit')!()
+    electron.appListeners.get('quit')!()
     expect(readLog()[0]).toMatchObject({ fps: null })
   })
 
@@ -136,7 +136,7 @@ describe('setupPerfLog', () => {
     vi.advanceTimersByTime(1000)
     handlers.hide.forEach((cb) => cb())
     vi.advanceTimersByTime(1000)
-    electron.appListeners.get('before-quit')!()
+    electron.appListeners.get('quit')!()
 
     const states = readLog()
       .filter((l) => l.kind === 'sample')

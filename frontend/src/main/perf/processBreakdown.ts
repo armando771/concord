@@ -17,7 +17,9 @@ export class ProcessBreakdown {
     const byGroup = new Map<string, Reading[]>()
     for (const reading of readings) {
       const group = groupOf(reading.type)
-      byGroup.set(group, [...(byGroup.get(group) ?? []), reading])
+      const list = byGroup.get(group) ?? []
+      list.push(reading)
+      byGroup.set(group, list)
     }
     const stats: ProcStats = {}
     for (const [group, sampler] of this.samplers) {
