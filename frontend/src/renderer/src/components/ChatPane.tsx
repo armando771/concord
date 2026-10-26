@@ -36,6 +36,7 @@ import {
   editOutcome,
   lastEditableMessage
 } from '../lib/messageEdit'
+import { isGroupedWithPrevious } from '../lib/messageGrouping'
 import MessageText from './chat/MessageText'
 import MessageEditor from './chat/MessageEditor'
 import EmotePickerPopover from './chat/EmotePickerPopover'
@@ -165,8 +166,11 @@ function MessageItem({
   canModerate,
   canDelete = true,
   canPin,
-  onTogglePin
+  onTogglePin,
+  grouped = false
 }: {
+  /** Continuação de uma sequência do mesmo autor: só o texto, sem avatar e nome. */
+  grouped?: boolean
   canPin?: boolean
   onTogglePin?: () => void
   message: Message
@@ -226,6 +230,28 @@ function MessageItem({
   const hasReplyReference = Boolean(message.reply_to_id || message.reply_to)
   const replyAuthorName = serverDisplayName({ nickname: replyNickname }, message.reply_to?.author)
 
+  // Autor bloqueado e revelado: sem agrupar, para a linha não ficar sem nome.
+  const compact = grouped && !authorBlocked
+
+  const badges = (
+    <>
+      {message.edited_at && (
+        <span className="text-ds-xs text-gray-500" title={formatEditedAt(message.edited_at)}>
+          (editada)
+        </span>
+      )}
+      {message.pinned_at && (
+        <span
+          className="flex items-center gap-0.5 text-ds-xs text-amber-400 font-medium"
+          title="Mensagem fixada"
+        >
+          <PinIcon className="h-3 w-3" />
+          <span>fixada</span>
+        </span>
+      )}
+    </>
+  )
+
   if (message.system_kind === 'music') return <MusicMessage message={message} />
   if (message.system_kind) return <SystemMessage message={message} />
 
@@ -248,7 +274,9 @@ function MessageItem({
   return (
     <div
       id={`msg-${message.id}`}
-      className={`group relative flex flex-col gap-1 rounded-md px-4 py-1.5 transition-colors ${
+      className={`group relative flex flex-col gap-1 rounded-md px-4 transition-colors ${
+        compact ? 'py-0.5' : 'py-1.5'
+      } ${
         mentionsMe
           ? 'border-l-2 border-warning bg-warning/10 hover:bg-warning/15'
           : 'hover:bg-fg/[0.03]'
@@ -272,48 +300,51 @@ function MessageItem({
       )}
 
       <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={openProfile}
-          aria-label={`Perfil de ${name}`}
-          className="h-10 shrink-0 cursor-pointer self-start rounded-full"
-        >
-          <Avatar userId={message.author_id} name={name} avatarUrl={look.avatarUrl} size={40} />
-        </button>
+        {compact ? (
+          // Mesma largura do avatar; a hora aparece ao passar o mouse.
+          <span
+            aria-hidden="true"
+            className="w-10 shrink-0 select-none self-start pt-[3px] text-center text-[10px] font-medium leading-[1.375rem] text-gray-500 opacity-0 group-hover:opacity-100"
+          >
+            {formatTime(message.created_at)}
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={openProfile}
+            aria-label={`Perfil de ${name}`}
+            className="h-10 shrink-0 cursor-pointer self-start rounded-full"
+          >
+            <Avatar userId={message.author_id} name={name} avatarUrl={look.avatarUrl} size={40} />
+          </button>
+        )}
         <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2">
-            <button
-              type="button"
-              onClick={openProfile}
-              style={nameColor ? { color: nameColor } : undefined}
-              className={`cursor-pointer text-ds-chat font-medium hover:underline ${
-                nameColor ? '' : 'text-strong'
-              }`}
-            >
-              {nickname ? (
-                name
-              ) : (
-                <StyledName name={name} userId={message.author_id} style={author?.name_style} />
-              )}
-            </button>
-            <span className="text-ds-xs font-medium text-gray-500">
-              {formatTime(message.created_at)}
-            </span>
-            {message.edited_at && (
-              <span className="text-ds-xs text-gray-500" title={formatEditedAt(message.edited_at)}>
-                (editada)
-              </span>
-            )}
-            {message.pinned_at && (
-              <span
-                className="flex items-center gap-0.5 text-ds-xs text-amber-400 font-medium"
-                title="Mensagem fixada"
+          {compact ? (
+            (message.edited_at || message.pinned_at) && (
+              <div className="flex items-baseline gap-2">{badges}</div>
+            )
+          ) : (
+            <div className="flex items-baseline gap-2">
+              <button
+                type="button"
+                onClick={openProfile}
+                style={nameColor ? { color: nameColor } : undefined}
+                className={`cursor-pointer text-ds-chat font-medium hover:underline ${
+                  nameColor ? '' : 'text-strong'
+                }`}
               >
-                <PinIcon className="h-3 w-3" />
-                <span>fixada</span>
+                {nickname ? (
+                  name
+                ) : (
+                  <StyledName name={name} userId={message.author_id} style={author?.name_style} />
+                )}
+              </button>
+              <span className="text-ds-xs font-medium text-gray-500">
+                {formatTime(message.created_at)}
               </span>
-            )}
-          </div>
+              {badges}
+            </div>
+          )}
           {isEditing ? (
             <MessageEditor
               initial={message.content}
@@ -1071,10 +1102,11 @@ function ChatPane({
                 Nenhuma mensagem por aqui ainda. Seja o primeiro a escrever!
               </div>
             )}
-            {messages.map((m) => (
+            {messages.map((m, i) => (
               <MessageItem
                 key={m.id}
                 message={m}
+                grouped={isGroupedWithPrevious(m, messages[i - 1])}
                 serverId={serverId}
                 isHighlighted={highlightedId === m.id}
                 mentionLabels={labels}
