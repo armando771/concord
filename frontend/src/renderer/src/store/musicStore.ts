@@ -64,6 +64,7 @@ interface MusicStore {
   setStageVideo: (on: boolean) => void
   openPanel: () => void
   closePanel: () => void
+  togglePanel: () => void
   clearState: () => void
 }
 
@@ -150,5 +151,6 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
   setStageVideo: (on) => set({ stageVideo: on }),
   openPanel: () => set({ panelOpen: true }),
   closePanel: () => set({ panelOpen: false }),
+  togglePanel: () => set((st) => ({ panelOpen: !st.panelOpen })),
   clearState: () => set({ state: null, stageVideo: false, panelOpen: false })
 }))

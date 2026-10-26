@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { removeQueueItem, skipMusic, swapQueueItems, type MusicItem } from '../../api/music'
 import { canSwap, formatDuration, T17, T20 } from '../../lib/music'
 import { useAuthStore } from '../../store/authStore'
@@ -13,7 +13,8 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : 'Falha na operação.'
 }
 
-/** Painel "Tocando agora" da call: abre ao clicar no Maestro no canal de voz.
+/** Painel "Tocando agora" da call: coluna que desliza da esquerda sobre a tela
+ *  de voz ao clicar no Maestro (clicar de novo, fora, Esc ou no X fecha).
  *  Fechar só esconde o painel (a música e o vídeo do palco seguem). */
 function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | null {
   const state = useMusicStore((s) => s.state)
@@ -31,8 +32,30 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
   // useElapsed recebe o início em ms (relógio local) e devolve segundos.
   const startedAt = state?.now ? state.now.started_at - serverOffsetMs : null
   const elapsed = useElapsed(startedAt)
+  const asideRef = useRef<HTMLElement | null>(null)
 
-  if (!state || !panelOpen) return null
+  // Clique fora fecha. O Maestro (tile ou linha da lateral) fica de fora: ele
+  // mesmo alterna, senão o clique fecharia e reabriria na sequência.
+  useEffect(() => {
+    if (!panelOpen) return
+    const onDown = (e: MouseEvent): void => {
+      const target = e.target as Element | null
+      if (!target || asideRef.current?.contains(target) || target.closest('[data-maestro-tile]'))
+        return
+      closePanel()
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') closePanel()
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [panelOpen, closePanel])
+
+  if (!state) return null
   const now = state.now
   const mineNow = now?.item.requested_by.id === meId
   const voted = !!meId && state.skip.voters.includes(meId)
@@ -60,21 +83,32 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
   }
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-white/6 bg-black/20 p-4">
+    <aside
+      ref={asideRef}
+      aria-hidden={!panelOpen}
+      className={`absolute inset-y-0 left-0 z-20 flex w-72 flex-col gap-3 overflow-y-auto border-r border-white/10 bg-[#1a1b1e]/95 p-4 shadow-2xl backdrop-blur transition-all duration-300 ease-out ${
+        panelOpen
+          ? 'translate-x-0 opacity-100'
+          : 'pointer-events-none invisible -translate-x-full opacity-0'
+      }`}
+    >
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400">{T17.title}</h3>
         <button
           type="button"
           onClick={closePanel}
           aria-label="Fechar"
-          className="cursor-pointer rounded p-1 text-gray-400 hover:bg-white/10 hover:text-white"
+          title="Fechar"
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-white/10 text-gray-200 transition-colors hover:bg-white/20 hover:text-white"
         >
           <XIcon className="h-4 w-4" />
         </button>
       </div>
       {now && (
         <div className="flex flex-col gap-2">
-          <MusicVideo serverId={serverId} item={now.item} startedAt={now.started_at} />
+          {panelOpen && (
+            <MusicVideo serverId={serverId} item={now.item} startedAt={now.started_at} />
+          )}
           {now.item.has_video && (
             <div className="flex gap-2">
               <button
@@ -159,9 +193,9 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
                         showToast.error(errorText(err))
                       )
                     }
-                    className="cursor-pointer text-gray-500 hover:text-white"
+                    className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-gray-300 transition-colors hover:bg-white/15 hover:text-white"
                   >
-                    ✕
+                    <XIcon className="h-3.5 w-3.5" />
                   </button>
                 )}
               </li>

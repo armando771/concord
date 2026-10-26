@@ -127,9 +127,9 @@ function ParticipantTile({
   /** Espaço para não cobrir botões do cabeçalho da transmissão focada. */
   hasHeaderOffset?: boolean
 }): React.JSX.Element {
-  // Clicar no Maestro na call abre o painel "Tocando agora" (vídeo, fila…).
-  const openMusicPanel = useMusicStore((s) => s.openPanel)
-  const onClick = onClickProp ?? (isMaestroIdentity(user.id) ? openMusicPanel : undefined)
+  // Clicar no Maestro na call abre/fecha o painel "Tocando agora" (vídeo, fila…).
+  const toggleMusicPanel = useMusicStore((s) => s.togglePanel)
+  const onClick = onClickProp ?? (isMaestroIdentity(user.id) ? toggleMusicPanel : undefined)
   const activeSound = useSoundboardStore((s) => (isScreen ? undefined : s.activePlays[user.id]))
   const isPlayingSound = Boolean(activeSound)
   // 'fill': o maior retângulo com a proporção do vídeo que cabe no container
@@ -178,6 +178,7 @@ function ParticipantTile({
       onClick={handleClick}
       onDoubleClick={canFullscreen ? handleDoubleClick : undefined}
       onContextMenu={onContextMenu}
+      data-maestro-tile={isMaestroIdentity(user.id) ? '' : undefined}
       role={onClick ? 'button' : undefined}
       title={onClick && isScreen ? 'Expandir tela' : undefined}
       style={inFullscreen ? undefined : fillStyle}
