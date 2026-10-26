@@ -118,6 +118,11 @@ export interface OverlayShortcutStatus {
   taken: boolean
 }
 
+export interface WindowThemeApi {
+  /** Pinta a barra de título nativa (Windows/Linux) com as cores do tema. */
+  setTitleBarColors(colors: { color: string; symbolColor: string }): void
+}
+
 export interface OverlayApi {
   /** Overlay de jogo existe nesta plataforma (só Windows). */
   supported: boolean
@@ -165,6 +170,7 @@ declare global {
       activities?: ActivitiesApi
       games?: GamesApi
       keybinds?: KeybindsApi
+      windowTheme?: WindowThemeApi
     }
   }
 }

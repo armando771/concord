@@ -1,27 +1,22 @@
 @import 'tailwindcss';
 /* Fonte e escala de texto do Discord (compartilhado com o overlay). */
 @import './typography.css';
+/* Tokens de cor dos temas (lista e documentação no topo do arquivo). */
+@import './theme.css';
 
 @theme {
-  --color-discord-violet: #5865f2;
-  --color-discord-violet-hover: #4752c4;
-  --color-discord-green: #23a55a;
-  --color-discord-green-hover: #1d8a4b;
-  --color-discord-dnd: #f23f43;
-  --color-discord-idle: #f0b232;
-  --color-discord-offline: #80848e;
+  /* Vidro dos painéis: seguem o tema (no AMOLED ficam translúcidos sobre o brilho). */
+  --glass-onyx-bg: var(--bg-floating);
+  --glass-onyx-deep: var(--bg-tertiary);
+  --glass-onyx-surface: var(--bg-secondary);
+  --glass-onyx-card: var(--bg-modal);
+  --glass-onyx-card-hover: var(--bg-modal);
+  --glass-border: var(--border-subtle);
+  --glass-border-light: var(--border-normal);
+  --glass-highlight: color-mix(in srgb, var(--brand) 40%, transparent);
 
-  --glass-onyx-bg: rgba(9, 10, 15, 0.75);
-  --glass-onyx-deep: rgba(5, 6, 9, 0.88);
-  --glass-onyx-surface: rgba(18, 20, 29, 0.65);
-  --glass-onyx-card: rgba(255, 255, 255, 0.04);
-  --glass-onyx-card-hover: rgba(255, 255, 255, 0.07);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-border-light: rgba(255, 255, 255, 0.12);
-  --glass-highlight: rgba(139, 92, 246, 0.4);
-
-  --shadow-onyx-glass: 0 8px 32px rgba(0, 0, 0, 0.65);
-  --shadow-onyx-card: 0 4px 20px rgba(0, 0, 0, 0.45);
+  --shadow-onyx-glass: 0 8px 32px var(--shadow);
+  --shadow-onyx-card: 0 4px 20px var(--shadow);
 }
 
 @layer base {
@@ -37,11 +32,11 @@
 
   body {
     font-family: var(--font-sans);
-    color: #f2f3f5;
-    background: #050508;
+    color: var(--text-normal);
+    background: var(--bg-app);
   }
 
-  /* Custom Thin Onyx Scrollbar */
+  /* Barra de rolagem fina, na cor do tema. */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -52,12 +47,18 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--scrollbar-thumb);
     border-radius: 9999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.28);
+    background: var(--scrollbar-thumb-hover);
+  }
+
+  /* As opções de <select> abrem numa lista nativa: no fundo do tema. */
+  option {
+    background: var(--bg-floating);
+    color: var(--text-normal);
   }
 }
 
@@ -89,10 +90,10 @@
     width: 100%;
     min-height: 2.75rem;
     padding: 0.625rem 0.875rem;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: var(--bg-input);
+    border: 1px solid var(--border-normal);
     border-radius: 0.625rem;
-    color: #f2f3f5;
+    color: var(--text-normal);
     /* Campo de texto do Discord: 16px (44px de altura com o min-height). */
     font-size: var(--text-ds-md);
     line-height: var(--text-ds-md--line-height);
@@ -104,17 +105,16 @@
   }
 
   .glass-input:hover {
-    border-color: rgba(255, 255, 255, 0.24);
+    border-color: var(--border-strong);
   }
 
   .glass-input::placeholder {
-    color: rgba(242, 243, 245, 0.35);
+    color: var(--text-faint);
   }
 
   .glass-input:focus {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(139, 92, 246, 0.8);
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.22);
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 25%, transparent);
   }
 
   select.glass-input {
@@ -126,17 +126,34 @@
     background-position: right 0.75rem center;
   }
 
+  /* A seta é um SVG em data URI (não lê var()): no tema claro, uma mais escura. */
+  [data-theme='discord-light'] select.glass-input {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236c6d76' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  }
+
   .badge-novo {
     font-size: 0.625rem;
     font-weight: 700;
     line-height: 1;
     padding: 0.15rem 0.35rem;
     border-radius: 0.375rem;
-    background: linear-gradient(135deg, #f43f5e, #e11d48);
+    background: var(--red-strong);
     color: #ffffff;
     letter-spacing: 0.05em;
-    box-shadow: 0 2px 8px rgba(244, 63, 94, 0.4);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--red) 40%, transparent);
   }
+}
+
+/* Bolhas de luz do fundo (components/Background.tsx): só nos temas com
+   --decor-opacity > 0. Fora deles, display: none para não animar blur à toa. */
+.app-decor {
+  display: none;
+  opacity: var(--decor-opacity);
+}
+
+[data-theme='amoled'] .app-decor,
+[data-theme='neon'] .app-decor {
+  display: block;
 }
 
 @keyframes blob-float {
@@ -740,8 +757,8 @@
     opacity: 1;
   }
   100% {
-    transform: translate(calc(-50% + var(--dx) * 0.4), calc(-50% + var(--dy) * 0.4))
-      rotate(240deg) scale(0.2);
+    transform: translate(calc(-50% + var(--dx) * 0.4), calc(-50% + var(--dy) * 0.4)) rotate(240deg)
+      scale(0.2);
     opacity: 0;
   }
 }

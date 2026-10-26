@@ -1,0 +1,595 @@
+/* ==========================================================================
+   Temas da Salinha: tokens de cor semânticos
+   ==========================================================================
+
+   Importado pelo app (main.css) e pelo overlay (overlay.css), depois de
+   'tailwindcss'. O tema vem do atributo data-theme no <html> (ver
+   lib/themes.ts e store/themeStore.ts); sem atributo vale o Discord Escuro.
+   data-theme também funciona num elemento qualquer: as prévias do seletor
+   (Configurações → Aparência) usam isso para pintar cada cartão com o tema dele.
+
+   Use sempre os tokens, nunca hex solto. Em CSS: var(--bg-primary). Em
+   Tailwind: as classes da coluna da direita (aceitam /opacidade: bg-brand/20).
+
+   Fundos
+     --bg-app            fundo da janela (opaco; base para compor os translúcidos)
+     --bg-tertiary       trilho de servidores, barra de título        bg-tertiary
+     --bg-secondary      barra lateral (canais, DMs, navegação)       bg-secondary
+     --bg-primary        área do chat / conteúdo principal            bg-primary
+     --bg-members        lista de membros                             bg-members
+     --bg-surface        cartões e blocos dentro de um painel         bg-surface
+     --bg-floating       menus, popovers, tooltips, toasts            bg-floating
+     --bg-modal          modais e diálogos                            bg-modal
+     --bg-input          campos de texto, busca                       bg-input
+     --bg-accent         neutro sólido (trilhas, esqueletos, chips)   bg-accent
+     --bg-hover          hover de item de lista (translúcido)         bg-hover
+     --bg-active         item pressionado (translúcido)               bg-active
+     --bg-selected       item selecionado (translúcido)               bg-selected
+     --scrim             fundo escurecido atrás de modal              bg-scrim
+   Bordas
+     --border-subtle     divisórias                                   border-subtle
+     --border-normal     contorno de campos e cartões                 border-normal
+     --border-strong     contorno com destaque (hover de campo)       border-strong
+   Texto (todos com contraste AA, 4.5:1, nos fundos acima)
+     --text-strong       títulos, nome em destaque                    text-strong
+     --text-normal       texto comum, mensagens                       text-normal
+     --text-secondary    texto de apoio                               text-secondary
+     --text-muted        rótulos, metadados                           text-muted
+     --text-faint        o mais apagado ainda legível (horário)       text-faint
+     --text-link         links                                        text-link
+     --text-brand        texto na cor da marca                        text-brand
+     --text-positive     texto de sucesso                             text-success
+     --text-danger       texto de erro                                text-danger
+     --text-warning      texto de aviso                               text-warning
+   Interativo (ícones e itens clicáveis)
+     --interactive-normal  repouso                                    text-interactive-normal
+     --interactive-hover   hover                                      text-interactive-hover
+     --interactive-active  ativo/selecionado                          text-interactive-active
+     --interactive-muted   desabilitado/silenciado (decorativo)       text-interactive-muted
+   Marca e status (texto branco por cima passa AA nos *-strong e na marca)
+     --brand / --brand-hover                    blurple               bg-brand, bg-brand-hover
+     --green                                    indicador (online)    bg-success, ring-success
+     --green-strong / --green-strong-hover      botão verde           bg-success-strong
+     --red                                      indicador, ao vivo    bg-danger
+     --red-strong / --red-strong-hover          botão de perigo       bg-danger-strong
+     --yellow                                   ausente, aviso        bg-warning
+   Outros
+     --fg                cor-base dos véus translúcidos (bg-fg/5, border-fg/10):
+                         branco nos temas escuros, preto nos claros
+     --scrollbar-thumb / --scrollbar-thumb-hover
+     --shadow            cor da sombra
+     --decor-opacity     brilho do fundo animado (0 = sem)
+   Classe .on-media: texto claro por cima de vídeo/imagem/véu preto, em qualquer tema.
+   Os cinzas do Tailwind (text-gray-50…600) também seguem o tema: ver main.css.
+
+   Fonte do Discord Escuro e Claro: variáveis públicas do cliente web
+   (https://discord.com/app, build 649389, arquivo
+   /assets/952007.87dea5a700fabeaf.css, classes .theme-dark e .theme-light,
+   lidas em 26/10/2026). Nome do Discord ao lado de cada valor.
+   ========================================================================== */
+
+:root,
+[data-theme='discord-dark'] {
+  color-scheme: dark;
+  --bg-app: #2c2d32;
+  --bg-tertiary: #2c2d32; /* --background-base-lowest */
+  --bg-secondary: #323339; /* --background-base-lower, --channel-background-default */
+  --bg-primary: #393a41; /* --chat-background-default, --background-surface-high */
+  --bg-members: #36373e; /* --background-base-low */
+  --bg-surface: #3c3d45; /* --background-surface-higher */
+  --bg-floating: #3f4048; /* --background-surface-highest */
+  --bg-modal: #393a41; /* --modal-background */
+  --bg-input: #2c2d32; /* --background-base-lowest */
+  --bg-accent: #41434a; /* --background-accent */
+  --bg-hover: rgba(151, 151, 159, 0.122); /* --interactive-background-hover */
+  --bg-active: rgba(151, 151, 159, 0.161); /* --interactive-background-active */
+  --bg-selected: rgba(151, 151, 159, 0.2); /* --interactive-background-selected */
+  --scrim: rgba(0, 0, 0, 0.722); /* --background-scrim */
+  --border-subtle: rgba(151, 151, 159, 0.122); /* --border-subtle */
+  --border-normal: rgba(151, 151, 159, 0.2); /* --border-normal */
+  --border-strong: rgba(151, 151, 159, 0.439); /* --border-strong */
+  --text-strong: #ffffff; /* --text-strong */
+  --text-normal: #f3f3f4; /* --text-default */
+  --text-secondary: #c5c6ca; /* --text-subtle */
+  --text-muted: #abacb2; /* --text-muted */
+  --text-faint: #abacb2; /* --text-muted (o Discord não tem texto mais apagado) */
+  --text-link: #76aff6; /* --text-link */
+  --text-brand: #94a8ff; /* --text-brand */
+  --text-positive: #7ecb94; /* --text-feedback-positive */
+  --text-danger: #ffa09b; /* --text-feedback-critical */
+  --text-warning: #fcb529; /* --text-feedback-warning */
+  --interactive-normal: #c5c6ca; /* --interactive-text-default */
+  --interactive-hover: #ffffff; /* --interactive-text-hover */
+  --interactive-active: #ffffff; /* --interactive-text-active */
+  --interactive-muted: #4e5058; /* --interactive-muted */
+  --brand: #5865f2; /* --background-brand, --brand-500 */
+  --brand-hover: #4752c4; /* --brand-560 */
+  --green: #23a55a; /* --status-positive */
+  --green-strong: #248046; /* --status-positive-background */
+  --green-strong-hover: #1a6334;
+  --red: #f23f43; /* --status-danger */
+  --red-strong: #da373c;
+  --red-strong-hover: #a12d2f;
+  --yellow: #f0b232; /* --status-warning */
+  --fg: #ffffff;
+  --scrollbar-thumb: #767780; /* --scrollbar-thin-thumb */
+  --scrollbar-thumb-hover: #9d9ea5;
+  --shadow: rgba(0, 0, 0, 0.36);
+  --decor-opacity: 0;
+}
+
+[data-theme='discord-light'] {
+  color-scheme: light;
+  --bg-app: #f3f3f4;
+  --bg-tertiary: #f3f3f4; /* --background-base-lowest */
+  --bg-secondary: #fbfbfb; /* --background-base-lower */
+  --bg-primary: #ffffff; /* --chat-background-default */
+  --bg-members: #fbfbfb; /* --background-base-low */
+  --bg-surface: #ffffff; /* --background-surface-higher */
+  --bg-floating: #ffffff; /* --background-surface-highest */
+  --bg-modal: #ffffff; /* --modal-background */
+  --bg-input: #f3f3f4; /* --background-base-lowest (o #ebedef do campo do Discord deixa o texto apagado abaixo de AA) */
+  --bg-accent: #e3e5e8;
+  --bg-hover: rgba(151, 151, 159, 0.122); /* --interactive-background-hover */
+  --bg-active: rgba(151, 151, 159, 0.161); /* --interactive-background-active */
+  --bg-selected: rgba(151, 151, 159, 0.239); /* --interactive-background-selected */
+  --scrim: rgba(0, 0, 0, 0.522); /* --background-scrim */
+  --border-subtle: rgba(151, 151, 159, 0.278); /* --border-subtle */
+  --border-normal: rgba(151, 151, 159, 0.4); /* --border-normal */
+  --border-strong: rgba(151, 151, 159, 0.522); /* --border-strong */
+  --text-strong: #28282d; /* --text-strong */
+  --text-normal: #2e2e34; /* --text-default */
+  --text-secondary: #595a63; /* --text-subtle */
+  --text-muted: #6c6d76; /* --text-muted */
+  --text-faint: #6c6d76; /* --text-muted */
+  --text-link: #006dd4; /* --text-link */
+  --text-brand: #525fe0; /* --text-brand */
+  --text-positive: #01713a; /* --text-feedback-positive */
+  --text-danger: #b92733; /* --text-feedback-critical */
+  --text-warning: #945300; /* --text-feedback-warning */
+  --interactive-normal: #595a63; /* --interactive-text-default */
+  --interactive-hover: #28282d; /* --interactive-text-hover */
+  --interactive-active: #28282d; /* --interactive-text-active */
+  --interactive-muted: #c4c9ce; /* --interactive-muted */
+  --brand: #5865f2; /* --background-brand */
+  --brand-hover: #4752c4; /* --brand-560 */
+  --green: #24934e; /* --status-positive */
+  --green-strong: #248046;
+  --green-strong-hover: #1a6334;
+  --red: #da373c; /* --status-danger */
+  --red-strong: #da373c;
+  --red-strong-hover: #a12d2f;
+  --yellow: #af7615; /* --status-warning */
+  --fg: #000000;
+  --scrollbar-thumb: #8b8c94; /* --scrollbar-thin-thumb */
+  --scrollbar-thumb-hover: #6c6d76;
+  --shadow: rgba(0, 0, 0, 0.16);
+  --decor-opacity: 0;
+}
+
+/* Os tons claros do Tailwind (text-amber-300, text-violet-400…) foram pensados
+   para fundo escuro: no tema claro viram os tons 700/800 do mesmo matiz. */
+[data-theme='discord-light'] {
+  --color-red-50: oklch(44.4% 0.177 26.899); /* red-800 */
+  --color-red-100: oklch(44.4% 0.177 26.899); /* red-800 */
+  --color-red-200: oklch(44.4% 0.177 26.899); /* red-800 */
+  --color-red-300: oklch(50.5% 0.213 27.518); /* red-700 */
+  --color-red-400: oklch(50.5% 0.213 27.518); /* red-700 */
+  --color-orange-50: oklch(47% 0.157 37.304); /* orange-800 */
+  --color-orange-100: oklch(47% 0.157 37.304); /* orange-800 */
+  --color-orange-200: oklch(47% 0.157 37.304); /* orange-800 */
+  --color-orange-300: oklch(55.3% 0.195 38.402); /* orange-700 */
+  --color-orange-400: oklch(55.3% 0.195 38.402); /* orange-700 */
+  --color-amber-50: oklch(47.3% 0.137 46.201); /* amber-800 */
+  --color-amber-100: oklch(47.3% 0.137 46.201); /* amber-800 */
+  --color-amber-200: oklch(47.3% 0.137 46.201); /* amber-800 */
+  --color-amber-300: oklch(55.5% 0.163 48.998); /* amber-700 */
+  --color-amber-400: oklch(55.5% 0.163 48.998); /* amber-700 */
+  --color-yellow-50: oklch(47.6% 0.114 61.907); /* yellow-800 */
+  --color-yellow-100: oklch(47.6% 0.114 61.907); /* yellow-800 */
+  --color-yellow-200: oklch(47.6% 0.114 61.907); /* yellow-800 */
+  --color-yellow-300: oklch(55.4% 0.135 66.442); /* yellow-700 */
+  --color-yellow-400: oklch(55.4% 0.135 66.442); /* yellow-700 */
+  --color-emerald-50: oklch(43.2% 0.095 166.913); /* emerald-800 */
+  --color-emerald-100: oklch(43.2% 0.095 166.913); /* emerald-800 */
+  --color-emerald-200: oklch(43.2% 0.095 166.913); /* emerald-800 */
+  --color-emerald-300: oklch(50.8% 0.118 165.612); /* emerald-700 */
+  --color-emerald-400: oklch(50.8% 0.118 165.612); /* emerald-700 */
+  --color-cyan-50: oklch(45% 0.085 224.283); /* cyan-800 */
+  --color-cyan-100: oklch(45% 0.085 224.283); /* cyan-800 */
+  --color-cyan-200: oklch(45% 0.085 224.283); /* cyan-800 */
+  --color-cyan-300: oklch(52% 0.105 223.128); /* cyan-700 */
+  --color-cyan-400: oklch(52% 0.105 223.128); /* cyan-700 */
+  --color-violet-50: oklch(43.2% 0.232 292.759); /* violet-800 */
+  --color-violet-100: oklch(43.2% 0.232 292.759); /* violet-800 */
+  --color-violet-200: oklch(43.2% 0.232 292.759); /* violet-800 */
+  --color-violet-300: oklch(49.1% 0.27 292.581); /* violet-700 */
+  --color-violet-400: oklch(49.1% 0.27 292.581); /* violet-700 */
+  --color-rose-50: oklch(45.5% 0.188 13.697); /* rose-800 */
+  --color-rose-100: oklch(45.5% 0.188 13.697); /* rose-800 */
+  --color-rose-200: oklch(45.5% 0.188 13.697); /* rose-800 */
+  --color-rose-300: oklch(51.4% 0.222 16.935); /* rose-700 */
+  --color-rose-400: oklch(51.4% 0.222 16.935); /* rose-700 */
+}
+
+/* O visual de antes: preto quase puro com painéis de vidro sobre o brilho animado. */
+[data-theme='amoled'] {
+  color-scheme: dark;
+  --bg-app: #050508;
+  --bg-tertiary: rgba(6, 7, 10, 0.85);
+  --bg-secondary: rgba(11, 12, 16, 0.8);
+  --bg-primary: rgba(7, 8, 11, 0.9);
+  --bg-members: rgba(7, 8, 11, 0.6);
+  --bg-surface: #111214;
+  --bg-floating: #111214;
+  --bg-modal: #111320;
+  --bg-input: rgba(0, 0, 0, 0.3);
+  --bg-accent: #1e1f22;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(255, 255, 255, 0.08);
+  --bg-selected: rgba(255, 255, 255, 0.1);
+  --scrim: rgba(0, 0, 0, 0.7);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-normal: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.24);
+  --text-strong: #ffffff;
+  --text-normal: #f2f3f5;
+  --text-secondary: #d1d5dc;
+  --text-muted: #99a1af;
+  --text-faint: #8a92a0;
+  --text-link: #00a8fc;
+  --text-brand: #a5b4fc;
+  --text-positive: #6ee7a0;
+  --text-danger: #ff8a8d;
+  --text-warning: #f0b232;
+  --interactive-normal: #99a1af;
+  --interactive-hover: #ffffff;
+  --interactive-active: #ffffff;
+  --interactive-muted: #4a5565;
+  --brand: #5865f2;
+  --brand-hover: #4752c4;
+  --green: #23a55a;
+  --green-strong: #248046;
+  --green-strong-hover: #1a6334;
+  --red: #f23f43;
+  --red-strong: #da373c;
+  --red-strong-hover: #a12d2f;
+  --yellow: #f0b232;
+  --fg: #ffffff;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
+  --shadow: rgba(0, 0, 0, 0.65);
+  --decor-opacity: 1;
+}
+
+/* Azul-marinho. */
+[data-theme='midnight'] {
+  color-scheme: dark;
+  --bg-app: #0b1220;
+  --bg-tertiary: #0b1220;
+  --bg-secondary: #0f172a;
+  --bg-primary: #131c31;
+  --bg-members: #111a2e;
+  --bg-surface: #18233b;
+  --bg-floating: #1b2742;
+  --bg-modal: #162038;
+  --bg-input: #0c1424;
+  --bg-accent: #24314f;
+  --bg-hover: rgba(148, 163, 184, 0.12);
+  --bg-active: rgba(148, 163, 184, 0.16);
+  --bg-selected: rgba(148, 163, 184, 0.22);
+  --scrim: rgba(2, 6, 23, 0.75);
+  --border-subtle: rgba(148, 163, 184, 0.12);
+  --border-normal: rgba(148, 163, 184, 0.2);
+  --border-strong: rgba(148, 163, 184, 0.42);
+  --text-strong: #ffffff;
+  --text-normal: #e2e8f0;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-faint: #8b9ab0;
+  --text-link: #7cb4ff;
+  --text-brand: #93b4ff;
+  --text-positive: #6ee7a0;
+  --text-danger: #fda4af;
+  --text-warning: #fcd34d;
+  --interactive-normal: #b6c2d3;
+  --interactive-hover: #ffffff;
+  --interactive-active: #ffffff;
+  --interactive-muted: #3b4a66;
+  --brand: #2563eb;
+  --brand-hover: #1d4ed8;
+  --green: #22c55e;
+  --green-strong: #15803d;
+  --green-strong-hover: #166534;
+  --red: #f43f5e;
+  --red-strong: #e11d48;
+  --red-strong-hover: #be123c;
+  --yellow: #fbbf24;
+  --fg: #ffffff;
+  --scrollbar-thumb: #334155;
+  --scrollbar-thumb-hover: #475569;
+  --shadow: rgba(2, 6, 23, 0.5);
+  --decor-opacity: 0;
+}
+
+/* Verde-musgo. */
+[data-theme='forest'] {
+  color-scheme: dark;
+  --bg-app: #0f1a14;
+  --bg-tertiary: #0f1a14;
+  --bg-secondary: #13221a;
+  --bg-primary: #182b21;
+  --bg-members: #15261d;
+  --bg-surface: #1d3428;
+  --bg-floating: #20392c;
+  --bg-modal: #1a2f24;
+  --bg-input: #0f1c15;
+  --bg-accent: #284637;
+  --bg-hover: rgba(157, 196, 170, 0.12);
+  --bg-active: rgba(157, 196, 170, 0.16);
+  --bg-selected: rgba(157, 196, 170, 0.22);
+  --scrim: rgba(3, 10, 6, 0.75);
+  --border-subtle: rgba(157, 196, 170, 0.12);
+  --border-normal: rgba(157, 196, 170, 0.2);
+  --border-strong: rgba(157, 196, 170, 0.42);
+  --text-strong: #ffffff;
+  --text-normal: #e6f2ea;
+  --text-secondary: #c4d9cb;
+  --text-muted: #9db8a6;
+  --text-faint: #94b19d;
+  --text-link: #7ddca0;
+  --text-brand: #8fe3b0;
+  --text-positive: #86efac;
+  --text-danger: #fca5a5;
+  --text-warning: #fcd34d;
+  --interactive-normal: #b3cdbb;
+  --interactive-hover: #ffffff;
+  --interactive-active: #ffffff;
+  --interactive-muted: #3d5a49;
+  --brand: #1f7a4d;
+  --brand-hover: #19633e;
+  --green: #4ade80;
+  --green-strong: #15803d;
+  --green-strong-hover: #166534;
+  --red: #f87171;
+  --red-strong: #dc2626;
+  --red-strong-hover: #b91c1c;
+  --yellow: #facc15;
+  --fg: #ffffff;
+  --scrollbar-thumb: #2f4d3c;
+  --scrollbar-thumb-hover: #436a54;
+  --shadow: rgba(0, 0, 0, 0.45);
+  --decor-opacity: 0;
+}
+
+/* Tons quentes de fim de tarde. */
+[data-theme='sunset'] {
+  color-scheme: dark;
+  --bg-app: #1f1412;
+  --bg-tertiary: #1f1412;
+  --bg-secondary: #2a1a17;
+  --bg-primary: #33201c;
+  --bg-members: #2e1d19;
+  --bg-surface: #3b2621;
+  --bg-floating: #422b25;
+  --bg-modal: #382320;
+  --bg-input: #221512;
+  --bg-accent: #4d332c;
+  --bg-hover: rgba(232, 178, 150, 0.1);
+  --bg-active: rgba(232, 178, 150, 0.14);
+  --bg-selected: rgba(232, 178, 150, 0.2);
+  --scrim: rgba(15, 6, 4, 0.75);
+  --border-subtle: rgba(232, 178, 150, 0.12);
+  --border-normal: rgba(232, 178, 150, 0.2);
+  --border-strong: rgba(232, 178, 150, 0.42);
+  --text-strong: #ffffff;
+  --text-normal: #fbeee6;
+  --text-secondary: #ecd3c6;
+  --text-muted: #cfab9b;
+  --text-faint: #c9a493;
+  --text-link: #fdba74;
+  --text-brand: #fdba74;
+  --text-positive: #86efac;
+  --text-danger: #fca5a5;
+  --text-warning: #fcd34d;
+  --interactive-normal: #e0c0b1;
+  --interactive-hover: #ffffff;
+  --interactive-active: #ffffff;
+  --interactive-muted: #6b4a40;
+  --brand: #c2410c;
+  --brand-hover: #9a3412;
+  --green: #4ade80;
+  --green-strong: #15803d;
+  --green-strong-hover: #166534;
+  --red: #f87171;
+  --red-strong: #dc2626;
+  --red-strong-hover: #b91c1c;
+  --yellow: #fbbf24;
+  --fg: #ffffff;
+  --scrollbar-thumb: #5a3d34;
+  --scrollbar-thumb-hover: #7a5446;
+  --shadow: rgba(10, 4, 2, 0.5);
+  --decor-opacity: 0;
+}
+
+/* Roxo profundo com brilho neon ao fundo. */
+[data-theme='neon'] {
+  color-scheme: dark;
+  --bg-app: #0d0716;
+  --bg-tertiary: rgba(13, 7, 22, 0.85);
+  --bg-secondary: rgba(20, 11, 34, 0.82);
+  --bg-primary: rgba(26, 15, 44, 0.88);
+  --bg-members: rgba(23, 13, 39, 0.8);
+  --bg-surface: #221438;
+  --bg-floating: #26173f;
+  --bg-modal: #1e1233;
+  --bg-input: #10091b;
+  --bg-accent: #321d52;
+  --bg-hover: rgba(192, 132, 252, 0.12);
+  --bg-active: rgba(192, 132, 252, 0.16);
+  --bg-selected: rgba(192, 132, 252, 0.22);
+  --scrim: rgba(8, 3, 15, 0.78);
+  --border-subtle: rgba(192, 132, 252, 0.14);
+  --border-normal: rgba(192, 132, 252, 0.24);
+  --border-strong: rgba(232, 121, 249, 0.55);
+  --text-strong: #ffffff;
+  --text-normal: #f3e8ff;
+  --text-secondary: #e0ccff;
+  --text-muted: #b9a2dc;
+  --text-faint: #b29ad6;
+  --text-link: #f0abfc;
+  --text-brand: #e879f9;
+  --text-positive: #86efac;
+  --text-danger: #fda4af;
+  --text-warning: #fde047;
+  --interactive-normal: #cdb6ee;
+  --interactive-hover: #ffffff;
+  --interactive-active: #ffffff;
+  --interactive-muted: #4c3370;
+  --brand: #9333ea;
+  --brand-hover: #7e22ce;
+  --green: #4ade80;
+  --green-strong: #15803d;
+  --green-strong-hover: #166534;
+  --red: #fb7185;
+  --red-strong: #e11d48;
+  --red-strong-hover: #be123c;
+  --yellow: #fde047;
+  --fg: #ffffff;
+  --scrollbar-thumb: #4c2f75;
+  --scrollbar-thumb-hover: #6b44a3;
+  --shadow: rgba(8, 3, 15, 0.6);
+  --decor-opacity: 0.6;
+}
+
+/* Preto e branco puros, bordas visíveis e cores fortes. */
+[data-theme='high-contrast'] {
+  color-scheme: dark;
+  --bg-app: #000000;
+  --bg-tertiary: #000000;
+  --bg-secondary: #000000;
+  --bg-primary: #000000;
+  --bg-members: #000000;
+  --bg-surface: #0a0a0a;
+  --bg-floating: #000000;
+  --bg-modal: #000000;
+  --bg-input: #000000;
+  --bg-accent: #262626;
+  --bg-hover: rgba(255, 255, 255, 0.18);
+  --bg-active: rgba(255, 255, 255, 0.24);
+  --bg-selected: rgba(255, 255, 255, 0.3);
+  --scrim: rgba(0, 0, 0, 0.85);
+  --border-subtle: rgba(255, 255, 255, 0.5);
+  --border-normal: rgba(255, 255, 255, 0.75);
+  --border-strong: #ffffff;
+  --text-strong: #ffffff;
+  --text-normal: #ffffff;
+  --text-secondary: #f2f2f2;
+  --text-muted: #d9d9d9;
+  --text-faint: #cccccc;
+  --text-link: #ffe14d;
+  --text-brand: #a8c4ff;
+  --text-positive: #7dffa8;
+  --text-danger: #ff9e9e;
+  --text-warning: #ffe14d;
+  --interactive-normal: #f2f2f2;
+  --interactive-hover: #ffffff;
+  --interactive-active: #ffffff;
+  --interactive-muted: #8c8c8c;
+  --brand: #1d4ed8;
+  --brand-hover: #1e40af;
+  --green: #3ddc84;
+  --green-strong: #0f7a3a;
+  --green-strong-hover: #0b5c2c;
+  --red: #ff5c5c;
+  --red-strong: #c81e1e;
+  --red-strong-hover: #9b1515;
+  --yellow: #ffe14d;
+  --fg: #ffffff;
+  --scrollbar-thumb: #bfbfbf;
+  --scrollbar-thumb-hover: #ffffff;
+  --shadow: rgba(0, 0, 0, 0.8);
+  --decor-opacity: 0;
+}
+
+/* Por cima de vídeo, imagem ou véu preto (bg-black/60+): texto claro em
+   qualquer tema, inclusive no claro (AA mesmo sobre imagem branca). Só os tokens de texto e o --fg mudam. */
+.on-media {
+  --text-strong: #ffffff;
+  --text-normal: #ffffff;
+  --text-secondary: #ebebeb;
+  --text-muted: #e6e6e6;
+  --text-faint: #e6e6e6;
+  --interactive-normal: #ebebeb;
+  --interactive-hover: #ffffff;
+  --interactive-active: #ffffff;
+  --fg: #ffffff;
+}
+
+/* Tokens → utilitários do Tailwind. `inline` faz a classe usar var(--token)
+   direto: vale o data-theme do elemento mais próximo (as prévias dependem disso). */
+@theme inline {
+  --background-color-app: var(--bg-app);
+  --background-color-tertiary: var(--bg-tertiary);
+  --background-color-secondary: var(--bg-secondary);
+  --background-color-primary: var(--bg-primary);
+  --background-color-members: var(--bg-members);
+  --background-color-surface: var(--bg-surface);
+  --background-color-floating: var(--bg-floating);
+  --background-color-modal: var(--bg-modal);
+  --background-color-input: var(--bg-input);
+  --background-color-accent: var(--bg-accent);
+  --background-color-hover: var(--bg-hover);
+  --background-color-active: var(--bg-active);
+  --background-color-selected: var(--bg-selected);
+  --background-color-scrim: var(--scrim);
+
+  --border-color-subtle: var(--border-subtle);
+  --border-color-normal: var(--border-normal);
+  --border-color-strong: var(--border-strong);
+
+  --text-color-strong: var(--text-strong);
+  --text-color-normal: var(--text-normal);
+  --text-color-secondary: var(--text-secondary);
+  --text-color-muted: var(--text-muted);
+  --text-color-faint: var(--text-faint);
+  --text-color-link: var(--text-link);
+  --text-color-brand: var(--text-brand);
+  --text-color-success: var(--text-positive);
+  --text-color-danger: var(--text-danger);
+  --text-color-warning: var(--text-warning);
+  --text-color-interactive-normal: var(--interactive-normal);
+  --text-color-interactive-hover: var(--interactive-hover);
+  --text-color-interactive-active: var(--interactive-active);
+  --text-color-interactive-muted: var(--interactive-muted);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-success: var(--green);
+  --color-success-strong: var(--green-strong);
+  --color-success-strong-hover: var(--green-strong-hover);
+  --color-danger: var(--red);
+  --color-danger-strong: var(--red-strong);
+  --color-danger-strong-hover: var(--red-strong-hover);
+  --color-warning: var(--yellow);
+  --color-fg: var(--fg);
+
+  /* Nomes antigos, mantidos para não quebrar quem usa. */
+  --color-discord-violet: var(--brand);
+  --color-discord-violet-hover: var(--brand-hover);
+  --color-discord-green: var(--green);
+  --color-discord-green-hover: var(--green-strong);
+  --color-discord-dnd: var(--red);
+  --color-discord-idle: var(--yellow);
+  --color-discord-offline: var(--text-faint);
+
+  /* Cinzas do Tailwind no tema: text-gray-400 etc. continuam funcionando e
+     trocam de cor junto (no tema claro viram cinzas escuros). */
+  --color-gray-50: var(--text-strong);
+  --color-gray-100: var(--text-strong);
+  --color-gray-200: var(--text-normal);
+  --color-gray-300: var(--text-secondary);
+  --color-gray-400: var(--text-muted);
+  --color-gray-500: var(--text-faint);
+  --color-gray-600: var(--interactive-muted);
+}
