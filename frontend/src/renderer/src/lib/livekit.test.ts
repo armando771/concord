@@ -477,3 +477,82 @@ describe('CallMedia — desconectado por moderador', () => {
     expect(onConnectionLost).not.toHaveBeenCalled()
   })
 })
+
+describe('CallMedia — sinais de conexão', () => {
+  function mediaWithSignals(): {
+    media: CallMedia
+    onConnectionLost: ReturnType<typeof vi.fn>
+    onSignalConnected: ReturnType<typeof vi.fn>
+    onConnectionQuality: ReturnType<typeof vi.fn>
+  } {
+    const onConnectionLost = vi.fn()
+    const onSignalConnected = vi.fn()
+    const onConnectionQuality = vi.fn()
+    const media = new CallMedia({
+      onRemoteMedia: (m) => emitted.push(m),
+      onConnectionLost,
+      onReconnecting: vi.fn(),
+      onReconnected: vi.fn(),
+      onActiveSpeakers: vi.fn(),
+      onSignalConnected,
+      onConnectionQuality
+    })
+    return { media, onConnectionLost, onSignalConnected, onConnectionQuality }
+  }
+
+  it('repassa o motivo da queda', () => {
+    const { onConnectionLost } = mediaWithSignals()
+    room().emit('Disconnected', 14)
+    expect(onConnectionLost).toHaveBeenCalledWith(14)
+  })
+
+  it('avisa quando o canal de controle abre (falta a mídia)', () => {
+    const { onSignalConnected } = mediaWithSignals()
+    room().emit('SignalConnected')
+    expect(onSignalConnected).toHaveBeenCalledTimes(1)
+  })
+
+  it('qualidade por pessoa (identity), com valor desconhecido virando "unknown"', () => {
+    const { onConnectionQuality } = mediaWithSignals()
+    room().emit('ConnectionQualityChanged', 'poor', { identity: 'ana' })
+    room().emit('ConnectionQualityChanged', 'weird', { identity: 'eu' })
+    room().emit('ConnectionQualityChanged', 'good', undefined)
+    expect(onConnectionQuality.mock.calls).toEqual([
+      ['ana', 'poor'],
+      ['eu', 'unknown']
+    ])
+  })
+
+  it('depois de disconnect() não repassa mais nada', () => {
+    const { media, onConnectionQuality, onSignalConnected } = mediaWithSignals()
+    media.disconnect()
+    room().emit('ConnectionQualityChanged', 'poor', { identity: 'ana' })
+    room().emit('SignalConnected')
+    expect(onConnectionQuality).not.toHaveBeenCalled()
+    expect(onSignalConnected).not.toHaveBeenCalled()
+  })
+
+  it('perda do áudio de alguém entre duas leituras', async () => {
+    const { media } = mediaWithSignals()
+    room().state = 'connected'
+    let counters = { packetsReceived: 100, packetsLost: 0 }
+    const remote = {
+      identity: 'ana',
+      name: 'ana',
+      trackPublications: new Map(),
+      getTrackPublication: () => ({
+        track: {
+          getRTCStatsReport: async () =>
+            new Map([['in', { type: 'inbound-rtp', ...counters }]]) as unknown as RTCStatsReport
+        }
+      })
+    }
+    room().remoteParticipants.set('ana', remote)
+    expect(await media.getQualityDetails(['ana'], 'eu')).toEqual({
+      ana: { lossPercent: null, latencyMs: null }
+    })
+    counters = { packetsReceived: 180, packetsLost: 20 }
+    const second = await media.getQualityDetails(['ana'], 'eu')
+    expect(second.ana.lossPercent).toBeCloseTo(20)
+  })
+})
