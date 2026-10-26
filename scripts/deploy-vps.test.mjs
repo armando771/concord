@@ -204,3 +204,49 @@ test('--infra chega ao servidor', () => {
   assert.equal(r.status, 0, r.stderr)
   assert.match(r.log, /INFRA=1/)
 })
+
+const IDS = '8afacbca-308c-4f59-9bc2-6f082cafdadd,326c9def-6fe5-4516-8b1d-98b48cd89d45'
+
+test('TECH_TEAM_USER_IDS entra no .env da VPS sem apagar o resto', () => {
+  const ctx = setup({ current: fakeBinary('good') })
+  const r = deploy(ctx, ['root@vps'], { TECH_TEAM_USER_IDS: IDS })
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /TECH_TEAM_USER_IDS gravado/)
+  assert.equal(read(ctx, '.env'), `export PORT="8090" # backend\nTECH_TEAM_USER_IDS=${IDS}\n`)
+})
+
+test('TECH_TEAM_USER_IDS troca a linha que já existe (e as repetidas)', () => {
+  const ctx = setup({ current: fakeBinary('good') })
+  writeFileSync(
+    join(ctx.server, '.env'),
+    'A=1\nTECH_TEAM_USER_IDS=velho\n# TECH_TEAM_USER_IDS=comentado\nexport TECH_TEAM_USER_IDS=outro\nB=2'
+  )
+  const r = deploy(ctx, ['root@vps'], { TECH_TEAM_USER_IDS: IDS })
+  assert.equal(r.status, 0, r.stderr)
+  assert.equal(
+    read(ctx, '.env'),
+    `A=1\nTECH_TEAM_USER_IDS=${IDS}\n# TECH_TEAM_USER_IDS=comentado\nB=2\n`
+  )
+})
+
+test('sem TECH_TEAM_USER_IDS (vazio ou ausente) o .env fica intacto', () => {
+  const ctx = setup({ current: fakeBinary('good') })
+  const before = read(ctx, '.env')
+  for (const extra of [{}, { TECH_TEAM_USER_IDS: '' }]) {
+    const r = deploy(ctx, ['root@vps'], extra)
+    assert.equal(r.status, 0, r.stderr)
+    assert.equal(read(ctx, '.env'), before)
+  }
+})
+
+test('valor com quebra de linha ou espaço é recusado antes de qualquer troca', () => {
+  for (const bad of ['a\nEVIL=1', 'a b', 'a"b', 'a$(x)']) {
+    const ctx = setup({ current: fakeBinary('good') })
+    const before = read(ctx, '.env')
+    const r = deploy(ctx, ['root@vps'], { TECH_TEAM_USER_IDS: bad })
+    assert.equal(r.status, 1, JSON.stringify(bad))
+    assert.match(r.stderr, /TECH_TEAM_USER_IDS tem caracteres/)
+    assert.equal(read(ctx, '.env'), before)
+    assert.ok(!existsSync(join(ctx.server, 'concord-server.good')), 'seguiu para o restart')
+  }
+})
