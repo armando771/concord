@@ -1252,3 +1252,322 @@ body.boost-quake #root {
     animation-name: level-fade;
   }
 }
+
+/*
+ * Raridade mítica (Criador da Salinha): holográfico. Só transform, opacity
+ * e background-position animam; o brilho fica recortado no formato da arte
+ * (mask-image com a própria imagem). MythicIcon escreve --mx/--my/--rx/--ry
+ * quando o mouse passa na arte grande do modal.
+ */
+:root {
+  --mythic-holo: linear-gradient(
+    100deg,
+    #ff7ae6 0%,
+    #a78bff 18%,
+    #6fd3ff 36%,
+    #7bffd9 52%,
+    #fff07a 68%,
+    #ff9f7a 84%,
+    #ff7ae6 100%
+  );
+}
+
+@keyframes mythic-pan {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes mythic-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* `scale` à parte: o transform é do mythic-spin, que roda junto. */
+@keyframes mythic-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    scale: 0.94;
+  }
+  50% {
+    opacity: 0.85;
+    scale: 1.04;
+  }
+}
+
+@keyframes mythic-sweep {
+  0%,
+  55% {
+    background-position: 160% 160%;
+  }
+  100% {
+    background-position: -60% -60%;
+  }
+}
+
+@keyframes mythic-flash {
+  0% {
+    opacity: 0.95;
+    transform: scale(0.35);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
+@keyframes mythic-reveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.7) rotate(-8deg);
+    filter: brightness(2.2) saturate(1.4);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.06) rotate(2deg);
+  }
+  100% {
+    transform: none;
+    filter: none;
+  }
+}
+
+/* Nome e selo. */
+.mythic-text {
+  background: var(--mythic-holo);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mythic-pan 4s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(255, 122, 230, 0.35));
+}
+
+.mythic-chip {
+  position: relative;
+  overflow: hidden;
+  color: #1a0b22;
+  background: var(--mythic-holo);
+  background-size: 200% 100%;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.35) inset,
+    0 0 14px rgba(255, 122, 230, 0.45);
+  animation: mythic-pan 4s linear infinite;
+}
+
+.mythic-chip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.85) 50%,
+    transparent 65%
+  );
+  background-size: 250% 250%;
+  animation: mythic-sweep 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.mythic-bar {
+  background: var(--mythic-holo);
+  background-size: 200% 100%;
+  animation: mythic-pan 3s linear infinite;
+}
+
+/* A arte. */
+.mythic-icon {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  isolation: isolate;
+  --rx: 0deg;
+  --ry: 0deg;
+  --mx: 50%;
+  --my: 50%;
+}
+
+.mythic-icon__aura {
+  position: absolute;
+  inset: -14%;
+  z-index: -1;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    #ff7ae6,
+    #a78bff,
+    #6fd3ff,
+    #7bffd9,
+    #fff07a,
+    #ff9f7a,
+    #ff7ae6
+  );
+  filter: blur(var(--mythic-blur, 4px));
+  opacity: 0.6;
+  animation:
+    mythic-spin 6s linear infinite,
+    mythic-pulse 2.8s ease-in-out infinite;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.mythic-icon--hero .mythic-icon__aura {
+  inset: 6%;
+  --mythic-blur: 28px;
+}
+
+.mythic-icon__card {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: perspective(600px) rotateX(var(--rx)) rotateY(var(--ry));
+  transition: transform 0.35s ease-out;
+}
+
+.mythic-icon[data-hover='true'] .mythic-icon__card {
+  transition-duration: 0.08s;
+}
+
+.mythic-icon__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.mythic-icon__foil {
+  position: absolute;
+  inset: 0;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.75) 44%,
+    rgba(111, 211, 255, 0.55) 49%,
+    rgba(255, 122, 230, 0.55) 54%,
+    transparent 68%
+  );
+  background-size: 250% 250%;
+  mix-blend-mode: overlay;
+  animation: mythic-sweep 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Com o mouse em cima, a folha segue o ponteiro em vez de passar sozinha. */
+.mythic-icon[data-hover='true'] .mythic-icon__foil {
+  animation: none;
+  background-position: calc(150% - var(--mx)) calc(150% - var(--my));
+  mix-blend-mode: color-dodge;
+  opacity: 0.85;
+}
+
+/* Partículas em órbita (só no hero). */
+.mythic-icon__orbit {
+  position: absolute;
+  inset: 4%;
+  border-radius: 9999px;
+  animation: mythic-spin 7s linear infinite;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.mythic-icon__orbit > i {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow:
+    0 0 6px 2px rgba(255, 122, 230, 0.9),
+    0 0 14px 4px rgba(111, 211, 255, 0.6);
+}
+
+.mythic-icon__orbit--b {
+  inset: -2%;
+  animation-duration: 11s;
+  animation-direction: reverse;
+}
+
+.mythic-icon__orbit--b > i {
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  box-shadow: 0 0 8px 3px rgba(123, 255, 217, 0.8);
+}
+
+.mythic-icon__orbit--c {
+  inset: 12%;
+  animation-duration: 5s;
+  animation-delay: -2s;
+}
+
+.mythic-icon__orbit--c > i {
+  top: auto;
+  bottom: 0;
+  width: 3px;
+  height: 3px;
+  margin-left: -1.5px;
+  box-shadow: 0 0 8px 3px rgba(255, 240, 122, 0.85);
+}
+
+/* Ao aparecer no modal: a arte surge com um clarão. Na arte (e não no card),
+   para o fill da animação não prender o transform da inclinação. */
+.mythic-icon--hero .mythic-icon__art {
+  animation: mythic-reveal 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+.mythic-icon__flash {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(255, 122, 230, 0.5) 35%,
+    transparent 70%
+  );
+  opacity: 0;
+  animation: mythic-flash 0.8s ease-out both;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mythic-text,
+  .mythic-chip,
+  .mythic-chip::after,
+  .mythic-bar,
+  .mythic-icon__aura,
+  .mythic-icon__foil,
+  .mythic-icon--hero .mythic-icon__art {
+    animation: none;
+  }
+  .mythic-icon__card {
+    transform: none;
+    transition: none;
+  }
+  /* A folha fica parada no meio: continua holográfica, sem movimento. */
+  .mythic-icon__foil {
+    background-position: 50% 50%;
+  }
+  .mythic-icon__orbit,
+  .mythic-icon__flash,
+  .mythic-chip::after {
+    display: none;
+  }
+}

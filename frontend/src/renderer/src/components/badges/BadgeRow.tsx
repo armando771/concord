@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useBadgeStore } from '../../store/badgeStore'
-import { profileBadgeRow, rarityMeta } from '../../lib/badges'
+import { badgeLabel, isMythic, profileBadgeRow, rarityMeta } from '../../lib/badges'
 import BadgeIcon from './BadgeIcon'
 
 interface BadgeRowProps {
@@ -51,7 +51,7 @@ function BadgeRow({
           key={b.category}
           type="button"
           onClick={() => open(b.category)}
-          aria-label={`${b.tier_name} (${b.name})`}
+          aria-label={badgeLabel(b)}
           className="group relative flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded transition-transform hover:scale-110"
         >
           <BadgeIcon category={b.category} tier={b.tier} rarity={b.rarity} size={20} />
@@ -59,10 +59,19 @@ function BadgeRow({
             role="tooltip"
             className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#111214] px-2 py-1 text-center shadow-xl group-hover:block group-focus-visible:block"
           >
-            <span className="block text-xs font-bold" style={{ color: rarityMeta(b.rarity).color }}>
-              {b.tier_name}
-            </span>
-            <span className="block text-[10px] text-gray-400">{b.name}</span>
+            {isMythic(b.rarity) ? (
+              <span className="mythic-text block text-xs font-black">{b.tier_name}</span>
+            ) : (
+              <span
+                className="block text-xs font-bold"
+                style={{ color: rarityMeta(b.rarity).color }}
+              >
+                {b.tier_name}
+              </span>
+            )}
+            {b.tier_name !== b.name && (
+              <span className="block text-[10px] text-gray-400">{b.name}</span>
+            )}
           </span>
         </button>
       ))}
