@@ -13,12 +13,12 @@ export default function ScreenQualityControls({
   const buttonClass = (selected: boolean): string =>
     `flex-1 cursor-pointer font-semibold transition-colors ${
       compact ? 'px-2 py-1.5 text-xs' : 'px-3 py-2 text-sm'
-    } ${selected ? 'bg-[#5865f2] text-white' : 'bg-white/5 text-gray-300 hover:bg-white/10'}`
+    } ${selected ? 'bg-brand text-white' : 'bg-fg/5 text-gray-300 hover:bg-fg/10'}`
   const labelClass = compact
     ? 'mb-1.5 text-[11px] font-semibold text-gray-400'
     : 'mb-2 text-xs font-semibold text-gray-400'
   return (
-    <fieldset className={compact ? 'mt-3' : 'mt-5 rounded-lg border border-white/10 p-4'}>
+    <fieldset className={compact ? 'mt-3' : 'mt-5 rounded-lg border border-subtle p-4'}>
       <legend className={compact ? 'sr-only' : 'px-1 text-xs font-bold uppercase text-gray-400'}>
         Qualidade da transmissão
       </legend>

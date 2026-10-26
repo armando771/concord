@@ -17,8 +17,8 @@ function AuthLayout({ children, wide }: AuthLayoutProps): React.JSX.Element {
       <GlassCard className={`w-full ${wide ? 'max-w-4xl' : 'max-w-3xl'} overflow-hidden p-0`}>
         <div className="grid md:grid-cols-[1fr_17rem]">
           <div className="p-6 sm:p-10">{children}</div>
-          <aside className="hidden flex-col items-center justify-center gap-4 bg-gradient-to-br from-[#4b22c9]/40 via-[#2a0e85]/30 to-transparent p-8 text-center md:flex">
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-[#5865f2] to-[#8b5cf6] text-white shadow-lg shadow-[#5865f2]/30">
+          <aside className="hidden flex-col items-center justify-center gap-4 bg-gradient-to-br from-brand/40 via-brand/15 to-transparent p-8 text-center md:flex">
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-brand to-[#8b5cf6] text-white shadow-lg shadow-brand/30">
               <SalinhaMarkIcon className="h-14 w-14" />
             </div>
             <p className="text-xl font-semibold text-gray-50">Salinha</p>

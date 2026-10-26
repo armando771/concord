@@ -92,7 +92,7 @@ function LiveStreamPreview({
           type="button"
           onClick={onWatch}
           disabled={ended}
-          className="w-full cursor-pointer rounded-md bg-[#248046] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1a6334] disabled:cursor-default disabled:opacity-60"
+          className="w-full cursor-pointer rounded-md bg-success-strong px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-success-strong-hover disabled:cursor-default disabled:opacity-60"
         >
           Entrar na transmissão
         </button>

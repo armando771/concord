@@ -2,7 +2,7 @@
 // busca do topo.
 
 export type SettingsSectionId =
-  'account' | 'profiles' | 'privacy' | 'voice' | 'keybinds' | 'notifications' | 'app'
+  'account' | 'profiles' | 'privacy' | 'appearance' | 'voice' | 'keybinds' | 'notifications' | 'app'
 
 export interface SettingsSection {
   id: SettingsSectionId
@@ -59,6 +59,12 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       'mensagem direta',
       'dm'
     ]
+  },
+  {
+    id: 'appearance',
+    label: 'Aparência',
+    group: 'app',
+    keywords: ['tema', 'cores', 'escuro', 'claro', 'modo escuro', 'amoled', 'contraste', 'sistema']
   },
   {
     id: 'voice',

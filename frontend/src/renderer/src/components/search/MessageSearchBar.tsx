@@ -207,8 +207,8 @@ export default function MessageSearchBar({
   return (
     <div className="relative">
       <div
-        className={`flex h-8 items-center gap-1.5 rounded-lg border bg-black/30 px-2 transition-[width,border-color] ${
-          focused || text ? 'w-72 border-[#5865f2]/60' : 'w-52 border-white/10'
+        className={`flex h-8 items-center gap-1.5 rounded-lg border bg-input px-2 transition-[width,border-color] ${
+          focused || text ? 'w-72 border-brand/60' : 'w-52 border-subtle'
         }`}
       >
         <input
@@ -250,7 +250,7 @@ export default function MessageSearchBar({
             }
           }}
           onKeyDown={handleKeyDown}
-          className="min-w-0 flex-1 bg-transparent text-ds-sm text-white outline-none placeholder:truncate placeholder:text-gray-500"
+          className="min-w-0 flex-1 bg-transparent text-ds-sm text-strong outline-none placeholder:truncate placeholder:text-gray-500"
         />
         {text ? (
           <button
@@ -258,7 +258,7 @@ export default function MessageSearchBar({
             onClick={clear}
             aria-label="Limpar busca"
             title="Limpar busca"
-            className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-gray-400 hover:text-white"
+            className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-gray-400 hover:text-strong"
           >
             <XIcon className="h-3.5 w-3.5" />
           </button>
@@ -269,7 +269,7 @@ export default function MessageSearchBar({
 
       {open && (
         <div
-          className="absolute right-0 top-10 z-50 w-80 overflow-hidden rounded-xl border border-white/10 bg-[#1e1f22]/95 py-2 shadow-2xl backdrop-blur-md"
+          className="absolute right-0 top-10 z-50 w-80 overflow-hidden rounded-xl border border-subtle bg-floating py-2 shadow-2xl backdrop-blur-md"
           onMouseDown={(e) => e.preventDefault()}
         >
           <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
@@ -290,7 +290,7 @@ export default function MessageSearchBar({
                 onMouseEnter={() => setActiveIndex(i)}
                 onClick={() => choose(item)}
                 className={`mx-1.5 flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 ${
-                  i === active ? 'bg-[#5865f2]/30' : 'hover:bg-white/5'
+                  i === active ? 'bg-brand/30' : 'hover:bg-fg/5'
                 }`}
               >
                 <MenuItemView item={item} />
@@ -298,7 +298,7 @@ export default function MessageSearchBar({
             ))}
           </ul>
           {!token.text && text.trim() && (
-            <p className="border-t border-white/6 px-3 pt-2 mt-1 text-[11px] text-gray-500">
+            <p className="border-t border-subtle px-3 pt-2 mt-1 text-[11px] text-gray-500">
               Enter para buscar
             </p>
           )}
@@ -315,7 +315,7 @@ function MenuItemView({ item }: { item: MenuItem }): React.JSX.Element {
         <>
           <SlidersIcon className="h-4 w-4 shrink-0 text-gray-400" />
           <span className="min-w-0">
-            <span className="block text-ds-sm font-medium text-white">Mais filtros</span>
+            <span className="block text-ds-sm font-medium text-strong">Mais filtros</span>
             <span className="block truncate text-ds-xs text-gray-400">
               datas, tipo de autor e mais
             </span>
@@ -329,7 +329,7 @@ function MenuItemView({ item }: { item: MenuItem }): React.JSX.Element {
         <>
           <Icon className="h-4 w-4 shrink-0 text-gray-400" />
           <span className="min-w-0">
-            <span className="block text-ds-sm font-medium text-white">{item.option.title}</span>
+            <span className="block text-ds-sm font-medium text-strong">{item.option.title}</span>
             <span className="block truncate text-ds-xs text-gray-400">
               <strong className="font-semibold text-gray-300">{k}:</strong>
               {rest.join(':')}
@@ -347,7 +347,7 @@ function MenuItemView({ item }: { item: MenuItem }): React.JSX.Element {
             avatarUrl={item.user.avatarUrl}
             size={20}
           />
-          <span className="min-w-0 truncate text-ds-sm text-white">
+          <span className="min-w-0 truncate text-ds-sm text-strong">
             {item.user.nickname || item.user.displayName}
           </span>
           <span className="ml-auto truncate text-ds-xs text-gray-400">@{item.user.username}</span>
@@ -357,13 +357,13 @@ function MenuItemView({ item }: { item: MenuItem }): React.JSX.Element {
       return (
         <>
           <HashIcon className="h-4 w-4 shrink-0 text-gray-400" />
-          <span className="min-w-0 truncate text-ds-sm text-white">{item.channel.name}</span>
+          <span className="min-w-0 truncate text-ds-sm text-strong">{item.channel.name}</span>
         </>
       )
     case 'value':
       return (
         <>
-          <span className="text-ds-sm text-white">{item.label}</span>
+          <span className="text-ds-sm text-strong">{item.label}</span>
           <span className="ml-auto text-ds-xs text-gray-400">
             {item.key}:{item.value}
           </span>

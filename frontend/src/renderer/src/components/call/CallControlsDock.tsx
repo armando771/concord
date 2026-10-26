@@ -22,7 +22,7 @@ function CallControlsDock(): React.JSX.Element {
             onClick={toggle}
             aria-label="Mostrar controles da chamada"
             title="Mostrar controles"
-            className="flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-white/10 bg-[#0b0c10]/95 px-3 text-[11px] font-semibold text-gray-300 shadow-lg transition-colors hover:bg-white/10 hover:text-white"
+            className="flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-subtle bg-secondary px-3 text-[11px] font-semibold text-gray-300 shadow-lg transition-colors hover:bg-fg/10 hover:text-strong"
           >
             <ChevronUpIcon className="h-3.5 w-3.5" />
             Mostrar controles
@@ -42,7 +42,7 @@ function CallControlsDock(): React.JSX.Element {
           onClick={toggle}
           aria-label="Ocultar controles da chamada"
           title="Ocultar controles"
-          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-[#0b0c10]/95 text-gray-400 shadow-lg transition-colors hover:bg-white/10 hover:text-white"
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-subtle bg-secondary text-gray-400 shadow-lg transition-colors hover:bg-fg/10 hover:text-strong"
         >
           <ChevronDownIcon className="h-4 w-4" />
         </button>

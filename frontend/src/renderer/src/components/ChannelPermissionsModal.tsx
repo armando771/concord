@@ -37,9 +37,9 @@ interface ChannelPermissionsModalProps {
 }
 
 const STATES: { id: TriState; label: string; symbol: string; active: string }[] = [
-  { id: 'deny', label: 'Negar', symbol: '✗', active: 'bg-[#f23f43] text-white' },
-  { id: 'inherit', label: 'Herdar do servidor', symbol: '/', active: 'bg-white/25 text-white' },
-  { id: 'allow', label: 'Permitir', symbol: '✓', active: 'bg-[#23a55a] text-white' }
+  { id: 'deny', label: 'Negar', symbol: '✗', active: 'bg-danger-strong text-white' },
+  { id: 'inherit', label: 'Herdar do servidor', symbol: '/', active: 'bg-fg/25 text-strong' },
+  { id: 'allow', label: 'Permitir', symbol: '✓', active: 'bg-success-strong text-white' }
 ]
 
 /**
@@ -192,9 +192,9 @@ function ChannelPermissionsModal({
       onClose={onClose}
       wide
     >
-      <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-white/8 bg-white/3 px-4 py-3">
+      <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-subtle bg-fg/3 px-4 py-3">
         <div>
-          <p className="text-sm font-semibold text-white">Canal privado</p>
+          <p className="text-sm font-semibold text-strong">Canal privado</p>
           <p className="text-xs text-gray-400">
             Só os cargos e membros que você liberar abaixo conseguem ver{' '}
             {kind === 'voice' ? 'e entrar n' : ''}este canal.
@@ -217,7 +217,7 @@ function ChannelPermissionsModal({
             className="mb-2 text-xs"
           />
           {term && (
-            <ul className="mb-2 max-h-40 overflow-y-auto rounded-lg border border-white/10 bg-black/30 p-1">
+            <ul className="mb-2 max-h-40 overflow-y-auto rounded-lg border border-subtle bg-input p-1">
               {candidates.length === 0 && (
                 <li className="px-2 py-1.5 text-xs text-gray-500">Ninguém encontrado.</li>
               )}
@@ -226,7 +226,7 @@ function ChannelPermissionsModal({
                   <button
                     type="button"
                     onClick={() => addTarget(c.ref)}
-                    className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10"
+                    className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-fg/10"
                   >
                     <span className="text-gray-500">@</span>
                     <span className="truncate">{c.name}</span>
@@ -248,13 +248,13 @@ function ChannelPermissionsModal({
                     }}
                     aria-current={active ? 'true' : undefined}
                     className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium ${
-                      active ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/5'
+                      active ? 'bg-fg/10 text-strong' : 'text-gray-400 hover:bg-fg/5'
                     }`}
                   >
                     <span
                       aria-hidden
                       className="shrink-0 text-xs"
-                      style={{ color: roleColorCss(row.color) ?? '#6b7280' }}
+                      style={{ color: roleColorCss(row.color) ?? 'var(--text-muted)' }}
                     >
                       {row.type === 'role' ? '◆' : '@'}
                     </span>
@@ -280,7 +280,7 @@ function ChannelPermissionsModal({
                 {groups.map((group) => (
                   <section key={group.title}>
                     <h3 className="mb-2 text-ds-sm font-medium text-gray-400">{group.title}</h3>
-                    <ul className="divide-y divide-white/6 rounded-lg border border-white/8 bg-white/3">
+                    <ul className="divide-y divide-subtle rounded-lg border border-subtle bg-fg/3">
                       {group.permissions.map((p) => {
                         const bit = Perm[p.name]
                         const allowed = canGrant(myChannelPerms, bit)
@@ -294,7 +294,7 @@ function ChannelPermissionsModal({
                             title={allowed ? undefined : 'Você não tem essa permissão neste canal.'}
                           >
                             <div className="min-w-0">
-                              <p className="text-sm font-semibold text-white">{p.label}</p>
+                              <p className="text-sm font-semibold text-strong">{p.label}</p>
                               <p className="text-[11px] leading-snug text-gray-400">
                                 {p.description}
                               </p>
@@ -302,7 +302,7 @@ function ChannelPermissionsModal({
                             <div
                               role="group"
                               aria-label={p.label}
-                              className="flex shrink-0 overflow-hidden rounded-md border border-white/12"
+                              className="flex shrink-0 overflow-hidden rounded-md border border-normal"
                             >
                               {STATES.map((s) => (
                                 <button
@@ -314,7 +314,7 @@ function ChannelPermissionsModal({
                                   title={s.label}
                                   onClick={() => setState(bit, s.id)}
                                   className={`h-7 w-8 cursor-pointer text-sm font-bold transition-colors disabled:cursor-not-allowed ${
-                                    state === s.id ? s.active : 'text-gray-400 hover:bg-white/10'
+                                    state === s.id ? s.active : 'text-gray-400 hover:bg-fg/10'
                                   }`}
                                 >
                                   {s.symbol}

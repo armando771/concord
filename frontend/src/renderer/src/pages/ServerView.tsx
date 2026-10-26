@@ -87,7 +87,7 @@ function MemberRow({
       // Na lista de membros o menu abre até em você (para "Alterar apelido").
       onContextMenu={userMenuHandler(userId, name, meId, handle, { allowSelf: true })}
       onClick={profileCardHandler(userId, name, handle, 'left')}
-      className={`group relative flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1 hover:bg-white/5 ${
+      className={`group relative flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1 hover:bg-fg/5 ${
         online ? '' : 'opacity-60 hover:opacity-100'
       }`}
     >
@@ -101,7 +101,7 @@ function MemberRow({
           size={32}
           // O Maestro não tem websocket: está sempre online.
           status={isBot ? 'online' : status}
-          cutoutColor="#07080b"
+          cutoutColor="var(--bg-members)"
           fallbackClassName={colorClass}
         />
       </div>
@@ -112,11 +112,7 @@ function MemberRow({
             style={nameColor ? { color: nameColor } : undefined}
             className={`truncate text-ds-md font-medium ${nameColor ? '' : nameClass}`}
           >
-            {nickname?.trim() ? (
-              name
-            ) : (
-              <StyledName name={name} userId={userId} style={nameStyle} />
-            )}
+            {nickname?.trim() ? name : <StyledName name={name} userId={userId} style={nameStyle} />}
           </p>
           {isBot ? (
             <span className="rounded bg-violet-400/30 px-1 text-[9px] font-bold uppercase text-violet-100">
@@ -148,7 +144,7 @@ function MembersAside({ children }: { children: React.ReactNode }): React.JSX.El
   return (
     <aside
       style={panel.panelStyle}
-      className="relative hidden shrink-0 flex-col border-l border-white/6 bg-[#07080b]/60 lg:flex"
+      className="relative hidden shrink-0 flex-col border-l border-subtle bg-primary lg:flex"
     >
       <ResizeHandle {...panel.handleProps} />
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">{children}</div>
@@ -258,7 +254,7 @@ export function ServerView(): React.JSX.Element {
   // currentServer ainda é o anterior no 1º render após clicar noutro servidor.
   if (loading || !currentServer || currentServer.id !== id) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-[#07080b]/90 text-gray-400">
+      <div className="flex h-full w-full items-center justify-center bg-primary text-gray-400">
         <p className="text-ds-md">Carregando servidor...</p>
       </div>
     )
@@ -303,11 +299,11 @@ export function ServerView(): React.JSX.Element {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-[#07080b]/90 backdrop-blur-2xl text-gray-100">
+    <div className="flex h-full w-full overflow-hidden bg-primary backdrop-blur-2xl text-gray-100">
       {/* Central Server View Column */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-r border-white/6">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-r border-subtle">
         {/* Top Channel Header Bar */}
-        <header className="relative flex h-14 shrink-0 items-center justify-between border-b border-white/6 px-4">
+        <header className="relative flex h-14 shrink-0 items-center justify-between border-b border-subtle px-4">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex min-w-0 items-center gap-2 text-gray-300">
               {activeChannel?.type === 'voice' ? (
@@ -317,7 +313,7 @@ export function ServerView(): React.JSX.Element {
               )}
               <span
                 title={activeChannel?.name ?? currentServer.name}
-                className="truncate text-ds-md font-semibold text-white"
+                className="truncate text-ds-md font-semibold text-strong"
               >
                 {activeChannel?.name ?? currentServer.name}
               </span>
@@ -333,7 +329,7 @@ export function ServerView(): React.JSX.Element {
                 className={`flex h-8 w-8 items-center justify-center rounded-lg border transition ${
                   pinsOpen
                     ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
-                    : 'border-white/10 bg-white/5 text-gray-400 hover:border-white/20 hover:text-white'
+                    : 'border-subtle bg-fg/5 text-gray-400 hover:border-normal hover:text-strong'
                 }`}
               >
                 <PinIcon className="h-4 w-4" />
@@ -395,12 +391,12 @@ export function ServerView(): React.JSX.Element {
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-violet-600/30 border border-violet-500/40 text-violet-300 font-bold text-2xl shadow-lg">
                 #
               </div>
-              <h1 className="text-ds-xxl font-bold text-white">
+              <h1 className="text-ds-xxl font-bold text-strong">
                 Bem-vindo a #{currentServer.name}!
               </h1>
               <p className="text-ds-md text-gray-400">
                 Este é o início do servidor{' '}
-                <strong className="text-white">{currentServer.name}</strong>. Convide seus amigos e
+                <strong className="text-strong">{currentServer.name}</strong>. Convide seus amigos e
                 comece a conversar!
               </p>
             </div>
@@ -499,7 +495,7 @@ export function ServerView(): React.JSX.Element {
                 return (
                   <div
                     key={f.id}
-                    className="flex items-center justify-between rounded-xl border border-white/6 bg-white/3 p-2.5"
+                    className="flex items-center justify-between rounded-xl border border-subtle bg-fg/3 p-2.5"
                   >
                     <div className="flex items-center gap-3">
                       <Avatar
@@ -509,7 +505,7 @@ export function ServerView(): React.JSX.Element {
                         size={32}
                       />
                       <div className="leading-tight">
-                        <p className="text-ds-md font-medium text-white">{f.display_name}</p>
+                        <p className="text-ds-md font-medium text-strong">{f.display_name}</p>
                         <p className="text-ds-xs text-gray-400">@{f.username}</p>
                       </div>
                     </div>

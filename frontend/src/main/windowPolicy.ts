@@ -53,8 +53,24 @@ export function staleLoginItem<T extends { path: string }>(
 /** Altura da barra de título (a faixa de arrastar e os botões nativos). */
 export const TITLE_BAR_HEIGHT = 32
 
-/** Mesmo preto do fundo do app (body), para a barra não destoar. */
-export const TITLE_BAR_COLOR = '#050508'
+/**
+ * Fundo e ícones da barra no tema padrão (Discord Escuro: --bg-app e
+ * --interactive-normal de assets/theme.css). Trocando o tema, o renderer manda
+ * as cores novas (ver parseTitleBarColors).
+ */
+export const TITLE_BAR_COLOR = '#2c2d32'
+export const TITLE_BAR_SYMBOL_COLOR = '#c5c6ca'
+
+const HEX6 = /^#[0-9a-f]{6}$/i
+
+/** Cores da barra vindas do renderer → só hex opaco de 6 dígitos; o resto, null. */
+export function parseTitleBarColors(raw: unknown): { color: string; symbolColor: string } | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const { color, symbolColor } = raw as Record<string, unknown>
+  if (typeof color !== 'string' || typeof symbolColor !== 'string') return null
+  if (!HEX6.test(color) || !HEX6.test(symbolColor)) return null
+  return { color: color.toLowerCase(), symbolColor: symbolColor.toLowerCase() }
+}
 
 /**
  * No Windows (e Linux) a moldura nativa segue o tema do sistema e fica clara.
@@ -69,6 +85,10 @@ export function titleBarOptions(platform: NodeJS.Platform): {
   if (platform === 'darwin') return {}
   return {
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: TITLE_BAR_COLOR, symbolColor: '#e5e7eb', height: TITLE_BAR_HEIGHT }
+    titleBarOverlay: {
+      color: TITLE_BAR_COLOR,
+      symbolColor: TITLE_BAR_SYMBOL_COLOR,
+      height: TITLE_BAR_HEIGHT
+    }
   }
 }

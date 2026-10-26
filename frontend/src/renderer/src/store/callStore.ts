@@ -771,7 +771,8 @@ export const useCallStore = create<CallState>()((set, get) => {
               ...joinReqs.filter((r) => !s.joinRequests.some((q) => q.id === r.id))
             ],
         screenSharers: sharing,
-        screenWatchers: (state.screen_watchers as Record<string, CallUserInfo[]>) ?? s.screenWatchers,
+        screenWatchers:
+          (state.screen_watchers as Record<string, CallUserInfo[]>) ?? s.screenWatchers,
         voiceStates: {
           ...Object.fromEntries(
             state.participants.map((p) => [
@@ -2010,12 +2011,7 @@ export const useCallStore = create<CallState>()((set, get) => {
 
 // Atividades seguem a chamada atual: sair/trocar de chamada fecha o jogo aqui.
 useCallStore.subscribe((s) => {
-  useActivityStore
-    .getState()
-    .setCall(
-      s.status === 'idle' ? null : s.callId,
-      voiceServerId(s)
-    )
+  useActivityStore.getState().setCall(s.status === 'idle' ? null : s.callId, voiceServerId(s))
 })
 
 // Os efeitos sonoros saem no mesmo dispositivo escolhido para as vozes.

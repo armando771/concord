@@ -33,13 +33,13 @@ function FriendActionsHost(): React.JSX.Element {
     >
       {isBlock ? (
         <>
-          Tem certeza que quer bloquear <strong className="text-white">{pending?.name}</strong>?
+          Tem certeza que quer bloquear <strong className="text-strong">{pending?.name}</strong>?
           Bloquear também remove a amizade, e essa pessoa não vai conseguir te mandar mensagens
           diretas nem pedidos de amizade.
         </>
       ) : (
         <>
-          Tem certeza que quer remover <strong className="text-white">{pending?.name}</strong> da
+          Tem certeza que quer remover <strong className="text-strong">{pending?.name}</strong> da
           sua lista de amigos? A conversa de vocês continua nas mensagens diretas.
         </>
       )}

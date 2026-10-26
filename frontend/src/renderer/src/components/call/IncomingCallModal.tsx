@@ -68,7 +68,7 @@ function IncomingCallModal(): React.JSX.Element | null {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="rounded-2xl border border-white/10 bg-[#111320] shadow-2xl shadow-black/70 w-full max-w-sm p-8 text-center">
+      <div className="rounded-2xl border border-subtle bg-modal shadow-2xl shadow-black/70 w-full max-w-sm p-8 text-center">
         <Avatar
           userId={peer.id}
           name={peer.display_name}
@@ -77,7 +77,7 @@ function IncomingCallModal(): React.JSX.Element | null {
           animate="always"
           className="mx-auto mb-4"
         />
-        <p className="text-lg font-bold text-white">
+        <p className="text-lg font-bold text-strong">
           <StyledName name={peer.display_name} userId={peer.id} style={peer.name_style} />
         </p>
         <p className="mb-6 text-xs text-gray-400">@{peer.username}</p>

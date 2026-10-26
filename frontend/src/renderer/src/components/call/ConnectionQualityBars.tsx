@@ -3,11 +3,11 @@ import { useCallStore } from '../../store/callStore'
 import { qualityBars, qualityTooltip, type CallQuality } from '../../lib/connectionQuality'
 
 const LIT: Record<CallQuality, string> = {
-  excellent: 'text-[#23a55a]',
-  good: 'text-[#23a55a]',
-  poor: 'text-[#f0b232]',
-  lost: 'text-[#f23f43]',
-  unknown: 'text-gray-500'
+  excellent: 'text-success',
+  good: 'text-success',
+  poor: 'text-warning',
+  lost: 'text-danger',
+  unknown: 'text-faint'
 }
 
 /** Ícone de barrinhas de sinal (3) do ConnectionQuality do LiveKit. */

@@ -17,11 +17,11 @@ function ComposerAttachments({
       {drafts.map((d) => (
         <div
           key={d.localId}
-          className={`relative flex w-40 shrink-0 flex-col gap-1 rounded-lg border bg-black/40 p-2 ${
-            d.status === 'error' ? 'border-red-500/50' : 'border-white/10'
+          className={`relative flex w-40 shrink-0 flex-col gap-1 rounded-lg border bg-input p-2 ${
+            d.status === 'error' ? 'border-red-500/50' : 'border-subtle'
           }`}
         >
-          <div className="relative flex h-20 items-center justify-center overflow-hidden rounded-md bg-white/5 text-gray-400">
+          <div className="relative flex h-20 items-center justify-center overflow-hidden rounded-md bg-fg/5 text-gray-400">
             {d.kind === 'image' && d.previewUrl ? (
               <img src={d.previewUrl} alt="" className="h-full w-full object-cover" />
             ) : d.kind === 'video' && d.previewUrl ? (
@@ -43,7 +43,7 @@ function ComposerAttachments({
           </p>
           <p className="text-[10px] text-gray-500">{formatBytes(d.file.size)}</p>
           {d.status === 'uploading' && (
-            <div className="h-1 overflow-hidden rounded-full bg-white/10">
+            <div className="h-1 overflow-hidden rounded-full bg-fg/10">
               <div
                 className="h-full rounded-full bg-violet-400 transition-[width]"
                 style={{ width: `${Math.round(d.progress * 100)}%` }}
@@ -56,7 +56,7 @@ function ComposerAttachments({
             onClick={() => onRemove(d.localId)}
             title="Remover"
             aria-label="Remover anexo"
-            className="absolute right-1 top-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-black/70 text-xs text-gray-300 hover:bg-red-500 hover:text-white"
+            className="absolute right-1 top-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-black/70 text-xs text-gray-300 hover:bg-red-500 hover:text-white on-media"
           >
             ×
           </button>

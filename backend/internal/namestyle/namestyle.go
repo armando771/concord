@@ -16,14 +16,29 @@ var ErrInvalid = errors.New("estilo de nome inválido")
 var Fonts = []string{
 	"default", "tempo", "sakura", "jellybean", "modern", "medieval", "bit8", "vampyre",
 	"handwritten", "slab", "condensed", "mono", "retro",
+	"pixel", "terminal", "script", "elegant", "gothic", "space", "rounded", "soft",
+	"marquee", "arcade", "disco", "cartoon", "scifi", "horror",
 }
 
-var Effects = []string{"solid", "gradient", "neon", "toon", "pop", "rainbow", "pulse"}
+var Effects = []string{
+	"solid", "gradient", "neon", "toon", "pop", "rainbow", "pulse",
+	"flow", "glow", "glitch", "fire", "wave", "shimmer", "sparkle", "typewriter", "chrome", "shadow3d",
+}
 
 const maxColors = 2
 
 // minColors: quantas cores o efeito exige. Os que não estão aqui não exigem.
-var minColors = map[string]int{"gradient": 2, "neon": 1, "toon": 1, "pop": 1}
+var minColors = map[string]int{
+	"gradient": 2, "neon": 1, "toon": 1, "pop": 1, "flow": 2, "glow": 1, "shadow3d": 2,
+}
+
+// colorLimit: efeitos que aceitam menos que maxColors (os de cores próprias,
+// como arco-íris e fogo, não aceitam nenhuma).
+var colorLimit = map[string]int{
+	"solid": 1, "neon": 1, "toon": 1, "pop": 1, "pulse": 1, "glow": 1,
+	"rainbow": 0, "fire": 0, "chrome": 0,
+	"glitch": 1, "wave": 1, "shimmer": 1, "sparkle": 1, "typewriter": 1,
+}
 
 var colorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
@@ -50,8 +65,12 @@ func Validate(s Style) (Style, error) {
 	if !slices.Contains(Effects, s.Effect) {
 		return Style{}, invalid("efeito desconhecido")
 	}
-	if len(s.Colors) > maxColors {
-		return Style{}, invalid(fmt.Sprintf("use até %d cores", maxColors))
+	limit := maxColors
+	if n, ok := colorLimit[s.Effect]; ok {
+		limit = n
+	}
+	if len(s.Colors) > limit {
+		return Style{}, invalid(fmt.Sprintf("o efeito escolhido aceita até %d cores", limit))
 	}
 	if len(s.Colors) < minColors[s.Effect] {
 		return Style{}, invalid("o efeito escolhido precisa de mais cores")

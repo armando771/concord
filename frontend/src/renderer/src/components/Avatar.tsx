@@ -41,7 +41,7 @@ function Avatar({
   size,
   animate = 'hover',
   status,
-  cutoutColor = '#111214',
+  cutoutColor = 'var(--bg-floating)',
   fallbackClassName = 'bg-violet-600',
   className = ''
 }: AvatarProps): React.JSX.Element {
@@ -69,10 +69,10 @@ function Avatar({
           alt=""
           draggable={false}
           style={{ imageRendering: 'pixelated' }}
-          className="h-full w-full rounded-full bg-[#1e1f22] object-cover"
+          className="h-full w-full rounded-full bg-accent object-cover"
         />
       ) : salinhaBot ? (
-        <div className="flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-[#5865f2] to-[#8b5cf6] text-white">
+        <div className="flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-brand to-[#8b5cf6] text-white">
           <SalinhaMarkIcon className="h-[72%] w-[72%]" />
         </div>
       ) : showImage ? (

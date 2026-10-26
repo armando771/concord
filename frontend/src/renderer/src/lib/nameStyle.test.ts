@@ -6,6 +6,7 @@ import {
   NAME_EFFECTS,
   NAME_FONTS,
   defaultColorsFor,
+  nameGraphemes,
   nameStyleCss,
   resolveNameStyle
 } from './nameStyle'
@@ -88,6 +89,79 @@ describe('nameStyleCss', () => {
     expect(nameStyleCss({ font: 'default', effect: 'pulse', colors: ['#ff00ff'] }).className).toBe(
       'name-pulse'
     )
+  })
+})
+
+describe('efeitos novos', () => {
+  it('têm cores iguais às do backend (mínimo e máximo)', () => {
+    // Espelha namestyle.go: minColors/colorLimit.
+    const expected: Record<string, [number, number]> = {
+      flow: [2, 2],
+      glow: [1, 1],
+      glitch: [0, 1],
+      fire: [0, 0],
+      wave: [0, 1],
+      shimmer: [0, 1],
+      sparkle: [0, 1],
+      typewriter: [0, 1],
+      chrome: [0, 0],
+      shadow3d: [2, 2]
+    }
+    for (const [id, [min, max]] of Object.entries(expected)) {
+      const def = NAME_EFFECTS.find((e) => e.id === id)
+      expect(def, id).toBeDefined()
+      expect([def!.minColors, def!.maxColors], id).toEqual([min, max])
+    }
+  })
+  it('degradê animado usa as duas cores e a classe animada', () => {
+    const css = nameStyleCss({ font: 'default', effect: 'flow', colors: ['#ff0000', '#0000ff'] })
+    expect(css.className).toBe('name-flow')
+    expect(css.style.backgroundImage).toContain('#ff0000')
+    expect(css.style.backgroundImage).toContain('#0000ff')
+  })
+  it('glitch e neon pulsante desenham uma cópia do texto (data-text)', () => {
+    expect(nameStyleCss({ font: 'default', effect: 'glitch', colors: [] }).copy).toBe(true)
+    const glow = nameStyleCss({ font: 'default', effect: 'glow', colors: ['#00ffaa'] })
+    expect(glow.copy).toBe(true)
+    expect(glow.style).toMatchObject({ '--name-c1': '#00ffaa' })
+  })
+  it('onda separa as letras', () => {
+    expect(nameStyleCss({ font: 'default', effect: 'wave', colors: [] }).letters).toBe(true)
+    expect(nameStyleCss({ font: 'default', effect: 'fire', colors: [] }).letters).toBeFalsy()
+  })
+  it('sombra 3D empilha sombras na segunda cor', () => {
+    const { style } = nameStyleCss({
+      font: 'default',
+      effect: 'shadow3d',
+      colors: ['#ffffff', '#ff00aa']
+    })
+    expect(style.color).toBe('#ffffff')
+    expect(String(style.textShadow).match(/#ff00aa/g)?.length).toBeGreaterThanOrEqual(3)
+  })
+  it('fogo e cromado não aceitam cor', () => {
+    expect(resolveNameStyle({ font: 'default', effect: 'fire', colors: ['#ff0000'] })).toEqual({
+      font: 'default',
+      effect: 'fire',
+      colors: []
+    })
+    expect(nameStyleCss({ font: 'default', effect: 'chrome', colors: [] }).className).toBe(
+      'name-chrome'
+    )
+  })
+  it('fontes novas viram font-family', () => {
+    expect(nameStyleCss({ font: 'pixel', effect: 'solid', colors: [] }).style.fontFamily).toContain(
+      'Silkscreen'
+    )
+    expect(
+      nameStyleCss({ font: 'gothic', effect: 'solid', colors: [] }).style.fontFamily
+    ).toContain('UnifrakturMaguntia')
+  })
+})
+
+describe('nameGraphemes', () => {
+  it('não quebra emoji nem acento combinado', () => {
+    expect(nameGraphemes('oi👍🏽')).toEqual(['o', 'i', '👍🏽'])
+    expect(nameGraphemes('e\u0301a')).toEqual(['e\u0301', 'a'])
   })
 })
 

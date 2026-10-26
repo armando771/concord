@@ -4,6 +4,7 @@ import { useAuthStore, type ProfileLink, type PublicUser, type User } from '../s
 import type { ChosenStatus, PresenceStatus } from '../lib/presenceStatus'
 import type { ProfileFields } from '../lib/profileValidation'
 import type { NameStyle } from '../lib/nameStyle'
+import type { ProfileTheme } from '../lib/profileTheme'
 
 export function getMe(): Promise<User> {
   return request<User>('/users/me')
@@ -28,6 +29,8 @@ export interface PublicProfile {
   status: PresenceStatus
   is_bot?: boolean
   name_style?: NameStyle
+  /** Borda, fundo e efeito do cartão (ausente = padrão). */
+  profile_theme?: ProfileTheme
   created_at: string
 }
 

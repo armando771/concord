@@ -57,7 +57,7 @@ function RequireAuth({ children }: RequireAuthProps): React.JSX.Element {
   if (!user) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4">
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/20 border-t-violet-500" />
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-normal border-t-violet-500" />
         {offline && (
           <p className="text-sm text-gray-400">Sem conexão com o servidor. Tentando de novo…</p>
         )}

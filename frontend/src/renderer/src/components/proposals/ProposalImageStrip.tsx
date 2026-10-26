@@ -14,7 +14,7 @@ function ProposalImageStrip({
       {drafts.map((d) => (
         <li
           key={d.key}
-          className="relative h-20 w-20 overflow-hidden rounded-lg border border-white/10 bg-black/30"
+          className="relative h-20 w-20 overflow-hidden rounded-lg border border-subtle bg-input"
         >
           <img
             src={d.previewUrl}
@@ -23,7 +23,7 @@ function ProposalImageStrip({
             className={`h-full w-full object-cover ${d.error ? 'opacity-30' : ''}`}
           />
           {d.id == null && !d.error && (
-            <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50">
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50 on-media">
               <div
                 className="h-full bg-violet-400 transition-all"
                 style={{ width: `${Math.round(d.progress * 100)}%` }}
@@ -39,7 +39,7 @@ function ProposalImageStrip({
             type="button"
             onClick={() => onRemove(d.key)}
             aria-label="Remover imagem"
-            className="absolute right-1 top-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-black/70 text-[10px] text-white transition-colors hover:bg-red-500"
+            className="absolute right-1 top-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-black/70 text-[10px] text-white transition-colors hover:bg-red-500 on-media"
           >
             ✕
           </button>

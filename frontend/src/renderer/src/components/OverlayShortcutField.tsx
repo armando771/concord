@@ -63,7 +63,7 @@ function OverlayShortcutField({ disabled }: { disabled: boolean }): React.JSX.El
   return (
     <div className="mt-4 flex flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-semibold text-white">Atalho para mover o overlay</span>
+        <span className="text-sm font-semibold text-strong">Atalho para mover o overlay</span>
         <div
           role="button"
           tabIndex={disabled ? -1 : 0}
@@ -74,8 +74,8 @@ function OverlayShortcutField({ disabled }: { disabled: boolean }): React.JSX.El
           onBlur={() => setRecording(false)}
           className={`min-w-[9rem] shrink-0 cursor-pointer select-none rounded-lg border px-3 py-2 text-center text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-violet-400 ${
             recording
-              ? 'border-[#5865f2] bg-[#5865f2]/15 text-white'
-              : 'border-white/10 bg-white/10 text-white hover:bg-white/15'
+              ? 'border-brand bg-brand/15 text-strong'
+              : 'border-subtle bg-fg/10 text-strong hover:bg-fg/15'
           } ${disabled ? 'pointer-events-none opacity-50' : ''}`}
         >
           {recording ? 'Aperte a combinação…' : <kbd className="font-semibold">{shortcut}</kbd>}

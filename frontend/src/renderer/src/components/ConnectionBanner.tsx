@@ -8,10 +8,18 @@ import {
 } from '../lib/wsStatus'
 
 const TONE: Record<Banner['kind'], string> = {
-  offline: 'border-red-400/25 bg-red-500/15 text-red-100',
-  lost: 'border-red-400/25 bg-red-500/15 text-red-100',
-  restarting: 'border-indigo-400/25 bg-indigo-500/15 text-indigo-100',
-  reconnected: 'border-emerald-400/25 bg-emerald-500/15 text-emerald-100'
+  offline: 'border-danger/30 bg-danger/15',
+  lost: 'border-danger/30 bg-danger/15',
+  restarting: 'border-brand/30 bg-brand/15',
+  reconnected: 'border-success/30 bg-success/15'
+}
+
+/** Cor do ponto e do botão (texto do tema, com contraste AA). */
+const ACCENT: Record<Banner['kind'], string> = {
+  offline: 'text-danger',
+  lost: 'text-danger',
+  restarting: 'text-brand',
+  reconnected: 'text-success'
 }
 
 function bannerText(banner: Banner): string {
@@ -55,12 +63,12 @@ function ConnectionBanner(): React.JSX.Element | null {
       aria-live="polite"
       data-testid="connection-banner"
       data-kind={banner.kind}
-      className={`flex items-center gap-3 border-b px-4 py-2 text-sm ${TONE[banner.kind]}`}
+      className={`flex items-center gap-3 border-b px-4 py-2 text-sm text-normal ${TONE[banner.kind]}`}
     >
       {banner.kind !== 'reconnected' && (
         <span
           aria-hidden="true"
-          className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-current opacity-80"
+          className={`h-2 w-2 shrink-0 animate-pulse rounded-full bg-current ${ACCENT[banner.kind]}`}
         />
       )}
       <span className="min-w-0 flex-1 truncate">{bannerText(banner)}</span>
@@ -68,7 +76,7 @@ function ConnectionBanner(): React.JSX.Element | null {
         <button
           type="button"
           onClick={() => useChatStore.getState().retryWsNow()}
-          className="shrink-0 cursor-pointer rounded font-semibold underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-white/60"
+          className={`shrink-0 cursor-pointer rounded font-semibold underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand ${ACCENT[banner.kind]}`}
         >
           Tentar agora
         </button>
