@@ -142,7 +142,11 @@ vi.mock('../lib/localSpeaking', () => ({
   }
 }))
 
+const chromaPipeline = vi.hoisted(() => ({ create: vi.fn() }))
+vi.mock('../lib/chromaKeyPipeline', () => ({ createChromaKeyPipeline: chromaPipeline.create }))
+
 import { useCallStore } from './callStore'
+import { useChromaKeyStore } from './chromaKeyStore'
 import { ApiError } from '../api/client'
 import { showToast } from './toastStore'
 
@@ -169,6 +173,7 @@ async function joinChannel(): Promise<void> {
 }
 
 beforeEach(() => {
+  useChromaKeyStore.setState({ enabled: false })
   useCallStore.getState().endCall()
   vi.clearAllMocks()
   media.instances.length = 0
@@ -366,6 +371,115 @@ describe('callStore — mídia via LiveKit', () => {
 
     expect(useCallStore.getState().localCameraStream).toBeNull()
     expect(allStopped(stream)).toBe(true)
+  })
+
+  describe('chroma key na câmera', () => {
+    function fakePipeline(): { stream: MediaStream; destroy: ReturnType<typeof vi.fn> } {
+      const processed = fakeStream('video')
+      const destroy = vi.fn()
+      return { stream: processed, destroy }
+    }
+
+    it('desligado: publica a câmera crua e não cria pipeline', async () => {
+      await joinChannel()
+      const raw = fakeStream('video')
+      rtc.getCameraStream.mockResolvedValue(raw)
+
+      await useCallStore.getState().toggleCamera()
+
+      expect(chromaPipeline.create).not.toHaveBeenCalled()
+      expect(useCallStore.getState().localCameraStream).toBe(raw)
+      expect(media.publishCamera).toHaveBeenCalledWith(raw)
+    })
+
+    it('ligado: prévia e sala recebem o stream processado', async () => {
+      useChromaKeyStore.setState({ enabled: true })
+      await joinChannel()
+      const raw = fakeStream('video')
+      const pipeline = fakePipeline()
+      rtc.getCameraStream.mockResolvedValue(raw)
+      chromaPipeline.create.mockReturnValue(pipeline)
+
+      await useCallStore.getState().toggleCamera()
+
+      expect(chromaPipeline.create).toHaveBeenCalledWith(raw, expect.any(Function))
+      expect(useCallStore.getState().localCameraStream).toBe(pipeline.stream)
+      expect(media.publishCamera).toHaveBeenCalledWith(pipeline.stream)
+    })
+
+    it('desligar a câmera encerra o pipeline', async () => {
+      useChromaKeyStore.setState({ enabled: true })
+      await joinChannel()
+      const pipeline = fakePipeline()
+      rtc.getCameraStream.mockResolvedValue(fakeStream('video'))
+      chromaPipeline.create.mockReturnValue(pipeline)
+      await useCallStore.getState().toggleCamera()
+
+      await useCallStore.getState().toggleCamera()
+      await flush()
+
+      expect(useCallStore.getState().localCameraStream).toBeNull()
+      expect(pipeline.destroy).toHaveBeenCalledTimes(1)
+    })
+
+    it('encerrar a chamada encerra o pipeline', async () => {
+      useChromaKeyStore.setState({ enabled: true })
+      await joinChannel()
+      const pipeline = fakePipeline()
+      rtc.getCameraStream.mockResolvedValue(fakeStream('video'))
+      chromaPipeline.create.mockReturnValue(pipeline)
+      await useCallStore.getState().toggleCamera()
+
+      useCallStore.getState().endCall()
+
+      expect(pipeline.destroy).toHaveBeenCalledTimes(1)
+    })
+
+    it('pipeline que falha cai para a câmera crua, com aviso', async () => {
+      useChromaKeyStore.setState({ enabled: true })
+      await joinChannel()
+      const raw = fakeStream('video')
+      rtc.getCameraStream.mockResolvedValue(raw)
+      chromaPipeline.create.mockImplementation(() => {
+        throw new Error('sem canvas')
+      })
+      vi.mocked(showToast.error).mockClear()
+
+      await useCallStore.getState().toggleCamera()
+
+      expect(useCallStore.getState().localCameraStream).toBe(raw)
+      expect(media.publishCamera).toHaveBeenCalledWith(raw)
+      expect(showToast.error).toHaveBeenCalledWith(expect.stringMatching(/chroma key/))
+    })
+
+    it('ligar o efeito com a câmera aberta recria a câmera com o pipeline', async () => {
+      await joinChannel()
+      const raw = fakeStream('video')
+      const pipeline = fakePipeline()
+      rtc.getCameraStream.mockResolvedValue(raw)
+      chromaPipeline.create.mockReturnValue(pipeline)
+      await useCallStore.getState().toggleCamera()
+      expect(chromaPipeline.create).not.toHaveBeenCalled()
+
+      useChromaKeyStore.getState().setEnabled(true)
+      await flush()
+      await flush()
+
+      expect(chromaPipeline.create).toHaveBeenCalledTimes(1)
+      expect(useCallStore.getState().localCameraStream).toBe(pipeline.stream)
+    })
+
+    it('mexer em sliders não recria a câmera', async () => {
+      await joinChannel()
+      rtc.getCameraStream.mockResolvedValue(fakeStream('video'))
+      await useCallStore.getState().toggleCamera()
+      rtc.getCameraStream.mockClear()
+
+      useChromaKeyStore.getState().setSimilarity(0.9)
+      await flush()
+
+      expect(rtc.getCameraStream).not.toHaveBeenCalled()
+    })
   })
 
   it('falha ao publicar a tela depois de conectar não derruba a chamada', async () => {

@@ -10,6 +10,8 @@ import {
 } from '../api/calls'
 import { ApiError } from '../api/client'
 import { getAudioStream, getCameraStream, getDisplayStream } from '../lib/rtc'
+import { createChromaKeyPipeline, type ChromaKeyPipeline } from '../lib/chromaKeyPipeline'
+import { chromaKeySettings, useChromaKeyStore } from './chromaKeyStore'
 import { ScreenShareSetupError } from '../lib/displayMedia'
 import {
   rememberStreamQuality,
@@ -420,6 +422,8 @@ const sendScreenPreview = createPreviewSender({
 let windowAudio: WindowAudio | null = null
 // Câmera local (não-reativa; o estado reativo é localCameraStream)
 let localCameraStream: MediaStream | null = null
+// Pipeline do chroma key da câmera local (null = câmera crua)
+let cameraPipeline: ChromaKeyPipeline | null = null
 
 /** call:live recentes, reaplicados sobre o polling da lista do servidor. */
 let recentLive: LiveRecord[] = []
@@ -444,6 +448,24 @@ function releaseStream(stream: MediaStream): void {
     .unpublish(stream)
     .catch(() => {})
     .finally(stop)
+}
+
+/** Como releaseStream, mas também encerra o chroma key (e a câmera por trás dele). */
+function releaseCamera(stream: MediaStream): void {
+  const pipeline = cameraPipeline
+  cameraPipeline = null
+  if (!pipeline) {
+    releaseStream(stream)
+    return
+  }
+  if (!media) {
+    pipeline.destroy()
+    return
+  }
+  void media
+    .unpublish(stream)
+    .catch(() => {})
+    .finally(() => pipeline.destroy())
 }
 
 function stopLocalStream(): void {
@@ -946,6 +968,8 @@ export const useCallStore = create<CallState>()((set, get) => {
     windowAudio = null
     localCameraStream?.getTracks().forEach((t) => t.stop())
     localCameraStream = null
+    cameraPipeline?.destroy()
+    cameraPipeline = null
     useSoundboardStore.getState().clearActivePlays()
     useAnnotationStore.getState().cleanup()
     set({
@@ -1550,7 +1574,7 @@ export const useCallStore = create<CallState>()((set, get) => {
         const stream = localCameraStream
         localCameraStream = null
         set({ localCameraStream: null })
-        releaseStream(stream)
+        releaseCamera(stream)
         return
       }
 
@@ -1575,11 +1599,27 @@ export const useCallStore = create<CallState>()((set, get) => {
         return
       }
 
+      const rawCamera = stream
+      // Chroma key ligado: o que vai para a prévia e para a sala é o stream
+      // processado. Se o pipeline falhar, segue com a câmera crua.
+      if (useChromaKeyStore.getState().enabled) {
+        try {
+          const pipeline = createChromaKeyPipeline(stream, () =>
+            chromaKeySettings(useChromaKeyStore.getState())
+          )
+          cameraPipeline = pipeline
+          stream = pipeline.stream
+        } catch {
+          showToast.error('Não foi possível aplicar o chroma key — usando a câmera normal.')
+        }
+      }
+
       localCameraStream = stream
       set({ localCameraStream: stream })
 
       // Câmera desligada pelo SO/app (ex.: fechar a fonte) desliga o share.
-      stream.getVideoTracks().forEach((track) => {
+      // (a track da câmera de verdade, não a do canvas do chroma key)
+      rawCamera.getVideoTracks().forEach((track) => {
         track.addEventListener('ended', () => {
           if (get().status === 'active' && localCameraStream === stream) {
             void get().toggleCamera()
@@ -2043,3 +2083,15 @@ if (typeof navigator !== 'undefined' && navigator.mediaDevices?.addEventListener
     })
   })
 }
+
+// Ligar/desligar o chroma key com a câmera aberta recria a câmera: o stream
+// publicado muda (canvas x câmera crua). Sliders e cores valem ao vivo, sem isso.
+useChromaKeyStore.subscribe((state, prev) => {
+  if (state.enabled === prev.enabled) return
+  const call = useCallStore.getState()
+  if (!localCameraStream || call.status !== 'active') return
+  void (async () => {
+    await call.toggleCamera()
+    await useCallStore.getState().toggleCamera()
+  })()
+})
