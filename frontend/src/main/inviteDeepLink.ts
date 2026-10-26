@@ -1,4 +1,8 @@
-import { findInviteDeepLink, parseInviteDeepLink } from '../renderer/src/lib/inviteLink'
+import {
+  findInviteDeepLink,
+  parseInviteDeepLink,
+  parseOwnInviteUrl
+} from '../renderer/src/lib/inviteLink'
 
 /**
  * Convite que chegou pelo salinha://convite/<código> e ainda não foi aberto.
@@ -16,6 +20,11 @@ export class PendingInvite {
   /** URL do open-url (macOS). */
   offerUrl(url: string): boolean {
     return this.keep(parseInviteDeepLink(url))
+  }
+
+  /** Link https de convite nosso clicado dentro do app (e não aberto no navegador). */
+  offerWebUrl(url: string, serverOrigins: readonly (string | undefined)[]): boolean {
+    return this.keep(parseOwnInviteUrl(url, serverOrigins))
   }
 
   take(): string | null {
