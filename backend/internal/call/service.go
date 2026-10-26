@@ -598,16 +598,16 @@ func (s *Service) detachParticipant(callID, userID string) (remaining int, remov
 	}
 	channelID := ac.info.ChannelID
 	hooks := append([]func(string, string){}, s.onParticipantLeft...)
-	// Quem abriu a atividade saiu: ela acaba para os que ficaram.
-	activityStop := s.dropActivityOfLocked(callID, userID)
+	// Quem abriu a atividade saiu: ela acaba; quem só jogava sai da lista.
+	activityChange := s.dropActivityOfLocked(callID, userID)
 	targets := participantIDsLocked(ac)
 	s.mu.Unlock()
 	for _, fn := range hooks {
 		fn(callID, userID)
 	}
 
-	if activityStop != nil {
-		s.sendToAll(targets, activityStop)
+	if activityChange != nil {
+		s.sendToAll(targets, activityChange)
 	}
 	if wasSharing {
 		s.publishLive(serverID, LiveEvent{CallID: callID, ChannelID: channelID, UserID: userID, Active: false})
@@ -1111,6 +1111,10 @@ func (s *Service) HandleCallMessage(userID string, evType string, payload json.R
 		s.handleActivityMessage(ctx, userID, payload)
 	case "call:activity:stop":
 		s.handleActivityStopMessage(userID, payload)
+	case "call:activity:join":
+		s.handleActivityPresenceMessage(userID, true, payload)
+	case "call:activity:leave":
+		s.handleActivityPresenceMessage(userID, false, payload)
 	case "call:lock":
 		var p LockPayload
 		if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" {

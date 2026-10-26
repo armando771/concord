@@ -20,7 +20,7 @@ func find(t *testing.T, badges []Badge, key string) Badge {
 
 func TestCatalogIsWellFormed(t *testing.T) {
 	seen := map[string]bool{}
-	valid := map[string]bool{RarityCommon: true, RarityRare: true, RarityEpic: true, RarityLegendary: true}
+	valid := map[string]bool{RarityCommon: true, RarityRare: true, RarityEpic: true, RarityLegendary: true, RarityMythic: true}
 	for _, c := range Catalog {
 		if seen[c.Key] {
 			t.Fatalf("duplicate category %q", c.Key)
@@ -30,6 +30,10 @@ func TestCatalogIsWellFormed(t *testing.T) {
 			t.Fatalf("category %q incomplete", c.Key)
 		}
 		for i, tier := range c.Tiers {
+			// Mítico é só dos badges concedidos à mão.
+			if (tier.Rarity == RarityMythic) != c.Exclusive {
+				t.Fatalf("%s tier %d: rarity %q with exclusive=%v", c.Key, i+1, tier.Rarity, c.Exclusive)
+			}
 			if !valid[tier.Rarity] {
 				t.Fatalf("%s tier %d has rarity %q", c.Key, i+1, tier.Rarity)
 			}
@@ -217,5 +221,87 @@ func TestEvaluateIgnoresUnknownStoredTiers(t *testing.T) {
 	badges, _ := Evaluate(Stats{CreatedAt: FounderCutoff}, stored, now)
 	if party := find(t, badges, "festeiro"); party.Tier != 0 {
 		t.Fatalf("festeiro = %+v, want 0", party)
+	}
+}
+
+func TestRarityRankOrder(t *testing.T) {
+	order := []string{RarityCommon, RarityRare, RarityEpic, RarityLegendary, RarityMythic}
+	for i := 1; i < len(order); i++ {
+		if rarityRank(order[i]) <= rarityRank(order[i-1]) {
+			t.Fatalf("%s (%d) is not above %s (%d)", order[i], rarityRank(order[i]), order[i-1], rarityRank(order[i-1]))
+		}
+	}
+	if rarityRank("desconhecida") != rarityRank(RarityCommon) {
+		t.Fatal("unknown rarity should rank as common")
+	}
+}
+
+func hasBadge(badges []Badge, key string) bool {
+	for _, b := range badges {
+		if b.Category == key {
+			return true
+		}
+	}
+	return false
+}
+
+func TestEvaluateCreatorIsOnlyForDevs(t *testing.T) {
+	badges, fresh := Evaluate(Stats{CreatedAt: FounderCutoff}, nil, now)
+	if hasBadge(badges, "criador") {
+		t.Fatal("non-dev sees the Criador da Salinha badge")
+	}
+	for _, u := range fresh {
+		if u.Category == "criador" {
+			t.Fatalf("non-dev unlocked criador: %+v", u)
+		}
+	}
+
+	badges, fresh = Evaluate(Stats{CreatedAt: FounderCutoff, IsDev: true}, nil, now)
+	c := find(t, badges, "criador")
+	if c.Tier != 1 || c.Rarity != RarityMythic || c.TierName != "Criador da Salinha" || !c.Obtainable || c.Progress != 1 || c.NextThreshold != nil {
+		t.Fatalf("dev criador = %+v", c)
+	}
+	if c.UnlockedAt == nil || !c.UnlockedAt.Equal(now) {
+		t.Fatalf("dev criador unlocked_at = %v, want now", c.UnlockedAt)
+	}
+	var got bool
+	for _, u := range fresh {
+		got = got || (u.Category == "criador" && u.Tier == 1)
+	}
+	if !got {
+		t.Fatalf("fresh = %+v, want criador/1", fresh)
+	}
+}
+
+func TestEvaluateCreatorKeepsDateButNotAfterRevoke(t *testing.T) {
+	granted := now.AddDate(0, -1, 0)
+	stored := Unlocks{"criador": {1: granted}}
+
+	badges, fresh := Evaluate(Stats{CreatedAt: FounderCutoff, IsDev: true}, stored, now)
+	if c := find(t, badges, "criador"); c.UnlockedAt == nil || !c.UnlockedAt.Equal(granted) {
+		t.Fatalf("criador unlocked_at = %v, want the stored %v", c.UnlockedAt, granted)
+	}
+	if len(fresh) != 0 {
+		t.Fatalf("fresh = %+v, want nothing new", fresh)
+	}
+
+	// Saiu da tabela: o badge some, mesmo gravado.
+	badges, _ = Evaluate(Stats{CreatedAt: FounderCutoff}, stored, now)
+	if hasBadge(badges, "criador") {
+		t.Fatal("revoked dev still has criador")
+	}
+}
+
+func TestPublicViewOfCreatorHasNoNumbers(t *testing.T) {
+	badges, _ := Evaluate(Stats{CreatedAt: FounderCutoff, IsDev: true}, nil, now)
+	var pub *PublicBadge
+	for _, b := range publicView(badges) {
+		if b.Category == "criador" {
+			b := b
+			pub = &b
+		}
+	}
+	if pub == nil || pub.Rarity != RarityMythic || pub.TierName != "Criador da Salinha" || pub.UnlockedAt == "" {
+		t.Fatalf("public criador = %+v", pub)
 	}
 }

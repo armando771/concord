@@ -5,6 +5,7 @@ import {
   activityWindowOptions,
   canNavigateActivity,
   createExternalOpenGate,
+  createRoomTracker,
   isUserGestureInput,
   opensExternally
 } from './activityPolicy'
@@ -113,6 +114,34 @@ describe('activityPolicy', () => {
       gate.recordInput(10_000)
       expect(gate.allow(10_100)).toBe(true)
       expect(gate.allow(13_200)).toBe(false)
+    })
+  })
+
+  describe('createRoomTracker (sala lida da janela do jogo)', () => {
+    it('avisa cada sala nova uma vez só', () => {
+      const tracker = createRoomTracker('krunker')
+      expect(tracker.visit('https://krunker.io/')).toBeNull()
+      expect(tracker.visit('https://krunker.io/?game=BRZ:tukbo')).toBe(
+        'https://krunker.io/?game=BRZ:tukbo'
+      )
+      expect(tracker.visit('https://krunker.io/?game=BRZ:tukbo')).toBeNull()
+      expect(tracker.visit('https://krunker.io/?game=FRA:abc12')).toBe(
+        'https://krunker.io/?game=FRA:abc12'
+      )
+    })
+
+    it('sair da sala não apaga a última (quem entrar depois ainda cai nela)', () => {
+      const tracker = createRoomTracker('survev')
+      expect(tracker.visit('https://survev.io/#1Fu4')).toBe('https://survev.io/#1Fu4')
+      expect(tracker.visit('https://survev.io/')).toBeNull()
+      expect(tracker.visit('https://survev.io/#1Fu4')).toBeNull()
+    })
+
+    it('reset: a mesma sala volta a ser avisada (janela reaberta)', () => {
+      const tracker = createRoomTracker('survev')
+      tracker.visit('https://survev.io/#1Fu4')
+      tracker.reset()
+      expect(tracker.visit('https://survev.io/#1Fu4')).toBe('https://survev.io/#1Fu4')
     })
   })
 })

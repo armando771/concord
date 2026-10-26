@@ -7,7 +7,8 @@ import {
 } from '../../../../shared/activities'
 import { useActivityStore } from '../../store/activityStore'
 import { useCallStore } from '../../store/callStore'
-import { CrosshairIcon } from '../icons'
+import { IS_WEB } from '../../lib/config'
+import { CrosshairIcon, ParachuteIcon } from '../icons'
 
 const POPOVER_WIDTH = 360
 const GAP = 10
@@ -22,6 +23,8 @@ export function ActivityGlyph({
   className?: string
 }): React.JSX.Element {
   switch (activity.icon) {
+    case 'royale':
+      return <ParachuteIcon className={className} />
     case 'crosshair':
     default:
       return <CrosshairIcon className={className} />
@@ -169,8 +172,10 @@ function ActivityPickerPopover({
               Cole o link da sala (opcional)
             </span>
             <input
-              type="url"
+              type="text"
               inputMode="url"
+              autoComplete="off"
+              spellCheck={false}
               value={link}
               onChange={(e) => {
                 setLink(e.target.value)
@@ -189,7 +194,11 @@ function ActivityPickerPopover({
             </p>
           ) : (
             <p className="text-[11px] text-gray-500">
-              Sem link, quem entrar abre a página inicial do jogo.
+              {/* No desktop a janela do jogo é observada e a sala vai sozinha; no
+                  navegador o iframe de outro site não deixa ler a URL. */}
+              {IS_WEB
+                ? 'Sem link, quem entrar abre a página inicial do jogo. Pode colar só o código da sala.'
+                : `${selected.roomHint} Sem link, quem entrar abre a página inicial.`}
             </p>
           )}
           <button

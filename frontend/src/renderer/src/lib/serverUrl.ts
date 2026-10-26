@@ -87,7 +87,7 @@ export function buildWebMediaSrc(): string {
 
 /**
  * Diretivas que só o build web acrescenta à CSP (o desktop fica como está).
- * frame-src: só o iframe das atividades (Krunker.io); o desktop abre o jogo
+ * frame-src: só o iframe das atividades (os jogos do catálogo); o desktop abre o jogo
  * numa janela própria.
  */
 export const WEB_EXTRA_CSP = `base-uri 'self'; frame-src ${ACTIVITIES.flatMap((a) => a.origins).join(' ')}`

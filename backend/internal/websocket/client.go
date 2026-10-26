@@ -97,7 +97,7 @@ func (c *Client) readPump(ctx context.Context) {
 		case "activity:set", "activity:clear":
 			c.hub.HandleActivity(c.userID, ev.Type, ev.Payload)
 		case "call:invite", "call:accept", "call:decline", "call:leave", "call:screen", "call:voice", "call:soundboard",
-			"call:activity", "call:activity:stop",
+			"call:activity", "call:activity:stop", "call:activity:join", "call:activity:leave",
 			"call:lock", "call:knock", "call:knock_cancel", "call:knock_respond",
 			"call:screen_watch",
 			"call:screen_draw", "call:screen_draw_clear", "call:screen_draw_undo":

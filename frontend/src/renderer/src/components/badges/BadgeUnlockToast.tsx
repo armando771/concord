@@ -1,7 +1,7 @@
 import { useAuthStore } from '../../store/authStore'
 import { UNLOCK_TOAST_MS, useBadgeStore } from '../../store/badgeStore'
 import { useLevelStore } from '../../store/levelStore'
-import { rarityMeta, unlockCount } from '../../lib/badges'
+import { isMythic, rarityMeta, unlockCount } from '../../lib/badges'
 import BadgeIcon from './BadgeIcon'
 
 /**
@@ -62,7 +62,12 @@ function BadgeUnlockToast(): React.JSX.Element | null {
             {count > 1 ? `${count} badges novos!` : 'Badge novo!'}
           </span>
           <span className="block text-[11px] text-gray-400">
-            <span style={{ color: meta.color }}>{first.tier_name}</span> · {first.name}
+            {isMythic(first.rarity) ? (
+              <span className="mythic-text font-bold">{first.tier_name}</span>
+            ) : (
+              <span style={{ color: meta.color }}>{first.tier_name}</span>
+            )}{' '}
+            · {first.name}
             {count > 1 && ` e mais ${count - 1}`}
           </span>
         </span>

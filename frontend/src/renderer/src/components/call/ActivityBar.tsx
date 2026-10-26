@@ -68,8 +68,10 @@ function ActivityBar(): React.JSX.Element | null {
             }}
           >
             <input
-              type="url"
+              type="text"
               inputMode="url"
+              autoComplete="off"
+              spellCheck={false}
               autoFocus
               value={link}
               onChange={(e) => {

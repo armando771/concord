@@ -110,6 +110,8 @@ export interface ActivitiesApi {
   close(): void
   /** A janela do jogo fechou (pelo usuário ou pelo app). Retorna unsubscribe. */
   onClosed(cb: (activityId: string) => void): () => void
+  /** A janela do jogo entrou numa sala nova (URL já canônica). Retorna unsubscribe. */
+  onRoom(cb: (activityId: string, url: string) => void): () => void
 }
 
 /** Atalho do modo de edição e se outro programa já tem ele. */
