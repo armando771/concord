@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { API_BASE_URL } from '../../lib/config'
-import { MAESTRO_USER_ID } from '../../lib/music'
+import { MAESTRO_HOWTO, MAESTRO_USER_ID } from '../../lib/music'
 import { profileMediaSrc } from '../../lib/profileMedia'
 import { detectProvider, linkLabel, splitLinks } from '../../lib/profileLinks'
 import type { PresenceStatus } from '../../lib/presenceStatus'
@@ -288,6 +288,17 @@ function ProfileCardBody({
               )
             )}
           </p>
+        )}
+
+        {profile.is_bot && profile.id === MAESTRO_USER_ID && (
+          <div className="mt-3 rounded-lg bg-fg/5 p-2.5">
+            <p className="text-ds-xs font-bold uppercase text-gray-400">{MAESTRO_HOWTO.title}</p>
+            <ol className="mt-1 list-decimal space-y-1 pl-4 text-sm leading-snug text-gray-200">
+              {MAESTRO_HOWTO.steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          </div>
         )}
 
         {links.length > 0 && (

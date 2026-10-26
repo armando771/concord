@@ -5,6 +5,7 @@ import {
   duckTarget,
   formatDuration,
   isMaestroIdentity,
+  MAESTRO_HOWTO,
   maestroIdentity,
   slashSuggestions,
   splitBold,
@@ -43,6 +44,13 @@ describe('slashSuggestions', () => {
   it('some depois do espaço ou sem barra', () => {
     expect(slashSuggestions('/play queen')).toEqual([])
     expect(slashSuggestions('oi')).toEqual([])
+  })
+})
+
+describe('MAESTRO_HOWTO', () => {
+  it('cita todos os comandos que o /help ensina', () => {
+    const text = MAESTRO_HOWTO.steps.join(' ')
+    for (const cmd of ['/play', '/skip', '/fila', '/help']) expect(text).toContain(cmd)
   })
 })
 
