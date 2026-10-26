@@ -7,6 +7,7 @@ import {
   OVERLAY_PREFS_VERSION,
   OVERLAY_OPACITY_DEFAULT,
   overlayRowOpacity,
+  overlayAvatarSrc,
   sameOverlaySnapshot,
   type OverlayInput
 } from './overlayState'
@@ -32,6 +33,21 @@ function input(over: Partial<OverlayInput> = {}): OverlayInput {
     ...over
   }
 }
+
+describe('overlayAvatarSrc', () => {
+  const gif = { speaking: false, avatarUrl: '/s', avatarAnimatedUrl: '/a' }
+
+  it('quem fala anima; os outros ficam parados', () => {
+    expect(overlayAvatarSrc(gif, null)).toBe('/s')
+    expect(overlayAvatarSrc({ ...gif, speaking: true }, null)).toBe('/a')
+  })
+
+  it('sem versão animada usa a imagem; sem avatar ou com erro, a inicial', () => {
+    expect(overlayAvatarSrc({ speaking: true, avatarUrl: '/p', avatarAnimatedUrl: null }, null)).toBe('/p')
+    expect(overlayAvatarSrc({ speaking: true, avatarUrl: null, avatarAnimatedUrl: null }, null)).toBeNull()
+    expect(overlayAvatarSrc({ ...gif, speaking: true }, '/a')).toBeNull()
+  })
+})
 
 describe('sameOverlaySnapshot', () => {
   it('igual por conteúdo, não por identidade', () => {

@@ -131,6 +131,18 @@ function nameOf(person: OverlayPerson): string {
   return person.display_name.trim() || person.username.trim() || 'Usuário'
 }
 
+/**
+ * Imagem do avatar na pílula: quem fala anima (GIF), os outros ficam no quadro
+ * parado. null = mostra a inicial (sem avatar, ou o endereço já falhou).
+ */
+export function overlayAvatarSrc(
+  member: Pick<OverlayMember, 'speaking' | 'avatarUrl' | 'avatarAnimatedUrl'>,
+  failedUrl: string | null
+): string | null {
+  const url = member.speaking ? (member.avatarAnimatedUrl ?? member.avatarUrl) : member.avatarUrl
+  return url === failedUrl ? null : url
+}
+
 /** Mesmo conteúdo? O bridge só manda ao main (e ao jogo) o que mudou de verdade. */
 export function sameOverlaySnapshot(a: OverlaySnapshot | null, b: OverlaySnapshot): boolean {
   return a !== null && JSON.stringify(a) === JSON.stringify(b)
