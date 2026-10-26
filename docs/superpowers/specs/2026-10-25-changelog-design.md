@@ -40,7 +40,8 @@ Endpoints:
 - Rota `/changelog` em `router.tsx`, página em `pages/Changelog.tsx`.
 - Ícone novo no `ServerRail.tsx`, abaixo de Propostas.
 - Lista da mais nova para a mais antiga: cabeçalho "vX.Y.Z · data", grupos **Novidades** e **Correções** com selo de cor por tipo. A versão em uso recebe o destaque "Você está aqui".
-- Atalhos extras: versão nas Configurações e `UpdateBar` apontam para `/changelog`.
+- A versão instalada vem do Electron (`app.getVersion()`, via IPC `update:current-version`); na web não há destaque.
+- Sem atalhos extras (Configurações não mostram versão hoje; o ServerRail já dá acesso em 1 clique).
 
 ## Testes
 
