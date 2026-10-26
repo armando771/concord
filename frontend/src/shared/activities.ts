@@ -6,11 +6,12 @@
 /**
  * Como o jogo marca a sala na própria URL (o desktop lê da janela e
  * compartilha sozinho; o link colado também pode ser só o código):
- * - query: `/?param=CÓDIGO` (Krunker: `?game=REGIÃO:id`, a partida em que se está);
- * - hash: `/#CÓDIGO` (survev/Suroi: o time criado), com a região opcional.
+ * `/?param=CÓDIGO` (Krunker: `?game=REGIÃO:id`, a partida em que se está).
  */
-export type ActivityRoom =
-  { kind: 'query'; param: string; code: RegExp } | { kind: 'hash'; code: RegExp; region?: RegExp }
+export interface ActivityRoom {
+  param: string
+  code: RegExp
+}
 
 export interface ActivityDefinition {
   id: string
@@ -25,7 +26,7 @@ export interface ActivityDefinition {
   /** Exemplo do link da sala, no placeholder do campo. */
   linkExample: string
   /** Ícone do card (o renderer mapeia para o SVG). */
-  icon: 'crosshair' | 'royale'
+  icon: 'crosshair'
   /** Onde a sala aparece na URL do jogo. */
   room: ActivityRoom
   /** Como criar a sala que vai para a chamada (dica no seletor). */
@@ -46,38 +47,10 @@ export const ACTIVITIES: readonly ActivityDefinition[] = [
     origins: ['https://krunker.io'],
     linkExample: 'https://krunker.io/?game=XX:xxxxx',
     icon: 'crosshair',
-    room: { kind: 'query', param: 'game', code: /^[A-Z]{2,5}:[a-z0-9]{2,16}$/i },
+    room: { param: 'game', code: /^[A-Z]{2,5}:[a-z0-9]{2,16}$/i },
     roomHint: 'Quando você entrar numa partida, ela vai para todos da chamada.',
     accent: '#f0b232',
     partition: 'persist:activity-krunker'
-  },
-  {
-    id: 'survev',
-    name: 'survev.io',
-    category: 'Battle royale',
-    description: 'O surviv.io de volta (código aberto): battle royale 2D de até 4 por time.',
-    homeUrl: 'https://survev.io/',
-    origins: ['https://survev.io'],
-    linkExample: 'https://survev.io/#xxxx',
-    icon: 'royale',
-    room: { kind: 'hash', code: /^[A-Za-z0-9]{4,8}$/ },
-    roomHint: 'Crie um time (Create Team) e o convite vai para todos da chamada.',
-    accent: '#84cc16',
-    partition: 'persist:activity-survev'
-  },
-  {
-    id: 'suroi',
-    name: 'Suroi',
-    category: 'Battle royale',
-    description: 'Battle royale 2D de código aberto, no estilo do surviv.io, com times.',
-    homeUrl: 'https://suroi.io/',
-    origins: ['https://suroi.io'],
-    linkExample: 'https://suroi.io/#xxxx',
-    icon: 'royale',
-    room: { kind: 'hash', code: /^[A-Za-z0-9]{4,8}$/, region: /^[a-z0-9_-]{1,16}$/i },
-    roomHint: 'Crie um time (Create Team) e o convite vai para todos da chamada.',
-    accent: '#ff8a1f',
-    partition: 'persist:activity-suroi'
   }
 ]
 
@@ -105,10 +78,9 @@ export function validateActivityLink(activityId: string, raw: string): ActivityL
     error: `Use um link ${activity.origins[0]}/…`
   }
   if (link.length > MAX_ACTIVITY_URL) return invalid
-  // Só o código da sala (no iframe o survev copia só ele): monta o link.
+  // Só o código da sala: monta o link.
   if (!link.includes('://')) {
-    const code = activity.room.kind === 'hash' ? link.replace(/^#/, '') : link
-    return activity.room.code.test(code) ? { ok: true, url: roomUrl(activity, code) } : invalid
+    return activity.room.code.test(link) ? { ok: true, url: roomUrl(activity, link) } : invalid
   }
   // A autoridade crua (antes do URL normalizar porta, barras invertidas etc.).
   const match = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)/i.exec(link)
@@ -123,10 +95,8 @@ export function validateActivityLink(activityId: string, raw: string): ActivityL
   return { ok: true, url: link }
 }
 
-function roomUrl(activity: ActivityDefinition, code: string, region?: string): string {
-  const origin = activity.origins[0]
-  if (activity.room.kind === 'query') return `${origin}/?${activity.room.param}=${code}`
-  return `${origin}/${region ? `?region=${region}` : ''}#${code}`
+function roomUrl(activity: ActivityDefinition, code: string): string {
+  return `${activity.origins[0]}/?${activity.room.param}=${code}`
 }
 
 /**
@@ -144,15 +114,8 @@ export function activityRoomFromUrl(activityId: string, url: string): string | n
     return null
   }
   if (!activity.origins.includes(parsed.origin) || parsed.pathname !== '/') return null
-  const room = activity.room
-  if (room.kind === 'query') {
-    const code = parsed.searchParams.get(room.param) ?? ''
-    return room.code.test(code) ? roomUrl(activity, code) : null
-  }
-  const code = parsed.hash.replace(/^#/, '')
-  if (!room.code.test(code)) return null
-  const region = parsed.searchParams.get('region') ?? ''
-  return roomUrl(activity, code, room.region?.test(region) ? region : undefined)
+  const code = parsed.searchParams.get(activity.room.param) ?? ''
+  return activity.room.code.test(code) ? roomUrl(activity, code) : null
 }
 
 /** Link não vazio e dentro das origens da atividade (main confere antes de abrir). */
