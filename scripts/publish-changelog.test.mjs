@@ -97,3 +97,8 @@ test('publicar não mexe no arquivo de notas', async () => {
   assert.equal(status, 0)
   assert.equal(readFileSync(file, 'utf8'), notes)
 })
+
+test('arquivo acumulado de vários deploys cabe no limite', () => {
+  const bullets = Array.from({ length: 500 }, (_, i) => `- nota ${i}`)
+  assert.equal(parseNotes(['## Novidades', ...bullets].join('\n')).entries.length, 500)
+})

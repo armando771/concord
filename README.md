@@ -231,7 +231,7 @@ node scripts/rnnoise-offline.mjs entrada.wav saida.wav
 
 ### Changelog (novidades por versão)
 
-Todo PR de feature ou correção visível ao usuário acrescenta uma linha em `changelog/next.md`, em `## Novidades` ou `## Correções` (linguagem de usuário, uma frase). O deploy envia o arquivo na versão que subir (`scripts/publish-changelog.mjs`) e o servidor guarda nela só as notas que nenhuma versão anterior trouxe, então o arquivo pode acumular. Apagar notas antigas dele é só limpeza; reescrever uma nota faz ela sair de novo como nova.
+Todo PR de feature ou correção visível ao usuário acrescenta uma linha em `changelog/next.md`, em `## Novidades` ou `## Correções` (linguagem de usuário, uma frase). O deploy envia o arquivo na versão que subir (`scripts/publish-changelog.mjs`) e o servidor guarda nela só as notas que nenhuma versão anterior trouxe, então o arquivo acumula entre deploys. De tempos em tempos apague dele as notas que já saíram (o envio aceita até 1000 notas e o `--check` do deploy barra acima disso); reescrever uma nota faz ela sair de novo como nova.
 
 ## 🔌 API (resumo)
 

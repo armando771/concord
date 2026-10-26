@@ -13,7 +13,7 @@ export const EMPTY_NOTES = '## Novidades\n\n## Correções\n'
 
 // Mesmos limites de backend/internal/changelog/changelog.go: o erro aparece
 // aqui, antes do merge, e não no PUT depois que a versão já está no ar.
-export const MAX_ENTRIES = 100
+export const MAX_ENTRIES = 1000
 export const MAX_ENTRY_TEXT = 1000
 
 const SECTIONS = { novidades: 'feature', correções: 'fix', correcoes: 'fix' }

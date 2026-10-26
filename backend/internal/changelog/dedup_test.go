@@ -2,6 +2,7 @@ package changelog
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"reflect"
 	"testing"
@@ -55,5 +56,18 @@ func TestListHidesReleasesWithoutNotes(t *testing.T) {
 	}
 	if len(got) != 2 || got[0].Version != "0.6.33" || got[1].Version != "0.6.2" {
 		t.Fatalf("releases = %+v", got)
+	}
+}
+
+// O next.md acumula entre deploys: o envio precisa caber bem mais que um lote.
+func TestPublishAcceptsAnAccumulatedFile(t *testing.T) {
+	texts := make([]string, 500)
+	for i := range texts {
+		texts[i] = fmt.Sprint("nota ", i)
+	}
+	st := &fakeStore{}
+	w := serve(t, st, "tok", http.MethodPut, "/api/changelog/0.6.46", "tok", notesBody(texts...), false)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
 	}
 }
