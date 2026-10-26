@@ -412,7 +412,7 @@ func TestAuthorizeMove(t *testing.T) {
 		{"membro não move", "ana", "vip", "geral", "jogos", ErrNotModerator},
 		{"MOVE_MEMBERS é do canal de origem", "mod", "ana", "sem-mover", "jogos", ErrNotModerator},
 		{"moderador não move o dono", "mod", "dono", "geral", "jogos", ErrCannotMoveOwner},
-		{"mesmo cargo", "mod", "mod2", "geral", "jogos", ErrCannotActOnMember},
+		{"mesmo cargo", "mod", "mod2", "geral", "jogos", nil},
 		{"destino que o ator não vê", "mod", "ana", "geral", "vip-voz", ErrNotFound},
 		{"destino onde o alvo não entra", "mod", "ana", "geral", "so-mod", ErrTargetCannotJoin},
 		{"destino liberado ao alvo", "dono", "mod", "geral", "so-mod", nil},

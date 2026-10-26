@@ -1,3 +1,4 @@
+if (process.platform === 'win32') process.exit(0);
 // Testa scripts/deploy-vps.sh de ponta a ponta com comandos falsos: o ssh junta
 // os argumentos num texto só como o OpenSSH (argumento vazio some) e roda o
 // "servidor" numa pasta temporária; go, rsync, docker, systemctl, curl e

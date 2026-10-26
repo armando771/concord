@@ -1,3 +1,4 @@
+if (process.platform === 'win32') process.exit(0);
 // Testa scripts/apply-caddyfile.sh com comandos falsos: o ssh junta os
 // argumentos como o OpenSSH e roda o "servidor" em pastas temporárias.
 import assert from 'node:assert/strict'

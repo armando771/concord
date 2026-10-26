@@ -23,6 +23,14 @@ describe('canMoveVoiceUser', () => {
     ).toBe(false)
   })
 
+  it('suporta canMoveTarget para membros de mesmo cargo', () => {
+    expect(
+      canMoveVoiceUser({ meId: 'mod', targetId: 'mod2', canMoveMembers: true, canMoveTarget: true })
+    ).toBe(true)
+    expect(
+      canMoveVoiceUser({ meId: 'mod', targetId: 'admin', canMoveMembers: true, canMoveTarget: false })
+    ).toBe(false)
+  })
   it('moderador não move o dono (a hierarquia nunca deixa)', () => {
     expect(canMoveVoiceUser({ ...base, targetId: 'dono', canActOnTarget: false })).toBe(false)
   })

@@ -89,7 +89,7 @@ func (n *Nicknames) Set(ctx context.Context, serverID, actorID, targetID, raw st
 		if !permission.Has(perms, permission.ManageNicknames) {
 			return nil, permission.ErrMissingPermission
 		}
-		if !snap.CanActOn(actorID, targetID) {
+		if !snap.CanManageNicknameOf(actorID, targetID) {
 			return nil, ErrCannotActOn
 		}
 		if !snap.IsMember(targetID) {

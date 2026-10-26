@@ -30,6 +30,7 @@ const DEFAULT_MOD =
   Perm.DEAFEN_MEMBERS |
   Perm.KICK_MEMBERS |
   Perm.MANAGE_EXPRESSIONS |
+  Perm.DISCONNECT_MEMBERS |
   Perm.MANAGE_NICKNAMES
 
 const roles = [
@@ -166,17 +167,47 @@ describe('serverAccess — apelidos', () => {
     expect(dono.canChangeNickname('dono')).toBe(true)
   })
 
-  it('o dos outros: "Gerenciar apelidos" e cargo acima (o dono nunca é alvo)', () => {
+  it('o dos outros: "Gerenciar apelidos" e mesmo cargo ou acima (o dono nunca é alvo)', () => {
     const mod = as('mod')
     expect(mod.canChangeNickname('ana')).toBe(true)
     expect(mod.canChangeNickname('vip')).toBe(true)
-    expect(mod.canChangeNickname('mod2')).toBe(false)
+    // mesmo cargo: permitido
+    expect(mod.canChangeNickname('mod2')).toBe(true)
+    // cargo acima: negado
     expect(mod.canChangeNickname('ger')).toBe(false)
+    // dono nunca é alvo
     expect(mod.canChangeNickname('dono')).toBe(false)
     expect(as('ana').canChangeNickname('vip')).toBe(false)
     // gerente está acima, mas não tem "Gerenciar apelidos".
     expect(as('ger').canChangeNickname('ana')).toBe(false)
     expect(as('dono').canChangeNickname('ger')).toBe(true)
+  })
+
+  it('canMoveMember: mesmo cargo ou menor pode mover; maior cargo não pode', () => {
+    const mod = as('mod')
+    expect(mod.canMoveMember('ana')).toBe(true)
+    expect(mod.canMoveMember('vip')).toBe(true)
+    // mesmo cargo: permitido
+    expect(mod.canMoveMember('mod2')).toBe(true)
+    // cargo acima: não pode
+    expect(mod.canMoveMember('ger')).toBe(false)
+    // dono: não pode
+    expect(mod.canMoveMember('dono')).toBe(false)
+    // dono pode mover qualquer um
+    expect(as('dono').canMoveMember('ger')).toBe(true)
+  })
+  it('canDisconnectMember: mesmo cargo ou menor pode desconectar; maior cargo não pode', () => {
+    const mod = as('mod')
+    expect(mod.canDisconnectMember('ana')).toBe(true)
+    expect(mod.canDisconnectMember('vip')).toBe(true)
+    // mesmo cargo: permitido
+    expect(mod.canDisconnectMember('mod2')).toBe(true)
+    // cargo acima: não pode
+    expect(mod.canDisconnectMember('ger')).toBe(false)
+    // dono: não pode
+    expect(mod.canDisconnectMember('dono')).toBe(false)
+    // dono pode desconectar qualquer um
+    expect(as('dono').canDisconnectMember('ger')).toBe(true)
   })
 
   it('fora do servidor, nada', () => {

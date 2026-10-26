@@ -23,6 +23,7 @@ func readMigration(t *testing.T, name string) string {
 func TestMigrationDefaultsMatchConstants(t *testing.T) {
 	sql := readMigration(t, "000029_add_roles_permissions.up.sql")
 	added := nicknameMigrationBits(t)
+	disconnectBits := disconnectMigrationBits(t)
 	for name, want := range map[string]int64{"@everyone": DefaultEveryone, "Moderador": DefaultModerator} {
 		needle := "'" + name + "', "
 		i := strings.Index(sql, "SELECT id, "+needle)
@@ -34,8 +35,9 @@ func TestMigrationDefaultsMatchConstants(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v (%q)", name, err, fields)
 		}
-		if got|added[name] != want {
-			t.Errorf("%s: migrations = %d, Go = %d", name, got|added[name], want)
+		total := got | added[name] | disconnectBits[name]
+		if total != want {
+			t.Errorf("%s: migrations = %d, Go = %d", name, total, want)
 		}
 	}
 }
@@ -70,10 +72,45 @@ func nicknameMigrationBits(t *testing.T) map[string]int64 {
 	return added
 }
 
+// disconnectMigrationBits: o que a 000061 liga em cada cargo padrão.
+func disconnectMigrationBits(t *testing.T) map[string]int64 {
+	t.Helper()
+	sql := readMigration(t, "000061_add_disconnect_members_permission.up.sql")
+	re := regexp.MustCompile(`UPDATE roles SET permissions = permissions \| (\d+) WHERE (.+);`)
+	targets := map[string]string{
+		"name = 'Moderador' AND NOT is_default": "Moderador",
+	}
+	added := map[string]int64{}
+	for _, m := range re.FindAllStringSubmatch(sql, -1) {
+		name, ok := targets[m[2]]
+		if !ok {
+			t.Fatalf("UPDATE inesperado na 000061: %q", m[0])
+		}
+		bits, err := strconv.ParseInt(m[1], 10, 64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		added[name] |= bits
+	}
+	if added["Moderador"] != DisconnectMembers {
+		t.Errorf("Moderador ganha %d na 000061, want DisconnectMembers (%d)", added["Moderador"], DisconnectMembers)
+	}
+	return added
+}
+
 // O down da 000039 desliga exatamente os bits que o up ligou.
 func TestNicknameMigrationDownClearsBits(t *testing.T) {
 	sql := readMigration(t, "000039_add_member_nicknames.down.sql")
 	want := "permissions & ~" + strconv.FormatInt(ChangeNickname|ManageNicknames, 10)
+	if !strings.Contains(sql, want) {
+		t.Errorf("down devia ter %q", want)
+	}
+}
+
+// O down da 000061 desliga exatamente os bits que o up ligou.
+func TestDisconnectMigrationDownClearsBits(t *testing.T) {
+	sql := readMigration(t, "000061_add_disconnect_members_permission.down.sql")
+	want := "permissions & ~" + strconv.FormatInt(DisconnectMembers, 10)
 	if !strings.Contains(sql, want) {
 		t.Errorf("down devia ter %q", want)
 	}
