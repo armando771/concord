@@ -211,6 +211,9 @@ describe('VoiceChannelRow', () => {
     expect(html).toContain('aria-label="Abrir chat"')
     expect(html).toContain('sm:opacity-0 sm:group-hover/voicech:opacity-100')
     expect(html).toContain('right-1.5')
+    // No toque, a área de clique cresce para 40×40 (o desenho continua 20 px).
+    expect(html).toContain('pointer-coarse:before:-inset-y-2.5 pointer-coarse:before:-left-5')
+    expect(html).toContain('h-5 w-5')
   })
 
   it('com o "•••", o balão fica à esquerda dele', () => {

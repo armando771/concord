@@ -4,6 +4,13 @@ import { useVoiceChatPanelStore } from '../../chat/store/voiceChatPanelStore'
 import { ChatBubbleIcon } from '../../../shared/ui/icons'
 import { knockView } from '../lib/voiceChannelRow'
 
+/**
+ * No toque o alvo cresce para 40×40 sem mudar o desenho de 20 px: a área extra
+ * vai para cima, para baixo e para a esquerda (à direita fica o "•••").
+ */
+const TOUCH_AREA =
+  "before:absolute before:inset-0 before:content-[''] pointer-coarse:before:-inset-y-2.5 pointer-coarse:before:-left-5"
+
 interface VoiceChatButtonProps {
   serverId: string | undefined
   channelId: string
@@ -37,7 +44,7 @@ function VoiceChatButton({
       onClick={open}
       aria-label="Abrir chat"
       title="Abrir chat"
-      className={`absolute top-1.5 z-20 flex h-5 w-5 cursor-pointer items-center justify-center rounded-md text-gray-400 transition-[color,background-color,opacity] hover:bg-fg/10 hover:text-strong focus-visible:opacity-100 sm:opacity-0 sm:group-hover/voicech:opacity-100 ${
+      className={`absolute top-1.5 z-20 flex h-5 w-5 cursor-pointer items-center justify-center rounded-md text-gray-400 transition-[color,background-color,opacity] hover:bg-fg/10 hover:text-strong focus-visible:opacity-100 sm:opacity-0 sm:group-hover/voicech:opacity-100 ${TOUCH_AREA} ${
         besideMenu ? 'right-7' : 'right-1.5'
       }`}
     >
