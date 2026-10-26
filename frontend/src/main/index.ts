@@ -24,6 +24,7 @@ import { setupOverlay } from './overlay/overlay'
 import { setupGlobalKeybinds } from './overlay/globalKeybinds'
 import { setupGames } from './activity/games'
 import { setupAppMetrics } from './app/appMetrics'
+import { setupPerfLog } from './perf/setupPerfLog'
 import { handleInviteArgs, handleInviteUrl, setupInviteProtocol } from './app/inviteProtocol'
 import { closeActivity, setupActivities } from './activity/activityWindow'
 import { APP_USER_MODEL_ID } from './window/toastPolicy'
@@ -327,6 +328,8 @@ if (
 }
 
 app.whenReady().then(() => {
+  // Primeiro de tudo: o tempo de abertura medido começa daqui. Sem --perf-log não faz nada.
+  setupPerfLog(() => mainWindow)
   // Set app user model id for windows. Mantém o id do Concord (nome antigo):
   // é o que liga notificações, atalho de login e instalação ao mesmo app.
   electronApp.setAppUserModelId(APP_USER_MODEL_ID)
