@@ -3,23 +3,75 @@ package music
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
+	"math/rand"
 	"os/exec"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/livekit/server-sdk-go/v2/pkg/oggreader"
 )
 
 func TestEncoderArgsHiFi(t *testing.T) {
 	args := strings.Join(EncoderArgs(), " ")
 	for _, want := range []string{
 		"-f f32le -ar 48000 -ac 2 -i pipe:0",
-		"-c:a libopus", "-b:a 320k", "-vbr constrained", "-application audio",
+		"-c:a libopus", "-b:a 320k", "-vbr off", "-application audio",
 		"-frame_duration 20", "-page_duration 20000", "-flush_packets 1", "-f ogg pipe:1",
 	} {
 		if !strings.Contains(args, want) {
 			t.Errorf("faltou %q em %q", want, args)
 		}
+	}
+}
+
+// O SDK do LiveKit (pion) recusa amostras acima de 1200 bytes e, na primeira
+// recusa, para de escrever a faixa para sempre: o Maestro fica mudo. Nenhum
+// frame do encoder pode passar disso, nem nos ataques de uma música.
+func TestEncoderFramesFitRTPPacket(t *testing.T) {
+	ff, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg ausente")
+	}
+	src := &transientSource{r: rand.New(rand.NewSource(1))}
+	frame := make([]float32, FrameLen)
+	var pcm bytes.Buffer
+	for i := 0; i < 150; i++ { // 3 s
+		src.ReadFrame(frame)
+		for _, v := range frame {
+			_ = binary.Write(&pcm, binary.LittleEndian, v)
+		}
+	}
+	cmd := exec.Command(ff, EncoderArgs()...)
+	cmd.Stdin = &pcm
+	var out, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("ffmpeg: %v: %s", err, stderr.String())
+	}
+
+	reader, _, err := oggreader.NewOggReader(&out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var packets, biggest int
+	for {
+		pkt, err := reader.ReadPacket()
+		if err != nil {
+			break
+		}
+		packets++
+		if len(pkt) > biggest {
+			biggest = len(pkt)
+		}
+	}
+	if packets < 100 {
+		t.Fatalf("poucos pacotes Opus: %d", packets)
+	}
+	if biggest > maxOpusPacket {
+		t.Fatalf("frame Opus de %d bytes (máximo %d): o SDK pararia a faixa", biggest, maxOpusPacket)
 	}
 }
 

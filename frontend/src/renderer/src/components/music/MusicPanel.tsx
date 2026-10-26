@@ -1,16 +1,11 @@
-import { useEffect, useState } from 'react'
-import {
-  removeQueueItem,
-  setVideoWatching,
-  skipMusic,
-  swapQueueItems,
-  type MusicItem
-} from '../../api/music'
-import { canSwap, formatDuration, T17, T20, wantsVideo } from '../../lib/music'
+import { useState } from 'react'
+import { removeQueueItem, skipMusic, swapQueueItems, type MusicItem } from '../../api/music'
+import { canSwap, formatDuration, T17, T20 } from '../../lib/music'
 import { useAuthStore } from '../../store/authStore'
 import { useMusicStore } from '../../store/musicStore'
 import { showToast } from '../../store/toastStore'
 import Switch from '../Switch'
+import { XIcon } from '../icons'
 import { useElapsed } from '../call/callUtils'
 import MusicVideo from './MusicVideo'
 
@@ -18,9 +13,12 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : 'Falha na operação.'
 }
 
-/** Painel "Tocando agora" da call (aparece quando o Maestro está na call). */
+/** Painel "Tocando agora" da call: abre ao clicar no Maestro no canal de voz.
+ *  Fechar só esconde o painel (a música e o vídeo do palco seguem). */
 function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | null {
   const state = useMusicStore((s) => s.state)
+  const panelOpen = useMusicStore((s) => s.panelOpen)
+  const closePanel = useMusicStore((s) => s.closePanel)
   const ducking = useMusicStore((s) => s.duckingEnabled)
   const setDucking = useMusicStore((s) => s.setDucking)
   const videoEnabled = useMusicStore((s) => s.videoEnabled)
@@ -33,18 +31,8 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
   // useElapsed recebe o início em ms (relógio local) e devolve segundos.
   const startedAt = state?.now ? state.now.started_at - serverOffsetMs : null
   const elapsed = useElapsed(startedAt)
-  const watching = wantsVideo(!!state?.now?.item.has_video, stageVideo, videoEnabled)
 
-  // Único ponto que avisa o backend que há espectador (não é contado por referência).
-  useEffect(() => {
-    if (!watching) return
-    void setVideoWatching(serverId, true).catch(() => {})
-    return () => {
-      void setVideoWatching(serverId, false).catch(() => {})
-    }
-  }, [serverId, watching])
-
-  if (!state) return null
+  if (!state || !panelOpen) return null
   const now = state.now
   const mineNow = now?.item.requested_by.id === meId
   const voted = !!meId && state.skip.voters.includes(meId)
@@ -73,7 +61,17 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
 
   return (
     <aside className="flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-white/6 bg-black/20 p-4">
-      <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400">{T17.title}</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400">{T17.title}</h3>
+        <button
+          type="button"
+          onClick={closePanel}
+          aria-label="Fechar"
+          className="cursor-pointer rounded p-1 text-gray-400 hover:bg-white/10 hover:text-white"
+        >
+          <XIcon className="h-4 w-4" />
+        </button>
+      </div>
       {now && (
         <div className="flex flex-col gap-2">
           <MusicVideo serverId={serverId} item={now.item} startedAt={now.started_at} />

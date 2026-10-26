@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CallUserInfo } from '../../store/callStore'
 import { useSoundboardStore } from '../../store/soundboardStore'
+import { useMusicStore } from '../../store/musicStore'
 import VoiceStateIcons from './VoiceStateIcons'
 import StreamAudioControls from './StreamAudioControls'
 import FullscreenOverlay from './FullscreenOverlay'
@@ -79,7 +80,7 @@ function ParticipantTile({
   size = 'lg',
   isScreen = false,
   mirror = false,
-  onClick,
+  onClick: onClickProp,
   onContextMenu,
   locallyMuted = false,
   action,
@@ -121,6 +122,9 @@ function ParticipantTile({
   /** Espaço para não cobrir botões do cabeçalho da transmissão focada. */
   hasHeaderOffset?: boolean
 }): React.JSX.Element {
+  // Clicar no Maestro na call abre o painel "Tocando agora" (vídeo, fila…).
+  const openMusicPanel = useMusicStore((s) => s.openPanel)
+  const onClick = onClickProp ?? (isMaestroIdentity(user.id) ? openMusicPanel : undefined)
   const activeSound = useSoundboardStore((s) => (isScreen ? undefined : s.activePlays[user.id]))
   const isPlayingSound = Boolean(activeSound)
   // 'fill': o maior retângulo com a proporção do vídeo que cabe no container
