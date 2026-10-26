@@ -140,6 +140,9 @@ interface ServerState {
 
 /** Conta as chamadas de selectServer: só a mais recente grava o resultado. */
 let selectSeq = 0
+/** Idem para a busca de convites e a de canais (a resposta velha chega depois da nova). */
+let invitesSeq = 0
+let channelsSeq = 0
 
 const isSameSession = (tokenAtStart: string | null): boolean =>
   useAuthStore.getState().accessToken === tokenAtStart
@@ -227,22 +230,26 @@ export const useServerStore = create<ServerState>()((set, get) => ({
   },
   fetchServerInvites: async (serverId: string) => {
     const token = useAuthStore.getState().accessToken
+    const seq = ++invitesSeq
     try {
       const invites = await listServerInvites(serverId)
-      if (!isSameSession(token)) return
+      if (!isSameSession(token) || seq !== invitesSeq) return
       set({ serverInvites: Array.isArray(invites) ? invites : [] })
     } catch {
-      if (isSameSession(token)) set({ serverInvites: [] })
+      if (isSameSession(token) && seq === invitesSeq) set({ serverInvites: [] })
     }
   },
   fetchChannels: async (serverId: string) => {
     const token = useAuthStore.getState().accessToken
+    const seq = ++channelsSeq
     try {
       const channels = await apiListChannels(serverId)
-      if (!isSameSession(token)) return
+      if (!isSameSession(token) || seq !== channelsSeq) return
       set({ channels: Array.isArray(channels) ? channels : [], channelsLoadedFor: serverId })
     } catch {
-      if (isSameSession(token)) set({ channels: [], channelsLoadedFor: serverId })
+      if (isSameSession(token) && seq === channelsSeq) {
+        set({ channels: [], channelsLoadedFor: serverId })
+      }
     }
   },
   addServer: async (name: string, icon_url?: string) => {
