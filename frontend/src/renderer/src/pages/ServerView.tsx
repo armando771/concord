@@ -352,6 +352,7 @@ export function ServerView(): React.JSX.Element {
             placeholder={`Mensagem para #${activeChannel?.name ?? 'canal'}`}
             canMentionEveryone={canMentionEveryone}
             permissions={chatPermissions}
+            canDeleteMessages={!activeChannel?.is_system}
             mentionable={currentMembers
               .filter((m) => m.username)
               .map((m) => ({
