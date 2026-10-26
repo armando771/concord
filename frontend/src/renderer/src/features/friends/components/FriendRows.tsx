@@ -63,7 +63,13 @@ export function FriendRow({ friend }: { friend: PublicUser }): React.JSX.Element
 
 function AcceptIcon(): React.JSX.Element {
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2.5}>
+    <svg
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.5}
+    >
       <path d="M5 12.5l4.5 4.5L19 7.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )

@@ -3,17 +3,16 @@ import { ClockIcon, FriendsIcon, OnlineIcon, UserPlusIcon, XIcon } from '../../.
 import { PersonListSkeleton } from '../../../shared/ui/skeleton/layouts'
 import type { FriendsTab } from '../../../shared/store/uiStore'
 import type { PendingRequest } from '../api/friends'
-import type { PublicUser } from '../../auth/store/authStore'
-import { useChatStore } from '../../chat/store/chatStore'
 import { useFriendStore } from '../store/friendStore'
 import { useFriendsFirstLoad } from '../hooks/useFriendsFirstLoad'
+import { useFriendsForTab } from '../hooks/useFriendsForTab'
 import { filterPeople } from '../lib/personFilter'
-import { onlineFriends } from '../lib/onlineFriends'
+import ServerInviteList from '../../servers/components/ServerInviteList'
 import AddFriend from './AddFriend'
 import EmptyState from './EmptyState'
 import { BlockedRow, FriendRow, PendingRow } from './FriendRows'
 
-export interface TabBodyProps {
+interface TabBodyProps {
   filterText: string
 }
 
@@ -42,15 +41,12 @@ function FriendsListTab({
   kind,
   filterText
 }: TabBodyProps & { kind: keyof typeof LIST_COPY }): React.JSX.Element {
-  const friends = useFriendStore((s) => s.friends)
-  const presence = useChatStore((s) => s.presence)
-  const statuses = useChatStore((s) => s.statuses)
+  const base = useFriendsForTab(kind)
   const firstLoad = useFriendsFirstLoad()
   const copy = LIST_COPY[kind]
   if (firstLoad) return <PersonListSkeleton actions={2} />
-
-  const base: PublicUser[] = kind === 'online' ? onlineFriends(friends, presence, statuses) : friends
-  if (base.length === 0) return <EmptyState icon={<copy.Icon className="h-10 w-10" />} text={copy.empty} />
+  if (base.length === 0)
+    return <EmptyState icon={<copy.Icon className="h-10 w-10" />} text={copy.empty} />
 
   const list = filterPeople(base, filterText)
   return (
@@ -63,7 +59,13 @@ function FriendsListTab({
   )
 }
 
-function PendingSection({ label, items }: { label: string; items: PendingRequest[] }): React.JSX.Element {
+function PendingSection({
+  label,
+  items
+}: {
+  label: string
+  items: PendingRequest[]
+}): React.JSX.Element {
   return (
     <>
       {items.length > 0 && <SectionTitle label={label} count={items.length} />}
@@ -138,16 +140,25 @@ function AllTab(p: TabBodyProps): React.JSX.Element {
   return <FriendsListTab kind="all" {...p} />
 }
 
-function NoTab(): null {
-  return null
+function InvitesTab(): React.JSX.Element {
+  return <ServerInviteList />
 }
 
 /** Conteúdo de cada aba da tela de Amigos. */
-export const TAB_BODIES: Record<FriendsTab, ComponentType<TabBodyProps>> = {
+const TAB_BODIES: Record<FriendsTab, ComponentType<TabBodyProps>> = {
   online: OnlineTab,
   all: AllTab,
   pending: PendingTab,
-  invites: NoTab,
+  invites: InvitesTab,
   blocked: BlockedTab,
   add: AddTab
+}
+
+/** O conteúdo da aba aberta. */
+export function FriendsBody({
+  tab,
+  filterText
+}: TabBodyProps & { tab: FriendsTab }): React.JSX.Element {
+  const Body = TAB_BODIES[tab]
+  return <Body filterText={filterText} />
 }

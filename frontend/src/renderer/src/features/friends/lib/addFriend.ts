@@ -2,8 +2,7 @@ import { friendRequestError } from '../../profile/lib/relationship'
 import type { SendRequestResult } from '../api/friends'
 
 export type AddFriendOutcome =
-  | { ok: true; name: string; accepted: boolean }
-  | { ok: false; error: string }
+  { ok: true; name: string; accepted: boolean } | { ok: false; error: string }
 
 /** Tira espaços e o "@" que a pessoa pode ter digitado. */
 export const cleanUsername = (raw: string): string => raw.trim().replace(/^@/, '')

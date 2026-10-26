@@ -1,12 +1,12 @@
 import { FriendsIcon, SearchIcon } from '../../../shared/ui/icons'
 import type { FriendsTab } from '../../../shared/store/uiStore'
-import { useFriendStore } from '../store/friendStore'
 import { addTabClass, tabBadge, tabClass, type TabCounts } from '../lib/friendsTabs'
 
 const TABS: { id: Exclude<FriendsTab, 'add'>; label: string }[] = [
   { id: 'online', label: 'Online' },
   { id: 'all', label: 'Todos' },
   { id: 'pending', label: 'Pendente' },
+  { id: 'invites', label: 'Convites' },
   { id: 'blocked', label: 'Bloqueado' }
 ]
 
@@ -74,11 +74,6 @@ export function FriendsHeader({
       </nav>
     </header>
   )
-}
-
-export function useTabCounts(): TabCounts {
-  const pending = useFriendStore((s) => s.pending.filter((p) => p.direction === 'incoming').length)
-  return { pending, invites: 0 }
 }
 
 export function SearchBox({

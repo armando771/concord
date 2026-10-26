@@ -5,8 +5,9 @@ import { useFriendStore } from '../store/friendStore'
 import { useUIStore, type FriendsTab } from '../../../shared/store/uiStore'
 import { useChatStore } from '../../chat/store/chatStore'
 import ActiveNow from '../components/ActiveNow'
-import { FriendsHeader, SearchBox, useTabCounts } from '../components/FriendsTabs'
-import { TAB_BODIES } from '../components/FriendsTabBodies'
+import { FriendsHeader, SearchBox } from '../components/FriendsTabs'
+import { FriendsBody } from '../components/FriendsTabBodies'
+import { useTabCounts } from '../hooks/useTabCounts'
 import { MAIN_BG } from '../components/PersonRow'
 import { parseFriendsTab, tabHasSearch } from '../lib/friendsTabs'
 
@@ -20,7 +21,6 @@ function Friends(): React.JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams()
   const [filterText, setFilterText] = useState('')
   const counts = useTabCounts()
-  const Body = TAB_BODIES[tab]
 
   const setTab = (next: FriendsTab): void => {
     setFriendsTab(next)
@@ -50,7 +50,7 @@ function Friends(): React.JSX.Element {
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto px-4 pt-4 pb-6 sm:px-6">
           {tabHasSearch(tab) && <SearchBox value={filterText} onChange={setFilterText} />}
-          <Body filterText={filterText} />
+          <FriendsBody tab={tab} filterText={filterText} />
         </div>
         {me && <ActiveNow friends={friends} />}
       </div>
