@@ -6,7 +6,7 @@
 //   node scripts/affected-tests.mjs full   # suíte inteira + vet/typecheck + CRAP
 //   opção: --base <ref> (padrão origin/develop, senão origin/main)
 import path from 'node:path'
-import { classify, dependents, goPackages, parseGoList, scriptTests } from './lib/affected.mjs'
+import { classify, dependents, goPackages, parseArgs, parseGoList, scriptTests } from './lib/affected.mjs'
 import { changedLines, defaultBase } from './lib/diff.mjs'
 import { capture, GO, ROOT, run } from './lib/run.mjs'
 
@@ -62,9 +62,9 @@ function full() {
 }
 
 function main() {
-  const args = process.argv.slice(2)
-  const mode = args.find((a) => !a.startsWith('--') && a !== args[args.indexOf('--base') + 1]) ?? 'loop'
-  const base = args.includes('--base') ? args[args.indexOf('--base') + 1] : defaultBase()
+  const args = parseArgs(process.argv.slice(2))
+  const mode = args.mode
+  const base = args.base ?? defaultBase()
   process.chdir(ROOT)
   const files = Object.keys(changedLines(base))
   const { shared } = classify(files)

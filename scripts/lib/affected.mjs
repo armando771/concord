@@ -63,3 +63,10 @@ export function scriptTests(scriptFiles, exists = existsSync) {
   const tests = scriptFiles.map((f) => (f.endsWith('.test.mjs') ? f : f.replace(/\.mjs$/, '.test.mjs')))
   return [...new Set(tests.filter((f) => exists(f)))].sort()
 }
+
+// parseArgs: modo (loop|pr|full) e --base <ref> da linha de comando.
+export function parseArgs(args) {
+  const mode = args.find((a) => !a.startsWith('--') && a !== args[args.indexOf('--base') + 1]) ?? 'loop'
+  const base = args.includes('--base') ? args[args.indexOf('--base') + 1] : null
+  return { mode, base }
+}
