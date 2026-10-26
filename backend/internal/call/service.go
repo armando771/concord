@@ -1216,20 +1216,6 @@ func (s *Service) findActiveByScopeLocked(scope string, scopeID string) *activeC
 	return nil
 }
 
-func (s *Service) userInfo(ctx context.Context, userID string) (UserInfo, error) {
-	u, err := s.userService.FindByID(ctx, userID)
-	if err != nil {
-		return UserInfo{}, err
-	}
-	return UserInfo{
-		ID:          u.ID,
-		Username:    u.Username,
-		DisplayName: u.DisplayName,
-		AvatarURL:   u.AvatarURL,
-		NameStyle:   u.NameStyle,
-	}, nil
-}
-
 func (s *Service) sendError(userID string, callID string, message string) {
 	s.publisher.SendToUser(userID, marshalEvent("call:error", ErrorEvent{
 		CallID:  callID,
