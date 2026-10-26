@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Spec: `docs/superpowers/specs/2026-10-25-fonte-apelido-design.md`.
-- Migração nova é `000047` (a última existente é `000046`). Só acrescenta colunas com padrão: o binário anterior continua funcionando.
+- Migração nova é `000048` (a última existente é `000046`). Só acrescenta colunas com padrão: o binário anterior continua funcionando.
 - Padrões: `name_font='default'`, `name_effect='solid'`, `name_colors='{}'`.
 - Backend valida contra listas fixas de IDs; cores são `^#[0-9a-fA-F]{6}$` guardadas em minúsculas; no máximo 2 cores. Nunca CSS livre.
 - Cliente antigo que não manda `name_style` no `PUT /users/me/profile` não pode apagar o estilo (campo é ponteiro; ausente = mantém).
@@ -24,7 +24,7 @@
 ## Mapa de arquivos
 
 Backend:
-- Create `backend/migrations/000047_user_name_style.up.sql` / `.down.sql`
+- Create `backend/migrations/000048_user_name_style.up.sql` / `.down.sql`
 - Create `backend/internal/namestyle/namestyle.go` + `namestyle_test.go`
 - Modify `backend/internal/user/model.go`, `profile.go`, `repository.go`, `profile_handler_test.go`, `profile_test.go`
 - Modify `backend/internal/message/model.go`, `repository.go`
@@ -48,7 +48,7 @@ Frontend (`frontend/src/renderer/src/`):
 ### Task 1: Migração e pacote `namestyle`
 
 **Files:**
-- Create: `backend/migrations/000047_user_name_style.up.sql`, `backend/migrations/000047_user_name_style.down.sql`
+- Create: `backend/migrations/000048_user_name_style.up.sql`, `backend/migrations/000048_user_name_style.down.sql`
 - Create: `backend/internal/namestyle/namestyle.go`
 - Test: `backend/internal/namestyle/namestyle_test.go`
 
@@ -132,7 +132,7 @@ Expected: FAIL (pacote não compila: `Style`, `Validate`... indefinidos).
 
 - [ ] **Step 3: Escrever a migração**
 
-`backend/migrations/000047_user_name_style.up.sql`:
+`backend/migrations/000048_user_name_style.up.sql`:
 
 ```sql
 -- Estilo do nome de exibição (fonte + efeito + cores), como no Discord.
@@ -143,7 +143,7 @@ ALTER TABLE users
   ADD COLUMN IF NOT EXISTS name_colors TEXT[] NOT NULL DEFAULT '{}';
 ```
 
-`backend/migrations/000047_user_name_style.down.sql`:
+`backend/migrations/000048_user_name_style.down.sql`:
 
 ```sql
 ALTER TABLE users
@@ -243,7 +243,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add backend/migrations/000047_user_name_style.* backend/internal/namestyle
+git add backend/migrations/000048_user_name_style.* backend/internal/namestyle
 git commit -m "feat: colunas e validação do estilo do nome de exibição"
 ```
 
