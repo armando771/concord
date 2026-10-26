@@ -48,7 +48,8 @@ func TestHandlerOwnerGetsTheFullView(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
 		t.Fatal(err)
 	}
-	if !res.Self || len(res.Badges) != len(Catalog) {
+	// Criador da Salinha só aparece para os devs.
+	if !res.Self || len(res.Badges) != len(Catalog)-1 {
 		t.Fatalf("owner body = %s", w.Body.String())
 	}
 	if msgs := find(t, res.Badges, "mensagens"); msgs.Value != 2345 || msgs.NextThreshold == nil {
@@ -81,6 +82,38 @@ func TestHandlerOthersGetThePublicView(t *testing.T) {
 		if b["category"] == "dono" && b["tier_name"] != "Anfitrião" {
 			t.Fatalf("dono = %v", b)
 		}
+	}
+}
+
+func TestHandlerOthersSeeTheDevBadgeWithoutNumbers(t *testing.T) {
+	s, st, _, _, _ := newTestService()
+	st.stats[ownerID] = Stats{CreatedAt: now.AddDate(0, -2, 0), IsDev: true}
+	w := serve(t, s, "/api/users/"+ownerID+"/badges", otherID)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	var res struct {
+		Badges []map[string]any `json:"badges"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	var dev map[string]any
+	for _, b := range res.Badges {
+		if b["category"] == "criador" {
+			dev = b
+		}
+	}
+	if dev == nil || dev["rarity"] != RarityMythic || dev["tier_name"] != "Criador da Salinha" {
+		t.Fatalf("criador = %v (body %s)", dev, w.Body.String())
+	}
+	for _, k := range []string{"value", "progress", "next_threshold", "obtainable", "is_dev"} {
+		if _, ok := dev[k]; ok {
+			t.Fatalf("%s leaked: %v", k, dev)
+		}
+	}
+	if day, _ := dev["unlocked_at"].(string); len(day) != len("2006-01-02") {
+		t.Fatalf("unlocked_at = %q, want only the day", day)
 	}
 }
 

@@ -18,14 +18,62 @@ export const RARITY: Record<BadgeRarity, RarityMeta> = {
   comum: { label: 'Comum', color: '#b5bac1', bg: 'rgba(181,186,193,0.14)', rank: 0 },
   raro: { label: 'Raro', color: '#5ba8ff', bg: 'rgba(91,168,255,0.16)', rank: 1 },
   epico: { label: 'Épico', color: '#c38bff', bg: 'rgba(195,139,255,0.18)', rank: 2 },
-  lendario: { label: 'Lendário', color: '#f7c948', bg: 'rgba(247,201,72,0.18)', rank: 3 }
+  lendario: { label: 'Lendário', color: '#f7c948', bg: 'rgba(247,201,72,0.18)', rank: 3 },
+  // Holográfico: a cor é a base; o selo, o nome e a arte ganham o efeito
+  // (main.css, .mythic-*).
+  mitico: { label: 'Mítico', color: '#ff7ae6', bg: 'rgba(255,122,230,0.16)', rank: 4 }
 }
 
 export function rarityMeta(rarity: BadgeRarity | undefined): RarityMeta {
   return (rarity && RARITY[rarity]) || RARITY.comum
 }
 
+/**
+ * "Locutor (Tempo em call)"; quando o tier tem o nome do badge (Fundador,
+ * Criador da Salinha), só o nome, sem repetir.
+ */
+export function badgeLabel(b: Pick<Badge, 'name' | 'tier_name'>): string {
+  return !b.tier_name || b.tier_name === b.name ? b.name : `${b.tier_name} (${b.name})`
+}
+
+/** Mítico ganha o efeito holográfico (aura, brilho e partículas). */
+export function isMythic(rarity: BadgeRarity | undefined): boolean {
+  return rarity === 'mitico'
+}
+
+export interface HoloPointer {
+  /** Posição do brilho, 0–100 (%). */
+  mx: number
+  my: number
+  /** Inclinação em graus: o lado do mouse afunda. */
+  rx: number
+  ry: number
+}
+
+const clamp01 = (n: number): number => Math.min(1, Math.max(0, n))
+const round2 = (n: number): number => Math.round(n * 100) / 100 + 0
+
+/** Brilho e inclinação da arte mítica seguindo o mouse dentro de `rect`. */
+export function holoPointer(
+  x: number,
+  y: number,
+  rect: { left: number; top: number; width: number; height: number },
+  maxTilt = 12
+): HoloPointer {
+  const px = rect.width > 0 ? clamp01((x - rect.left) / rect.width) : 0.5
+  const py = rect.height > 0 ? clamp01((y - rect.top) / rect.height) : 0.5
+  return {
+    mx: round2(px * 100),
+    my: round2(py * 100),
+    rx: round2((0.5 - py) * 2 * maxTilt),
+    ry: round2((px - 0.5) * 2 * maxTilt)
+  }
+}
+
 const HOUR = 3600
+
+const DEV_TEXT = 'Dev do Salinha'
+const DEV_ONLY = 'Só para os devs'
 
 function num(n: number): string {
   return Math.floor(n).toLocaleString('pt-BR')
@@ -81,6 +129,8 @@ export function statText(b: Badge): string {
       return `Dono de ${plural(value, 'servidor', 'servidores')}`
     case 'founder':
       return value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas'
+    case 'dev':
+      return DEV_TEXT
   }
   return num(value)
 }
@@ -91,6 +141,7 @@ export function statText(b: Badge): string {
  */
 export function publicStatText(b: Badge): string {
   if (b.unit === 'founder') return 'Chegou nas primeiras semanas'
+  if (b.unit === 'dev') return DEV_TEXT
   const reached = b.tiers[b.tier - 1]
   if (!reached) return ''
   const label = `${formatThreshold(b.unit, reached.threshold)}`
@@ -120,6 +171,8 @@ export function formatThreshold(unit: BadgeUnit, threshold: number): string {
     case 'founder':
       // Corte do backend: contas criadas antes de 01/11/2026.
       return 'Até 31/10/26'
+    case 'dev':
+      return DEV_ONLY
   }
   return num(threshold)
 }
@@ -156,6 +209,8 @@ export function remainingText(b: Badge, now: Date = new Date()): string {
       return falta(left, 'servidor', 'servidores')
     case 'founder':
       return 'Só para quem chegou nas primeiras semanas'
+    case 'dev':
+      return DEV_ONLY
   }
   return ''
 }

@@ -20,6 +20,7 @@ import VoiceStateIcons from './call/VoiceStateIcons'
 import VoiceChannelTimer from './call/VoiceChannelTimer'
 import LiveBadge from './call/LiveBadge'
 import { GameBadge } from './ActivityLine'
+import CallActivityBadge from './call/CallActivityBadge'
 import { liveUserIds } from '../lib/liveBadge'
 import { useUserAudioStore } from '../store/userAudioStore'
 import { useLevelStore } from '../store/levelStore'
@@ -1010,6 +1011,8 @@ export function ServerSidebar(): React.JSX.Element {
                               {/* Selo de nível só na lista de membros da direita; aqui o
                                   nível só ordena a lista (ver voiceOrder). */}
                               <span className="ml-auto flex items-center gap-0.5 pr-1">
+                                {/* Atividade da chamada: só sabemos de quem joga na nossa. */}
+                                {connectedHere && <CallActivityBadge userId={p.user_id} />}
                                 <GameBadge userId={p.user_id} />
                                 {live.has(p.user_id) && <LiveBadge />}
                                 {!isMe && locallyMuted[p.user_id]?.muted && (

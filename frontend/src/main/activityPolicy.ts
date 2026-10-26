@@ -1,5 +1,5 @@
 import type { BrowserWindowConstructorOptions } from 'electron'
-import { findActivity } from '../shared/activities'
+import { activityRoomFromUrl, findActivity } from '../shared/activities'
 
 // Regras da janela das atividades (jogo web de terceiros). Puras para testar.
 
@@ -111,6 +111,32 @@ export function createExternalOpenGate(): ExternalOpenGate {
       lastOpen = now
       lastInput = -Infinity
       return true
+    }
+  }
+}
+
+export interface RoomTracker {
+  /** A janela navegou: devolve a sala se ela é nova, senão null. */
+  visit(url: string): string | null
+  reset(): void
+}
+
+/**
+ * Sala em que a janela do jogo está (did-navigate / did-navigate-in-page): o
+ * jogo troca a URL sozinho ao entrar numa partida ou criar um time. Só avisa
+ * quando a sala muda; voltar ao menu não apaga a última.
+ */
+export function createRoomTracker(activityId: string): RoomTracker {
+  let last: string | null = null
+  return {
+    visit(url) {
+      const room = activityRoomFromUrl(activityId, url)
+      if (!room || room === last) return null
+      last = room
+      return room
+    },
+    reset() {
+      last = null
     }
   }
 }

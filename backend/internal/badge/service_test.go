@@ -133,7 +133,7 @@ func TestBadgesAnnouncesNewTiersOnlyOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if full, ok := res.Badges.([]Badge); !ok || len(full) != len(Catalog) || res.UserID != "ana" || !res.Self {
+	if full, ok := res.Badges.([]Badge); !ok || len(full) != len(Catalog)-1 || res.UserID != "ana" || !res.Self {
 		t.Fatalf("response = %+v", res)
 	}
 	if len(pub.events) != 1 || len(pub.events[0].Unlocks) != 1 {
@@ -168,6 +168,17 @@ func TestAnnounceSortsRarestFirst(t *testing.T) {
 	first := pub.events[0].Unlocks[0]
 	if first.Category != "fundador" {
 		t.Fatalf("first unlock = %+v, want the legendary Fundador", first)
+	}
+}
+
+func TestAnnounceSortsMythicAboveLegendary(t *testing.T) {
+	s, st, pub, _, _ := newTestService()
+	st.stats["ana"] = Stats{CreatedAt: FounderCutoff.Add(-time.Hour), IsDev: true}
+	if _, err := s.Badges(context.Background(), "ana", "ana"); err != nil {
+		t.Fatal(err)
+	}
+	if first := pub.events[0].Unlocks[0]; first.Category != "criador" || first.Rarity != RarityMythic {
+		t.Fatalf("first unlock = %+v, want the mythic Criador da Salinha", first)
 	}
 }
 

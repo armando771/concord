@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import router from '../router'
 import { useAuthStore } from '../store/authStore'
 import { useCallStore } from '../store/callStore'
+import { useActivityStore } from '../store/activityStore'
+import { activityOfPlayer, canJoinFromProfile } from '../lib/activityState'
 import { useChatStore } from '../store/chatStore'
 import { useFriendStore, useRelationship } from '../store/friendStore'
 import { useUserMenuStore } from '../store/userMenuStore'
@@ -34,6 +36,7 @@ import LiveBadge from './call/LiveBadge'
 import StatusIcon from './StatusIcon'
 import { DotsIcon, PencilIcon, VolumeIcon } from './icons'
 import Avatar from './Avatar'
+import { ActivityGlyph } from './call/ActivityPickerPopover'
 
 const CARD_WIDTH = 300
 /** Altura aproximada do submenu de status (4 opções, duas com descrição). */
@@ -170,6 +173,13 @@ function UserProfileCard(): React.JSX.Element | null {
   const askNickname = useModerationStore((s) => s.askNickname)
   // Os badges chegam depois e podem mudar a altura do cartão.
   const badgesLoaded = useBadgeStore((s) => (target ? Boolean(s.byUser[target.userId]) : false))
+  // Atividade da chamada em que a pessoa está jogando (só se for a minha call).
+  const joinableActivity = useActivityStore((s) =>
+    target && canJoinFromProfile(s, me?.id ?? null, target.userId)
+      ? activityOfPlayer(s, target.userId)
+      : null
+  )
+  const joinActivity = useActivityStore((s) => s.join)
   const ref = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
   const [sending, setSending] = useState(false)
@@ -236,7 +246,7 @@ function UserProfileCard(): React.JSX.Element | null {
         { width: window.innerWidth, height: window.innerHeight }
       )
     )
-  }, [target, profile, me, mutual, badgesLoaded, streamKey, live])
+  }, [target, profile, me, mutual, badgesLoaded, streamKey, live, joinableActivity])
 
   useEffect(() => {
     if (!target) return
@@ -448,6 +458,20 @@ function UserProfileCard(): React.JSX.Element | null {
           />
         )}
 
+        {joinableActivity && (
+          <button
+            type="button"
+            onClick={() => {
+              close()
+              void joinActivity()
+            }}
+            className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#23a55a] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1e8c4a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          >
+            <ActivityGlyph activity={joinableActivity} className="h-4 w-4" />
+            Juntar-se à atividade
+            <span className="sr-only">: {joinableActivity.name}</span>
+          </button>
+        )}
         {hasInfo && (
           <div className="mt-3 flex flex-col gap-3 rounded-lg bg-black/30 p-3">
             {inServer && (isServerOwner || memberRoles.length > 0) && (
