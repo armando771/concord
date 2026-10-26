@@ -101,6 +101,27 @@ Exemplos atuais: `call/service.go`, `callStore.ts`, `chatStore.ts`,
 O PR leva uma tabela de CRAP antes/depois e não leva atribuição de IA (regra do
 repo).
 
+## Acréscimos pedidos durante a implementação
+
+- **Exemplos bom × ruim** em arquivos separados (`docs/ai/exemplos/`: crap,
+  god-files, testes, responsivo), linkados a partir do AGENTS.md e das regras.
+- **Estrutura de pastas padronizada e corrigida neste PR** (decisão do usuário:
+  tudo no mesmo PR). Renderer por feature (`app/`, `features/`, `shared/`),
+  `src/main` por responsabilidade, infra do backend em `internal/platform/`,
+  `cmd/` dividido por área. Registrado no ADR 0001. Verificado por
+  `scripts/check-structure.mjs`, que também aplica a catraca anti-god (arquivo
+  tocado com mais de 400 linhas sai menor). Imports, comentários, linhas em
+  branco e arquivos só movidos não contam como "tocar no código".
+- **Responsivo obrigatório** (360 px até telas largas) nas regras do frontend.
+- **Skills de terceiros** revisadas e copiadas em `.claude/skills/` (Go:
+  testing, concurrency, security, refactoring; React: best-practices,
+  composition-patterns; web-design-guidelines com as regras fixas no repo), sem
+  `allowed-tools` e com nota Concord. Catálogo em `docs/ai/skills.md`.
+- **Plugin superpowers vinculado ao projeto** via `.claude/settings.json`
+  (`extraKnownMarketplaces` + `enabledPlugins`); instruções para Gemini e Codex.
+- Modelo de PR em `.github/pull_request_template.md`.
+
 ## Fora de escopo
 
-Hooks, job de CI, refatorar god files existentes que não forem tocados.
+Hooks, job de CI, refatorar o conteúdo dos god files existentes que não forem
+tocados (a migração só os moveu).

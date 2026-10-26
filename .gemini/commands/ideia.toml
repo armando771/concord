@@ -1,0 +1,11 @@
+description = "Transforma uma ideia vaga numa spec aprovada (brainstorming, pesquisa de arquitetura, ADR)."
+prompt = """
+Entrada: {{args}}
+
+Siga todos os passos do procedimento abaixo, na ordem, respeitando as regras do AGENTS.md.
+Quando um passo citar uma skill `superpowers:*`, use a skill de mesmo nome da extensão
+superpowers (gemini extensions install https://github.com/obra/superpowers); sem a extensão,
+siga o resumo escrito no próprio passo.
+
+@{docs/ai/pipeline-ideia.md}
+"""
