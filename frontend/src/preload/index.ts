@@ -204,6 +204,12 @@ const api = {
       const listener = (_e: unknown, activityId: string): void => cb(activityId)
       ipcRenderer.on('activity:closed', listener)
       return () => ipcRenderer.removeListener('activity:closed', listener)
+    },
+    /** A janela do jogo entrou numa sala (partida/time) nova. */
+    onRoom(cb: (activityId: string, url: string) => void): () => void {
+      const listener = (_e: unknown, activityId: string, url: string): void => cb(activityId, url)
+      ipcRenderer.on('activity:room', listener)
+      return () => ipcRenderer.removeListener('activity:room', listener)
     }
   },
   keybinds: {

@@ -402,3 +402,184 @@ func TestActivityRejectedAttemptDoesNotStartCooldown(t *testing.T) {
 		t.Fatalf("link errado não pode gastar o cooldown: %v", err)
 	}
 }
+
+// playersOf lê os jogadores do último call:activity:players enviado a target.
+func playersOf(t *testing.T, pub *fakePublisher, target string) []string {
+	t.Helper()
+	events := eventsOfType(pub, "call:activity:players")[target]
+	if len(events) == 0 {
+		t.Fatalf("%s não recebeu call:activity:players", target)
+	}
+	var p ActivityPlayersEvent
+	if err := json.Unmarshal(events[len(events)-1], &p); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	return p.Players
+}
+
+func TestStarterIsFirstPlayer(t *testing.T) {
+	pub := &fakePublisher{}
+	s := activityCall(pub, "user-1", "user-2")
+	if err := s.StartActivity(context.Background(), "call-1", "user-1", "krunker", ""); err != nil {
+		t.Fatalf("StartActivity: %v", err)
+	}
+	if got := s.ActivityFor("call-1", "user-2"); got == nil || !reflect.DeepEqual(got.Players, []string{"user-1"}) {
+		t.Fatalf("players = %+v, want [user-1]", got)
+	}
+	var p struct {
+		Players []string `json:"players"`
+	}
+	_ = json.Unmarshal(eventsOfType(pub, "call:activity")["user:user-2"][0], &p)
+	if !reflect.DeepEqual(p.Players, []string{"user-1"}) {
+		t.Fatalf("call:activity sem os jogadores: %+v", p)
+	}
+}
+
+func TestJoinAndLeaveActivityBroadcastPlayers(t *testing.T) {
+	pub := &fakePublisher{}
+	s := activityCall(pub, "user-1", "user-2", "user-3")
+	if err := s.StartActivity(context.Background(), "call-1", "user-1", "krunker", ""); err != nil {
+		t.Fatalf("StartActivity: %v", err)
+	}
+
+	raw, _ := json.Marshal(ActivityPresencePayload{CallID: "call-1", ActivityID: "krunker"})
+	s.HandleCallMessage("user-2", "call:activity:join", raw)
+	for _, target := range []string{"user:user-1", "user:user-2", "user:user-3"} {
+		if got := playersOf(t, pub, target); !reflect.DeepEqual(got, []string{"user-1", "user-2"}) {
+			t.Fatalf("%s: players = %v", target, got)
+		}
+	}
+	if got := s.ActivityFor("call-1", "user-3"); !reflect.DeepEqual(got.Players, []string{"user-1", "user-2"}) {
+		t.Fatalf("estado: players = %v", got.Players)
+	}
+
+	// Entrar de novo não repete o aviso.
+	before := len(eventsOfType(pub, "call:activity:players")["user:user-3"])
+	s.HandleCallMessage("user-2", "call:activity:join", raw)
+	if n := len(eventsOfType(pub, "call:activity:players")["user:user-3"]); n != before {
+		t.Fatalf("join repetido avisou de novo (%d -> %d)", before, n)
+	}
+
+	s.HandleCallMessage("user-2", "call:activity:leave", raw)
+	if got := playersOf(t, pub, "user:user-3"); !reflect.DeepEqual(got, []string{"user-1"}) {
+		t.Fatalf("depois do leave: players = %v", got)
+	}
+}
+
+func TestJoinActivityRejectsOutsiders(t *testing.T) {
+	pub := &fakePublisher{}
+	s := activityCall(pub, "user-1")
+	if err := s.StartActivity(context.Background(), "call-1", "user-1", "krunker", ""); err != nil {
+		t.Fatalf("StartActivity: %v", err)
+	}
+	raw, _ := json.Marshal(ActivityPresencePayload{CallID: "call-1", ActivityID: "krunker"})
+	s.HandleCallMessage("intruso", "call:activity:join", raw)
+	if got := s.ActivityFor("call-1", "user-1"); !reflect.DeepEqual(got.Players, []string{"user-1"}) {
+		t.Fatalf("intruso entrou na atividade: %v", got.Players)
+	}
+	if n := len(eventsOfType(pub, "call:activity:players")); n != 0 {
+		t.Fatalf("join de quem está fora avisou a chamada (%d)", n)
+	}
+	if errs := eventsOfType(pub, "call:activity:error"); len(errs["user:intruso"]) != 1 {
+		t.Fatalf("intruso devia receber call:activity:error, got %v", errs)
+	}
+}
+
+func TestJoinWithoutActivityOrOtherActivityIsIgnored(t *testing.T) {
+	pub := &fakePublisher{}
+	s := activityCall(pub, "user-1", "user-2")
+	raw, _ := json.Marshal(ActivityPresencePayload{CallID: "call-1", ActivityID: "krunker"})
+	// Sem atividade aberta (corrida com o stop): nada acontece, nem erro.
+	s.HandleCallMessage("user-2", "call:activity:join", raw)
+	if n := len(eventsOfType(pub, "call:activity:error")) + len(eventsOfType(pub, "call:activity:players")); n != 0 {
+		t.Fatalf("join sem atividade gerou %d eventos", n)
+	}
+
+	if err := s.StartActivity(context.Background(), "call-1", "user-1", "survev", ""); err != nil {
+		t.Fatalf("StartActivity: %v", err)
+	}
+	// Join de uma atividade que já foi trocada por outra não conta.
+	s.HandleCallMessage("user-2", "call:activity:join", raw)
+	if got := s.ActivityFor("call-1", "user-2"); !reflect.DeepEqual(got.Players, []string{"user-1"}) {
+		t.Fatalf("join da atividade antiga contou: %v", got.Players)
+	}
+}
+
+func TestStarterLeaveMessageKeepsStarter(t *testing.T) {
+	pub := &fakePublisher{}
+	s := activityCall(pub, "user-1", "user-2")
+	if err := s.StartActivity(context.Background(), "call-1", "user-1", "krunker", ""); err != nil {
+		t.Fatalf("StartActivity: %v", err)
+	}
+	raw, _ := json.Marshal(ActivityPresencePayload{CallID: "call-1", ActivityID: "krunker"})
+	s.HandleCallMessage("user-1", "call:activity:leave", raw)
+	if got := s.ActivityFor("call-1", "user-2"); got == nil || !reflect.DeepEqual(got.Players, []string{"user-1"}) {
+		t.Fatalf("quem abriu saiu da lista sem encerrar: %+v", got)
+	}
+}
+
+func TestLinkUpdateKeepsPlayersNewActivityResets(t *testing.T) {
+	pub := &fakePublisher{}
+	s := activityCall(pub, "user-1", "user-2", "user-3")
+	ctx := context.Background()
+	if err := s.StartActivity(ctx, "call-1", "user-1", "krunker", ""); err != nil {
+		t.Fatalf("StartActivity: %v", err)
+	}
+	if err := s.JoinActivity("call-1", "user-2", "krunker"); err != nil {
+		t.Fatalf("JoinActivity: %v", err)
+	}
+	// A sala capturada (troca de link) mantém quem já estava jogando.
+	if err := s.StartActivity(ctx, "call-1", "user-1", "krunker", "https://krunker.io/?game=BRZ:tukbo"); err != nil {
+		t.Fatalf("StartActivity (link): %v", err)
+	}
+	if got := s.ActivityFor("call-1", "user-3"); !reflect.DeepEqual(got.Players, []string{"user-1", "user-2"}) {
+		t.Fatalf("troca de link perdeu jogadores: %v", got.Players)
+	}
+	// Outra pessoa abre outra atividade: começa só com ela.
+	if err := s.StartActivity(ctx, "call-1", "user-3", "survev", ""); err != nil {
+		t.Fatalf("StartActivity (outra): %v", err)
+	}
+	if got := s.ActivityFor("call-1", "user-1"); !reflect.DeepEqual(got.Players, []string{"user-3"}) {
+		t.Fatalf("atividade nova herdou jogadores: %v", got.Players)
+	}
+}
+
+func TestPlayerLeavingCallLeavesActivity(t *testing.T) {
+	pub := &fakePublisher{}
+	s := activityCall(pub, "user-1", "user-2", "user-3")
+	if err := s.StartActivity(context.Background(), "call-1", "user-1", "krunker", ""); err != nil {
+		t.Fatalf("StartActivity: %v", err)
+	}
+	if err := s.JoinActivity("call-1", "user-2", "krunker"); err != nil {
+		t.Fatalf("JoinActivity: %v", err)
+	}
+	if _, _, err := s.detachParticipant("call-1", "user-2"); err != nil {
+		t.Fatalf("detachParticipant: %v", err)
+	}
+	if got := playersOf(t, pub, "user:user-3"); !reflect.DeepEqual(got, []string{"user-1"}) {
+		t.Fatalf("quem saiu da chamada continua jogando: %v", got)
+	}
+	// Quem saiu da chamada sem estar na atividade não gera aviso.
+	before := len(eventsOfType(pub, "call:activity:players")["user:user-1"])
+	if _, _, err := s.detachParticipant("call-1", "user-3"); err != nil {
+		t.Fatalf("detachParticipant: %v", err)
+	}
+	if n := len(eventsOfType(pub, "call:activity:players")["user:user-1"]); n != before {
+		t.Fatalf("saída de quem não jogava avisou (%d -> %d)", before, n)
+	}
+}
+
+func TestNewActivitiesInCatalog(t *testing.T) {
+	cases := []struct{ id, raw string }{
+		{"survev", "https://survev.io/#r7S5"},
+		{"suroi", "https://suroi.io/?region=sa#xv0d"},
+	}
+	for _, tc := range cases {
+		if got, err := ValidateActivityURL(tc.id, tc.raw); err != nil || got != tc.raw {
+			t.Fatalf("%s: %q, %v", tc.id, got, err)
+		}
+	}
+	if _, err := ValidateActivityURL("survev", "https://krunker.io/"); !errors.Is(err, ErrActivityURL) {
+		t.Fatalf("survev aceitou link do krunker: %v", err)
+	}
+}
