@@ -38,7 +38,7 @@ Opção 3 no frontend e `internal/platform/` no backend. O `cmd/` foi dividido p
 área (`wire_<área>.go`, cada uma registra as próprias rotas), com a mesma ordem
 de montagem de antes. A estrutura é verificada por `scripts/check-structure.mjs`.
 A migração foi feita de uma vez, só com movimentação e reescrita de imports
-(typecheck, 2417 testes do front, build web/Electron e testes Go passando).
+(typecheck, os 2533 testes do front, build web/Electron e testes Go passando).
 
 ## Consequências
 
