@@ -5,7 +5,7 @@ const textButton =
 
 /**
  * Barra que aparece sobre a mensagem ao passar o mouse: reações rápidas,
- * seletor de emoji, responder, copiar, editar e excluir. Cada ação só aparece
+ * seletor de emoji, responder, copiar, editar, fixar e excluir. Cada ação só aparece
  * quando o handler vem (copiar sem texto, editar de outro autor etc. ficam de fora).
  */
 function MessageActionsBar({
@@ -15,6 +15,9 @@ function MessageActionsBar({
   onReply,
   onCopy,
   onEdit,
+  canPin,
+  isPinned,
+  onTogglePin,
   onDelete,
   deleteTitle = 'Excluir mensagem'
 }: {
@@ -24,6 +27,9 @@ function MessageActionsBar({
   onReply: () => void
   onCopy?: () => void
   onEdit?: () => void
+  canPin?: boolean
+  isPinned?: boolean
+  onTogglePin?: () => void
   onDelete?: () => void
   deleteTitle?: string
 }): React.JSX.Element {
@@ -54,6 +60,16 @@ function MessageActionsBar({
       <button type="button" onClick={onReply} title="Responder" className={textButton}>
         Responder
       </button>
+      {canPin && onTogglePin && (
+        <button
+          type="button"
+          onClick={onTogglePin}
+          title={isPinned ? 'Desafixar mensagem' : 'Fixar mensagem'}
+          className={textButton}
+        >
+          {isPinned ? 'Desafixar' : 'Fixar'}
+        </button>
+      )}
       {onCopy && (
         <button type="button" onClick={onCopy} title="Copiar texto" className={textButton}>
           Copiar texto

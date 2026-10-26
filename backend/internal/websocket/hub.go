@@ -519,6 +519,14 @@ func (h *Hub) PublishMessageDelete(event message.DeleteEvent) {
 	h.publishMessage(writeEvent("message:delete", event), event.ChannelID, event.ServerID, event.ConversationID, event.UserIDs)
 }
 
+func (h *Hub) PublishMessagePin(event message.PinEvent) {
+	h.publishMessage(writeEvent("channel:pin:add", event), &event.ChannelID, event.ServerID, nil, nil)
+}
+
+func (h *Hub) PublishMessageUnpin(event message.UnpinEvent) {
+	h.publishMessage(writeEvent("channel:pin:remove", event), &event.ChannelID, event.ServerID, nil, nil)
+}
+
 // PublishPollUpdate vai só para a sala da conversa/canal: quem não está com a
 // sala aberta recebe a enquete atualizada ao carregar as mensagens.
 func (h *Hub) PublishPollUpdate(event message.PollUpdateEvent) {
