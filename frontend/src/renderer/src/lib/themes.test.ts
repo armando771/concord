@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { colorDistance } from './colorDiff'
 import { contrastRatio, parseColor } from './contrast'
 import {
   DEFAULT_THEME,
@@ -196,6 +197,65 @@ describe.each(THEMES.map((t) => [t.label, t.id] as const))('tema %s', (_label, i
         )
       }
     }
+  })
+})
+
+/**
+ * Cores do Discord de verdade, medidas em pixels nos prints do cliente desktop
+ * (moda de cada região; ver scripts/e2e-cores-discord.mjs). O Discord
+ * Escuro precisa ficar a ΔE ≤ 2 de todas.
+ */
+const DISCORD_ESCURO_MEDIDO: Record<string, string> = {
+  'bg-app': '#121214', // moldura da janela, barra de título
+  'bg-tertiary': '#121214', // trilho de servidores
+  'bg-secondary': '#121214', // lista de canais e DMs
+  'bg-primary': '#1a1a1e', // chat
+  'bg-members': '#222327', // painel de perfil / membros
+  'bg-input': '#222327', // caixa de mensagem
+  'bg-surface': '#202024', // painel do usuário embaixo (os cartões de modal são #242428)
+  'bg-floating': '#252429', // menus e popovers
+  'bg-modal': '#242429', // modais
+  'bg-accent': '#323237', // botões e peças dentro de modais
+  'text-strong': '#fbfbfb',
+  'text-normal': '#efeff1',
+  'text-secondary': '#abacb2',
+  'text-muted': '#96979e',
+  'interactive-normal': '#96979e',
+  'interactive-active': '#efeff1',
+  'text-link': '#4d96ee',
+  'text-positive': '#5eb479',
+  brand: '#5865f2',
+  green: '#45a366',
+  red: '#da3e44'
+}
+/** Itens de lista e divisórias são translúcidos: o que importa é o resultado sobre o fundo. */
+const DISCORD_ESCURO_COMPOSTO: Array<[token: ThemeToken, over: ThemeToken, medido: string]> = [
+  ['bg-hover', 'bg-secondary', '#222225'],
+  ['bg-selected', 'bg-secondary', '#2c2c30'],
+  ['border-subtle', 'bg-primary', '#29292d']
+]
+
+describe('Discord Escuro tem as cores do Discord', () => {
+  const dark = parsed['discord-dark'] ?? {}
+
+  it.each(Object.entries(DISCORD_ESCURO_MEDIDO))('%s fica a ΔE ≤ 2 de %s', (token, medido) => {
+    const delta = colorDistance(dark[token], medido)
+    expect(
+      delta,
+      `--${token}: ${dark[token]} vs ${medido} (ΔE ${delta.toFixed(2)})`
+    ).toBeLessThanOrEqual(2)
+  })
+
+  it.each(DISCORD_ESCURO_COMPOSTO)('%s sobre %s fica a ΔE ≤ 2 de %s', (token, over, medido) => {
+    const delta = colorDistance(dark[token], medido, dark[over])
+    expect(delta, `--${token} sobre --${over} (ΔE ${delta.toFixed(2)})`).toBeLessThanOrEqual(2)
+  })
+
+  it('texto apagado (horário, rótulo) só se afasta do Discord o necessário para passar AA', () => {
+    // O #81828a do Discord dá 4,0:1 nos cartões e modais; o menor cinza que passa em todos é este.
+    const delta = colorDistance(dark['text-faint'], '#81828a')
+    expect(delta).toBeLessThanOrEqual(3.5)
+    expect(contrastRatio('#81828a', dark['bg-surface'])).toBeLessThan(4.5)
   })
 })
 

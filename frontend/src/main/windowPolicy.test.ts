@@ -85,8 +85,8 @@ describe('titleBarOptions', () => {
       titleBarOverlay: { color: TITLE_BAR_COLOR, symbolColor: TITLE_BAR_SYMBOL_COLOR, height: 32 }
     })
     // Discord Escuro, o tema padrão (--bg-app e --interactive-normal).
-    expect(TITLE_BAR_COLOR).toBe('#2c2d32')
-    expect(TITLE_BAR_SYMBOL_COLOR).toBe('#c5c6ca')
+    expect(TITLE_BAR_COLOR).toBe('#121214')
+    expect(TITLE_BAR_SYMBOL_COLOR).toBe('#96979e')
     expect(titleBarOptions('linux').titleBarStyle).toBe('hidden')
   })
 

@@ -58,8 +58,8 @@ export const TITLE_BAR_HEIGHT = 32
  * --interactive-normal de assets/theme.css). Trocando o tema, o renderer manda
  * as cores novas (ver parseTitleBarColors).
  */
-export const TITLE_BAR_COLOR = '#2c2d32'
-export const TITLE_BAR_SYMBOL_COLOR = '#c5c6ca'
+export const TITLE_BAR_COLOR = '#121214'
+export const TITLE_BAR_SYMBOL_COLOR = '#96979e'
 
 const HEX6 = /^#[0-9a-f]{6}$/i
 
