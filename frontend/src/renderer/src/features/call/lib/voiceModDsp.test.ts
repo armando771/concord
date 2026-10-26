@@ -61,10 +61,47 @@ describe('VoiceModDsp', () => {
     expect(peak).toBeLessThan(0.55)
   })
 
-  it('modulação em anel multiplica a voz por um seno', () => {
+  it('modulação em anel (profundidade 1) multiplica a voz por um seno', () => {
     const dsp = new VoiceModDsp(RATE)
-    dsp.ringHz = 100
+    dsp.modHz = 100
+    dsp.modDepth = 1
     expect(frequency(run(dsp, signal(() => 1)))).toBeCloseTo(100, -1)
+  })
+
+  it('profundidade parcial vira tremolo: o volume oscila sem inverter a voz', () => {
+    const dsp = new VoiceModDsp(RATE)
+    dsp.modHz = 5
+    dsp.modDepth = 0.25
+    const out = run(dsp, signal(() => 1)).subarray(RATE / 2)
+    expect(Math.min(...out)).toBeCloseTo(0.5, 2)
+    expect(Math.max(...out)).toBeCloseTo(1, 2)
+  })
+
+  it('vibrato oscila o tom em torno da razão base', () => {
+    const dsp = new VoiceModDsp(RATE)
+    dsp.vibratoHz = 4
+    dsp.vibratoSemitones = 1
+    const out = run(dsp, sine(1000))
+    // Frequência em janelas de 25 ms ao longo de meio segundo (dois ciclos do vibrato).
+    const window = RATE / 40
+    const freqs: number[] = []
+    for (let from = RATE / 4; from + window <= (RATE * 3) / 4; from += window) {
+      freqs.push(frequency(out.subarray(from - RATE / 4, from + window)))
+    }
+    expect(Math.max(...freqs)).toBeGreaterThan(1030)
+    expect(Math.min(...freqs)).toBeLessThan(970)
+  })
+
+  it('configure copia a mensagem da porta', () => {
+    const dsp = new VoiceModDsp(RATE)
+    dsp.configure({ ratio: 1.5, modHz: 7, modDepth: 0.3, vibratoHz: 6, vibratoSemitones: 0.8 })
+    expect(dsp).toMatchObject({
+      ratio: 1.5,
+      modHz: 7,
+      modDepth: 0.3,
+      vibratoHz: 6,
+      vibratoSemitones: 0.8
+    })
   })
 
   it('sem entrada conta como silêncio', () => {

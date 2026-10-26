@@ -46,6 +46,18 @@ describe('voiceModStore', () => {
     })
   })
 
+  it('os presets novos também preenchem os sliders', async () => {
+    const { useVoiceModStore } = await import('./voiceModStore')
+    useVoiceModStore.getState().selectPreset('monstro')
+    expect(useVoiceModStore.getState()).toMatchObject({
+      preset: 'monstro',
+      customized: false,
+      pitch: -9,
+      timbre: -0.6,
+      intensity: 1
+    })
+  })
+
   it('mexer num slider marca como personalizado e mantém o preset', async () => {
     const { useVoiceModStore } = await import('./voiceModStore')
     const store = useVoiceModStore.getState()

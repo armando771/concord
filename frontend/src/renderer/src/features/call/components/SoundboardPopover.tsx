@@ -56,9 +56,11 @@ function SoundboardPopover({
   if (!serverId) return null
 
   const rect = anchor.getBoundingClientRect()
+  // No celular (360 px) encolhe para caber com margem dos dois lados.
+  const width = Math.min(POPOVER_WIDTH, window.innerWidth - MARGIN * 2)
   const left = Math.min(
-    Math.max(MARGIN, rect.left + rect.width / 2 - POPOVER_WIDTH / 2),
-    window.innerWidth - POPOVER_WIDTH - MARGIN
+    Math.max(MARGIN, rect.left + rect.width / 2 - width / 2),
+    window.innerWidth - width - MARGIN
   )
   const bottom = Math.max(MARGIN, window.innerHeight - rect.top + GAP)
   const current = SECTIONS.find((s) => s.id === section) ?? SECTIONS[0]
@@ -68,7 +70,7 @@ function SoundboardPopover({
       ref={ref}
       role="dialog"
       aria-label="Mesa de Áudio"
-      style={{ width: POPOVER_WIDTH, left, bottom }}
+      style={{ width, left, bottom }}
       className="fixed z-50 flex max-h-[460px] gap-3 rounded-2xl border border-subtle bg-floating p-3 shadow-2xl"
     >
       <div
