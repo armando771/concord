@@ -88,6 +88,7 @@ import { permissionError } from '../../servers/lib/permissions'
 import { bottomScrollPlan, JUMP_HIGHLIGHT_MS } from '../lib/scrollAnchor'
 import { useOlderMessages } from '../hooks/useOlderMessages'
 import { useInfiniteScrollOlder } from '../hooks/useInfiniteScrollOlder'
+import { useAutoFocusComposer } from '../hooks/useAutoFocusComposer'
 import OlderMessagesLoader from './OlderMessagesLoader'
 
 const NO_MENTIONABLE: Mentionable[] = []
@@ -472,6 +473,7 @@ function ChatPane({
   const highlightTimer = useRef<number | undefined>(undefined)
   useEffect(() => () => window.clearTimeout(highlightTimer.current), [])
   const inputRef = useRef<HTMLInputElement>(null)
+  useAutoFocusComposer({ room, inputRef, canSend: !disabledReason })
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { drafts, addFiles: addDraftFiles, remove: removeAttachment } = useAttachmentDraft(room)
   /** Sem ATTACH_FILES, arrastar, colar ou escolher arquivos só avisa. */
