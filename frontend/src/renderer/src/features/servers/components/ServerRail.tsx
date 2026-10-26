@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { InboxIcon, DiamondIcon, PlusIcon } from '../../../shared/ui/icons'
+import { DiamondIcon, PlusIcon } from '../../../shared/ui/icons'
 import { useServerStore } from '../store/serverStore'
-import { useInviteStore } from '../store/inviteStore'
 import { useServerRailSync } from '../hooks/useServerRailSync'
 import { useRailBadges } from '../hooks/useRailBadges'
 import { isHomePath } from '../lib/railHome'
@@ -14,11 +13,9 @@ function ServerRail(): React.JSX.Element {
   const location = useLocation()
   const navigate = useNavigate()
   const clearCurrentServer = useServerStore((s) => s.clearCurrentServer)
-  const invitesCount = useInviteStore((s) => s.invites.length)
   const [createModalOpen, setCreateModalOpen] = useState(false)
 
   useServerRailSync()
-  const onInvites = location.pathname === '/invites'
   const onProposals = location.pathname === '/proposals'
   const { dmUnread, proposalsBadge } = useRailBadges(onProposals)
 
@@ -30,6 +27,7 @@ function ServerRail(): React.JSX.Element {
   return (
     <>
       <aside className="group/rail flex h-full w-18 shrink-0 flex-col items-center gap-2 border-r border-subtle bg-tertiary py-3 backdrop-blur-2xl">
+        {/* Início: Mensagens Diretas, Amigos e convites de servidor */}
         <RailHomeButton
           isHome={isHomePath(location.pathname)}
           unread={dmUnread}
@@ -37,14 +35,6 @@ function ServerRail(): React.JSX.Element {
         />
 
         <div className="my-1 h-0.5 w-8 rounded-full bg-fg/10" />
-
-        <RailNavButton
-          label="Convites de servidor"
-          active={onInvites}
-          badge={invitesCount}
-          icon={(cls) => <InboxIcon className={cls} />}
-          onClick={() => goTo('/invites')}
-        />
 
         {/* Quadro de propostas (kanban com votação) */}
         <RailNavButton
