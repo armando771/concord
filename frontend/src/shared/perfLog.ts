@@ -54,19 +54,33 @@ export interface StartupLine {
 }
 
 const MAX_ROUTE = 200
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// Segmentos fixos das rotas de app/router.tsx. Todo o resto (ids, código de convite de
+// 8 letras/números, uma rota nova que ainda não entrou aqui) vira `:id`: errar para este
+// lado só perde legibilidade, nunca deixa um identificador no arquivo.
+const FIXED_SEGMENTS = new Set([
+  '',
+  'friends',
+  'invites',
+  'proposals',
+  'changelog',
+  'dm',
+  'c',
+  'servers',
+  'channels',
+  'login',
+  'register',
+  'forgot-password',
+  'reset-password',
+  'verify-email',
+  'convite'
+])
 
-function isIdSegment(segment: string): boolean {
-  if (UUID.test(segment) || /^\d+$/.test(segment)) return true
-  return segment.length >= 12 && /\d/.test(segment)
-}
-
-/** Troca os IDs da rota por `:id`: o arquivo pode ser compartilhado sem dados pessoais. */
+/** Troca tudo que não é segmento fixo por `:id`: o arquivo pode ser compartilhado sem dados pessoais. */
 export function normalizeRoute(path: string): string {
   const clean = path.split(/[?#]/)[0]
   return clean
     .split('/')
-    .map((segment) => (isIdSegment(segment) ? ':id' : segment))
+    .map((segment) => (FIXED_SEGMENTS.has(segment) ? segment : ':id'))
     .join('/')
 }
 

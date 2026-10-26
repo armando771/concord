@@ -9,15 +9,39 @@ describe('normalizeRoute', () => {
   })
 
   it('mantém segmentos fixos', () => {
-    expect(normalizeRoute('/friends/online')).toBe('/friends/online')
+    expect(normalizeRoute('/servers')).toBe('/servers')
   })
 
   it('descarta query e hash', () => {
     expect(normalizeRoute('/friends?x=1#topo')).toBe('/friends')
   })
 
-  it('troca códigos longos com número (convite)', () => {
-    expect(normalizeRoute('/invite/ab12cd34ef56gh')).toBe('/invite/:id')
+  // Tabela das rotas reais de app/router.tsx: nenhum identificador pode sobrar.
+  it.each([
+    ['/', '/'],
+    ['/friends', '/friends'],
+    ['/proposals', '/proposals'],
+    ['/changelog', '/changelog'],
+    ['/login', '/login'],
+    ['/reset-password', '/reset-password'],
+    ['/verify-email', '/verify-email'],
+    ['/dm/3f2c9a10-1b2c-4d3e-8f90-a1b2c3d4e5f6', '/dm/:id'],
+    ['/dm/c/3f2c9a10-1b2c-4d3e-8f90-a1b2c3d4e5f6', '/dm/c/:id'],
+    ['/servers/42', '/servers/:id'],
+    ['/servers/42/channels/7', '/servers/:id/channels/:id']
+  ])('rota real %s vira %s', (route, expected) => {
+    expect(normalizeRoute(route)).toBe(expected)
+  })
+
+  it.each(['K7PQ4XMD', 'ABCDEFGH', 'xyz', 'a1'])(
+    'código de convite %s (8 caracteres, com ou sem dígito) nunca sobra',
+    (code) => {
+      expect(normalizeRoute(`/convite/${code}`)).toBe('/convite/:id')
+    }
+  )
+
+  it('rota desconhecida falha para o lado seguro: o segmento vira :id', () => {
+    expect(normalizeRoute('/segredo/maria-da-silva')).toBe('/:id/:id')
   })
 
   it('é idempotente', () => {
@@ -62,7 +86,7 @@ describe('parsePerfEvent', () => {
   })
 
   it('corta rotas enormes', () => {
-    const parsed = parsePerfEvent({ kind: 'report', ctx: { ...ctx, route: `/${'a'.repeat(500)}` } })
+    const parsed = parsePerfEvent({ kind: 'report', ctx: { ...ctx, route: '/c'.repeat(300) } })
     expect(parsed?.kind === 'report' && parsed.ctx.route.length).toBe(200)
   })
 })
