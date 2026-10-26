@@ -412,54 +412,10 @@ type rowScanner interface {
 func scanMessages(rows rowScanner) ([]Message, error) {
 	var messages []Message
 	for rows.Next() {
-		var msg Message
-		var replyID, replyAuthorID, replyUsername, replyDisplayName, replyContent *string
-		var replyAvatarURL *string
-		var replyStyle namestyle.Style
-
-		msg.Author = &Author{}
-		if err := rows.Scan(
-			&msg.ID,
-			&msg.AuthorID,
-			&msg.Author.Username,
-			&msg.Author.DisplayName,
-			&msg.Author.AvatarURL,
-			&msg.Author.NameStyle,
-			&msg.ChannelID,
-			&msg.ConversationID,
-			&msg.ReplyToID,
-			&msg.Content,
-			&msg.SystemKind,
-			&msg.MentionEveryone,
-			&msg.CreatedAt,
-			&msg.EditedAt,
-			&replyID,
-			&replyAuthorID,
-			&replyUsername,
-			&replyDisplayName,
-			&replyAvatarURL,
-			&replyStyle,
-			&replyContent,
-		); err != nil {
+		msg, err := scanMessageRow(rows)
+		if err != nil {
 			return nil, err
 		}
-		msg.Author.ID = msg.AuthorID
-
-		if replyID != nil && replyAuthorID != nil && replyUsername != nil && replyDisplayName != nil && replyContent != nil {
-			msg.ReplyTo = &ReplyPreview{
-				ID:       *replyID,
-				AuthorID: *replyAuthorID,
-				Author: &Author{
-					ID:          *replyAuthorID,
-					Username:    *replyUsername,
-					DisplayName: *replyDisplayName,
-					AvatarURL:   replyAvatarURL,
-					NameStyle:   replyStyle,
-				},
-				Content: *replyContent,
-			}
-		}
-
 		messages = append(messages, msg)
 	}
 
@@ -468,4 +424,58 @@ func scanMessages(rows rowScanner) ([]Message, error) {
 	}
 
 	return messages, nil
+}
+
+// scanMessageRow lê uma linha de messageColumns; extra recebe as colunas
+// que vierem depois delas.
+func scanMessageRow(rows rowScanner, extra ...any) (Message, error) {
+	var msg Message
+	var replyID, replyAuthorID, replyUsername, replyDisplayName, replyContent *string
+	var replyAvatarURL *string
+	var replyStyle namestyle.Style
+
+	msg.Author = &Author{}
+	dest := []any{
+		&msg.ID,
+		&msg.AuthorID,
+		&msg.Author.Username,
+		&msg.Author.DisplayName,
+		&msg.Author.AvatarURL,
+		&msg.Author.NameStyle,
+		&msg.ChannelID,
+		&msg.ConversationID,
+		&msg.ReplyToID,
+		&msg.Content,
+		&msg.SystemKind,
+		&msg.MentionEveryone,
+		&msg.CreatedAt,
+		&msg.EditedAt,
+		&replyID,
+		&replyAuthorID,
+		&replyUsername,
+		&replyDisplayName,
+		&replyAvatarURL,
+		&replyStyle,
+		&replyContent,
+	}
+	if err := rows.Scan(append(dest, extra...)...); err != nil {
+		return Message{}, err
+	}
+	msg.Author.ID = msg.AuthorID
+
+	if replyID != nil && replyAuthorID != nil && replyUsername != nil && replyDisplayName != nil && replyContent != nil {
+		msg.ReplyTo = &ReplyPreview{
+			ID:       *replyID,
+			AuthorID: *replyAuthorID,
+			Author: &Author{
+				ID:          *replyAuthorID,
+				Username:    *replyUsername,
+				DisplayName: *replyDisplayName,
+				AvatarURL:   replyAvatarURL,
+				NameStyle:   replyStyle,
+			},
+			Content: *replyContent,
+		}
+	}
+	return msg, nil
 }

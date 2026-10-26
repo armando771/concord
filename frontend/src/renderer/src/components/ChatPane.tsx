@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useUIStore } from '../store/uiStore'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
+import { useSearchStore } from '../store/searchStore'
 import type { Message } from '../api/messages'
 import { showToast } from '../store/toastStore'
 import SystemMessage from './SystemMessage'
@@ -782,12 +783,8 @@ function ChatPane({
     requestAnimationFrame(() => inputRef.current?.focus())
   }
 
-  const handleJumpToMessage = (messageId: string): void => {
-    const el = document.getElementById(`msg-${messageId}`)
-    if (!el) {
-      showToast.info('A mensagem original é mais antiga e não está carregada na tela.')
-      return
-    }
+  const showMessage = (el: HTMLElement, messageId: string): void => {
+    stickToBottom.current = false
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
     setHighlightedId(messageId)
     window.setTimeout(() => {
@@ -795,11 +792,66 @@ function ChatPane({
     }, 1600)
   }
 
+  // Mensagem fora da tela (resposta antiga, resultado da busca): carrega as
+  // páginas antigas até ela, com a mesma âncora do "Carregar mensagens
+  // anteriores" (a tela não pula enquanto carrega), e então rola até ela.
+  const handleJumpToMessage = async (messageId: string): Promise<void> => {
+    const shown = (): HTMLElement | null => {
+      const node = document.getElementById(`msg-${messageId}`)
+      return node && scrollRef.current?.contains(node) ? node : null
+    }
+    const el = shown()
+    if (el) {
+      showMessage(el, messageId)
+      return
+    }
+    const startedRoom = room
+    const container = scrollRef.current
+    if (container) {
+      const candidates: AnchorCandidate[] = []
+      for (const m of messages.slice(0, ANCHOR_CANDIDATES)) {
+        const node = document.getElementById(`msg-${m.id}`)
+        if (node) candidates.push({ id: m.id, offset: measureOffset(container, node) })
+      }
+      if (candidates.length > 0) olderAnchor.current = { room: startedRoom, candidates }
+    }
+    stickToBottom.current = false
+    setLoadingOlderRooms((current) => new Set(current).add(startedRoom))
+    const found = await useChatStore.getState().loadOlderUntil(startedRoom, messageId)
+    setLoadingOlderRooms((current) => {
+      const next = new Set(current)
+      next.delete(startedRoom)
+      return next
+    })
+    if (roomRef.current !== startedRoom) return
+    if (!found) {
+      showToast.info('Não encontrei essa mensagem: ela pode ter sido apagada ou ser antiga demais.')
+      return
+    }
+    // Espera o React desenhar a página que chegou.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const node = shown()
+        if (node) showMessage(node, messageId)
+      })
+    )
+  }
+
+  // Clique num resultado da busca: pula quando a sala já carregou.
+  const pendingJump = useSearchStore((s) => s.pendingJump)
   useEffect(() => {
-    const onJump = (e: Event) => {
+    if (!pendingJump || pendingJump.room !== room || loading) return
+    useSearchStore.getState().clearJump()
+    void handleJumpToMessage(pendingJump.messageId)
+    // handleJumpToMessage muda a cada render; o gatilho é o pedido de pulo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingJump, room, loading])
+
+  useEffect(() => {
+    const onJump = (e: Event): void => {
       const detail = (e as CustomEvent<{ messageId: string }>).detail
       if (detail?.messageId) {
-        handleJumpToMessage(detail.messageId)
+        void handleJumpToMessage(detail.messageId)
       }
     }
     window.addEventListener('concord:jump-to-message', onJump)
@@ -809,7 +861,7 @@ function ChatPane({
   const isChannel = room.startsWith('channel:')
   const channelId = isChannel ? room.slice('channel:'.length) : null
 
-  const handleTogglePin = async (message: Message) => {
+  const handleTogglePin = async (message: Message): Promise<void> => {
     if (!channelId) return
     if (message.pinned_at) {
       await usePinStore.getState().unpin(channelId, message.id)
@@ -873,8 +925,8 @@ function ChatPane({
         <div
           role="button"
           tabIndex={0}
-          onClick={() => handleJumpToMessage(latestPin.id)}
-          onKeyDown={(e) => e.key === 'Enter' && handleJumpToMessage(latestPin.id)}
+          onClick={() => void handleJumpToMessage(latestPin.id)}
+          onKeyDown={(e) => e.key === 'Enter' && void handleJumpToMessage(latestPin.id)}
           title="Clique para ir até a mensagem fixada"
           className="group relative z-10 flex shrink-0 cursor-pointer items-center justify-between border-b border-white/6 bg-[#18191c]/80 px-4 py-2 backdrop-blur transition hover:bg-[#1f2024]"
         >

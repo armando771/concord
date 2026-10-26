@@ -18,6 +18,9 @@ import ChatPane from '../components/ChatPane'
 import VoiceChannelView from '../components/call/VoiceChannelView'
 import { UserPlusIcon, SearchIcon, VolumeIcon, PinIcon } from '../components/icons'
 import PinnedMessagesPopover from '../components/chat/PinnedMessagesPopover'
+import MessageSearchBar from '../components/search/MessageSearchBar'
+import SearchResultsPanel from '../components/search/SearchResultsPanel'
+import { useSearchStore } from '../store/searchStore'
 import LevelBadge from '../components/level/LevelBadge'
 import LevelRowShimmer from '../components/level/LevelRowShimmer'
 import LevelUpBurst from '../components/level/LevelUpBurst'
@@ -182,6 +185,8 @@ export function ServerView(): React.JSX.Element {
   const [inviteFilter, setInviteFilter] = useState('')
   const [invitingId, setInvitingId] = useState<string | null>(null)
   const [pinsOpen, setPinsOpen] = useState(false)
+  // Com uma busca deste servidor aberta, os resultados tomam o lugar dos membros.
+  const searchOpen = useSearchStore((s) => s.scope?.kind === 'server' && s.scope.id === id)
 
   useEffect(() => {
     return () => closeInviteModal()
@@ -332,6 +337,22 @@ export function ServerView(): React.JSX.Element {
                 <span>Convidar</span>
               </Button>
             )}
+            <MessageSearchBar
+              scope={{ kind: 'server', id: currentServer.id }}
+              name={currentServer.name}
+              users={currentMembers
+                .filter((m) => m.username)
+                .map((m) => ({
+                  id: m.user_id,
+                  username: m.username as string,
+                  displayName: m.display_name || (m.username as string),
+                  nickname: m.nickname,
+                  avatarUrl: m.avatar_url
+                }))}
+              channels={channels
+                .filter((c) => c.server_id === currentServer.id && (c.type ?? 'text') === 'text')
+                .map((c) => ({ id: c.id, name: c.name }))}
+            />
           </div>
 
           {pinsOpen && channelId && (
@@ -380,49 +401,58 @@ export function ServerView(): React.JSX.Element {
         )}
       </div>
 
+      {searchOpen && (
+        <SearchResultsPanel
+          scope={{ kind: 'server', id: currentServer.id }}
+          currentChannelId={channelId}
+        />
+      )}
+
       {/* Right Column: Server Members List */}
-      <MembersAside>
-        {memberGroups.map((group) => {
-          const offline = group.key === 'offline'
-          return (
-            <div key={group.key}>
-              <p className="mb-1 text-ds-sm font-medium text-gray-400">
-                {group.title} — {group.members.length}
-              </p>
-              <div className={`flex flex-col gap-1 ${offline ? 'opacity-70' : ''}`}>
-                {group.members.map((m) => {
-                  const isOwner = m.user_id === currentServer.owner_id
-                  const displayName =
-                    m.display_name ??
-                    m.username ??
-                    (m.user_id === me?.id ? me?.display_name : 'Membro')
-                  const handle = m.username ?? (m.user_id === me?.id ? me?.username : 'membro')
-                  return (
-                    <MemberRow
-                      key={m.user_id}
-                      userId={m.user_id}
-                      displayName={displayName ?? 'Membro'}
-                      nickname={m.nickname}
-                      nameStyle={m.name_style}
-                      avatarUrl={m.avatar_url}
-                      handle={handle ?? 'membro'}
-                      colorClass={
-                        offline ? 'bg-gray-600' : isOwner ? 'bg-amber-600' : 'bg-indigo-600'
-                      }
-                      nameClass={
-                        offline ? 'text-gray-400' : isOwner ? 'text-amber-300' : 'text-gray-200'
-                      }
-                      nameColor={roleColorCss(memberColor(roles, m.role_ids))}
-                      online={!offline}
-                      isBot={!!m.is_bot}
-                    />
-                  )
-                })}
+      {!searchOpen && (
+        <MembersAside>
+          {memberGroups.map((group) => {
+            const offline = group.key === 'offline'
+            return (
+              <div key={group.key}>
+                <p className="mb-1 text-ds-sm font-medium text-gray-400">
+                  {group.title} — {group.members.length}
+                </p>
+                <div className={`flex flex-col gap-1 ${offline ? 'opacity-70' : ''}`}>
+                  {group.members.map((m) => {
+                    const isOwner = m.user_id === currentServer.owner_id
+                    const displayName =
+                      m.display_name ??
+                      m.username ??
+                      (m.user_id === me?.id ? me?.display_name : 'Membro')
+                    const handle = m.username ?? (m.user_id === me?.id ? me?.username : 'membro')
+                    return (
+                      <MemberRow
+                        key={m.user_id}
+                        userId={m.user_id}
+                        displayName={displayName ?? 'Membro'}
+                        nickname={m.nickname}
+                        nameStyle={m.name_style}
+                        avatarUrl={m.avatar_url}
+                        handle={handle ?? 'membro'}
+                        colorClass={
+                          offline ? 'bg-gray-600' : isOwner ? 'bg-amber-600' : 'bg-indigo-600'
+                        }
+                        nameClass={
+                          offline ? 'text-gray-400' : isOwner ? 'text-amber-300' : 'text-gray-200'
+                        }
+                        nameColor={roleColorCss(memberColor(roles, m.role_ids))}
+                        online={!offline}
+                        isBot={!!m.is_bot}
+                      />
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          )
-        })}
-      </MembersAside>
+            )
+          })}
+        </MembersAside>
+      )}
 
       {/* Modal Convidar Amigos */}
       <Modal
