@@ -71,6 +71,42 @@ export function parseInviteInput(input: string): string | null {
   return normalizeInviteCode(text)
 }
 
+/**
+ * Link de convite HTTP(S) que é nosso (clicado dentro do app) → código. Só os
+ * nossos endereços: o do app web, o do site de download e as origens extras
+ * (o servidor do build, ex.: o PUBLIC_URL sslip.io; no navegador, a própria
+ * origem da página). Caminho exatamente /convite/<código>; query e fragmento
+ * são ignorados, mas usuário/senha e outras portas não passam. Qualquer outro
+ * link devolve null e segue o caminho normal (navegador de fora).
+ */
+export function parseOwnInviteUrl(
+  raw: string,
+  extraOrigins: readonly (string | undefined)[] = []
+): string | null {
+  if (raw.length > 2048) return null
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return null
+  if (url.username || url.password) return null
+  const allowed = new Set<string>([new URL(INVITE_WEB_ORIGIN).origin, new URL(DOWNLOAD_URL).origin])
+  for (const extra of extraOrigins) {
+    if (!extra?.trim()) continue
+    try {
+      const origin = new URL(extra).origin
+      if (origin !== 'null') allowed.add(origin)
+    } catch {
+      // origem extra inválida (config errada): ignora
+    }
+  }
+  if (!allowed.has(url.origin)) return null
+  const match = WEB_PATH.exec(url.pathname)
+  return match ? match[1].toUpperCase() : null
+}
+
 /** Código guardado em ?convite= (login e cadastro, para voltar ao convite). */
 export function inviteCodeFromSearch(search: string): string | null {
   const raw = new URLSearchParams(search).get('convite')

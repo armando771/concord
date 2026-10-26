@@ -18,6 +18,8 @@ function hostOf(href: string): string {
  *
  * O link abre no navegador de fora: na web pelo target="_blank"; no app o
  * mesmo target cai no setWindowOpenHandler, que só deixa passar http/https.
+ * Convite nosso é exceção: o clique abre a confirmação no app
+ * (useInviteLinkClicks).
  */
 function MessageText({
   content,
