@@ -109,6 +109,7 @@ jobs:
       - name: Publicar na VPS (backend + página de download + app web + atualização do app)
         env:
           TECH_TEAM_USER_IDS: ${{ secrets.TECH_TEAM_USER_IDS }}
+          CHANGELOG_TOKEN: ${{ secrets.CHANGELOG_TOKEN }}
         run: scripts/deploy-vps.sh "$VPS_HOST"
 
       - name: Conferir
@@ -145,6 +146,13 @@ jobs:
             echo "App web no ar em ${WEB_URL%/}"
           fi
           echo "Salinha ${{ steps.version.outputs.version }} no ar em ${PUBLIC_URL%/}"
+
+      # Depois do "Conferir": a versão já está no ar e o endpoint novo também.
+      # O PUT é idempotente e o next.md só é esvaziado depois de gravar.
+      - name: Changelog
+        env:
+          CHANGELOG_TOKEN: ${{ secrets.CHANGELOG_TOKEN }}
+        run: node scripts/publish-changelog.mjs "${{ steps.version.outputs.version }}" changelog/next.md "$PUBLIC_URL"
 
       - name: Limpar chaves
         if: always()
