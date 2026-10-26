@@ -6,9 +6,11 @@ import {
   NAME_EFFECTS,
   NAME_FONTS,
   defaultColorsFor,
+  nameEndPadding,
   nameGraphemes,
   nameStyleCss,
-  resolveNameStyle
+  resolveNameStyle,
+  type NameStyle
 } from './nameStyle'
 
 // Lê as listas de IDs do Go: se alguém adicionar uma fonte/efeito só de um lado, quebra aqui.
@@ -155,6 +157,32 @@ describe('efeitos novos', () => {
     expect(
       nameStyleCss({ font: 'gothic', effect: 'solid', colors: [] }).style.fontFamily
     ).toContain('UnifrakturMaguntia')
+  })
+})
+
+describe('nameEndPadding', () => {
+  const style = (font: string, effect: string, colors: string[] = []): NameStyle =>
+    resolveNameStyle({ font, effect, colors })
+
+  it('nome padrão não ganha espaço (nada muda)', () => {
+    expect(nameEndPadding(style('default', 'solid'))).toEqual({})
+    expect(nameEndPadding(style('default', 'rainbow'))).toEqual({})
+  })
+
+  it('fonte própria ganha espaço no fim: o traço da última letra passa da caixa e o overflow do truncate cortava', () => {
+    expect(nameEndPadding(style('elegant', 'solid'))).toEqual({ paddingInlineEnd: '0.2em' })
+    expect(nameEndPadding(style('gothic', 'gradient', ['#4dc3ff', '#b84dff']))).toEqual({
+      paddingInlineEnd: '0.2em'
+    })
+  })
+
+  it('sombra deslocada para a direita também precisa de espaço', () => {
+    expect(nameEndPadding(style('default', 'pop', ['#ff00ff']))).toEqual({
+      paddingInlineEnd: '0.2em'
+    })
+    expect(nameEndPadding(style('default', 'shadow3d', ['#ffffff', '#ff00ff']))).toEqual({
+      paddingInlineEnd: '0.2em'
+    })
   })
 })
 

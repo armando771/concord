@@ -76,4 +76,19 @@ describe('StyledName', () => {
     )
     expect(html).toContain('--name-steps:5')
   })
+  it('fonte própria deixa espaço no fim do nome (a última letra não é cortada pelo truncate)', () => {
+    const html = renderToStaticMarkup(
+      <StyledName name="Mugis" style={{ font: 'elegant', effect: 'solid', colors: [] }} />
+    )
+    expect(html).toContain('padding-inline-end:0.2em')
+  })
+  it('onda também deixa o espaço no fim', () => {
+    const html = renderToStaticMarkup(
+      <StyledName name="Mugis" style={{ font: 'gothic', effect: 'wave', colors: [] }} />
+    )
+    expect(html).toContain('padding-inline-end:0.2em')
+  })
+  it('nome padrão continua sem espaço extra', () => {
+    expect(renderToStaticMarkup(<StyledName name="Mugis" />)).not.toContain('padding')
+  })
 })
