@@ -13,6 +13,7 @@ export type BadgeUnit =
   | 'servers'
   | 'founder'
   | 'dev'
+  | 'proposals'
 
 export interface BadgeTier {
   tier: number

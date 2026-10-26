@@ -127,6 +127,8 @@ export function statText(b: Badge): string {
       return `Call com até ${plural(value, 'pessoa', 'pessoas')}`
     case 'servers':
       return `Dono de ${plural(value, 'servidor', 'servidores')}`
+    case 'proposals':
+      return value === 1 ? '1 proposta criada' : `${num(value)} propostas criadas`
     case 'founder':
       return value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas'
     case 'dev':
@@ -168,6 +170,8 @@ export function formatThreshold(unit: BadgeUnit, threshold: number): string {
       return plural(threshold, 'pessoa', 'pessoas')
     case 'servers':
       return plural(threshold, 'servidor', 'servidores')
+    case 'proposals':
+      return plural(threshold, 'proposta', 'propostas')
     case 'founder':
       // Corte do backend: contas criadas antes de 01/11/2026.
       return 'Até 31/10/26'
@@ -207,6 +211,8 @@ export function remainingText(b: Badge, now: Date = new Date()): string {
       return `Uma call com ${plural(b.next_threshold, 'pessoa', 'pessoas')}`
     case 'servers':
       return falta(left, 'servidor', 'servidores')
+    case 'proposals':
+      return falta(left, 'proposta', 'propostas')
     case 'founder':
       return 'Só para quem chegou nas primeiras semanas'
     case 'dev':
