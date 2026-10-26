@@ -126,6 +126,11 @@ function nameOf(person: OverlayPerson): string {
   return person.display_name.trim() || person.username.trim() || 'Usuário'
 }
 
+/** Mesmo conteúdo? O bridge só manda ao main (e ao jogo) o que mudou de verdade. */
+export function sameOverlaySnapshot(a: OverlaySnapshot | null, b: OverlaySnapshot): boolean {
+  return a !== null && JSON.stringify(a) === JSON.stringify(b)
+}
+
 export function buildOverlaySnapshot(
   input: OverlayInput,
   maxRows = OVERLAY_MAX_ROWS

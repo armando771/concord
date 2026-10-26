@@ -7,6 +7,7 @@ import {
   OVERLAY_PREFS_VERSION,
   OVERLAY_OPACITY_DEFAULT,
   overlayRowOpacity,
+  sameOverlaySnapshot,
   type OverlayInput
 } from './overlayState'
 import { OVERLAY_DEFAULT_LAYOUT } from './overlayLayout'
@@ -31,6 +32,20 @@ function input(over: Partial<OverlayInput> = {}): OverlayInput {
     ...over
   }
 }
+
+describe('sameOverlaySnapshot', () => {
+  it('igual por conteúdo, não por identidade', () => {
+    expect(sameOverlaySnapshot(buildOverlaySnapshot(input()), buildOverlaySnapshot(input()))).toBe(
+      true
+    )
+  })
+
+  it('muda quando alguém fala ou não há anterior', () => {
+    const a = buildOverlaySnapshot(input())
+    expect(sameOverlaySnapshot(null, a)).toBe(false)
+    expect(sameOverlaySnapshot(a, buildOverlaySnapshot(input({ speakingIds: ['ana'] })))).toBe(false)
+  })
+})
 
 describe('buildOverlaySnapshot', () => {
   it('avatar vira URL absoluta (a janela do overlay não é a origem da API)', () => {
