@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest'
-import { usePinStore } from '../store/pinStore'
+import { selectPins, usePinStore } from '../store/pinStore'
 import type { PinnedMessage, Message } from '../api/messages'
 
 const mockMessage = (id: string, channelId: string, content = 'teste'): PinnedMessage => ({
@@ -69,5 +69,14 @@ describe('pinStore', () => {
     const pins = usePinStore.getState().pinsByChannel['ch1']
     expect(pins[0].content).toBe('Conteúdo editado')
     expect(pins[0].edited_at).toBeTruthy()
+  })
+})
+
+describe('selectPins', () => {
+  it('sem fixadas devolve sempre a mesma referência (senão o zustand entra em loop)', () => {
+    const state = usePinStore.getState()
+    const select = selectPins('canal-sem-pins')
+    expect(select(state)).toEqual([])
+    expect(select(state)).toBe(select(state))
   })
 })

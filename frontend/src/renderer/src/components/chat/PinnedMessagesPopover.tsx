@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { usePinStore } from '../../store/pinStore'
+import { usePinStore, selectPins } from '../../store/pinStore'
 import { PinIcon, XIcon } from '../icons'
 import Avatar from '../Avatar'
 import type { PinnedMessage } from '../../api/messages'
@@ -32,7 +32,7 @@ export default function PinnedMessagesPopover({
   onClose
 }: PinnedMessagesPopoverProps): React.JSX.Element {
   const popoverRef = useRef<HTMLDivElement>(null)
-  const pins = usePinStore((s) => s.pinsByChannel[channelId] ?? [])
+  const pins = usePinStore(selectPins(channelId))
   const loading = usePinStore((s) => s.loadingByChannel[channelId] ?? false)
   const loadPins = usePinStore((s) => s.loadPins)
   const unpin = usePinStore((s) => s.unpin)

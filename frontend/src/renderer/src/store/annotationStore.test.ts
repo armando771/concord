@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAnnotationStore } from './annotationStore'
+import { selectMyStrokeIds, selectStrokes, useAnnotationStore } from './annotationStore'
 import { useChatStore } from './chatStore'
 
 vi.mock('./chatStore', () => ({
@@ -60,7 +60,10 @@ describe('annotationStore', () => {
       tool: 'pen',
       color: '#ef4444',
       width: 4,
-      points: [{ x: 0.1, y: 0.1 }, { x: 0.2, y: 0.2 }]
+      points: [
+        { x: 0.1, y: 0.1 },
+        { x: 0.2, y: 0.2 }
+      ]
     })
 
     const list = useAnnotationStore.getState().strokes['sharer-1']
@@ -161,5 +164,15 @@ describe('annotationStore', () => {
     })
 
     expect(useAnnotationStore.getState().strokes['sharer-1']).toHaveLength(0)
+  })
+})
+
+describe('seletores sem dados', () => {
+  it('devolvem sempre a mesma referência (senão o zustand entra em loop de render)', () => {
+    const state = useAnnotationStore.getState()
+    for (const select of [selectStrokes('ninguem'), selectMyStrokeIds('ninguem')]) {
+      expect(select(state)).toEqual([])
+      expect(select(state)).toBe(select(state))
+    }
   })
 })
