@@ -10,8 +10,14 @@ import {
 } from '../api/calls'
 import { ApiError } from '../api/client'
 import { getAudioStream, getCameraStream, getDisplayStream } from '../lib/rtc'
-import { createChromaKeyPipeline, type ChromaKeyPipeline } from '../lib/chromaKeyPipeline'
-import { chromaKeySettings, useChromaKeyStore } from './chromaKeyStore'
+import {
+  createBackgroundPipeline,
+  type BackgroundEffect,
+  type BackgroundPipeline
+} from '../lib/backgroundPipeline'
+import { needsPipeline, resolveBackgroundEffect, sameBackground } from '../lib/videoBackground'
+import { useVideoSettingsStore } from './videoSettingsStore'
+import { useVideoModalStore } from './videoModalStore'
 import { ScreenShareSetupError } from '../lib/displayMedia'
 import {
   rememberStreamQuality,
@@ -311,7 +317,10 @@ interface CallState {
   startScreenShare: () => Promise<void>
   stopScreenShare: () => void
   updateScreenQuality: (quality: ScreenShareQuality) => void
-  toggleCamera: () => Promise<void>
+  /** `skipPreview`: já passou pela prévia (o botão "Ligar câmera" dela). */
+  toggleCamera: (opts?: { skipPreview?: boolean }) => Promise<void>
+  /** Troca a câmera ('' = padrão); com a câmera ligada, troca ao vivo. */
+  setCameraDevice: (deviceId: string) => Promise<void>
   setFocusedScreenUser: (userId: string | null) => void
   /** Começa a baixar e assistir a transmissão de alguém (e foca nela). */
   watchScreen: (userId: string) => void
@@ -420,10 +429,19 @@ const sendScreenPreview = createPreviewSender({
 
 // Som só da janela compartilhada (Windows), quando o helper nativo captura
 let windowAudio: WindowAudio | null = null
-// Câmera local (não-reativa; o estado reativo é localCameraStream)
+// Câmera local (não-reativa; o estado reativo é localCameraStream): o que é
+// publicado e aparece no tile. Com efeito de fundo é o stream do pipeline.
 let localCameraStream: MediaStream | null = null
-// Pipeline do chroma key da câmera local (null = câmera crua)
-let cameraPipeline: ChromaKeyPipeline | null = null
+// A câmera de verdade (igual a localCameraStream quando não há efeito)
+let cameraRaw: MediaStream | null = null
+// Pipeline do efeito de fundo (null = câmera crua)
+let cameraPipeline: BackgroundPipeline | null = null
+// O modelo do efeito falhou: não tenta de novo até o usuário escolher outro fundo
+let effectUnavailable = false
+// Trocas da câmera (dispositivo, efeito) uma por vez
+let cameraQueue: Promise<void> = Promise.resolve()
+// Publicação da câmera em andamento: trocar o stream antes dela terminar não acharia a track
+let cameraPublish: Promise<void> = Promise.resolve()
 
 /** call:live recentes, reaplicados sobre o polling da lista do servidor. */
 let recentLive: LiveRecord[] = []
@@ -450,7 +468,7 @@ function releaseStream(stream: MediaStream): void {
     .finally(stop)
 }
 
-/** Como releaseStream, mas também encerra o chroma key (e a câmera por trás dele). */
+/** Como releaseStream, mas também encerra o efeito de fundo (e a câmera por trás dele). */
 function releaseCamera(stream: MediaStream): void {
   const pipeline = cameraPipeline
   cameraPipeline = null
@@ -466,6 +484,96 @@ function releaseCamera(stream: MediaStream): void {
     .unpublish(stream)
     .catch(() => {})
     .finally(() => pipeline.destroy())
+}
+
+/** O fundo escolhido, já com a imagem resolvida (lido a cada quadro pelo pipeline). */
+function currentEffect(): BackgroundEffect {
+  const { background, customs } = useVideoSettingsStore.getState()
+  return resolveBackgroundEffect(background, customs)
+}
+
+function wantsEffect(): boolean {
+  const { background, customs } = useVideoSettingsStore.getState()
+  return !effectUnavailable && needsPipeline(background, customs)
+}
+
+/** Cria o pipeline do efeito sobre a câmera; null (e aviso) se não der. */
+function makePipeline(raw: MediaStream): BackgroundPipeline | null {
+  try {
+    return createBackgroundPipeline(raw, currentEffect, undefined, () => void effectFailed())
+  } catch {
+    effectUnavailable = true
+    showToast.error('Não foi possível aplicar o fundo — usando a câmera normal.')
+    return null
+  }
+}
+
+/** Uma troca da câmera por vez; um erro numa não trava as próximas. */
+function enqueueCamera(task: () => Promise<void>): Promise<void> {
+  const run = cameraQueue.then(task, task)
+  cameraQueue = run.catch(() => {})
+  return run
+}
+
+function stopStream(stream: MediaStream | null | undefined): void {
+  stream?.getTracks().forEach((t) => t.stop())
+}
+
+/** Câmera desligada pelo SO/app (ex.: desplugou) desliga a transmissão dela. */
+function watchCameraEnded(raw: MediaStream): void {
+  raw.getVideoTracks().forEach((track) => {
+    track.addEventListener('ended', () => {
+      const { status, toggleCamera } = useCallStore.getState()
+      if (status === 'active' && cameraRaw === raw) void toggleCamera()
+    })
+  })
+}
+
+/** O pipeline não conseguiu o modelo: volta para a câmera crua, com aviso. */
+async function effectFailed(): Promise<void> {
+  effectUnavailable = true
+  showToast.error('Não foi possível aplicar o fundo — usando a câmera normal.')
+  await enqueueCamera(dropEffect)
+}
+
+/** Troca o stream publicado do pipeline pela câmera crua, sem desligar a câmera. */
+async function dropEffect(): Promise<void> {
+  await cameraPublish
+  const pipeline = cameraPipeline
+  if (!pipeline || !cameraRaw) return
+  const raw = pipeline.detach()
+  cameraPipeline = null
+  try {
+    await media?.replaceCamera(raw)
+  } catch {
+    showToast.error('Não foi possível trocar o vídeo da câmera.')
+  }
+  if (cameraRaw !== raw) return
+  localCameraStream = raw
+  useCallStore.setState({ localCameraStream: raw })
+}
+
+/** Liga o efeito sobre a câmera que já está publicada. */
+async function addEffect(): Promise<void> {
+  await cameraPublish
+  const raw = cameraRaw
+  if (!raw || cameraPipeline || !localCameraStream) return
+  const pipeline = makePipeline(raw)
+  if (!pipeline) return
+  try {
+    await media?.replaceCamera(pipeline.stream)
+  } catch {
+    pipeline.detach()
+    showToast.error('Não foi possível aplicar o fundo.')
+    return
+  }
+  if (cameraRaw !== raw) {
+    pipeline.detach()
+    return
+  }
+  cameraPipeline = pipeline
+  localCameraStream = pipeline.stream
+  useCallStore.setState({ localCameraStream: pipeline.stream })
 }
 
 function stopLocalStream(): void {
@@ -968,6 +1076,8 @@ export const useCallStore = create<CallState>()((set, get) => {
     windowAudio = null
     localCameraStream?.getTracks().forEach((t) => t.stop())
     localCameraStream = null
+    cameraRaw?.getTracks().forEach((t) => t.stop())
+    cameraRaw = null
     cameraPipeline?.destroy()
     cameraPipeline = null
     useSoundboardStore.getState().clearActivePlays()
@@ -1564,7 +1674,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       set({ focusedScreenUserId: userId, dmMinimized: false })
     },
 
-    toggleCamera: async () => {
+    toggleCamera: async (opts) => {
       const s = get()
       if (s.type === null || s.status !== 'active' || transitioning) return
 
@@ -1573,6 +1683,7 @@ export const useCallStore = create<CallState>()((set, get) => {
         // o fim pelo evento 'mute' da track remota).
         const stream = localCameraStream
         localCameraStream = null
+        cameraRaw = null
         set({ localCameraStream: null })
         releaseCamera(stream)
         return
@@ -1584,9 +1695,15 @@ export const useCallStore = create<CallState>()((set, get) => {
         return
       }
 
+      // "Sempre ver prévia do vídeo": mostra a prévia antes de abrir a câmera na chamada.
+      if (!opts?.skipPreview && useVideoSettingsStore.getState().alwaysPreview) {
+        useVideoModalStore.getState().openPreview()
+        return
+      }
+
       let stream: MediaStream
       try {
-        stream = await getCameraStream()
+        stream = await getCameraStream(useVideoSettingsStore.getState().cameraId)
       } catch (err) {
         if ((err as DOMException)?.name !== 'NotAllowedError') {
           showToast.error('Não foi possível acessar a câmera.')
@@ -1600,40 +1717,69 @@ export const useCallStore = create<CallState>()((set, get) => {
       }
 
       const rawCamera = stream
-      // Chroma key ligado: o que vai para a prévia e para a sala é o stream
+      // Fundo escolhido: o que vai para a prévia e para a sala é o stream
       // processado. Se o pipeline falhar, segue com a câmera crua.
-      if (useChromaKeyStore.getState().enabled) {
-        try {
-          const pipeline = createChromaKeyPipeline(stream, () =>
-            chromaKeySettings(useChromaKeyStore.getState())
-          )
+      if (wantsEffect()) {
+        const pipeline = makePipeline(rawCamera)
+        if (pipeline) {
           cameraPipeline = pipeline
           stream = pipeline.stream
-        } catch {
-          showToast.error('Não foi possível aplicar o chroma key — usando a câmera normal.')
         }
       }
 
+      cameraRaw = rawCamera
       localCameraStream = stream
       set({ localCameraStream: stream })
+      watchCameraEnded(rawCamera)
 
-      // Câmera desligada pelo SO/app (ex.: fechar a fonte) desliga o share.
-      // (a track da câmera de verdade, não a do canvas do chroma key)
-      rawCamera.getVideoTracks().forEach((track) => {
-        track.addEventListener('ended', () => {
-          if (get().status === 'active' && localCameraStream === stream) {
-            void get().toggleCamera()
-          }
-        })
-      })
-
+      const publishing = Promise.resolve(media?.publishCamera(stream))
+      cameraPublish = publishing.then(
+        () => {},
+        () => {}
+      )
       try {
-        await media?.publishCamera(stream)
+        await publishing
       } catch {
         showToast.error('Não foi possível transmitir a câmera.')
         if (localCameraStream === stream) void get().toggleCamera()
       }
     },
+
+    setCameraDevice: (deviceId) =>
+      enqueueCamera(async () => {
+        const settings = useVideoSettingsStore.getState()
+        const previous = settings.cameraId
+        settings.setCameraId(deviceId)
+        const live = localCameraStream
+        if (!live || get().status !== 'active') return
+        const callId = get().callId
+        let next: MediaStream | null = null
+        try {
+          next = await getCameraStream(deviceId)
+          // A chamada ou a câmera podem ter acabado enquanto o dispositivo abria.
+          if (get().callId !== callId || get().status !== 'active' || localCameraStream !== live) {
+            stopStream(next)
+            return
+          }
+          const old = cameraRaw
+          if (cameraPipeline) {
+            cameraPipeline.setSource(next) // para a câmera antiga
+          } else {
+            await media?.replaceCamera(next)
+            stopStream(old)
+            localCameraStream = next
+            set({ localCameraStream: next })
+          }
+          cameraRaw = next
+          watchCameraEnded(next)
+        } catch (err) {
+          stopStream(next)
+          useVideoSettingsStore.getState().setCameraId(previous)
+          if ((err as DOMException)?.name !== 'NotAllowedError') {
+            showToast.error('Não foi possível usar essa câmera.')
+          }
+        }
+      }),
 
     setServerCalls: (map) => {
       set({ serverCalls: reapplyRecentLive(map, recentLive, Date.now()) })
@@ -2080,18 +2226,30 @@ if (typeof navigator !== 'undefined' && navigator.mediaDevices?.addEventListener
         showToast.info('Saída de áudio desconectada — usando o padrão do sistema.')
         setOutputDevice('')
       }
+      const { cameraId } = useVideoSettingsStore.getState()
+      if (resolveDeviceId(devices, 'videoinput', cameraId) !== cameraId) {
+        showToast.info('Câmera desconectada — usando a padrão do sistema.')
+        void useCallStore.getState().setCameraDevice('')
+      }
     })
   })
 }
 
-// Ligar/desligar o chroma key com a câmera aberta recria a câmera: o stream
-// publicado muda (canvas x câmera crua). Sliders e cores valem ao vivo, sem isso.
-useChromaKeyStore.subscribe((state, prev) => {
-  if (state.enabled === prev.enabled) return
+// Trocar o fundo com a câmera aberta: ligar/desligar o efeito troca o stream
+// publicado (canvas x câmera crua, sem piscar, via replaceTrack). Mudar de
+// imagem ou de desfoque para imagem não precisa: o pipeline lê o fundo a cada quadro.
+useVideoSettingsStore.subscribe((state, prev) => {
+  const changed = !sameBackground(state.background, prev.background)
+  // Um GIF salvo que acabou de carregar do IndexedDB também liga o efeito sem trocar a escolha.
+  const flipped =
+    needsPipeline(state.background, state.customs) !== needsPipeline(prev.background, prev.customs)
+  if (!changed && !flipped) return
+  // Escolheu outro fundo: vale tentar de novo mesmo que o modelo tenha falhado antes.
+  if (changed) effectUnavailable = false
   const call = useCallStore.getState()
   if (!localCameraStream || call.status !== 'active') return
-  void (async () => {
-    await call.toggleCamera()
-    await useCallStore.getState().toggleCamera()
-  })()
+  void enqueueCamera(async () => {
+    if (wantsEffect() && !cameraPipeline) await addEffect()
+    else if (!wantsEffect() && cameraPipeline) await dropEffect()
+  })
 })

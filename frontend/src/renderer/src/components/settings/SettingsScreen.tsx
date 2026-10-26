@@ -18,6 +18,7 @@ import { PrivacySection } from './sections/PrivacySection'
 import { KeybindsSection } from './sections/KeybindsSection'
 import { AppearanceSection } from './sections/AppearanceSection'
 import { AppSection, NotificationsSection, VoiceSection } from './sections/SimpleSections'
+import { VideoSection } from './sections/VideoSection'
 
 const NAV_BG = 'var(--bg-secondary)'
 const CONTENT_BG = 'var(--bg-primary)'
@@ -33,6 +34,7 @@ const SECTION_VIEW: Record<SettingsSectionId, () => React.JSX.Element | null> = 
   privacy: PrivacySection,
   appearance: AppearanceSection,
   voice: VoiceSection,
+  video: VideoSection,
   keybinds: KeybindsSection,
   notifications: NotificationsSection,
   app: AppSection

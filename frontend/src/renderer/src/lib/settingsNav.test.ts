@@ -27,6 +27,17 @@ describe('filterSections', () => {
     expect(ids('aparencia')).toEqual(['appearance'])
   })
 
+  it('"Vídeo" fica logo depois de "Voz e áudio" e acha câmera e fundo', () => {
+    const order = SETTINGS_SECTIONS.map((s) => s.id)
+    expect(order.indexOf('video')).toBe(order.indexOf('voice') + 1)
+    expect(SETTINGS_SECTIONS.find((s) => s.id === 'video')?.label).toBe('Vídeo')
+    expect(ids('webcam')).toEqual(['video'])
+    expect(ids('camera')).toEqual(['video'])
+    expect(ids('desfoque')).toEqual(['video'])
+    expect(ids('borrar')).toEqual(['video'])
+    expect(ids('plano de fundo')).toEqual(['video'])
+  })
+
   it('sem resultado volta vazio', () => {
     expect(ids('xyzzy')).toEqual([])
   })

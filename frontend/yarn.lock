@@ -911,6 +911,11 @@
     lodash "^4.17.15"
     tmp-promise "^3.0.2"
 
+"@mediapipe/tasks-vision@1.1.1":
+  version "1.1.1"
+  resolved "https://registry.yarnpkg.com/@mediapipe/tasks-vision/-/tasks-vision-1.1.1.tgz#9a219124017db10bbeb4aedca86d367a640c555d"
+  integrity sha512-jwntgT5tzDrKOkqg6xNDNpRcTUnGvmylZE5DFnzPXossiWOIDdZX+C81LI75hlXhsG58YZW+lGzcmjH1qrQE/Q==
+
 "@napi-rs/lzma-linux-x64-gnu@1.5.1":
   version "1.5.1"
   resolved "https://registry.yarnpkg.com/@napi-rs/lzma-linux-x64-gnu/-/lzma-linux-x64-gnu-1.5.1.tgz#e57d4306966078662038094fb38eb9146dc3aea9"

@@ -8,7 +8,7 @@ vi.mock('./config', () => ({
 }))
 vi.mock('./noiseSuppression', () => ({ openMicrophone: vi.fn() }))
 
-import { getDisplayStream } from './rtc'
+import { getCameraStream, getDisplayStream } from './rtc'
 import { saveScreenQuality, streamQuality } from './screenShareQuality'
 import { useScreenQualityStore } from '../store/screenQualityStore'
 import { notePickerCancelled } from './screenPickerCancel'
@@ -165,5 +165,55 @@ describe('captura de tela', () => {
       useScreenQualityStore.getState().request!.resolve({ resolution: '1080p', frameRate: 30 })
       await expect(pending).rejects.toMatchObject({ name: 'NotAllowedError' })
     })
+  })
+})
+
+describe('câmera', () => {
+  const getUserMedia = vi.fn()
+  const camStream = (): MediaStream => {
+    const track = { contentHint: '' }
+    return { getVideoTracks: () => [track] } as unknown as MediaStream
+  }
+  beforeEach(() => {
+    getUserMedia.mockReset()
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } })
+  })
+
+  it('sem dispositivo escolhido usa a câmera padrão', async () => {
+    const stream = camStream()
+    getUserMedia.mockResolvedValue(stream)
+    expect(await getCameraStream()).toBe(stream)
+    const { video, audio } = getUserMedia.mock.calls[0][0]
+    expect(audio).toBe(false)
+    expect(video.deviceId).toBeUndefined()
+    expect(stream.getVideoTracks()[0].contentHint).toBe('motion')
+  })
+
+  it('com dispositivo escolhido pede exatamente ele', async () => {
+    getUserMedia.mockResolvedValue(camStream())
+    await getCameraStream('cam-2')
+    expect(getUserMedia.mock.calls[0][0].video.deviceId).toEqual({ exact: 'cam-2' })
+  })
+
+  it('câmera escolhida que sumiu: abre a padrão', async () => {
+    const stream = camStream()
+    getUserMedia
+      .mockRejectedValueOnce(Object.assign(new Error('x'), { name: 'OverconstrainedError' }))
+      .mockResolvedValueOnce(stream)
+    expect(await getCameraStream('cam-sumiu')).toBe(stream)
+    expect(getUserMedia).toHaveBeenCalledTimes(2)
+    expect(getUserMedia.mock.calls[1][0].video.deviceId).toBeUndefined()
+  })
+
+  it('permissão negada não tenta de novo', async () => {
+    getUserMedia.mockRejectedValue(Object.assign(new Error('x'), { name: 'NotAllowedError' }))
+    await expect(getCameraStream('cam-2')).rejects.toMatchObject({ name: 'NotAllowedError' })
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+  })
+
+  it('sem dispositivo escolhido, o erro sobe direto', async () => {
+    getUserMedia.mockRejectedValue(Object.assign(new Error('x'), { name: 'OverconstrainedError' }))
+    await expect(getCameraStream()).rejects.toBeTruthy()
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
   })
 })
