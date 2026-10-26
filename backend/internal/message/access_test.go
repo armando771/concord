@@ -77,6 +77,46 @@ func TestChannelAccess(t *testing.T) {
 	}
 }
 
+// O chat do canal de voz usa as mesmas rotas e regras do canal de texto: lê
+// quem vê o canal (mesmo sem conectar) e escreve quem pode enviar.
+func TestVoiceChannelChatAccess(t *testing.T) {
+	snap := accessSnapshot().
+		WithChannel("call", permission.ChannelVoice).
+		WithChannel("call-mudo", permission.ChannelVoice,
+			permission.Overwrite{TargetType: permission.TargetRole, TargetID: "everyone", Deny: permission.SendMessages},
+		).
+		WithChannel("call-sem-entrar", permission.ChannelVoice,
+			permission.Overwrite{TargetType: permission.TargetRole, TargetID: "everyone", Deny: permission.Connect},
+		).
+		WithChannel("call-privada", permission.ChannelVoice,
+			permission.Overwrite{TargetType: permission.TargetRole, TargetID: "everyone", Deny: permission.ViewChannel},
+		)
+	perms := newSnapPerms(snap)
+	ctx := context.Background()
+	read := permission.ViewChannel | permission.ReadHistory
+	write := permission.ViewChannel | permission.SendMessages | permission.AttachFiles
+
+	cases := []struct {
+		name    string
+		channel string
+		want    int64
+		err     error
+	}{
+		{"membro lê o chat da call", "call", read, nil},
+		{"membro escreve no chat da call", "call", write, nil},
+		{"sem enviar no canal de voz, só lê", "call-mudo", write, ErrNoRoomAccess},
+		{"sem conectar ainda lê o chat", "call-sem-entrar", read, nil},
+		{"sem conectar ainda escreve no chat", "call-sem-entrar", write, nil},
+		{"canal de voz privado: não acha o chat", "call-privada", read, ErrRoomNotFound},
+	}
+	for _, tc := range cases {
+		err := channelAccess(ctx, perms, tc.channel, "ana", tc.want)
+		if !errors.Is(err, tc.err) {
+			t.Errorf("%s: err = %v, want %v", tc.name, err, tc.err)
+		}
+	}
+}
+
 func TestCanModerateMessages(t *testing.T) {
 	// Quem apaga: o autor, ou quem tem MANAGE_MESSAGES no canal.
 	snap := accessSnapshot()

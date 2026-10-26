@@ -169,17 +169,23 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   }
 ]
 
-/** Os grupos de permissão que valem para um tipo de canal (editor de sobrescritas). */
+const groupTitled = (title: string): PermissionGroup =>
+  PERMISSION_GROUPS.find((g) => g.title === title) ?? { title, permissions: [] }
+
+/**
+ * Os grupos de permissão que valem para um tipo de canal (editor de
+ * sobrescritas). O canal de voz tem chat próprio: leva também as de texto.
+ */
 export function channelPermissionGroups(kind: ChannelKind): PermissionGroup[] {
-  const groups: PermissionGroup[] = [
-    {
-      title: 'Geral',
-      permissions: PERMISSION_GROUPS[0].permissions.filter((p) => p.name === 'VIEW_CHANNEL')
-    }
+  const general: PermissionGroup = {
+    title: 'Geral',
+    permissions: PERMISSION_GROUPS[0].permissions.filter((p) => p.name === 'VIEW_CHANNEL')
+  }
+  const text = groupTitled('Canais de texto')
+  if (kind === 'text') return [general, text]
+  return [
+    general,
+    groupTitled('Canais de voz'),
+    { title: 'Chat do canal de voz', permissions: text.permissions }
   ]
-  const specific = PERMISSION_GROUPS.find((g) =>
-    kind === 'text' ? g.title === 'Canais de texto' : g.title === 'Canais de voz'
-  )
-  if (specific) groups.push(specific)
-  return groups
 }

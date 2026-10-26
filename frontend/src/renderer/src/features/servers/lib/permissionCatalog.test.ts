@@ -20,6 +20,14 @@ describe('catálogo de permissões', () => {
     expect(text).not.toContain('SPEAK')
     expect(voice).toContain('SPEAK')
     expect(voice).toContain('CONNECT')
-    expect(voice).not.toContain('SEND_MESSAGES')
+    // O canal de voz tem chat próprio: as permissões de texto valem nele também.
+    expect(voice).toContain('SEND_MESSAGES')
+    expect(voice).toContain('READ_MESSAGE_HISTORY')
+  })
+
+  it('no canal de voz, as permissões do chat vêm num grupo próprio', () => {
+    const titles = channelPermissionGroups('voice').map((g) => g.title)
+    expect(titles).toEqual(['Geral', 'Canais de voz', 'Chat do canal de voz'])
+    expect(channelPermissionGroups('text').map((g) => g.title)).toEqual(['Geral', 'Canais de texto'])
   })
 })
