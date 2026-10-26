@@ -25,6 +25,7 @@ import ScreenWatchersOverlay from './ScreenWatchersOverlay'
 import ScreenAnnotationCanvas from './ScreenAnnotationCanvas'
 import ScreenAnnotationToolbar from './ScreenAnnotationToolbar'
 import StyledName from '../StyledName'
+import CallActivityBadge from './CallActivityBadge'
 
 export function VideoFill({
   stream,
@@ -349,6 +350,7 @@ function ParticipantTile({
         <span className="truncate text-xs font-semibold text-white">
           <StyledName name={user.display_name} userId={user.id} style={user.name_style} />
         </span>
+        {!isScreen && <CallActivityBadge userId={user.id} className="h-3.5 w-3.5" />}
         {isMaestroIdentity(user.id) && (
           <span className="rounded bg-violet-400/30 px-1 text-[9px] font-bold uppercase text-violet-100">
             {T18.tag}
