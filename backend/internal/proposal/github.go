@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -219,19 +220,105 @@ func (g *GitHubClient) UpdateIssue(ctx context.Context, number int, state string
 	return err == nil, err
 }
 
+const (
+	// issueMaxComments e issueCommentLen limitam a discussão que vai no corpo da issue.
+	issueMaxComments = 10
+	issueCommentLen  = 300
+)
+
+// brt: as datas da issue saem no horário de Brasília (sem horário de verão).
+var brt = time.FixedZone("BRT", -3*60*60)
+
+var (
+	issueMention = regexp.MustCompile(`@([A-Za-z0-9_-])`)
+	issueHTMLTag = regexp.MustCompile(`(?i)</?(details|summary)\b[^>]*>`)
+)
+
+// issueText deixa o texto vindo do app seguro para o corpo da issue: o @ ganha
+// um caractere invisível (não notifica quem tem o mesmo login no GitHub) e as
+// tags de <details> coladas pela pessoa não quebram o bloco da discussão.
+func issueText(s string) string {
+	s = issueHTMLTag.ReplaceAllString(s, "")
+	return issueMention.ReplaceAllString(s, "@\u200b$1")
+}
+
+func issueDate(t time.Time) string { return t.In(brt).Format("02/01/2006") }
+
+// issueCell tira o que quebra uma célula de tabela markdown.
+func issueCell(s string) string {
+	return strings.NewReplacer("|", `\|`, "\n", " ", "\r", " ").Replace(strings.TrimSpace(s))
+}
+
+// issueResult: como a votação acabou (prazo ou movida pelo time tech).
+func issueResult(p Proposal) string {
+	when := ""
+	if p.ClosedAt != nil {
+		when = " em " + issueDate(*p.ClosedAt)
+	}
+	if p.CloseReason != nil && *p.CloseReason == CloseManual {
+		if p.ClosedByName != nil && *p.ClosedByName != "" {
+			return "Movida pelo time (" + issueCell(issueText(*p.ClosedByName)) + ")" + when
+		}
+		return "Movida pelo time" + when
+	}
+	return "Prazo da votação encerrado" + when
+}
+
+func issueDiscussion(comments []Comment) string {
+	if len(comments) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "\n\n<details>\n<summary>Discussão no card (%d)</summary>\n", len(comments))
+	for i, c := range comments {
+		if i == issueMaxComments {
+			fmt.Fprintf(&b, "\n_…e mais %d comentários no card._\n", len(comments)-issueMaxComments)
+			break
+		}
+		body := strings.TrimSpace(issueText(c.Body))
+		if r := []rune(body); len(r) > issueCommentLen {
+			body = string(r[:issueCommentLen]) + "…"
+		}
+		if n := len(c.Attachments); n > 0 {
+			body = strings.TrimSpace(body + fmt.Sprintf(" [%d anexo(s)]", n))
+		}
+		fmt.Fprintf(&b, "\n**%s** (%s):\n> %s\n", issueCell(issueText(c.AuthorName)), issueDate(c.CreatedAt),
+			strings.ReplaceAll(body, "\n", "\n> "))
+	}
+	b.WriteString("\n</details>")
+	return b.String()
+}
+
+// issueBody é o corpo da issue: descrição e imagens do card, um resumo (autor,
+// datas, votação, como acabou) e a discussão dos comentários.
 func issueBody(p Proposal, publicURL string) string {
-	desc := strings.TrimSpace(p.Description)
+	desc := strings.TrimSpace(issueText(p.Description))
 	if desc == "" {
 		desc = "_Sem descrição._"
 	}
-	var images strings.Builder
+	var b strings.Builder
+	b.WriteString(desc)
 	if publicURL != "" {
 		for i, img := range p.Images {
-			fmt.Fprintf(&images, "\n\n![Imagem %d](%s%s)", i+1, publicURL, img.URL)
+			fmt.Fprintf(&b, "\n\n![Imagem %d](%s%s)", i+1, publicURL, img.URL)
 		}
 	}
-	return fmt.Sprintf(
-		"%s%s\n\n---\nProposta de **%s**, aprovada na votação da comunidade: %d sim, %d não.",
-		desc, images.String(), p.AuthorName, p.YesVotes, p.NoVotes,
-	)
+
+	votes := fmt.Sprintf("%d sim, %d não", p.YesVotes, p.NoVotes)
+	if total := p.YesVotes + p.NoVotes; total > 0 {
+		votes += fmt.Sprintf(" (%d%% a favor)", p.YesVotes*100/total)
+	}
+	b.WriteString("\n\n## Sobre a proposta\n\n| | |\n|---|---|\n")
+	fmt.Fprintf(&b, "| Autor | %s |\n", issueCell(issueText(p.AuthorName)))
+	fmt.Fprintf(&b, "| Aberta em | %s |\n", issueDate(p.CreatedAt))
+	fmt.Fprintf(&b, "| Votação | %s |\n", votes)
+	fmt.Fprintf(&b, "| Resultado | %s |\n", issueResult(p))
+	fmt.Fprintf(&b, "| Comentários | %d |", p.CommentCount)
+	if p.EditedAt != nil {
+		fmt.Fprintf(&b, "\n| Editada em | %s |", issueDate(*p.EditedAt))
+	}
+
+	b.WriteString(issueDiscussion(p.Comments))
+	b.WriteString("\n\n---\nCriada automaticamente a partir de uma proposta da comunidade.")
+	return b.String()
 }

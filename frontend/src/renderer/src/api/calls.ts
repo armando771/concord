@@ -44,9 +44,17 @@ export interface CallStateResponse {
   /** Atividade aberta na chamada (só vem para quem está nela). */
   activity?: RawCallActivity | null
   /** Lista de quem assiste cada tela (sharer_id -> espectadores) */
-  screen_watchers?: Record<string, { id: string; username: string; display_name: string; avatar_url?: string | null }[]>
+  screen_watchers?: Record<
+    string,
+    { id: string; username: string; display_name: string; avatar_url?: string | null }[]
+  >
   /** pedidos para entrar na sala trancada (só no estado visto por participantes) */
-  join_requests?: { id: string; username: string; display_name: string; avatar_url?: string | null }[]
+  join_requests?: {
+    id: string
+    username: string
+    display_name: string
+    avatar_url?: string | null
+  }[]
 }
 
 /** Resposta 423 do POST /calls: a sala do canal está trancada. */
@@ -112,4 +120,22 @@ export function setServerDeafen(callId: string, userId: string, deafened: boolea
 /** Tira alguém da chamada (MOVE_MEMBERS). */
 export function disconnectParticipant(callId: string, userId: string): Promise<void> {
   return request<void>(`/calls/${callId}/participants/${userId}`, { method: 'DELETE' })
+}
+
+/** Miniatura da transmissão (base64 do JPEG); image null = pedida, ainda não chegou. */
+export function getScreenPreview(
+  callId: string,
+  userId: string
+): Promise<{ image: string | null }> {
+  return request<{ image: string | null }>(
+    `/calls/${encodeURIComponent(callId)}/screen-preview/${encodeURIComponent(userId)}`
+  )
+}
+
+/** Quem transmite manda a miniatura pedida pelo servidor (base64 do JPEG). */
+export function putScreenPreview(callId: string, image: string): Promise<void> {
+  return request<void>(`/calls/${encodeURIComponent(callId)}/screen-preview`, {
+    method: 'PUT',
+    body: JSON.stringify({ image })
+  })
 }

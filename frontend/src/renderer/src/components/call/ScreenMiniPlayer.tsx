@@ -164,7 +164,7 @@ function ScreenMiniPlayer(): React.JSX.Element | null {
       <VideoFill stream={screenStreams[id]} fit="contain" />
       <div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-danger-strong px-1.5 py-0.5">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-        <span className="text-[10px] font-bold uppercase tracking-wide text-strong">Ao vivo</span>
+        <span className="text-[10px] font-bold uppercase tracking-wide text-white">Ao vivo</span>
       </div>
       <button
         // O X não começa arrasto nem conta como clique de voltar à call.

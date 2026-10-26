@@ -5,6 +5,7 @@ import {
   endCall as endCallApi,
   getCallState,
   getCallToken,
+  putScreenPreview,
   type CallStateResponse
 } from '../api/calls'
 import { ApiError } from '../api/client'
@@ -24,6 +25,8 @@ import { LIVEKIT_URL } from '../lib/config'
 import { retry } from '../lib/retry'
 import { micBlockReason, streamBlockReason } from '../lib/voicePermissions'
 import { addWatched, miniPlayerOnly, pruneWatched, resolveFocus } from '../lib/screenWatch'
+import { createPreviewSender } from '../lib/screenPreviewFlow'
+import { captureScreenPreview } from '../lib/screenSnapshot'
 import {
   applyLiveEvent,
   LIVE_GRACE_MS,
@@ -371,6 +374,12 @@ async function runScreenQualityQueue(): Promise<void> {
   }
 }
 
+/** Foto da própria tela para a prévia no cartão de perfil, só quando o servidor pede. */
+const sendScreenPreview = createPreviewSender({
+  capture: captureScreenPreview,
+  upload: putScreenPreview
+})
+
 // Som só da janela compartilhada (Windows), quando o helper nativo captura
 let windowAudio: WindowAudio | null = null
 // Câmera local (não-reativa; o estado reativo é localCameraStream)
@@ -636,7 +645,8 @@ export const useCallStore = create<CallState>()((set, get) => {
               ...joinReqs.filter((r) => !s.joinRequests.some((q) => q.id === r.id))
             ],
         screenSharers: sharing,
-        screenWatchers: (state.screen_watchers as Record<string, CallUserInfo[]>) ?? s.screenWatchers,
+        screenWatchers:
+          (state.screen_watchers as Record<string, CallUserInfo[]>) ?? s.screenWatchers,
         voiceStates: {
           ...Object.fromEntries(
             state.participants.map((p) => [
@@ -1609,6 +1619,15 @@ export const useCallStore = create<CallState>()((set, get) => {
           return
         }
 
+        case 'call:screen_preview_request': {
+          // Alguém abriu meu cartão de perfil: manda uma foto pequena da tela.
+          const p = payload as unknown as { call_id: string }
+          const stream = localScreenStream
+          if (!stream || get().callId !== p.call_id || !get().isScreenSharing) return
+          void sendScreenPreview(p.call_id, stream)
+          return
+        }
+
         case 'call:screen_draw':
         case 'call:screen_draw_clear':
         case 'call:screen_draw_undo': {
@@ -1840,12 +1859,7 @@ export const useCallStore = create<CallState>()((set, get) => {
 
 // Atividades seguem a chamada atual: sair/trocar de chamada fecha o jogo aqui.
 useCallStore.subscribe((s) => {
-  useActivityStore
-    .getState()
-    .setCall(
-      s.status === 'idle' ? null : s.callId,
-      voiceServerId(s)
-    )
+  useActivityStore.getState().setCall(s.status === 'idle' ? null : s.callId, voiceServerId(s))
 })
 
 // Os efeitos sonoros saem no mesmo dispositivo escolhido para as vozes.

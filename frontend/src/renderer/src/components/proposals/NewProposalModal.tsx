@@ -209,7 +209,6 @@ function NewProposalModal({
       open={open}
       title={proposal ? 'Editar proposta' : 'Propor uma melhoria'}
       onClose={onClose}
-      solid
     >
       <ProposalForm onClose={onClose} proposal={proposal} />
     </Modal>

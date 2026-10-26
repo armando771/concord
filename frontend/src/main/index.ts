@@ -20,7 +20,7 @@ import { setupOverlay } from './overlay'
 import { setupGlobalKeybinds } from './globalKeybinds'
 import { setupGames } from './games'
 import { setupAppMetrics } from './appMetrics'
-import { handleInviteArgs, setupInviteProtocol } from './inviteProtocol'
+import { handleInviteArgs, handleInviteUrl, setupInviteProtocol } from './inviteProtocol'
 import { closeActivity, setupActivities } from './activityWindow'
 import { APP_USER_MODEL_ID } from './toastPolicy'
 import { setupToasts } from './toasts'
@@ -209,7 +209,9 @@ function createWindow(): void {
 
   // Link do chat (target="_blank") abre no navegador de fora. Só http/https:
   // o openExternal abriria qualquer esquema (file:, smb:, ms-settings:…).
+  // Link de convite nosso abre a confirmação aqui mesmo, não o navegador.
   mainWindow.webContents.setWindowOpenHandler((details) => {
+    if (handleInviteUrl(details.url, () => mainWindow)) return { action: 'deny' }
     if (isSafeExternalUrl(details.url)) void shell.openExternal(details.url)
     return { action: 'deny' }
   })
@@ -227,6 +229,7 @@ function createWindow(): void {
         label: item.label,
         click: () => {
           if (item.action === 'copyLink') clipboard.writeText(url)
+          else if (handleInviteUrl(url, () => mainWindow)) return
           else if (isSafeExternalUrl(url)) void shell.openExternal(url)
         }
       }

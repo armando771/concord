@@ -59,7 +59,7 @@ function ProposalDetailModal({
 
   return (
     <>
-      <Modal open title={p.title} onClose={onClose} xl solid>
+      <Modal open title={p.title} onClose={onClose} xl>
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <div className="flex min-w-0 flex-col gap-5">
             <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">

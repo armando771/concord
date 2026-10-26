@@ -21,7 +21,7 @@ function ConfirmTakeoverModal({
 }): React.JSX.Element {
   const assignee = proposal.assignee
   return (
-    <Modal open title="Tirar a tarefa do colega?" onClose={onCancel} solid>
+    <Modal open title="Tirar a tarefa do colega?" onClose={onCancel}>
       <div className="flex flex-col gap-4">
         {assignee && (
           <div className="flex items-center gap-3 rounded-lg border border-subtle bg-fg/4 px-3 py-2">

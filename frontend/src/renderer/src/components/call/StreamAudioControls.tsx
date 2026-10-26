@@ -41,15 +41,16 @@ export function StreamVolume({ userId }: { userId: string }): React.JSX.Element 
 }
 
 /**
- * Barra que aparece ao passar o mouse na live de alguém: mutar e volume da
- * transmissão só para você (os outros continuam ouvindo normalmente) e, no
- * canto, o botão de tela cheia. O pai precisa da classe `group/tile`.
+ * Barra que aparece ao passar o mouse no vídeo: mutar e volume da transmissão
+ * só para você (os outros continuam ouvindo normalmente; só na live de alguém)
+ * e, no canto, o botão de tela cheia. O pai precisa da classe `group/tile`.
  */
 function StreamAudioControls({
   userId,
   onToggleFullscreen
 }: {
-  userId: string
+  /** Sem id (câmera): não há volume de transmissão, só a tela cheia. */
+  userId?: string
   /** Presente = mostra o botão "Tela cheia" no canto inferior direito. */
   onToggleFullscreen?: () => void
 }): React.JSX.Element {
@@ -66,7 +67,7 @@ function StreamAudioControls({
       onDoubleClick={(e) => e.stopPropagation()}
       className="absolute bottom-2 right-2 z-20 flex items-center gap-2 rounded-lg bg-black/70 px-2 py-1 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover/tile:opacity-100 on-media"
     >
-      <StreamVolume userId={userId} />
+      {userId && <StreamVolume userId={userId} />}
       {onToggleFullscreen && (
         <button
           type="button"

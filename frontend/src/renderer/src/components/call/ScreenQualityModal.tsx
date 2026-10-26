@@ -44,7 +44,7 @@ function QualityDialog({
         tabIndex={-1}
         aria-modal="true"
         aria-labelledby="screen-quality-title"
-        className="glass-card w-full max-w-xl p-6"
+        className="rounded-2xl border border-subtle bg-modal shadow-2xl shadow-black/70 w-full max-w-xl p-6"
       >
         <h2 id="screen-quality-title" className="text-xl font-bold text-strong">
           Compartilhe sua tela
