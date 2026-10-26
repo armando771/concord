@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { logoutAndReset } from '../../profile/store/meActions'
 import {
-  SETTINGS_GROUPS,
   SETTINGS_SECTIONS,
+  accountName,
+  currentSettingsSection,
   filterSections,
   type SettingsSectionId
 } from '../lib/settingsNav'
 import { IS_WEB } from '../../../shared/lib/config'
-import Avatar from '../../../shared/ui/Avatar'
-import { PencilIcon, SearchIcon, XIcon } from '../../../shared/ui/icons'
+import SettingsShell from '../../../shared/ui/SettingsShell'
+import SettingsNav from './SettingsNav'
 import MyAccountSection from './sections/MyAccountSection'
 import ProfilesPage from './sections/ProfilesPage'
 import { PrivacySection } from './sections/PrivacySection'
@@ -20,8 +20,6 @@ import { AppearanceSection } from './sections/AppearanceSection'
 import { AppSection, NotificationsSection, VoiceSection } from './sections/SimpleSections'
 import { VideoSection } from './sections/VideoSection'
 
-const NAV_BG = 'var(--bg-secondary)'
-const CONTENT_BG = 'var(--bg-primary)'
 
 // "Aplicativo" (iniciar com o sistema, overlay) só existe no desktop; no dev
 // fica por causa da prévia da animação de nível.
@@ -70,9 +68,9 @@ function SettingsContent(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey)
   }, [close])
 
-  const current = SECTIONS.find((s) => s.id === section) ?? SECTIONS[0]
+  const current = currentSettingsSection(SECTIONS, section)
   const View = SECTION_VIEW[current.id]
-  const name = user?.display_name || user?.username || ''
+  const name = accountName(user)
 
   const logout = async (): Promise<void> => {
     setLoggingOut(true)
@@ -80,115 +78,30 @@ function SettingsContent(): React.JSX.Element {
     setLoggingOut(false)
   }
 
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Configurações"
-      className="app-no-drag fixed inset-x-0 bottom-0 z-50 flex text-gray-200"
-      style={{ top: 'var(--titlebar-height, 0px)', background: CONTENT_BG }}
+  return (
+    <SettingsShell
+      ariaLabel="Configurações"
+      title={current.label}
+      titleClassName="text-ds-lg font-semibold text-strong"
+      contentClassName="max-w-[740px]"
+      closeLabel="Fechar configurações"
+      onClose={close}
+      nav={
+        <SettingsNav
+          user={user}
+          name={name}
+          query={query}
+          onQuery={setQuery}
+          visible={visible}
+          currentId={current.id}
+          onGo={goTo}
+          loggingOut={loggingOut}
+          onLogout={() => void logout()}
+        />
+      }
     >
-      {/* Navegação */}
-      <aside
-        className="flex w-[260px] shrink-0 flex-col border-r border-subtle"
-        style={{ background: NAV_BG }}
-      >
-        <button
-          type="button"
-          onClick={() => goTo('profiles')}
-          className="m-3 flex cursor-pointer items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-fg/5"
-        >
-          <Avatar
-            userId={user?.id}
-            name={name}
-            avatarUrl={user?.avatar_url}
-            size={40}
-            animate="always"
-          />
-          <span className="min-w-0">
-            <span className="block truncate text-ds-md font-medium text-strong">{name}</span>
-            <span className="flex items-center gap-1 text-xs text-gray-400">
-              Editar perfis <PencilIcon className="h-3 w-3" />
-            </span>
-          </span>
-        </button>
-
-        <label className="mx-3 mb-3 flex items-center gap-2 rounded-lg border border-subtle bg-input px-3 py-2 focus-within:border-brand">
-          <SearchIcon className="h-4 w-4 shrink-0 text-gray-400" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar"
-            aria-label="Buscar nas configurações"
-            className="min-w-0 flex-1 bg-transparent text-ds-md text-strong placeholder:text-gray-500 focus:outline-none"
-          />
-        </label>
-
-        <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
-          {SETTINGS_GROUPS.map((group) => {
-            const items = visible.filter((s) => s.group === group.id)
-            if (items.length === 0) return null
-            return (
-              <div key={group.id} className="mb-4">
-                <p className="mb-1 px-2 text-ds-sm font-medium text-gray-500">{group.label}</p>
-                {items.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => goTo(item.id)}
-                    aria-current={item.id === current.id ? 'page' : undefined}
-                    className={`mb-0.5 block w-full cursor-pointer rounded-md px-2 py-1.5 text-left text-ds-md font-medium transition-colors ${
-                      item.id === current.id
-                        ? 'bg-fg/10 text-strong'
-                        : 'text-gray-400 hover:bg-fg/5 hover:text-gray-200'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            )
-          })}
-          {visible.length === 0 && (
-            <p className="px-2 text-ds-md text-gray-500">Nada encontrado para “{query}”.</p>
-          )}
-
-          <div className="mt-2 border-t border-subtle pt-2">
-            <button
-              type="button"
-              onClick={() => void logout()}
-              disabled={loggingOut}
-              className="block w-full cursor-pointer rounded-md px-2 py-1.5 text-left text-ds-md font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
-            >
-              {loggingOut ? 'Saindo...' : 'Sair'}
-            </button>
-          </div>
-        </nav>
-      </aside>
-
-      {/* Conteúdo */}
-      <main className="relative min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[740px] px-10 pb-28 pt-14">
-          <h1 className="mb-6 text-ds-lg font-semibold text-strong">{current.label}</h1>
-          <View />
-        </div>
-        <div
-          className="fixed right-8 flex flex-col items-center gap-1"
-          style={{ top: 'calc(var(--titlebar-height, 0px) + 56px)' }}
-        >
-          <button
-            type="button"
-            onClick={close}
-            aria-label="Fechar configurações"
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-2 border-gray-500 text-gray-400 transition-colors hover:border-[var(--text-strong)] hover:text-strong"
-          >
-            <XIcon className="h-4 w-4" />
-          </button>
-          <span className="text-[11px] font-bold text-gray-500">ESC</span>
-        </div>
-      </main>
-    </div>,
-    document.body
+      <View />
+    </SettingsShell>
   )
 }
 

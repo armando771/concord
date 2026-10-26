@@ -4,6 +4,7 @@ import type { OverlaySnapshot } from '../renderer/src/features/overlay/lib/overl
 import type { OverlayFrame, OverlayLayout } from '../renderer/src/features/overlay/lib/overlayLayout'
 import type { CallResume, PendingCallResume } from '../shared/callResume'
 import type { AppMetrics } from '../shared/appMetrics'
+import type { PerfEvent } from '../shared/perfLog'
 import { screenShareFlow, type PortalStatus } from '../shared/screenShareFlow'
 
 interface ScreenSourceInfo {
@@ -19,6 +20,15 @@ const api = {
   appMetrics: {
     sample(reset = false): Promise<AppMetrics | null> {
       return ipcRenderer.invoke('app-metrics:sample', reset)
+    }
+  },
+  perf: {
+    /** O main responde true só quando o app foi aberto com --perf-log. */
+    enabled(): Promise<boolean> {
+      return ipcRenderer.invoke('perf:enabled')
+    },
+    report(event: PerfEvent): void {
+      ipcRenderer.send('perf:report', event)
     }
   },
   windowTheme: {
@@ -56,6 +66,10 @@ const api = {
       const listener = (): void => cb()
       ipcRenderer.on('screen-share:window-hidden', listener)
       return () => ipcRenderer.removeListener('screen-share:window-hidden', listener)
+    },
+    /** Acha a janela do jogo; id da fonte = o próximo compartilhamento a usa, sem o modal. */
+    preferGameWindow(gameName: string): Promise<string | null> {
+      return ipcRenderer.invoke('screen-share:prefer-game', gameName)
     },
     /** O compartilhamento acabou: para de vigiar a janela. */
     ended(): void {

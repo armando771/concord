@@ -20,7 +20,7 @@ import {
   SignalIcon,
   SoundboardIcon
 } from '../../../shared/ui/icons'
-import GameIcon from '../../activity/components/GameIcon'
+import GameIcon from '../../activity/components/ActiveGameIcon'
 import ActivityPickerPopover from './ActivityPickerPopover'
 import NoiseSuppressionPopover from './NoiseSuppressionPopover'
 import ConnectionStatsPopover from './ConnectionStatsPopover'

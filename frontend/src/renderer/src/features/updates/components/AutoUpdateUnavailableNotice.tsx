@@ -39,7 +39,7 @@ function AutoUpdateUnavailableNotice(): React.JSX.Element | null {
   return (
     <div
       role="status"
-      className="fixed bottom-4 left-4 z-50 w-80 rounded-xl border border-amber-400/40 bg-floating p-4 shadow-2xl backdrop-blur"
+      className="pointer-events-auto w-full rounded-xl border border-amber-400/40 bg-floating p-4 shadow-2xl backdrop-blur"
     >
       <p className="text-sm font-semibold text-strong">
         Atualização automática indisponível nesta instalação
