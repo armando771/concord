@@ -1,5 +1,5 @@
 /**
- * Âncora de rolagem do "Carregar mensagens anteriores": a mensagem que era a
+ * Âncora de rolagem das páginas antigas (scroll infinito): a mensagem que era a
  * primeira da lista fica no mesmo lugar da tela depois que a página antiga
  * entra em cima dela.
  *
@@ -57,6 +57,56 @@ export function olderPagePrepended(
   candidates: AnchorCandidate[]
 ): boolean {
   return firstId !== undefined && !candidates.some((c) => c.id === firstId)
+}
+
+/** Reservas da âncora do loadOlder (a primeira e as seguintes). */
+export const ANCHOR_CANDIDATES = 20
+
+/**
+ * As primeiras mensagens da lista que estão desenhadas, com a posição de
+ * cada uma no conteúdo: a primeira é a âncora, as seguintes, reservas.
+ */
+export function anchorCandidates(
+  ids: string[],
+  offsetOf: (id: string) => number | null,
+  max = ANCHOR_CANDIDATES
+): AnchorCandidate[] {
+  const candidates: AnchorCandidate[] = []
+  for (const id of ids.slice(0, max)) {
+    const offset = offsetOf(id)
+    if (offset !== null) candidates.push({ id, offset })
+  }
+  return candidates
+}
+
+/** Âncora guardada antes de carregar a página antiga de uma sala. */
+export interface OlderAnchor {
+  room: string
+  candidates: AnchorCandidate[]
+}
+
+/**
+ * Depois de uma mudança na lista: a âncora que continua guardada e o novo
+ * scrollTop (null: não mexe). Só gasta a âncora quando a página antiga entrou
+ * em cima; mensagem ao vivo embaixo (ou a de cima apagada) não conta.
+ */
+export function restoreOlderAnchor(input: {
+  anchor: OlderAnchor | null
+  room: string
+  firstId: string | undefined
+  scrollTop: number
+  /** Posição da mensagem no conteúdo; null se ela não está desenhada. */
+  offsetOf: (id: string) => number | null
+}): { anchor: OlderAnchor | null; scrollTop: number | null } {
+  const { anchor } = input
+  if (!anchor || !olderPagePrepended(input.firstId, anchor.candidates)) {
+    return { anchor, scrollTop: null }
+  }
+  if (anchor.room !== input.room) return { anchor: null, scrollTop: null }
+  const kept = pickAnchor(anchor.candidates, (id) => input.offsetOf(id) !== null)
+  if (!kept) return { anchor: null, scrollTop: null }
+  const current = input.offsetOf(kept.id) ?? kept.offset
+  return { anchor: null, scrollTop: anchoredScrollTop(input.scrollTop, kept.offset, current) }
 }
 
 /**
