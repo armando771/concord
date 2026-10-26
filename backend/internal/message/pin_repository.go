@@ -5,6 +5,8 @@ import (
 	"errors"
 	"time"
 
+	"gin-quickstart/backend/internal/namestyle"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -14,12 +16,13 @@ var (
 
 const MaxPinnedMessagesPerChannel = 50
 
-const pinnedMessageColumns = `
+var pinnedMessageColumns = `
 	m.id,
 	m.author_id,
 	u.username,
 	u.display_name,
 	u.avatar_url,
+	` + namestyle.Expr("u") + `,
 	m.channel_id,
 	m.conversation_id,
 	m.reply_to_id,
@@ -33,6 +36,7 @@ const pinnedMessageColumns = `
 	ru.username,
 	ru.display_name,
 	ru.avatar_url,
+	` + namestyle.Expr("ru") + `,
 	rm.content,
 	cpm.pinned_at,
 	cpm.pinned_by,
@@ -203,6 +207,7 @@ func scanPinnedRows(source interface{}) ([]PinnedMessage, error) {
 		pin.Author = &Author{}
 		var replyID, replyAuthorID, replyUsername, replyDisplayName, replyContent *string
 		var replyAvatarURL *string
+		var replyStyle namestyle.Style
 		var pinnedByID, pinnedByUsername, pinnedByDisplayName, pinnedByAvatarURL *string
 
 		if err := s.Scan(
@@ -211,6 +216,7 @@ func scanPinnedRows(source interface{}) ([]PinnedMessage, error) {
 			&pin.Author.Username,
 			&pin.Author.DisplayName,
 			&pin.Author.AvatarURL,
+			&pin.Author.NameStyle,
 			&pin.ChannelID,
 			&pin.ConversationID,
 			&pin.ReplyToID,
@@ -224,6 +230,7 @@ func scanPinnedRows(source interface{}) ([]PinnedMessage, error) {
 			&replyUsername,
 			&replyDisplayName,
 			&replyAvatarURL,
+			&replyStyle,
 			&replyContent,
 			&pin.PinnedAt,
 			&pinnedByID,
@@ -245,6 +252,7 @@ func scanPinnedRows(source interface{}) ([]PinnedMessage, error) {
 					Username:    *replyUsername,
 					DisplayName: *replyDisplayName,
 					AvatarURL:   replyAvatarURL,
+					NameStyle:   replyStyle,
 				},
 				Content: *replyContent,
 			}

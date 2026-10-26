@@ -1,12 +1,17 @@
 package message
 
-import "time"
+import (
+	"time"
+
+	"gin-quickstart/backend/internal/namestyle"
+)
 
 type Author struct {
 	ID          string  `json:"id"`
 	Username    string  `json:"username"`
 	DisplayName string  `json:"display_name"`
 	AvatarURL   *string `json:"avatar_url,omitempty"`
+	NameStyle   namestyle.Style `json:"name_style"`
 }
 
 type ReplyPreview struct {
