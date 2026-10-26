@@ -172,7 +172,8 @@ function registerScreenShareHandlers(): void {
     }))
   })
 
-  ipcMain.on('screen-picker:select', async (_event, sourceId: string) => {
+  // Responde o getDisplayMedia pendente com a fonte escolhida (modal ou atalho do jogo).
+  async function shareSource(sourceId: string): Promise<void> {
     const callback = pendingDisplay.take()
     if (!callback) return
     try {
@@ -214,7 +215,9 @@ function registerScreenShareHandlers(): void {
       logAudio(`falha ao compartilhar ${sourceId}: ${String(err)}`)
       callback(null)
     }
-  })
+  }
+
+  ipcMain.on('screen-picker:select', (_event, sourceId: string) => void shareSource(sourceId))
 
   ipcMain.on('screen-picker:cancel', () => {
     stopWindowAudio()
