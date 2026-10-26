@@ -31,6 +31,7 @@ const userColumns = `
 	avatar_url,
 	banner_url,
 	banner_color,
+	entrance_sound_url,
 	pronouns,
 	bio,
 	status_text,
@@ -63,6 +64,7 @@ func scanUser(row pgx.Row) (*User, error) {
 		&user.AvatarURL,
 		&user.BannerURL,
 		&user.BannerColor,
+		&user.EntranceSoundURL,
 		&user.Pronouns,
 		&user.Bio,
 		&user.StatusText,
@@ -371,8 +373,13 @@ func (r *Repository) SetBanner(ctx context.Context, id string, url *string) (*Us
 	return r.swapMedia(ctx, id, "banner_url", url)
 }
 
+// SetEntranceSound troca a URL do som de entrada e devolve a anterior.
+func (r *Repository) SetEntranceSound(ctx context.Context, id string, url *string) (*User, *string, error) {
+	return r.swapMedia(ctx, id, "entrance_sound_url", url)
+}
+
 // swapMedia lê a URL antiga e grava a nova na mesma transação. column vem
-// sempre de SetAvatar/SetBanner, nunca do cliente.
+// sempre de SetAvatar/SetBanner/SetEntranceSound, nunca do cliente.
 func (r *Repository) swapMedia(ctx context.Context, id, column string, url *string) (*User, *string, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {

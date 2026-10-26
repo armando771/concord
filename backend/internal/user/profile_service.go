@@ -15,6 +15,7 @@ type profileRepo interface {
 	UpdateProfile(ctx context.Context, id string, in ProfileInput) (*User, error)
 	SetAvatar(ctx context.Context, id string, url *string) (*User, *string, error)
 	SetBanner(ctx context.Context, id string, url *string) (*User, *string, error)
+	SetEntranceSound(ctx context.Context, id string, url *string) (*User, *string, error)
 	SetStatus(ctx context.Context, id string, status string) (*User, error)
 }
 
@@ -85,6 +86,12 @@ func (s *ProfileService) SetAvatar(ctx context.Context, userID string, url *stri
 
 func (s *ProfileService) SetBanner(ctx context.Context, userID string, url *string) (*User, *string, error) {
 	return s.swap(ctx, userID, url, s.repo.SetBanner)
+}
+
+// SetEntranceSound grava a URL do som de entrada (nil volta ao padrão) e
+// devolve a antiga para quem chama apagar o arquivo.
+func (s *ProfileService) SetEntranceSound(ctx context.Context, userID string, url *string) (*User, *string, error) {
+	return s.swap(ctx, userID, url, s.repo.SetEntranceSound)
 }
 
 func (s *ProfileService) swap(
