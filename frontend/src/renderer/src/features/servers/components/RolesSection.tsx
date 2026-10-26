@@ -78,8 +78,8 @@ function RolesSection(): React.JSX.Element {
   }
 
   return (
-    <div className="flex gap-6">
-      <div className="w-[230px] shrink-0">
+    <div className="flex flex-col gap-6 md:flex-row">
+      <div className="w-full md:w-[230px] md:shrink-0">
         <Button
           variant="primary"
           className="mb-3 flex w-full items-center justify-center gap-1.5 py-1.5 text-xs"
@@ -117,7 +117,7 @@ function RolesSection(): React.JSX.Element {
                 )}
               </button>
               {!role.is_default && !role.is_system && (
-                <span className="flex shrink-0 flex-col opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                <span className="flex shrink-0 flex-col transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-within:opacity-100">
                   <button
                     type="button"
                     aria-label={`Subir ${role.name}`}

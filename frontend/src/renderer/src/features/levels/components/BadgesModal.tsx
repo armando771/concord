@@ -277,7 +277,7 @@ function BadgesModal(): React.JSX.Element | null {
         aria-modal="true"
         aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
-        className="flex h-[min(600px,100%)] w-full max-w-[760px] overflow-hidden rounded-2xl border border-subtle text-gray-200 shadow-2xl"
+        className="flex h-[min(600px,100%)] w-full max-w-[760px] flex-col overflow-hidden rounded-2xl border border-subtle text-gray-200 shadow-2xl md:flex-row"
       >
         <BadgesAside
           target={target}
@@ -292,7 +292,7 @@ function BadgesModal(): React.JSX.Element | null {
           onViewMine={viewMine}
         />
 
-        <section className="relative min-w-0 flex-1 overflow-y-auto bg-primary p-6">
+        <section className="relative min-h-0 min-w-0 flex-1 overflow-y-auto bg-primary p-6">
           <button
             ref={closeRef}
             type="button"

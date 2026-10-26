@@ -43,4 +43,17 @@ describe('BadgesModal', () => {
     store.modal = null
     expect(renderToStaticMarkup(<BadgesModal />)).toBe('')
   })
+
+  it('em tela estreita empilha a grade e o detalhe (antes o detalhe ficava com ~40 px)', () => {
+    const html = renderToStaticMarkup(<BadgesModal />)
+    expect(html).toMatch(/role="dialog"[^>]*class="[^"]*[\s"]flex-col[\s"]/)
+    expect(html).toContain('md:flex-row')
+  })
+
+  it('a coluna de 290 px só existe a partir de md, e empilhada não passa de metade da altura', () => {
+    const html = renderToStaticMarkup(<BadgesModal />)
+    expect(html).toContain('md:w-[290px]')
+    expect(html).not.toMatch(/[\s"]w-\[290px\]/)
+    expect(html).toContain('max-h-[50%]')
+  })
 })

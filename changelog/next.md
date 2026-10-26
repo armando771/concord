@@ -11,3 +11,4 @@
 - Vídeo: nova seção em Configurações → Vídeo, com escolha da câmera, prévia ao vivo e fundo do vídeo como no Discord: desfocar o fundo (Borrar), usar uma das imagens do app, a sua própria ou até um GIF animado, sem precisar de pano verde. A separação roda no seu computador. Na chamada, o microfone, o fone e a câmera ganharam uma setinha para trocar de dispositivo, e a câmera também abre o "Mudar fundo de vídeo". Com "Sempre ver prévia do vídeo" você confere como aparece antes de ligar a câmera. O chroma key da versão anterior saiu.
 
 ## Correções
+- Janela estreita: Configurações, Configurações do servidor, badges e cargos agora cabem em telas pequenas, com a navegação em cima do conteúdo, e as setas para ordenar cargos aparecem em telas de toque.
