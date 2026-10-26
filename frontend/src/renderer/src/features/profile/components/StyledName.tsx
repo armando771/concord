@@ -1,5 +1,11 @@
 import { useProfileStore } from '../store/profileStore'
-import { nameGraphemes, nameStyleCss, resolveNameStyle, type NameStyle } from '../lib/nameStyle'
+import {
+  nameEndPadding,
+  nameGraphemes,
+  nameStyleCss,
+  resolveNameStyle,
+  type NameStyle
+} from '../lib/nameStyle'
 import '../../../assets/nameStyle.css'
 
 /**
@@ -23,13 +29,14 @@ export default function StyledName({
   const live = useProfileStore((s) => (userId ? s.profiles[userId]?.name_style : undefined))
   const resolved = resolveNameStyle(style === null ? null : (live ?? style))
   const css = nameStyleCss(resolved)
+  const boxStyle = { ...css.style, ...nameEndPadding(resolved) }
   const classes = [className, css.className].filter(Boolean).join(' ') || undefined
 
   if (css.letters) {
     // Onda: cada letra num span com atraso próprio (só CSS anima). O leitor de
     // tela lê o nome inteiro, não letra por letra.
     return (
-      <span className={classes} style={css.style}>
+      <span className={classes} style={boxStyle}>
         <span className="sr-only">{name}</span>
         {nameGraphemes(name).map((ch, i) => (
           <span
@@ -47,8 +54,8 @@ export default function StyledName({
 
   const extra =
     resolved.effect === 'typewriter'
-      ? { ...css.style, '--name-steps': Math.max(1, nameGraphemes(name).length) }
-      : css.style
+      ? { ...boxStyle, '--name-steps': Math.max(1, nameGraphemes(name).length) }
+      : boxStyle
   return (
     <span className={classes} style={extra} data-text={css.copy ? name : undefined}>
       {name}

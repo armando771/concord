@@ -36,6 +36,12 @@ import {
   reorderChannels as apiReorderChannels
 } from '../api/channels'
 import { applyChannelOrder } from '../lib/channelOrder'
+import {
+  findReorderSection,
+  isOwnReorderEcho,
+  reorderSection,
+  trackOwnReorderRequest
+} from '../lib/channelReorderQueue'
 import { removeRole, sortRoles, stripRoleFromMembers, upsertRole } from '../lib/roleList'
 import { nicknameMap, withNickname } from '../lib/serverNames'
 
@@ -132,36 +138,11 @@ interface ServerState {
   reset: () => void
 }
 
-// Reordenação de canais: uma fila por seção (servidor + tipo). Os pedidos saem
-// um de cada vez, então um mais novo nunca é ultrapassado por um mais antigo.
-interface ReorderSection {
-  /** Último pedido da fila (o próximo espera ele terminar). */
-  queue: Promise<unknown>
-  /** Pedidos ainda sem resposta. */
-  inFlight: number
-  /** Conta as reordenações locais; falha só desfaz se nenhuma veio depois. */
-  generation: number
-  /** Chegou ordem de outra pessoa no meio: buscar a lista ao terminar. */
-  stale: boolean
-}
-const reorderSections = new Map<string, ReorderSection>()
-const reorderSection = (serverId: string, type: ChannelType): ReorderSection => {
-  const key = `${serverId}:${type}`
-  let section = reorderSections.get(key)
-  if (!section) {
-    section = { queue: Promise.resolve(), inFlight: 0, generation: 0, stale: false }
-    reorderSections.set(key, section)
-  }
-  return section
-}
-/** request_id das nossas reordenações, para ignorar o eco pelo WS. */
-const ownReorderRequests = new Set<string>()
-const OWN_REQUEST_TTL_MS = 60_000
-const newRequestId = (): string =>
-  globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
-
 /** Conta as chamadas de selectServer: só a mais recente grava o resultado. */
 let selectSeq = 0
+/** Idem para a busca de convites e a de canais (a resposta velha chega depois da nova). */
+let invitesSeq = 0
+let channelsSeq = 0
 
 const isSameSession = (tokenAtStart: string | null): boolean =>
   useAuthStore.getState().accessToken === tokenAtStart
@@ -249,22 +230,26 @@ export const useServerStore = create<ServerState>()((set, get) => ({
   },
   fetchServerInvites: async (serverId: string) => {
     const token = useAuthStore.getState().accessToken
+    const seq = ++invitesSeq
     try {
       const invites = await listServerInvites(serverId)
-      if (!isSameSession(token)) return
+      if (!isSameSession(token) || seq !== invitesSeq) return
       set({ serverInvites: Array.isArray(invites) ? invites : [] })
     } catch {
-      if (isSameSession(token)) set({ serverInvites: [] })
+      if (isSameSession(token) && seq === invitesSeq) set({ serverInvites: [] })
     }
   },
   fetchChannels: async (serverId: string) => {
     const token = useAuthStore.getState().accessToken
+    const seq = ++channelsSeq
     try {
       const channels = await apiListChannels(serverId)
-      if (!isSameSession(token)) return
+      if (!isSameSession(token) || seq !== channelsSeq) return
       set({ channels: Array.isArray(channels) ? channels : [], channelsLoadedFor: serverId })
     } catch {
-      if (isSameSession(token)) set({ channels: [], channelsLoadedFor: serverId })
+      if (isSameSession(token) && seq === channelsSeq) {
+        set({ channels: [], channelsLoadedFor: serverId })
+      }
     }
   },
   addServer: async (name: string, icon_url?: string) => {
@@ -292,9 +277,7 @@ export const useServerStore = create<ServerState>()((set, get) => ({
     const generation = ++section.generation
     get().applyChannelOrder(serverId, type, channelIds)
 
-    const requestId = newRequestId()
-    ownReorderRequests.add(requestId)
-    setTimeout(() => ownReorderRequests.delete(requestId), OWN_REQUEST_TTL_MS)
+    const requestId = trackOwnReorderRequest()
 
     section.inFlight++
     const sent = section.queue.then(() => apiReorderChannels(serverId, type, channelIds, requestId))
@@ -316,8 +299,8 @@ export const useServerStore = create<ServerState>()((set, get) => ({
     }
   },
   receiveChannelOrder: (serverId, type, channelIds, requestId) => {
-    if (requestId && ownReorderRequests.delete(requestId)) return
-    const section = reorderSections.get(`${serverId}:${type}`)
+    if (isOwnReorderEcho(requestId)) return
+    const section = findReorderSection(serverId, type)
     if (section && section.inFlight > 0) {
       section.stale = true
       return
