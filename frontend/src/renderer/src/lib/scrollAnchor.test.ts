@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { anchoredScrollTop, contentOffset, olderPagePrepended, pickAnchor } from './scrollAnchor'
+import {
+  anchoredScrollTop,
+  bottomScrollPlan,
+  contentOffset,
+  olderPagePrepended,
+  pickAnchor
+} from './scrollAnchor'
 
 // Scroller com topo na tela em y=100. A mensagem âncora (a antiga primeira)
 // está 40px abaixo do topo visível, rolada 0.
@@ -97,5 +103,48 @@ describe('olderPagePrepended', () => {
 
   it('lista vazia: nada a fazer', () => {
     expect(olderPagePrepended(undefined, candidates)).toBe(false)
+  })
+})
+
+describe('bottomScrollPlan', () => {
+  const base = {
+    positionedRoom: null as string | null,
+    room: 'channel:a',
+    loading: false,
+    stickToBottom: true,
+    countChanged: true
+  }
+
+  it('abre a sala já no fim, de uma vez (sem rolar suave)', () => {
+    expect(bottomScrollPlan(base)).toEqual({ scroll: 'instant', positionedRoom: 'channel:a' })
+  })
+
+  it('carregando: não rola e a próxima carga conta como abertura nova', () => {
+    expect(bottomScrollPlan({ ...base, loading: true, positionedRoom: 'channel:a' })).toEqual({
+      scroll: 'none',
+      positionedRoom: null
+    })
+  })
+
+  it('trocar de sala posiciona de novo, mesmo sem mudar a contagem', () => {
+    expect(bottomScrollPlan({ ...base, positionedRoom: 'channel:b', countChanged: false })).toEqual(
+      { scroll: 'instant', positionedRoom: 'channel:a' }
+    )
+  })
+
+  it('mensagem nova depois de aberta, com a pessoa no fim: rola suave', () => {
+    expect(bottomScrollPlan({ ...base, positionedRoom: 'channel:a' }).scroll).toBe('smooth')
+  })
+
+  it('mensagem nova com a pessoa lendo mais acima: não puxa', () => {
+    expect(
+      bottomScrollPlan({ ...base, positionedRoom: 'channel:a', stickToBottom: false }).scroll
+    ).toBe('none')
+  })
+
+  it('sem mudança na lista: não rola', () => {
+    expect(
+      bottomScrollPlan({ ...base, positionedRoom: 'channel:a', countChanged: false }).scroll
+    ).toBe('none')
   })
 })
