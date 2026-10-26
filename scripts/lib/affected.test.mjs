@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { classify, dependents, goPackages, parseGoList, scriptTests } from './affected.mjs'
+import { classify, dependents, goPackages, parseArgs, parseGoList, scriptTests } from './affected.mjs'
 
 test('classify separa Go, TS e scripts e detecta código compartilhado', () => {
   const result = classify(['backend/internal/call/service.go', 'frontend/src/renderer/src/features/chat/lib/x.ts', 'scripts/a.mjs', 'README.md'])
@@ -23,4 +23,16 @@ test('dependents: fecho reverso, inclusive dependência de teste', () => {
 test('scriptTests: acha o .test.mjs vizinho e mantém testes alterados', () => {
   const exists = (f) => ['scripts/a.test.mjs', 'scripts/lib/b.test.mjs'].includes(f)
   assert.deepEqual(scriptTests(['scripts/a.mjs', 'scripts/sem-teste.mjs', 'scripts/lib/b.test.mjs'], exists), ['scripts/a.test.mjs', 'scripts/lib/b.test.mjs'])
+})
+
+// Regressão: sem --base, indexOf dava -1 e o args[0] ("pr") era descartado
+// como se fosse o valor do --base; o pr rodava como loop e pulava vet/CRAP.
+test('parseArgs: modo sem --base não é descartado', () => {
+  assert.deepEqual(parseArgs(['pr']), { mode: 'pr', base: null })
+  assert.deepEqual(parseArgs([]), { mode: 'loop', base: null })
+})
+
+test('parseArgs: --base em qualquer posição', () => {
+  assert.deepEqual(parseArgs(['pr', '--base', 'origin/main']), { mode: 'pr', base: 'origin/main' })
+  assert.deepEqual(parseArgs(['--base', 'origin/main', 'full']), { mode: 'full', base: 'origin/main' })
 })

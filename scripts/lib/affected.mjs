@@ -66,7 +66,8 @@ export function scriptTests(scriptFiles, exists = existsSync) {
 
 // parseArgs: modo (loop|pr|full) e --base <ref> da linha de comando.
 export function parseArgs(args) {
-  const mode = args.find((a) => !a.startsWith('--') && a !== args[args.indexOf('--base') + 1]) ?? 'loop'
-  const base = args.includes('--base') ? args[args.indexOf('--base') + 1] : null
+  const i = args.indexOf('--base')
+  const base = i >= 0 ? args[i + 1] : null
+  const mode = args.find((a, j) => !a.startsWith('--') && (i < 0 || j !== i + 1)) ?? 'loop'
   return { mode, base }
 }
