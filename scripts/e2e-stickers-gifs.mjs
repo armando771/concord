@@ -1,8 +1,9 @@
-// E2E test for Stickers, Giphy/GIFs, Reactions and Media in chat
+// Comprehensive E2E test for Chat, Reactions, Giphy/GIFs, Server Stickers, DMs, Edits, Pins & WebSockets
 import { strict as assert } from 'assert'
 import { execSync } from 'child_process'
 
 const API = process.env.API ?? 'http://localhost:8080/api'
+const WS_URL = API.replace(/^http/, 'ws').replace(/\/api$/, '/ws')
 const run = Date.now().toString(36)
 
 // PNG 1x1 valid image
@@ -30,24 +31,30 @@ async function api(path, { token, method = 'GET', body } = {}) {
   return { status: res.status, body: parsed }
 }
 
-async function uploadSticker(token, serverId, name, bytes) {
+async function uploadSticker(token, serverId, name, bytes, mime = 'image/png', ext = 'png') {
   const form = new FormData()
   form.append('name', name)
-  form.append('file', new Blob([bytes], { type: 'image/png' }), `${name}.png`)
+  form.append('file', new Blob([bytes], { type: mime }), `${name}.${ext}`)
   const res = await fetch(`${API}/servers/${serverId}/stickers`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: form
   })
   const text = await res.text()
-  return { status: res.status, body: text ? JSON.parse(text) : null }
+  let parsed = null
+  try {
+    parsed = text ? JSON.parse(text) : null
+  } catch {
+    parsed = text
+  }
+  return { status: res.status, body: parsed }
 }
 
 async function makeUser(name) {
   const username = `${name}_${run}`
   const email = `${name}-${run}@teste.dev`
   const password = 'senha-forte-123'
-  let res = await api('/auth/register', {
+  const res = await api('/auth/register', {
     method: 'POST',
     body: { username, display_name: name, email, password }
   })
@@ -71,9 +78,11 @@ async function makeUser(name) {
   }
 
   assert.equal(res.status, 201, `register ${name} failed: ${JSON.stringify(res.body)}`)
-  
+
   // Marca email como verificado no banco para os testes
-  execSync('docker exec concord-postgres psql -U concord-user -d concord -c "UPDATE users SET email_verified_at = NOW();"')
+  execSync(
+    'docker exec concord-postgres psql -U concord-user -d concord -c "UPDATE users SET email_verified_at = NOW();"'
+  )
 
   const me = (await api('/users/me', { token: res.body.access_token })).body
   return {
@@ -85,8 +94,48 @@ async function makeUser(name) {
   }
 }
 
+function connectWs(token, rooms = []) {
+  return new Promise((resolve, reject) => {
+    const events = []
+    const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`)
+    const timer = setTimeout(() => reject(new Error('WS connection timeout')), 5000)
+
+    ws.addEventListener('open', () => {
+      clearTimeout(timer)
+      for (const room of rooms) {
+        ws.send(JSON.stringify({ type: 'subscribe', payload: { room } }))
+      }
+      setTimeout(() => resolve({ ws, events }), 150)
+    })
+
+    ws.addEventListener('message', (ev) => {
+      try {
+        const parsed = JSON.parse(String(ev.data))
+        events.push(parsed)
+      } catch {
+        // ignore non-json
+      }
+    })
+
+    ws.addEventListener('error', (err) => {
+      clearTimeout(timer)
+      reject(err)
+    })
+  })
+}
+
+async function waitForWsEvent(events, predicate, timeoutMs = 3000) {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    const found = events.find(predicate)
+    if (found) return found
+    await new Promise((r) => setTimeout(r, 50))
+  }
+  return null
+}
+
 async function runTests() {
-  console.log('--- INICIANDO TESTES END-TO-END (E2E) ---')
+  console.log('--- INICIANDO TESTES COMPLETOS END-TO-END (E2E) ---')
 
   // 1. Criação de usuários Ana e Bia
   console.log('1. Criando usuários Ana e Bia...')
@@ -94,8 +143,8 @@ async function runTests() {
   const bia = await makeUser('bia')
   console.log(`   Ana: ${ana.id}, Bia: ${bia.id}`)
 
-  // 2. Ana cria um servidor e pega o canal de texto
-  console.log('2. Ana criando servidor...')
+  // 2. Ana cria um servidor e Bia entra pelo convite
+  console.log('2. Ana criando servidor e Bia entrando pelo convite...')
   const srvRes = await api('/servers', {
     token: ana.token,
     method: 'POST',
@@ -104,8 +153,6 @@ async function runTests() {
   assert.equal(srvRes.status, 201, 'Servidor deve ser criado com 201')
   const serverId = srvRes.body.id ?? srvRes.body.server?.id
 
-  // Bia entra no servidor
-  console.log('   Bia entrando no servidor pelo código de convite...')
   const codeRes = await api(`/servers/${serverId}/invite-code`, { token: ana.token })
   assert.equal(codeRes.status, 200)
   const joinRes = await api('/invites/join', {
@@ -115,168 +162,412 @@ async function runTests() {
   })
   assert.equal(joinRes.status, 200, `Bia deve entrar no servidor: ${JSON.stringify(joinRes.body)}`)
 
-  // Pega o canal de texto principal
   const channels = (await api(`/servers/${serverId}/channels`, { token: ana.token })).body
   const channel = channels.find((c) => (c.type ?? 'text') === 'text')
   assert.ok(channel, 'Canal de texto deve existir')
   console.log(`   Servidor: ${serverId}, Canal: ${channel.id}`)
 
-  // 3. Upload de Figurinha (Ana envia figurinha)
-  console.log('3. Ana enviando figurinha para o servidor...')
+  // Conecta WebSocket para Bia e Ana
+  console.log('   Conectando WebSockets para verificar eventos em tempo real...')
+  const biaWs = await connectWs(bia.token, [`channel:${channel.id}`, `server:${serverId}`])
+  const anaWs = await connectWs(ana.token, [`channel:${channel.id}`, `server:${serverId}`])
+
+  // 3. Upload e validação de Figurinha
+  console.log('3. Testando upload de figurinha (validação de formato + evento WS sticker:created)...')
+  const badUpload = await uploadSticker(
+    ana.token,
+    serverId,
+    'bad_file',
+    Buffer.from('not an image'),
+    'text/plain',
+    'txt'
+  )
+  assert.equal(badUpload.status, 415, `Upload inválido deve retornar 415: ${badUpload.status}`)
+
   const uploadRes = await uploadSticker(ana.token, serverId, 'doge_test', PNG)
-  assert.equal(uploadRes.status, 201, `Upload de figurinha deve retornar 201: ${JSON.stringify(uploadRes.body)}`)
+  assert.equal(
+    uploadRes.status,
+    201,
+    `Upload de figurinha deve retornar 201: ${JSON.stringify(uploadRes.body)}`
+  )
   const sticker = uploadRes.body
   assert.equal(sticker.name, 'doge_test')
   assert.equal(sticker.server_id, serverId)
   assert.equal(sticker.uploader_id, ana.id)
-  console.log(`   Figurinha criada com sucesso: ID ${sticker.id} (nome: :${sticker.name}:)`)
 
-  // 4. Bia lista figurinhas do servidor
-  console.log('4. Bia listando figurinhas do servidor...')
+  const wsStickerCreated = await waitForWsEvent(
+    biaWs.events,
+    (e) => e.type === 'sticker:created' && e.payload?.sticker?.id === sticker.id
+  )
+  assert.ok(wsStickerCreated, 'Bia deve receber evento WS sticker:created no formato padrão {type, payload}')
+  console.log(`   Figurinha criada e recebida via WS: ID ${sticker.id} (:${sticker.name}:)`)
+
+  // 4. Listagem e download da figurinha com media token
+  console.log('4. Bia listando e baixando figurinha do servidor...')
   const listStkRes = await api(`/servers/${serverId}/stickers`, { token: bia.token })
   assert.equal(listStkRes.status, 200)
-  assert.ok(Array.isArray(listStkRes.body))
   assert.ok(listStkRes.body.some((s) => s.id === sticker.id && s.name === 'doge_test'))
-  console.log(`   Bia encontrou a figurinha da Ana no servidor!`)
 
-  // 5. Download do arquivo de figurinha com media token
-  console.log('5. Obtendo media token e baixando arquivo da figurinha...')
   const tokenRes = await api('/media/token', { token: bia.token })
   assert.equal(tokenRes.status, 200)
   const mediaToken = tokenRes.body.token
-  const fileRes = await fetch(`${API}/stickers/${sticker.id}/file?token=${mediaToken}`)
-  assert.equal(fileRes.status, 200, 'Download da figurinha deve retornar 200')
-  const fileBytes = Buffer.from(await fileRes.arrayBuffer())
+  const fileNoToken = await fetch(`${API}/stickers/${sticker.id}/file`)
+  assert.equal(fileNoToken.status, 401, 'Download sem token deve retornar 401')
+  const fileRes1 = await fetch(`${API}/stickers/${sticker.id}/file?token=${mediaToken}`)
+  assert.equal(fileRes1.status, 200, 'Download em /stickers/:id/file deve retornar 200')
+  const fileBytes = Buffer.from(await fileRes1.arrayBuffer())
   assert.equal(fileBytes.length, PNG.length)
   console.log(`   Download da figurinha conferido (${fileBytes.length} bytes)!`)
 
-  // 6. Envio de mensagem com Figurinha (sem texto)
-  console.log('6. Ana enviando mensagem apenas com a Figurinha no chat...')
+  // 5. Envio de mensagens no canal: Texto, Figurinha e GIF (com Reply)
+  console.log('5. Testando envio de mensagens de texto, figurinha, GIF e respostas (reply)...')
+  const sendTextRes = await api(`/channels/${channel.id}/messages`, {
+    token: ana.token,
+    method: 'POST',
+    body: { content: 'Olá pessoal do chat!' }
+  })
+  assert.equal(sendTextRes.status, 201)
+  const msgText = sendTextRes.body
+
+  const wsMsgText = await waitForWsEvent(
+    biaWs.events,
+    (e) => e.type === 'message:create' && e.payload?.message?.id === msgText.id
+  )
+  assert.ok(wsMsgText, 'Bia deve receber message:create via WS')
+
   const sendStkMsg = await api(`/channels/${channel.id}/messages`, {
     token: ana.token,
     method: 'POST',
     body: {
       content: '',
-      sticker_id: sticker.id
+      sticker_id: sticker.id,
+      reply_to_id: msgText.id
     }
   })
   assert.equal(sendStkMsg.status, 201, `Envio de figurinha deve retornar 201: ${JSON.stringify(sendStkMsg.body)}`)
   const msg1 = sendStkMsg.body
   assert.equal(msg1.sticker_id, sticker.id)
-  assert.ok(msg1.sticker, 'Preview da figurinha deve estar populado')
-  assert.equal(msg1.sticker.name, 'doge_test')
-  console.log(`   Mensagem com figurinha enviada com sucesso: ID ${msg1.id}`)
+  assert.equal(msg1.reply_to_id, msgText.id)
+  assert.equal(msg1.sticker?.name, 'doge_test')
 
-  // 7. Envio de mensagem com GIF
-  console.log('7. Bia enviando mensagem com GIF do Giphy...')
+  // Bia responde à figurinha da Ana com um GIF
   const sendGifMsg = await api(`/channels/${channel.id}/messages`, {
     token: bia.token,
     method: 'POST',
     body: {
       content: 'olha esse gif!',
+      reply_to_id: msg1.id,
       gif_url: 'https://media.giphy.com/media/test/giphy.gif',
-      gif_metadata: { width: 480, height: 270, preview_url: 'https://media.giphy.com/media/test/preview.gif' }
+      gif_metadata: {
+        width: 480,
+        height: 270,
+        preview_url: 'https://media.giphy.com/media/test/preview.gif'
+      }
     }
   })
   assert.equal(sendGifMsg.status, 201, `Envio de GIF deve retornar 201: ${JSON.stringify(sendGifMsg.body)}`)
   const msg2 = sendGifMsg.body
   assert.equal(msg2.gif_url, 'https://media.giphy.com/media/test/giphy.gif')
+  assert.equal(msg2.reply_to_id, msg1.id)
   assert.equal(msg2.gif_metadata.width, 480)
-  console.log(`   Mensagem com GIF enviada com sucesso: ID ${msg2.id}`)
 
-  // 8. Reações com Emojis
-  console.log('8. Testando sistema de reações com emojis...')
-  // Bia reage com 👍 na mensagem de figurinha da Ana
+  // Validação de gif_url inválido
+  const badGifMsg = await api(`/channels/${channel.id}/messages`, {
+    token: bia.token,
+    method: 'POST',
+    body: {
+      content: '',
+      gif_url: 'javascript:alert(1)'
+    }
+  })
+  assert.equal(badGifMsg.status, 400, 'gif_url sem http/https deve ser rejeitado com 400')
+  console.log('   Mensagens de texto, figurinha, GIF (com reply_to_id) e validações conferidas!')
+
+  // 6. Edição de mensagens (texto comum + limpar legenda de mensagem com GIF)
+  console.log('6. Testando edição de mensagens e remoção de texto em mensagem com GIF...')
+  const editRes1 = await api(`/channels/${channel.id}/messages/${msgText.id}`, {
+    token: ana.token,
+    method: 'PATCH',
+    body: { content: 'Olá pessoal do chat (editado)!' }
+  })
+  assert.equal(editRes1.status, 200)
+  assert.equal(editRes1.body.content, 'Olá pessoal do chat (editado)!')
+  assert.ok(editRes1.body.edited_at, 'edited_at deve estar preenchido')
+
+  const wsMsgUpdate = await waitForWsEvent(
+    biaWs.events,
+    (e) => e.type === 'message:update' && e.payload?.message?.id === msgText.id
+  )
+  assert.ok(wsMsgUpdate, 'Bia deve receber message:update via WS')
+
+  // Bia limpa o texto da sua mensagem com GIF (deve ser permitido pois tem gif_url)
+  const editGifRes = await api(`/channels/${channel.id}/messages/${msg2.id}`, {
+    token: bia.token,
+    method: 'PATCH',
+    body: { content: '' }
+  })
+  assert.equal(
+    editGifRes.status,
+    200,
+    `Limpar texto de mensagem com GIF deve retornar 200: ${JSON.stringify(editGifRes.body)}`
+  )
+  assert.equal(editGifRes.body.content, '')
+  assert.equal(editGifRes.body.gif_url, 'https://media.giphy.com/media/test/giphy.gif')
+
+  // Outro usuário não pode editar mensagem alheia
+  const forbiddenEdit = await api(`/channels/${channel.id}/messages/${msgText.id}`, {
+    token: bia.token,
+    method: 'PATCH',
+    body: { content: 'tentativa inválida' }
+  })
+  assert.equal(forbiddenEdit.status, 403)
+  console.log('   Edição de mensagens (e preservação de GIF ao limpar legenda) conferida!')
+
+  // 7. Fixar mensagens (Pins) com figurinha e GIF
+  console.log('7. Testando fixação (Pin/Unpin) de mensagens com figurinha e GIF...')
+  const pin1 = await api(`/channels/${channel.id}/pins/${msg1.id}`, {
+    token: ana.token,
+    method: 'PUT'
+  })
+  assert.ok(pin1.status === 200 || pin1.status === 204, 'Fixar mensagem de figurinha deve retornar 200/204')
+
+  const pin2 = await api(`/channels/${channel.id}/pins/${msg2.id}`, {
+    token: ana.token,
+    method: 'PUT'
+  })
+  assert.ok(pin2.status === 200 || pin2.status === 204, 'Fixar mensagem de GIF deve retornar 200/204')
+
+  const wsPinAdd = await waitForWsEvent(
+    biaWs.events,
+    (e) => e.type === 'channel:pin:add' && e.payload?.message?.id === msg1.id
+  )
+  assert.ok(wsPinAdd, 'Evento WS channel:pin:add deve ser recebido')
+  assert.equal(wsPinAdd.payload?.message?.sticker?.name, 'doge_test', 'WS channel:pin:add deve trazer sticker populado')
+
+  const pinsList = await api(`/channels/${channel.id}/pins`, { token: bia.token })
+  assert.equal(pinsList.status, 200)
+  const pinnedStickerMsg = pinsList.body.find((p) => p.id === msg1.id)
+  const pinnedGifMsg = pinsList.body.find((p) => p.id === msg2.id)
+  assert.ok(pinnedStickerMsg, 'Mensagem de figurinha deve estar nos fixados')
+  assert.equal(pinnedStickerMsg.sticker?.name, 'doge_test', 'Pin deve trazer objeto sticker populado')
+  assert.ok(pinnedGifMsg, 'Mensagem de GIF deve estar nos fixados')
+  assert.equal(
+    pinnedGifMsg.gif_url,
+    'https://media.giphy.com/media/test/giphy.gif',
+    'Pin deve trazer gif_url populado'
+  )
+
+  const unpin2 = await api(`/channels/${channel.id}/pins/${msg2.id}`, {
+    token: ana.token,
+    method: 'DELETE'
+  })
+  assert.ok(unpin2.status === 200 || unpin2.status === 204, 'Desafixar mensagem deve retornar 200/204')
+  console.log('   Fixação de mensagens com figurinha e GIF conferida!')
+
+  // 8. Reações com Emojis e eventos WS
+  console.log('8. Testando sistema de reações com emojis e eventos em tempo real...')
   const react1 = await api(`/channels/${channel.id}/messages/${msg1.id}/reactions`, {
     token: bia.token,
     method: 'POST',
     body: { emoji: '👍' }
   })
-  assert.equal(react1.status, 200, `Reação com 👍 deve retornar 200: ${JSON.stringify(react1.body)}`)
-  console.log('   Bia reagiu com 👍 na mensagem da Ana')
+  assert.equal(react1.status, 200)
 
-  // Ana também reage com 👍 na mesma mensagem
+  const wsReactAdd = await waitForWsEvent(
+    anaWs.events,
+    (e) =>
+      e.type === 'message:reaction:add' &&
+      e.payload?.message_id === msg1.id &&
+      e.payload?.emoji === '👍' &&
+      e.payload?.user_id === bia.id
+  )
+  assert.ok(wsReactAdd, 'Ana deve receber evento WS message:reaction:add')
+
   const react2 = await api(`/channels/${channel.id}/messages/${msg1.id}/reactions`, {
     token: ana.token,
     method: 'POST',
     body: { emoji: '👍' }
   })
   assert.equal(react2.status, 200)
-  console.log('   Ana também reagiu com 👍 na mesma mensagem')
 
-  // Ana reage com 🔥 na mensagem de GIF da Bia
   const react3 = await api(`/channels/${channel.id}/messages/${msg2.id}/reactions`, {
     token: ana.token,
     method: 'POST',
     body: { emoji: '🔥' }
   })
   assert.equal(react3.status, 200)
-  console.log('   Ana reagiu com 🔥 na mensagem da Bia')
+
+  // Validação de emoji inválido/vazio
+  const badReact = await api(`/channels/${channel.id}/messages/${msg1.id}/reactions`, {
+    token: ana.token,
+    method: 'POST',
+    body: { emoji: '' }
+  })
+  assert.equal(badReact.status, 400, 'Emoji vazio deve retornar 400')
 
   // 9. Consulta histórico de mensagens e confere agregação de reações
   console.log('9. Verificando listagem e agregação de reações no chat...')
   const listMsgs = await api(`/channels/${channel.id}/messages`, { token: bia.token })
   assert.equal(listMsgs.status, 200)
   const fetchedMsg1 = listMsgs.body.find((m) => m.id === msg1.id)
-  assert.ok(fetchedMsg1, 'Mensagem 1 deve estar na lista')
-  assert.ok(fetchedMsg1.reactions, 'Reações devem estar presentes')
+  assert.ok(fetchedMsg1?.reactions, 'Reações devem estar presentes')
   const thumbReaction = fetchedMsg1.reactions.find((r) => r.emoji === '👍')
-  assert.ok(thumbReaction, 'Reação 👍 deve existir')
-  assert.equal(thumbReaction.count, 2, 'Contagem de 👍 deve ser 2')
-  assert.ok(thumbReaction.user_ids.includes(ana.id))
-  assert.ok(thumbReaction.user_ids.includes(bia.id))
-  console.log(`   Reação 👍 na msg 1 verificada: count=${thumbReaction.count}, users=[Ana, Bia]`)
+  assert.equal(thumbReaction?.count, 2, 'Contagem de 👍 deve ser 2')
+  assert.deepEqual(thumbReaction.user_ids, [bia.id, ana.id], 'Ordem de quem reagiu deve ser preservada')
 
   // 10. Removendo reação (Bia remove o 👍)
   console.log('10. Bia removendo reação 👍...')
-  const removeReact = await api(`/channels/${channel.id}/messages/${msg1.id}/reactions?emoji=${encodeURIComponent('👍')}`, {
+  const removeReact = await api(
+    `/channels/${channel.id}/messages/${msg1.id}/reactions?emoji=${encodeURIComponent('👍')}`,
+    {
+      token: bia.token,
+      method: 'DELETE'
+    }
+  )
+  assert.equal(removeReact.status, 200)
+
+  const wsReactRemove = await waitForWsEvent(
+    anaWs.events,
+    (e) =>
+      e.type === 'message:reaction:remove' &&
+      e.payload?.message_id === msg1.id &&
+      e.payload?.emoji === '👍' &&
+      e.payload?.user_id === bia.id
+  )
+  assert.ok(wsReactRemove, 'Ana deve receber evento WS message:reaction:remove')
+
+  const listMsgsAfter = await api(`/channels/${channel.id}/messages`, { token: bia.token })
+  const thumbAfter = listMsgsAfter.body
+    .find((m) => m.id === msg1.id)
+    ?.reactions?.find((r) => r.emoji === '👍')
+  assert.equal(thumbAfter?.count, 1)
+  assert.deepEqual(thumbAfter?.user_ids, [ana.id])
+  console.log('   Adição, agregação e remoção de reações confirmadas!')
+
+  // 11. Chat em Mensagem Direta (DM): texto, GIF, reação e bloqueio de figurinha de servidor
+  console.log('11. Testando chat em Mensagem Direta (DM), envio de GIF, reações e prévia na lista...')
+  // Como Ana e Bia estão no mesmo servidor, podem abrir DM
+  const convRes = await api(`/conversations/with/${bia.id}`, {
+    token: ana.token
+  })
+  assert.ok(
+    convRes.status === 200 || convRes.status === 201,
+    `Abrir DM deve retornar 200/201: ${JSON.stringify(convRes.body)}`
+  )
+  const convId = convRes.body.id
+
+  const dmText = await api(`/conversations/${convId}/messages`, {
+    token: ana.token,
+    method: 'POST',
+    body: { content: 'Oi Bia na DM!' }
+  })
+  assert.equal(dmText.status, 201)
+
+  // Figurinha de servidor em DM deve ser recusada com 400
+  const dmStickerAttempt = await api(`/conversations/${convId}/messages`, {
+    token: ana.token,
+    method: 'POST',
+    body: { content: '', sticker_id: sticker.id }
+  })
+  assert.equal(dmStickerAttempt.status, 400, 'Figurinha de servidor não deve ser aceita em DM')
+
+  // Bia envia um GIF sem texto na DM
+  const dmGif = await api(`/conversations/${convId}/messages`, {
+    token: bia.token,
+    method: 'POST',
+    body: {
+      content: '',
+      gif_url: 'https://media.giphy.com/media/dmgif/giphy.gif',
+      gif_metadata: { width: 320, height: 240 }
+    }
+  })
+  assert.equal(dmGif.status, 201, `Envio de GIF na DM deve retornar 201: ${JSON.stringify(dmGif.body)}`)
+
+  // Ana reage com ❤️ ao GIF da Bia na DM
+  const dmReact = await api(`/conversations/${convId}/messages/${dmGif.body.id}/reactions`, {
+    token: ana.token,
+    method: 'POST',
+    body: { emoji: '❤️' }
+  })
+  assert.equal(dmReact.status, 200)
+
+  // Verifica que a listagem de conversas mostra '👾 GIF' como prévia da última mensagem sem texto
+  const convList = await api('/conversations', { token: ana.token })
+  assert.equal(convList.status, 200)
+  const foundConv = convList.body.find((c) => c.id === convId)
+  assert.ok(foundConv, 'Conversa DM deve aparecer na lista')
+  assert.equal(
+    foundConv.last_message?.content,
+    '👾 GIF',
+    'Prévia da última mensagem de GIF sem texto na DM deve ser "👾 GIF"'
+  )
+  console.log('   DM testada com sucesso (texto, GIF, reações e prévia last_message = "👾 GIF")!')
+
+  // 12. Teste dos endpoints proxy do Giphy (Trending e Search)
+  console.log('12. Testando endpoints de proxy do Giphy...')
+  const trendingRes = await api('/gifs/trending', { token: bia.token })
+  assert.equal(trendingRes.status, 200)
+  assert.ok(Array.isArray(trendingRes.body))
+
+  const searchRes = await api('/gifs/search?q=cats', { token: bia.token })
+  assert.equal(searchRes.status, 200)
+  assert.ok(Array.isArray(searchRes.body))
+  console.log(
+    `   Giphy Trending (${trendingRes.body.length}) e Search (${searchRes.body.length}) OK!`
+  )
+
+  // 13. Permissões e Exclusão de Figurinha + Evento WS sticker:deleted
+  console.log('13. Testando permissões de exclusão de figurinha e evento WS sticker:deleted...')
+  const forbiddenDelStk = await api(`/servers/${serverId}/stickers/${sticker.id}`, {
     token: bia.token,
     method: 'DELETE'
   })
-  assert.equal(removeReact.status, 200, 'Remoção de reação deve retornar 200')
+  assert.equal(
+    forbiddenDelStk.status,
+    403,
+    'Membro comum que não enviou a figurinha não pode excluí-la (403)'
+  )
 
-  // Confere que agora count é 1
-  const listMsgsAfter = await api(`/channels/${channel.id}/messages`, { token: bia.token })
-  const fetchedMsg1After = listMsgsAfter.body.find((m) => m.id === msg1.id)
-  const thumbAfter = fetchedMsg1After.reactions.find((r) => r.emoji === '👍')
-  assert.ok(thumbAfter, 'Reação ainda deve existir (da Ana)')
-  assert.equal(thumbAfter.count, 1, 'Contagem deve ser 1 após remoção da Bia')
-  assert.deepEqual(thumbAfter.user_ids, [ana.id])
-  console.log('   Remoção de reação confirmada com sucesso!')
-
-  // 11. Teste dos endpoints proxy do Giphy (Trending e Search)
-  console.log('11. Testando endpoints de proxy do Giphy...')
-  const trendingRes = await api('/gifs/trending', { token: bia.token })
-  assert.equal(trendingRes.status, 200, 'Trending GIFs deve retornar 200')
-  assert.ok(Array.isArray(trendingRes.body), 'Trending GIFs deve ser um array')
-  console.log(`   Giphy Trending OK (retornou ${trendingRes.body.length} itens)`)
-
-  const searchRes = await api('/gifs/search?q=cats', { token: bia.token })
-  assert.equal(searchRes.status, 200, 'Search GIFs deve retornar 200')
-  assert.ok(Array.isArray(searchRes.body), 'Search GIFs deve ser um array')
-  console.log(`   Giphy Search OK (retornou ${searchRes.body.length} itens)`)
-
-  // 12. Exclusão de Figurinha
-  console.log('12. Ana excluindo a figurinha...')
   const delStk = await api(`/servers/${serverId}/stickers/${sticker.id}`, {
     token: ana.token,
     method: 'DELETE'
   })
   assert.equal(delStk.status, 200)
+
+  const wsStickerDeleted = await waitForWsEvent(
+    biaWs.events,
+    (e) => e.type === 'sticker:deleted' && e.payload?.sticker_id === sticker.id
+  )
+  assert.ok(wsStickerDeleted, 'Bia deve receber evento WS sticker:deleted')
+
   const listStkEmpty = await api(`/servers/${serverId}/stickers`, { token: ana.token })
   assert.equal(listStkEmpty.body.length, 0, 'Servidor não deve ter mais figurinhas')
-  console.log('   Figurinha excluída do servidor com sucesso!')
+  console.log('   Permissões e exclusão de figurinha (com WS sticker:deleted) confirmadas!')
 
-  // 13. Mensagem com figurinha excluída continua legível
-  console.log('13. Conferindo que mensagem de figurinha excluída continua legível...')
+  // 14. Mensagem com figurinha excluída continua legível e exclusão de mensagem funciona
+  console.log('14. Conferindo histórico pós-exclusão de figurinha e exclusão de mensagem...')
   const listMsgsFinal = await api(`/channels/${channel.id}/messages`, { token: bia.token })
   const finalMsg1 = listMsgsFinal.body.find((m) => m.id === msg1.id)
-  assert.ok(finalMsg1, 'Mensagem deve continuar existindo')
-  console.log('   Mensagem pós-exclusão mantida no histórico!')
+  assert.ok(finalMsg1, 'Mensagem deve continuar existindo após figurinha ser excluída')
+  assert.equal(finalMsg1.sticker_id ?? null, null, 'sticker_id deve ficar null após ON DELETE SET NULL')
 
-  console.log('\n=============================================')
-  console.log('🎉 TODOS OS 13 TESTES END-TO-END PASSARAM!')
-  console.log('=============================================\n')
+  const delMsg2 = await api(`/channels/${channel.id}/messages/${msg2.id}`, {
+    token: bia.token,
+    method: 'DELETE'
+  })
+  assert.ok(delMsg2.status === 200 || delMsg2.status === 204)
+  const wsMsgDelete = await waitForWsEvent(
+    anaWs.events,
+    (e) => e.type === 'message:delete' && e.payload?.message_id === msg2.id
+  )
+  assert.ok(wsMsgDelete, 'Ana deve receber evento WS message:delete')
+
+  biaWs.ws.close()
+  anaWs.ws.close()
+
+  console.log('\n=======================================================')
+  console.log('🎉 TODOS OS 14 TESTES END-TO-END (E2E) PASSARAM 100%!')
+  console.log('=======================================================\n')
 }
 
 runTests().catch((err) => {

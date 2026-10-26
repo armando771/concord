@@ -55,4 +55,23 @@ func TestGiphyServiceCacheAndFetch(t *testing.T) {
 	if items[0].Width != 200 || items[0].Height != 200 {
 		t.Fatalf("expected 200x200, got %dx%d", items[0].Width, items[0].Height)
 	}
+	if items[0].URL != "https://media.giphy.com/cat-downsized.gif" || items[0].PreviewURL != "https://media.giphy.com/cat-fixed.gif" {
+		t.Fatalf("unexpected urls: %+v", items[0])
+	}
+
+	// Test cache hit (does not call HTTP server again)
+	svc.setCached("trending:10:0", items)
+	cached, err := svc.Trending(context.Background(), 10, 0)
+	if err != nil || len(cached) != 1 || calls != 1 {
+		t.Fatalf("expected cached hit without extra HTTP call, calls=%d, err=%v", calls, err)
+	}
+}
+
+func TestGiphyHandlerRoutes(t *testing.T) {
+	t.Parallel()
+	h := NewHandler("")
+	items, err := h.service.Search(context.Background(), "cats", 25, 0)
+	if err != nil || len(items) != 0 {
+		t.Fatalf("expected empty slice with empty key, got %v, %v", items, err)
+	}
 }

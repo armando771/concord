@@ -3,9 +3,11 @@ import { compareTimestamps, mergeMessages } from './messageOrder'
 
 // Edição de mensagem (como no Discord): só o autor, só texto comum.
 
-/** Dá para editar? Sua mensagem, que não é do sistema nem enquete. */
+/** Dá para editar? Sua mensagem, que não é do sistema, enquete nem só figurinha. */
 export function canEditMessage(message: Message, meId: string | null | undefined): boolean {
-  return Boolean(meId) && message.author_id === meId && !message.system_kind && !message.poll
+  if (!meId || message.author_id !== meId || message.system_kind || message.poll) return false
+  if ((message.sticker_id || message.sticker) && !message.content) return false
+  return true
 }
 
 /** ↑ no campo vazio: a sua última mensagem editável da sala (ou null). */
@@ -59,6 +61,8 @@ export function applyMessageUpdate(existing: Message[], updated: Message): Messa
     poll: updated.poll ?? current.poll,
     reactions: updated.reactions ?? current.reactions,
     attachments: updated.attachments ?? current.attachments,
+    sticker: updated.sticker ?? current.sticker,
+    gif_metadata: updated.gif_metadata ?? current.gif_metadata,
     reply_to: updated.reply_to ?? current.reply_to
   }
   const withReplies = existing.map((m) =>

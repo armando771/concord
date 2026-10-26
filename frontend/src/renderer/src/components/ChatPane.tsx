@@ -371,7 +371,20 @@ function MessageItem({
               />
             )
           )}
-          {message.sticker && <MessageSticker sticker={message.sticker} />}
+          {message.sticker ? (
+            <MessageSticker sticker={message.sticker} />
+          ) : (
+            (message.sticker_id ||
+              (!message.content &&
+                !message.gif_url &&
+                !message.attachments?.length &&
+                !message.poll &&
+                !message.system_kind)) && (
+              <div className="my-1 flex h-28 w-28 items-center justify-center rounded-lg border border-dashed border-white/10 bg-white/5 p-2 text-center text-xs text-gray-500">
+                Figurinha indisponível
+              </div>
+            )
+          )}
           {message.gif_url && (
             <MessageGif gifUrl={message.gif_url} metadata={message.gif_metadata} />
           )}
@@ -614,7 +627,10 @@ function ChatPane({
   }
 
   const handleSaveEdit = async (message: Message, draft: string): Promise<void> => {
-    const outcome = editOutcome(message.content, draft, Boolean(message.attachments?.length))
+    const hasMedia = Boolean(
+      message.attachments?.length || message.sticker_id || message.sticker || message.gif_url
+    )
+    const outcome = editOutcome(message.content, draft, hasMedia)
     if (outcome.kind === 'unchanged') {
       closeEdit()
       return
@@ -862,16 +878,22 @@ function ChatPane({
   }
 
   const handleSendSticker = async (stk: ServerSticker): Promise<void> => {
+    stickToBottom.current = true
+    const sentReply = replyingTo
+    setReplyState(null)
     try {
-      await sendToRoom(room, '', [], null, { stickerId: stk.id })
+      await sendToRoom(room, '', [], sentReply?.id ?? null, { stickerId: stk.id })
     } catch {
       showToast.error('Não foi possível enviar a figurinha.')
     }
   }
 
   const handleSendGif = async (gif: GiphyItem): Promise<void> => {
+    stickToBottom.current = true
+    const sentReply = replyingTo
+    setReplyState(null)
     try {
-      await sendToRoom(room, draft, [], null, {
+      await sendToRoom(room, draft, [], sentReply?.id ?? null, {
         gifUrl: gif.url,
         gifMetadata: { width: gif.width, height: gif.height, preview_url: gif.preview_url }
       })

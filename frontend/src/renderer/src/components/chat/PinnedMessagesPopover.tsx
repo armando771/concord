@@ -7,6 +7,8 @@ import { PinIcon, XIcon } from '../icons'
 import Avatar from '../Avatar'
 import type { PinnedMessage } from '../../api/messages'
 import MessageAttachments from './MessageAttachments'
+import MessageSticker from './MessageSticker'
+import MessageGif from './MessageGif'
 import { PinnedListSkeleton } from '../skeleton/layouts'
 
 interface PinnedMessagesPopoverProps {
@@ -104,6 +106,18 @@ function PinnedMessageItem({
         <p className="mt-2 whitespace-pre-wrap break-words text-ds-sm text-gray-200">
           {pin.content}
         </p>
+      )}
+
+      {pin.sticker && (
+        <div className="mt-2">
+          <MessageSticker sticker={pin.sticker} />
+        </div>
+      )}
+
+      {pin.gif_url && (
+        <div className="mt-2">
+          <MessageGif gifUrl={pin.gif_url} metadata={pin.gif_metadata} />
+        </div>
       )}
 
       {/* Anexos */}

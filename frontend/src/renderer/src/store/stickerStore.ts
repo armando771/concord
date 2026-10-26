@@ -21,6 +21,15 @@ interface StickerState {
   handleWsEvent: (event: WsEvent) => boolean
 }
 
+// Sem figurinhas, devolva sempre a mesma referência: um `[]` novo por leitura
+// faz o zustand v5 entrar em loop de render (React #185).
+const NO_STICKERS: ServerSticker[] = []
+
+export const selectStickers =
+  (serverId?: string | null) =>
+  (s: Pick<StickerState, 'stickersByServer'>): ServerSticker[] =>
+    serverId ? (s.stickersByServer[serverId] ?? NO_STICKERS) : NO_STICKERS
+
 export const useStickerStore = create<StickerState>((set) => ({
   stickersByServer: {},
   loadingByServer: {},

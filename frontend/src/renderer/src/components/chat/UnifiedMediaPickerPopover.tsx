@@ -5,8 +5,12 @@ import {
   type ServerSticker,
   stickerFileUrl
 } from '../../api/stickers'
-import { useStickerStore } from '../../store/stickerStore'
+import { useStickerStore, selectStickers } from '../../store/stickerStore'
 import { useAuthStore } from '../../store/authStore'
+import { useServerStore } from '../../store/serverStore'
+import { useServerAccess } from '../../store/useServerAccess'
+import { Perm } from '../../lib/permissions'
+import { showToast } from '../../store/toastStore'
 import { ensureMediaToken } from '../../store/mediaToken'
 import { PlusIcon, TrashIcon } from '../icons'
 import StickerUploadModal from './StickerUploadModal'
@@ -98,10 +102,13 @@ export default function UnifiedMediaPickerPopover({
   const [loadingGifs, setLoadingGifs] = useState(false)
 
   // Stickers
-  const stickers = useStickerStore((s) => (serverId ? s.stickersByServer[serverId] ?? [] : []))
+  const stickers = useStickerStore(selectStickers(serverId))
   const loadStickers = useStickerStore((s) => s.loadStickers)
   const deleteSticker = useStickerStore((s) => s.deleteSticker)
   const currentUserId = useAuthStore((s) => s.user?.id)
+  const viewingServer = useServerStore((s) => Boolean(serverId && s.currentServer?.id === serverId))
+  const access = useServerAccess()
+  const isModeratorOrOwner = viewingServer && access.can(Perm.MANAGE_EXPRESSIONS)
 
   const ref = useRef<HTMLDivElement>(null)
 
@@ -343,14 +350,20 @@ export default function UnifiedMediaPickerPopover({
                           <StickerItem
                             key={stk.id}
                             sticker={stk}
-                            canDelete={stk.uploader_id === currentUserId}
+                            canDelete={stk.uploader_id === currentUserId || isModeratorOrOwner}
                             onSelect={(selected) => {
                               onSelectSticker(selected)
                               onClose()
                             }}
                             onDelete={(toDelete) => {
                               if (serverId) {
-                                deleteSticker(serverId, toDelete.id)
+                                deleteSticker(serverId, toDelete.id).catch((err) => {
+                                  showToast.error(
+                                    err instanceof Error
+                                      ? err.message
+                                      : 'Não foi possível excluir a figurinha.'
+                                  )
+                                })
                               }
                             }}
                           />

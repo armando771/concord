@@ -108,10 +108,15 @@ export function applyPollUpdate(
   }
 }
 
-/** Texto da mensagem para prévias (lista de DMs, notificações). */
-export function messagePreview(message: Pick<Message, 'content' | 'poll' | 'attachments'>): string {
+/** Texto da mensagem para prévias (lista de DMs, notificações, barra de resposta). */
+export function messagePreview(
+  message: Pick<Message, 'content' | 'poll' | 'attachments' | 'sticker' | 'sticker_id' | 'gif_url'>
+): string {
   if (message.poll) return `📊 ${message.poll.question}`
   if (message.content) return message.content
+  if (message.sticker) return `💟 Figurinha :${message.sticker.name}:`
+  if (message.sticker_id) return '💟 Figurinha'
+  if (message.gif_url) return '👾 GIF'
   return attachmentLabel(message.attachments) ?? ''
 }
 
