@@ -25,10 +25,10 @@ function DeviceSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+        className="glass-input !py-2 text-sm"
       >
         {options.map((o) => (
-          <option key={o.id} value={o.id}>
+          <option key={o.id} value={o.id} className="bg-[#111214]">
             {o.label}
           </option>
         ))}
