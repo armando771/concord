@@ -26,12 +26,15 @@ import {
   type ProfileDraft
 } from '../../../lib/profileValidation'
 import { MAX_LINKS, detectProvider, linkError, normalizeLink } from '../../../lib/profileLinks'
-import ProfileCardBody, { CARD_BG } from '../../profile/ProfileCardBody'
+import ProfileCardBody from '../../profile/ProfileCardBody'
+import ProfileCardFrame from '../../profile/ProfileCardFrame'
+import { profileThemeLook, resolveProfileTheme } from '../../../lib/profileTheme'
 import LinkIcon from '../../profile/LinkIcon'
 import { BirthdaySettings } from '../../AppSettings'
 import { PlusIcon, XIcon } from '../../icons'
 import ImageCropModal, { type ImageKind } from '../ImageCropModal'
 import NameStyleEditor from '../NameStyleEditor'
+import ProfileThemeEditor from '../ProfileThemeEditor'
 
 const DEFAULT_BANNER = 'linear-gradient(135deg, #5865f2, #8b5cf6)'
 const inputClass =
@@ -213,6 +216,8 @@ function ProfilesSection(): React.JSX.Element | null {
     }
   }
 
+  const theme = resolveProfileTheme(draft.profile_theme)
+  const look = profileThemeLook(theme)
   const avatarUrl = previewMedia(draft.avatar, user.avatar_url)
   const bannerUrl = previewMedia(draft.banner, user.banner_url)
   const links = draft.links
@@ -323,6 +328,16 @@ function ProfilesSection(): React.JSX.Element | null {
           </Field>
 
           <Field
+            label="Tema do perfil"
+            hint="Borda, fundo e efeito do seu cartão de perfil, do jeito que os outros veem."
+          >
+            <ProfileThemeEditor
+              value={draft.profile_theme}
+              onChange={(next) => set('profile_theme', next)}
+            />
+          </Field>
+
+          <Field
             label="Nota"
             hint="O balão que aparece ao lado da sua foto."
             error={errors.status_text}
@@ -424,13 +439,17 @@ function ProfilesSection(): React.JSX.Element | null {
         {/* Prévia */}
         <div className="w-full shrink-0 lg:sticky lg:top-0 lg:w-[300px]">
           <p className="mb-2 text-ds-sm font-medium text-gray-300">Prévia</p>
-          <div
-            className="rounded-xl border border-white/10 text-sm text-gray-200 shadow-2xl"
-            style={{ background: CARD_BG }}
+          <ProfileCardFrame
+            look={look}
+            effect={theme.effect}
+            className="text-sm text-gray-200 shadow-2xl"
           >
             <ProfileCardBody
               preview
               isMe
+              surface={look.surface}
+              onEditAvatar={() => fileInputs.avatar.current?.click()}
+              onEditBanner={() => fileInputs.banner.current?.click()}
               profile={{
                 display_name: draft.display_name.trim() || user.username,
                 name_style: draft.name_style,
@@ -447,7 +466,10 @@ function ProfilesSection(): React.JSX.Element | null {
               status={user.status ?? 'online'}
               fallbackBanner={DEFAULT_BANNER}
             />
-          </div>
+          </ProfileCardFrame>
+          <p className="mt-2 text-xs text-gray-500">
+            Passe o mouse no avatar ou no banner para trocar a imagem.
+          </p>
         </div>
       </div>
 

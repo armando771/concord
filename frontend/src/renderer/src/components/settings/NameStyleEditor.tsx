@@ -59,7 +59,8 @@ export default function NameStyleEditor({
               className={optionClass(value.effect === e.id)}
               onClick={() => onChange(withEffect(value, e.id))}
             >
-              {e.label}
+              {/* O botão já mostra o efeito (com as cores atuais, se servirem). */}
+              <StyledName name={e.label} style={{ ...withEffect(value, e.id), font: 'default' }} />
             </button>
           ))}
         </div>

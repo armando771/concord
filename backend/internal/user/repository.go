@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"gin-quickstart/backend/internal/namestyle"
+	"gin-quickstart/backend/internal/profiletheme"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -39,6 +40,11 @@ const userColumns = `
 	name_font,
 	name_effect,
 	name_colors,
+	profile_border,
+	profile_border_colors,
+	profile_background,
+	profile_background_colors,
+	profile_effect,
 	friend_request_policy,
 	allow_server_dms,
 	active,
@@ -66,6 +72,11 @@ func scanUser(row pgx.Row) (*User, error) {
 		&user.NameStyle.Font,
 		&user.NameStyle.Effect,
 		&user.NameStyle.Colors,
+		&user.ProfileTheme.Border,
+		&user.ProfileTheme.BorderColors,
+		&user.ProfileTheme.Background,
+		&user.ProfileTheme.BackgroundColors,
+		&user.ProfileTheme.Effect,
 		&user.FriendRequestPolicy,
 		&user.AllowServerDMs,
 		&user.Active,
@@ -273,6 +284,8 @@ func (r *Repository) Create(
 	ctx context.Context,
 	user *User,
 ) error {
+	// As colunas do tema nascem com o padrão; o JSON da conta nova já sai igual.
+	user.ProfileTheme = profiletheme.Default()
 	return r.db.QueryRow(
 		ctx,
 		`
@@ -323,6 +336,11 @@ func (r *Repository) UpdateProfile(ctx context.Context, id string, in ProfileInp
 			name_font = COALESCE($8, name_font),
 			name_effect = COALESCE($9, name_effect),
 			name_colors = COALESCE($10, name_colors),
+			profile_border = COALESCE($11, profile_border),
+			profile_border_colors = COALESCE($12, profile_border_colors),
+			profile_background = COALESCE($13, profile_background),
+			profile_background_colors = COALESCE($14, profile_background_colors),
+			profile_effect = COALESCE($15, profile_effect),
 			updated_at = NOW()
 		WHERE id = $1
 		RETURNING `+userColumns,
@@ -336,7 +354,32 @@ func (r *Repository) UpdateProfile(ctx context.Context, id string, in ProfileInp
 		styleFont(in.NameStyle),
 		styleEffect(in.NameStyle),
 		styleColors(in.NameStyle),
+		themeField(in.ProfileTheme, func(t *profiletheme.Theme) string { return t.Border }),
+		themeColors(in.ProfileTheme, func(t *profiletheme.Theme) []string { return t.BorderColors }),
+		themeField(in.ProfileTheme, func(t *profiletheme.Theme) string { return t.Background }),
+		themeColors(in.ProfileTheme, func(t *profiletheme.Theme) []string { return t.BackgroundColors }),
+		themeField(in.ProfileTheme, func(t *profiletheme.Theme) string { return t.Effect }),
 	))
+}
+
+// themeField e themeColors: tema nil vira NULL (COALESCE mantém o salvo).
+func themeField(t *profiletheme.Theme, get func(*profiletheme.Theme) string) *string {
+	if t == nil {
+		return nil
+	}
+	v := get(t)
+	return &v
+}
+
+// Lista vazia grava '{}' (nunca NULL): o tema validado sempre traz slices.
+func themeColors(t *profiletheme.Theme, get func(*profiletheme.Theme) []string) []string {
+	if t == nil {
+		return nil
+	}
+	if c := get(t); c != nil {
+		return c
+	}
+	return []string{}
 }
 
 func styleFont(s *namestyle.Style) *string {
