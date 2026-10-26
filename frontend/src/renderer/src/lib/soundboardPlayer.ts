@@ -1,21 +1,16 @@
 import { soundFileUrl } from '../api/soundboard'
 import { ensureMediaToken } from '../store/mediaToken'
+import { routeElementToOutput, type VoiceRoute } from './voiceOutput'
 
-type SinkAudioElement = HTMLAudioElement & {
-  setSinkId?: (id: string) => Promise<void>
-}
-
-const activeElements = new Set<SinkAudioElement>()
+const activeClips = new Map<HTMLAudioElement, VoiceRoute>()
 
 export function setActiveSoundboardVolume(volume: number): void {
   const clamped = Math.max(0, Math.min(1, volume))
-  activeElements.forEach((el) => {
-    el.volume = clamped
-  })
+  activeClips.forEach((route) => route.setVolume(clamped))
 }
 
 export function stopAllSoundboardAudio(): void {
-  activeElements.forEach((el) => {
+  activeClips.forEach((route, el) => {
     try {
       el.pause()
       el.removeAttribute('src')
@@ -23,14 +18,14 @@ export function stopAllSoundboardAudio(): void {
     } catch {
       // ignora em ambiente de teste
     }
+    route.stop()
   })
-  activeElements.clear()
+  activeClips.clear()
 }
 
 export async function playSoundboardClip(opts: {
   soundId: string
   volume: number
-  outputDeviceId: string
   onEnded?: () => void
 }): Promise<void> {
   const clampedVolume = Math.max(0, Math.min(1, opts.volume))
@@ -45,16 +40,17 @@ export async function playSoundboardClip(opts: {
     return
   }
 
-  const el = new Audio(soundFileUrl(opts.soundId, token)) as SinkAudioElement
-  el.volume = clampedVolume
-  if (opts.outputDeviceId && typeof el.setSinkId === 'function') {
-    void el.setSinkId(opts.outputDeviceId).catch(() => {})
-  }
+  // CORS: o Web Audio só lê a mídia de outra origem com a requisição anônima.
+  const el = new Audio()
+  el.crossOrigin = 'anonymous'
+  el.src = soundFileUrl(opts.soundId, token)
+  const route = routeElementToOutput(el, clampedVolume)
+  activeClips.set(el, route)
 
-  activeElements.add(el)
   const cleanup = (): void => {
-    if (!activeElements.has(el)) return
-    activeElements.delete(el)
+    if (!activeClips.has(el)) return
+    activeClips.delete(el)
+    route.stop()
     opts.onEnded?.()
   }
 

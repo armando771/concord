@@ -52,6 +52,7 @@ import { useSoundboardStore } from './soundboardStore'
 import { useBoostStore } from './boostStore'
 import { useActivityStore } from './activityStore'
 import { stopAllSoundboardAudio } from '../lib/soundboardPlayer'
+import { setVoiceOutputDevice } from '../lib/voiceOutput'
 
 export type CallStatus = 'idle' | 'ringing' | 'outgoing' | 'active'
 export type CallKind = 'dm' | 'channel'
@@ -406,6 +407,11 @@ const EMPTY_MEDIA: RemoteMedia = {
   videoStreams: {},
   mediaPeers: {},
   availableScreens: []
+}
+
+/** Microfone da chamada em andamento (null fora dela), para o medidor de sensibilidade. */
+export function getCallMicrophone(): MicHandle | null {
+  return localMic
 }
 
 export const useCallStore = create<CallState>()((set, get) => {
@@ -1163,6 +1169,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     setOutputDevice: (deviceId) => {
       set({ outputDeviceId: deviceId })
       setSoundOutput(deviceId)
+      setVoiceOutputDevice(deviceId)
       saveAudioPrefs({ inputId: get().inputDeviceId, outputId: deviceId })
     },
 
@@ -1778,6 +1785,7 @@ useCallStore.subscribe((s) => {
 
 // Os efeitos sonoros saem no mesmo dispositivo escolhido para as vozes.
 setSoundOutput(useCallStore.getState().outputDeviceId)
+setVoiceOutputDevice(useCallStore.getState().outputDeviceId)
 
 // Dispositivo escolhido desconectado (ex.: tirou o headset): volta para o
 // padrão do sistema em vez de ficar sem microfone/som.

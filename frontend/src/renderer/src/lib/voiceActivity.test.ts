@@ -4,7 +4,11 @@ import {
   mergeLocalSpeaking,
   rmsDb,
   sameIds,
+  smoothingCoefficient,
   stepVoiceActivity,
+  thresholdDb,
+  voiceActivityFor,
+  VOICE_ACTIVITY_DEFAULTS,
   type VoiceActivityConfig
 } from './voiceActivity'
 
@@ -114,5 +118,41 @@ describe('sameIds', () => {
     expect(sameIds(['a', 'b'], ['b', 'a'])).toBe(false)
     expect(sameIds(['a'], ['a', 'b'])).toBe(false)
     expect(sameIds([], [])).toBe(true)
+  })
+})
+
+describe('thresholdDb', () => {
+  it('vai de −10 dB (sensibilidade 0) a −60 dB (100), com 60 em −40 dB', () => {
+    expect(thresholdDb(0)).toBe(-10)
+    expect(thresholdDb(100)).toBe(-60)
+    expect(thresholdDb(60)).toBeCloseTo(-40)
+  })
+
+  it('limita a sensibilidade entre 0 e 100', () => {
+    expect(thresholdDb(-5)).toBe(-10)
+    expect(thresholdDb(150)).toBe(-60)
+  })
+})
+
+describe('voiceActivityFor', () => {
+  it('usa o limiar da sensibilidade e a histerese padrão (6 dB)', () => {
+    expect(voiceActivityFor(60)).toEqual({ ...VOICE_ACTIVITY_DEFAULTS, onDb: -40, offDb: -46 })
+  })
+})
+
+describe('smoothingCoefficient', () => {
+  it('é maior para constantes de tempo menores e fica entre 0 e 1', () => {
+    const fast = smoothingCoefficient(2, 48_000)
+    const slow = smoothingCoefficient(30, 48_000)
+    expect(fast).toBeGreaterThan(slow)
+    expect(fast).toBeGreaterThan(0)
+    expect(slow).toBeLessThan(1)
+  })
+
+  it('depois de uma constante de tempo, cobre ~63% do caminho', () => {
+    const sampleRate = 48_000
+    const coefficient = smoothingCoefficient(10, sampleRate)
+    const samples = 10 * 0.001 * sampleRate
+    expect(1 - (1 - coefficient) ** samples).toBeCloseTo(1 - Math.exp(-1), 2)
   })
 })
