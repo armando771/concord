@@ -179,6 +179,87 @@ func (h *Handler) DeleteChannelMessage(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "message deleted"})
 }
 
+func (h *Handler) ListChannelPins(c *gin.Context) {
+	channelID := c.Param("channelId")
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	if !h.requireChannel(c, channelID, userID, 0) {
+		return
+	}
+	if perms, err := h.perms.ChannelPerms(c.Request.Context(), channelID, userID); err != nil || !permission.Has(perms, permission.ReadHistory) {
+		c.JSON(http.StatusOK, []PinnedMessage{})
+		return
+	}
+
+	pins, err := h.service.ListChannelPins(c.Request.Context(), channelID, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list pinned messages"})
+		return
+	}
+
+	c.JSON(http.StatusOK, pins)
+}
+
+func (h *Handler) PinChannelMessage(c *gin.Context) {
+	channelID := c.Param("channelId")
+	messageID := c.Param("messageId")
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	if !h.requireChannel(c, channelID, userID, permission.ManageMessages) {
+		return
+	}
+
+	pinned, err := h.service.PinChannelMessage(c.Request.Context(), channelID, messageID, userID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrPinLimitReached):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "pin_limit_reached"})
+		case errors.Is(err, ErrMessageNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		case errors.Is(err, permission.ErrMissingPermission):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "missing_permission"})
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, pinned)
+}
+
+func (h *Handler) UnpinChannelMessage(c *gin.Context) {
+	channelID := c.Param("channelId")
+	messageID := c.Param("messageId")
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	if !h.requireChannel(c, channelID, userID, permission.ManageMessages) {
+		return
+	}
+
+	if err := h.service.UnpinChannelMessage(c.Request.Context(), channelID, messageID, userID); err != nil {
+		switch {
+		case errors.Is(err, ErrMessageNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		case errors.Is(err, permission.ErrMissingPermission):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "missing_permission"})
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "message unpinned"})
+}
+
 type editInput struct {
 	Content *string `json:"content"`
 }

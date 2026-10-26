@@ -81,6 +81,14 @@ export interface Message {
   created_at: string
   /** Quando o autor editou o texto pela última vez; ausente = nunca editada. */
   edited_at?: string | null
+  /** Quando a mensagem foi fixada no canal; ausente = não fixada. */
+  pinned_at?: string | null
+}
+
+export interface PinnedMessage extends Message {
+  pinned_by?: MessageAuthor
+  pinned_by_id?: string
+  pinned_at: string
 }
 
 export interface PollAnswerInput {
@@ -130,6 +138,18 @@ export function editMessage(room: string, messageId: string, content: string): P
 
 export function deleteChannelMessage(channelId: string, messageId: string): Promise<void> {
   return request<void>(`/channels/${channelId}/messages/${messageId}`, { method: 'DELETE' })
+}
+
+export function listChannelPins(channelId: string): Promise<PinnedMessage[]> {
+  return request<PinnedMessage[]>(`/channels/${channelId}/pins`)
+}
+
+export function pinChannelMessage(channelId: string, messageId: string): Promise<PinnedMessage> {
+  return request<PinnedMessage>(`/channels/${channelId}/pins/${messageId}`, { method: 'PUT' })
+}
+
+export function unpinChannelMessage(channelId: string, messageId: string): Promise<void> {
+  return request<void>(`/channels/${channelId}/pins/${messageId}`, { method: 'DELETE' })
 }
 
 export function addChannelReaction(

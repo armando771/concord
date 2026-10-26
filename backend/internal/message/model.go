@@ -48,6 +48,15 @@ type Message struct {
 	CreatedAt       time.Time    `json:"created_at"`
 	// Quando o autor editou o texto pela última vez; nil = nunca editada.
 	EditedAt *time.Time `json:"edited_at,omitempty"`
+	// Quando a mensagem foi fixada no canal; nil = não fixada.
+	PinnedAt *time.Time `json:"pinned_at,omitempty"`
+}
+
+type PinnedMessage struct {
+	Message
+	PinnedBy   *Author   `json:"pinned_by,omitempty"`
+	PinnedByID *string   `json:"pinned_by_id,omitempty"`
+	PinnedAt   time.Time `json:"pinned_at"`
 }
 
 type CreateEvent struct {
@@ -82,4 +91,16 @@ type ReactionEvent struct {
 	MessageID      string  `json:"message_id"`
 	UserID         string  `json:"user_id"`
 	Emoji          string  `json:"emoji"`
+}
+
+type PinEvent struct {
+	ChannelID string        `json:"channel_id"`
+	ServerID  string        `json:"server_id,omitempty"`
+	Message   PinnedMessage `json:"message"`
+}
+
+type UnpinEvent struct {
+	ChannelID string `json:"channel_id"`
+	ServerID  string `json:"server_id,omitempty"`
+	MessageID string `json:"message_id"`
 }

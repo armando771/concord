@@ -78,6 +78,8 @@ type fakePublisher struct {
 
 func (p *fakePublisher) PublishMessageCreate(CreateEvent)       {}
 func (p *fakePublisher) PublishMessageDelete(DeleteEvent)       {}
+func (p *fakePublisher) PublishMessagePin(PinEvent)             {}
+func (p *fakePublisher) PublishMessageUnpin(UnpinEvent)         {}
 func (p *fakePublisher) PublishPollUpdate(PollUpdateEvent)      {}
 func (p *fakePublisher) PublishReactionAdd(ReactionEvent)       {}
 func (p *fakePublisher) PublishReactionRemove(ReactionEvent)    {}
