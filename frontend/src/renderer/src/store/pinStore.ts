@@ -20,6 +20,15 @@ interface PinState {
   onMessageUpdate: (message: Message) => void
 }
 
+// Sem fixadas, devolva sempre a mesma referência: um `[]` novo por leitura faz
+// o zustand v5 entrar em loop de render (React #185).
+const NO_PINS: PinnedMessage[] = []
+
+export const selectPins =
+  (channelId: string) =>
+  (s: Pick<PinState, 'pinsByChannel'>): PinnedMessage[] =>
+    s.pinsByChannel[channelId] ?? NO_PINS
+
 export const usePinStore = create<PinState>((set, get) => ({
   pinsByChannel: {},
   loadingByChannel: {},
@@ -62,8 +71,7 @@ export const usePinStore = create<PinState>((set, get) => ({
       get().onPinRemove(channelId, messageId)
       showToast.info('Mensagem desafixada.')
     } catch (err: unknown) {
-      const errorMsg =
-        err instanceof Error ? err.message : 'Falha ao desafixar mensagem.'
+      const errorMsg = err instanceof Error ? err.message : 'Falha ao desafixar mensagem.'
       showToast.error(errorMsg)
       throw err
     }

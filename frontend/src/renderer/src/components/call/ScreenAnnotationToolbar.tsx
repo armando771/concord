@@ -1,5 +1,6 @@
 import {
   useAnnotationStore,
+  selectMyStrokeIds,
   PRESET_COLORS,
   PRESET_WIDTHS,
   type AnnotationTool
@@ -35,7 +36,7 @@ export default function ScreenAnnotationToolbar({
   const setWidth = useAnnotationStore((s) => s.setWidth)
   const undo = useAnnotationStore((s) => s.undo)
   const clear = useAnnotationStore((s) => s.clear)
-  const myStrokes = useAnnotationStore((s) => s.myStrokeIds[sharerId] ?? [])
+  const myStrokes = useAnnotationStore(selectMyStrokeIds(sharerId))
 
   const tools: { id: AnnotationTool; label: string; icon: React.ReactNode }[] = [
     { id: 'pen', label: 'Caneta', icon: <PencilIcon className="h-4 w-4" /> },
@@ -85,7 +86,9 @@ export default function ScreenAnnotationToolbar({
                 onClick={() => setColor(c)}
                 style={{ backgroundColor: c }}
                 className={`h-4.5 w-4.5 rounded-full transition-transform ${
-                  isSelected ? 'scale-125 ring-2 ring-white shadow-md' : 'opacity-80 hover:scale-110 hover:opacity-100'
+                  isSelected
+                    ? 'scale-125 ring-2 ring-white shadow-md'
+                    : 'opacity-80 hover:scale-110 hover:opacity-100'
                 }`}
               />
             )
@@ -105,7 +108,9 @@ export default function ScreenAnnotationToolbar({
                 title={`Espessura ${w}px`}
                 onClick={() => setWidth(w)}
                 className={`flex h-7 w-6 items-center justify-center rounded-lg transition-colors ${
-                  isSelected ? 'bg-white/20 text-white ring-1 ring-white/30' : 'text-gray-400 hover:bg-white/10'
+                  isSelected
+                    ? 'bg-white/20 text-white ring-1 ring-white/30'
+                    : 'text-gray-400 hover:bg-white/10'
                 }`}
               >
                 <span
