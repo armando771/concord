@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { windowState } from './windowState'
 
-const win = (destroyed: boolean, minimized: boolean, visible: boolean) => ({
+interface FakeWindow {
+  isDestroyed(): boolean
+  isMinimized(): boolean
+  isVisible(): boolean
+}
+
+const win = (destroyed: boolean, minimized: boolean, visible: boolean): FakeWindow => ({
   isDestroyed: () => destroyed,
   isMinimized: () => minimized,
   isVisible: () => visible
