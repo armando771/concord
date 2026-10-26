@@ -8,6 +8,9 @@ import { profileCardHandler } from '../store/profileCardStore'
 import { userMenuHandler } from '../store/userMenuStore'
 import { showToast } from '../store/toastStore'
 import ChatPane from '../components/ChatPane'
+import MessageSearchBar from '../components/search/MessageSearchBar'
+import SearchResultsPanel from '../components/search/SearchResultsPanel'
+import { useSearchStore } from '../store/searchStore'
 import Avatar from '../components/Avatar'
 import StyledName from '../components/StyledName'
 import GroupIcon from '../components/friends/GroupIcon'
@@ -110,6 +113,9 @@ function GroupChat(): React.JSX.Element {
   // Texto do nome enquanto edita (null = mostra o nome salvo).
   const [editingName, setEditingName] = useState<string | null>(null)
   const [showMembers, setShowMembers] = useState(true)
+  const searchOpen = useSearchStore(
+    (s) => s.scope?.kind === 'conversation' && s.scope.id === conversationId
+  )
   const [adding, setAdding] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const [removing, setRemoving] = useState<ConversationOtherUser | null>(null)
@@ -239,6 +245,16 @@ function GroupChat(): React.JSX.Element {
           >
             Sair do grupo
           </button>
+          <MessageSearchBar
+            scope={{ kind: 'conversation', id: conv.id }}
+            name={title}
+            users={conv.members.map((m) => ({
+              id: m.id,
+              username: m.username,
+              displayName: m.display_name,
+              avatarUrl: m.avatar_url
+            }))}
+          />
         </div>
       </header>
 
@@ -253,7 +269,8 @@ function GroupChat(): React.JSX.Element {
             }))}
           />
         </div>
-        {showMembers && (
+        {searchOpen && <SearchResultsPanel scope={{ kind: 'conversation', id: conv.id }} />}
+        {showMembers && !searchOpen && (
           <aside className="w-60 shrink-0 overflow-y-auto border-l border-white/6 bg-[#0b0c10]/60 px-2 py-4">
             <p className="px-2 pb-1 text-ds-sm font-medium text-gray-400">
               Membros — {conv.members.length}

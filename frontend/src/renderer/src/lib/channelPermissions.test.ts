@@ -5,6 +5,7 @@ import {
   isPrivateChannel,
   overwriteRows,
   privateOverwrite,
+  targetRows,
   triState,
   withTriState
 } from './channelPermissions'
@@ -152,5 +153,33 @@ describe('overwriteRows', () => {
       () => undefined
     )
     expect(rows.map((r) => r.id)).toEqual(['vip'])
+  })
+})
+
+describe('targetRows', () => {
+  const role = (id: string, position: number, is_default = false): Role =>
+    ({ id, name: id, color: null, position, is_default }) as Role
+
+  it('lista todos os cargos: @everyone primeiro, depois do mais alto ao mais baixo', () => {
+    const rows = targetRows(
+      undefined,
+      [role('mod', 5), role('everyone', 0, true), role('admin', 9)],
+      () => undefined
+    )
+    expect(rows.map((r) => r.id)).toEqual(['everyone', 'admin', 'mod'])
+    expect(rows.every((r) => r.hasRules === false)).toBe(true)
+  })
+
+  it('marca quem tem regra e põe membros com regra no fim', () => {
+    const rows = targetRows(
+      [ow('role', 'mod', Perm.SEND_MESSAGES), ow('member', 'u1', 0, Perm.VIEW_CHANNEL)],
+      [role('everyone', 0, true), role('mod', 5)],
+      (id) => (id === 'u1' ? 'Ana' : undefined)
+    )
+    expect(rows.map((r) => [r.type, r.id, r.hasRules])).toEqual([
+      ['role', 'everyone', false],
+      ['role', 'mod', true],
+      ['member', 'u1', true]
+    ])
   })
 })

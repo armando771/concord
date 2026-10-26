@@ -20,6 +20,7 @@ import VoiceStateIcons from './call/VoiceStateIcons'
 import VoiceChannelTimer from './call/VoiceChannelTimer'
 import LiveBadge from './call/LiveBadge'
 import { GameBadge } from './ActivityLine'
+import CallActivityBadge from './call/CallActivityBadge'
 import { liveUserIds } from '../lib/liveBadge'
 import { useUserAudioStore } from '../store/userAudioStore'
 import { useLevelStore } from '../store/levelStore'
@@ -88,7 +89,7 @@ export function ServerSidebar(): React.JSX.Element {
   const maestroChannels = useMusicStore(
     (s) => (currentServer ? s.presence[currentServer.id] : undefined) ?? NO_CHANNELS
   )
-  const openMusicPanel = useMusicStore((s) => s.openPanel)
+  const toggleMusicPanel = useMusicStore((s) => s.togglePanel)
   const roles = useServerStore((s) => s.roles)
   const channels = useServerStore((s) => s.channels)
   const channelsLoadedFor = useServerStore((s) => s.channelsLoadedFor)
@@ -1030,6 +1031,8 @@ export function ServerSidebar(): React.JSX.Element {
                               {/* Selo de nível só na lista de membros da direita; aqui o
                                   nível só ordena a lista (ver voiceOrder). */}
                               <span className="ml-auto flex items-center gap-0.5 pr-1">
+                                {/* Atividade da chamada: só sabemos de quem joga na nossa. */}
+                                {connectedHere && <CallActivityBadge userId={p.user_id} />}
                                 <GameBadge userId={p.user_id} />
                                 {live.has(p.user_id) && <LiveBadge />}
                                 {!isMe && locallyMuted[p.user_id]?.muted && (
@@ -1051,13 +1054,14 @@ export function ServerSidebar(): React.JSX.Element {
                             abre o painel "Tocando agora" (não o perfil). */}
                         {maestroChannels.includes(ch.id) && (
                           <div
+                            data-maestro-tile=""
                             onContextMenu={userMenuHandler(
                               maestroIdentity(ch.id),
                               MAESTRO_NAME,
                               user?.id
                             )}
                             onClick={() => {
-                              openMusicPanel()
+                              toggleMusicPanel()
                               if (currentServer?.id && channelId !== ch.id) {
                                 navigate(`/servers/${currentServer.id}/channels/${ch.id}`)
                               }

@@ -1,7 +1,8 @@
 import { badgeArt, type BadgeArtSize } from '../../lib/badgeArt'
-import { rarityMeta } from '../../lib/badges'
+import { isMythic, rarityMeta } from '../../lib/badges'
 import type { BadgeRarity } from '../../api/badges'
 import { StarIcon } from '../icons'
+import MythicIcon from './MythicIcon'
 
 interface BadgeIconProps {
   category: string
@@ -11,6 +12,8 @@ interface BadgeIconProps {
   rarity?: BadgeRarity
   /** Ainda não conquistado: cinza e apagado. */
   locked?: boolean
+  /** Arte grande do modal: no mítico, segue o mouse e tem partículas. */
+  hero?: boolean
   className?: string
 }
 
@@ -21,6 +24,7 @@ function BadgeIcon({
   size,
   rarity,
   locked = false,
+  hero = false,
   className = ''
 }: BadgeIconProps): React.JSX.Element {
   const variant: BadgeArtSize = size > 64 ? 'lg' : 'sm'
@@ -36,6 +40,9 @@ function BadgeIcon({
         <StarIcon className="h-[80%] w-[80%]" />
       </span>
     )
+  }
+  if (!locked && isMythic(rarity)) {
+    return <MythicIcon src={src} size={size} hero={hero} className={className} />
   }
   return (
     <img

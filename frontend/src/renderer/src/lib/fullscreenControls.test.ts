@@ -4,6 +4,7 @@ import {
   ClickDisambiguator,
   CONTROLS_HIDE_DELAY_MS,
   DOUBLE_CLICK_MS,
+  canTileFullscreen,
   isInteractiveTarget
 } from './fullscreenControls'
 
@@ -112,5 +113,16 @@ describe('isInteractiveTarget', () => {
   it('o vídeo em si conta', () => {
     expect(isInteractiveTarget(target(false))).toBe(false)
     expect(isInteractiveTarget(null)).toBe(false)
+  })
+})
+
+describe('canTileFullscreen', () => {
+  it('câmera ou transmissão com vídeo abre em tela cheia', () => {
+    expect(canTileFullscreen(true, true)).toBe(true)
+  })
+
+  it('sem vídeo, ou na minha própria tela, não abre', () => {
+    expect(canTileFullscreen(true, false)).toBe(false)
+    expect(canTileFullscreen(false, true)).toBe(false)
   })
 })

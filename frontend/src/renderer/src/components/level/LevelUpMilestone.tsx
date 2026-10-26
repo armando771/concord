@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useAuthStore } from '../../store/authStore'
-import { useLevelStore } from '../../store/levelStore'
 import { levelUpEffects, RAINBOW, type MilestoneKind } from '../../lib/levels'
 import { canvasScale } from '../../lib/canvasBudget'
 import { useCallStore } from '../../store/callStore'
 import { buildScene, DRAWS_NUMBER, IMPACT_MS } from './milestoneScenes'
 import Crown from './Crown'
+import { useScreenCelebration } from './useScreenCelebration'
 
 /** Quando o título entra em cada cena (ms): depois do "momento" dela. */
 const TITLE_AT: Record<MilestoneKind, number> = {
@@ -34,8 +33,7 @@ const reducedMotion = (): boolean =>
  * acaba. Com prefers-reduced-motion só o título aparece e some (fade).
  */
 function LevelUpMilestone(): React.JSX.Element | null {
-  const meId = useAuthStore((s) => s.user?.id)
-  const celebration = useLevelStore((s) => (meId ? s.celebrations[meId] : undefined))
+  const celebration = useScreenCelebration()
   const fx = useMemo(
     () => (celebration ? levelUpEffects(celebration.level, celebration.previous) : null),
     [celebration]

@@ -1,8 +1,7 @@
 import { useMemo } from 'react'
-import { useAuthStore } from '../../store/authStore'
-import { useLevelStore } from '../../store/levelStore'
 import { levelUpEffects, RAINBOW } from '../../lib/levels'
 import Crown from './Crown'
+import { useScreenCelebration } from './useScreenCelebration'
 
 /** Duração da celebração lendária em tela cheia. */
 const LEGENDARY_MS = 4000
@@ -14,8 +13,7 @@ const LEGENDARY_MS = 4000
  * pointer-events: none — nunca bloqueia o app — e sai do DOM quando acaba.
  */
 function LevelUpScreen(): React.JSX.Element | null {
-  const meId = useAuthStore((s) => s.user?.id)
-  const celebration = useLevelStore((s) => (meId ? s.celebrations[meId] : undefined))
+  const celebration = useScreenCelebration()
 
   const fx = useMemo(
     () => (celebration ? levelUpEffects(celebration.level, celebration.previous) : null),

@@ -185,6 +185,9 @@ type Proposal struct {
 	IssueState     *string `json:"-"`
 	IssueAssignee  *string `json:"-"`
 	AssigneeGithub *string `json:"-"`
+
+	// Comments: a discussão do card, preenchida só ao abrir a issue (vai no corpo dela).
+	Comments []Comment `json:"-"`
 }
 
 // Estados da issue no GitHub (proposals.github_issue_state).

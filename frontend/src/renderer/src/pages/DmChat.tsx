@@ -15,6 +15,8 @@ import { getOrCreateConversationWith } from '../api/conversations'
 import { showToast } from '../store/toastStore'
 import ChatPane from '../components/ChatPane'
 import DmCallView from '../components/call/DmCallView'
+import MessageSearchBar from '../components/search/MessageSearchBar'
+import SearchResultsPanel from '../components/search/SearchResultsPanel'
 import { PhoneIcon, PhoneOffIcon } from '../components/icons'
 import { ComposerSkeleton, MessageListSkeleton } from '../components/skeleton/layouts'
 
@@ -90,6 +92,30 @@ function DmChat(): React.JSX.Element {
       : undefined
   const chatPermissions = withBot ? BOT_DM_PERMISSIONS : undefined
 
+  // Quem aparece no from:/mentions: da busca: eu e a outra pessoa.
+  const searchUsers = [
+    ...(me
+      ? [
+          {
+            id: me.id,
+            username: me.username,
+            displayName: me.display_name || me.username,
+            avatarUrl: me.avatar_url
+          }
+        ]
+      : []),
+    ...(userId && otherHandle && userId !== me?.id
+      ? [
+          {
+            id: userId,
+            username: otherHandle,
+            displayName: otherName,
+            avatarUrl: other?.avatar_url
+          }
+        ]
+      : [])
+  ]
+
   const openMenu = (e: React.MouseEvent): void => {
     if (!userId || userId === me?.id) return
     e.preventDefault()
@@ -140,7 +166,7 @@ function DmChat(): React.JSX.Element {
         <span className="text-ds-xs font-semibold" style={{ color: STATUS_META[status].color }}>
           {STATUS_META[status].label}
         </span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           {withBot ? null : inCallWithUser ? (
             <button
               className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-[#f23f43] text-white transition-colors hover:bg-[#d83a3e]"
@@ -174,6 +200,13 @@ function DmChat(): React.JSX.Element {
               <PhoneIcon className="h-[18px] w-[18px]" />
             </button>
           )}
+          {conversationId && (
+            <MessageSearchBar
+              scope={{ kind: 'conversation', id: conversationId }}
+              name={look.name}
+              users={searchUsers}
+            />
+          )}
         </div>
       </header>
 
@@ -182,25 +215,30 @@ function DmChat(): React.JSX.Element {
           <p>{error}</p>
         </div>
       ) : conversationId ? (
-        inCallWithUser ? (
-          <DmCallView>
-            <ChatPane
-              room={`conversation:${conversationId}`}
-              placeholder={`Mensagem para @${otherHandle || otherName}`}
-              mentionable={dmMentionable}
-              disabledReason={blockedReason}
-              permissions={chatPermissions}
-            />
-          </DmCallView>
-        ) : (
-          <ChatPane
-            room={`conversation:${conversationId}`}
-            placeholder={`Mensagem para @${otherHandle || otherName}`}
-            mentionable={dmMentionable}
-            disabledReason={blockedReason}
-            permissions={chatPermissions}
-          />
-        )
+        <div className="flex min-h-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-col">
+            {inCallWithUser ? (
+              <DmCallView>
+                <ChatPane
+                  room={`conversation:${conversationId}`}
+                  placeholder={`Mensagem para @${otherHandle || otherName}`}
+                  mentionable={dmMentionable}
+                  disabledReason={blockedReason}
+                  permissions={chatPermissions}
+                />
+              </DmCallView>
+            ) : (
+              <ChatPane
+                room={`conversation:${conversationId}`}
+                placeholder={`Mensagem para @${otherHandle || otherName}`}
+                mentionable={dmMentionable}
+                disabledReason={blockedReason}
+                permissions={chatPermissions}
+              />
+            )}
+          </div>
+          <SearchResultsPanel scope={{ kind: 'conversation', id: conversationId }} />
+        </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1">

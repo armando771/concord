@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import router from '../router'
 import { useAuthStore } from '../store/authStore'
 import { useCallStore } from '../store/callStore'
+import { useActivityStore } from '../store/activityStore'
+import { activityOfPlayer, canJoinFromProfile } from '../lib/activityState'
 import { useChatStore } from '../store/chatStore'
 import { useFriendStore, useRelationship } from '../store/friendStore'
 import { useUserMenuStore } from '../store/userMenuStore'
@@ -22,15 +24,20 @@ import { useModerationStore } from '../store/moderationStore'
 import { levelTier } from '../lib/levels'
 import { voiceChannelOf } from '../lib/voiceMove'
 import { memberColor } from '../lib/memberGroups'
-import { roleColorCss, rolesOfMember } from '../lib/permissions'
+import { Perm, roleColorCss, rolesOfMember } from '../lib/permissions'
+import { isUserLive, liveTarget, type MyCall } from '../lib/screenPreview'
+import { requestWatchStream } from '../store/streamJoinStore'
 import { CHOSEN_STATUSES, STATUS_META, type PresenceStatus } from '../lib/presenceStatus'
 import LevelBadge from './level/LevelBadge'
 import BadgeRow from './badges/BadgeRow'
 import ProfileCardBody, { CARD_BG, type CardProfile } from './profile/ProfileCardBody'
 import { ProfileInfoSkeleton } from './skeleton/layouts'
+import LiveStreamPreview from './profile/LiveStreamPreview'
+import LiveBadge from './call/LiveBadge'
 import StatusIcon from './StatusIcon'
 import { DotsIcon, PencilIcon, VolumeIcon } from './icons'
 import Avatar from './Avatar'
+import { ActivityGlyph } from './call/ActivityPickerPopover'
 
 const CARD_WIDTH = 300
 /** Altura aproximada do submenu de status (4 opções, duas com descrição). */
@@ -148,8 +155,15 @@ function UserProfileCard(): React.JSX.Element | null {
   const online = useChatStore((s) => (target ? Boolean(s.presence[target.userId]) : false))
   const knownStatus = useChatStore((s) => (target ? s.statuses[target.userId] : undefined))
   const serverCalls = useCallStore((s) => s.serverCalls)
+  const callStatus = useCallStore((s) => s.status)
+  const callId = useCallStore((s) => s.callId)
+  const callType = useCallStore((s) => s.type)
+  const callChannelId = useCallStore((s) => s.channelId)
+  const screenSharers = useCallStore((s) => s.screenSharers)
+  const availableScreens = useCallStore((s) => s.availableScreens)
   const level = useLevelStore((s) => (target ? s.levels[target.userId] : undefined))
   const ensureLevels = useLevelStore((s) => s.ensureLevels)
+  const replayLevelUp = useLevelStore((s) => s.replayLevelUp)
   const relationship = useRelationship(target?.userId)
   const sendRequest = useFriendStore((s) => s.sendRequest)
   const accept = useFriendStore((s) => s.accept)
@@ -160,6 +174,13 @@ function UserProfileCard(): React.JSX.Element | null {
   const askNickname = useModerationStore((s) => s.askNickname)
   // Os badges chegam depois e podem mudar a altura do cartão.
   const badgesLoaded = useBadgeStore((s) => (target ? Boolean(s.byUser[target.userId]) : false))
+  // Atividade da chamada em que a pessoa está jogando (só se for a minha call).
+  const joinableActivity = useActivityStore((s) =>
+    target && canJoinFromProfile(s, me?.id ?? null, target.userId)
+      ? activityOfPlayer(s, target.userId)
+      : null
+  )
+  const joinActivity = useActivityStore((s) => s.join)
   const ref = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
   const [sending, setSending] = useState(false)
@@ -172,6 +193,27 @@ function UserProfileCard(): React.JSX.Element | null {
 
   const isMe = Boolean(target && target.userId === me?.id)
   const isBot = Boolean(profile?.is_bot || member?.is_bot)
+
+  // Transmitindo agora: selo LIVE e, se dá para assistir, a prévia com o botão.
+  const myCall: MyCall = {
+    status: callStatus,
+    callId,
+    type: callType,
+    channelId: callChannelId,
+    screenSharers,
+    availableScreens
+  }
+  const live = target ? isUserLive(target.userId, myCall, serverCalls) : false
+  const stream = target
+    ? liveTarget({
+        userId: target.userId,
+        meId: me?.id,
+        call: myCall,
+        serverCalls,
+        canConnect: (channelId) => access.canInChannel(channelId, Perm.VIEW_CHANNEL | Perm.CONNECT)
+      })
+    : null
+  const streamKey = stream ? `${stream.kind}:${stream.callId}` : ''
 
   useEffect(() => {
     if (!target) return
@@ -218,7 +260,18 @@ function UserProfileCard(): React.JSX.Element | null {
         { width: window.innerWidth, height: window.innerHeight }
       )
     )
-  }, [target, profile, me, mutual, badgesLoaded, profileSettled, mutualSettled])
+  }, [
+    target,
+    profile,
+    me,
+    mutual,
+    badgesLoaded,
+    profileSettled,
+    mutualSettled,
+    streamKey,
+    live,
+    joinableActivity
+  ])
 
   useEffect(() => {
     if (!target) return
@@ -364,6 +417,18 @@ function UserProfileCard(): React.JSX.Element | null {
     mutualServers.length > 0 ||
     mutualLoading
 
+  const watchStream = (): void => {
+    if (!stream) return
+    close()
+    requestWatchStream({
+      userId: target.userId,
+      name: nickname || card.display_name,
+      target: stream,
+      channelName:
+        stream.kind === 'join' ? channels.find((c) => c.id === stream.channelId)?.name : undefined
+    })
+  }
+
   const openMore = (e: React.MouseEvent<HTMLButtonElement>): void => {
     const r = e.currentTarget.getBoundingClientRect()
     useUserMenuStore.getState().open({
@@ -395,7 +460,13 @@ function UserProfileCard(): React.JSX.Element | null {
         isMe={isMe}
         fallbackBanner={fallbackBanner}
         avatarFallbackClassName={role.avatar}
-        badge={<LevelBadge userId={target.userId} size="md" />}
+        badge={
+          <LevelBadge
+            userId={target.userId}
+            size="md"
+            onClick={() => replayLevelUp(target.userId, card.display_name)}
+          />
+        }
         badges={
           <BadgeRow
             userId={target.userId}
@@ -407,6 +478,30 @@ function UserProfileCard(): React.JSX.Element | null {
         onEditProfile={isMe ? editProfile : undefined}
         loading={profileLoading}
       >
+        {stream && (
+          <LiveStreamPreview
+            key={`${stream.callId}:${target.userId}`}
+            userId={target.userId}
+            name={nickname || card.display_name}
+            target={stream}
+            onWatch={watchStream}
+          />
+        )}
+
+        {joinableActivity && (
+          <button
+            type="button"
+            onClick={() => {
+              close()
+              void joinActivity()
+            }}
+            className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#23a55a] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1e8c4a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          >
+            <ActivityGlyph activity={joinableActivity} className="h-4 w-4" />
+            Juntar-se à atividade
+            <span className="sr-only">: {joinableActivity.name}</span>
+          </button>
+        )}
         {hasInfo && (
           <div className="mt-3 flex flex-col gap-3 rounded-lg bg-black/30 p-3">
             {inServer && (isServerOwner || memberRoles.length > 0) && (
@@ -509,7 +604,8 @@ function UserProfileCard(): React.JSX.Element | null {
                 <SectionTitle>Em call</SectionTitle>
                 <p className="flex items-center gap-1.5 text-xs text-gray-200">
                   <VolumeIcon className="h-3.5 w-3.5 text-[#23a55a]" />
-                  {voiceChannel.name}
+                  <span className="min-w-0 truncate">{voiceChannel.name}</span>
+                  {live && <LiveBadge />}
                 </p>
               </div>
             )}

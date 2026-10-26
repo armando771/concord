@@ -414,6 +414,8 @@ func (f *fakeFiles) Remove(name string) error {
 }
 
 type fakeIssues struct {
+	// last: a proposta da última chamada de CreateIssue.
+	last Proposal
 	calls int
 	fail  bool
 	// limited: o limite da API acabou (todas as chamadas recusam).
@@ -429,8 +431,9 @@ type fakeIssueUpdate struct {
 	assignee string
 }
 
-func (f *fakeIssues) CreateIssue(context.Context, Proposal) (int, string, error) {
+func (f *fakeIssues) CreateIssue(_ context.Context, p Proposal) (int, string, error) {
 	f.calls++
+	f.last = p
 	if f.limited {
 		return 0, "", &RateLimitError{Until: t0.Add(time.Hour)}
 	}
@@ -932,3 +935,19 @@ func TestTickClosesByDeadline(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+func TestIssueGetsCardDiscussion(t *testing.T) {
+	issues := &fakeIssues{}
+	s, st, _ := newTestService(issues)
+	ctx := context.Background()
+	p, _ := s.Create(ctx, "u1", "Com conversa", "", nil)
+	st.comments = append(st.comments, &Comment{ID: "c1", ProposalID: p.ID, AuthorID: "u2", Body: "Apoio"})
+	s.Vote(ctx, p.ID, "a", true)
+
+	s.now = func() time.Time { return t0.Add(VotingDuration) }
+	s.Tick(ctx)
+
+	if issues.calls != 1 || len(issues.last.Comments) != 1 || issues.last.Comments[0].Body != "Apoio" {
+		t.Fatalf("a issue deveria receber a discussão: calls=%d comments=%v", issues.calls, issues.last.Comments)
+	}
+}

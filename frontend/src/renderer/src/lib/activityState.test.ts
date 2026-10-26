@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   activityBanner,
+  activityOfPlayer,
   activityReducer,
   activityStarterName,
+  canJoinFromProfile,
+  capturedRoomToShare,
+  needsJoinReport,
   INITIAL_ACTIVITY_STATE,
   type ActivityState,
   type RawCallActivity
@@ -56,7 +60,8 @@ describe('activityReducer', () => {
       callId: 'call-1',
       activityId: 'krunker',
       url: 'https://krunker.io/?game=FRA:abc12',
-      startedBy: ana
+      startedBy: ana,
+      players: ['u-ana']
     })
   })
 
@@ -260,5 +265,126 @@ describe('activityStarterName (aviso "X abriu … na chamada")', () => {
   it('apelido do servidor na call de canal; sem mapa (DM), o nome de exibição', () => {
     expect(activityStarterName(shared, { 'u-ana': 'Aninha' })).toBe('Aninha')
     expect(activityStarterName(shared, undefined)).toBe('Ana')
+  })
+})
+
+describe('jogadores da atividade (selo, perfil)', () => {
+  const started = (players?: unknown): ActivityState =>
+    activityReducer(inCall, {
+      type: 'started',
+      activity: { ...raw(), ...(players === undefined ? {} : { players }) } as RawCallActivity
+    })
+
+  it('started traz quem joga; sem a lista (backend antigo), só quem abriu', () => {
+    expect(started(['u-ana', 'u-bia']).shared?.players).toEqual(['u-ana', 'u-bia'])
+    expect(started().shared?.players).toEqual(['u-ana'])
+  })
+
+  it('lista torta: só ids em texto, sem repetidos, com quem abriu', () => {
+    expect(started(['u-bia', 7, null, 'u-bia', '']).shared?.players).toEqual(['u-ana', 'u-bia'])
+    expect(started('u-bia').shared?.players).toEqual(['u-ana'])
+  })
+
+  it('players: troca a lista se for a atividade aberta', () => {
+    const state = started()
+    const next = activityReducer(state, {
+      type: 'players',
+      callId: 'call-1',
+      activityId: 'krunker',
+      players: ['u-ana', 'u-bia']
+    })
+    expect(next.shared?.players).toEqual(['u-ana', 'u-bia'])
+    // Outra chamada ou outra atividade: ignora.
+    expect(
+      activityReducer(state, {
+        type: 'players',
+        callId: 'call-2',
+        activityId: 'krunker',
+        players: []
+      })
+    ).toBe(state)
+    expect(
+      activityReducer(state, {
+        type: 'players',
+        callId: 'call-1',
+        activityId: 'survev',
+        players: []
+      })
+    ).toBe(state)
+    expect(
+      activityReducer(INITIAL_ACTIVITY_STATE, {
+        type: 'players',
+        callId: 'call-1',
+        activityId: 'krunker',
+        players: []
+      })
+    ).toEqual(INITIAL_ACTIVITY_STATE)
+  })
+
+  it('activityOfPlayer: a atividade de quem está jogando; null para o resto', () => {
+    const state = started(['u-ana', 'u-bia'])
+    expect(activityOfPlayer(state, 'u-bia')?.name).toBe('Krunker.io')
+    expect(activityOfPlayer(state, 'u-cris')).toBeNull()
+    expect(activityOfPlayer(INITIAL_ACTIVITY_STATE, 'u-ana')).toBeNull()
+  })
+
+  it('needsJoinReport: jogo aberto aqui e ainda fora da lista', () => {
+    const state = started(['u-ana'])
+    const playing: ActivityState = { ...state, local: { activityId: 'krunker', url: 'x' } }
+    expect(needsJoinReport(playing, 'u-bia')).toBe(true)
+    // Já na lista, quem abriu, sem jogo aberto ou jogo de outra atividade: não.
+    expect(
+      needsJoinReport({ ...playing, shared: started(['u-ana', 'u-bia']).shared }, 'u-bia')
+    ).toBe(false)
+    expect(needsJoinReport(playing, 'u-ana')).toBe(false)
+    expect(needsJoinReport(state, 'u-bia')).toBe(false)
+    expect(
+      needsJoinReport({ ...playing, local: { activityId: 'survev', url: 'x' } }, 'u-bia')
+    ).toBe(false)
+    expect(needsJoinReport(playing, null)).toBe(false)
+  })
+
+  it('canJoinFromProfile: outra pessoa jogando e eu ainda fora do jogo', () => {
+    const state = started(['u-ana', 'u-bia'])
+    expect(canJoinFromProfile(state, 'u-cris', 'u-bia')).toBe(true)
+    expect(canJoinFromProfile(state, 'u-bia', 'u-bia')).toBe(false)
+    expect(canJoinFromProfile(state, 'u-cris', 'u-cris')).toBe(false)
+    const playing: ActivityState = { ...state, local: { activityId: 'krunker', url: 'x' } }
+    expect(canJoinFromProfile(playing, 'u-cris', 'u-bia')).toBe(false)
+    expect(canJoinFromProfile(INITIAL_ACTIVITY_STATE, 'u-cris', 'u-bia')).toBe(false)
+  })
+})
+
+describe('capturedRoomToShare (sala lida da janela de quem abriu)', () => {
+  const mine: ActivityState = {
+    ...activityReducer(inCall, { type: 'started', activity: raw({ url: '' }) }),
+    local: { activityId: 'krunker', url: 'https://krunker.io/' }
+  }
+
+  it('quem abriu, com o jogo aberto: compartilha a sala nova', () => {
+    expect(
+      capturedRoomToShare(mine, 'u-ana', 'krunker', 'https://krunker.io/?game=BRZ:tukbo')
+    ).toBe('https://krunker.io/?game=BRZ:tukbo')
+  })
+
+  it('a sala já compartilhada não vai de novo', () => {
+    const shared = activityReducer(mine, {
+      type: 'started',
+      activity: raw({ url: 'https://krunker.io/?game=BRZ:tukbo' })
+    })
+    expect(
+      capturedRoomToShare(shared, 'u-ana', 'krunker', 'https://krunker.io/?game=BRZ:tukbo')
+    ).toBeNull()
+  })
+
+  it('não compartilha: outra pessoa abriu, outra atividade, sem jogo aberto ou link de fora', () => {
+    const room = 'https://krunker.io/?game=BRZ:tukbo'
+    expect(capturedRoomToShare(mine, 'u-bia', 'krunker', room)).toBeNull()
+    expect(capturedRoomToShare(mine, 'u-ana', 'survev', 'https://survev.io/#1Fu4')).toBeNull()
+    expect(capturedRoomToShare({ ...mine, local: null }, 'u-ana', 'krunker', room)).toBeNull()
+    expect(
+      capturedRoomToShare(mine, 'u-ana', 'krunker', 'https://evil.com/?game=BRZ:tukbo')
+    ).toBeNull()
+    expect(capturedRoomToShare(mine, null, 'krunker', room)).toBeNull()
   })
 })

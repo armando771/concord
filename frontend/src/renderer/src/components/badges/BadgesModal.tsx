@@ -7,6 +7,7 @@ import { useBadgeStore } from '../../store/badgeStore'
 import {
   formatThreshold,
   formatUnlockDate,
+  isMythic,
   progressPercent,
   rarityMeta,
   remainingText,
@@ -30,6 +31,14 @@ function RarityChip({ badge }: { badge: Badge }): React.JSX.Element {
     )
   }
   const meta = rarityMeta(badge.rarity)
+  if (isMythic(badge.rarity)) {
+    return (
+      <span className="mythic-chip inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-black uppercase tracking-wide">
+        <span aria-hidden="true">✦</span>
+        {meta.label}
+      </span>
+    )
+  }
   return (
     <span
       className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide"
@@ -119,27 +128,36 @@ function Detail({
   const title = earned ? badge.tier_name : badge.next_tier_name
   const unlocked = formatUnlockDate(badge.unlocked_at)
   const maxed = badge.tier >= badge.tiers.length
+  // O mítico tem a própria aura (MythicIcon); os outros, um brilho na cor.
+  const mythic = earned && isMythic(badge.rarity)
 
   return (
     <div className="flex flex-col items-center">
       <div className="relative flex h-44 w-44 items-center justify-center">
-        <span
-          aria-hidden="true"
-          className="absolute inset-4 rounded-full blur-2xl"
-          style={{ background: earned ? `${meta.color}33` : 'rgba(255,255,255,0.05)' }}
-        />
+        {!mythic && (
+          <span
+            aria-hidden="true"
+            className="absolute inset-4 rounded-full blur-2xl"
+            style={{ background: earned ? `${meta.color}33` : 'rgba(255,255,255,0.05)' }}
+          />
+        )}
         <BadgeIcon
           category={badge.category}
           tier={badge.tier}
           rarity={badge.rarity}
           size={168}
           locked={!earned}
+          hero
           className="relative drop-shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
         />
       </div>
 
-      <p className="mt-2 text-sm text-gray-300">{badge.name}</p>
-      <h3 className="mt-0.5 text-center text-3xl font-black uppercase tracking-wide text-white">
+      {title !== badge.name && <p className="mt-2 text-sm text-gray-300">{badge.name}</p>}
+      <h3
+        className={`${title !== badge.name ? 'mt-0.5' : 'mt-2'} text-center text-3xl font-black uppercase tracking-wide ${
+          mythic ? 'mythic-text' : 'text-white'
+        }`}
+      >
         {title}
       </h3>
       <p className="mt-1.5 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 text-center text-xs text-gray-400">
@@ -181,7 +199,9 @@ function Detail({
                   aria-label={`Progresso para ${badge.next_tier_name ?? 'o próximo tier'}`}
                 >
                   <div
-                    className="h-full rounded-full bg-[#5865f2] transition-[width] duration-500"
+                    className={`h-full rounded-full transition-[width] duration-500 ${
+                      mythic ? 'mythic-bar' : 'bg-[#5865f2]'
+                    }`}
                     style={{ width: `${progressPercent(badge)}%` }}
                   />
                 </div>

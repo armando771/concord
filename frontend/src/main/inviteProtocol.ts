@@ -41,6 +41,24 @@ export function handleInviteArgs(
   if (pending.offerArgs(argv)) notify(getWindow)
 }
 
+/**
+ * Link https de convite nosso clicado dentro do app (janela nova, "Abrir no
+ * navegador" do menu): abre a confirmação no app em vez do navegador. true se
+ * era um convite nosso (quem chamou não deve abrir o navegador).
+ */
+export function handleInviteUrl(url: string, getWindow: () => BrowserWindow | null): boolean {
+  // O servidor do build (PUBLIC_URL) é a origem de __CONCORD_UPDATE_URL__; em dev é vazio.
+  let server: string | undefined
+  try {
+    server = __CONCORD_UPDATE_URL__ ? new URL(__CONCORD_UPDATE_URL__).origin : undefined
+  } catch {
+    server = undefined
+  }
+  if (!pending.offerWebUrl(url, [server])) return false
+  notify(getWindow)
+  return true
+}
+
 /** Chamar antes do whenReady: guarda o convite da partida a frio. */
 export function setupInviteProtocol(getWindow: () => BrowserWindow | null): void {
   registerProtocol()
