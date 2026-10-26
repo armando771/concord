@@ -62,12 +62,7 @@ import ComposerAttachments from './ComposerAttachments'
 import { useAttachmentDraft } from '../hooks/useAttachmentDraft'
 import { useTypingSender } from '../hooks/useTypingSender'
 import TypingIndicator from './TypingIndicator'
-import {
-  afterSendFailure,
-  canRestoreHere,
-  replyAfterRestore,
-  restoreFailedText
-} from '../lib/composerDraft'
+import { reportSendFailure, type ReplyState } from '../lib/sendFailure'
 import {
   ATTACH_DENIED,
   DIRECT_CHAT_PERMISSIONS,
@@ -481,7 +476,7 @@ function ChatPane({
 
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
-  const [replyState, setReplyState] = useState<{ room: string; message: Message } | null>(null)
+  const [replyState, setReplyState] = useState<ReplyState | null>(null)
   const replyingTo = inRoom(replyState, room, 'message')
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const highlightTimer = useRef<number | undefined>(undefined)
@@ -732,56 +727,27 @@ function ChatPane({
     }
   }
 
-  // O texto que falhou nunca se perde: volta sozinho se o campo continua
-  // vazio; senão o aviso oferece "Restaurar" (vem antes do texto novo, com a
-  // resposta). Em outra sala o campo é de lá: o aviso oferece copiar.
+  // O texto que falhou nunca se perde (ver lib/sendFailure).
   const handleSendFailure = (
     message: string,
     sentRoom: string,
     sentText: string,
     sentReply: Message | null
-  ): void => {
-    const sentReplyState = sentReply ? { room: sentRoom, message: sentReply } : null
-    const here = (): boolean => canRestoreHere(mountedRef.current, roomRef.current, sentRoom)
-    const copyAction = {
-      label: 'Copiar',
-      run: () => void navigator.clipboard?.writeText(sentText)
-    }
-    if (!here()) {
-      showToast.error(message, 10000, sentText.trim() ? copyAction : undefined)
-      return
-    }
-    const current = inputRef.current?.value ?? ''
-    const action = afterSendFailure(sentText, sentReply !== null, current)
-    if (action === 'restore') {
-      setDraft(sentText)
-      setReplyState((now) => replyAfterRestore(now, sentReplyState))
-      showToast.error(message)
-      return
-    }
-    if (action === 'nothing') {
-      showToast.error(message)
-      return
-    }
-    showToast.error(message, 10000, {
-      label: 'Restaurar',
-      run: () => {
-        if (!here()) {
-          if (sentText.trim()) {
-            showToast.error(
-              'Você saiu da conversa: copie a mensagem que falhou.',
-              10000,
-              copyAction
-            )
-          }
-          return
-        }
-        setDraft((now) => restoreFailedText(sentText, now))
-        setReplyState((now) => replyAfterRestore(now, sentReplyState))
-        requestAnimationFrame(() => inputRef.current?.focus())
+  ): void =>
+    reportSendFailure(
+      message,
+      { room: sentRoom, text: sentText, reply: sentReply },
+      {
+        mounted: () => mountedRef.current,
+        currentRoom: () => roomRef.current,
+        currentText: () => inputRef.current?.value ?? '',
+        setDraft,
+        setReply: setReplyState,
+        focusInput: () => requestAnimationFrame(() => inputRef.current?.focus()),
+        error: showToast.error,
+        copy: (text) => void navigator.clipboard?.writeText(text)
       }
-    })
-  }
+    )
 
   // Áudio gravado vai sozinho; o texto digitado continua no campo.
   const handleRecorded = async (blob: Blob, durationMs: number): Promise<void> => {
