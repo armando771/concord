@@ -3,6 +3,7 @@ import type { Attachment } from '../api/messages'
 import {
   acceptFiles,
   attachmentLabel,
+  canCopyImage,
   canSubmit,
   classifyFile,
   draftStatus,
@@ -119,5 +120,12 @@ describe('anexos', () => {
     )
     expect(sendErrorMessage(400, 'content is required')).toBe('content is required')
     expect(sendErrorMessage(0, '')).toBe('Falha ao enviar mensagem.')
+  })
+  it('copia PNG, JPEG e WebP; GIF não', () => {
+    expect(canCopyImage('image/png')).toBe(true)
+    expect(canCopyImage('image/jpeg')).toBe(true)
+    expect(canCopyImage('image/webp')).toBe(true)
+    expect(canCopyImage('image/gif')).toBe(false)
+    expect(canCopyImage('IMAGE/JPEG; charset=binary')).toBe(true)
   })
 })

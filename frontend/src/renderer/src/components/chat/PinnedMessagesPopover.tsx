@@ -109,7 +109,7 @@ function PinnedMessageItem({
       {/* Anexos */}
       {pin.attachments && pin.attachments.length > 0 && (
         <div className="mt-2">
-          <MessageAttachments attachments={pin.attachments} />
+          <MessageAttachments attachments={pin.attachments} copyImages />
         </div>
       )}
 
