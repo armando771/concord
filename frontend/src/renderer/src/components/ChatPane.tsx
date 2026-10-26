@@ -100,6 +100,8 @@ interface ChatPaneProps {
   disabledReason?: string
   /** O que a pessoa pode neste canal (cargos). Sem isso (DM), vale o padrão do chat. */
   permissions?: ChatPermissions
+  /** Se falso (ex.: canais de sistema #avisos e #bot), esconde a ação de excluir mensagens. */
+  canDeleteMessages?: boolean
 }
 
 const MAX_SUGGESTIONS = 6
@@ -145,6 +147,7 @@ function MessageItem({
   savingEdit,
   canReact,
   canModerate,
+  canDelete = true,
   canPin,
   onTogglePin
 }: {
@@ -171,6 +174,8 @@ function MessageItem({
   canReact: boolean
   /** MANAGE_MESSAGES no canal: apaga mensagem de outros e encerra enquete. */
   canModerate: boolean
+  /** Em canais de sistema (#avisos e #bot) nenhuma mensagem pode ser excluída. */
+  canDelete?: boolean
 }): React.JSX.Element {
   const me = useAuthStore((s) => s.user)
   const isMine = message.author_id === me?.id
@@ -335,7 +340,7 @@ function MessageItem({
             canPin={canPin}
             isPinned={Boolean(message.pinned_at)}
             onTogglePin={onTogglePin}
-            onDelete={isMine || canModerate ? onDelete : undefined}
+            onDelete={canDelete && (isMine || canModerate) ? onDelete : undefined}
             deleteTitle={isMine ? 'Excluir mensagem' : 'Excluir mensagem (moderação)'}
           />
         )}
@@ -358,7 +363,8 @@ function ChatPane({
   mentionable = [],
   canMentionEveryone = false,
   disabledReason: disabledReasonProp,
-  permissions = DIRECT_CHAT_PERMISSIONS
+  permissions = DIRECT_CHAT_PERMISSIONS,
+  canDeleteMessages = true
 }: ChatPaneProps): React.JSX.Element {
   // Sem SEND_MESSAGES o campo de mensagem dá lugar ao aviso.
   const disabledReason = disabledReasonProp ?? sendDeniedReason(permissions)
@@ -947,6 +953,7 @@ function ChatPane({
                 savingEdit={savingEdit && editingId === m.id}
                 canReact={permissions.canReact}
                 canModerate={permissions.canModerate}
+                canDelete={canDeleteMessages}
                 canPin={isChannel && permissions.canModerate}
                 onTogglePin={() => void handleTogglePin(m)}
               />
