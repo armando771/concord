@@ -1,4 +1,5 @@
-// Núcleo do voice mod: pitch shift granular e modulação em anel.
+// Núcleo do voice mod: pitch shift granular (com vibrato) e modulação de
+// amplitude (anel ou tremolo).
 //
 // Auto-contido (sem DOM): roda dentro do AudioWorklet (voiceModWorklet.ts) e
 // nos testes.
@@ -8,6 +9,12 @@
 // amostra, então a leitura avança `razão` amostras por amostra. As pontas se
 // alternam com janelas sin² que somam 1 (sem tremor de volume). Com razão 1 a
 // saída é a entrada atrasada em meia janela.
+//
+// Vibrato: a razão oscila por bloco (128 amostras) em torno da razão base;
+// barato e, como a fase acumula, sem degraus audíveis.
+//
+// Modulação de amplitude: ganho 1 − d + d·sen. Com d = 1 é anel (Robô); com
+// d ≤ 0,5 o ganho fica entre 1 − 2d e 1, um tremolo.
 
 /** Nome do processador registrado pelo voiceModWorklet. */
 export const VOICE_MOD_PROCESSOR = 'concord-voice-mod'
@@ -20,24 +27,36 @@ export const VOICE_MOD_LATENCY_MS = WINDOW_MS / 2
 export interface VoiceModWorkletMessage {
   /** Razão de frequência (2 = uma oitava acima). */
   ratio: number
-  /** Frequência da modulação em anel; 0 = desligada. */
-  ringHz: number
+  /** Frequência da modulação de amplitude; 0 = desligada. */
+  modHz: number
+  /** 1 = anel (multiplica por um seno); menos = tremolo. */
+  modDepth: number
+  /** Frequência do vibrato; 0 = desligado. */
+  vibratoHz: number
+  /** Amplitude do vibrato, em semitons. */
+  vibratoSemitones: number
 }
+
+const TWO_PI = 2 * Math.PI
 
 function sinSquared(phase: number): number {
   const s = Math.sin(Math.PI * phase)
   return s * s
 }
 
-export class VoiceModDsp {
+export class VoiceModDsp implements VoiceModWorkletMessage {
   ratio = 1
-  ringHz = 0
+  modHz = 0
+  modDepth = 0
+  vibratoHz = 0
+  vibratoSemitones = 0
   private readonly rate: number
   private readonly size: number
   private readonly buffer: Float32Array
   private pos = 0
   private phase = 0
-  private ringPhase = 0
+  private modPhase = 0
+  private vibratoPhase = 0
 
   constructor(rate: number) {
     this.rate = rate
@@ -45,23 +64,40 @@ export class VoiceModDsp {
     this.buffer = new Float32Array(this.size * 2 + 4)
   }
 
+  configure(message: VoiceModWorkletMessage): void {
+    this.ratio = message.ratio
+    this.modHz = message.modHz
+    this.modDepth = message.modDepth
+    this.vibratoHz = message.vibratoHz
+    this.vibratoSemitones = message.vibratoSemitones
+  }
+
   process(input: Float32Array | undefined, output: Float32Array): void {
-    const ringStep = (2 * Math.PI * this.ringHz) / this.rate
+    const step = (1 - this.blockRatio(output.length)) / this.size
+    const modStep = (TWO_PI * this.modHz) / this.rate
     for (let i = 0; i < output.length; i++) {
       this.buffer[this.pos] = input?.[i] ?? 0
       const phaseB = (this.phase + 0.5) % 1
       let y =
         this.read(this.phase * this.size) * sinSquared(this.phase) +
         this.read(phaseB * this.size) * sinSquared(phaseB)
-      if (this.ringHz > 0) {
-        y *= Math.sin(this.ringPhase)
-        this.ringPhase = (this.ringPhase + ringStep) % (2 * Math.PI)
+      if (this.modHz > 0) {
+        y *= 1 - this.modDepth + this.modDepth * Math.sin(this.modPhase)
+        this.modPhase = (this.modPhase + modStep) % TWO_PI
       }
       output[i] = y
-      this.phase += (1 - this.ratio) / this.size
+      this.phase += step
       this.phase -= Math.floor(this.phase)
       this.pos = (this.pos + 1) % this.buffer.length
     }
+  }
+
+  /** Razão deste bloco: a base com o desvio do vibrato; avança a fase dele. */
+  private blockRatio(samples: number): number {
+    const ratio = this.ratio * 2 ** ((this.vibratoSemitones * Math.sin(this.vibratoPhase)) / 12)
+    const step = (TWO_PI * this.vibratoHz * samples) / this.rate
+    this.vibratoPhase = (this.vibratoPhase + step) % TWO_PI
+    return ratio
   }
 
   /** Lê o buffer `delay` amostras atrás da última escrita (interpolação linear). */

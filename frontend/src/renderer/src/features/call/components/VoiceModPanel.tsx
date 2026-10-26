@@ -67,14 +67,19 @@ function VoiceModPanel(): React.JSX.Element {
   useEffect(() => () => useVoiceModStore.getState().setMonitoring(false), [])
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+    <div className="@container min-h-0 flex-1 overflow-y-auto pr-1">
       {!available && (
         <p className="mb-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] text-warning">
           O voice mod não carregou neste PC. Sua voz segue normal.
         </p>
       )}
 
-      <div className="mb-4 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Preset de voz">
+      {/* 3 colunas no celular (painel estreito), 4 quando o painel tem espaço. */}
+      <div
+        className="mb-4 grid grid-cols-3 gap-2 @xs:grid-cols-4"
+        role="radiogroup"
+        aria-label="Preset de voz"
+      >
         {PRESET_ORDER.map((id) => {
           const selected = id === preset
           return (
@@ -85,7 +90,7 @@ function VoiceModPanel(): React.JSX.Element {
               aria-checked={selected}
               disabled={!available}
               onClick={() => selectPreset(id)}
-              className={`cursor-pointer rounded-xl border px-2 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+              className={`min-w-0 cursor-pointer truncate rounded-xl border px-1.5 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 selected
                   ? 'border-brand bg-brand/20 text-strong'
                   : 'border-subtle bg-fg/[0.04] text-gray-300 hover:border-normal hover:bg-fg/[0.08]'

@@ -1,5 +1,5 @@
-// AudioWorklet do voice mod: pitch shift e modulação em anel (ver voiceModDsp.ts).
-// Roda na thread de áudio e só recebe {ratio, ringHz} pela porta.
+// AudioWorklet do voice mod: pitch shift, vibrato e modulação de amplitude (ver
+// voiceModDsp.ts). Roda na thread de áudio e só recebe a mensagem pela porta.
 import { VOICE_MOD_PROCESSOR, VoiceModDsp, type VoiceModWorkletMessage } from './voiceModDsp'
 
 declare class AudioWorkletProcessor {
@@ -14,8 +14,7 @@ class ConcordVoiceModProcessor extends AudioWorkletProcessor {
   constructor() {
     super()
     this.port.onmessage = (event: MessageEvent<VoiceModWorkletMessage>) => {
-      this.dsp.ratio = event.data.ratio
-      this.dsp.ringHz = event.data.ringHz
+      this.dsp.configure(event.data)
     }
   }
 
