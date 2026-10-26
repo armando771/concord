@@ -48,13 +48,13 @@ function SearchPicker({ e, serverId }: { e: MusicEphemeral; serverId: string }):
             type="button"
             disabled={e.expired || busy}
             onClick={() => void pick(i)}
-            className="flex cursor-pointer items-center gap-3 rounded-md border border-white/10 bg-white/5 p-1.5 text-left transition-colors hover:bg-white/10 disabled:cursor-default disabled:opacity-40"
+            className="flex cursor-pointer items-center gap-3 rounded-md border border-subtle bg-fg/5 p-1.5 text-left transition-colors hover:bg-fg/10 disabled:cursor-default disabled:opacity-40"
           >
             {r.thumbnail && (
               <img src={r.thumbnail} alt="" className="h-9 w-16 rounded object-cover" />
             )}
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium text-white">{r.title}</span>
+              <span className="block truncate text-sm font-medium text-strong">{r.title}</span>
               <span className="block truncate text-xs text-gray-400">
                 {r.artist} · {formatDuration(r.duration_ms)}
               </span>
@@ -83,7 +83,7 @@ function MusicEphemeralList({
       {items.map((e) => (
         <div
           key={e.id}
-          className="mx-2 my-1 flex gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5"
+          className="mx-2 my-1 flex gap-3 rounded-lg border border-subtle bg-fg/[0.03] px-3 py-2.5"
         >
           <MaestroAvatar />
           <div className="min-w-0 flex-1">
@@ -94,7 +94,7 @@ function MusicEphemeralList({
                 <button
                   type="button"
                   onClick={() => dismiss(e.id)}
-                  className="cursor-pointer text-[#00a8fc] hover:underline"
+                  className="cursor-pointer text-link hover:underline"
                 >
                   {T14_DISMISS}
                 </button>

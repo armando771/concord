@@ -34,14 +34,14 @@ function EmotePickerPopover({
     <div
       ref={ref}
       onClick={(e) => e.stopPropagation()}
-      className="absolute right-4 top-8 z-30 w-64 rounded-xl border border-white/10 bg-[#18191c] p-3 shadow-2xl"
+      className="absolute right-4 top-8 z-30 w-64 rounded-xl border border-subtle bg-floating p-3 shadow-2xl"
     >
       <input
         type="text"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Buscar emote..."
-        className="mb-2 w-full rounded-md border border-white/10 bg-black/40 px-2.5 py-1 text-xs text-white placeholder:text-gray-500 outline-none focus:border-violet-500/50"
+        className="mb-2 w-full rounded-md border border-subtle bg-input px-2.5 py-1 text-xs text-strong placeholder:text-gray-500 outline-none focus:border-violet-500/50"
       />
       <div className="max-h-56 overflow-y-auto pr-1">
         {categories.map((category) => (
@@ -59,7 +59,7 @@ function EmotePickerPopover({
                     onSelect(item.emoji)
                     onClose()
                   }}
-                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-lg transition-transform hover:scale-110 hover:bg-white/10"
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-lg transition-transform hover:scale-110 hover:bg-fg/10"
                 >
                   {item.emoji}
                 </button>

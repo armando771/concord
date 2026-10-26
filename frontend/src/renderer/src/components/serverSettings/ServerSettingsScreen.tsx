@@ -15,8 +15,8 @@ import RolesSection from './RolesSection'
 import MembersSection from './MembersSection'
 import BansSection from './BansSection'
 
-const NAV_BG = '#0b0c10'
-const CONTENT_BG = '#050508'
+const NAV_BG = 'var(--bg-secondary)'
+const CONTENT_BG = 'var(--bg-primary)'
 
 const SECTION_VIEW = {
   overview: OverviewSection,
@@ -80,7 +80,7 @@ function ServerSettingsContent(): React.JSX.Element | null {
       style={{ top: 'var(--titlebar-height, 0px)', background: CONTENT_BG }}
     >
       <aside
-        className="flex w-[260px] shrink-0 flex-col border-r border-white/6"
+        className="flex w-[260px] shrink-0 flex-col border-r border-subtle"
         style={{ background: NAV_BG }}
       >
         <p className="m-4 mb-2 truncate text-ds-sm font-medium text-gray-400">{server.name}</p>
@@ -93,20 +93,20 @@ function ServerSettingsContent(): React.JSX.Element | null {
               aria-current={item.id === current ? 'page' : undefined}
               className={`mb-0.5 block w-full cursor-pointer rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors ${
                 item.id === current
-                  ? 'bg-white/10 text-white'
-                  : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                  ? 'bg-fg/10 text-strong'
+                  : 'text-gray-400 hover:bg-fg/5 hover:text-gray-200'
               }`}
             >
               {item.label}
             </button>
           ))}
 
-          <div className="mt-2 border-t border-white/10 pt-2">
+          <div className="mt-2 border-t border-subtle pt-2">
             {access.isOwner ? (
               <button
                 type="button"
                 onClick={() => setDeleting(true)}
-                className="block w-full cursor-pointer rounded-md px-2 py-1.5 text-left text-sm font-medium text-[#f23f43] transition-colors hover:bg-[#f23f43]/10"
+                className="block w-full cursor-pointer rounded-md px-2 py-1.5 text-left text-sm font-medium text-danger transition-colors hover:bg-danger/10"
               >
                 Deletar servidor
               </button>
@@ -114,7 +114,7 @@ function ServerSettingsContent(): React.JSX.Element | null {
               <button
                 type="button"
                 onClick={() => setLeaving(true)}
-                className="block w-full cursor-pointer rounded-md px-2 py-1.5 text-left text-sm font-medium text-[#f23f43] transition-colors hover:bg-[#f23f43]/10"
+                className="block w-full cursor-pointer rounded-md px-2 py-1.5 text-left text-sm font-medium text-danger transition-colors hover:bg-danger/10"
               >
                 Sair do servidor
               </button>
@@ -125,7 +125,7 @@ function ServerSettingsContent(): React.JSX.Element | null {
 
       <main className="relative min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[860px] px-10 pb-28 pt-14">
-          <h1 className="mb-6 text-xl font-bold text-white">{label}</h1>
+          <h1 className="mb-6 text-xl font-bold text-strong">{label}</h1>
           <View />
         </div>
         <div
@@ -136,7 +136,7 @@ function ServerSettingsContent(): React.JSX.Element | null {
             type="button"
             onClick={close}
             aria-label="Fechar configurações do servidor"
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-2 border-gray-500 text-gray-400 transition-colors hover:border-white hover:text-white"
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-2 border-gray-500 text-gray-400 transition-colors hover:border-white hover:text-strong"
           >
             <XIcon className="h-4 w-4" />
           </button>
@@ -159,7 +159,7 @@ function ServerSettingsContent(): React.JSX.Element | null {
         }}
       >
         <p>
-          Você sai de <b className="text-white">{server.name}</b> e só volta com um novo convite.
+          Você sai de <b className="text-strong">{server.name}</b> e só volta com um novo convite.
         </p>
       </ConfirmModal>
 
@@ -179,7 +179,7 @@ function ServerSettingsContent(): React.JSX.Element | null {
         }}
       >
         <p>
-          Todos os canais e mensagens de <b className="text-white">{server.name}</b> serão apagados
+          Todos os canais e mensagens de <b className="text-strong">{server.name}</b> serão apagados
           e todos os membros serão removidos. Esta ação não pode ser desfeita.
         </p>
       </ConfirmModal>

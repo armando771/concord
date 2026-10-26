@@ -57,20 +57,20 @@ function AudioPlayer({ attachment }: { attachment: Attachment }): React.JSX.Elem
 
   return (
     <div className="max-w-md">
-      <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+      <div className="flex items-center gap-3 rounded-lg border border-subtle bg-fg/5 px-3 py-2">
         <button
           type="button"
           onClick={toggle}
           disabled={failed}
           aria-label={playing ? 'Pausar' : 'Tocar'}
           title={playing ? 'Pausar' : 'Tocar'}
-          className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#5865f2] text-white transition-colors hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-brand text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-40"
         >
           {playing ? <PauseIcon className="h-4 w-4" /> : <PlayIcon className="h-4 w-4" />}
         </button>
         <div
           onClick={seek}
-          className="relative h-1.5 min-w-0 flex-1 cursor-pointer rounded-full bg-white/10"
+          className="relative h-1.5 min-w-0 flex-1 cursor-pointer rounded-full bg-fg/10"
         >
           <div
             className="absolute inset-y-0 left-0 rounded-full bg-violet-400"

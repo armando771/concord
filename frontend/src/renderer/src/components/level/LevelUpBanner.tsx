@@ -111,7 +111,7 @@ function LevelUpBanner(): React.JSX.Element | null {
         {fx.stage === 5 ? '👑' : milestone ? '🏆' : '⬆️'}
       </span>
       <div className="relative leading-tight">
-        <p className="text-sm font-bold text-white">
+        <p className="text-sm font-bold text-strong">
           {milestone ? `Marco ${milestone.level} alcançado!` : 'Você subiu de nível!'}
         </p>
         <p className="text-[11px] text-gray-400">
@@ -170,13 +170,13 @@ function LevelUpBanner(): React.JSX.Element | null {
                   animation: 'level-border-spin 1.8s linear infinite'
                 }}
               />
-              <div className="relative flex items-center gap-3 overflow-hidden rounded-[14px] bg-[#0b0b10]/95 px-4 py-2.5 backdrop-blur-xl">
+              <div className="relative flex items-center gap-3 overflow-hidden rounded-[14px] bg-floating px-4 py-2.5 backdrop-blur-xl">
                 {content}
               </div>
             </div>
           ) : (
             <div
-              className="relative flex items-center gap-3 overflow-hidden rounded-2xl border bg-[#0b0b10]/90 px-4 py-2.5 shadow-2xl backdrop-blur-xl"
+              className="relative flex items-center gap-3 overflow-hidden rounded-2xl border bg-floating px-4 py-2.5 shadow-2xl backdrop-blur-xl"
               style={{ borderColor: `${tier.color}66`, boxShadow: shadow }}
             >
               {content}

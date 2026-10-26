@@ -103,10 +103,10 @@ function DmChat(): React.JSX.Element {
   }
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-[#07080b]/90 backdrop-blur-2xl text-gray-100">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-primary backdrop-blur-2xl text-gray-100">
       <header
         onContextMenu={openMenu}
-        className="flex h-14 shrink-0 items-center gap-3 border-b border-white/6 px-4"
+        className="flex h-14 shrink-0 items-center gap-3 border-b border-subtle px-4"
       >
         <div className="flex items-center gap-2.5 min-w-0">
           <button
@@ -126,23 +126,23 @@ function DmChat(): React.JSX.Element {
               size={32}
               animate="always"
               status={status}
-              cutoutColor="#07080b"
+              cutoutColor="var(--bg-primary)"
             />
           </button>
           <div className="min-w-0">
-            <p className="truncate text-ds-md font-semibold text-white">
+            <p className="truncate text-ds-md font-semibold text-strong">
               <StyledName name={look.name} userId={userId} style={other?.name_style} />
             </p>
             {otherHandle && <p className="truncate text-ds-xs text-gray-400">@{otherHandle}</p>}
           </div>
         </div>
-        <span className="text-ds-xs font-semibold" style={{ color: STATUS_META[status].color }}>
+        <span className="text-ds-xs font-semibold" style={{ color: STATUS_META[status].textColor }}>
           {STATUS_META[status].label}
         </span>
         <div className="ml-auto">
           {withBot ? null : inCallWithUser ? (
             <button
-              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-[#f23f43] text-white transition-colors hover:bg-[#d83a3e]"
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-danger-strong text-white transition-colors hover:bg-danger-strong-hover"
               onClick={endCall}
               aria-label="Encerrar chamada"
               title="Encerrar chamada"
@@ -151,7 +151,7 @@ function DmChat(): React.JSX.Element {
             </button>
           ) : (
             <button
-              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-white/5 text-gray-300 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-fg/5 text-gray-300 transition-colors hover:bg-fg/10 hover:text-strong disabled:cursor-not-allowed disabled:opacity-40"
               onClick={() => {
                 if (!conversationId || !userId) return
                 void startDMCall(conversationId, {

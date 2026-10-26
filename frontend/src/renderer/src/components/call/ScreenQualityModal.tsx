@@ -46,7 +46,7 @@ function QualityDialog({
         aria-labelledby="screen-quality-title"
         className="glass-card w-full max-w-xl p-6"
       >
-        <h2 id="screen-quality-title" className="text-xl font-bold text-white">
+        <h2 id="screen-quality-title" className="text-xl font-bold text-strong">
           Compartilhe sua tela
         </h2>
         <ScreenQualityControls value={quality} onChange={setQuality} />

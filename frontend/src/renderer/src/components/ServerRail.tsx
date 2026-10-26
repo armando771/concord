@@ -177,7 +177,7 @@ function ServerRail(): React.JSX.Element {
 
   return (
     <>
-      <aside className="group/rail flex h-full w-18 shrink-0 flex-col items-center gap-2 border-r border-white/6 bg-[#06070a]/85 py-3 backdrop-blur-2xl">
+      <aside className="group/rail flex h-full w-18 shrink-0 flex-col items-center gap-2 border-r border-subtle bg-tertiary py-3 backdrop-blur-2xl">
         {/* Início: botão com a marca da Salinha */}
         <div className="relative flex items-center justify-center">
           <span
@@ -190,10 +190,10 @@ function ServerRail(): React.JSX.Element {
             onClick={clearCurrentServer}
             aria-label="Início"
             title="Mensagens Diretas e Amigos"
-            className={`group/home relative flex h-12 w-12 items-center justify-center font-bold text-xl text-white shadow-lg transition-all duration-200 ${
+            className={`group/home relative flex h-12 w-12 items-center justify-center font-bold text-xl shadow-lg transition-all duration-200 ${
               isHome
-                ? 'rounded-2xl bg-linear-to-br from-violet-600 to-indigo-600 shadow-violet-500/30'
-                : 'rounded-3xl bg-[#12141d]/80 border border-white/10 hover:rounded-2xl hover:bg-linear-to-br hover:from-violet-600 hover:to-indigo-600 hover:shadow-violet-500/30'
+                ? 'rounded-2xl bg-linear-to-br from-violet-600 to-indigo-600 text-white shadow-violet-500/30'
+                : 'rounded-3xl bg-surface border border-subtle text-strong hover:text-white hover:rounded-2xl hover:bg-linear-to-br hover:from-violet-600 hover:to-indigo-600 hover:shadow-violet-500/30'
             }`}
           >
             <SalinhaMarkIcon className="h-8 w-8" />
@@ -205,7 +205,7 @@ function ServerRail(): React.JSX.Element {
           )}
         </div>
 
-        <div className="my-1 h-0.5 w-8 rounded-full bg-white/10" />
+        <div className="my-1 h-0.5 w-8 rounded-full bg-fg/10" />
 
         {/* Invites Button with Pending Badge */}
         <div className="relative flex items-center justify-center">
@@ -219,7 +219,7 @@ function ServerRail(): React.JSX.Element {
             className={`relative flex h-12 w-12 cursor-pointer items-center justify-center transition-all duration-200 ${
               location.pathname === '/invites'
                 ? 'rounded-2xl bg-violet-600 shadow-md shadow-violet-500/30'
-                : 'rounded-3xl border border-white/6 bg-[#12141d]/80 hover:rounded-2xl hover:bg-violet-600 hover:shadow-md hover:shadow-violet-500/30'
+                : 'rounded-3xl border border-subtle bg-surface hover:rounded-2xl hover:bg-violet-600 hover:shadow-md hover:shadow-violet-500/30'
             }`}
           >
             <InboxIcon
@@ -247,7 +247,7 @@ function ServerRail(): React.JSX.Element {
             className={`relative flex h-12 w-12 cursor-pointer items-center justify-center transition-all duration-200 ${
               onProposals
                 ? 'rounded-2xl bg-violet-600 shadow-md shadow-violet-500/30'
-                : 'rounded-3xl border border-white/6 bg-[#12141d]/80 hover:rounded-2xl hover:bg-violet-600 hover:shadow-md hover:shadow-violet-500/30'
+                : 'rounded-3xl border border-subtle bg-surface hover:rounded-2xl hover:bg-violet-600 hover:shadow-md hover:shadow-violet-500/30'
             }`}
           >
             <DiamondIcon className={`h-6 w-6 ${onProposals ? 'text-white' : 'text-violet-400'}`} />
@@ -271,10 +271,12 @@ function ServerRail(): React.JSX.Element {
             className={`relative flex h-12 w-12 cursor-pointer items-center justify-center transition-all duration-200 ${
               onChangelog
                 ? 'rounded-2xl bg-violet-600 shadow-md shadow-violet-500/30'
-                : 'rounded-3xl border border-white/6 bg-[#12141d]/80 hover:rounded-2xl hover:bg-violet-600 hover:shadow-md hover:shadow-violet-500/30'
+                : 'rounded-3xl border border-subtle bg-surface hover:rounded-2xl hover:bg-violet-600 hover:shadow-md hover:shadow-violet-500/30'
             }`}
           >
-            <ChangelogIcon className={`h-6 w-6 ${onChangelog ? 'text-white' : 'text-violet-400'}`} />
+            <ChangelogIcon
+              className={`h-6 w-6 ${onChangelog ? 'text-white' : 'text-violet-400'}`}
+            />
           </button>
         </div>
 
@@ -302,12 +304,12 @@ function ServerRail(): React.JSX.Element {
                     openNotifyModal({ serverId: srv.id, name: srv.name })
                   }}
                   title={srv.name}
-                  className={`group/btn relative flex h-12 w-12 items-center justify-center font-bold text-base text-white transition-all duration-200 cursor-pointer overflow-hidden ${
+                  className={`group/btn relative flex h-12 w-12 items-center justify-center font-bold text-base transition-all duration-200 cursor-pointer overflow-hidden ${
                     muted && !isActive && mentions === 0 ? 'opacity-50' : ''
                   } ${
                     isActive
-                      ? 'rounded-2xl bg-violet-600 shadow-md shadow-violet-500/30'
-                      : 'rounded-3xl bg-[#12141d]/80 border border-white/10 hover:rounded-2xl hover:bg-violet-600 hover:shadow-md hover:shadow-violet-500/30'
+                      ? 'rounded-2xl bg-violet-600 text-white shadow-md shadow-violet-500/30'
+                      : 'rounded-3xl bg-surface border border-subtle text-strong hover:text-white hover:rounded-2xl hover:bg-violet-600 hover:shadow-md hover:shadow-violet-500/30'
                   }`}
                 >
                   {srv.icon_url ? (
@@ -332,10 +334,10 @@ function ServerRail(): React.JSX.Element {
                   <span
                     title={srv.id === voiceSrvId ? 'Em chamada' : 'Chamada em andamento'}
                     aria-label={srv.id === voiceSrvId ? 'Em chamada' : 'Chamada em andamento'}
-                    className={`absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border-[3px] border-[#06070a] shadow-md ${
+                    className={`absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border-[3px] border-[var(--bg-app)] shadow-md ${
                       srv.id === voiceSrvId
                         ? 'bg-discord-green text-white'
-                        : 'bg-[#2b2f3d] text-discord-green'
+                        : 'bg-accent text-discord-green'
                     }`}
                   >
                     <VolumeIcon className="h-3 w-3" />
@@ -352,7 +354,7 @@ function ServerRail(): React.JSX.Element {
             onClick={() => setCreateModalOpen(true)}
             title="Adicionar um servidor"
             aria-label="Adicionar servidor"
-            className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-3xl border border-white/6 bg-[#12141d]/60 text-discord-green transition-all duration-200 hover:rounded-2xl hover:bg-discord-green hover:text-white hover:shadow-lg hover:shadow-discord-green/25"
+            className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-3xl border border-subtle bg-surface text-discord-green transition-all duration-200 hover:rounded-2xl hover:bg-discord-green hover:text-white hover:shadow-lg hover:shadow-discord-green/25"
           >
             <PlusIcon className="h-6 w-6" />
           </button>
@@ -397,9 +399,9 @@ function ServerRail(): React.JSX.Element {
         {/* Entrar em um servidor existente com o código de convite */}
         <form
           onSubmit={handleJoinByCode}
-          className="mt-5 flex flex-col gap-3 border-t border-white/10 pt-5"
+          className="mt-5 flex flex-col gap-3 border-t border-subtle pt-5"
         >
-          <p className="text-sm font-semibold text-white">Entrar com código</p>
+          <p className="text-sm font-semibold text-strong">Entrar com código</p>
           <p className="-mt-1 text-xs text-gray-400">Cole o link de convite ou digite o código.</p>
           <div className="flex gap-2">
             <Input

@@ -39,8 +39,8 @@ export default function MutedNotifications(): React.JSX.Element | null {
   if (serverRows.length === 0 && channelRows.length === 0) return null
 
   return (
-    <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
-      <h3 className="mb-3 text-ds-sm font-semibold text-white">Silenciados e personalizados</h3>
+    <div className="mt-4 rounded-xl border border-subtle bg-fg/5 p-4">
+      <h3 className="mb-3 text-ds-sm font-semibold text-strong">Silenciados e personalizados</h3>
       <ul className="flex flex-col gap-1">
         {serverRows.map((r) => (
           <li key={r.id} className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5">
@@ -51,7 +51,7 @@ export default function MutedNotifications(): React.JSX.Element | null {
             <button
               type="button"
               onClick={() => openModal({ serverId: r.id, name: r.name })}
-              className="shrink-0 cursor-pointer rounded-md bg-white/10 px-3 py-1 text-ds-sm text-gray-200 hover:bg-white/20"
+              className="shrink-0 cursor-pointer rounded-md bg-fg/10 px-3 py-1 text-ds-sm text-gray-200 hover:bg-fg/20"
             >
               Editar
             </button>
@@ -71,7 +71,7 @@ export default function MutedNotifications(): React.JSX.Element | null {
               onClick={() =>
                 openModal({ serverId: r.serverId, channelId: r.id, name: r.name.slice(1) })
               }
-              className="shrink-0 cursor-pointer rounded-md bg-white/10 px-3 py-1 text-ds-sm text-gray-200 hover:bg-white/20"
+              className="shrink-0 cursor-pointer rounded-md bg-fg/10 px-3 py-1 text-ds-sm text-gray-200 hover:bg-fg/20"
             >
               Editar
             </button>

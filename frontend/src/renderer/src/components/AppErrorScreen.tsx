@@ -29,10 +29,10 @@ export function AppErrorScreen({ error }: { error?: unknown }): React.JSX.Elemen
   return (
     <div
       role="alert"
-      className="flex h-full min-h-screen w-full items-center justify-center bg-[#0b0c10] p-6 text-center"
+      className="flex h-full min-h-screen w-full items-center justify-center bg-secondary p-6 text-center"
     >
       <div className="w-full max-w-sm">
-        <p className="text-xl font-semibold text-white">Algo deu errado</p>
+        <p className="text-xl font-semibold text-strong">Algo deu errado</p>
         <p className="mt-2 text-sm text-gray-400">
           Esta tela encontrou um problema. Recarregue o app; se continuar, verifique se há uma
           versão nova.

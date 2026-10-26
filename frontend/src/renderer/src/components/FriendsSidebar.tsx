@@ -24,7 +24,7 @@ import { GameLine } from './ActivityLine'
 import StyledName from './StyledName'
 import type { NameStyle } from '../lib/nameStyle'
 
-const SIDEBAR_BG = '#0b0c10'
+const SIDEBAR_BG = 'var(--bg-secondary)'
 
 function DmAvatar({
   userId,
@@ -105,7 +105,7 @@ function ConversationRow({
       }}
       onContextMenu={onContextMenu}
       className={`group flex w-full cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors ${
-        active ? 'bg-white/10' : 'hover:bg-white/6'
+        active ? 'bg-fg/10' : 'hover:bg-fg/6'
       }`}
     >
       {isGroup || !other ? (
@@ -121,7 +121,7 @@ function ConversationRow({
         <p
           className={`truncate text-ds-md ${
             active || unread > 0
-              ? 'font-semibold text-white'
+              ? 'font-semibold text-strong'
               : 'font-medium text-gray-400 group-hover:text-gray-200'
           }`}
         >
@@ -147,7 +147,7 @@ function ConversationRow({
         )}
       </div>
       {unread > 0 && (
-        <span className="shrink-0 rounded-full bg-[#f23f43] px-1.5 text-[11px] font-bold text-white group-hover:hidden">
+        <span className="shrink-0 rounded-full bg-danger-strong px-1.5 text-[11px] font-bold text-white group-hover:hidden">
           {unread > 99 ? '99+' : unread}
         </span>
       )}
@@ -159,7 +159,7 @@ function ConversationRow({
           e.stopPropagation()
           onClose(conv)
         }}
-        className="hidden shrink-0 cursor-pointer text-gray-400 hover:text-white group-hover:block"
+        className="hidden shrink-0 cursor-pointer text-gray-400 hover:text-strong group-hover:block"
       >
         <XIcon className="h-4 w-4" />
       </button>
@@ -227,14 +227,14 @@ export function FriendsSidebar(): React.JSX.Element {
       {/* z-10: a alça de redimensionar passa um pouco da borda, sobre o conteúdo. */}
       <aside
         style={sidebar.panelStyle}
-        className="relative z-10 flex h-full shrink-0 flex-col border-r border-white/6 bg-[#0b0c10]/80 backdrop-blur-2xl"
+        className="relative z-10 flex h-full shrink-0 flex-col border-r border-subtle bg-secondary backdrop-blur-2xl"
       >
         <ResizeHandle {...sidebar.handleProps} />
-        <div className="flex h-12 shrink-0 items-center border-b border-white/6 px-2.5">
+        <div className="flex h-12 shrink-0 items-center border-b border-subtle px-2.5">
           <button
             type="button"
             onClick={() => setQuickSwitcherOpen(true)}
-            className="w-full cursor-pointer truncate rounded-md bg-[#111214] px-2 py-1.5 text-left text-ds-sm text-gray-400 transition-colors hover:text-gray-200"
+            className="w-full cursor-pointer truncate rounded-md bg-floating px-2 py-1.5 text-left text-ds-sm text-gray-400 transition-colors hover:text-gray-200"
           >
             Encontre ou comece uma conversa
           </button>
@@ -250,8 +250,8 @@ export function FriendsSidebar(): React.JSX.Element {
               }}
               className={`flex w-full cursor-pointer items-center justify-between rounded-md px-3 py-2 text-ds-md font-medium transition-colors ${
                 onFriendsPage
-                  ? 'bg-white/10 text-white'
-                  : 'text-gray-400 hover:bg-white/6 hover:text-gray-200'
+                  ? 'bg-fg/10 text-strong'
+                  : 'text-gray-400 hover:bg-fg/6 hover:text-gray-200'
               }`}
             >
               <span className="flex items-center gap-3">
@@ -259,7 +259,7 @@ export function FriendsSidebar(): React.JSX.Element {
                 Amigos
               </span>
               {incomingCount > 0 && (
-                <span className="rounded-full bg-[#f23f43] px-1.5 text-[11px] font-bold text-white">
+                <span className="rounded-full bg-danger-strong px-1.5 text-[11px] font-bold text-white">
                   {incomingCount}
                 </span>
               )}
@@ -276,7 +276,7 @@ export function FriendsSidebar(): React.JSX.Element {
                 title="Criar DM"
                 aria-label="Criar DM"
                 onClick={() => setGroupOpen(true)}
-                className="cursor-pointer text-gray-400 hover:text-white"
+                className="cursor-pointer text-gray-400 hover:text-strong"
               >
                 <PlusIcon className="h-4 w-4" />
               </button>

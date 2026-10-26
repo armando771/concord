@@ -77,7 +77,7 @@ function IncomingCallModal(): React.JSX.Element | null {
           animate="always"
           className="mx-auto mb-4"
         />
-        <p className="text-lg font-bold text-white">
+        <p className="text-lg font-bold text-strong">
           <StyledName name={peer.display_name} userId={peer.id} style={peer.name_style} />
         </p>
         <p className="mb-6 text-xs text-gray-400">@{peer.username}</p>

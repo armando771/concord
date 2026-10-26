@@ -19,10 +19,7 @@ function SystemMessage({ message }: { message: Message }): React.JSX.Element {
   const renderText = (text: string, offset: number): React.ReactNode[] =>
     splitMentions(text).map((part, i) =>
       part.mention ? (
-        <span
-          key={`${offset}-${i}`}
-          className="rounded bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]"
-        >
+        <span key={`${offset}-${i}`} className="rounded bg-brand/30 px-0.5 font-medium text-brand">
           {part.text}
         </span>
       ) : (
@@ -52,7 +49,7 @@ function SystemMessage({ message }: { message: Message }): React.JSX.Element {
           {at >= 0 ? (
             <>
               {renderText(message.content.slice(0, at), 0)}O servidor{' '}
-              <strong className="font-bold text-white">{serverName}</strong>
+              <strong className="font-bold text-strong">{serverName}</strong>
               {renderText(message.content.slice(at + marker.length), 1)}
             </>
           ) : (

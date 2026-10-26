@@ -219,7 +219,7 @@ function MessageItem({
         <button
           type="button"
           onClick={() => setRevealBlocked(true)}
-          className="cursor-pointer text-[#00a8fc] hover:underline"
+          className="cursor-pointer text-link hover:underline"
         >
           Mostrar
         </button>
@@ -232,10 +232,10 @@ function MessageItem({
       id={`msg-${message.id}`}
       className={`group relative flex flex-col gap-1 rounded-md px-4 py-1.5 transition-colors ${
         isHighlighted
-          ? 'bg-[#5865f2]/20 ring-1 ring-[#5865f2]/50'
+          ? 'bg-brand/20 ring-1 ring-brand/50'
           : mentionsMe
-            ? 'border-l-2 border-[#f0b232] bg-[#f0b232]/10 hover:bg-[#f0b232]/15'
-            : 'hover:bg-white/[0.03]'
+            ? 'border-l-2 border-warning bg-warning/10 hover:bg-warning/15'
+            : 'hover:bg-fg/[0.03]'
       }`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
@@ -271,7 +271,7 @@ function MessageItem({
               onClick={openProfile}
               style={nameColor ? { color: nameColor } : undefined}
               className={`cursor-pointer text-ds-chat font-medium hover:underline ${
-                nameColor ? '' : 'text-white'
+                nameColor ? '' : 'text-strong'
               }`}
             >
               {nickname ? (
@@ -289,7 +289,10 @@ function MessageItem({
               </span>
             )}
             {message.pinned_at && (
-              <span className="flex items-center gap-0.5 text-ds-xs text-amber-400 font-medium" title="Mensagem fixada">
+              <span
+                className="flex items-center gap-0.5 text-ds-xs text-amber-400 font-medium"
+                title="Mensagem fixada"
+              >
                 <PinIcon className="h-3 w-3" />
                 <span>fixada</span>
               </span>
@@ -839,13 +842,13 @@ function ChatPane({
       ? latestPin.attachments[0].kind === 'image'
         ? '📷 Imagem'
         : latestPin.attachments[0].kind === 'video'
-        ? '🎥 Vídeo'
-        : latestPin.attachments[0].kind === 'audio'
-        ? '🎵 Áudio'
-        : '📎 Anexo'
+          ? '🎥 Vídeo'
+          : latestPin.attachments[0].kind === 'audio'
+            ? '🎵 Áudio'
+            : '📎 Anexo'
       : latestPin?.poll
-      ? '📊 Enquete: ' + latestPin.poll.question
-      : 'Mensagem fixada')
+        ? '📊 Enquete: ' + latestPin.poll.question
+        : 'Mensagem fixada')
 
   const replyTargetAuthor = serverDisplayName(
     { nickname: replyingTo ? nicknames?.[replyingTo.author_id] : undefined },
@@ -863,7 +866,7 @@ function ChatPane({
       onDrop={handleDrop}
     >
       {dragging && (
-        <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-violet-400/70 bg-black/60 text-sm font-semibold text-white">
+        <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-violet-400/70 bg-black/60 text-sm font-semibold text-white on-media">
           Solte os arquivos para enviar
         </div>
       )}
@@ -876,25 +879,21 @@ function ChatPane({
           onClick={() => handleJumpToMessage(latestPin.id)}
           onKeyDown={(e) => e.key === 'Enter' && handleJumpToMessage(latestPin.id)}
           title="Clique para ir até a mensagem fixada"
-          className="group relative z-10 flex shrink-0 cursor-pointer items-center justify-between border-b border-white/6 bg-[#18191c]/80 px-4 py-2 backdrop-blur transition hover:bg-[#1f2024]"
+          className="group relative z-10 flex shrink-0 cursor-pointer items-center justify-between border-b border-subtle bg-floating px-4 py-2 backdrop-blur transition hover:bg-surface"
         >
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-amber-400/15 text-amber-400">
               <PinIcon className="h-3.5 w-3.5" />
             </span>
             <div className="flex min-w-0 items-center gap-1.5 text-ds-xs">
-              <span className="shrink-0 font-semibold text-white">
-                {latestPinAuthorName}:
-              </span>
-              <span className="truncate text-gray-300">
-                {latestPinPreview}
-              </span>
+              <span className="shrink-0 font-semibold text-strong">{latestPinAuthorName}:</span>
+              <span className="truncate text-gray-300">{latestPinPreview}</span>
             </div>
           </div>
 
           <div className="flex shrink-0 items-center gap-2 pl-3">
             {pins.length > 1 && (
-              <span className="rounded bg-white/5 px-2 py-0.5 text-[10px] font-medium text-gray-400">
+              <span className="rounded bg-fg/5 px-2 py-0.5 text-[10px] font-medium text-gray-400">
                 +{pins.length - 1} fixada{pins.length - 1 > 1 ? 's' : ''}
               </span>
             )}
@@ -922,7 +921,7 @@ function ChatPane({
                 <button
                   onClick={handleLoadOlder}
                   disabled={loadingOlder}
-                  className="cursor-pointer rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+                  className="cursor-pointer rounded-full border border-subtle bg-fg/5 px-3 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:bg-fg/10 hover:text-strong disabled:opacity-50"
                 >
                   {loadingOlder ? 'Carregando...' : 'Carregar mensagens anteriores'}
                 </button>
@@ -969,7 +968,7 @@ function ChatPane({
           <ul
             role="listbox"
             aria-label="Marcar alguém"
-            className="absolute bottom-full left-4 right-4 mb-2 overflow-hidden rounded-lg border border-white/10 bg-[#111214] py-1 shadow-2xl"
+            className="absolute bottom-full left-4 right-4 mb-2 overflow-hidden rounded-lg border border-subtle bg-floating py-1 shadow-2xl"
           >
             {suggestions.map((m, i) => (
               <li
@@ -982,7 +981,7 @@ function ChatPane({
                 }}
                 onMouseEnter={() => setHighlight(i)}
                 className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm ${
-                  i === highlight ? 'bg-[#5865f2]/30 text-white' : 'text-gray-300'
+                  i === highlight ? 'bg-brand/30 text-strong' : 'text-gray-300'
                 }`}
               >
                 {m.kind === 'everyone' ? (
@@ -1002,29 +1001,29 @@ function ChatPane({
         )}
         <ComposerAttachments drafts={drafts} onRemove={removeAttachment} />
         {replyingTo && (
-          <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#18191c] px-3 py-1.5 text-ds-sm text-gray-300">
+          <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg border border-subtle bg-floating px-3 py-1.5 text-ds-sm text-gray-300">
             <div className="min-w-0 truncate">
-              Respondendo a <span className="font-semibold text-white">@{replyTargetAuthor}</span>
+              Respondendo a <span className="font-semibold text-strong">@{replyTargetAuthor}</span>
               <span className="ml-2 text-gray-400">{messagePreview(replyingTo)}</span>
             </div>
             <button
               type="button"
               onClick={() => setReplyState(null)}
               title="Cancelar resposta (Esc)"
-              className="shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+              className="shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
             >
               ✕
             </button>
           </div>
         )}
         {disabledReason ? (
-          <div className="rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-center text-sm text-gray-400">
+          <div className="rounded-xl border border-subtle bg-input px-4 py-3 text-center text-sm text-gray-400">
             {disabledReason}
           </div>
         ) : (
           <form
             onSubmit={handleSubmit}
-            className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
+            className="relative flex items-center gap-2 rounded-xl border border-subtle bg-input px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
           >
             {room.startsWith('channel:') && !mention && (
               <SlashSuggestions
@@ -1041,7 +1040,7 @@ function ChatPane({
                 onClick={() => fileInputRef.current?.click()}
                 title="Anexar arquivo"
                 aria-label="Anexar arquivo"
-                className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+                className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
               >
                 <PaperclipIcon className="h-5 w-5" />
               </button>
@@ -1062,7 +1061,7 @@ function ChatPane({
               onClick={() => setPollOpen(true)}
               title="Criar enquete"
               aria-label="Criar enquete"
-              className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+              className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
             >
               <PollIcon className="h-5 w-5" />
             </button>
@@ -1080,7 +1079,7 @@ function ChatPane({
               onBlur={() => setMention(null)}
               placeholder={replyingTo ? `Responder a @${replyTargetAuthor}...` : placeholder}
               maxLength={2000}
-              className="min-w-0 flex-1 bg-transparent text-ds-chat text-white placeholder:text-gray-500 outline-none"
+              className="min-w-0 flex-1 bg-transparent text-ds-chat text-strong placeholder:text-gray-500 outline-none"
             />
             {permissions.canAttach && (
               <VoiceRecordButton key={room} disabled={sendingVoice} onRecorded={handleRecorded} />
@@ -1088,7 +1087,7 @@ function ChatPane({
             <button
               type="submit"
               disabled={sending || !submittable}
-              className="cursor-pointer rounded-lg bg-[#5865f2] px-3 py-1.5 text-ds-sm font-medium text-white transition-all hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-40"
+              className="cursor-pointer rounded-lg bg-brand px-3 py-1.5 text-ds-sm font-medium text-white transition-all hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-40"
             >
               {attachmentState.uploading
                 ? 'Enviando arquivos...'

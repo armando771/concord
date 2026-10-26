@@ -60,14 +60,14 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
   }
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-white/6 bg-black/20 p-4">
+    <aside className="flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-subtle bg-secondary p-4">
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400">{T17.title}</h3>
         <button
           type="button"
           onClick={closePanel}
           aria-label="Fechar"
-          className="cursor-pointer rounded p-1 text-gray-400 hover:bg-white/10 hover:text-white"
+          className="cursor-pointer rounded p-1 text-gray-400 hover:bg-fg/10 hover:text-strong"
         >
           <XIcon className="h-4 w-4" />
         </button>
@@ -80,28 +80,28 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
               <button
                 type="button"
                 onClick={() => setStageVideo(true)}
-                className="cursor-pointer rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/15"
+                className="cursor-pointer rounded bg-fg/10 px-2 py-1 text-xs text-strong hover:bg-fg/15"
               >
                 {T20.watch}
               </button>
               <button
                 type="button"
                 onClick={goFullscreen}
-                className="cursor-pointer rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/15"
+                className="cursor-pointer rounded bg-fg/10 px-2 py-1 text-xs text-strong hover:bg-fg/15"
               >
                 {T20.fullscreen}
               </button>
             </div>
           )}
           <div className="min-w-0">
-            <p data-testid="music-now-title" className="truncate font-semibold text-white">
+            <p data-testid="music-now-title" className="truncate font-semibold text-strong">
               {now.item.title}
             </p>
             <p className="truncate text-xs text-gray-400">
               {now.item.artist} · @{now.item.requested_by.username}
             </p>
           </div>
-          <div className="h-1 overflow-hidden rounded bg-white/10">
+          <div className="h-1 overflow-hidden rounded bg-fg/10">
             <div
               className="h-full bg-violet-400"
               style={{
@@ -117,7 +117,7 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
             type="button"
             onClick={onSkip}
             disabled={!mineNow && voted}
-            className="cursor-pointer rounded-md bg-white/10 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-50"
+            className="cursor-pointer rounded-md bg-fg/10 px-3 py-1.5 text-sm font-semibold text-strong hover:bg-fg/15 disabled:opacity-50"
           >
             {mineNow ? T17.skip : T17.vote(state.skip.votes, state.skip.needed)}
           </button>
@@ -141,11 +141,11 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
                   if (source && canSwap(source, it, meId)) e.preventDefault()
                 }}
                 onDrop={() => onDrop(it)}
-                className={`flex items-center gap-2 rounded px-2 py-1 text-sm ${mine ? 'cursor-grab bg-white/5' : 'opacity-80'}`}
+                className={`flex items-center gap-2 rounded px-2 py-1 text-sm ${mine ? 'cursor-grab bg-fg/5' : 'opacity-80'}`}
               >
                 <span className="w-4 text-xs text-gray-500">{i + 1}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-white">{it.title}</span>
+                  <span className="block truncate text-strong">{it.title}</span>
                   <span className="block truncate text-[11px] text-gray-500">
                     {formatDuration(it.duration_ms)} · @{it.requested_by.username}
                   </span>
@@ -159,7 +159,7 @@ function MusicPanel({ serverId }: { serverId: string }): React.JSX.Element | nul
                         showToast.error(errorText(err))
                       )
                     }
-                    className="cursor-pointer text-gray-500 hover:text-white"
+                    className="cursor-pointer text-gray-500 hover:text-strong"
                   >
                     ✕
                   </button>

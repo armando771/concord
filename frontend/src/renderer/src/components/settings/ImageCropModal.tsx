@@ -150,11 +150,11 @@ function ImageCropModal({
         role="dialog"
         aria-modal="true"
         aria-label="Editar imagem"
-        className="w-full max-w-[540px] rounded-xl border border-white/10 bg-[#111214] shadow-2xl"
+        className="w-full max-w-[540px] rounded-xl border border-subtle bg-floating shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="px-5 pt-5">
-          <h2 className="text-lg font-bold text-white">Editar imagem</h2>
+          <h2 className="text-lg font-bold text-strong">Editar imagem</h2>
           {isGif && (
             <p className="mt-1 text-xs text-gray-400">
               GIFs entram inteiros, sem recorte, e animam no seu perfil.
@@ -211,14 +211,14 @@ function ImageCropModal({
               value={zoom}
               onChange={(e) => setZoom(Number(e.target.value))}
               aria-label="Zoom"
-              className="flex-1 accent-[#5865f2]"
+              className="flex-1 accent-brand"
             />
             <span className="text-sm text-gray-400">+</span>
           </div>
         )}
-        {error && <p className="px-6 pt-3 text-xs text-[#f23f43]">{error}</p>}
+        {error && <p className="px-6 pt-3 text-xs text-danger">{error}</p>}
 
-        <div className="mt-5 flex items-center justify-end gap-2 rounded-b-xl bg-black/30 px-5 py-4">
+        <div className="mt-5 flex items-center justify-end gap-2 rounded-b-xl bg-input px-5 py-4">
           {!isGif && (
             <button
               type="button"
@@ -234,7 +234,7 @@ function ImageCropModal({
           <button
             type="button"
             onClick={onCancel}
-            className="cursor-pointer rounded-md px-4 py-2 text-sm text-white hover:underline"
+            className="cursor-pointer rounded-md px-4 py-2 text-sm text-strong hover:underline"
           >
             Cancelar
           </button>
@@ -242,7 +242,7 @@ function ImageCropModal({
             type="button"
             onClick={() => void apply()}
             disabled={busy || !natural}
-            className="cursor-pointer rounded-md bg-[#5865f2] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[#4752c4] disabled:opacity-50"
+            className="cursor-pointer rounded-md bg-brand px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
           >
             {busy ? 'Aplicando...' : 'Aplicar'}
           </button>

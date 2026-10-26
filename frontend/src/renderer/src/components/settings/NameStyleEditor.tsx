@@ -11,8 +11,8 @@ function withEffect(style: NameStyle, effectId: string): NameStyle {
 }
 
 const optionClass = (active: boolean): string =>
-  `cursor-pointer rounded-md border px-3 py-2 text-left text-ds-sm text-white transition-colors ${
-    active ? 'border-[#5865f2] bg-white/10' : 'border-white/10 bg-black/30 hover:bg-white/10'
+  `cursor-pointer rounded-md border px-3 py-2 text-left text-ds-sm text-strong transition-colors ${
+    active ? 'border-brand bg-fg/10' : 'border-subtle bg-input hover:bg-fg/10'
   }`
 
 export default function NameStyleEditor({
@@ -27,7 +27,7 @@ export default function NameStyleEditor({
   const effect = NAME_EFFECTS.find((e) => e.id === value.effect) ?? NAME_EFFECTS[0]
   return (
     <div className="space-y-4">
-      <div className="truncate rounded-md bg-black/40 px-4 py-3 text-lg text-white">
+      <div className="truncate rounded-md bg-input px-4 py-3 text-lg text-strong">
         <StyledName name={previewName || 'Seu nome'} style={value} />
       </div>
 
@@ -79,7 +79,7 @@ export default function NameStyleEditor({
                 colors[i] = ev.target.value
                 onChange({ ...value, colors })
               }}
-              className="h-8 w-12 cursor-pointer rounded border border-white/10 bg-transparent"
+              className="h-8 w-12 cursor-pointer rounded border border-subtle bg-transparent"
             />
           ))}
         </div>

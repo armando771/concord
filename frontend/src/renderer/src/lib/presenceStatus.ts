@@ -9,23 +9,29 @@ export type PresenceStatus = ChosenStatus | 'offline'
 
 export const CHOSEN_STATUSES: ChosenStatus[] = ['online', 'idle', 'dnd', 'invisible']
 
+/**
+ * Cores pelos tokens do tema (assets/theme.css): `color` é a bolinha (verde/
+ * amarelo/vermelho do Discord); `textColor`, a versão legível (AA) para texto.
+ */
 export const STATUS_META: Record<
   PresenceStatus,
-  { label: string; color: string; description?: string }
+  { label: string; color: string; textColor: string; description?: string }
 > = {
-  online: { label: 'Online', color: '#23a55a' },
-  idle: { label: 'Ausente', color: '#f0b232' },
+  online: { label: 'Online', color: 'var(--green)', textColor: 'var(--text-positive)' },
+  idle: { label: 'Ausente', color: 'var(--yellow)', textColor: 'var(--text-warning)' },
   dnd: {
     label: 'Não perturbe',
-    color: '#f23f43',
+    color: 'var(--red)',
+    textColor: 'var(--text-danger)',
     description: 'Você não receberá notificações na área de trabalho'
   },
   invisible: {
     label: 'Invisível',
-    color: '#80848e',
+    color: 'var(--text-faint)',
+    textColor: 'var(--text-muted)',
     description: 'Você aparecerá offline, mas terá acesso total ao Salinha'
   },
-  offline: { label: 'Offline', color: '#80848e' }
+  offline: { label: 'Offline', color: 'var(--text-faint)', textColor: 'var(--text-muted)' }
 }
 
 export function isChosenStatus(value: unknown): value is ChosenStatus {

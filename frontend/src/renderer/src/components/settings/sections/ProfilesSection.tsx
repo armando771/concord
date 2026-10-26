@@ -35,7 +35,7 @@ import NameStyleEditor from '../NameStyleEditor'
 
 const DEFAULT_BANNER = 'linear-gradient(135deg, #5865f2, #8b5cf6)'
 const inputClass =
-  'w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:border-[#5865f2] focus:outline-none'
+  'w-full rounded-md border border-subtle bg-input px-3 py-2 text-sm text-strong placeholder:text-gray-500 focus:border-brand focus:outline-none'
 
 function Field({
   label,
@@ -51,12 +51,12 @@ function Field({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div className="border-b border-white/10 pb-6">
+    <div className="border-b border-subtle pb-6">
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <p className="text-ds-sm font-medium text-gray-300">{label}</p>
         {counter && (
           <span
-            className={`text-[11px] ${counter.used > counter.max ? 'text-[#f23f43]' : 'text-gray-500'}`}
+            className={`text-[11px] ${counter.used > counter.max ? 'text-danger' : 'text-gray-500'}`}
           >
             {counter.max - counter.used}
           </span>
@@ -64,7 +64,7 @@ function Field({
       </div>
       {hint && <p className="-mt-1 mb-2 text-xs text-gray-400">{hint}</p>}
       {children}
-      {error && <p className="mt-1.5 text-xs text-[#f23f43]">{error}</p>}
+      {error && <p className="mt-1.5 text-xs text-danger">{error}</p>}
     </div>
   )
 }
@@ -74,7 +74,7 @@ function SecondaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>): 
     <button
       type="button"
       {...props}
-      className="cursor-pointer rounded-md bg-white/10 px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+      className="cursor-pointer rounded-md bg-fg/10 px-4 py-2 text-ds-sm font-medium text-strong transition-colors hover:bg-fg/15 disabled:cursor-not-allowed disabled:opacity-50"
     />
   )
 }
@@ -262,7 +262,7 @@ function ProfilesSection(): React.JSX.Element | null {
               <button
                 type="button"
                 onClick={() => fileInputs.avatar.current?.click()}
-                className="cursor-pointer rounded-md bg-[#5865f2] px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-[#4752c4]"
+                className="cursor-pointer rounded-md bg-brand px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-brand-hover"
               >
                 Alterar avatar
               </button>
@@ -279,7 +279,7 @@ function ProfilesSection(): React.JSX.Element | null {
               <button
                 type="button"
                 onClick={() => fileInputs.banner.current?.click()}
-                className="cursor-pointer rounded-md bg-[#5865f2] px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-[#4752c4]"
+                className="cursor-pointer rounded-md bg-brand px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-brand-hover"
               >
                 Alterar banner
               </button>
@@ -291,7 +291,7 @@ function ProfilesSection(): React.JSX.Element | null {
             </div>
             <div className="mt-4 flex items-center gap-3">
               <label
-                className="relative h-12 w-16 cursor-pointer overflow-hidden rounded-md border border-white/20"
+                className="relative h-12 w-16 cursor-pointer overflow-hidden rounded-md border border-normal"
                 style={{ background: draft.banner_color ?? DEFAULT_BANNER }}
                 title="Escolher a cor do banner"
               >
@@ -310,7 +310,7 @@ function ProfilesSection(): React.JSX.Element | null {
                   <button
                     type="button"
                     onClick={() => set('banner_color', null)}
-                    className="mt-0.5 cursor-pointer text-[#00a8fc] hover:underline"
+                    className="mt-0.5 cursor-pointer text-link hover:underline"
                   >
                     Usar a cor padrão
                   </button>
@@ -318,7 +318,7 @@ function ProfilesSection(): React.JSX.Element | null {
               </div>
             </div>
             {errors.banner_color && (
-              <p className="mt-1.5 text-xs text-[#f23f43]">{errors.banner_color}</p>
+              <p className="mt-1.5 text-xs text-danger">{errors.banner_color}</p>
             )}
           </Field>
 
@@ -365,7 +365,7 @@ function ProfilesSection(): React.JSX.Element | null {
                   <div key={i}>
                     <div className="flex items-center gap-2">
                       <span
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white/5 text-gray-300"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-fg/5 text-gray-300"
                         title={provider.label}
                       >
                         <LinkIcon provider={provider.id} />
@@ -391,12 +391,12 @@ function ProfilesSection(): React.JSX.Element | null {
                           )
                         }
                         aria-label={`Remover link ${i + 1}`}
-                        className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+                        className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
                       >
                         <XIcon className="h-4 w-4" />
                       </button>
                     </div>
-                    {error && <p className="ml-11 mt-1 text-xs text-[#f23f43]">{error}</p>}
+                    {error && <p className="ml-11 mt-1 text-xs text-danger">{error}</p>}
                   </div>
                 )
               })}
@@ -425,7 +425,7 @@ function ProfilesSection(): React.JSX.Element | null {
         <div className="w-full shrink-0 lg:sticky lg:top-0 lg:w-[300px]">
           <p className="mb-2 text-ds-sm font-medium text-gray-300">Prévia</p>
           <div
-            className="rounded-xl border border-white/10 text-sm text-gray-200 shadow-2xl"
+            className="rounded-xl border border-subtle text-sm text-gray-200 shadow-2xl"
             style={{ background: CARD_BG }}
           >
             <ProfileCardBody
@@ -487,10 +487,10 @@ function ProfilesSection(): React.JSX.Element | null {
           <div
             role="status"
             className={`flex items-center justify-between gap-4 rounded-lg px-4 py-2.5 shadow-2xl transition-colors ${
-              shaking ? 'unsaved-shake bg-[#da373c]' : 'bg-[#111214] border border-white/10'
+              shaking ? 'unsaved-shake bg-danger-strong' : 'bg-floating border border-subtle'
             }`}
           >
-            <p className="text-sm font-medium text-white">
+            <p className="text-sm font-medium text-strong">
               Cuidado — você tem alterações não salvas!
             </p>
             <div className="flex shrink-0 items-center gap-3">
@@ -498,7 +498,7 @@ function ProfilesSection(): React.JSX.Element | null {
                 type="button"
                 onClick={reset}
                 disabled={saving}
-                className="cursor-pointer text-sm text-white hover:underline disabled:opacity-50"
+                className="cursor-pointer text-sm text-strong hover:underline disabled:opacity-50"
               >
                 Redefinir
               </button>
@@ -507,7 +507,7 @@ function ProfilesSection(): React.JSX.Element | null {
                 onClick={() => void save()}
                 disabled={saving || invalid}
                 title={invalid ? 'Corrija os campos em vermelho' : undefined}
-                className="cursor-pointer rounded-md bg-[#248046] px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-[#1a6334] disabled:cursor-not-allowed disabled:opacity-50"
+                className="cursor-pointer rounded-md bg-success-strong px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-success-strong-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving
                   ? progress !== null
