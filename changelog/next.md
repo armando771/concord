@@ -5,5 +5,6 @@
 - Propostas: o card mostra quem do time está fazendo, a issue no GitHub fecha e reabre junto com o card, e o Salinha Bot te avisa na DM como anda a sua sugestão.
 - Badges: nova raridade Mítico, acima de Lendário, com efeito holográfico. O primeiro é o Criador da Salinha, exclusivo de quem constrói o app.
 - Carregamento: no lugar do "Carregando..." e dos círculos girando, as telas mostram um esqueleto com o formato do que vai aparecer (mensagens, canais, membros, amigos, perfis e mais), como no Discord.
+- Badges: novo badge Contribuinte para quem cria cards no quadro de propostas de melhorias (Ideia, Colaborador, Inovador, Visionário e Arquiteto, de 1 a 100 cards). Sobe na hora em que você cria o card, e quem já tinha cards ganha os tiers com a data certa.
 
 ## Correções

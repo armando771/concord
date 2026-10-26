@@ -121,12 +121,19 @@ type fileRemover interface {
 	Remove(name string) error
 }
 
+// BadgeRefresher reavalia os badges de alguém na hora (badge.Service): card
+// novo sobe o badge Contribuinte e manda o aviso de desbloqueio.
+type BadgeRefresher interface {
+	Refresh(ctx context.Context, userID string)
+}
+
 type Service struct {
 	store     store
 	publisher EventPublisher
 	issues    IssueCreator   // nil: sem token do GitHub, não cria issue
 	files     fileRemover    // nil: não apaga arquivos (testes)
 	notifier  StatusNotifier // nil: o Salinha Bot não avisa
+	badges    BadgeRefresher // nil: o badge sobe na próxima varredura
 	tech      map[string]bool
 	now       func() time.Time
 	// githubBlockedLogged: até quando já foi logado o limite da API (loga uma vez).
@@ -136,6 +143,12 @@ type Service struct {
 // WithNotifier liga os avisos do Salinha Bot na DM de quem sugeriu.
 func (s *Service) WithNotifier(n StatusNotifier) *Service {
 	s.notifier = n
+	return s
+}
+
+// WithBadges liga a reavaliação dos badges de quem cria um card.
+func (s *Service) WithBadges(b BadgeRefresher) *Service {
+	s.badges = b
 	return s
 }
 
@@ -230,6 +243,9 @@ func (s *Service) Create(ctx context.Context, authorID, title, description strin
 		return nil, err
 	}
 	s.publish("proposal:create", id)
+	if s.badges != nil {
+		s.badges.Refresh(ctx, authorID)
+	}
 	return p, nil
 }
 

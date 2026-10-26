@@ -109,6 +109,15 @@ func (s *Service) Badges(ctx context.Context, viewerID, userID string) (Response
 	return Response{UserID: userID, Badges: publicView(badges)}, nil
 }
 
+// Refresh reavalia os badges de userID agora e avisa (badge:unlock) o que
+// entrou, sem esperar a varredura dos online. Quem muda um número na hora
+// (card novo no quadro de propostas) chama; falha só é registrada.
+func (s *Service) Refresh(ctx context.Context, userID string) {
+	if _, err := s.sync(ctx, userID); err != nil {
+		log.Printf("[badge] refresh %s: %v", userID, err)
+	}
+}
+
 func (s *Service) sync(ctx context.Context, userID string) ([]Badge, error) {
 	stats, err := s.store.Stats(ctx, userID)
 	if err != nil {

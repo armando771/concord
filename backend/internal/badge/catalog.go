@@ -23,6 +23,7 @@ const (
 	UnitServers   = "servers"
 	UnitFounder   = "founder"
 	UnitDev       = "dev"
+	UnitProposals = "proposals"
 )
 
 // FounderCutoff: quem criou a conta antes desta data (horário de Brasília)
@@ -205,6 +206,24 @@ var Catalog = []Category{
 			{"Curtidor", 50, RarityCommon},
 			{"Emotivo", 500, RarityRare},
 			{"Emojista", 2000, RarityEpic},
+		},
+	},
+	{
+		// Conta os cards que a pessoa criou e que ainda estão no quadro,
+		// inclusive os rejeitados (a ideia foi dada; ninguém perde por não ser
+		// aprovada). Spam o time tech apaga, e card apagado sai da contagem; o
+		// autor também só apaga em votação, então criar e apagar não sobe o
+		// badge. Como todo badge, o tier já conquistado não se perde.
+		Key:         "contribuinte",
+		Name:        "Contribuinte",
+		Description: "Crie cards no quadro de propostas de melhorias. Contam os que continuam no quadro, até os rejeitados.",
+		Unit:        UnitProposals,
+		Tiers: []Tier{
+			{"Ideia", 1, RarityCommon},
+			{"Colaborador", 5, RarityRare},
+			{"Inovador", 15, RarityEpic},
+			{"Visionário", 40, RarityEpic},
+			{"Arquiteto", 100, RarityLegendary},
 		},
 	},
 }

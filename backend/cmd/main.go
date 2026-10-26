@@ -497,17 +497,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to open proposal images dir: %v", err)
 	}
-	proposalService := proposal.ProposalService(proposal.ProposalRepository(db), hub, issueCreator, proposalImages, techIDs).
-		WithNotifier(salinhaBotNotifier{conversations: conversationService, messages: messageService})
-	proposalHandler := proposal.ProposalHandler(proposalService, proposalImages, uploadSpace)
-	go proposalService.Run(ctx)
-
 	// Badges do perfil (tempo transmitindo, madrugada, maior call... somados
 	// olhando as chamadas; o resto vem dos contadores do banco)
 	// Horas de Coruja/Madrugador em Brasília (nil), não no relógio da VPS. No
 	// desligamento grava o que estava na memória antes de fechar o banco.
 	badgeService := badge.BadgeService(badge.BadgeRepository(db), hub, callService, hub, nil)
 	badgeHandler := badge.BadgeHandler(badgeService)
+
+	// Card novo no quadro já reavalia o badge Contribuinte de quem criou.
+	proposalService := proposal.ProposalService(proposal.ProposalRepository(db), hub, issueCreator, proposalImages, techIDs).
+		WithNotifier(salinhaBotNotifier{conversations: conversationService, messages: messageService}).
+		WithBadges(badgeService)
+	proposalHandler := proposal.ProposalHandler(proposalService, proposalImages, uploadSpace)
+	go proposalService.Run(ctx)
 	notifySettingsHandler := notifysettings.NotifySettingsHandler(
 		notifysettings.NotifySettingsService(notifysettings.NotifySettingsRepository(db), permissionService, hub),
 	)
