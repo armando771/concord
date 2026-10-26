@@ -61,19 +61,17 @@
   }
 }
 
-/* Skeleton de carregamento. Os tokens usam a cor do texto do contexto
-   (currentColor): um tema claro ou escuro acompanha sozinho, e um tema pode
-   trocar --skeleton-base / --skeleton-shine direto. */
-:root {
-  --skeleton-base: color-mix(in srgb, currentColor 7%, transparent);
-  --skeleton-shine: color-mix(in srgb, currentColor 12%, transparent);
-}
-
+/* Skeleton de carregamento. Usa os tokens semânticos do tema (theme.css):
+   --bg-accent é o neutro sólido para esqueletos e --fg a cor-base dos véus
+   (branco nos temas escuros, preto nos claros). Sem esses tokens (antes dos
+   temas entrarem) cai para a cor do texto do contexto. Um tema também pode
+   trocar --skeleton-base / --skeleton-shine direto. Os var() ficam em cada
+   elemento (não no :root) para seguir um data-theme aplicado num trecho só. */
 @layer components {
   .skeleton {
     position: relative;
     overflow: hidden;
-    background: var(--skeleton-base);
+    background: var(--skeleton-base, var(--bg-accent, color-mix(in srgb, currentColor 7%, transparent)));
   }
 
   /* O brilho é uma faixa que anda por cima (só transform: roda no compositor). */
@@ -82,7 +80,12 @@
     position: absolute;
     inset: 0;
     transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, var(--skeleton-shine), transparent);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--skeleton-shine, color-mix(in srgb, var(--fg, currentColor) 12%, transparent)),
+      transparent
+    );
     animation: skeleton-shimmer 1.6s ease-in-out infinite;
   }
 }

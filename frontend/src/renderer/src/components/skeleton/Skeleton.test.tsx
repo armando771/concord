@@ -126,8 +126,10 @@ describe('CSS do skeleton (main.css)', () => {
   })
 
   it('as cores vêm de variáveis do tema, sem hexadecimal fixo', () => {
-    expect(skeletonCss).toContain('var(--skeleton-base)')
-    expect(skeletonCss).toContain('var(--skeleton-shine)')
+    expect(skeletonCss).toContain('var(--skeleton-base,')
+    expect(skeletonCss).toContain('var(--bg-accent')
+    expect(skeletonCss).toContain('var(--skeleton-shine,')
+    expect(skeletonCss).toContain('var(--fg')
     expect(skeletonCss).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
   })
 
