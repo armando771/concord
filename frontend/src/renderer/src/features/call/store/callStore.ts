@@ -46,6 +46,7 @@ import {
 import { callNotification, knockNotification, notifyDesktop } from '../../notifications/lib/notifications'
 import { playSound, setSoundOutput } from '../lib/sounds'
 import { playOwnJoinSound } from '../lib/entranceSoundOwn'
+import { channelJoinState } from '../lib/channelJoinState'
 import {
   abortWindowAudio,
   resetWindowAudio,
@@ -1317,27 +1318,23 @@ export const useCallStore = create<CallState>()((set, get) => {
           useChatStore.getState().sendEvent('call:leave', { call_id: call.id })
           return
         }
-        const muted = !!resume && (resume.muted || resume.deafened)
+        const join = channelJoinState(call, resume)
         localMic.stream.getAudioTracks().forEach((track) => {
-          track.enabled = !muted
+          track.enabled = !join.muted
         })
         set({
+          ...join,
           status: 'active',
           callId: call.id,
           type: 'channel',
           conversationId: null,
           channelId,
-          serverId: call.server_id ?? null,
           participants: [],
           isInitiator: false,
           streams: {},
-          muted,
-          deafened: resume?.deafened ?? false,
-          mutedBeforeDeafen: resume?.mutedBeforeDeafen ?? false,
-          startedAt: Date.now(),
-          locked: call.locked ?? false
+          startedAt: Date.now()
         })
-        void playOwnJoinSound(resume?.deafened ?? false)
+        void playOwnJoinSound(join.deafened)
         useChatStore.getState().subscribeRoom(`call:${call.id}`)
         // O backend já registrou a entrada (startCall é idempotente): a mídia
         // pode conectar em paralelo à leitura do estado da chamada.
