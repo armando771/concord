@@ -166,7 +166,8 @@ class FakeWorkletNode {
   static instances: FakeWorkletNode[] = []
   port = {
     onmessage: null as ((e: { data: boolean }) => void) | null,
-    close: vi.fn()
+    close: vi.fn(),
+    postMessage: vi.fn()
   }
   connect = vi.fn((next: unknown) => next)
   disconnect = vi.fn()
@@ -195,6 +196,15 @@ class FakeAudioContext {
     this.gains.push(g)
     return g
   }
+  createAnalyser = (): {
+    fftSize: number
+    connect: ReturnType<typeof vi.fn>
+    getFloatTimeDomainData: (buf: Float32Array) => void
+  } => ({
+    fftSize: 2048,
+    connect: vi.fn((next: unknown) => next),
+    getFloatTimeDomainData: (buf) => buf.fill(0.5)
+  })
   destination = { stream: { getTracks: () => [this.outTrack] } }
   createMediaStreamDestination = (): { stream: { getTracks: () => unknown[] } } => this.destination
   resume = async (): Promise<void> => {}
@@ -210,9 +220,14 @@ vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: fake.getUserMedia } }
 
 const { openMicrophone } = await import('./noiseSuppression')
 const { useNoiseSuppressionStore } = await import('../store/noiseSuppressionStore')
+const { useVoiceAudioStore } = await import('../store/voiceAudioStore')
 
-/** [wet, dry] do último contexto criado. */
-const gains = (): number[] => fake.contexts.at(-1)!.gains.map((g) => g.gain.value)
+/** [wet, dry] do último contexto criado (os dois primeiros ganhos do grafo). */
+const wetDry = (): number[] =>
+  fake.contexts
+    .at(-1)!
+    .gains.slice(0, 2)
+    .map((g) => g.gain.value)
 
 describe('openMicrophone', () => {
   beforeEach(() => {
@@ -229,7 +244,7 @@ describe('openMicrophone', () => {
       audio: expect.objectContaining({ deviceId: { exact: 'mic-usb' }, noiseSuppression: false }),
       video: false
     })
-    expect(gains()).toEqual([1, 0])
+    expect(wetDry()).toEqual([1, 0])
   })
 
   it('microfone estéreo vira mono antes do RNNoise', async () => {
@@ -241,9 +256,9 @@ describe('openMicrophone', () => {
     const mic = await openMicrophone()
     const stream = mic.stream
     useNoiseSuppressionStore.getState().setEnabled(false)
-    expect(gains()).toEqual([0, 1])
+    expect(wetDry()).toEqual([0, 1])
     useNoiseSuppressionStore.getState().setEnabled(true)
-    expect(gains()).toEqual([1, 0])
+    expect(wetDry()).toEqual([1, 0])
     expect(mic.stream).toBe(stream)
     mic.stop()
   })
@@ -258,7 +273,7 @@ describe('openMicrophone', () => {
     expect(fake.contexts[0].close).toHaveBeenCalled()
     // Depois de fechado, o toggle não mexe mais nele.
     useNoiseSuppressionStore.getState().setEnabled(false)
-    expect(gains()).toEqual([1, 0])
+    expect(wetDry()).toEqual([1, 0])
   })
 
   it('se o RNNoise não carrega: libera tudo e usa a supressão do Chromium', async () => {
@@ -280,73 +295,88 @@ describe('openMicrophone', () => {
   })
 })
 
-describe('openMicrophone — detecção de fala no mesmo contexto', () => {
+describe('openMicrophone — detecção de fala, portão e volume de entrada', () => {
   beforeEach(() => {
     fake.contexts.length = 0
     FakeWorkletNode.instances.length = 0
     fake.addModule.mockReset().mockResolvedValue(undefined)
     fake.getUserMedia.mockReset().mockImplementation(async () => rawStream())
     useNoiseSuppressionStore.setState({ enabled: true, available: true })
+    useVoiceAudioStore.setState({ inputVolume: 1, detectionEnabled: true, sensitivity: 60 })
   })
 
-  it('liga o detector na soma wet+dry, sem abrir outro AudioContext', async () => {
+  it('o detector fica no caminho do áudio, depois do ganho de entrada, sem outro AudioContext', async () => {
     const mic = await openMicrophone()
-    const changes: boolean[] = []
-    const tap = mic.watchSpeaking!((s) => changes.push(s))
-    await tap.ready
-
     expect(fake.contexts).toHaveLength(1)
     const ctx = fake.contexts[0] as unknown as FakeAudioContext
     const vad = FakeWorkletNode.instances[0]
     expect(vad.name).toBe('concord-voice-activity')
     expect(vad.ctx).toBe(ctx)
-    const [wet, dry] = ctx.gains
-    expect(wet.connect).toHaveBeenCalledWith(vad)
-    expect(dry.connect).toHaveBeenCalledWith(vad)
-    // Puxado pelo destino do próprio microfone (a saída do worklet é muda).
+    const inputGain = ctx.gains[2]
+    expect(inputGain.connect).toHaveBeenCalledWith(vad)
+    // O que passa pelo portão é o que vai para o destino (o worklet é quem fecha o portão).
     expect(vad.connect).toHaveBeenCalledWith(ctx.destination)
+    mic.stop()
+  })
+
+  it('watchSpeaking recebe a fala e para de receber quando é parado', async () => {
+    const mic = await openMicrophone()
+    const vad = FakeWorkletNode.instances[0]
+    const changes: boolean[] = []
+    const tap = mic.watchSpeaking!((s) => changes.push(s))
+    await tap.ready
 
     vad.port.onmessage!({ data: true })
-    vad.port.onmessage!({ data: false })
-    expect(changes).toEqual([true, false])
-    mic.stop()
-  })
-
-  it('carrega o módulo uma vez por microfone; stop desliga e ignora o resto', async () => {
-    const mic = await openMicrophone()
-    const modulesBefore = fake.addModule.mock.calls.length
-    const changes: boolean[] = []
-    const first = mic.watchSpeaking!((s) => changes.push(s))
-    await first.ready
-    first.stop()
-    const ctx = fake.contexts[0] as unknown as FakeAudioContext
-    const vad = FakeWorkletNode.instances[0]
-    expect(ctx.gains[0].disconnect).toHaveBeenCalledWith(vad)
-    expect(ctx.gains[1].disconnect).toHaveBeenCalledWith(vad)
-    expect(vad.disconnect).toHaveBeenCalled()
-    expect(vad.port.close).toHaveBeenCalled()
-
-    const second = mic.watchSpeaking!(() => {})
-    await second.ready
-    expect(fake.addModule.mock.calls.length - modulesBefore).toBe(1)
-    expect(FakeWorkletNode.instances).toHaveLength(2)
-    expect(changes).toEqual([])
-    mic.stop()
-  })
-
-  it('parar antes do módulo carregar não cria o detector', async () => {
-    const mic = await openMicrophone()
-    const tap = mic.watchSpeaking!(() => {})
     tap.stop()
-    await tap.ready
-    expect(FakeWorkletNode.instances).toHaveLength(0)
+    vad.port.onmessage!({ data: false })
+    expect(changes).toEqual([true])
     mic.stop()
   })
 
-  it('worklet da detecção que não carrega: ready rejeita (quem chama volta ao servidor)', async () => {
+  it('sem o worklet de detecção o microfone segue, sem portão nem watchSpeaking', async () => {
+    fake.addModule.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('CSP'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     const mic = await openMicrophone()
-    fake.addModule.mockRejectedValueOnce(new Error('CSP'))
-    await expect(mic.watchSpeaking!(() => {}).ready).rejects.toThrow('CSP')
+    expect(mic.watchSpeaking).toBeUndefined()
+    expect(mic.stream).toBeDefined()
+    const ctx = fake.contexts[0] as unknown as FakeAudioContext
+    expect(ctx.gains[2].connect).toHaveBeenCalledWith(ctx.destination)
+    mic.stop()
+  })
+
+  it('volume de entrada e detecção/sensibilidade chegam ao grafo, ao vivo', async () => {
+    useVoiceAudioStore.setState({ inputVolume: 1.5 })
+    const mic = await openMicrophone()
+    const ctx = fake.contexts[0] as unknown as FakeAudioContext
+    const inputGain = ctx.gains[2]
+    const vad = FakeWorkletNode.instances[0]
+    expect(inputGain.gain.value).toBe(1.5)
+    expect(vad.port.postMessage).toHaveBeenLastCalledWith({
+      config: expect.objectContaining({ onDb: -40, offDb: -46 }),
+      gate: true
+    })
+
+    useVoiceAudioStore.getState().setInputVolume(0.5)
+    expect(inputGain.gain.value).toBe(0.5)
+
+    useVoiceAudioStore.getState().setDetectionEnabled(false)
+    expect(vad.port.postMessage).toHaveBeenLastCalledWith({
+      config: expect.objectContaining({ onDb: -40 }),
+      gate: false
+    })
+
+    useVoiceAudioStore.getState().setSensitivity(100)
+    expect(vad.port.postMessage).toHaveBeenLastCalledWith({
+      config: expect.objectContaining({ onDb: -60, offDb: -66 }),
+      gate: false
+    })
+    mic.stop()
+  })
+
+  it('o medidor lê o nível em dBFS, antes do portão', async () => {
+    const mic = await openMicrophone()
+    // Amostras a 0,5 dão RMS de −6 dBFS.
+    expect(mic.readLevel!()).toBeCloseTo(-6.02, 1)
     mic.stop()
   })
 

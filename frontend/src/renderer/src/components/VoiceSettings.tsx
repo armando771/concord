@@ -1,7 +1,12 @@
 import { useCallStore } from '../store/callStore'
+import { useNoiseSuppressionStore } from '../store/noiseSuppressionStore'
+import { useVoiceAudioStore } from '../store/voiceAudioStore'
 import { deviceOptions, type DeviceOption } from '../lib/audioDevices'
+import { thresholdDb } from '../lib/voiceActivity'
 import { CAN_CHOOSE_OUTPUT, useAudioDevices } from './useAudioDevices'
 import { NoiseSuppressionSettings } from './call/NoiseSuppressionPopover'
+import SensitivityMeter from './call/SensitivityMeter'
+import Switch from './Switch'
 
 function DeviceSelect({
   label,
@@ -32,13 +37,53 @@ function DeviceSelect({
   )
 }
 
-/** Seção "Voz" das configurações: microfone, saída, supressão de ruído e teste. */
+/** Volume de 0 a 150%: 100% é o normal; acima disso é boost (em amarelo). */
+function VolumeSlider({
+  label,
+  value,
+  onChange
+}: {
+  label: string
+  value: number
+  onChange: (volume: number) => void
+}): React.JSX.Element {
+  const percent = Math.round(value * 100)
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="flex items-center justify-between text-ds-sm font-medium text-gray-400">
+        {label}
+        <span className={percent > 100 ? 'text-[#f0b232]' : 'text-white'}>{percent}%</span>
+      </span>
+      <input
+        type="range"
+        min={0}
+        max={150}
+        step={1}
+        value={percent}
+        onChange={(e) => onChange(Number(e.target.value) / 100)}
+        className="w-full cursor-pointer accent-[#5865f2]"
+      />
+    </label>
+  )
+}
+
+/** Seção "Voz" das configurações: microfone, saída, volumes, detecção de voz e teste. */
 function VoiceSettings(): React.JSX.Element {
   const devices = useAudioDevices()
   const inputDeviceId = useCallStore((s) => s.inputDeviceId)
   const outputDeviceId = useCallStore((s) => s.outputDeviceId)
   const setInputDevice = useCallStore((s) => s.setInputDevice)
   const setOutputDevice = useCallStore((s) => s.setOutputDevice)
+  const inputVolume = useVoiceAudioStore((s) => s.inputVolume)
+  const outputVolume = useVoiceAudioStore((s) => s.outputVolume)
+  const setInputVolume = useVoiceAudioStore((s) => s.setInputVolume)
+  const setOutputVolume = useVoiceAudioStore((s) => s.setOutputVolume)
+  const detectionEnabled = useVoiceAudioStore((s) => s.detectionEnabled)
+  const setDetectionEnabled = useVoiceAudioStore((s) => s.setDetectionEnabled)
+  const sensitivity = useVoiceAudioStore((s) => s.sensitivity)
+  const setSensitivity = useVoiceAudioStore((s) => s.setSensitivity)
+  const rnnoiseAvailable = useNoiseSuppressionStore((s) => s.available)
+  const threshold = thresholdDb(sensitivity)
 
   return (
     <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
@@ -49,6 +94,7 @@ function VoiceSettings(): React.JSX.Element {
         options={deviceOptions(devices, 'audioinput')}
         onChange={(id) => void setInputDevice(id)}
       />
+      <VolumeSlider label="Volume de entrada" value={inputVolume} onChange={setInputVolume} />
       {CAN_CHOOSE_OUTPUT && (
         <DeviceSelect
           label="Saída de áudio"
@@ -57,6 +103,44 @@ function VoiceSettings(): React.JSX.Element {
           onChange={setOutputDevice}
         />
       )}
+      <VolumeSlider label="Volume de saída" value={outputVolume} onChange={setOutputVolume} />
+      <div className="space-y-3 border-t border-white/10 pt-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-ds-sm font-medium text-white">Detecção de voz</p>
+            <p className="text-xs text-gray-400">
+              Envia sua voz só quando ela passa da sensibilidade.
+            </p>
+          </div>
+          <Switch
+            checked={detectionEnabled}
+            onChange={setDetectionEnabled}
+            label="Detecção de voz"
+          />
+        </div>
+        <label className="flex flex-col gap-1.5">
+          <span className="flex items-center justify-between text-ds-sm font-medium text-gray-400">
+            Sensibilidade
+            <span className="text-white">{Math.round(threshold)} dB</span>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={sensitivity}
+            onChange={(e) => setSensitivity(Number(e.target.value))}
+            className="w-full cursor-pointer accent-[#5865f2]"
+          />
+          <span className="text-xs text-gray-400">Mais à direita, capta vozes mais baixas.</span>
+        </label>
+        <SensitivityMeter thresholdDb={threshold} />
+        {!rnnoiseAvailable && (
+          <p className="text-xs text-[#f0b232]">
+            O volume de entrada e a detecção de voz precisam do RNNoise, que não carregou neste
+            computador.
+          </p>
+        )}
+      </div>
       <div className="border-t border-white/10 pt-3">
         <NoiseSuppressionSettings />
       </div>

@@ -30,6 +30,17 @@ export const VOICE_ACTIVITY_PROCESSOR = 'concord-voice-activity'
 /** Janela de análise: ~31 avaliações por segundo. */
 export const VOICE_ACTIVITY_WINDOW_MS = 32
 
+/** Histerese da sensibilidade: sai da fala 6 dB abaixo de onde entrou. */
+const HYSTERESIS_DB = 6
+/** Limiar da sensibilidade: 0 = só voz alta, 100 = qualquer som. */
+const THRESHOLD_LOUDEST_DB = -10
+const THRESHOLD_QUIETEST_DB = -60
+
+/** Portão de ruído: o áudio sai com este atraso, para o portão já estar aberto. */
+export const GATE_LOOKAHEAD_MS = 40
+export const GATE_ATTACK_MS = 2
+export const GATE_RELEASE_MS = 30
+
 /** Piso do nível (silêncio absoluto vira um número finito). */
 const FLOOR_DB = -120
 
@@ -91,4 +102,27 @@ export function mergeLocalSpeaking(
 /** Mesma lista (na mesma ordem) — evita re-render quando nada mudou. */
 export function sameIds(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((id, i) => id === b[i])
+}
+
+/** Limiar em dBFS para uma sensibilidade de 0 a 100 (mais à direita = mais sensível). */
+export function thresholdDb(sensitivity: number): number {
+  const s = Math.min(100, Math.max(0, sensitivity))
+  return THRESHOLD_LOUDEST_DB - (s / 100) * (THRESHOLD_LOUDEST_DB - THRESHOLD_QUIETEST_DB)
+}
+
+/** Detector para uma sensibilidade de 0 a 100. */
+export function voiceActivityFor(sensitivity: number): VoiceActivityConfig {
+  const onDb = thresholdDb(sensitivity)
+  return { ...VOICE_ACTIVITY_DEFAULTS, onDb, offDb: onDb - HYSTERESIS_DB }
+}
+
+/** Mensagem da thread principal para o worklet: o detector e se o portão está ligado. */
+export interface VoiceActivitySettings {
+  config: VoiceActivityConfig
+  gate: boolean
+}
+
+/** Coeficiente de suavização por amostra para uma constante de tempo em ms. */
+export function smoothingCoefficient(ms: number, sampleRate: number): number {
+  return 1 - Math.exp(-1000 / (ms * sampleRate))
 }
