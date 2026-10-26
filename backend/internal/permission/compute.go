@@ -85,21 +85,18 @@ func ForChannel(base int64, channelType string, overwrites []Overwrite, everyone
 	return implicit(Normalize(perms), channelType)
 }
 
-// implicit: sem ver o canal não faz nada nele; em texto, sem enviar não anexa
-// nem menciona todos; em voz, sem conectar não fala, transmite nem modera.
+// implicit: sem ver o canal não faz nada nele; sem enviar não anexa nem
+// menciona todos (no texto e no chat do canal de voz); em voz, sem conectar
+// não fala, transmite nem modera.
 func implicit(perms int64, channelType string) int64 {
 	if perms&ViewChannel == 0 {
 		return 0
 	}
-	switch channelType {
-	case ChannelText:
-		if perms&SendMessages == 0 {
-			perms &^= AttachFiles | MentionEveryone
-		}
-	case ChannelVoice:
-		if perms&Connect == 0 {
-			perms &^= Speak | Stream | MuteMembers | DeafenMembers | MoveMembers | UseSoundboard
-		}
+	if perms&SendMessages == 0 {
+		perms &^= AttachFiles | MentionEveryone
+	}
+	if channelType == ChannelVoice && perms&Connect == 0 {
+		perms &^= Speak | Stream | MuteMembers | DeafenMembers | MoveMembers | UseSoundboard
 	}
 	return perms
 }

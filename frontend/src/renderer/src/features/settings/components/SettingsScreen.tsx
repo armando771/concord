@@ -13,7 +13,7 @@ import { IS_WEB } from '../../../shared/lib/config'
 import Avatar from '../../../shared/ui/Avatar'
 import { PencilIcon, SearchIcon, XIcon } from '../../../shared/ui/icons'
 import MyAccountSection from './sections/MyAccountSection'
-import ProfilesSection from './sections/ProfilesSection'
+import ProfilesPage from './sections/ProfilesPage'
 import { PrivacySection } from './sections/PrivacySection'
 import { KeybindsSection } from './sections/KeybindsSection'
 import { AppearanceSection } from './sections/AppearanceSection'
@@ -30,7 +30,7 @@ const SECTIONS = SETTINGS_SECTIONS.filter((s) => s.id !== 'app' || showAppSectio
 
 const SECTION_VIEW: Record<SettingsSectionId, () => React.JSX.Element | null> = {
   account: MyAccountSection,
-  profiles: ProfilesSection,
+  profiles: ProfilesPage,
   privacy: PrivacySection,
   appearance: AppearanceSection,
   voice: VoiceSection,

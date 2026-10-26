@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  anchorCandidates,
   anchoredScrollTop,
   bottomScrollPlan,
   contentOffset,
   olderPagePrepended,
-  pickAnchor
+  pickAnchor,
+  restoreOlderAnchor
 } from './scrollAnchor'
 
 // Scroller com topo na tela em y=100. A mensagem âncora (a antiga primeira)
@@ -146,5 +148,79 @@ describe('bottomScrollPlan', () => {
     expect(
       bottomScrollPlan({ ...base, positionedRoom: 'channel:a', countChanged: false }).scroll
     ).toBe('none')
+  })
+})
+
+describe('anchorCandidates', () => {
+  const offsets: Record<string, number> = { a: 10, b: 60, c: 110 }
+  const offsetOf = (id: string): number | null => offsets[id] ?? null
+
+  it('guarda as primeiras mensagens que estão na tela, na ordem, até o limite', () => {
+    expect(anchorCandidates(['a', 'b', 'c'], offsetOf, 2)).toEqual([
+      { id: 'a', offset: 10 },
+      { id: 'b', offset: 60 }
+    ])
+  })
+
+  it('pula a que não está desenhada (sem posição)', () => {
+    expect(anchorCandidates(['x', 'b'], offsetOf)).toEqual([{ id: 'b', offset: 60 }])
+  })
+
+  it('lista vazia: nenhuma âncora', () => {
+    expect(anchorCandidates([], offsetOf)).toEqual([])
+  })
+})
+
+describe('restoreOlderAnchor', () => {
+  const anchor = {
+    room: 'channel:1',
+    candidates: [
+      { id: 'a', offset: 40 },
+      { id: 'b', offset: 90 }
+    ]
+  }
+  // Página antiga de 2000px entrou em cima.
+  const positions: Record<string, number> = { a: 2040, b: 2090 }
+  const offsetOf = (id: string): number | null => positions[id] ?? null
+  const base = { anchor, room: 'channel:1', firstId: 'z', scrollTop: 0, offsetOf }
+
+  it('sem âncora: não mexe', () => {
+    expect(restoreOlderAnchor({ ...base, anchor: null })).toEqual({
+      anchor: null,
+      scrollTop: null
+    })
+  })
+
+  it('a página antiga ainda não entrou: guarda a âncora e não mexe', () => {
+    expect(restoreOlderAnchor({ ...base, firstId: 'a' })).toEqual({ anchor, scrollTop: null })
+  })
+
+  it('a página entrou: gasta a âncora e rola o que entrou acima dela', () => {
+    expect(restoreOlderAnchor({ ...base, scrollTop: 5 })).toEqual({
+      anchor: null,
+      scrollTop: 2005
+    })
+  })
+
+  it('a antiga primeira foi apagada: usa a seguinte', () => {
+    const semA = (id: string): number | null => (id === 'b' ? 2090 : null)
+    expect(restoreOlderAnchor({ ...base, offsetOf: semA })).toEqual({
+      anchor: null,
+      scrollTop: 2000
+    })
+  })
+
+  it('âncora de outra sala: gasta sem rolar', () => {
+    expect(restoreOlderAnchor({ ...base, room: 'channel:2' })).toEqual({
+      anchor: null,
+      scrollTop: null
+    })
+  })
+
+  it('nenhuma candidata na tela: gasta sem rolar', () => {
+    expect(restoreOlderAnchor({ ...base, offsetOf: () => null })).toEqual({
+      anchor: null,
+      scrollTop: null
+    })
   })
 })

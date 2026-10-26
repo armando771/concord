@@ -50,7 +50,9 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       'links',
       'steam',
       'twitch',
-      'aniversário'
+      'aniversário',
+      'som de entrada',
+      'entrada na call'
     ]
   },
   {

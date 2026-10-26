@@ -55,7 +55,9 @@ describe('voiceModWorklet', () => {
 
   it('aplica a razão recebida pela porta', () => {
     const processor = new Processor()
-    processor.port.onmessage!({ data: { ratio: 2, ringHz: 0 } })
+    processor.port.onmessage!({
+      data: { ratio: 2, modHz: 0, modDepth: 0, vibratoHz: 0, vibratoSemitones: 0 }
+    })
     expect(frequency(run(processor, sine(1000)))).toBeCloseTo(2000, -2)
   })
 

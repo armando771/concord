@@ -38,4 +38,16 @@ describe('ScreenWatchersOverlay', () => {
     expect(html).toContain('+2')
     expect(html).toContain('User 1')
   })
+
+  it('mantém o GIF do espectador animado, sem o quadro parado', () => {
+    const gif = '/api/profile-media/a_22222222-2222-2222-2222-222222222222'
+    const watchers: CallUserInfo[] = [
+      { id: 'u1', username: 'alice', display_name: 'Alice', avatar_url: gif }
+    ]
+
+    const html = renderToStaticMarkup(<ScreenWatchersOverlay watchers={watchers} />)
+
+    expect(html).toContain(`${gif}"`)
+    expect(html).not.toContain('/static')
+  })
 })

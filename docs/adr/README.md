@@ -39,3 +39,5 @@ O que fica mais fácil, o que fica mais difícil, o que precisa ser feito depois
 ## Índice
 
 - [0001. Organizar o código por feature e infraestrutura em platform/](0001-estrutura-por-feature.md)
+- [0002. Guardar o som de entrada no perfil e tocá-lo por um ouvinte do WS](0002-som-de-entrada.md)
+- [0003. Reaproveitar as mensagens de canal para o chat do canal de voz](0003-chat-do-canal-de-voz.md)

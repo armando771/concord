@@ -59,13 +59,17 @@ func (a *app) wireChat() {
 	profileMediaDir := filepath.Join(a.uploadsDir, user.ProfileMediaDir)
 	profileMedia := mustStore(profileMediaDir, "profile media dir")
 	profileStatic := mustStore(filepath.Join(profileMediaDir, "static"), "profile media dir")
-	a.profileHandler = user.NewProfileHandler(user.NewProfileService(a.userRepository, a.hub), profileMedia, profileStatic, a.uploadSpace)
+	profileService := user.NewProfileService(a.userRepository, a.hub)
+	a.profileHandler = user.NewProfileHandler(profileService, profileMedia, profileStatic, a.uploadSpace)
+	entranceSounds := mustStore(filepath.Join(profileMediaDir, user.EntranceSoundDir), "entrance sounds dir")
+	entranceSoundHandler := user.NewEntranceSoundHandler(profileService, entranceSounds, a.uploadSpace)
 	conversationHandler := conversation.ConversationHandler(a.conversationService, a.userService, a.profileHandler)
 	// O ícone do servidor usa o mesmo upload do avatar.
 	serverHandler := server.ServerHandler(a.serverService, a.friendshipService, a.userService, a.channelService, a.permissionService, a.roleService, a.moderationService, a.nicknameService, a.profileHandler)
 
 	a.route(func(_ *gin.Engine, api *gin.RouterGroup) {
 		user.ProfileRoutes(api, a.profileHandler, a.authMiddleware)
+		user.EntranceSoundRoutes(api, entranceSoundHandler, a.authMiddleware)
 		server.ServerRoutes(api, serverHandler, a.authMiddleware, a.requireVerified, auth.OptionalAuthMiddleware(a.authService))
 		conversation.ConversationRoutes(api, conversationHandler, a.authMiddleware)
 		message.MessageRoutes(api, a.messageHandler, a.authMiddleware)

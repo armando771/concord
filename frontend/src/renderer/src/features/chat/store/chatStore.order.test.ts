@@ -166,6 +166,18 @@ describe('ordem das mensagens no chatStore', () => {
     expect(contents()).toEqual(range(10, 100))
   })
 
+  it('loadOlder sem nada mais antigo encerra o histórico (o scroll infinito para)', async () => {
+    const opening = useChatStore.getState().openRoom(ROOM)
+    await respond(page(1, 50)) // página cheia: pode haver mais
+    await opening
+    expect(useChatStore.getState().hasMoreByRoom[ROOM]).toBe(true)
+    const older = useChatStore.getState().loadOlder(ROOM)
+    await respond([]) // o histórico tinha exatamente uma página
+    await older
+    expect(useChatStore.getState().hasMoreByRoom[ROOM]).toBe(false)
+    expect(contents()).toEqual(range(1, 50))
+  })
+
   it('mensagem ao vivo durante o loadOlder continua no fim', async () => {
     const opening = useChatStore.getState().openRoom(ROOM)
     await respond(page(51, 100))

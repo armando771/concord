@@ -11,7 +11,7 @@ Cada servidor tem **cargos** com permissões, como no Discord. O **dono** (quem 
    1. a do @everyone;
    2. as dos cargos do membro (somadas: se um cargo permite, vale);
    3. a do próprio membro (vence tudo).
-5. Sem **Ver canais** o resultado é zero: o canal nem aparece. Em texto, sem *Enviar mensagens* caem *Enviar arquivos* e *Mencionar @all*. Em voz, sem *Conectar* caem falar, transmitir, mesa de áudio e moderação.
+5. Sem **Ver canais** o resultado é zero: o canal nem aparece. Sem *Enviar mensagens* caem *Enviar arquivos* e *Mencionar @all* (no canal de texto e no chat do canal de voz). Em voz, sem *Conectar* caem falar, transmitir, mesa de áudio e moderação.
 
 O cálculo é o mesmo no backend (`backend/internal/permission`) e no app (`frontend/src/renderer/src/features/servers/lib/permissions.ts`). Os dois rodam os mesmos casos de `backend/internal/permission/testdata/vectors.json`: mudou uma regra, mude os casos e os dois lados.
 
@@ -50,6 +50,7 @@ A posição do cargo define quem manda em quem (maior = mais alto).
 
 ## Voz
 
+- Cada canal de voz tem um **chat próprio** (como o "Text in Voice" do Discord): valem as permissões de texto do canal (*Ver canais* + *Ver histórico* para ler, *Enviar mensagens* para escrever, etc.), sem precisar de *Conectar*. O editor de permissões do canal de voz mostra esse grupo como "Chat do canal de voz".
 - Entrar exige **Conectar**; o token do LiveKit só deixa publicar o microfone com **Falar** e tela/câmera com **Transmitir**.
 - *Silenciar* e *Ensurdecer no servidor* tiram do LiveKit a permissão de publicar / de ouvir e valem até um moderador liberar ou a chamada acabar.
 - Mudou um cargo ou canal no meio da chamada? Quem perdeu o acesso sai da chamada e quem perdeu falar/transmitir tem a mídia ajustada na hora.

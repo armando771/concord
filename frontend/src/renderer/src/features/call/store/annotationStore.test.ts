@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { selectMyStrokeIds, selectStrokes, useAnnotationStore } from './annotationStore'
+import {
+  selectMyStrokeIds,
+  selectStrokes,
+  selectVisibleStrokes,
+  useAnnotationStore
+} from './annotationStore'
 import { useChatStore } from '../../chat/store/chatStore'
 
 vi.mock('../../chat/store/chatStore', () => ({
@@ -174,5 +179,130 @@ describe('seletores sem dados', () => {
       expect(select(state)).toEqual([])
       expect(select(state)).toBe(select(state))
     }
+  })
+})
+
+describe('ocultar desenhos por transmissão (só para mim)', () => {
+  const remoteStroke = (id: string): { type: string; payload: unknown } => ({
+    type: 'call:screen_draw',
+    payload: {
+      call_id: 'call-1',
+      sharer_id: 'sharer-1',
+      stroke: {
+        id,
+        sharer_id: 'sharer-1',
+        user_id: 'user-remote',
+        tool: 'pen',
+        color: '#ef4444',
+        width: 4,
+        points: [{ x: 0.5, y: 0.5 }],
+        created_at: Date.now()
+      }
+    }
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(useChatStore.getState).mockReturnValue({ sendEvent: vi.fn() } as never)
+    useAnnotationStore.getState().cleanup()
+  })
+
+  it('começa mostrando os desenhos de todas as transmissões', () => {
+    expect(useAnnotationStore.getState().hiddenSharers['sharer-1']).toBeFalsy()
+  })
+
+  it('toggleHidden oculta e volta a mostrar só a transmissão escolhida', () => {
+    useAnnotationStore.getState().toggleHidden('sharer-1')
+    expect(useAnnotationStore.getState().hiddenSharers['sharer-1']).toBe(true)
+    expect(useAnnotationStore.getState().hiddenSharers['sharer-2']).toBeFalsy()
+
+    useAnnotationStore.getState().toggleHidden('sharer-1')
+    expect(useAnnotationStore.getState().hiddenSharers['sharer-1']).toBeFalsy()
+  })
+
+  it('ocultar não envia nada aos outros nem apaga os traços', () => {
+    const sendEvent = vi.fn()
+    vi.mocked(useChatStore.getState).mockReturnValue({ sendEvent } as never)
+    useAnnotationStore.getState().handleWsEvent(remoteStroke('st-1'))
+
+    useAnnotationStore.getState().toggleHidden('sharer-1')
+
+    expect(sendEvent).not.toHaveBeenCalled()
+    expect(useAnnotationStore.getState().strokes['sharer-1']).toHaveLength(1)
+  })
+
+  it('traços que chegam com os desenhos ocultos ficam guardados e aparecem ao mostrar', () => {
+    useAnnotationStore.getState().toggleHidden('sharer-1')
+    useAnnotationStore.getState().handleWsEvent(remoteStroke('st-1'))
+
+    const hidden = useAnnotationStore.getState()
+    expect(selectVisibleStrokes('sharer-1')(hidden)).toEqual([])
+
+    hidden.toggleHidden('sharer-1')
+    const shown = useAnnotationStore.getState()
+    expect(selectVisibleStrokes('sharer-1')(shown)).toHaveLength(1)
+  })
+
+  it('ocultar também desliga o modo desenho daquela transmissão', () => {
+    useAnnotationStore.getState().setDrawingActive('sharer-1', true)
+    useAnnotationStore.getState().setDrawingActive('sharer-2', true)
+
+    useAnnotationStore.getState().toggleHidden('sharer-1')
+
+    expect(useAnnotationStore.getState().drawingActive['sharer-1']).toBe(false)
+    expect(useAnnotationStore.getState().drawingActive['sharer-2']).toBe(true)
+  })
+
+  it('começar a desenhar volta a mostrar os desenhos (toggleDrawing e setDrawingActive)', () => {
+    useAnnotationStore.getState().toggleHidden('sharer-1')
+    useAnnotationStore.getState().toggleDrawing('sharer-1')
+    expect(useAnnotationStore.getState().hiddenSharers['sharer-1']).toBeFalsy()
+    expect(useAnnotationStore.getState().drawingActive['sharer-1']).toBe(true)
+
+    useAnnotationStore.getState().toggleHidden('sharer-1')
+    useAnnotationStore.getState().setDrawingActive('sharer-1', true)
+    expect(useAnnotationStore.getState().hiddenSharers['sharer-1']).toBeFalsy()
+  })
+
+  it('fechar o modo desenho não mexe nos desenhos ocultos de outra live', () => {
+    useAnnotationStore.getState().toggleHidden('sharer-2')
+    useAnnotationStore.getState().setDrawingActive('sharer-1', false)
+    expect(useAnnotationStore.getState().hiddenSharers['sharer-2']).toBe(true)
+  })
+
+  it('cleanup de uma transmissão volta ao padrão só dela; cleanup geral, de todas', () => {
+    useAnnotationStore.getState().toggleHidden('sharer-1')
+    useAnnotationStore.getState().toggleHidden('sharer-2')
+
+    useAnnotationStore.getState().cleanup('sharer-1')
+    expect(useAnnotationStore.getState().hiddenSharers['sharer-1']).toBeFalsy()
+    expect(useAnnotationStore.getState().hiddenSharers['sharer-2']).toBe(true)
+
+    useAnnotationStore.getState().cleanup()
+    expect(useAnnotationStore.getState().hiddenSharers).toEqual({})
+  })
+
+  it('pruneHidden esquece as lives que acabaram e mantém as ativas', () => {
+    useAnnotationStore.getState().toggleHidden('sharer-1')
+    useAnnotationStore.getState().toggleHidden('sharer-2')
+
+    useAnnotationStore.getState().pruneHidden(['sharer-2'])
+
+    expect(useAnnotationStore.getState().hiddenSharers).toEqual({ 'sharer-2': true })
+  })
+
+  it('pruneHidden sem nada para esquecer não troca o estado (sem re-render à toa)', () => {
+    useAnnotationStore.getState().toggleHidden('sharer-1')
+    const before = useAnnotationStore.getState().hiddenSharers
+
+    useAnnotationStore.getState().pruneHidden(['sharer-1', 'sharer-3'])
+
+    expect(useAnnotationStore.getState().hiddenSharers).toBe(before)
+  })
+
+  it('selectVisibleStrokes sem dados devolve sempre a mesma referência', () => {
+    const state = useAnnotationStore.getState()
+    const select = selectVisibleStrokes('ninguem')
+    expect(select(state)).toBe(select(state))
   })
 })

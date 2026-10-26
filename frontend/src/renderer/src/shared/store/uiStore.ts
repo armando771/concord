@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type FriendsTab = 'online' | 'all' | 'pending' | 'blocked' | 'add'
+export type FriendsTab = 'online' | 'all' | 'pending' | 'invites' | 'blocked' | 'add'
 
 const CALL_CONTROLS_KEY = 'concord:call-controls-hidden'
 
@@ -19,9 +19,6 @@ interface UIState {
   serverInviteModalOpen: boolean
   openServerInviteModal: () => void
   closeServerInviteModal: () => void
-  createChannelModalOpen: boolean
-  openCreateChannelModal: () => void
-  closeCreateChannelModal: () => void
   /** Barra de controles da chamada (mutar, câmera…) oculta. */
   callControlsHidden: boolean
   toggleCallControls: () => void
@@ -40,9 +37,6 @@ export const useUIStore = create<UIState>()((set) => ({
   serverInviteModalOpen: false,
   openServerInviteModal: () => set({ serverInviteModalOpen: true }),
   closeServerInviteModal: () => set({ serverInviteModalOpen: false }),
-  createChannelModalOpen: false,
-  openCreateChannelModal: () => set({ createChannelModalOpen: true }),
-  closeCreateChannelModal: () => set({ createChannelModalOpen: false }),
   callControlsHidden: loadCallControlsHidden(),
   toggleCallControls: () =>
     set((state) => {

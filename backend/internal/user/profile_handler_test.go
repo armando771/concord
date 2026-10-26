@@ -81,6 +81,14 @@ func (r *fakeProfileRepo) SetBanner(_ context.Context, id string, url *string) (
 	return r.swap(id, &u.BannerURL, url)
 }
 
+func (r *fakeProfileRepo) SetEntranceSound(_ context.Context, id string, url *string) (*User, *string, error) {
+	u, err := r.find(id)
+	if err != nil {
+		return nil, nil, err
+	}
+	return r.swap(id, &u.EntranceSoundURL, url)
+}
+
 func (r *fakeProfileRepo) SetStatus(_ context.Context, id string, status string) (*User, error) {
 	u, err := r.find(id)
 	if err != nil {
