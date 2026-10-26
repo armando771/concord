@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useBadgeStore } from '../../store/badgeStore'
 import { badgeLabel, isMythic, profileBadgeRow, rarityMeta } from '../../lib/badges'
 import BadgeIcon from './BadgeIcon'
+import { BadgeRowSkeleton } from '../skeleton/layouts'
 
 interface BadgeRowProps {
   userId: string
@@ -28,11 +29,20 @@ function BadgeRow({
   const ensureBadges = useBadgeStore((s) => s.ensureBadges)
   const openModal = useBadgeStore((s) => s.openModal)
 
+  // Quem já respondeu (mesmo com erro): o skeleton não fica para sempre se falhar.
+  const [settled, setSettled] = useState<string | null>(null)
+
   useEffect(() => {
-    void ensureBadges(userId)
+    let cancelled = false
+    void ensureBadges(userId).then(() => {
+      if (!cancelled) setSettled(userId)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [userId, ensureBadges])
 
-  if (!badges) return null
+  if (!badges) return settled === userId ? null : <BadgeRowSkeleton />
   const { shown, overflow } = profileBadgeRow(badges, max)
   if (shown.length === 0) return null
 

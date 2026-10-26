@@ -5,6 +5,7 @@ import { showToast } from '../../store/toastStore'
 import { actionErrorMessage } from '../../lib/permissionErrors'
 import Avatar from '../Avatar'
 import Button from '../Button'
+import { BanListSkeleton } from '../skeleton/layouts'
 
 /** Quem está banido do servidor, com o motivo, e o botão de desbanir. */
 function BansSection(): React.JSX.Element {
@@ -65,7 +66,7 @@ function BansSection(): React.JSX.Element {
       </div>
     )
   }
-  if (bans === null) return <p className="text-sm text-gray-400">Carregando...</p>
+  if (bans === null) return <BanListSkeleton />
   if (bans.length === 0) {
     return <p className="text-sm text-gray-500">Ninguém está banido deste servidor.</p>
   }

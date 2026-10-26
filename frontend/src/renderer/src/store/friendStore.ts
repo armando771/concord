@@ -22,6 +22,8 @@ interface FriendState {
   pending: PendingRequest[]
   blocked: PublicUser[]
   loading: boolean
+  /** loadAll já respondeu uma vez: só a primeira carga mostra o skeleton. */
+  loaded: boolean
   error: string | null
   fetchFriends: () => Promise<void>
   fetchPending: () => Promise<void>
@@ -53,6 +55,7 @@ export const useFriendStore = create<FriendState>()((set, get) => ({
   pending: [],
   blocked: [],
   loading: false,
+  loaded: false,
   error: null,
   fetchFriends: async () => {
     const token = useAuthStore.getState().accessToken
@@ -106,7 +109,12 @@ export const useFriendStore = create<FriendState>()((set, get) => ({
       const resolvedBlocked =
         blocked.status === 'fulfilled' ? keepWithId<PublicUser>(blocked.value, 'id', 'blocked') : []
 
-      set({ friends: resolvedFriends, pending: resolvedPending, blocked: resolvedBlocked })
+      set({
+        friends: resolvedFriends,
+        pending: resolvedPending,
+        blocked: resolvedBlocked,
+        loaded: true
+      })
     } finally {
       set({ loading: false })
     }
@@ -144,7 +152,8 @@ export const useFriendStore = create<FriendState>()((set, get) => ({
     await unblockUser(userId)
     await get().loadAll()
   },
-  reset: () => set({ friends: [], pending: [], blocked: [], loading: false, error: null })
+  reset: () =>
+    set({ friends: [], pending: [], blocked: [], loading: false, loaded: false, error: null })
 }))
 
 /** Relação com alguém (amigo, pedido, bloqueado) pelo que já está carregado. */

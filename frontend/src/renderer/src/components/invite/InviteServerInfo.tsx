@@ -78,6 +78,7 @@ export function InviteBackdrop({
   )
 }
 
+/** Espera de uma ação (abrindo o app): não é conteúdo carregando, então segue o spinner. */
 export function InviteSpinner(): React.JSX.Element {
   return (
     <div className="h-10 w-10 animate-spin rounded-full border-2 border-normal border-t-violet-500" />

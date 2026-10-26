@@ -32,6 +32,8 @@ interface ProposalState {
   proposals: Proposal[]
   isTech: boolean
   loading: boolean
+  /** O quadro já respondeu uma vez: só a primeira carga mostra o skeleton. */
+  loaded: boolean
   /** Última visita ao quadro (ms); nulo até carregar. Os cards criados depois contam no badge. */
   lastSeenAt: number | null
   pendingMentions: PendingProposalMention[]
@@ -128,19 +130,21 @@ export const useProposalStore = create<ProposalState>()((set, get) => {
     proposals: [],
     isTech: false,
     loading: false,
+    loaded: false,
     lastSeenAt: null,
     pendingMentions: [],
     commentsByProposal: {},
     fetchProposals: async () => {
       const token = useAuthStore.getState().accessToken
-      if (get().proposals.length === 0) set({ loading: true })
+      if (!get().loaded && get().proposals.length === 0) set({ loading: true })
       try {
         const board = await listProposals()
         if (!isSameSession(token)) return
         set({
           proposals: Array.isArray(board.proposals) ? board.proposals : [],
           isTech: !!board.is_tech,
-          githubUsername: board.github_username ?? null
+          githubUsername: board.github_username ?? null,
+          loaded: true
         })
         ensureLastSeen()
       } catch (err) {
@@ -291,6 +295,7 @@ export const useProposalStore = create<ProposalState>()((set, get) => {
         isTech: false,
         githubUsername: null,
         loading: false,
+        loaded: false,
         lastSeenAt: null,
         pendingMentions: [],
         commentsByProposal: {}

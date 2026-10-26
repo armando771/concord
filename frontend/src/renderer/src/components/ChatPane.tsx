@@ -77,6 +77,8 @@ import {
   type ChatPermissions
 } from '../lib/chatPermissions'
 import { actionErrorMessage } from '../lib/permissionErrors'
+import { Skeleton } from './skeleton/Skeleton'
+import { MessageListSkeleton } from './skeleton/layouts'
 import { permissionError } from '../lib/permissions'
 import {
   anchoredScrollTop,
@@ -1042,9 +1044,8 @@ function ChatPane({
         onScroll={handleScroll}
       >
         {loading ? (
-          <div className="flex h-full items-center justify-center text-sm text-gray-400">
-            Carregando mensagens...
-          </div>
+          // closeRoom apaga a lista ao sair do canal: carregando é sempre a primeira carga.
+          <MessageListSkeleton />
         ) : (
           <div ref={contentRef} className="flex min-h-full flex-col justify-end py-4">
             {hasMore && (
@@ -1054,7 +1055,14 @@ function ChatPane({
                   disabled={loadingOlder}
                   className="cursor-pointer rounded-full border border-subtle bg-fg/5 px-3 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:bg-fg/10 hover:text-strong disabled:opacity-50"
                 >
-                  {loadingOlder ? 'Carregando...' : 'Carregar mensagens anteriores'}
+                  {loadingOlder ? (
+                    <span className="flex h-4 items-center">
+                      <Skeleton className="h-2.5 w-36" />
+                      <span className="sr-only">Carregando mensagens anteriores</span>
+                    </span>
+                  ) : (
+                    'Carregar mensagens anteriores'
+                  )}
                 </button>
               </div>
             )}

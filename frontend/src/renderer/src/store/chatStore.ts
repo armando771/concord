@@ -103,6 +103,8 @@ interface ChatState {
   statuses: Record<string, PresenceStatus>
   conversations: ConversationSummary[]
   conversationsLoading: boolean
+  /** A lista de conversas já respondeu uma vez: só a primeira carga mostra o skeleton. */
+  conversationsLoaded: boolean
   /** Minhas mensagens ainda sem confirmação do servidor ("enviando…" / "não enviada"). */
   pendingByRoom: Record<RoomKey, PendingMessage[]>
   /** Reenvia uma mensagem que falhou. */
@@ -363,6 +365,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   statuses: {},
   conversations: [],
   conversationsLoading: false,
+  conversationsLoaded: false,
   pendingByRoom: {},
 
   connect: () => {
@@ -672,7 +675,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           const room = `conversation:${c.id}`
           unreadByRoom[room] = room === state.activeRoom ? 0 : (c.unread_count ?? 0)
         }
-        return { conversations: list, unreadByRoom }
+        return { conversations: list, unreadByRoom, conversationsLoaded: true }
       })
       const meId = useAuthStore.getState().user?.id
       const ids = list
@@ -681,6 +684,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       if (ids.length > 0) await get().fetchPresenceFor(ids)
     } catch (err) {
       console.error('[chatStore] fetchConversations error:', err)
+      if (useAuthStore.getState().accessToken === token) set({ conversationsLoaded: true })
     } finally {
       set({ conversationsLoading: false })
     }
@@ -1484,6 +1488,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       statuses: {},
       conversations: [],
       conversationsLoading: false,
+      conversationsLoaded: false,
       pendingByRoom: {}
     })
   }

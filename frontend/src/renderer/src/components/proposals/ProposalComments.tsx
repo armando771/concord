@@ -20,6 +20,7 @@ import MessageText from '../chat/MessageText'
 import ReactionChips from '../chat/ReactionChips'
 import ReplyReference from '../chat/ReplyReference'
 import CommentComposer from './CommentComposer'
+import { CommentListSkeleton } from '../skeleton/layouts'
 
 const NO_COMMENTS: ProposalComment[] = []
 
@@ -268,9 +269,11 @@ function ProposalComments({
         Comentários{loaded && comments.length > 0 ? ` (${comments.length})` : ''}
       </h3>
       {!loaded ? (
-        <p className="text-xs text-gray-400">
-          {failed ? 'Não foi possível carregar os comentários.' : 'Carregando comentários...'}
-        </p>
+        failed ? (
+          <p className="text-xs text-gray-400">Não foi possível carregar os comentários.</p>
+        ) : (
+          <CommentListSkeleton />
+        )
       ) : comments.length === 0 ? (
         <p className="text-xs text-gray-500">Ninguém comentou ainda. Comece a conversa!</p>
       ) : (

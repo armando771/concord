@@ -8,6 +8,7 @@ import {
   type LiveTarget
 } from '../../lib/screenPreview'
 import LiveBadge from '../call/LiveBadge'
+import { Skeleton } from '../skeleton/Skeleton'
 
 /**
  * Busca a foto da transmissão enquanto o cartão está aberto: rápido até a
@@ -78,9 +79,13 @@ function LiveStreamPreview({
             draggable={false}
             className="h-full w-full object-contain"
           />
-        ) : (
+        ) : ended ? (
           <div className="flex h-full items-center justify-center text-xs text-gray-500">
-            {ended ? 'Transmissão encerrada' : 'Carregando prévia…'}
+            Transmissão encerrada
+          </div>
+        ) : (
+          <div role="status" aria-label="Carregando prévia…" className="h-full w-full">
+            <Skeleton className="h-full w-full rounded-none" />
           </div>
         )}
         <span className="absolute left-2 top-2">

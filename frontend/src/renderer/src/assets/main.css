@@ -62,6 +62,48 @@
   }
 }
 
+/* Skeleton de carregamento. Usa os tokens semânticos do tema (theme.css):
+   --bg-accent é o neutro sólido para esqueletos e --fg a cor-base dos véus
+   (branco nos temas escuros, preto nos claros). Um tema pode trocar
+   --skeleton-base / --skeleton-shine direto. Os var() ficam em cada elemento
+   (não no :root) para seguir um data-theme aplicado num trecho só. */
+@layer components {
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--skeleton-base, var(--bg-accent));
+  }
+
+  /* O brilho é uma faixa que anda por cima (só transform: roda no compositor). */
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--skeleton-shine, color-mix(in srgb, var(--fg) 12%, transparent)),
+      transparent
+    );
+    animation: skeleton-shimmer 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Sem movimento: fica a cor parada, sem o brilho. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+    display: none;
+  }
+}
+
 @layer components {
   .glass-panel {
     background: var(--glass-onyx-bg);

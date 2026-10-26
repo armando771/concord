@@ -7,6 +7,8 @@ import { useServerStore } from './serverStore'
 interface InviteState {
   invites: ServerInvite[]
   loading: boolean
+  /** A lista já respondeu uma vez: só a primeira carga mostra o skeleton. */
+  loaded: boolean
   fetchInvites: () => Promise<void>
   accept: (id: string) => Promise<void>
   decline: (id: string) => Promise<void>
@@ -28,15 +30,16 @@ if (typeof window !== 'undefined') {
 export const useInviteStore = create<InviteState>()((set, get) => ({
   invites: [],
   loading: false,
+  loaded: false,
   fetchInvites: async () => {
     const token = useAuthStore.getState().accessToken
     // Relida a cada foco da janela: com convites na tela, busca por baixo e
     // troca quando chegar (o "carregando" é só para a primeira carga).
-    if (get().invites.length === 0) set({ loading: true })
+    if (!get().loaded && get().invites.length === 0) set({ loading: true })
     try {
       const invites = await listInvites()
       if (!isSameSession(token)) return
-      set({ invites: Array.isArray(invites) ? invites : [] })
+      set({ invites: Array.isArray(invites) ? invites : [], loaded: true })
     } catch (err) {
       console.error('[inviteStore] fetchInvites error:', err)
       // Falhou: fica com o que já estava na tela.
@@ -53,5 +56,5 @@ export const useInviteStore = create<InviteState>()((set, get) => ({
     await declineInvite(id)
     set({ invites: get().invites.filter((i) => i.id !== id) })
   },
-  reset: () => set({ invites: [], loading: false })
+  reset: () => set({ invites: [], loading: false, loaded: false })
 }))

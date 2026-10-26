@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchChangelog, type ChangelogRelease } from '../api/changelog'
 import { ChangelogIcon } from '../components/icons'
+import { ChangelogSkeleton } from '../components/skeleton/layouts'
 import { formatReleaseDate, groupEntries } from '../lib/changelog'
 
 interface ViewProps {
@@ -43,7 +44,7 @@ export function ChangelogView({ releases, current, loading, error }: ViewProps):
         </header>
         <main className="flex-1 overflow-y-auto p-4">
           <div className="mx-auto flex max-w-2xl flex-col gap-4">
-            {loading && <p className="text-sm text-gray-400">Carregando…</p>}
+            {loading && <ChangelogSkeleton />}
             {error && <p className="text-sm text-red-400">{error}</p>}
             {!loading && !error && releases.length === 0 && (
               <p className="text-sm text-gray-400">Nenhuma versão publicada ainda.</p>

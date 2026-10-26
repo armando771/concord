@@ -35,6 +35,7 @@ import { snapCenterToCursor } from '../lib/dragModifiers'
 import { useAuthStore } from '../store/authStore'
 import { useProposalStore } from '../store/proposalStore'
 import { showToast } from '../store/toastStore'
+import { ProposalBoardSkeleton } from '../components/skeleton/layouts'
 
 interface ProposalActions {
   onVote: (approve: boolean) => Promise<void>
@@ -218,7 +219,7 @@ function Proposals(): React.JSX.Element {
         </header>
 
         {loading ? (
-          <div className="py-8 text-center text-sm text-gray-400">Carregando propostas...</div>
+          <ProposalBoardSkeleton columns={columns} />
         ) : (
           <DndContext
             sensors={sensors}

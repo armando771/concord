@@ -11,12 +11,9 @@ import { useServerStore } from '../../store/serverStore'
 import { showToast } from '../../store/toastStore'
 import Avatar from '../Avatar'
 import Button from '../Button'
-import {
-  InviteBackdrop,
-  InviteServerIcon,
-  InviteServerInfo,
-  InviteSpinner
-} from './InviteServerInfo'
+import { InviteBackdrop, InviteServerIcon, InviteServerInfo } from './InviteServerInfo'
+import { ButtonSkeleton, InvitePreviewSkeleton } from '../skeleton/layouts'
+import { Skeleton } from '../skeleton/Skeleton'
 import { useInvitePreview } from './useInvitePreview'
 
 /**
@@ -130,7 +127,17 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex min-h-[420px] w-full flex-col items-center justify-center px-8 py-10 md:w-[420px] md:shrink-0">
-          {state.status === 'loading' && <InviteSpinner />}
+          {state.status === 'loading' && (
+            <div className="flex w-full flex-1 flex-col items-center">
+              <div className="flex flex-1 flex-col justify-center">
+                <InvitePreviewSkeleton />
+              </div>
+              <ButtonSkeleton className="mt-8" />
+              <div className="mt-3 flex h-[18px] items-center">
+                <Skeleton className="h-3 w-24" />
+              </div>
+            </div>
+          )}
 
           {state.status === 'error' && (
             <div className="flex flex-col items-center text-center">
@@ -252,6 +259,11 @@ function InviteConfirm({ code }: { code: string }): React.JSX.Element {
           {preview && (
             <div className="absolute inset-0 flex items-center justify-center">
               <InviteServerIcon name={preview.name} iconUrl={preview.icon_url} size={160} />
+            </div>
+          )}
+          {state.status === 'loading' && (
+            <div aria-hidden className="absolute inset-0 flex items-center justify-center">
+              <Skeleton className="h-40 w-40 rounded-2xl" />
             </div>
           )}
         </div>

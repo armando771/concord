@@ -7,6 +7,7 @@ import { PinIcon, XIcon } from '../icons'
 import Avatar from '../Avatar'
 import type { PinnedMessage } from '../../api/messages'
 import MessageAttachments from './MessageAttachments'
+import { PinnedListSkeleton } from '../skeleton/layouts'
 
 interface PinnedMessagesPopoverProps {
   channelId: string
@@ -132,6 +133,8 @@ export default function PinnedMessagesPopover({
   const popoverRef = useRef<HTMLDivElement>(null)
   const pins = usePinStore(selectPins(channelId))
   const loading = usePinStore((s) => s.loadingByChannel[channelId] ?? false)
+  // Já buscou este canal alguma vez: abrir de novo mostra as fixadas na hora.
+  const pinsLoaded = usePinStore((s) => s.pinsByChannel[channelId] !== undefined)
   const loadPins = usePinStore((s) => s.loadPins)
   const unpin = usePinStore((s) => s.unpin)
   const serverId = useServerStore((s) => s.currentServer?.id)
@@ -203,10 +206,8 @@ export default function PinnedMessagesPopover({
 
       {/* Conteúdo */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {loading && pins.length === 0 ? (
-          <div className="flex h-40 items-center justify-center text-gray-400 text-ds-sm">
-            Carregando mensagens fixadas...
-          </div>
+        {loading && !pinsLoaded ? (
+          <PinnedListSkeleton />
         ) : pins.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-fg/5 text-gray-400">

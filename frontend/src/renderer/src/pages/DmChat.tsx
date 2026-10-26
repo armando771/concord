@@ -18,6 +18,7 @@ import DmCallView from '../components/call/DmCallView'
 import MessageSearchBar from '../components/search/MessageSearchBar'
 import SearchResultsPanel from '../components/search/SearchResultsPanel'
 import { PhoneIcon, PhoneOffIcon } from '../components/icons'
+import { ComposerSkeleton, MessageListSkeleton } from '../components/skeleton/layouts'
 
 function DmChat(): React.JSX.Element {
   const { userId } = useParams<{ userId: string }>()
@@ -239,8 +240,11 @@ function DmChat(): React.JSX.Element {
           <SearchResultsPanel scope={{ kind: 'conversation', id: conversationId }} />
         </div>
       ) : (
-        <div className="flex flex-1 items-center justify-center text-ds-md text-gray-400">
-          <p>Abrindo conversa...</p>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1">
+            <MessageListSkeleton label="Abrindo conversa…" />
+          </div>
+          <ComposerSkeleton />
         </div>
       )}
     </div>

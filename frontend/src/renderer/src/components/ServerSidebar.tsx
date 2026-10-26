@@ -68,6 +68,8 @@ import { primaryChannelId } from '../lib/primaryChannel'
 import ResizeHandle from './ResizeHandle'
 import { useResizableWidth } from './useResizableWidth'
 import StyledName from './StyledName'
+import { ChannelListSkeleton } from './skeleton/layouts'
+import { Skeleton } from './skeleton/Skeleton'
 
 /**
  * Nomes longos quebram linha em vez de cortar com "…" (o canal "predador-🐺-vs…"
@@ -90,6 +92,7 @@ export function ServerSidebar(): React.JSX.Element {
   const toggleMusicPanel = useMusicStore((s) => s.togglePanel)
   const roles = useServerStore((s) => s.roles)
   const channels = useServerStore((s) => s.channels)
+  const channelsLoadedFor = useServerStore((s) => s.channelsLoadedFor)
   const createChannel = useServerStore((s) => s.createChannel)
   const updateChannel = useServerStore((s) => s.updateChannel)
   const deleteChannel = useServerStore((s) => s.deleteChannel)
@@ -142,9 +145,16 @@ export function ServerSidebar(): React.JSX.Element {
   /** Canal cujas permissões estão abertas no editor. */
   const [permissionsFor, setPermissionsFor] = useState<Channel | null>(null)
 
-  const textChannels = channels.filter((ch) => (ch.type ?? 'text') === 'text')
+  // `channels` é o do servidor anterior até a busca do atual voltar: só mostra
+  // a lista quando for deste servidor (ou já tiver canais dele).
+  const channelsReady =
+    Boolean(currentServer) &&
+    (channelsLoadedFor === currentServer?.id ||
+      channels.some((c) => c.server_id === currentServer?.id))
+  const shownChannels = channelsReady ? channels : []
+  const textChannels = shownChannels.filter((ch) => (ch.type ?? 'text') === 'text')
   const primaryId = primaryChannelId(currentServer, channels)
-  const voiceChannels = channels.filter((ch) => ch.type === 'voice')
+  const voiceChannels = shownChannels.filter((ch) => ch.type === 'voice')
 
   // Quem pode o quê vem dos cargos; o servidor confere de novo a cada ação.
   const access = useServerAccess()
@@ -562,7 +572,15 @@ export function ServerSidebar(): React.JSX.Element {
             className="flex w-full min-w-0 items-center justify-between gap-1 text-left text-ds-md font-semibold text-strong hover:text-gray-200 cursor-pointer"
           >
             {/* Até duas linhas (o cabeçalho tem altura fixa); o resto no title. */}
-            <span className={`line-clamp-2 min-w-0 leading-5 ${WRAP_NAME}`}>{serverName}</span>
+            {currentServer ? (
+              <span className={`line-clamp-2 min-w-0 leading-5 ${WRAP_NAME}`}>{serverName}</span>
+            ) : (
+              // Sem servidor ainda (abrindo): o nome real entra no lugar da barra.
+              <span className="flex h-5 min-w-0 flex-1 items-center">
+                <Skeleton className="h-3.5 w-3/5" />
+                <span className="sr-only">Carregando servidor…</span>
+              </span>
+            )}
             <span className="shrink-0 text-xs text-gray-400">▼</span>
           </button>
 
@@ -683,7 +701,8 @@ export function ServerSidebar(): React.JSX.Element {
               )}
             </div>
             <div className="mt-1 flex flex-col gap-0.5" onDragLeave={clearDropOnLeave}>
-              {textChannels.length === 0 && (
+              {!channelsReady && <ChannelListSkeleton count={6} />}
+              {channelsReady && textChannels.length === 0 && (
                 <p className="px-2 text-ds-sm text-gray-500 italic">Nenhum canal ainda.</p>
               )}
               {textChannels.map((ch, index) => {
@@ -787,7 +806,8 @@ export function ServerSidebar(): React.JSX.Element {
               )}
             </div>
             <div className="mt-1 flex flex-col gap-0.5" onDragLeave={clearDropOnLeave}>
-              {voiceChannels.length === 0 && (
+              {!channelsReady && <ChannelListSkeleton count={3} offset={4} />}
+              {channelsReady && voiceChannels.length === 0 && (
                 <p className="px-2 text-ds-sm text-gray-500 italic">Nenhum canal de voz ainda.</p>
               )}
               {voiceChannels.map((ch, index) => {
