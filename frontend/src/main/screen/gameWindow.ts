@@ -30,6 +30,21 @@ export function pickGameWindow(
   return byTitle?.id ?? null
 }
 
+export interface GameWindowDeps {
+  windows: () => Promise<Array<{ id: string; name: string }>>
+  hwnds: (processNames: string[]) => Promise<string[]>
+}
+
+/** Id da fonte de janela do jogo (nome vindo do renderer); null = não achou. */
+export async function findGameWindow(
+  gameName: unknown,
+  deps: GameWindowDeps
+): Promise<string | null> {
+  if (typeof gameName !== 'string') return null
+  const [sources, hwnds] = await Promise.all([deps.windows(), deps.hwnds(exeProcessNames(gameName))])
+  return pickGameWindow(sources, hwnds, gameName)
+}
+
 /** Janelas principais (hwnd) dos processos informados. Só no Windows. */
 export function listProcessWindows(processNames: readonly string[]): Promise<string[]> {
   if (process.platform !== 'win32' || processNames.length === 0) return Promise.resolve([])

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { PreferredSource, exeProcessNames, pickGameWindow } from './gameWindow'
+import { describe, expect, it, vi } from 'vitest'
+import { PreferredSource, exeProcessNames, findGameWindow, pickGameWindow } from './gameWindow'
 
 const win = (hwnd: number, name: string): { id: string; name: string } => ({
   id: `window:${hwnd}:0`,
@@ -55,5 +55,21 @@ describe('PreferredSource', () => {
     preferred.set('window:1:0')
     preferred.clear()
     expect(preferred.take()).toBeNull()
+  })
+})
+
+describe('findGameWindow', () => {
+  const windows = async (): Promise<Array<{ id: string; name: string }>> => [win(7, 'Fortnite')]
+
+  it('junta janelas e processos do jogo', async () => {
+    const hwnds = vi.fn().mockResolvedValue(['7'])
+    expect(await findGameWindow('Fortnite', { windows, hwnds })).toBe('window:7:0')
+    expect(hwnds).toHaveBeenCalledWith(['fortniteclient-win64-shipping'])
+  })
+
+  it('nome que não é texto não procura nada', async () => {
+    const hwnds = vi.fn()
+    expect(await findGameWindow(42, { windows, hwnds })).toBeNull()
+    expect(hwnds).not.toHaveBeenCalled()
   })
 })

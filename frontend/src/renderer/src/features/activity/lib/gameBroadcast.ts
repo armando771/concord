@@ -33,3 +33,40 @@ export async function toggleGameBroadcast(d: GameBroadcastDeps): Promise<void> {
   await d.start()
   if (d.isSharing()) d.remember(d.game)
 }
+
+export interface BroadcastViewInput {
+  game: string
+  sharing: boolean
+  canStream: boolean
+  connected: boolean
+  /** Jogo cuja janela o card está transmitindo (null = nenhum). */
+  broadcasting: string | null
+}
+
+export interface BroadcastView {
+  active: boolean
+  disabled: boolean
+  label: string
+}
+
+/** Estado visual do botão: ativo, desabilitado e rótulo (também o tooltip). */
+export function broadcastView(i: BroadcastViewInput): BroadcastView {
+  const active = i.sharing && i.broadcasting === i.game
+  return {
+    active,
+    disabled: !i.connected || (!i.canStream && !i.sharing),
+    label: active ? `Parar de transmitir ${i.game}` : `Transmitir ${i.game}`
+  }
+}
+
+/** Classes do botão por estado (desabilitado, ativo, ocioso). */
+export function broadcastTone(view: BroadcastView): string {
+  if (view.disabled) return 'cursor-not-allowed bg-fg/5 text-gray-600'
+  if (view.active) return 'cursor-pointer bg-success-strong text-white hover:bg-success-strong-hover'
+  return 'cursor-pointer bg-fg/6 text-gray-200 hover:bg-fg/12 hover:text-strong'
+}
+
+/** O desktop sabe achar a janela do jogo (Electron no Windows). */
+export function canBroadcastGame(win: { api?: { screenShare?: { preferGameWindow?: unknown } } } | undefined): boolean {
+  return typeof win?.api?.screenShare?.preferGameWindow === 'function'
+}

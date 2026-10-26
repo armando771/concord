@@ -3,13 +3,8 @@ import { useCallStore } from '../../call/store/callStore'
 import { notePickedSource } from '../../call/lib/windowAudio'
 import { showToast } from '../../../shared/store/toastStore'
 import { MonitorIcon } from '../../../shared/ui/icons'
-import { toggleGameBroadcast } from '../lib/gameBroadcast'
+import { broadcastTone, broadcastView, toggleGameBroadcast } from '../lib/gameBroadcast'
 import { useGameBroadcastStore } from '../store/gameBroadcastStore'
-
-/** O desktop sabe achar a janela do jogo (Electron no Windows). */
-export function canBroadcastGame(): boolean {
-  return typeof window !== 'undefined' && !!window.api?.screenShare?.preferGameWindow
-}
 
 /**
  * Botão de transmitir a janela do jogo em atividade na call atual, sem passar
@@ -21,29 +16,26 @@ function GameBroadcastButton({ game }: { game: string }): React.JSX.Element {
   const connected = useCallStore((s) => s.status === 'active')
   const broadcasting = useGameBroadcastStore((s) => s.game)
   const setBroadcasting = useGameBroadcastStore((s) => s.set)
-  const active = sharing && broadcasting === game
+  const view = broadcastView({ game, sharing, canStream, connected, broadcasting })
 
   // O compartilhamento acabou (por qualquer caminho): o estado ativo some.
   useEffect(() => {
-    if (!sharing && broadcasting) setBroadcasting(null)
-  }, [sharing, broadcasting, setBroadcasting])
-
-  const disabled = !connected || (!canStream && !sharing)
-  const label = active ? `Parar de transmitir ${game}` : `Transmitir ${game}`
+    if (!sharing) setBroadcasting(null)
+  }, [sharing, setBroadcasting])
 
   const onClick = (): void => {
     const call = useCallStore.getState()
     void toggleGameBroadcast({
       game,
       sharing,
-      active,
+      active: view.active,
       prefer: (name) => window.api!.screenShare!.preferGameWindow(name),
       notePicked: notePickedSource,
       start: call.startScreenShare,
       stop: call.stopScreenShare,
       isSharing: () => useCallStore.getState().isScreenSharing,
       remember: setBroadcasting,
-      notify: (message) => showToast.error(message)
+      notify: showToast.error
     })
   }
 
@@ -51,17 +43,11 @@ function GameBroadcastButton({ game }: { game: string }): React.JSX.Element {
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      aria-pressed={active}
-      title={label}
-      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-        disabled
-          ? 'cursor-not-allowed bg-fg/5 text-gray-600'
-          : active
-            ? 'cursor-pointer bg-success-strong text-white hover:bg-success-strong-hover'
-            : 'cursor-pointer bg-fg/6 text-gray-200 hover:bg-fg/12 hover:text-strong'
-      }`}
+      disabled={view.disabled}
+      aria-label={view.label}
+      aria-pressed={view.active}
+      title={view.label}
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-brand ${broadcastTone(view)}`}
     >
       <MonitorIcon className="h-4 w-4" />
     </button>
