@@ -3,7 +3,8 @@
 // AudioContext — abrir o teste de microfone não mexe no da chamada.
 //
 //   mic ─┬─ RNNoise ─ wetGain ─┐
-//        └────────── dryGain ──┴─ entrada ─┬─ detecção/portão ─ destino (track enviada)
+//        └────────── dryGain ──┴─ entrada ─┬─ voice mod ─┬─ detecção/portão ─ destino (track enviada)
+//                                          │             └─ monitor (mudo, "Ouvir minha voz")
 //                                          └─ analisador (medidor, mudo)
 //
 // Ligar/desligar a supressão só cruza os ganhos: a track de saída é sempre a
@@ -27,6 +28,9 @@ import {
 } from './voiceActivity'
 import { useNoiseSuppressionStore } from '../store/noiseSuppressionStore'
 import { useVoiceAudioStore, type VoiceAudioSettings } from '../store/voiceAudioStore'
+import { createVoiceMod, type VoiceModNode } from './voiceMod'
+import type { VoiceModSettings } from './voiceModPresets'
+import { useVoiceModStore } from '../store/voiceModStore'
 
 /** O RNNoise trabalha em quadros de 10 ms a 48 kHz. */
 const SAMPLE_RATE = 48_000
@@ -46,6 +50,10 @@ export interface MicHandle {
   setNoiseSuppression: (on: boolean) => void
   /** Volume de entrada e detecção de voz ao vivo (só com o processamento completo). */
   setVoiceAudio?: (settings: MicVoiceSettings) => void
+  /** Voice mod ao vivo (só quando o worklet do voice mod carregou). */
+  setVoiceMod?: (settings: VoiceModSettings) => void
+  /** Liga/desliga ouvir a própria voz já alterada (para testar o voice mod). */
+  setMonitor?: (on: boolean) => void
   /** Nível do microfone em dBFS, antes do portão (para o medidor de sensibilidade). */
   readLevel?: () => number
   /**
@@ -110,6 +118,20 @@ useVoiceAudioStore.subscribe((state, prev) => {
   active.forEach((mic) => mic.setVoiceAudio?.(state))
 })
 
+useVoiceModStore.subscribe((state, prev) => {
+  if (state.monitoring !== prev.monitoring) {
+    active.forEach((mic) => mic.setMonitor?.(state.monitoring))
+  }
+  if (
+    state.preset !== prev.preset ||
+    state.pitch !== prev.pitch ||
+    state.timbre !== prev.timbre ||
+    state.intensity !== prev.intensity
+  ) {
+    active.forEach((mic) => mic.setVoiceMod?.(state))
+  }
+})
+
 /**
  * Abre o microfone com o RNNoise no caminho. Se o RNNoise não carregar, libera
  * tudo o que abriu e devolve o microfone com a supressão padrão do Chromium —
@@ -150,11 +172,26 @@ export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
     const silent = ctx.createGain()
     silent.gain.value = 0
     const destination = ctx.createMediaStreamDestination()
+    // Sem o voice mod o microfone segue: só não há mudança de voz.
+    let mod: VoiceModNode | null = null
+    try {
+      mod = await createVoiceMod(ctx)
+    } catch (err) {
+      console.error('[voz] voice mod indisponível:', err)
+    }
+    useVoiceModStore.getState().setAvailable(mod !== null)
     source.connect(rnnoise).connect(wet).connect(inputGain)
     source.connect(dry).connect(inputGain)
-    if (vad) inputGain.connect(vad).connect(destination)
-    else inputGain.connect(destination)
+    // Cauda da cadeia: depois do voice mod (se carregou), alimenta detecção e monitor.
+    const tail: AudioNode = mod ? mod.output : inputGain
+    if (mod) inputGain.connect(mod.input)
+    if (vad) tail.connect(vad).connect(destination)
+    else tail.connect(destination)
     inputGain.connect(analyser).connect(silent).connect(destination)
+    // Monitor: ouvir a própria voz já alterada. Mudo até o usuário pedir.
+    const monitor = ctx.createGain()
+    monitor.gain.value = 0
+    tail.connect(monitor).connect(ctx.destination)
     if (ctx.state === 'suspended') await ctx.resume()
 
     const context = ctx
@@ -190,6 +227,8 @@ export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
     }
     apply(useNoiseSuppressionStore.getState().enabled, true)
     applyVoice(useVoiceAudioStore.getState(), true)
+    mod?.apply(useVoiceModStore.getState(), true)
+    if (useVoiceModStore.getState().monitoring) monitor.gain.value = 1
     useNoiseSuppressionStore.getState().setAvailable(true)
 
     const levels = new Float32Array(analyser.fftSize)
@@ -201,6 +240,14 @@ export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
       },
       setVoiceAudio: (settings) => {
         if (!stopped) applyVoice(settings, false)
+      },
+      setVoiceMod: mod
+        ? (settings) => {
+            if (!stopped) mod.apply(settings, false)
+          }
+        : undefined,
+      setMonitor: (on) => {
+        if (!stopped) monitor.gain.setTargetAtTime(on ? 1 : 0, context.currentTime, FADE_SECONDS)
       },
       readLevel: () => {
         analyser.getFloatTimeDomainData(levels)
@@ -224,6 +271,8 @@ export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
         stopped = true
         active.delete(handle)
         listeners.clear()
+        mod?.destroy()
+        if (active.size === 0) useVoiceModStore.getState().setMonitoring(false)
         raw.getTracks().forEach((t) => t.stop())
         destination.stream.getTracks().forEach((t) => t.stop())
         node.destroy()
@@ -238,6 +287,7 @@ export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
     void ctx?.close()
     raw.getTracks().forEach((t) => t.stop())
     useNoiseSuppressionStore.getState().setAvailable(false)
+    useVoiceModStore.getState().setAvailable(false)
     const fallback = await captureMic(deviceId, true)
     return {
       stream: fallback,
