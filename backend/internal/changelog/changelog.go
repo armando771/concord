@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -15,7 +16,7 @@ const (
 	KindFix     = "fix"
 
 	maxEntries   = 100
-	maxEntryText = 500
+	maxEntryText = 1000 // em caracteres (runas), não bytes: acento conta 1
 	maxSummary   = 500
 )
 
@@ -48,7 +49,7 @@ type store interface {
 
 func (p *Publication) validate() error {
 	p.Summary = strings.TrimSpace(p.Summary)
-	if len(p.Summary) > maxSummary {
+	if utf8.RuneCountInString(p.Summary) > maxSummary {
 		return errors.New("summary muito longo")
 	}
 	if len(p.Entries) > maxEntries {
@@ -60,7 +61,7 @@ func (p *Publication) validate() error {
 		if e.Kind != KindFeature && e.Kind != KindFix {
 			return errors.New("kind inválido")
 		}
-		if e.Text == "" || len(e.Text) > maxEntryText {
+		if e.Text == "" || utf8.RuneCountInString(e.Text) > maxEntryText {
 			return errors.New("texto inválido")
 		}
 	}
