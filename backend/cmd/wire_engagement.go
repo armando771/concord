@@ -10,11 +10,11 @@ import (
 	"gin-quickstart/backend/internal/bot"
 	"gin-quickstart/backend/internal/changelog"
 	"gin-quickstart/backend/internal/conversation"
+	"gin-quickstart/backend/internal/enquete"
 	"gin-quickstart/backend/internal/level"
 	"gin-quickstart/backend/internal/message"
 	"gin-quickstart/backend/internal/notifysettings"
 	"gin-quickstart/backend/internal/proposal"
-	"gin-quickstart/backend/internal/enquete"
 
 	"github.com/gin-gonic/gin"
 )
