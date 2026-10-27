@@ -22,10 +22,39 @@ type fakeStore struct {
 	savedSessions map[string]int64
 	loadSessions  map[string]int64
 	failAdd       bool
+	// Contadores por categoria (DJ, Barulhento).
+	counts map[string]map[string]int64
+	// Dias de uso gravados ("id@dia") e falha na gravação (Sequência).
+	activeDays []string
+	failDays   bool
+	// Vagas do Top 10 do nível 100, na ordem de chegada (ver top10_test.go).
+	top10 []string
 }
 
 func newFakeStore() *fakeStore {
-	return &fakeStore{stats: map[string]Stats{}, unlocks: map[string]Unlocks{}, deltas: map[string]Delta{}}
+	return &fakeStore{stats: map[string]Stats{}, unlocks: map[string]Unlocks{}, deltas: map[string]Delta{}, counts: map[string]map[string]int64{}}
+}
+
+func (f *fakeStore) RecordActiveDay(_ context.Context, userIDs []string, day string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failDays {
+		return errors.New("db down")
+	}
+	for _, id := range userIDs {
+		f.activeDays = append(f.activeDays, id+"@"+day)
+	}
+	return nil
+}
+
+func (f *fakeStore) AddCount(_ context.Context, userID, category string, n int64) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.counts[userID] == nil {
+		f.counts[userID] = map[string]int64{}
+	}
+	f.counts[userID][category] += n
+	return f.counts[userID][category], nil
 }
 
 func (f *fakeStore) Stats(_ context.Context, userID string) (Stats, error) {
@@ -36,6 +65,7 @@ func (f *fakeStore) Stats(_ context.Context, userID string) (Stats, error) {
 	if !ok {
 		return Stats{}, ErrUserNotFound
 	}
+	s.Top10Rank = f.top10RankLocked(userID)
 	return s, nil
 }
 
@@ -191,6 +221,8 @@ func TestTickFlushesCallStatsAndSyncs(t *testing.T) {
 		CallID: "c1", Participants: []string{"ana", "bia"}, Listeners: []string{"ana", "bia"}, Voice: []string{"ana", "bia"}, ScreenSharers: []string{"ana"},
 	}}
 	online.ids = []string{"caio"}
+	// O dia de uso de caio já foi gravado (Sequência): só a varredura o reavalia.
+	s.days.fresh(t0.Add(flushEvery*tickInterval).Format(time.DateOnly), []string{"caio"})
 
 	at := t0
 	for i := 0; i < flushEvery; i++ {

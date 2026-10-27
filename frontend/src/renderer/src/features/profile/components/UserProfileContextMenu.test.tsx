@@ -79,7 +79,7 @@ describe('UserProfileCard e UserContextMenu integração', () => {
     expect(html).toContain('overflow-y-auto')
     // Deve conter opções de controle do usuário
     expect(html).toContain('Mugis')
-    expect(html).toContain('Copiar ID do usuário')
+    expect(html).not.toContain('Copiar ID')
   })
 
   it('UserContextMenu fecha corretamente ao chamar close()', () => {

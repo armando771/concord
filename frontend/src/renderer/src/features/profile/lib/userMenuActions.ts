@@ -28,11 +28,6 @@ export function openUserProfile(target: UserMenuActionTarget): void {
   })
 }
 
-export function copyUserId(userId: string): void {
-  void navigator.clipboard?.writeText(userId)
-  showToast.success('ID copiado.')
-}
-
 export function sendDirectMessage(userId: string): void {
   void router.navigate(`/dm/${userId}`)
 }

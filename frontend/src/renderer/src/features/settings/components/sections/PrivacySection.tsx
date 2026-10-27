@@ -5,9 +5,9 @@ import {
   type FriendRequestPolicy,
   type Privacy
 } from '../../../profile/api/users'
-import { Toggle } from '../AppSettings'
 import { useFriendStore } from '../../../friends/store/friendStore'
-import { usePresenceActivityStore } from '../../../activity/store/presenceActivityStore'
+import { Toggle } from '../Toggle'
+import { ActivityPrivacy } from './ActivityPrivacy'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useUIStore } from '../../../../shared/store/uiStore'
 import { showToast } from '../../../../shared/store/toastStore'
@@ -33,6 +33,11 @@ function SectionTitle({ children }: { children: React.ReactNode }): React.JSX.El
   return <h2 className="mb-3 text-ds-sm font-medium text-gray-400">{children}</h2>
 }
 
+function blockedLabel(count: number): string {
+  if (count === 0) return 'Você não bloqueou ninguém.'
+  return count === 1 ? '1 usuário bloqueado.' : `${count} usuários bloqueados.`
+}
+
 /**
  * Configurações → Privacidade e segurança: quem pode mandar pedido de
  * amizade, DMs de membros de servidores e os usuários bloqueados. Salva na
@@ -43,8 +48,6 @@ export function PrivacySection(): React.JSX.Element {
   const [saving, setSaving] = useState(false)
   const blockedCount = useFriendStore((s) => s.blocked.length)
   const loadFriends = useFriendStore((s) => s.loadAll)
-  const showActivity = usePresenceActivityStore((s) => s.enabled)
-  const setShowActivity = usePresenceActivityStore((s) => s.setEnabled)
 
   useEffect(() => {
     let cancelled = false
@@ -123,28 +126,12 @@ export function PrivacySection(): React.JSX.Element {
         />
       </section>
 
-      {window.api?.games && (
-        <section className="border-b border-subtle pb-6">
-          <SectionTitle>Atividade</SectionTitle>
-          <Toggle
-            title="Mostrar o jogo que estou jogando"
-            description="Amigos e membros de servidores em comum veem o jogo em andamento embaixo do seu nome. Só jogos conhecidos são detectados; nada mais sai do seu computador."
-            checked={showActivity}
-            onChange={() => setShowActivity(!showActivity)}
-          />
-        </section>
-      )}
+      <ActivityPrivacy />
 
       <section>
         <SectionTitle>Usuários bloqueados</SectionTitle>
         <div className="flex items-center justify-between gap-4">
-          <p className="text-ds-md text-gray-300">
-            {blockedCount === 0
-              ? 'Você não bloqueou ninguém.'
-              : blockedCount === 1
-                ? '1 usuário bloqueado.'
-                : `${blockedCount} usuários bloqueados.`}
-          </p>
+          <p className="text-ds-md text-gray-300">{blockedLabel(blockedCount)}</p>
           <button
             type="button"
             onClick={openBlocked}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuthStore, type User } from '../../auth/store/authStore'
+import { commitMe } from '../../auth/store/accountActions'
 import { useSettingsStore } from '../store/settingsStore'
 import { showToast } from '../../../shared/store/toastStore'
 import { deleteProfileImage, updateProfile, uploadProfileImage } from '../../profile/api/users'
@@ -42,12 +43,6 @@ export interface ProfileEditor {
 
 const revoke = (change: MediaChange): void => {
   if (change.kind === 'set') URL.revokeObjectURL(change.previewUrl)
-}
-
-/** O status da sessão é o escolhido; a resposta já traz, mas o local manda. */
-function commitUser(latest: User): void {
-  const { user: current, setUser } = useAuthStore.getState()
-  setUser({ ...latest, status: current?.status ?? latest.status })
 }
 
 /** Avisa o resto das configurações e treme a barra ao tentar sair. */
@@ -143,7 +138,7 @@ export function useProfileEditor(): ProfileEditor {
         upload: uploadProfileImage,
         remove: deleteProfileImage,
         update: updateProfile,
-        commit: commitUser,
+        commit: commitMe,
         keepMedia: (kind) => {
           draftRef.current = { ...draftRef.current, [kind]: { kind: 'keep' } }
           setMedia(kind, { kind: 'keep' })

@@ -72,6 +72,15 @@ describe('activityLine', () => {
     })
   })
 
+  it('música vem depois do jogo e antes de "Em voz"', () => {
+    const listening = { app: 'Spotify', title: 'Águas de Março', started_at: 0 }
+    expect(activityLine({ ...base, activity: null, listening, inVoice: true })).toEqual({
+      kind: 'listening',
+      text: 'Ouvindo Águas de Março'
+    })
+    expect(activityLine({ ...base, activity: game, listening }).kind).toBe('game')
+  })
+
   it('em voz vem antes da nota', () => {
     expect(activityLine({ ...base, activity: null, inVoice: true, note: 'oi' })).toEqual({
       kind: 'voice',

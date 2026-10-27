@@ -5,9 +5,13 @@ import ProfilePreview from './ProfilePreview'
  * A prévia do cartão: coluna fixa (sticky) à direita no desktop; no celular
  * fica em cima do formulário e dá para recolher, para sobrar espaço.
  */
-export default function ProfilePreviewPanel(
-  props: React.ComponentProps<typeof ProfilePreview>
-): React.JSX.Element {
+export default function ProfilePreviewPanel({
+  notice,
+  ...props
+}: React.ComponentProps<typeof ProfilePreview> & {
+  /** Erro numa parte que só se edita no cartão (nome, pronomes). */
+  notice?: string | null
+}): React.JSX.Element {
   const [open, setOpen] = useState(true)
   return (
     <aside
@@ -34,8 +38,13 @@ export default function ProfilePreviewPanel(
       >
         <ProfilePreview {...props} />
         <p className="mt-2 text-xs text-gray-400">
-          É assim que os outros veem. Toque no avatar ou no banner para trocar a imagem.
+          É assim que os outros veem. Clique ou toque em qualquer parte do cartão para editar.
         </p>
+        {notice && (
+          <p role="alert" className="mt-1.5 text-xs text-danger">
+            {notice}
+          </p>
+        )}
       </div>
     </aside>
   )

@@ -6,6 +6,7 @@ import (
 	"log"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gin-quickstart/backend/internal/call"
@@ -31,6 +32,9 @@ type store interface {
 	AddCallStats(ctx context.Context, userID string, d Delta) error
 	SaveSessions(ctx context.Context, sessions map[string]int64) error
 	LoadSessions(ctx context.Context, maxAge time.Duration) (map[string]int64, error)
+	AddCount(ctx context.Context, userID, category string, n int64) (int64, error)
+	RecordActiveDay(ctx context.Context, userIDs []string, day string) error
+	ClaimTop10(ctx context.Context, userID string) (int64, error)
 }
 
 // EventPublisher avisa a própria pessoa (o hub do websocket implementa).
@@ -81,6 +85,13 @@ type Service struct {
 	mu      sync.Mutex
 	tracker *tracker
 	ticks   int
+	// Quem já teve o dia de uso gravado hoje (Sequência); só o tick usa.
+	days activeDays
+	// Quem está de câmera ligada (LiveKit); nil = Câmera ligada não conta.
+	cameras     CameraSource
+	cameraErrAt time.Time
+	// As 10 vagas do Top 10 do nível 100 acabaram (ver top10.go).
+	top10Full atomic.Bool
 }
 
 // BadgeService monta o serviço. loc é o fuso das horas de Coruja/Madrugador;
@@ -123,6 +134,7 @@ func (s *Service) sync(ctx context.Context, userID string) ([]Badge, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.claimTop10(ctx, userID, &stats)
 	stored, err := s.store.Unlocks(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -269,8 +281,11 @@ func (s *Service) flush(ctx context.Context, deltas map[string]Delta) map[string
 }
 
 func (s *Service) tick(ctx context.Context, now time.Time) {
+	snaps := s.calls.CallSnapshots()
+	cams := s.camerasOn(ctx, snaps)
 	s.mu.Lock()
-	s.tracker.accrue(s.calls.CallSnapshots(), now)
+	s.tracker.setCameras(cams)
+	s.tracker.accrue(snaps, now)
 	s.ticks++
 	flush := s.ticks%flushEvery == 0
 	sweep := s.ticks%onlineSweepEvery == 0
@@ -284,27 +299,14 @@ func (s *Service) tick(ctx context.Context, now time.Time) {
 		return
 	}
 	touched := s.flush(ctx, deltas)
-	// Quem está em call com XP também sobe Tempo em call e Nível.
-	for _, snap := range s.calls.CallSnapshots() {
-		for _, userID := range snap.Voice {
-			touched[userID] = true
-		}
+	s.touchVoice(touched)
+	if sweep {
+		s.touchOnline(touched)
 	}
-	if sweep && s.online != nil {
-		for _, userID := range s.online.OnlineUserIDs() {
-			touched[userID] = true
-		}
+	for _, userID := range s.recordActiveDays(ctx, now) {
+		touched[userID] = true
 	}
-	ids := make([]string, 0, len(touched))
-	for userID := range touched {
-		ids = append(ids, userID)
-	}
-	sort.Strings(ids)
-	for _, userID := range ids {
-		if _, err := s.sync(ctx, userID); err != nil {
-			log.Printf("[badge] sync %s: %v", userID, err)
-		}
-	}
+	s.syncAll(ctx, touched)
 }
 
 func marshalEvent(typ string, payload interface{}) []byte {

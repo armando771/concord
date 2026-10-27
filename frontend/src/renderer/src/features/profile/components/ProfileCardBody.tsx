@@ -1,20 +1,19 @@
 import type { ReactNode } from 'react'
 import { API_BASE_URL } from '../../../shared/lib/config'
-import { MAESTRO_HOWTO, MAESTRO_USER_ID } from '../../music/lib/music'
+import { MAESTRO_USER_ID } from '../../music/lib/music'
 import { profileMediaSrc } from '../lib/profileMedia'
-import { detectProvider, linkLabel, splitLinks } from '../lib/profileLinks'
 import type { PresenceStatus } from '../../friends/lib/presenceStatus'
-import Avatar from '../../../shared/ui/Avatar'
 import maestroBanner from '../../../assets/maestro-banner.gif'
-import { PencilIcon, PlusIcon } from '../../../shared/ui/icons'
-import GameIcon from '../../activity/components/GameIcon'
-import { Elapsed } from '../../activity/components/ActivityCard'
-import { useActivity } from '../../activity/store/presenceActivityStore'
-import LinkIcon from './LinkIcon'
-import StyledName from './StyledName'
-import { Skeleton } from '../../../shared/ui/skeleton/Skeleton'
+import { ProfileActivities } from '../../activity/components/ProfileActivities'
 import { ProfileBioSkeleton } from '../../../shared/ui/skeleton/layouts'
+import CardAvatar from './card/CardAvatar'
+import CardBanner from './card/CardBanner'
+import CardNames from './card/CardNames'
+import CardNote from './card/CardNote'
+import { CardBio, CardLinks, MaestroHowto } from './card/CardSections'
 import type { NameStyle } from '../lib/nameStyle'
+import { SPOT_PLACEHOLDER, type CardSpot } from '../lib/cardSpots'
+import EditableSpot from './card/EditableSpot'
 import { CARD_BG, type ProfileTheme } from '../lib/profileTheme'
 
 /** Fundo do cartão sem tema: recorta o avatar e a bolinha de status. */
@@ -62,10 +61,31 @@ interface ProfileCardBodyProps {
   loading?: boolean
   /** Cor do fundo logo abaixo do banner (tema): anel do avatar e recorte do status. */
   surface?: string
-  /** Prévia do editor: passar o mouse mostra o lápis e o clique já abre o arquivo. */
-  onEditAvatar?: () => void
-  onEditBanner?: () => void
+  /**
+   * Prévia do editor: cada parte (avatar, banner, nome, pronomes, nota, Sobre
+   * mim, links) vira um botão que abre o editor dela; as vazias mostram o
+   * convite para adicionar.
+   */
+  onEdit?: (spot: CardSpot) => void
   children?: ReactNode
+}
+
+type EditSpot = (spot: CardSpot) => void
+
+const spotHandler = (onEdit: EditSpot | undefined, spot: CardSpot): (() => void) | undefined =>
+  onEdit && (() => onEdit(spot))
+
+/** "Adicionar uma nota": no editor abre o modal; no próprio cartão, o editor de perfil. */
+function addNote(isMe: boolean, onEditProfile?: () => void, onEdit?: EditSpot): (() => void) | undefined {
+  if (onEdit) return () => onEdit('note')
+  return isMe ? onEditProfile : undefined
+}
+
+/** Banner sem imagem do perfil: o do Maestro é animado; o Salinha Bot fica com o gradiente. */
+function bannerFor(profile: CardProfile): string | null {
+  const own = profileMediaSrc(profile.banner_url, API_BASE_URL)
+  if (own) return own
+  return profile.is_bot && profile.id === MAESTRO_USER_ID ? maestroBanner : null
 }
 
 /**
@@ -84,243 +104,64 @@ function ProfileCardBody({
   preview = false,
   loading = false,
   surface = CARD_BG,
-  onEditAvatar,
-  onEditBanner,
+  onEdit,
   children
 }: ProfileCardBodyProps): React.JSX.Element {
-  // O banner animado é do Maestro; o Salinha Bot fica com o gradiente padrão.
-  const bannerSrc =
-    profileMediaSrc(profile.banner_url, API_BASE_URL) ??
-    (profile.is_bot && profile.id === MAESTRO_USER_ID ? maestroBanner : null)
-  const note = profile.status_text?.trim()
+  const bannerSrc = bannerFor(profile)
   const bio = profile.bio?.trim()
-  const game = useActivity(preview ? undefined : profile.id)
-  const links = profile.links ?? []
+  const placeholders = onEdit ? SPOT_PLACEHOLDER : undefined
 
   return (
     <div>
-      {/* Banner: imagem/GIF, cor escolhida ou o gradiente padrão. */}
-      <div
-        className={`group/banner relative overflow-hidden rounded-t-[10px] ${bannerSrc ? 'h-[106px]' : 'h-16'}`}
-        style={
-          bannerSrc
-            ? undefined
-            : profile.banner_color
-              ? { background: profile.banner_color }
-              : { backgroundImage: fallbackBanner }
-        }
-      >
-        {bannerSrc && (
-          <img src={bannerSrc} alt="" draggable={false} className="h-full w-full object-cover" />
-        )}
-        {loading && !bannerSrc && !profile.banner_color && (
-          // Opaco: o degradê de cargo por baixo ainda não vale (o perfil pode ter banner).
-          <div className="h-full w-full" style={{ background: surface }}>
-            <Skeleton className="h-full w-full rounded-none" />
-          </div>
-        )}
-        {onEditBanner && (
-          <button
-            type="button"
-            onClick={onEditBanner}
-            aria-label="Alterar banner"
-            title="Alterar banner"
-            className="group/edit absolute inset-0 cursor-pointer outline-none"
-          >
-            <span className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-black/60 text-white opacity-0 shadow-lg ring-white/70 transition-opacity group-hover/banner:opacity-100 group-focus-visible/edit:opacity-100 group-focus-visible/edit:ring-2">
-              <PencilIcon className="h-4 w-4" />
-            </span>
-          </button>
-        )}
-      </div>
+      <CardBanner
+        src={bannerSrc}
+        color={profile.banner_color}
+        fallback={fallbackBanner}
+        loading={loading}
+        surface={surface}
+        onEdit={spotHandler(onEdit, 'banner')}
+      />
 
       <div className="px-4 pb-4">
         {/* A faixa que sobe por cima do banner não pega o mouse (o lápis do banner
             aparece nela também); só o avatar, a nota e o selo pegam. */}
         <div className="pointer-events-none relative -mt-[46px] flex items-start justify-between">
           <div className="flex min-w-0 items-start gap-2">
-            <div
-              className="pt-ink-keep pointer-events-auto relative shrink-0 rounded-full p-1.5"
-              style={{ background: surface }}
-            >
-              <Avatar
-                userId={preview ? undefined : profile.id}
-                name={profile.nickname || profile.display_name}
-                avatarUrl={profile.avatar_url}
-                size={80}
-                animate="always"
-                status={status}
-                cutoutColor={surface}
-                fallbackClassName={avatarFallbackClassName}
-              />
-              {onEditProfile && (
-                <button
-                  type="button"
-                  onClick={onEditProfile}
-                  aria-label="Editar perfil"
-                  className="absolute inset-1.5 flex cursor-pointer flex-col items-center justify-center gap-0.5 rounded-full bg-black/60 text-[10px] font-bold uppercase text-white opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100 on-media"
-                >
-                  <PencilIcon className="h-4 w-4" />
-                  Editar perfil
-                </button>
-              )}
-              {onEditAvatar && (
-                <button
-                  type="button"
-                  onClick={onEditAvatar}
-                  aria-label="Alterar avatar"
-                  title="Alterar avatar"
-                  className="absolute inset-1.5 flex cursor-pointer items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100"
-                >
-                  <PencilIcon className="h-5 w-5 drop-shadow" />
-                </button>
-              )}
-            </div>
-
-            {/* Nota: o balão ao lado da foto, como no Discord. */}
-            {(note || (isMe && onEditProfile)) && (
-              <div className="pointer-events-auto relative mt-[38px] min-w-0">
-                <span
-                  aria-hidden="true"
-                  className="absolute -left-2.5 top-1 h-3 w-3 rounded-full border border-subtle bg-primary"
-                />
-                <span
-                  aria-hidden="true"
-                  className="absolute -left-4 -top-0.5 h-1.5 w-1.5 rounded-full border border-subtle bg-primary"
-                />
-                {note ? (
-                  <p className="relative max-w-[170px] break-words rounded-2xl border border-subtle bg-primary px-3 py-2 text-xs leading-snug text-gray-200 shadow-lg">
-                    {note}
-                  </p>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={onEditProfile}
-                    className="relative flex max-w-[170px] cursor-pointer items-center gap-1.5 rounded-2xl border border-subtle bg-primary px-3 py-2 text-left text-xs italic text-gray-400 shadow-lg transition-colors hover:text-gray-200"
-                  >
-                    <PlusIcon className="h-3.5 w-3.5 shrink-0 rounded-full bg-gray-400 p-0.5 text-[var(--bg-floating)]" />
-                    Adicionar uma nota
-                  </button>
-                )}
-              </div>
-            )}
+            <CardAvatar
+              userId={preview ? undefined : profile.id}
+              name={profile.nickname || profile.display_name}
+              avatarUrl={profile.avatar_url}
+              status={status}
+              surface={surface}
+              fallbackClassName={avatarFallbackClassName}
+              onEditProfile={onEditProfile}
+              onEdit={spotHandler(onEdit, 'avatar')}
+            />
+            <CardNote
+              note={profile.status_text?.trim()}
+              onAdd={addNote(isMe, onEditProfile, onEdit)}
+              onEdit={onEdit}
+            />
           </div>
           {badge && <div className="pointer-events-auto mt-[52px] shrink-0">{badge}</div>}
         </div>
 
-        <div className="mt-2">
-          <p className="truncate text-xl font-bold text-strong">
-            {profile.nickname ? (
-              profile.nickname
-            ) : (
-              <StyledName
-                name={profile.display_name || ' '}
-                userId={profile.id}
-                style={profile.name_style}
-              />
-            )}
-            {isMe && !preview && (
-              <span className="ml-1.5 text-xs font-medium text-gray-400">(você)</span>
-            )}
-          </p>
-          {profile.nickname && (
-            <p
-              className="truncate text-ds-sm font-semibold text-gray-200"
-              title="Nome de exibição (fora deste servidor)"
-            >
-              <StyledName
-                name={profile.display_name}
-                userId={profile.id}
-                style={profile.name_style}
-              />
-            </p>
-          )}
-          {(profile.username || profile.pronouns || badges) && (
-            <div className="flex min-w-0 items-center gap-2">
-              <p className="min-w-0 truncate text-sm text-gray-300">
-                {profile.username && <span>{profile.username}</span>}
-                {profile.username && profile.pronouns && <span className="text-gray-500"> • </span>}
-                {profile.pronouns && <span className="text-gray-400">{profile.pronouns}</span>}
-              </p>
-              {profile.is_bot && (
-                <span className="shrink-0 rounded bg-brand px-1.5 py-px text-[10px] font-bold uppercase leading-tight text-white">
-                  Bot
-                </span>
-              )}
-              {badges}
-            </div>
-          )}
-        </div>
-
-        {game && (
-          <div className="mt-3 rounded-lg bg-fg/5 p-2.5">
-            <p className="text-ds-xs font-bold uppercase text-gray-400">Jogando agora</p>
-            <p className="mt-1 flex items-center gap-1.5 text-ds-md font-semibold text-strong">
-              <GameIcon
-                name={game.name}
-                appId={game.app_id}
-                iconHash={game.icon_hash}
-                className="h-4 w-4 shrink-0"
-              />
-              <span className="truncate">{game.name}</span>
-              <span className="shrink-0 text-ds-xs font-normal text-gray-400">
-                <Elapsed startedAt={game.started_at} />
-              </span>
-            </p>
-          </div>
-        )}
+        <CardNames
+          profile={profile}
+          you={isMe && !preview}
+          badges={badges}
+          onEdit={onEdit}
+          pronounsPlaceholder={placeholders?.pronouns}
+        />
+        <ProfileActivities userId={preview ? undefined : profile.id} />
         {loading && !bio && <ProfileBioSkeleton />}
-        {bio && (
-          <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-snug text-gray-200">
-            {splitLinks(bio).map((part, i) =>
-              part.url ? (
-                <a
-                  key={i}
-                  href={part.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-link hover:underline"
-                >
-                  {part.text}
-                </a>
-              ) : (
-                <span key={i}>{part.text}</span>
-              )
-            )}
-          </p>
-        )}
-
-        {profile.is_bot && profile.id === MAESTRO_USER_ID && (
-          <div className="mt-3 rounded-lg bg-fg/5 p-2.5">
-            <p className="text-ds-xs font-bold uppercase text-gray-400">{MAESTRO_HOWTO.title}</p>
-            <ol className="mt-1 list-decimal space-y-1 pl-4 text-sm leading-snug text-gray-200">
-              {MAESTRO_HOWTO.steps.map((step) => (
-                <li key={step}>{step}</li>
-              ))}
-            </ol>
-          </div>
-        )}
-
-        {links.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {links.map((url) => {
-              const provider = detectProvider(url)
-              return (
-                <a
-                  key={url}
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer"
-                  title={`${provider.label}: ${linkLabel(url)}`}
-                  aria-label={`${provider.label}: ${linkLabel(url)}`}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-subtle bg-fg/5 text-gray-300 transition-colors hover:bg-fg/10 hover:text-strong"
-                >
-                  <LinkIcon provider={provider.id} />
-                </a>
-              )
-            })}
-          </div>
-        )}
+        <EditableSpot spot="bio" onEdit={onEdit}>
+          <CardBio bio={bio} placeholder={placeholders?.bio} />
+        </EditableSpot>
+        {profile.is_bot && profile.id === MAESTRO_USER_ID && <MaestroHowto />}
+        <EditableSpot spot="links" onEdit={onEdit}>
+          <CardLinks links={profile.links ?? []} placeholder={placeholders?.links} />
+        </EditableSpot>
 
         {children}
       </div>

@@ -4,9 +4,10 @@ import { badgeArt } from './badgeArt'
 // Mesma escada do catálogo do backend (internal/badge/catalog.go).
 const TIERS: Record<string, number> = {
   voz: 6,
-  conta: 5,
+  conta: 13,
   mensagens: 5,
   streamer: 5,
+  espectador: 5,
   nivel: 5,
   coruja: 4,
   madrugador: 4,
@@ -16,7 +17,10 @@ const TIERS: Record<string, number> = {
   festeiro: 3,
   maratona: 3,
   reacoes: 3,
-  contribuinte: 5
+  contribuinte: 5,
+  amigos: 5,
+  bugs: 4,
+  top10: 1
 }
 
 describe('badgeArt', () => {

@@ -1,18 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { moveToVoiceChannel } from '../../call/api/calls'
 import {
   StreamContextMenu,
   MaestroContextMenu,
   SelfUserMenu,
   StandardUserDMSection,
   StandardUserServerSection,
-  UserVoiceMoveSection,
   UserVolumeSection,
   MENU_WIDTH
 } from './UserContextMenuSections'
 import {
   openUserProfile,
-  copyUserId,
   sendDirectMessage,
   closeDirectMessage,
   startUserCall,
@@ -22,14 +19,9 @@ import {
   confirmUserBlock,
   unblockUserTarget,
   promptEditNickname,
-  computeVoiceMoveTargets,
   getAudioKey,
-  canChangeServerNickname,
-  resolveTargetUsername,
-  computeGivableRoles,
-  computeServerModerationPerms
+  canChangeServerNickname
 } from '../lib/userMenuActions'
-import { canMoveVoiceUser, voiceChannelOf } from '../../call/lib/voiceMove'
 import router from '../../../app/router'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useCallStore } from '../../call/store/callStore'
@@ -37,12 +29,12 @@ import { useFriendStore, useRelationship } from '../../friends/store/friendStore
 import { useServerStore } from '../../servers/store/serverStore'
 import { useServerAccess } from '../../servers/hooks/useServerAccess'
 import { useModerationStore } from '../../call/store/moderationStore'
-import { actionErrorMessage } from '../../servers/lib/permissionErrors'
-import { Perm, type Role } from '../../servers/lib/permissions'
-import { showToast } from '../../../shared/store/toastStore'
 import { useUserAudioStore } from '../../call/store/userAudioStore'
 import { useUserMenuStore, type UserMenuTarget } from '../store/userMenuStore'
 import { isMaestroUser } from '../../music/lib/music'
+import { UserMemberSubmenus } from './UserContextMenuSubmenus'
+import { useStandardUserMenuActions } from '../hooks/useStandardUserMenuActions'
+import { useStandardUserMenuModel } from '../hooks/useStandardUserMenuModel'
 
 const itemClass = 'cursor-pointer rounded px-2 py-1.5 text-left hover:bg-fg/5 disabled:opacity-50'
 
@@ -67,7 +59,6 @@ function StandardUserMenu({
   menuRef,
   close
 }: StandardUserMenuProps): React.JSX.Element {
-  const [saving, setSaving] = useState(false)
   const setVolume = useUserAudioStore((s) => s.setVolume)
   const toggleMuted = useUserAudioStore((s) => s.toggleMuted)
   const relationship = useRelationship(target.userId)
@@ -76,82 +67,23 @@ function StandardUserMenu({
   const unblock = useFriendStore((s) => s.unblock)
   const callIdle = useCallStore((s) => s.status === 'idle')
   const startDMCall = useCallStore((s) => s.startDMCall)
-  const server = useServerStore((s) => s.currentServer)
-  const member = useServerStore((s) => s.currentMembers.find((m) => m.user_id === target.userId))
-  const roles = useServerStore((s) => s.roles)
-  const addMemberRole = useServerStore((s) => s.addMemberRole)
-  const removeMemberRole = useServerStore((s) => s.removeMemberRole)
-  const channels = useServerStore((s) => s.channels)
-  const serverCalls = useCallStore((s) => s.serverCalls)
-  const access = useServerAccess()
-
-  const inCallWith = useCallStore(
-    (s) => s.status === 'active' && s.participants.some((p) => p.id === target.userId)
+  const {
+    server,
+    member,
+    username,
+    inCallWith,
+    givable,
+    voiceState,
+    voiceCallId,
+    moveTargets,
+    canNick,
+    modPerms
+  } = useStandardUserMenuModel(target, meId)
+  const { saving, moveTo, moderate, toggleRole } = useStandardUserMenuActions(
+    target,
+    server?.id,
+    close
   )
-  const callUsername = useCallStore(
-    (s) => s.participants.find((p) => p.id === target.userId)?.username
-  )
-  const username = resolveTargetUsername(target.username, member?.username, callUsername)
-  const inServer = Boolean(server && member)
-  const canAct = inServer && access.canActOnMember(target.userId)
-  const givable: Role[] = computeGivableRoles(inServer, roles, access)
-
-  const fromChannel = voiceChannelOf(serverCalls, target.userId)
-  const voiceCall = fromChannel ? serverCalls[fromChannel] : undefined
-  const voiceState = voiceCall?.participants.find((p) => p.user_id === target.userId)
-  const voiceCallId = voiceCall?.call?.id
-
-  const inFrom = (want: number): boolean =>
-    Boolean(fromChannel && voiceCallId && access.canInChannel(fromChannel, want))
-
-  const canMove = Boolean(
-    fromChannel &&
-      canMoveVoiceUser({
-        meId,
-        targetId: target.userId,
-        canMoveMembers: access.canInChannel(fromChannel, Perm.MOVE_MEMBERS),
-        canMoveTarget: access.canMoveMember(target.userId)
-      })
-  )
-  const moveTargets = computeVoiceMoveTargets(fromChannel, channels, canMove)
-  const canNick = canChangeServerNickname(
-    inServer,
-    router.state.location.pathname,
-    server?.id ?? undefined,
-    access.canChangeNickname(target.userId)
-  )
-
-  const modPerms = computeServerModerationPerms(
-    canAct,
-    access.canDisconnectMember(target.userId),
-    inFrom,
-    access.can
-  )
-
-  const moveTo = async (channelId: string, channelName: string): Promise<void> => {
-    setSaving(true)
-    try {
-      await moveToVoiceChannel(target.userId, channelId)
-      showToast.success(`${target.name} foi movido para ${channelName}.`)
-      close()
-    } catch (err) {
-      showToast.error(actionErrorMessage(err, 'Não foi possível mover.'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const moderate = async (action: () => Promise<unknown>, fallback: string): Promise<void> => {
-    setSaving(true)
-    try {
-      await action()
-      close()
-    } catch (err) {
-      showToast.error(actionErrorMessage(err, fallback))
-    } finally {
-      setSaving(false)
-    }
-  }
 
   return (
     <div
@@ -226,30 +158,19 @@ function StandardUserMenu({
         </>
       )}
 
-      <UserVoiceMoveSection
+      <UserMemberSubmenus
+        givable={givable}
+        memberRoleIds={member?.role_ids}
         moveTargets={moveTargets}
         saving={saving}
         itemClass={itemClass}
+        onToggleRole={(roleId, has) => void toggleRole(roleId, has)}
         onMoveTo={(id, name) => void moveTo(id, name)}
       />
 
-      <div className="my-1 h-px bg-fg/10" />
-      <button
-        role="menuitem"
-        onClick={() => {
-          close()
-          copyUserId(target.userId)
-        }}
-        className={itemClass}
-      >
-        Copiar ID do usuário
-      </button>
-
       <StandardUserServerSection
         server={server}
-        member={member}
         canNick={canNick}
-        givable={givable}
         voiceCallId={voiceCallId}
         voiceState={voiceState}
         canMuteInVoice={modPerms.canMute}
@@ -275,15 +196,6 @@ function StandardUserMenu({
             })
           }
         }}
-        onToggleRole={(roleId, has) =>
-          void moderate(
-            () =>
-              has
-                ? removeMemberRole(server!.id, member!.user_id, roleId)
-                : addMemberRole(server!.id, member!.user_id, roleId),
-            'Não foi possível mudar o cargo.'
-          )
-        }
         onModerate={moderate}
       />
     </div>
@@ -409,10 +321,6 @@ function UserContextMenu(): React.JSX.Element | null {
         onOpenProfile={() => {
           close()
           openUserProfile({ ...target, username: member?.username })
-        }}
-        onCopyId={() => {
-          close()
-          copyUserId(target.userId)
         }}
         itemClass={itemClass}
       />

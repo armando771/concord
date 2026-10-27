@@ -1,6 +1,6 @@
 import { request } from '../../../shared/api/client'
 
-/** mitico: acima de lendário, só nos badges concedidos à mão (Fundador). */
+/** mitico: acima de lendário, só nos exclusivos (Fundador e Top 10 do Nível 100). */
 export type BadgeRarity = 'comum' | 'raro' | 'epico' | 'lendario' | 'mitico'
 
 export type BadgeUnit =
@@ -15,6 +15,16 @@ export type BadgeUnit =
   | 'dev'
   | 'proposals'
   | 'vote'
+  | 'songs'
+  | 'sounds'
+  | 'stickers'
+  | 'days'
+  | 'votes'
+  | 'birthday'
+  | 'firsts'
+  | 'friends'
+  | 'bugs'
+  | 'rank'
 
 export interface BadgeTier {
   tier: number
@@ -34,7 +44,7 @@ export interface Badge {
   name: string
   description: string
   unit: BadgeUnit
-  /** Só no próprio perfil. */
+  /** Só no próprio perfil (no Top 10, a posição vem para todos). */
   value?: number
   tier: number
   tier_name?: string
