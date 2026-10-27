@@ -36,6 +36,7 @@ func (a *app) wireCalls() {
 	a.moderationService.SetOnRemoved(a.callService.RemoveFromServerCalls)
 	a.callService.SetBlockedCheck(a.friendshipService.IsBlockedEither)
 	a.callService.SetFriendChecker(a.friendshipService)
+	a.callService.SetPlaceSources(a.channelService, a.serverService)
 	callHandler := call.CallHandler(a.callService, a.liveKitTokens)
 	// Reinício do servidor não derruba quem está em chamada. Sem conseguir
 	// recarregar as chamadas o servidor não fica pronto (a porta nem abre):

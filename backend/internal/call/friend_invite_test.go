@@ -10,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/permission"
+	"gin-quickstart/backend/internal/server"
 )
 
 type fakeFriends map[string]bool
@@ -289,5 +291,44 @@ func TestInviteHandlerStatusCodes(t *testing.T) {
 		if rec.Code != c.want {
 			t.Errorf("%s: status = %d, want %d (%s)", c.name, rec.Code, c.want, rec.Body.String())
 		}
+	}
+}
+
+type fakeChannels struct{}
+
+func (fakeChannels) FindByID(_ context.Context, id string) (*channel.Channel, error) {
+	if id == "geral" {
+		return &channel.Channel{Name: "Geral"}, nil
+	}
+	return nil, errors.New("não achou")
+}
+
+type fakeServers struct{}
+
+func (fakeServers) FindByID(context.Context, string) (*server.Server, error) {
+	return &server.Server{Name: "Salinha"}, nil
+}
+
+func TestInvitePayloadHasChannelAndServerNames(t *testing.T) {
+	pub := &fakePublisher{}
+	s := inviteService(pub)
+	s.SetPlaceSources(fakeChannels{}, fakeServers{})
+	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
+	var p FriendInviteEvent
+	_ = json.Unmarshal(pub.eventsOf("call:friend_invite")[0].event["payload"], &p)
+	if p.ChannelName != "Geral" || p.ServerName != "Salinha" {
+		t.Fatalf("payload = %+v", p)
+	}
+}
+
+func TestPlaceNamesFallsBackToEmpty(t *testing.T) {
+	s := inviteService(&fakePublisher{})
+	s.SetPlaceSources(fakeChannels{}, fakeServers{})
+	srv := "server-1"
+	if ch, sv := s.placeNames(context.Background(), "outro", &srv); ch != "" || sv != "Salinha" {
+		t.Fatalf("ch=%q sv=%q", ch, sv)
+	}
+	if ch, sv := inviteService(&fakePublisher{}).placeNames(context.Background(), "geral", nil); ch != "" || sv != "" {
+		t.Fatalf("sem fontes: ch=%q sv=%q", ch, sv)
 	}
 }

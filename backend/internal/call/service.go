@@ -105,6 +105,8 @@ type Service struct {
 	isOnline            func(userID string) bool
 	perms               PermissionSource
 	friends             FriendChecker
+	channelNames        channelFinder
+	serverNames         serverFinder
 	media               MediaAdmin
 
 	mu    sync.RWMutex

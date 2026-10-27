@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"gin-quickstart/backend/internal/channel"
+	"gin-quickstart/backend/internal/server"
 )
 
 // Convite de amigos para a chamada de um canal de voz. Segue o molde do
@@ -206,16 +209,30 @@ func (s *Service) inviteContext(ctx context.Context, callID, inviterID string) (
 	return ic, nil
 }
 
+// channelFinder e serverFinder: o que o convite usa de channel.Service e server.Service.
+type channelFinder interface {
+	FindByID(ctx context.Context, id string) (*channel.Channel, error)
+}
+
+type serverFinder interface {
+	FindByID(ctx context.Context, id string) (*server.Server, error)
+}
+
+// SetPlaceSources liga a busca do nome do canal e do servidor (texto do convite).
+func (s *Service) SetPlaceSources(ch channelFinder, srv serverFinder) {
+	s.channelNames, s.serverNames = ch, srv
+}
+
 // placeNames busca o nome do canal e do servidor para o texto do convite
 // (vazio se não der: o cliente tem fallback).
 func (s *Service) placeNames(ctx context.Context, channelID string, serverID *string) (channelName, serverName string) {
-	if s.channelService != nil {
-		if ch, err := s.channelService.FindByID(ctx, channelID); err == nil && ch != nil {
+	if s.channelNames != nil {
+		if ch, err := s.channelNames.FindByID(ctx, channelID); err == nil && ch != nil {
 			channelName = ch.Name
 		}
 	}
-	if s.serverService != nil && serverID != nil {
-		if srv, err := s.serverService.FindByID(ctx, *serverID); err == nil && srv != nil {
+	if s.serverNames != nil && serverID != nil {
+		if srv, err := s.serverNames.FindByID(ctx, *serverID); err == nil && srv != nil {
 			serverName = srv.Name
 		}
 	}
