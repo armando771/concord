@@ -7,23 +7,28 @@
 //                                                  ├─ eco ──────┤
 //                                                  └─ envio ─ reverb ┘
 //
-// Todo bloco fica sempre no grafo e é neutralizado pelos parâmetros (filtros
-// abertos, curva nula, envios em 0): trocar de preset só mexe em valores, nunca
-// reconecta nós, então vale ao vivo sem estalo. Os envios ficam antes do eco e
-// do reverb: com ganho 0 o navegador vê silêncio e para de processar o
-// convolver depois da cauda (o reverb não pesa na CPU fora dos presets dele).
+// O grafo inteiro só existe com uma voz ativa: no Normal ele sai do caminho do
+// microfone e é destruído (audioStageSwitch.ts), e volta novo ao escolher uma
+// voz. Enquanto existe, todo bloco fica no grafo e é neutralizado pelos
+// parâmetros (filtros abertos, curva nula, envios em 0): trocar entre vozes só
+// mexe em valores, nunca reconecta nós, então vale ao vivo sem estalo. Os
+// envios ficam antes do eco e do reverb: com ganho 0 o navegador vê silêncio e
+// para de processar o convolver depois da cauda (o reverb não pesa na CPU fora
+// dos presets dele).
 // O caminho seco tem o mesmo atraso do pitch shifter para não haver filtro
 // pente ao misturar os dois; por isso o limitador é um WaveShaper (sem atraso)
 // e não um DynamicsCompressor (que tem look-ahead).
+import { switchStage } from './audioStageSwitch'
 import { dspProcessorOptions } from './dspModule'
 import voiceModWorkletUrl from './voiceModWorklet.ts?worker&url'
 import { driveCurve, reverbImpulse, softLimitCurve } from './voiceModCurves'
 import {
   VOICE_MOD_LATENCY_MS,
   VOICE_MOD_PROCESSOR,
+  VOICE_MOD_STOP,
   type VoiceModWorkletMessage
 } from './voiceModDsp'
-import { voiceModParams, type VoiceModSettings } from './voiceModPresets'
+import { isVoiceModActive, voiceModParams, type VoiceModSettings } from './voiceModPresets'
 
 /** Constante de tempo do crossfade ao trocar de preset ou mexer num slider. */
 const FADE_SECONDS = 0.015
@@ -33,22 +38,38 @@ const REVERB = { seconds: 2.2, preDelaySeconds: 0.03 }
 /** O processado entra no limitador dividido por isto (picos de até 2× ainda cabem). */
 const LIMITER_HEADROOM = 2
 const LIMITER_CURVE = softLimitCurve(0.8, LIMITER_HEADROOM)
+/**
+ * Espera do grafo recém-montado antes do crossfade: o processador sobe na
+ * thread de áudio e o pitch shifter enche meia janela (25 ms) antes de ter som.
+ */
+const VOICE_MOD_WARMUP_SECONDS = 0.06
 
 export interface VoiceModNode {
   input: AudioNode
   output: AudioNode
   /** `instant`: sem rampa (primeira aplicação, antes de o áudio rodar). */
   apply: (settings: VoiceModSettings, instant: boolean) => void
+  /** Desliga os nós e para o worklet de vez (o process() devolve false). */
   destroy: () => void
 }
 
-/** Rejeita se o worklet não carregar; quem chama segue sem voice mod. */
-export async function createVoiceMod(ctx: AudioContext): Promise<VoiceModNode> {
+/**
+ * Registra o worklet no contexto (uma vez) e devolve quem monta o grafo, na
+ * hora e sem esperar nada. Rejeita se o worklet não carregar; quem chama segue
+ * sem voice mod.
+ */
+export async function loadVoiceMod(ctx: AudioContext): Promise<() => VoiceModNode> {
   const [, processorOptions] = await Promise.all([
     ctx.audioWorklet.addModule(voiceModWorkletUrl),
     dspProcessorOptions()
   ])
+  return () => buildVoiceMod(ctx, processorOptions)
+}
 
+function buildVoiceMod(
+  ctx: AudioContext,
+  processorOptions: Awaited<ReturnType<typeof dspProcessorOptions>>
+): VoiceModNode {
   const input = ctx.createGain()
   input.channelCount = 1
   input.channelCountMode = 'explicit'
@@ -161,6 +182,65 @@ export async function createVoiceMod(ctx: AudioContext): Promise<VoiceModNode> {
       }
       shifter.port.postMessage(message)
     },
-    destroy: () => nodes.forEach((node) => node.disconnect())
+    destroy: () => {
+      nodes.forEach((node) => node.disconnect())
+      shifter.port.postMessage(VOICE_MOD_STOP)
+    }
   }
+}
+
+/** O voice mod no caminho do microfone: entra só com uma voz ativa. */
+export interface VoiceModPath {
+  output: AudioNode
+  apply: (settings: VoiceModSettings) => void
+  destroy: () => void
+}
+
+/**
+ * `input` ─┬─ direto ─────────────┬─ output
+ *          └─ voice mod ─ ganho ──┘
+ * No Normal sem ajuste o voice mod não existe; ao escolher uma voz ele é
+ * montado já com ela e entra por crossfade (audioStageSwitch.ts).
+ */
+export function voiceModPath(
+  ctx: AudioContext,
+  input: AudioNode,
+  create: () => VoiceModNode,
+  initial: VoiceModSettings
+): VoiceModPath {
+  const direct = ctx.createGain()
+  const through = ctx.createGain()
+  through.gain.value = 0
+  const output = ctx.createGain()
+  input.connect(direct).connect(output)
+  through.connect(output)
+  let latest = initial
+  const mount = (): VoiceModNode | null => {
+    try {
+      const mod = create()
+      mod.apply(latest, true)
+      return mod
+    } catch (err) {
+      console.error('[voz] voice mod não montou:', err)
+      return null
+    }
+  }
+  const stage = switchStage({
+    ctx,
+    source: input,
+    direct,
+    through,
+    create: mount,
+    warmupSeconds: VOICE_MOD_WARMUP_SECONDS
+  })
+  const apply = (settings: VoiceModSettings): void => {
+    latest = settings
+    const live = stage.current()
+    const active = isVoiceModActive(settings)
+    stage.set(active)
+    // Já montado (trocando de voz, ou voltando antes de desmontar): só os valores.
+    if (live && active) live.apply(settings, false)
+  }
+  apply(initial)
+  return { output, apply, destroy: stage.destroy }
 }

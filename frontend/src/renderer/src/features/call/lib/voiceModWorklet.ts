@@ -4,9 +4,10 @@
 // em Rust; sem ele, ou se não instanciar, no JS — o som é o mesmo.
 import {
   VOICE_MOD_PROCESSOR,
+  VOICE_MOD_STOP,
   VoiceModDsp,
-  type VoiceModProcessor,
-  type VoiceModWorkletMessage
+  type VoiceModPortMessage,
+  type VoiceModProcessor
 } from './voiceModDsp'
 import { VoiceModWasm } from './voiceModWasm'
 
@@ -21,6 +22,7 @@ declare const sampleRate: number
 
 class ConcordVoiceModProcessor extends AudioWorkletProcessor {
   private dsp: VoiceModProcessor
+  private stopped = false
   /** Qual implementação está rodando (diagnóstico e testes). */
   readonly engine: 'wasm' | 'js'
 
@@ -29,12 +31,14 @@ class ConcordVoiceModProcessor extends AudioWorkletProcessor {
     const wasm = VoiceModWasm.create(sampleRate, options?.processorOptions?.dspModule)
     this.dsp = wasm ?? new VoiceModDsp(sampleRate)
     this.engine = wasm ? 'wasm' : 'js'
-    this.port.onmessage = (event: MessageEvent<VoiceModWorkletMessage>) => {
-      this.dsp.configure(event.data)
+    this.port.onmessage = (event: MessageEvent<VoiceModPortMessage>) => {
+      if (event.data === VOICE_MOD_STOP) this.stopped = true
+      else this.dsp.configure(event.data)
     }
   }
 
   process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
+    if (this.stopped) return false
     const output = outputs[0]?.[0]
     if (output) this.dsp.process(inputs[0]?.[0], output)
     return true

@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { VOICE_MOD_PROCESSOR, type VoiceModWorkletMessage } from './voiceModDsp'
+import { VOICE_MOD_PROCESSOR, VOICE_MOD_STOP, type VoiceModPortMessage } from './voiceModDsp'
 
 const RATE = 48_000
 const BLOCK = 128
@@ -10,7 +10,7 @@ const dspModule = new WebAssembly.Module(
 
 interface Processor {
   engine: 'wasm' | 'js'
-  port: { onmessage: ((event: { data: VoiceModWorkletMessage }) => void) | null }
+  port: { onmessage: ((event: { data: VoiceModPortMessage }) => void) | null }
   process: (inputs: Float32Array[][], outputs: Float32Array[][]) => boolean
 }
 
@@ -43,7 +43,10 @@ function run(processor: Processor, input: Float32Array): Float32Array {
 }
 
 function sine(hz: number): Float32Array {
-  return Float32Array.from({ length: RATE }, (_, i) => 0.5 * Math.sin((2 * Math.PI * hz * i) / RATE))
+  return Float32Array.from(
+    { length: RATE },
+    (_, i) => 0.5 * Math.sin((2 * Math.PI * hz * i) / RATE)
+  )
 }
 
 function frequency(out: Float32Array): number {
@@ -79,6 +82,13 @@ describe('voiceModWorklet', () => {
     expect(new Processor().engine).toBe('js')
     expect(new Processor({ processorOptions: { dspModule: null } }).engine).toBe('js')
     expect(new Processor({ processorOptions: { dspModule: 'lixo' } }).engine).toBe('js')
+  })
+
+  it('depois de "stop" o process() devolve false: o Chromium para de chamá-lo', () => {
+    const processor = new Processor({ processorOptions: { dspModule } })
+    const block = new Float32Array(BLOCK)
+    processor.port.onmessage!({ data: VOICE_MOD_STOP })
+    expect(processor.process([[sine(1000).subarray(0, BLOCK)]], [[block]])).toBe(false)
   })
 
   it('sem entrada devolve silêncio e continua vivo', () => {
