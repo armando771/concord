@@ -30,11 +30,11 @@ const outra: Enquete = { ...enquete, id: 'outra' }
 
 const estado = (): ReturnType<typeof useEnqueteStore.getState> => useEnqueteStore.getState()
 
-async function ate(etapa: 'confirmacao', opcao: string): Promise<void> {
+async function ate(opcao: string): Promise<void> {
   await estado().carregar('ana')
   estado().selecionar(opcao)
   estado().continuar()
-  expect(estado().etapa).toBe(etapa)
+  expect(estado().etapa).toBe('confirmacao')
 }
 
 describe('enqueteStore', () => {
@@ -97,7 +97,7 @@ describe('enqueteStore', () => {
   })
 
   it('confirmar opção com badge: celebra, tira a enquete e recarrega os badges', async () => {
-    await ate('confirmacao', '22')
+    await ate('22')
     responderMock.mockResolvedValue({ enquete: 'segundo-turno', opcao: '22', badge: 'v22' })
     await estado().confirmar()
     expect(responderMock).toHaveBeenCalledWith('segundo-turno', '22')
@@ -110,7 +110,7 @@ describe('enqueteStore', () => {
   })
 
   it('confirmar "nenhum": aviso neutro e os badges ficam como estão', async () => {
-    await ate('confirmacao', 'nenhum')
+    await ate('nenhum')
     responderMock.mockResolvedValue({ enquete: 'segundo-turno', opcao: 'nenhum' })
     await estado().confirmar()
     expect(estado().reacao).toEqual({ tipo: 'neutra' })
@@ -119,7 +119,7 @@ describe('enqueteStore', () => {
 
   it('fecharReacao limpa a reação e mostra a próxima pendente', async () => {
     fetchMock.mockResolvedValue([enquete, outra])
-    await ate('confirmacao', 'l')
+    await ate('l')
     responderMock.mockResolvedValue({ enquete: 'segundo-turno', opcao: 'l', badge: 'l' })
     await estado().confirmar()
     expect(estado().pendentes).toEqual([outra])
@@ -130,7 +130,7 @@ describe('enqueteStore', () => {
 
   it('falha ao enviar mantém a confirmação aberta, marca o erro e libera os botões', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    await ate('confirmacao', 'l')
+    await ate('l')
     responderMock.mockRejectedValue(new Error('sem rede'))
     await estado().confirmar()
     expect(estado().etapa).toBe('confirmacao')
@@ -139,18 +139,42 @@ describe('enqueteStore', () => {
     expect(estado().reacao).toBeNull()
   })
 
-  it('409 (respondeu em outro aparelho) recarrega as pendentes em vez de mostrar erro', async () => {
-    await ate('confirmacao', 'l')
-    responderMock.mockRejectedValue(new ApiError(409, 'already answered'))
-    fetchMock.mockResolvedValue([])
+  it.each([403, 404, 409])(
+    '%i (servidor já decidiu) recarrega as pendentes em vez de mostrar erro',
+    async (status) => {
+      await ate('l')
+      responderMock.mockRejectedValue(new ApiError(status, 'decidido'))
+      fetchMock.mockResolvedValue([])
+      await estado().confirmar()
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(estado().erro).toBe(false)
+      expect(estado().pendentes).toEqual([])
+      expect(estado().reacao).toBeNull()
+    }
+  )
+
+  it('carregar de novo para a mesma pessoa depois de responder não apaga a reação nem refaz o fetch', async () => {
+    await ate('l')
+    responderMock.mockResolvedValue({ enquete: 'segundo-turno', opcao: 'l', badge: 'l' })
     await estado().confirmar()
-    expect(estado().erro).toBe(false)
-    expect(estado().pendentes).toEqual([])
-    expect(estado().reacao).toBeNull()
+    await estado().carregar('ana')
+    expect(estado().reacao).toEqual({ tipo: 'celebracao', badge: 'l', rotulo: 'Fez o L' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('falha em ensureBadges não vira promessa rejeitada solta', async () => {
+    const erro = vi.spyOn(console, 'error').mockImplementation(() => {})
+    ensureBadges.mockRejectedValue(new Error('x'))
+    await ate('l')
+    responderMock.mockResolvedValue({ enquete: 'segundo-turno', opcao: 'l', badge: 'l' })
+    await estado().confirmar()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(erro).toHaveBeenCalled()
   })
 
   it('dois cliques seguidos em confirmar enviam uma vez só', async () => {
-    await ate('confirmacao', 'l')
+    await ate('l')
     let liberar: (v: { enquete: string; opcao: string; badge: string }) => void = () => {}
     responderMock.mockReturnValue(new Promise((r) => (liberar = r)))
     const a = estado().confirmar()
@@ -161,7 +185,7 @@ describe('enqueteStore', () => {
   })
 
   it('resposta que chega depois de trocar de pessoa é descartada', async () => {
-    await ate('confirmacao', 'l')
+    await ate('l')
     let liberar: (v: { enquete: string; opcao: string; badge: string }) => void = () => {}
     responderMock.mockReturnValue(new Promise((r) => (liberar = r)))
     const pendente = estado().confirmar()

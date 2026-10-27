@@ -9,6 +9,8 @@ interface EnqueteState {
   userId: string | null
   /** Pendentes; a primeira é a que está na tela. */
   pendentes: Enquete[]
+  /** A carga das pendentes deste userId já deu certo: carregar de novo é no-op. */
+  carregado: boolean
   /** Opção marcada na enquete atual. */
   selecao: string | null
   etapa: Etapa
@@ -28,6 +30,7 @@ interface EnqueteState {
 const INICIAL = {
   userId: null,
   pendentes: [] as Enquete[],
+  carregado: false,
   selecao: null,
   etapa: 'pergunta' as Etapa,
   reacao: null,
@@ -44,11 +47,11 @@ export const useEnqueteStore = create<EnqueteState>()((set, get) => ({
   ...INICIAL,
 
   carregar: async (userId) => {
-    if (get().userId === userId && get().pendentes.length > 0) return
-    set({ ...INICIAL, userId })
+    if (get().userId === userId && get().carregado) return
+    if (get().userId !== userId) set({ ...INICIAL, userId })
     try {
       const pendentes = await fetchPendentes()
-      if (get().userId === userId) set({ pendentes })
+      if (get().userId === userId) set({ pendentes, carregado: true })
     } catch (err) {
       console.error('[enqueteStore] fetch failed:', err)
     }
@@ -81,11 +84,16 @@ export const useEnqueteStore = create<EnqueteState>()((set, get) => ({
         enviando: false
       })
       // O badge já existe no servidor; não depende do aviso pelo websocket.
-      if (opcao.badge) void useBadgeStore.getState().ensureBadges(userId, true)
+      if (opcao.badge) {
+        useBadgeStore
+          .getState()
+          .ensureBadges(userId, true)
+          .catch((e) => console.error('[enqueteStore] ensureBadges failed:', e))
+      }
     } catch (err) {
       if (get().userId !== userId) return
       if (jaDecidido(err)) {
-        set({ enviando: false, pendentes: [] })
+        set({ enviando: false, pendentes: [], carregado: false })
         await get().carregar(userId)
         return
       }
