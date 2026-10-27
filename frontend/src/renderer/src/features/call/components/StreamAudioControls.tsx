@@ -66,7 +66,7 @@ function StreamAudioControls({
       }}
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
-      className="absolute bottom-2 right-2 z-20 flex items-center gap-2 rounded-lg bg-black/70 px-2 py-1 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover/tile:opacity-100 on-media"
+      className="absolute bottom-2 right-2 z-20 flex items-center gap-2 rounded-lg bg-black/70 px-2 py-1 [@media(hover:hover)]:opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 [@media(hover:hover)]:group-hover/tile:opacity-100 on-media"
     >
       {userId && (
         <>

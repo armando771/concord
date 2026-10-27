@@ -166,7 +166,7 @@ function BackgroundPicker({
                 aria-label="Remover imagem"
                 title="Remover imagem"
                 onClick={() => onRemoveCustom(c.id)}
-                className="absolute right-1 top-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity hover:bg-danger-strong focus-visible:opacity-100 group-hover:opacity-100"
+                className="absolute right-1 top-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-black/70 text-white [@media(hover:hover)]:opacity-0 transition-opacity hover:bg-danger-strong focus-visible:opacity-100 [@media(hover:hover)]:group-hover:opacity-100"
               >
                 <XIcon className="h-3 w-3" />
               </button>

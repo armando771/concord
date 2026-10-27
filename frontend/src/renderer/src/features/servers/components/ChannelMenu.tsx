@@ -37,7 +37,7 @@ export function ChannelMenuButton({
       title="Opções do canal"
       className={`absolute right-1.5 top-1.5 z-10 flex h-5 items-center rounded-md px-0.5 text-gray-500 transition-[color,background-color,opacity] hover:bg-fg/10 hover:text-strong cursor-pointer ${
         onHover && !open
-          ? 'opacity-0 group-hover/voicech:opacity-100 focus-visible:opacity-100'
+          ? '[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/voicech:opacity-100 focus-visible:opacity-100'
           : ''
       }`}
     >

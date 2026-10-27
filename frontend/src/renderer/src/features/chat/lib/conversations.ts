@@ -60,3 +60,10 @@ export function sanitizeConversations(raw: unknown): ConversationSummary[] {
     } as ConversationSummary
   })
 }
+
+/** Título do aviso para tirar alguém do grupo; vazio enquanto ninguém está escolhido. */
+export function removeMemberTitle(
+  member: { display_name?: string; username?: string } | null
+): string {
+  return member ? `Remover ${member.display_name || member.username} do grupo` : ''
+}

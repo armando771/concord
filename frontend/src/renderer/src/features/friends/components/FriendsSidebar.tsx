@@ -6,167 +6,18 @@ import { useFriendStore } from '../store/friendStore'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useTypingStore } from '../../chat/store/typingStore'
 import { typersIn } from '../../chat/lib/typing'
-import { useChatStore, usePresenceStatus } from '../../chat/store/chatStore'
-import { useUserLook } from '../../profile/store/profileStore'
-import { useUserMenuStore } from '../../profile/store/userMenuStore'
+import { useChatStore } from '../../chat/store/chatStore'
 import { showToast } from '../../../shared/store/toastStore'
-import Avatar from '../../../shared/ui/Avatar'
 import SidebarFooter from '../../../app/SidebarFooter'
-import { FriendsIcon, PlusIcon, XIcon } from '../../../shared/ui/icons'
+import { FriendsIcon, PlusIcon } from '../../../shared/ui/icons'
 import ResizeHandle from '../../../shared/ui/ResizeHandle'
 import { useResizableWidth } from '../../../shared/hooks/useResizableWidth'
-import GroupIcon from './GroupIcon'
+import ConversationRow from './ConversationRow'
+import { conversationTitle } from '../../chat/lib/conversations'
 import CreateGroupModal from './CreateGroupModal'
-import { conversationRoute, conversationTitle } from '../../chat/lib/conversations'
 import { hideConversation, leaveGroup, type ConversationSummary } from '../../chat/api/conversations'
 import ConfirmModal from './ConfirmModal'
-import { GameLine } from '../../activity/components/ActivityLine'
-import StyledName from '../../profile/components/StyledName'
 import { DmListSkeleton } from '../../../shared/ui/skeleton/layouts'
-import type { NameStyle } from '../../profile/lib/nameStyle'
-
-const SIDEBAR_BG = 'var(--bg-secondary)'
-
-function DmAvatar({
-  userId,
-  name,
-  avatarUrl
-}: {
-  userId: string
-  name: string
-  avatarUrl?: string | null
-}): React.JSX.Element {
-  const status = usePresenceStatus(userId)
-  return (
-    <Avatar
-      userId={userId}
-      name={name}
-      avatarUrl={avatarUrl}
-      size={32}
-      status={status}
-      cutoutColor={SIDEBAR_BG}
-    />
-  )
-}
-
-/** Nome da conversa, já com a troca mais nova (user:update). */
-function DmName({
-  userId,
-  name,
-  style
-}: {
-  userId: string
-  name: string
-  style?: NameStyle
-}): React.JSX.Element {
-  return <StyledName name={useUserLook(userId, { name }).name} userId={userId} style={style} />
-}
-
-function ConversationRow({
-  conv,
-  active,
-  unread,
-  typing,
-  meId,
-  onClose
-}: {
-  conv: ConversationSummary
-  active: boolean
-  unread: number
-  /** Alguém digitando nesta conversa (DM ou grupo). */
-  typing: boolean
-  meId: string | undefined
-  onClose: (conv: ConversationSummary) => void
-}): React.JSX.Element {
-  const navigate = useNavigate()
-  const other = conv.other_user
-  const isGroup = conv.type === 'group'
-  const title = conversationTitle(conv, meId)
-
-  const onContextMenu = (e: React.MouseEvent): void => {
-    if (!other) return
-    e.preventDefault()
-    useUserMenuStore.getState().open({
-      userId: other.id,
-      name: other.display_name || other.username,
-      username: other.username,
-      conversationId: conv.id,
-      x: e.clientX,
-      y: e.clientY
-    })
-  }
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => navigate(conversationRoute(conv, meId))}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') navigate(conversationRoute(conv, meId))
-      }}
-      onContextMenu={onContextMenu}
-      className={`group flex w-full cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors ${
-        active ? 'bg-fg/10' : 'hover:bg-fg/6'
-      }`}
-    >
-      {isGroup || !other ? (
-        <GroupIcon id={conv.id} iconUrl={conv.icon_url} />
-      ) : (
-        <DmAvatar
-          userId={other.id}
-          name={other.display_name || other.username}
-          avatarUrl={other.avatar_url}
-        />
-      )}
-      <div className="min-w-0 flex-1">
-        <p
-          className={`truncate text-ds-md ${
-            active || unread > 0
-              ? 'font-semibold text-strong'
-              : 'font-medium text-gray-400 group-hover:text-gray-200'
-          }`}
-        >
-          {!isGroup && other ? (
-            <DmName
-              userId={other.id}
-              name={other.display_name || other.username}
-              style={other.name_style}
-            />
-          ) : (
-            title
-          )}
-        </p>
-        {typing ? (
-          <p className="truncate text-ds-xs italic text-violet-300">digitando…</p>
-        ) : (
-          (isGroup && (
-            <p className="truncate text-ds-xs font-medium text-gray-500">
-              {(conv.members ?? []).length} membros
-            </p>
-          )) ||
-          (other && <GameLine userId={other.id} className="text-ds-xs font-medium text-gray-500" />)
-        )}
-      </div>
-      {unread > 0 && (
-        <span className="shrink-0 rounded-full bg-danger-strong px-1.5 text-[11px] font-bold text-white group-hover:hidden">
-          {unread > 99 ? '99+' : unread}
-        </span>
-      )}
-      <button
-        type="button"
-        aria-label={isGroup ? 'Sair do grupo' : 'Fechar DM'}
-        title={isGroup ? 'Sair do grupo' : 'Fechar DM'}
-        onClick={(e) => {
-          e.stopPropagation()
-          onClose(conv)
-        }}
-        className="hidden shrink-0 cursor-pointer text-gray-400 hover:text-strong group-hover:block"
-      >
-        <XIcon className="h-4 w-4" />
-      </button>
-    </div>
-  )
-}
 
 export function FriendsSidebar(): React.JSX.Element {
   const navigate = useNavigate()

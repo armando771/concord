@@ -77,7 +77,7 @@ function StickerItem({
             onDelete(sticker)
           }}
           title="Excluir figurinha"
-          className="absolute right-1 top-1 hidden rounded-md bg-black/80 p-1 text-red-400 opacity-80 hover:opacity-100 group-hover:block"
+          className="absolute right-1 top-1 rounded-md bg-black/80 p-1 text-red-400 opacity-80 hover:opacity-100 focus-visible:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-80"
         >
           <TrashIcon className="h-3 w-3" />
         </button>
