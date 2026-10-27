@@ -96,7 +96,7 @@ func implicit(perms int64, channelType string) int64 {
 		perms &^= AttachFiles | MentionEveryone
 	}
 	if channelType == ChannelVoice && perms&Connect == 0 {
-		perms &^= Speak | Stream | MuteMembers | DeafenMembers | MoveMembers | UseSoundboard
+		perms &^= Speak | Stream | MuteMembers | DeafenMembers | MoveMembers | DisconnectMembers | UseSoundboard
 	}
 	return perms
 }
@@ -138,4 +138,40 @@ func CanActOn(ownerID, actorID, targetID string, actorHighest, targetHighest int
 		return true
 	}
 	return actorHighest > targetHighest
+}
+
+// CanManageNicknameOf: o ator pode mudar o apelido do alvo?
+// O dono nunca é alvo (exceto por si mesmo); fora o dono, pode quem tem o mesmo cargo ou superior (actorHighest >= targetHighest).
+func CanManageNicknameOf(ownerID, actorID, targetID string, actorHighest, targetHighest int) bool {
+	if targetID == ownerID {
+		return actorID == ownerID
+	}
+	if actorID == ownerID {
+		return true
+	}
+	return actorHighest >= targetHighest
+}
+
+// CanDisconnectMember: o ator pode desconectar o alvo da chamada de voz?
+// O dono nunca é alvo (exceto por si mesmo); fora o dono, pode quem tem o mesmo cargo ou superior (actorHighest >= targetHighest).
+func CanDisconnectMember(ownerID, actorID, targetID string, actorHighest, targetHighest int) bool {
+	if targetID == ownerID {
+		return actorID == ownerID
+	}
+	if actorID == ownerID {
+		return true
+	}
+	return actorHighest >= targetHighest
+}
+
+// CanMoveMember: o ator pode mover o alvo entre canais de voz?
+// O dono nunca é alvo (exceto por si mesmo); fora o dono, pode quem tem o mesmo cargo ou superior (actorHighest >= targetHighest).
+func CanMoveMember(ownerID, actorID, targetID string, actorHighest, targetHighest int) bool {
+	if targetID == ownerID {
+		return actorID == ownerID
+	}
+	if actorID == ownerID {
+		return true
+	}
+	return actorHighest >= targetHighest
 }

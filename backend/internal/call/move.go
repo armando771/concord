@@ -90,7 +90,7 @@ func checkMove(actorIsModerator bool, actorID, ownerID, targetID string, from vo
 }
 
 // authorizeMove junta as regras de mover: MOVE_MEMBERS no canal em que a
-// pessoa está, ver o destino, estar acima dela na hierarquia e o destino
+// pessoa está, ver o destino, estar no mesmo nível de hierarquia ou acima (mesma regra de desconectar) e o destino
 // deixar a pessoa entrar.
 func authorizeMove(snap *permission.Snapshot, actorID, targetID string, from voiceLocation, inVoice bool, dest *channel.Channel) error {
 	if !snap.CanView(dest.ID, actorID) {
@@ -100,7 +100,7 @@ func authorizeMove(snap *permission.Snapshot, actorID, targetID string, from voi
 	if err := checkMove(canMove, actorID, snap.OwnerID, targetID, from, inVoice, dest); err != nil {
 		return err
 	}
-	if targetID != actorID && !snap.CanActOn(actorID, targetID) {
+	if targetID != actorID && !snap.CanMoveMember(actorID, targetID) {
 		return ErrCannotActOnMember
 	}
 	if !permission.Has(snap.Channel(dest.ID, targetID), permission.ViewChannel|permission.Connect) {
@@ -111,7 +111,7 @@ func authorizeMove(snap *permission.Snapshot, actorID, targetID string, from voi
 
 // MoveToChannel tira targetID do canal de voz em que está e o coloca em
 // channelID. Exige MOVE_MEMBERS no canal em que a pessoa está, ver o canal de
-// destino e estar acima da pessoa na hierarquia; o destino precisa deixar a
+// destino e estar no mesmo nível de hierarquia ou acima da pessoa; o destino precisa deixar a
 // pessoa entrar (CONNECT).
 func (s *Service) MoveToChannel(ctx context.Context, actorID, targetID, channelID string) (*Call, error) {
 	dest, err := s.channelService.FindByID(ctx, channelID)

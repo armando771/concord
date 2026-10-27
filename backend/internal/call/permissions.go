@@ -203,10 +203,27 @@ func (s *Service) setServerVoice(ctx context.Context, callID, actorID, targetID 
 	return nil
 }
 
-// DisconnectParticipant tira alguém da chamada (MOVE_MEMBERS + hierarquia).
+// DisconnectParticipant tira alguém da chamada (DISCONNECT_MEMBERS + hierarquia: mesmo nível ou menor).
 func (s *Service) DisconnectParticipant(ctx context.Context, callID, actorID, targetID string) error {
-	if _, _, err := s.authorizeAction(ctx, callID, actorID, targetID, permission.MoveMembers); err != nil {
+	channelID, serverID, err := s.channelCall(callID)
+	if err != nil {
 		return err
+	}
+	if s.perms == nil {
+		return ErrMissingPermission
+	}
+	snap, err := s.perms.Snapshot(ctx, serverID)
+	if err != nil || !snap.IsMember(actorID) {
+		return ErrNotMember
+	}
+	if !permission.Has(snap.Channel(channelID, actorID), permission.DisconnectMembers) {
+		return ErrMissingPermission
+	}
+	if !s.IsParticipant(callID, targetID) {
+		return ErrTargetNotInCall
+	}
+	if !snap.CanDisconnectMember(actorID, targetID) {
+		return ErrCannotActOnMember
 	}
 	return s.kick(ctx, callID, targetID)
 }
