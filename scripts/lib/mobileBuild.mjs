@@ -37,3 +37,15 @@ export function buildPlan(env) {
     gradleArgs: signing.args
   }
 }
+
+// O ninja do SDK (CMake 3.22) não passa de 260 caracteres de caminho, e o
+// react-native-worklets embute o caminho do fonte no do objeto. No Windows, com
+// o projeto em caminho longo, o build roda numa cópia em pasta curta.
+const SHORT_PATH_LIMIT = 30
+export const DEFAULT_BUILD_DIR = String.raw`C:\sb`
+
+// buildDir: pasta curta para buildar, ou null para buildar no próprio lugar.
+export function buildDir(platform, mobileDir, env) {
+  if (platform !== 'win32' || mobileDir.length <= SHORT_PATH_LIMIT) return null
+  return env.SALINHA_BUILD_DIR || DEFAULT_BUILD_DIR
+}

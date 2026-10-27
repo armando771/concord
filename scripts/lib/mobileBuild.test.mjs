@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { buildPlan } from './mobileBuild.mjs'
+import { buildDir, buildPlan } from './mobileBuild.mjs'
 
 const SIGNING = {
   SALINHA_KEYSTORE_PATH: 'C:/chaves/salinha.jks',
@@ -55,4 +55,15 @@ test('nunca imprime as senhas nos avisos nem nos problemas', () => {
   const plan = buildPlan({ ...OK, ...SIGNING })
   const text = [...plan.problems, ...plan.warnings].join('\n')
   assert.ok(!text.includes('senha-loja') && !text.includes('senha-chave'))
+})
+
+test('buildDir: Windows com caminho longo builda numa pasta curta (limite de 260 do ninja)', () => {
+  const long = String.raw`C:\Users\hugoe\Documents\concord-app-mobile\mobile`
+  assert.equal(buildDir('win32', long, {}), String.raw`C:\sb`)
+  assert.equal(buildDir('win32', long, { SALINHA_BUILD_DIR: String.raw`D:\x` }), String.raw`D:\x`)
+})
+
+test('buildDir: caminho já curto, ou fora do Windows, builda no próprio lugar', () => {
+  assert.equal(buildDir('win32', String.raw`C:\dev\mobile`, {}), null)
+  assert.equal(buildDir('linux', '/home/ana/concord-app-mobile/mobile', {}), null)
 })
