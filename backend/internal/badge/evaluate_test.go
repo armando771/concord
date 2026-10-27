@@ -48,7 +48,12 @@ func TestCatalogIsWellFormed(t *testing.T) {
 }
 
 func TestTierForValue(t *testing.T) {
-	voz := Catalog[0]
+	var voz Category
+	for _, c := range Catalog {
+		if c.Key == "voz" {
+			voz = c
+		}
+	}
 	cases := []struct {
 		value int64
 		want  int
@@ -354,4 +359,76 @@ func nonExclusiveCount() int {
 		}
 	}
 	return n
+}
+
+func TestEvaluateSpectatorFromWatchTime(t *testing.T) {
+	badges, _ := Evaluate(Stats{CreatedAt: now, WatchSeconds: 12 * hour}, nil, now)
+	b := find(t, badges, "espectador")
+	if b.Unit != UnitSeconds || b.Value != 12*hour || b.Tier != 2 || b.TierName != "Pipoqueiro" {
+		t.Fatalf("espectador = %+v, want 12h, tier 2 Pipoqueiro", b)
+	}
+	if b.NextThreshold == nil || *b.NextThreshold != 50*hour {
+		t.Fatalf("espectador next = %v, want 50h", b.NextThreshold)
+	}
+	if last := b.Tiers[len(b.Tiers)-1]; last.Rarity != RarityLegendary {
+		t.Fatalf("espectador top tier = %+v, want lendário", last)
+	}
+}
+
+func TestEvaluateAccountAgeGoesUpToTenYears(t *testing.T) {
+	// Os 5 primeiros tiers (1 a 24 meses) ficam como eram: ninguém perde nada.
+	want := []string{"Semente", "Broto", "Muda", "Árvore", "Sequoia",
+		"Bosque", "Floresta", "Jequitibá", "Baobá", "Árvore Ancestral", "Árvore Celestial", "Árvore da Vida", "Yggdrasil"}
+	created := now.AddDate(-3, 0, -1)
+	badges, fresh := Evaluate(Stats{CreatedAt: created}, nil, now)
+	conta := find(t, badges, "conta")
+	if len(conta.Tiers) != len(want) {
+		t.Fatalf("conta tem %d tiers, want %d", len(conta.Tiers), len(want))
+	}
+	for i, name := range want {
+		if conta.Tiers[i].Name != name {
+			t.Fatalf("conta tier %d = %q, want %q", i+1, conta.Tiers[i].Name, name)
+		}
+	}
+	if conta.Tiers[5].Threshold != 36 || conta.Tiers[12].Threshold != 120 || conta.Tiers[12].Rarity != RarityLegendary {
+		t.Fatalf("3 anos/10 anos = %+v / %+v", conta.Tiers[5], conta.Tiers[12])
+	}
+	if conta.Tier != 6 || conta.NextAt == nil || !conta.NextAt.Equal(created.AddDate(0, 48, 0)) {
+		t.Fatalf("3 anos = tier %d next_at %v, want 6 e o dia dos 4 anos", conta.Tier, conta.NextAt)
+	}
+	// O dia exato em que fez 3 anos.
+	for _, u := range fresh {
+		if u.Category == "conta" && u.Tier == 6 && !u.At.Equal(created.AddDate(0, 36, 0)) {
+			t.Fatalf("conta/6 at %v", u.At)
+		}
+	}
+}
+
+func TestEvaluateFriendsFromAcceptedFriendships(t *testing.T) {
+	badges, _ := Evaluate(Stats{CreatedAt: now, Friends: 16}, nil, now)
+	b := find(t, badges, "amigos")
+	if b.Unit != UnitFriends || b.Value != 16 || b.Tier != 2 || b.NextThreshold == nil || *b.NextThreshold != 30 {
+		t.Fatalf("amigos = %+v, want 16 amigos, tier 2 e próximo em 30", b)
+	}
+	// Desfazer amizade não tira o tier já gravado (como todo badge).
+	stored := Unlocks{"amigos": {1: now, 2: now}}
+	badges, _ = Evaluate(Stats{CreatedAt: now, Friends: 3}, stored, now)
+	if b := find(t, badges, "amigos"); b.Tier != 2 {
+		t.Fatalf("amigos depois de desfazer = tier %d, want 2", b.Tier)
+	}
+}
+
+func TestEvaluateBugHunterIsGrantedByTheTeam(t *testing.T) {
+	// Sem linha em bug_hunters, nem aparece.
+	badges, _ := Evaluate(Stats{CreatedAt: now}, nil, now)
+	for _, b := range badges {
+		if b.Category == "bugs" {
+			t.Fatalf("bugs apareceu sem concessão: %+v", b)
+		}
+	}
+	badges, _ = Evaluate(Stats{CreatedAt: now, BugsReported: 3}, nil, now)
+	b := find(t, badges, "bugs")
+	if b.Unit != UnitBugs || b.Tier != 2 || b.TierName != "Detetive" || b.NextThreshold == nil || *b.NextThreshold != 10 {
+		t.Fatalf("bugs = %+v, want tier 2 Detetive e próximo em 10", b)
+	}
 }
