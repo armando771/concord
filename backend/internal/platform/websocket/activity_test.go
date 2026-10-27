@@ -17,8 +17,9 @@ func (f fakeAudience) Audience(_ context.Context, id string) ([]string, error) {
 type activityEvent struct {
 	Type    string `json:"type"`
 	Payload struct {
-		UserID   string    `json:"user_id"`
-		Activity *Activity `json:"activity"`
+		UserID    string     `json:"user_id"`
+		Activity  *Activity  `json:"activity"`
+		Listening *Listening `json:"listening"`
 	} `json:"payload"`
 }
 

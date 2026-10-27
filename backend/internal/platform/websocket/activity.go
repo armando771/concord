@@ -14,8 +14,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Atividade ("rich presence"): o que a pessoa está jogando agora. Fica só na
-// memória do hub, como a presença: some quando a última conexão cai.
+// Atividade ("rich presence"): o que a pessoa está jogando (e ouvindo, em
+// listening.go) agora. Fica só na memória do hub, como a presença: some
+// quando a última conexão cai.
 
 const (
 	ActivityKindGame = "game"
@@ -56,11 +57,28 @@ func (h *Hub) SetAudience(a AudienceProvider) {
 // richPresence é o que cada usuário está fazendo agora, por tipo. Protegido
 // por Hub.mu.
 type richPresence struct {
-	games activitySlot[Activity]
+	games     activitySlot[Activity]
+	listening activitySlot[Listening]
 }
 
 func newRichPresence() richPresence {
-	return richPresence{games: newActivitySlot(sameGame)}
+	return richPresence{games: newActivitySlot(sameGame), listening: newActivitySlot(sameListening)}
+}
+
+// ActivityEntry é o que alguém está fazendo agora. O jogo vai nos campos de
+// cima (o formato de antes, que apps antigos leem) e a música em "listening".
+type ActivityEntry struct {
+	*Activity
+	Listening *Listening `json:"listening,omitempty"`
+}
+
+func (e ActivityEntry) empty() bool {
+	return e.Activity == nil && e.Listening == nil
+}
+
+// of devolve uma cópia do que userID está fazendo.
+func (r *richPresence) of(userID string) ActivityEntry {
+	return ActivityEntry{Activity: r.games.get(userID), Listening: r.listening.get(userID)}
 }
 
 // sameGame: o mesmo jogo de novo (o início não conta) não avisa ninguém.
@@ -70,18 +88,44 @@ func sameGame(prev, next Activity) bool {
 
 // drop esquece as atividades de quem saiu; devolve se havia alguma.
 func (r *richPresence) drop(userID string) bool {
-	return r.games.drop(userID)
+	hadGame := r.games.drop(userID)
+	hadListening := r.listening.drop(userID)
+	return hadGame || hadListening
 }
 
-// HandleActivity trata "activity:set" e "activity:clear" vindos do app.
+// HandleActivity trata "activity:set" e "activity:clear" vindos do app. O
+// "kind" diz o tipo; sem ele (apps antigos), é o jogo.
 func (h *Hub) HandleActivity(userID, evType string, payload json.RawMessage) {
+	listening := activityKind(payload) == ActivityKindListening
 	if evType == "activity:clear" {
-		h.SetActivity(userID, nil)
+		h.clearActivity(userID, listening)
+		return
+	}
+	if listening {
+		if l, ok := parseListening(payload, time.Now()); ok {
+			h.SetListening(userID, l)
+		}
 		return
 	}
 	if a, ok := parseGameActivity(payload, time.Now()); ok {
 		h.SetActivity(userID, a)
 	}
+}
+
+func activityKind(payload json.RawMessage) string {
+	var p struct {
+		Kind string `json:"kind"`
+	}
+	_ = json.Unmarshal(payload, &p)
+	return p.Kind
+}
+
+func (h *Hub) clearActivity(userID string, listening bool) {
+	if listening {
+		h.SetListening(userID, nil)
+		return
+	}
+	h.SetActivity(userID, nil)
 }
 
 // parseGameActivity valida o jogo que o app mandou; ok = false descarta.
@@ -146,12 +190,12 @@ func (h *Hub) changeActivity(userID string, change func(*richPresence, time.Time
 		h.mu.Unlock()
 		return
 	}
-	game := h.rich.games.get(userID)
+	entry := h.rich.of(userID)
 	hidden := h.statuses[userID] == user.StatusInvisible
 	h.mu.Unlock()
 
 	if !hidden {
-		h.publishActivity(userID, game)
+		h.publishActivity(userID, entry)
 	}
 }
 
@@ -161,27 +205,29 @@ func (h *Hub) republishOnVisibility(userID string, wasInvisible, nowInvisible bo
 		return
 	}
 	h.mu.RLock()
-	game := h.rich.games.get(userID)
+	entry := h.rich.of(userID)
 	h.mu.RUnlock()
-	if game == nil {
+	if entry.empty() {
 		return
 	}
 	if nowInvisible {
-		game = nil
+		entry = ActivityEntry{}
 	}
-	h.publishActivity(userID, game)
+	h.publishActivity(userID, entry)
 }
 
-// publishActivity manda presence:activity para o público e para as conexões do
-// próprio usuário. A consulta do público roda fora do lock.
-func (h *Hub) publishActivity(userID string, a *Activity) {
+// publishActivity manda presence:activity (jogo e música, null = nada) para o
+// público e para as conexões do próprio usuário. A consulta do público roda
+// fora do lock.
+func (h *Hub) publishActivity(userID string, entry ActivityEntry) {
 	h.mu.RLock()
 	provider := h.audience
 	h.mu.RUnlock()
 
 	event := writeEvent("presence:activity", map[string]interface{}{
-		"user_id":  userID,
-		"activity": a,
+		"user_id":   userID,
+		"activity":  entry.Activity,
+		"listening": entry.Listening,
 	})
 	h.SendToUser(userID, event)
 	if provider == nil {
@@ -201,12 +247,12 @@ func (h *Hub) publishActivity(userID string, a *Activity) {
 
 // ActivitiesFor devolve a atividade de cada id que viewerID pode ver (ele
 // mesmo, amigos e quem divide servidor), sem quem está offline ou invisível.
-func (h *Hub) ActivitiesFor(ctx context.Context, viewerID string, ids []string) map[string]Activity {
+func (h *Hub) ActivitiesFor(ctx context.Context, viewerID string, ids []string) map[string]ActivityEntry {
 	h.mu.RLock()
 	provider := h.audience
 	h.mu.RUnlock()
 
-	result := make(map[string]Activity)
+	result := make(map[string]ActivityEntry)
 	if provider == nil {
 		return result
 	}
@@ -227,11 +273,11 @@ func (h *Hub) ActivitiesFor(ctx context.Context, viewerID string, ids []string) 
 		if _, ok := allowed[id]; !ok {
 			continue
 		}
-		a := h.rich.games.get(id)
-		if a == nil || h.effectiveStatusLocked(id) == user.StatusOffline {
+		entry := h.rich.of(id)
+		if entry.empty() || h.effectiveStatusLocked(id) == user.StatusOffline {
 			continue
 		}
-		result[id] = *a
+		result[id] = entry
 	}
 	return result
 }

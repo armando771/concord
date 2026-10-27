@@ -30,7 +30,7 @@ type Hub struct {
 	presence     map[string]int
 	statuses     map[string]string // status escolhido (online, idle, dnd, invisible)
 	statusLookup StatusLookup
-	// Atividade (jogo em andamento) por usuário; só memória (activity.go).
+	// Atividade (jogo e música) por usuário; só memória (activity.go).
 	rich         richPresence
 	audience     AudienceProvider
 	onDisconnect func(userID string)
@@ -151,7 +151,7 @@ func (h *Hub) Unregister(client *Client) {
 	h.mu.Unlock()
 
 	if wasOnline && hadActivity {
-		h.publishActivity(client.userID, nil)
+		h.publishActivity(client.userID, ActivityEntry{})
 	}
 
 	if wasOnline && h.onDisconnect != nil {

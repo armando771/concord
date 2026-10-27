@@ -133,7 +133,7 @@ func (h *Handler) Presence(c *gin.Context) {
 	c.JSON(http.StatusOK, presence)
 }
 
-// Activities devolve a atividade (jogo) de quem o usuário pode ver.
+// Activities devolve a atividade (jogo e música) de quem o usuário pode ver.
 func (h *Handler) Activities(c *gin.Context) {
 	raw := c.Query("ids")
 	if raw == "" {
