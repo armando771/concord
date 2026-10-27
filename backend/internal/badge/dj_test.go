@@ -80,7 +80,7 @@ func TestDJBackfillMatchesCatalog(t *testing.T) {
 
 // Contador e backfill pelos avisos do Maestro num Postgres de verdade.
 func TestDJDB(t *testing.T) {
-	d := openTestDB(t)
+	d := newTestDB(t)
 	ana, anaName := d.user()
 	bia, _ := d.user()
 	conv := d.conversation(ana, bia)

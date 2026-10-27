@@ -48,7 +48,9 @@ type app struct {
 	moderationService *server.Moderation
 	nicknameService   *server.Nicknames
 
-	friendshipService      *friendship.Service
+	friendshipService *friendship.Service
+	// friendAccepted: amizade aceita reavalia o badge Amigos (wireEngagement).
+	friendAccepted         *friendship.AcceptHook
 	channelRepository      *channel.Repository
 	channelService         *channel.Service
 	conversationRepository *conversation.Repository

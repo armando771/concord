@@ -8,7 +8,8 @@ const (
 	RarityRare      = "raro"
 	RarityEpic      = "epico"
 	RarityLegendary = "lendario"
-	// Acima de lendário: só badges concedidos à mão (Fundador).
+	// Acima de lendário, a mais rara: só badges exclusivos (Fundador, dos
+	// devs, e o Top 10 do nível 100, que só dez pessoas vão ter).
 	RarityMythic = "mitico"
 )
 
@@ -25,7 +26,11 @@ const (
 	UnitDev       = "dev"
 	UnitProposals = "proposals"
 	// UnitVote: badge de uma resposta única (o L do segundo turno).
-	UnitVote = "vote"
+	UnitVote    = "vote"
+	UnitFriends = "friends"
+	UnitBugs    = "bugs"
+	// UnitRank: posição de chegada (Top 10 do nível 100).
+	UnitRank = "rank"
 	// UnitSongs: músicas postas na fila do Maestro (DJ).
 	UnitSongs = "songs"
 	// UnitSounds: sons tocados na mesa de áudio (Barulhento).
@@ -72,6 +77,19 @@ const hour = int64(60 * 60)
 // Catalog é a lista de badges, na ordem em que o app mostra.
 var Catalog = []Category{
 	{
+		// Os 10 primeiros a chegar no nível 100, na ordem em badge_top10
+		// (ver top10.go). O valor é a posição (1 a 10). Primeiro do catálogo:
+		// entre os míticos, é o que aparece na frente.
+		Key:         "top10",
+		Name:        "Top 10 do Nível 100",
+		Description: "Um dos 10 primeiros a chegar no nível 100. Só 10 pessoas no Salinha vão ter este badge.",
+		Unit:        UnitRank,
+		Tiers: []Tier{
+			{"Panteão", 1, RarityMythic},
+		},
+		Exclusive: true,
+	},
+	{
 		Key:         "voz",
 		Name:        "Tempo em call",
 		Description: "Fique em call falando e ouvindo (sem mute e com mais alguém) para subir este badge.",
@@ -96,6 +114,16 @@ var Catalog = []Category{
 			{"Muda", 6, RarityRare},
 			{"Árvore", 12, RarityEpic},
 			{"Sequoia", 24, RarityLegendary},
+			// De 3 a 10 anos. Acima de lendário só há mítico, que é dos
+			// exclusivos: a raridade fica no topo e a arte é que cresce.
+			{"Bosque", 36, RarityLegendary},
+			{"Floresta", 48, RarityLegendary},
+			{"Jequitibá", 60, RarityLegendary},
+			{"Baobá", 72, RarityLegendary},
+			{"Árvore Ancestral", 84, RarityLegendary},
+			{"Árvore Celestial", 96, RarityLegendary},
+			{"Árvore da Vida", 108, RarityLegendary},
+			{"Yggdrasil", 120, RarityLegendary},
 		},
 	},
 	{
@@ -122,6 +150,21 @@ var Catalog = []Category{
 			{"Streamer", 50 * hour, RarityRare},
 			{"Diretor", 150 * hour, RarityEpic},
 			{"Hollywood", 500 * hour, RarityLegendary},
+		},
+	},
+	{
+		// Conta quem assiste à live de outra pessoa na call, sem estar surdo.
+		// Ver duas lives ao mesmo tempo conta uma vez; a própria não conta.
+		Key:         "espectador",
+		Name:        "Espectador",
+		Description: "Assista à transmissão de tela de outra pessoa numa call para subir este badge.",
+		Unit:        UnitSeconds,
+		Tiers: []Tier{
+			{"Curioso", 1 * hour, RarityCommon},
+			{"Pipoqueiro", 10 * hour, RarityCommon},
+			{"Cinéfilo", 50 * hour, RarityRare},
+			{"Crítico", 150 * hour, RarityEpic},
+			{"Camarote", 500 * hour, RarityLegendary},
 		},
 	},
 	{
@@ -193,6 +236,21 @@ var Catalog = []Category{
 		Exclusive: true,
 	},
 	{
+		// O time concede à mão em bug_hunters (SQL em docs/HOSPEDAGEM.md),
+		// somando os bugs reportados. Como o Fundador, some se a linha sair.
+		Key:         "bugs",
+		Name:        "Caçador de bugs",
+		Description: "Reporte bugs para o time do Salinha. Concedido pelo time a cada bug confirmado.",
+		Unit:        UnitBugs,
+		Tiers: []Tier{
+			{"Olho Vivo", 1, RarityCommon},
+			{"Detetive", 3, RarityRare},
+			{"Exterminador", 10, RarityEpic},
+			{"Lenda do QA", 25, RarityLegendary},
+		},
+		Exclusive: true,
+	},
+	{
 		Key:         "dono",
 		Name:        "Dono de servidor",
 		Description: "Crie servidores e mantenha a turma reunida.",
@@ -223,6 +281,21 @@ var Catalog = []Category{
 			{"Fôlego", 2 * hour, RarityCommon},
 			{"Maratonista", 5 * hour, RarityRare},
 			{"Ultramaratona", 12 * hour, RarityEpic},
+		},
+	},
+	{
+		// Amizades aceitas agora. Aceitar reavalia na hora (AcceptHook da
+		// amizade); desfazer não tira o tier já conquistado.
+		Key:         "amigos",
+		Name:        "Amigos",
+		Description: "Faça amizades no Salinha. Contam os pedidos de amizade aceitos.",
+		Unit:        UnitFriends,
+		Tiers: []Tier{
+			{"Enturmado", 5, RarityCommon},
+			{"Popular", 15, RarityCommon},
+			{"Galera Toda", 30, RarityRare},
+			{"Celebridade", 50, RarityEpic},
+			{"Prefeito da Salinha", 100, RarityLegendary},
 		},
 	},
 	{
@@ -326,7 +399,7 @@ var Catalog = []Category{
 			{"Rostinho", 1 * hour, RarityCommon},
 			{"Ao Vivo", 10 * hour, RarityCommon},
 			{"Galã", 50 * hour, RarityRare},
-			{"Celebridade", 150 * hour, RarityEpic},
+			{"Influencer", 150 * hour, RarityEpic},
 			{"Big Brother", 500 * hour, RarityLegendary},
 		},
 	},

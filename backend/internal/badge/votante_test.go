@@ -36,7 +36,7 @@ func TestVotanteBackfillMatchesCatalog(t *testing.T) {
 
 // Contagem e backfill num Postgres de verdade: trocar o voto não conta de novo.
 func TestVotanteDB(t *testing.T) {
-	d := openTestDB(t)
+	d := newTestDB(t)
 	ana, _ := d.user()
 	bia, _ := d.user()
 	base := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)

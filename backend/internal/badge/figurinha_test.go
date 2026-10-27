@@ -35,7 +35,7 @@ func TestFigurinhaBackfillMatchesCatalog(t *testing.T) {
 
 // Trigger e backfill num Postgres de verdade.
 func TestFigurinhaDB(t *testing.T) {
-	d := openTestDB(t)
+	d := newTestDB(t)
 	ana, _ := d.user()
 	serverID, channelID := d.server(ana)
 	stickerID := uuid.NewString()

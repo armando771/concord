@@ -43,7 +43,7 @@ func TestPrimeiraBackfillMatchesCatalog(t *testing.T) {
 
 // Trigger, corrida e backfill num Postgres de verdade.
 func TestPrimeiraDB(t *testing.T) {
-	d := openTestDB(t)
+	d := newTestDB(t)
 	ana, _ := d.user()
 	bia, _ := d.user()
 	repo := BadgeRepository(d.db)

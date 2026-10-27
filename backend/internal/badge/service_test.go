@@ -27,6 +27,8 @@ type fakeStore struct {
 	// Dias de uso gravados ("id@dia") e falha na gravação (Sequência).
 	activeDays []string
 	failDays   bool
+	// Vagas do Top 10 do nível 100, na ordem de chegada (ver top10_test.go).
+	top10 []string
 }
 
 func newFakeStore() *fakeStore {
@@ -63,6 +65,7 @@ func (f *fakeStore) Stats(_ context.Context, userID string) (Stats, error) {
 	if !ok {
 		return Stats{}, ErrUserNotFound
 	}
+	s.Top10Rank = f.top10RankLocked(userID)
 	return s, nil
 }
 

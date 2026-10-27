@@ -90,7 +90,7 @@ func TestTickRecordsActiveDayOncePerDay(t *testing.T) {
 
 // Backfill pelo histórico e a gravação diária num Postgres de verdade.
 func TestSequenciaDB(t *testing.T) {
-	d := openTestDB(t)
+	d := newTestDB(t)
 	ana, _ := d.user()
 	bia, _ := d.user()
 	conv := d.conversation(ana, bia)

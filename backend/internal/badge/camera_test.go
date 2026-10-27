@@ -19,7 +19,7 @@ func TestCameraTiers(t *testing.T) {
 		{"Rostinho", 1 * hour, RarityCommon},
 		{"Ao Vivo", 10 * hour, RarityCommon},
 		{"Galã", 50 * hour, RarityRare},
-		{"Celebridade", 150 * hour, RarityEpic},
+		{"Influencer", 150 * hour, RarityEpic},
 		{"Big Brother", 500 * hour, RarityLegendary},
 	})
 }
@@ -115,7 +115,7 @@ func TestTickWithoutLiveKitStillWorks(t *testing.T) {
 }
 
 func TestCameraDB(t *testing.T) {
-	d := openTestDB(t)
+	d := newTestDB(t)
 	ana, _ := d.user()
 	repo := BadgeRepository(d.db)
 	if err := repo.AddCallStats(d.ctx, ana, Delta{Camera: 30}); err != nil {

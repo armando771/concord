@@ -36,7 +36,7 @@ func TestCountSoundsUnlocksBarulhento(t *testing.T) {
 }
 
 func TestBarulhentoDB(t *testing.T) {
-	d := openTestDB(t)
+	d := newTestDB(t)
 	ana, _ := d.user()
 	repo := BadgeRepository(d.db)
 	if total, err := repo.AddCount(d.ctx, ana, "barulhento", 1); err != nil || total != 1 {

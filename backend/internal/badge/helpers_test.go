@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"gin-quickstart/backend/internal/platform/database"
-
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -63,29 +61,17 @@ func assertBackfillMatchesCatalog(t *testing.T, key, migration string) {
 	}
 }
 
-// testDB é um Postgres de verdade (TEST_DATABASE_URL, banco descartável) com
-// as migrations aplicadas; pula o teste sem ele.
+// testDB é o Postgres descartável de openTestDB com atalhos para os testes
+// dos badges de uso; pula o teste sem ele.
 type testDB struct {
 	t   *testing.T
 	ctx context.Context
 	db  *pgxpool.Pool
 }
 
-func openTestDB(t *testing.T) *testDB {
+func newTestDB(t *testing.T) *testDB {
 	t.Helper()
-	url := os.Getenv("TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("TEST_DATABASE_URL não definido")
-	}
-	db, err := database.Connect(url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(db.Close)
-	if err := database.Migrate(db, "../../migrations"); err != nil {
-		t.Fatal(err)
-	}
-	return &testDB{t: t, ctx: context.Background(), db: db}
+	return &testDB{t: t, ctx: context.Background(), db: openTestDB(t)}
 }
 
 func (d *testDB) exec(sql string, args ...any) {

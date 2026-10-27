@@ -57,7 +57,7 @@ func TestEvaluateAniversarianteStaysAfterTheDay(t *testing.T) {
 // O aniversário só vale para o badge se a pessoa deixa anunciar (o dia do
 // badge diria a data para todo mundo).
 func TestAniversarianteDB(t *testing.T) {
-	d := openTestDB(t)
+	d := newTestDB(t)
 	ana, _ := d.user()
 	bia, _ := d.user()
 	d.exec(`UPDATE users SET birthday_day = 25, birthday_month = 10, birthday_year = 2000 WHERE id = $1`, ana)
