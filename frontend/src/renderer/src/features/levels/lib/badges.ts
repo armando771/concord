@@ -74,7 +74,16 @@ const HOUR = 3600
 
 const DEV_TEXT = 'Dev do Salinha'
 const DEV_ONLY = 'Só para os devs'
-const VOTE_TEXT = 'Fez o L no segundo turno'
+/** O nome da escolha de cada badge do segundo turno (categoria -> "Fez o L"). */
+const VOTE_NAME: Record<string, string> = { l: 'Fez o L', v22: 'Fez o 22' }
+
+function voteName(category: string | undefined): string {
+  return VOTE_NAME[category ?? ''] ?? VOTE_NAME.l
+}
+
+function voteText(category: string | undefined): string {
+  return `${voteName(category)} no segundo turno`
+}
 
 function num(n: number): string {
   return Math.floor(n).toLocaleString('pt-BR')
@@ -121,7 +130,7 @@ const STAT_TEXT: Partial<Record<BadgeUnit, (b: Badge, value: number) => string>>
   founder: (_, value) =>
     value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas',
   dev: () => DEV_TEXT,
-  vote: () => VOTE_TEXT
+  vote: (b) => voteText(b.category)
 }
 
 /** A estatística da linha "798 horas em call • Desbloqueado em … • RARO". */
@@ -137,7 +146,7 @@ export function statText(b: Badge): string {
 export function publicStatText(b: Badge): string {
   if (b.unit === 'founder') return 'Chegou nas primeiras semanas'
   if (b.unit === 'dev') return DEV_TEXT
-  if (b.unit === 'vote') return VOTE_TEXT
+  if (b.unit === 'vote') return voteText(b.category)
   const reached = b.tiers[b.tier - 1]
   if (!reached) return ''
   const label = `${formatThreshold(b.unit, reached.threshold)}`
@@ -148,7 +157,7 @@ export function publicStatText(b: Badge): string {
 }
 
 /** Rótulo de um degrau da escada: "1 hora", "3 meses", "2.000 mensagens". */
-export function formatThreshold(unit: BadgeUnit, threshold: number): string {
+export function formatThreshold(unit: BadgeUnit, threshold: number, category?: string): string {
   switch (unit) {
     case 'seconds':
       return plural(Math.floor(threshold / HOUR), 'hora', 'horas')
@@ -172,7 +181,7 @@ export function formatThreshold(unit: BadgeUnit, threshold: number): string {
     case 'dev':
       return DEV_ONLY
     case 'vote':
-      return 'Fez o L'
+      return voteName(category)
   }
   return num(threshold)
 }

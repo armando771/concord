@@ -426,6 +426,34 @@ describe('Fez o L (resposta única do segundo turno)', () => {
   it('o nome não se repete no rótulo', () => {
     expect(badgeLabel(l)).toBe('Fez o L')
   })
+
+  it('formatThreshold com a categoria l mantém o rótulo do L', () => {
+    expect(formatThreshold('vote', 1, 'l')).toBe('Fez o L')
+  })
+
+  describe('Fez o 22 (v22)', () => {
+    const v22 = {
+      ...l,
+      category: 'v22',
+      name: 'Fez o 22',
+      tier_name: 'Fez o 22',
+      tiers: [{ tier: 1, name: 'Fez o 22', threshold: 1, rarity: 'lendario' as const }]
+    }
+
+    it('statText diz o 22, não o L', () => {
+      expect(statText(v22)).toBe('Fez o 22 no segundo turno')
+    })
+
+    it('publicStatText diz o 22, não o L', () => {
+      expect(publicStatText({ ...v22, value: undefined, progress: undefined })).toBe(
+        'Fez o 22 no segundo turno'
+      )
+    })
+
+    it('formatThreshold diz o 22, não o L', () => {
+      expect(formatThreshold('vote', 1, 'v22')).toBe('Fez o 22')
+    })
+  })
 })
 
 describe('unlocksComAviso', () => {

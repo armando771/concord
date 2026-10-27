@@ -192,7 +192,7 @@ function Detail({
                   className={`flex items-center gap-0.5 text-[11px] ${done ? 'text-gray-400' : 'text-gray-500'}`}
                 >
                   {!done && <LockIcon className="h-2.5 w-2.5" />}
-                  {formatThreshold(badge.unit, t.threshold)}
+                  {formatThreshold(badge.unit, t.threshold, badge.category)}
                 </span>
               </li>
             )
