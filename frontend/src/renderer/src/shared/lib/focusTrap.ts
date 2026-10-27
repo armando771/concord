@@ -20,6 +20,14 @@ export function focusableIn(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE))
 }
 
+/**
+ * Onde o foco começa: o elemento marcado com `data-autofocus` (ex.: o botão
+ * menos destrutivo de uma confirmação) ou, sem marca, o primeiro focável.
+ */
+export function initialFocusTarget(root: HTMLElement): HTMLElement | undefined {
+  return root.querySelector<HTMLElement>('[data-autofocus]') ?? focusableIn(root)[0]
+}
+
 /** onKeyDown do diálogo: prende o Tab dentro dele. */
 export function trapTab(e: KeyboardEvent | React.KeyboardEvent, root: HTMLElement | null): void {
   if (e.key !== 'Tab' || !root) return

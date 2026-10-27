@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Badge } from '../api/badges'
+import type { Badge, BadgeUnlockEvent } from '../api/badges'
 import {
   badgeLabel,
   formatThreshold,
@@ -15,6 +15,7 @@ import {
   statText,
   unlockCount,
   selectedBadge,
+  unlocksComAviso,
   visibleBadges
 } from './badges'
 
@@ -409,5 +410,48 @@ describe('Fez o L (resposta única do segundo turno)', () => {
 
   it('o nome não se repete no rótulo', () => {
     expect(badgeLabel(l)).toBe('Fez o L')
+  })
+
+  it('formatThreshold com a categoria l mantém o rótulo do L', () => {
+    expect(formatThreshold('vote', 1, 'l')).toBe('Fez o L')
+  })
+
+  describe('Fez o 22 (v22)', () => {
+    const v22 = {
+      ...l,
+      category: 'v22',
+      name: 'Fez o 22',
+      tier_name: 'Fez o 22',
+      tiers: [{ tier: 1, name: 'Fez o 22', threshold: 1, rarity: 'lendario' as const }]
+    }
+
+    it('statText diz o 22, não o L', () => {
+      expect(statText(v22)).toBe('Fez o 22 no segundo turno')
+    })
+
+    it('publicStatText diz o 22, não o L', () => {
+      expect(publicStatText({ ...v22, value: undefined, progress: undefined })).toBe(
+        'Fez o 22 no segundo turno'
+      )
+    })
+
+    it('formatThreshold diz o 22, não o L', () => {
+      expect(formatThreshold('vote', 1, 'v22')).toBe('Fez o 22')
+    })
+  })
+})
+
+describe('unlocksComAviso', () => {
+  const unlock = (category: string): BadgeUnlockEvent['unlocks'][number] => ({
+    category,
+    name: category,
+    tier: 1,
+    tier_name: category,
+    rarity: 'lendario'
+  })
+
+  it('l e v22 têm celebração própria e ficam fora do aviso genérico', () => {
+    const lista = [unlock('l'), unlock('voz'), unlock('v22')]
+    expect(unlocksComAviso(lista).map((u) => u.category)).toEqual(['voz'])
   })
 })

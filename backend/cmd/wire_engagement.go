@@ -10,11 +10,11 @@ import (
 	"gin-quickstart/backend/internal/bot"
 	"gin-quickstart/backend/internal/changelog"
 	"gin-quickstart/backend/internal/conversation"
+	"gin-quickstart/backend/internal/enquete"
 	"gin-quickstart/backend/internal/level"
 	"gin-quickstart/backend/internal/message"
 	"gin-quickstart/backend/internal/notifysettings"
 	"gin-quickstart/backend/internal/proposal"
-	"gin-quickstart/backend/internal/segundoturno"
 
 	"github.com/gin-gonic/gin"
 )
@@ -47,10 +47,10 @@ func (a *app) wireEngagement() {
 	// Amizade aceita já reavalia o badge Amigos das duas pessoas.
 	a.friendAccepted.OnAccepted(badgeService.Refresh)
 
-	// Banner "fez o L no segundo turno?": o sim reavalia o badge na hora e só
-	// contas criadas antes do corte do Pioneiro veem o banner.
-	segundoTurnoHandler := segundoturno.SegundoTurnoHandler(segundoturno.SegundoTurnoService(
-		segundoturno.SegundoTurnoRepository(a.db), badgeService, badge.FounderCutoff,
+	// Enquetes de escolha única (hoje: badge do segundo turno). Opção com badge
+	// reavalia os badges na hora; só contas anteriores ao corte da enquete a veem.
+	enqueteHandler := enquete.EnqueteHandler(enquete.EnqueteService(
+		enquete.EnqueteRepository(a.db), badgeService, enquete.Todas,
 	))
 
 	// Card novo no quadro já reavalia o badge Contribuinte de quem criou.
@@ -71,7 +71,7 @@ func (a *app) wireEngagement() {
 	a.route(func(_ *gin.Engine, api *gin.RouterGroup) {
 		level.LevelRoutes(api, levelHandler, a.authMiddleware)
 		badge.BadgeRoutes(api, badgeHandler, a.authMiddleware)
-		segundoturno.SegundoTurnoRoutes(api, segundoTurnoHandler, a.authMiddleware)
+		enquete.EnqueteRoutes(api, enqueteHandler, a.authMiddleware)
 		notifysettings.Routes(api, notifySettingsHandler, a.authMiddleware)
 		proposal.ProposalRoutes(api, proposalHandler, a.authMiddleware, a.requireVerified)
 		birthday.BirthdayRoutes(api, birthdayHandler, a.authMiddleware)

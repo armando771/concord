@@ -151,14 +151,25 @@ var baseCategories = []Category{
 		},
 	},
 	{
-		// Quem respondeu "sim" ao banner do segundo turno (internal/segundoturno).
-		// A resposta é única e fica em segundo_turno_respostas.
+		// Quem escolheu "Fez o L" na enquete do segundo turno (internal/enquete).
 		Key:         "l",
 		Name:        "Fez o L",
-		Description: "Fez o L no segundo turno. Ganho respondendo ao banner.",
+		Description: "Fez o L no segundo turno. Ganho escolhendo o badge do segundo turno.",
 		Unit:        UnitVote,
 		Tiers: []Tier{
 			{"Fez o L", 1, RarityLegendary},
+		},
+		Exclusive: true,
+	},
+	{
+		// Quem escolheu "Fez o 22" na enquete do segundo turno
+		// (internal/enquete), com o mesmo peso do badge l.
+		Key:         "v22",
+		Name:        "Fez o 22",
+		Description: "Fez o 22 no segundo turno. Ganho escolhendo o badge do segundo turno.",
+		Unit:        UnitVote,
+		Tiers: []Tier{
+			{"Fez o 22", 1, RarityLegendary},
 		},
 		Exclusive: true,
 	},

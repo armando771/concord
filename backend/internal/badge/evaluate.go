@@ -32,8 +32,8 @@ type Stats struct {
 	Proposals int64
 	// Está em dev_badge_users (Fundador).
 	IsDev bool
-	// Respondeu "sim" no banner do segundo turno (Fez o L).
-	FezOL bool
+	// Escolhas da enquete ("enquete:opcao"), de internal/enquete.
+	Escolhas map[string]bool
 	// Músicas postas na fila do Maestro (DJ).
 	SongsQueued int64
 	// Sons da mesa de áudio tocados com alguém ouvindo (Barulhento).
@@ -176,7 +176,8 @@ var valueFns = map[string]valueFn{
 	"top10":        func(s Stats, _ time.Time) int64 { return s.Top10Rank },
 	"contribuinte": func(s Stats, _ time.Time) int64 { return s.Proposals },
 	"criador":      func(s Stats, _ time.Time) int64 { return flag(s.IsDev) },
-	"l":            func(s Stats, _ time.Time) int64 { return flag(s.FezOL) },
+	"l":            func(s Stats, _ time.Time) int64 { return flag(s.Escolhas["segundo-turno:l"]) },
+	"v22":          func(s Stats, _ time.Time) int64 { return flag(s.Escolhas["segundo-turno:22"]) },
 	"dj":           func(s Stats, _ time.Time) int64 { return s.SongsQueued },
 	"barulhento":   func(s Stats, _ time.Time) int64 { return s.SoundsPlayed },
 	"figurinha":    func(s Stats, _ time.Time) int64 { return s.StickersSent },

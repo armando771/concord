@@ -5,8 +5,6 @@ import { useServerStore } from '../store/serverStore'
 import { useServerRailSync } from '../hooks/useServerRailSync'
 import { useRailBadges } from '../hooks/useRailBadges'
 import { isHomePath } from '../lib/railHome'
-import { useBotaoSegundoTurno } from '../../segundoturno/hooks/useBotaoSegundoTurno'
-import SegundoTurnoIcone from '../../segundoturno/components/SegundoTurnoIcone'
 import { RailHomeButton, RailNavButton } from './ServerRailButtons'
 import ServerRailList from './ServerRailList'
 import CreateServerModal from './CreateServerModal'
@@ -20,7 +18,6 @@ function ServerRail(): React.JSX.Element {
   useServerRailSync()
   const onProposals = location.pathname === '/proposals'
   const { dmUnread, proposalsBadge } = useRailBadges(onProposals)
-  const segundoTurno = useBotaoSegundoTurno()
 
   const goTo = (path: string): void => {
     clearCurrentServer()
@@ -47,17 +44,6 @@ function ServerRail(): React.JSX.Element {
           icon={(cls) => <DiamondIcon className={cls} />}
           onClick={() => goTo('/proposals')}
         />
-
-        {/* Banner do segundo turno dispensado: o botão reabre */}
-        {segundoTurno.visivel && (
-          <RailNavButton
-            label="Você fez o L no segundo turno?"
-            active={false}
-            badge={1}
-            icon={(cls) => <SegundoTurnoIcone className={cls} />}
-            onClick={segundoTurno.reabrir}
-          />
-        )}
 
         <ServerRailList />
 

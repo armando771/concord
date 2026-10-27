@@ -21,7 +21,7 @@ import LevelUpMilestone from '../features/levels/components/LevelUpMilestone'
 import { useFlushPendingLevelUp } from '../features/levels/hooks/useScreenCelebration'
 import BadgesModal from '../features/levels/components/BadgesModal'
 import BadgeUnlockToast from '../features/levels/components/BadgeUnlockToast'
-import SegundoTurnoHost from '../features/segundoturno/components/SegundoTurnoHost'
+import EnqueteHost from '../features/enquete/components/EnqueteHost'
 import QuickSwitcherModal from '../features/friends/components/QuickSwitcherModal'
 import ShortcutsModal from '../features/settings/components/ShortcutsModal'
 import { useGlobalShortcuts } from '../features/settings/hooks/useGlobalShortcuts'
@@ -80,7 +80,7 @@ function AppShell(): React.JSX.Element {
       <LevelUpBanner />
       <BoostBanner />
       <BadgeUnlockToast />
-      <SegundoTurnoHost />
+      <EnqueteHost />
       <BadgesModal />
       <NotifySettingsModal />
       {quickSwitcherOpen && <QuickSwitcherModal open onClose={() => setQuickSwitcherOpen(false)} />}

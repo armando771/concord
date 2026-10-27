@@ -322,7 +322,7 @@ func TestEvaluateLOnlyForWhoSaidYes(t *testing.T) {
 		}
 	}
 
-	badges, fresh = Evaluate(Stats{CreatedAt: FounderCutoff, FezOL: true}, nil, now)
+	badges, fresh = Evaluate(Stats{CreatedAt: FounderCutoff, Escolhas: map[string]bool{"segundo-turno:l": true}}, nil, now)
 	l := find(t, badges, "l")
 	if l.Tier != 1 || l.TierName != "Fez o L" || l.Rarity != RarityLegendary || l.Progress != 1 || l.NextThreshold != nil {
 		t.Fatalf("badge l = %+v", l)
@@ -338,7 +338,7 @@ func TestEvaluateLOnlyForWhoSaidYes(t *testing.T) {
 
 func TestEvaluateLKeepsDateOnceStored(t *testing.T) {
 	granted := now.AddDate(0, 0, -3)
-	badges, fresh := Evaluate(Stats{CreatedAt: FounderCutoff, FezOL: true}, Unlocks{"l": {1: granted}}, now)
+	badges, fresh := Evaluate(Stats{CreatedAt: FounderCutoff, Escolhas: map[string]bool{"segundo-turno:l": true}}, Unlocks{"l": {1: granted}}, now)
 	l := find(t, badges, "l")
 	if l.UnlockedAt == nil || !l.UnlockedAt.Equal(granted) {
 		t.Fatalf("unlocked_at = %v, want %v", l.UnlockedAt, granted)
@@ -359,6 +359,46 @@ func nonExclusiveCount() int {
 		}
 	}
 	return n
+}
+
+func TestEvaluateV22OnlyForWhoChoseIt(t *testing.T) {
+	badges, fresh := Evaluate(Stats{CreatedAt: FounderCutoff, Escolhas: map[string]bool{"segundo-turno:l": true}}, nil, now)
+	if hasBadge(badges, "v22") {
+		t.Fatal("quem escolheu o L vê o badge do 22")
+	}
+	for _, u := range fresh {
+		if u.Category == "v22" {
+			t.Fatalf("quem escolheu o L desbloqueou o 22: %+v", u)
+		}
+	}
+
+	badges, fresh = Evaluate(Stats{CreatedAt: FounderCutoff, Escolhas: map[string]bool{"segundo-turno:22": true}}, nil, now)
+	b := find(t, badges, "v22")
+	if b.Tier != 1 || b.TierName != "Fez o 22" || b.Rarity != RarityLegendary || b.Progress != 1 || b.NextThreshold != nil {
+		t.Fatalf("badge v22 = %+v", b)
+	}
+	if hasBadge(badges, "l") {
+		t.Fatal("quem escolheu o 22 vê o badge do L")
+	}
+	var got bool
+	for _, u := range fresh {
+		got = got || (u.Category == "v22" && u.Tier == 1)
+	}
+	if !got {
+		t.Fatalf("fresh = %+v, want v22/1", fresh)
+	}
+}
+
+func TestEvaluateNenhumNaoDaBadge(t *testing.T) {
+	badges, fresh := Evaluate(Stats{CreatedAt: FounderCutoff, Escolhas: map[string]bool{"segundo-turno:nenhum": true}}, nil, now)
+	if hasBadge(badges, "l") || hasBadge(badges, "v22") {
+		t.Fatal("quem preferiu não dizer ganhou badge")
+	}
+	for _, u := range fresh {
+		if u.Category == "l" || u.Category == "v22" {
+			t.Fatalf("desbloqueio indevido: %+v", u)
+		}
+	}
 }
 
 func TestEvaluateSpectatorFromWatchTime(t *testing.T) {
@@ -401,6 +441,16 @@ func TestEvaluateAccountAgeGoesUpToTenYears(t *testing.T) {
 		if u.Category == "conta" && u.Tier == 6 && !u.At.Equal(created.AddDate(0, 36, 0)) {
 			t.Fatalf("conta/6 at %v", u.At)
 		}
+	}
+}
+
+func TestEscolhasSet(t *testing.T) {
+	got := escolhasSet([]string{"segundo-turno:l", "outra:x"})
+	if !got["segundo-turno:l"] || !got["outra:x"] || got["segundo-turno:22"] || len(got) != 2 {
+		t.Fatalf("escolhasSet = %v", got)
+	}
+	if got := escolhasSet(nil); got == nil || len(got) != 0 {
+		t.Fatalf("escolhasSet(nil) = %v, quer mapa vazio", got)
 	}
 }
 

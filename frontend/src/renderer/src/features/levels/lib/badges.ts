@@ -74,7 +74,16 @@ const HOUR = 3600
 
 const DEV_TEXT = 'Dev do Salinha'
 const DEV_ONLY = 'Só para os devs'
-const VOTE_TEXT = 'Fez o L no segundo turno'
+/** O nome da escolha de cada badge do segundo turno (categoria -> "Fez o L"). */
+const VOTE_NAME: Record<string, string> = { l: 'Fez o L', v22: 'Fez o 22' }
+
+function voteName(category: string | undefined): string {
+  return VOTE_NAME[category ?? ''] ?? VOTE_NAME.l
+}
+
+function voteText(category: string | undefined): string {
+  return `${voteName(category)} no segundo turno`
+}
 const BIRTHDAY_TEXT = 'Comemorou o aniversário no Salinha'
 
 function birthdayText(b: Badge, value: number): string {
@@ -144,7 +153,7 @@ const STAT_TEXT: Partial<Record<BadgeUnit, (b: Badge, value: number) => string>>
   founder: (_, value) =>
     value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas',
   dev: () => DEV_TEXT,
-  vote: () => VOTE_TEXT
+  vote: (b) => voteText(b.category)
 }
 
 /** A estatística da linha "798 horas em call • Desbloqueado em … • RARO". */
@@ -157,7 +166,7 @@ export function statText(b: Badge): string {
 const PUBLIC_FIXED_TEXT: Partial<Record<BadgeUnit, (b: Badge) => string>> = {
   founder: () => 'Chegou nas primeiras semanas',
   dev: () => DEV_TEXT,
-  vote: () => VOTE_TEXT,
+  vote: (b) => voteText(b.category),
   rank: (b) => rankText(b.value),
   birthday: () => BIRTHDAY_TEXT
 }
@@ -184,7 +193,7 @@ export function publicStatText(b: Badge): string {
 }
 
 /** Rótulo de um degrau da escada, por unidade; unidade sem entrada mostra o número. */
-const THRESHOLD_TEXT: Partial<Record<BadgeUnit, (threshold: number) => string>> = {
+const THRESHOLD_TEXT: Partial<Record<BadgeUnit, (threshold: number, category?: string) => string>> = {
   seconds: (t) => plural(Math.floor(t / HOUR), 'hora', 'horas'),
   // "6 meses", "1 ano", "10 anos".
   months: (t) => monthsText(t),
@@ -207,12 +216,12 @@ const THRESHOLD_TEXT: Partial<Record<BadgeUnit, (threshold: number) => string>> 
   // Corte do backend: contas criadas antes de 01/11/2026.
   founder: () => 'Até 31/10/26',
   dev: () => DEV_ONLY,
-  vote: () => 'Fez o L'
+  vote: (_, category) => voteName(category)
 }
 
 /** Rótulo de um degrau da escada: "1 hora", "3 meses", "2.000 mensagens". */
-export function formatThreshold(unit: BadgeUnit, threshold: number): string {
-  return THRESHOLD_TEXT[unit]?.(threshold) ?? num(threshold)
+export function formatThreshold(unit: BadgeUnit, threshold: number, category?: string): string {
+  return THRESHOLD_TEXT[unit]?.(threshold, category) ?? num(threshold)
 }
 
 function falta(n: number, one: string, many: string): string {
@@ -335,7 +344,7 @@ export function selectedBadge<T extends { category?: string }>(
 }
 
 /** Badges que têm celebração própria na tela e ficam de fora do aviso genérico. */
-const CELEBRACAO_PROPRIA = new Set(['l'])
+const CELEBRACAO_PROPRIA = new Set(['l', 'v22'])
 
 /** Os desbloqueios que o aviso genérico mostra. */
 export function unlocksComAviso(unlocks: BadgeUnlockEvent['unlocks']): BadgeUnlockEvent['unlocks'] {

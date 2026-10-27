@@ -5,12 +5,9 @@ import type { BadgesModalTarget } from '../store/badgeStore'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useBadgeStore } from '../store/badgeStore'
 import {
-  formatThreshold,
   formatUnlockDate,
   isMythic,
-  progressPercent,
   rarityMeta,
-  remainingText,
   selectedBadge,
   publicStatText,
   statText,
@@ -20,6 +17,8 @@ import { trapTab } from '../../../shared/lib/focusTrap'
 import { LockIcon } from '../../../shared/ui/icons'
 import BadgeIcon from './BadgeIcon'
 import BadgesAside from './BadgesAside'
+import BadgeProgress from './BadgeProgress'
+import BadgeTierLadder from './BadgeTierLadder'
 import { BadgeDetailSkeleton } from '../../../shared/ui/skeleton/layouts'
 
 function RarityChip({ badge }: { badge: Badge }): React.JSX.Element {
@@ -68,7 +67,6 @@ function Detail({
   const meta = rarityMeta(badge.rarity)
   const title = earned ? badge.tier_name : badge.next_tier_name
   const unlocked = formatUnlockDate(badge.unlocked_at)
-  const maxed = badge.tier >= badge.tiers.length
   // O mítico tem a própria aura (MythicIcon); os outros, um brilho na cor.
   const mythic = earned && isMythic(badge.rarity)
 
@@ -117,49 +115,7 @@ function Detail({
       </p>
 
       <div className="mt-5 w-full rounded-xl bg-input p-4">
-        {isMe && (
-          <>
-            <p className="text-sm font-semibold text-strong">Seu progresso</p>
-            <div className="mt-3 flex items-center gap-3">
-              {earned && (
-                <BadgeIcon
-                  category={badge.category}
-                  tier={badge.tier}
-                  rarity={badge.rarity}
-                  size={32}
-                />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-gray-100">{remainingText(badge)}</p>
-                <div
-                  className="mt-1.5 h-2 overflow-hidden rounded-full bg-fg/10"
-                  role="progressbar"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={progressPercent(badge)}
-                  aria-label={`Progresso para ${badge.next_tier_name ?? 'o próximo tier'}`}
-                >
-                  <div
-                    className={`h-full rounded-full transition-[width] duration-500 ${
-                      mythic ? 'mythic-bar' : 'bg-brand'
-                    }`}
-                    style={{ width: `${progressPercent(badge)}%` }}
-                  />
-                </div>
-              </div>
-              {!maxed && (
-                <BadgeIcon
-                  category={badge.category}
-                  tier={badge.tier + 1}
-                  rarity={badge.tiers[badge.tier]?.rarity}
-                  size={32}
-                  locked
-                />
-              )}
-            </div>
-            <div className="my-4 h-px bg-fg/10" />
-          </>
-        )}
+        {isMe && <BadgeProgress badge={badge} mythic={mythic} />}
 
         <p className="text-sm leading-snug text-gray-200">{badge.description}</p>
 
@@ -167,37 +123,7 @@ function Detail({
         <p className="text-sm font-semibold text-strong">
           {isMe ? 'Tiers' : `Progresso de ${ownerName}`}
         </p>
-        <ol className="mt-3 grid grid-cols-4 gap-x-2 gap-y-4">
-          {badge.tiers.map((t) => {
-            const done = Boolean(t.unlocked_at)
-            return (
-              <li
-                key={t.tier}
-                className="flex flex-col items-center text-center"
-                title={done ? `Desbloqueado em ${formatUnlockDate(t.unlocked_at)}` : undefined}
-              >
-                <BadgeIcon
-                  category={badge.category}
-                  tier={t.tier}
-                  rarity={t.rarity}
-                  size={40}
-                  locked={!done}
-                />
-                <span
-                  className={`mt-1 text-xs font-semibold ${done ? 'text-gray-100' : 'text-gray-500'}`}
-                >
-                  {t.name}
-                </span>
-                <span
-                  className={`flex items-center gap-0.5 text-[11px] ${done ? 'text-gray-400' : 'text-gray-500'}`}
-                >
-                  {!done && <LockIcon className="h-2.5 w-2.5" />}
-                  {formatThreshold(badge.unit, t.threshold)}
-                </span>
-              </li>
-            )
-          })}
-        </ol>
+        <BadgeTierLadder badge={badge} />
       </div>
     </div>
   )
