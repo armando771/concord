@@ -49,3 +49,15 @@ export function buildDir(platform, mobileDir, env) {
   if (platform !== 'win32' || mobileDir.length <= SHORT_PATH_LIMIT) return null
   return env.SALINHA_BUILD_DIR || DEFAULT_BUILD_DIR
 }
+
+// O ninja 1.12+ traz o manifesto de caminho longo; o do SDK (1.10) não passa de ~248.
+export function ninjaSupportsLongPaths(versionOutput) {
+  const match = /^(\d+)\.(\d+)/.exec(versionOutput.trim())
+  if (!match) return false
+  const [major, minor] = [Number(match[1]), Number(match[2])]
+  return major > 1 || (major === 1 && minor >= 12)
+}
+
+// cmakeDirProperty: linha do android/local.properties que aponta o AGP para um CMake próprio.
+const BACKSLASH = String.fromCharCode(92)
+export const cmakeDirProperty = (dir) => `cmake.dir=${dir.replaceAll(BACKSLASH, '/')}`

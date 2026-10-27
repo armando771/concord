@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { buildDir, buildPlan } from './mobileBuild.mjs'
+import { buildDir, buildPlan, cmakeDirProperty, ninjaSupportsLongPaths } from './mobileBuild.mjs'
 
 const SIGNING = {
   SALINHA_KEYSTORE_PATH: 'C:/chaves/salinha.jks',
@@ -66,4 +66,17 @@ test('buildDir: Windows com caminho longo builda numa pasta curta (limite de 260
 test('buildDir: caminho já curto, ou fora do Windows, builda no próprio lugar', () => {
   assert.equal(buildDir('win32', String.raw`C:\dev\mobile`, {}), null)
   assert.equal(buildDir('linux', '/home/ana/concord-app-mobile/mobile', {}), null)
+})
+
+test('ninjaSupportsLongPaths: só do 1.12 em diante (manifesto de caminho longo)', () => {
+  assert.equal(ninjaSupportsLongPaths('1.13.2\n'), true)
+  assert.equal(ninjaSupportsLongPaths('1.12.0'), true)
+  assert.equal(ninjaSupportsLongPaths('1.10.2'), false)
+  assert.equal(ninjaSupportsLongPaths('2.0.0'), true)
+  assert.equal(ninjaSupportsLongPaths('lixo'), false)
+  assert.equal(ninjaSupportsLongPaths(''), false)
+})
+
+test('cmakeDirProperty: linha do local.properties com barras normais', () => {
+  assert.equal(cmakeDirProperty(String.raw`C:\sb\.cmake`), 'cmake.dir=C:/sb/.cmake')
 })
