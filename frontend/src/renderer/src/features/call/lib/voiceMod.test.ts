@@ -8,6 +8,8 @@ class FakeParam {
   cancelScheduledValues = (): void => {}
   setValueAtTime = (v: number): void => void (this.value = v)
   setTargetAtTime = (v: number): void => void (this.value = v)
+  cancelAndHoldAtTime = (): void => {}
+  linearRampToValueAtTime = (v: number): void => void (this.value = v)
 }
 
 class FakeNode {
@@ -80,15 +82,15 @@ class FakeContext {
   }
 }
 
-const { createVoiceMod } = await import('./voiceMod')
+const { loadVoiceMod } = await import('./voiceMod')
+const { VOICE_MOD_STOP } = await import('./voiceModDsp')
 
-async function build(): Promise<{
-  ctx: FakeContext
-  mod: Awaited<ReturnType<typeof createVoiceMod>>
-}> {
+type Mod = ReturnType<Awaited<ReturnType<typeof loadVoiceMod>>>
+
+async function build(): Promise<{ ctx: FakeContext; mod: Mod }> {
   const ctx = new FakeContext()
-  const mod = await createVoiceMod(ctx as unknown as AudioContext)
-  return { ctx, mod }
+  const create = await loadVoiceMod(ctx as unknown as AudioContext)
+  return { ctx, mod: create() }
 }
 
 function preset(id: VoiceModPreset): VoiceModSettings {
@@ -104,10 +106,7 @@ function reachesOutput(from: FakeNode, output: FakeNode, seen = new Set<FakeNode
 }
 
 /** Ganhos direto (bypass), seco e processado, achados pelas ligações. */
-function mainGains(
-  ctx: FakeContext,
-  mod: Awaited<ReturnType<typeof createVoiceMod>>
-): { bypass: FakeGain; dry: FakeGain; wet: FakeGain } {
+function mainGains(ctx: FakeContext, mod: Mod): { bypass: FakeGain; dry: FakeGain; wet: FakeGain } {
   const input = mod.input as unknown as FakeNode
   const output = mod.output as unknown as FakeNode
   const gains = ctx.nodes.filter((n): n is FakeGain => n.kind === 'gain')
@@ -121,7 +120,18 @@ function mainGains(
   }
 }
 
-describe('createVoiceMod', () => {
+describe('loadVoiceMod', () => {
+  it('carregar só registra o worklet: nenhum nó existe até a voz ser usada', async () => {
+    const ctx = new FakeContext()
+    const create = await loadVoiceMod(ctx as unknown as AudioContext)
+    expect(ctx.audioWorklet.addModule).toHaveBeenCalledOnce()
+    expect(ctx.nodes).toHaveLength(0)
+    create()
+    create()
+    expect(ctx.audioWorklet.addModule).toHaveBeenCalledOnce()
+    expect(ctx.nodes.filter((n) => n.kind === 'worklet')).toHaveLength(2)
+  })
+
   it('todo nó criado chega à saída (nada fica pendurado)', async () => {
     const { ctx, mod } = await build()
     const output = mod.output as unknown as FakeNode
@@ -199,9 +209,74 @@ describe('createVoiceMod', () => {
     expect(send.gain.value).toBe(0)
   })
 
-  it('destroy desliga todos os nós', async () => {
+  it('destroy desliga todos os nós e para o worklet de vez', async () => {
     const { ctx, mod } = await build()
     mod.destroy()
     for (const node of ctx.nodes) expect(node.disconnect, node.kind).toHaveBeenCalled()
+    const worklet = ctx.nodes.find((n): n is FakeWorklet => n.kind === 'worklet')!
+    expect(worklet.port.postMessage).toHaveBeenLastCalledWith(VOICE_MOD_STOP)
+  })
+})
+
+const { voiceModPath } = await import('./voiceMod')
+
+async function path(initial: VoiceModSettings): Promise<{
+  voice: ReturnType<typeof voiceModPath>
+  worklets: () => FakeWorklet[]
+}> {
+  const ctx = new FakeContext()
+  const create = await loadVoiceMod(ctx as unknown as AudioContext)
+  const input = ctx.createGain() as unknown as AudioNode
+  const voice = voiceModPath(ctx as unknown as AudioContext, input, create, initial)
+  const worklets = (): FakeWorklet[] =>
+    ctx.nodes.filter((n): n is FakeWorklet => n.kind === 'worklet')
+  return { voice, worklets }
+}
+
+describe('voiceModPath', () => {
+  it('no Normal o voice mod nem existe: o sinal vai direto para a saída', async () => {
+    const { worklets } = await path(preset('normal'))
+    expect(worklets()).toHaveLength(0)
+  })
+
+  it('escolher uma voz monta o grafo já com ela; voltar ao Normal destrói depois da rampa', async () => {
+    vi.useFakeTimers()
+    try {
+      const { voice, worklets } = await path(preset('normal'))
+      voice.apply(preset('esquilo'))
+      const [shifter] = worklets()
+      expect(shifter.port.postMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ ratio: 2 ** (VOICE_MOD_PRESETS.esquilo.values.pitch / 12) })
+      )
+      voice.apply(preset('robo'))
+      expect(worklets()).toHaveLength(1)
+      expect(shifter.port.postMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ modHz: VOICE_MOD_PRESETS.robo.effect.modHz })
+      )
+
+      voice.apply(preset('normal'))
+      expect(shifter.port.postMessage).not.toHaveBeenLastCalledWith(VOICE_MOD_STOP)
+      vi.advanceTimersByTime(1000)
+      expect(shifter.port.postMessage).toHaveBeenLastCalledWith(VOICE_MOD_STOP)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('abrir o microfone já numa voz monta o grafo na hora', async () => {
+    const { worklets } = await path(preset('grave'))
+    expect(worklets()).toHaveLength(1)
+  })
+
+  it('se o grafo não monta, o microfone segue sem a voz (direto)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const ctx = new FakeContext()
+    const input = ctx.createGain() as unknown as AudioNode
+    const broken = (): never => {
+      throw new Error('sem worklet')
+    }
+    const voice = voiceModPath(ctx as unknown as AudioContext, input, broken, preset('grave'))
+    expect(() => voice.apply(preset('esquilo'))).not.toThrow()
+    expect(console.error).toHaveBeenCalled()
   })
 })
