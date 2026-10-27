@@ -33,6 +33,30 @@ interface AvatarProps {
   className?: string
 }
 
+/** Bolinha de status no canto do avatar, com o recorte na cor do fundo. */
+function AvatarStatus({
+  status,
+  size,
+  cutoutColor
+}: {
+  status: PresenceStatus
+  size: number
+  cutoutColor: string
+}): React.JSX.Element {
+  const dot = Math.max(10, Math.round(size * 0.3))
+  const border = size >= 64 ? 5 : size >= 32 ? 3 : 2
+  return (
+    <span
+      title={STATUS_META[status].label}
+      aria-label={STATUS_META[status].label}
+      className="absolute flex items-center justify-center rounded-full"
+      style={{ padding: border, right: -border, bottom: -border, background: cutoutColor }}
+    >
+      <StatusIcon status={status} size={dot} />
+    </span>
+  )
+}
+
 /** Avatar redondo: foto (GIF anima como no Discord) ou a inicial do nome. */
 function Avatar({
   userId,
@@ -57,9 +81,6 @@ function Avatar({
   // usa o ícone da Salinha (o mesmo da tela de login).
   const maestro = userId === MAESTRO_USER_ID && !showImage
   const salinhaBot = userId === SALINHA_BOT_USER_ID && !showImage
-
-  const dot = Math.max(10, Math.round(size * 0.3))
-  const border = size >= 64 ? 5 : size >= 32 ? 3 : 2
 
   return (
     <div className={`group relative shrink-0 ${className}`} style={{ width: size, height: size }}>
@@ -96,16 +117,7 @@ function Avatar({
           {(look.name || '?').charAt(0).toUpperCase()}
         </div>
       )}
-      {status && (
-        <span
-          title={STATUS_META[status].label}
-          aria-label={STATUS_META[status].label}
-          className="absolute flex items-center justify-center rounded-full"
-          style={{ padding: border, right: -border, bottom: -border, background: cutoutColor }}
-        >
-          <StatusIcon status={status} size={dot} />
-        </span>
-      )}
+      {status && <AvatarStatus status={status} size={size} cutoutColor={cutoutColor} />}
     </div>
   )
 }
