@@ -10,6 +10,7 @@ import { AppErrorBoundary } from './shared/ui/AppErrorScreen'
 import { useLevelStore } from './features/levels/store/levelStore'
 import { startThemeSync } from './features/settings/store/themeStore'
 import { startEntranceSounds } from './features/call/lib/entranceSoundStart'
+import { startScreenSounds } from './features/call/lib/screenSoundsStart'
 import { startArrivalBadges } from './features/call/lib/arrivalEventsStart'
 import { startCallInvites } from './features/call/lib/callInviteStart'
 
@@ -18,6 +19,9 @@ startThemeSync()
 
 // Som de quem entra na call (o som de entrada da pessoa ou o padrão).
 startEntranceSounds()
+
+// Sons da transmissão: live aberta, encerrada e alguém entrando nela.
+startScreenSounds()
 
 // Selo "Chegou" de quem entra no canal de voz.
 startArrivalBadges()
