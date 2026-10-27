@@ -8,6 +8,7 @@ import (
 	"gin-quickstart/backend/internal/platform/mailer"
 	"gin-quickstart/backend/internal/platform/websocket"
 	"gin-quickstart/backend/internal/updates"
+	"gin-quickstart/backend/internal/user"
 
 	"github.com/gin-gonic/gin"
 )
@@ -32,13 +33,16 @@ func (a *app) wireRealtime() {
 	})
 }
 
-// wireAccount: login, cadastro e e-mails da conta (rotas públicas).
+// wireAccount: login, cadastro, e-mails da conta e troca de @/e-mail.
 func (a *app) wireAccount() {
 	appURL := envOr("APP_URL", "http://localhost:5173")
 	emailService := auth.NewEmailService(a.authRepository, a.userService, a.authService, mailer.FromEnv(), appURL)
 	authHandler := auth.AuthHandler(a.authService, a.userService).WithEmail(emailService)
+	// Trocar @ e e-mail em Minha conta: o @ novo vai para todos pelo hub.
+	accountHandler := auth.NewAccountHandler(authHandler, a.userService, user.NewAccountService(a.userRepository, a.hub))
 	a.route(func(_ *gin.Engine, api *gin.RouterGroup) {
 		auth.AuthRoutes(api, authHandler, a.authMiddleware)
+		auth.AccountRoutes(api, accountHandler, a.authMiddleware)
 	})
 }
 
