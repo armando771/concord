@@ -41,11 +41,11 @@ servidor, convidador):
 - Mantidos: só amigos, bloqueio, fora da call, ocupado em outra call, permissão
   no canal, máx. 20 por requisição, resposta por pessoa. Novo status `failed`
   (a DM não pôde ser postada).
-- "Abrir" -> `POST /calls/:id/invites/accept` (dá o passe `admitted` se a pessoa
+- "Abrir" -> `POST /calls/:id/invites/open` (dá o passe `admitted` se a pessoa
   foi convidada; call acabada = 404 e o cartão fica inválido) e depois
   `startChannelCall`, como antes. Sem registro do convite (reinício do servidor):
   200 sem passe, a pessoa entra pelo fluxo normal (bate na porta se trancada).
-  Some o `decline`.
+  Somem `accept` e `decline` (o cartão só tem "Abrir").
 - Convidador vê o cartão igual, **sem botão** ("Você convidou para a call").
 
 ## Frontend
@@ -56,8 +56,11 @@ servidor, convidador):
 - Remover: `FriendInviteCard`, `FriendInviteHost`, `callInviteStore.received`,
   `callInviteEvents/Start`, `notifyDesktop` do convite, eventos
   `call:friend_invite*`.
-- Sidebar: `InviteFriendsButton` (ícone `UserPlusIcon`) na linha do canal de voz,
-  extraída num componente próprio; some do `CallControlsDock`.
+- Sidebar: `servers/components/VoiceInviteButton.tsx` (ícone `UserPlusIcon`) na linha do
+  canal de voz (`VoiceChannelRow`, que fica com ~250 linhas: sem extração), entre o balão
+  e o "•••", só em quem está conectado no canal; some do `CallControlsDock`. Alvo de toque
+  28x40 (o espaço entre ícones não comporta 40 de largura); aparece sempre no toque e no
+  foco do teclado, no hover do sm em diante.
 
 ## Verificação
 

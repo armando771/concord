@@ -3,6 +3,7 @@ import {
   isConnectedTo,
   knockView,
   shownVoiceState,
+  inviteCallId,
   voiceRowClass,
   voiceRowTitle,
   type VoiceRowLook
@@ -14,6 +15,21 @@ describe('isConnectedTo', () => {
     expect(isConnectedTo({ status: 'active', type: 'channel', channelId: 'v2' }, 'v1')).toBe(false)
     expect(isConnectedTo({ status: 'idle', type: 'channel', channelId: 'v1' }, 'v1')).toBe(false)
     expect(isConnectedTo({ status: 'active', type: 'dm', channelId: 'v1' }, 'v1')).toBe(false)
+  })
+})
+
+describe('inviteCallId', () => {
+  const here = { status: 'active', type: 'channel', channelId: 'v1', callId: 'call-1' }
+
+  it('é a call do canal em que estou conectado', () => {
+    expect(inviteCallId(here, 'v1')).toBe('call-1')
+  })
+
+  it('nada em outro canal, sem estar ativa, em DM ou sem id', () => {
+    expect(inviteCallId(here, 'v2')).toBeNull()
+    expect(inviteCallId({ ...here, status: 'connecting' }, 'v1')).toBeNull()
+    expect(inviteCallId({ ...here, type: 'dm' }, 'v1')).toBeNull()
+    expect(inviteCallId({ ...here, callId: null }, 'v1')).toBeNull()
   })
 })
 
@@ -68,6 +84,12 @@ describe('voiceRowClass', () => {
   it('com gente, no sm os botões ficam no lugar da contagem (que some no hover)', () => {
     expect(pads({ ...base, hasPeople: true })).toEqual(['pr-7', 'sm:pr-2.5'])
     expect(pads({ ...base, hasMenu: true, hasPeople: true })).toEqual(['pr-12', 'sm:pr-2.5'])
+  })
+
+  it('com "Convidar amigos" o espaço da direita cresce um botão', () => {
+    expect(pads({ ...base, hasInvite: true })).toEqual(['pr-14', 'sm:pr-14'])
+    expect(pads({ ...base, hasMenu: true, hasInvite: true })).toEqual(['pr-20', 'sm:pr-20'])
+    expect(pads({ ...base, hasInvite: true, hasPeople: true })).toEqual(['pr-14', 'sm:pr-2.5'])
   })
 
   it('arrastando alguém por cima ganha do conectado', () => {

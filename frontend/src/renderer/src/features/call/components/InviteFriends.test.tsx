@@ -28,11 +28,9 @@ const inviteState = {
   phase: 'idle',
   results: [] as { user_id: string; status: string }[],
   error: null as string | null,
-  sentStatus: {} as Record<string, string>,
   resetSend: vi.fn()
 }
 vi.mock('../store/callInviteStore', () => ({
-  sentKey: (c: string, u: string) => c + ':' + u,
   useCallInviteStore: Object.assign((sel: (s: unknown) => unknown) => sel(inviteState), {
     getState: () => inviteState
   })
@@ -130,17 +128,16 @@ describe('InviteResultsList', () => {
   it('uma linha por pessoa com o motivo de quem não foi convidado', () => {
     const html = renderToStaticMarkup(
       <InviteResultsList
-        callId="c1"
         nameOf={(id) => id}
         results={[
           { user_id: 'u1', status: 'sent' },
-          { user_id: 'u2', status: 'offline' }
+          { user_id: 'u2', status: 'busy' }
         ]}
       />
     )
     expect(html).toContain('1 de 2 convites enviados')
-    expect(html).toContain('Convite enviado')
-    expect(html).toContain('Está offline')
+    expect(html).toContain('Convite enviado na conversa privada')
+    expect(html).toContain('Está em outra call')
   })
 })
 

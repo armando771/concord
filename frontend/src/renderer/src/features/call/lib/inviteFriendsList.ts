@@ -1,5 +1,5 @@
-import type { InviteResult, InviteResultStatus, InviteUpdateStatus } from '../api/callInvites'
-import { INVITE_COPY, resultText, updateText } from './callInviteCopy'
+import type { InviteResult, InviteResultStatus } from '../api/callInvites'
+import { INVITE_COPY, resultText } from './callInviteCopy'
 
 export interface InvitableFriend {
   id: string
@@ -55,14 +55,9 @@ export function sendHeadline(sent: number, total: number): string {
 
 export type ResultTone = 'good' | 'neutral' | 'bad'
 
-/** Texto e tom da linha de cada pessoa; `live` é a resposta chegada em tempo real. */
-export function resultLine(
-  status: InviteResultStatus,
-  live: InviteUpdateStatus | undefined
-): { text: string; tone: ResultTone } {
-  if (status !== 'sent') return { text: resultText(status), tone: 'bad' }
-  if (!live) return { text: resultText('sent'), tone: 'good' }
-  return { text: updateText(live), tone: live === 'accepted' ? 'good' : 'neutral' }
+/** Texto e tom da linha de cada pessoa. */
+export function resultLine(status: InviteResultStatus): { text: string; tone: ResultTone } {
+  return { text: resultText(status), tone: status === 'sent' ? 'good' : 'bad' }
 }
 
 /** Mensagem quando a lista fica vazia. */

@@ -1,29 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { inviteNotification, resultText, updateText } from './callInviteCopy'
+import { INVITE_COPY, resultText } from './callInviteCopy'
 
-describe('inviteNotification', () => {
-  it('título com quem convidou e rota do canal', () => {
-    const n = inviteNotification({
-      by: { display_name: 'Ana', username: 'ana' },
-      server_id: 's1',
-      channel_id: 'c1'
-    })
-    expect(n.title).toBe('Ana te convidou para a call')
-    expect(n.route).toBe('/servers/s1/channels/c1')
-  })
-
-  it('sem canal vai para a raiz e sem nome usa o usuário', () => {
-    const n = inviteNotification({ by: { username: 'ana' } })
-    expect(n.title).toContain('ana')
-    expect(n.route).toBe('/')
+describe('textos do cartão', () => {
+  it('título muda para quem foi convidado e para quem convidou', () => {
+    expect(INVITE_COPY.cardTitleForGuest('Ana')).toBe('Ana convidou você para a call')
+    expect(INVITE_COPY.cardTitleForAuthor).toBe('Você convidou para a call')
   })
 })
 
-describe('textos de status', () => {
+describe('resultText', () => {
   it('conhece os status e tem fallback', () => {
-    expect(resultText('offline')).toBe('Está offline')
+    expect(resultText('busy')).toBe('Está em outra call')
+    expect(resultText('failed')).toBe('Não foi possível enviar o convite')
     expect(resultText('x')).toBe('Não foi possível convidar')
-    expect(updateText('expired')).toBe('O convite expirou')
-    expect(updateText('x')).toBe('')
+  })
+
+  it('offline e cooldown deixaram de existir (a DM guarda o convite)', () => {
+    expect(resultText('offline')).toBe('Não foi possível convidar')
+    expect(resultText('cooldown')).toBe('Não foi possível convidar')
   })
 })
