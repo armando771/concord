@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ensureBadges = vi.hoisted(() => vi.fn())
 vi.mock('../../levels/store/badgeStore', () => ({
@@ -42,8 +42,13 @@ describe('enqueteStore', () => {
     fetchMock.mockReset()
     responderMock.mockReset()
     ensureBadges.mockReset()
+    ensureBadges.mockResolvedValue(undefined)
     fetchMock.mockResolvedValue([enquete])
     estado().reset()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('carrega as pendentes uma vez por pessoa', async () => {
@@ -106,6 +111,7 @@ describe('enqueteStore', () => {
     expect(estado().etapa).toBe('pergunta')
     expect(estado().selecao).toBeNull()
     expect(estado().enviando).toBe(false)
+    expect(estado().erro).toBe(false)
     expect(ensureBadges).toHaveBeenCalledWith('ana', true)
   })
 
@@ -162,15 +168,15 @@ describe('enqueteStore', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('falha em ensureBadges não vira promessa rejeitada solta', async () => {
+  it('falha em ensureBadges é só logada: a celebração continua e não há erro', async () => {
     const erro = vi.spyOn(console, 'error').mockImplementation(() => {})
     ensureBadges.mockRejectedValue(new Error('x'))
     await ate('l')
     responderMock.mockResolvedValue({ enquete: 'segundo-turno', opcao: 'l', badge: 'l' })
     await estado().confirmar()
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(erro).toHaveBeenCalled()
+    await vi.waitFor(() => expect(erro).toHaveBeenCalled())
+    expect(estado().reacao).toEqual({ tipo: 'celebracao', badge: 'l', rotulo: 'Fez o L' })
+    expect(estado().erro).toBe(false)
   })
 
   it('dois cliques seguidos em confirmar enviam uma vez só', async () => {
