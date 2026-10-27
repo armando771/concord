@@ -14,7 +14,7 @@ import (
 	"gin-quickstart/backend/internal/message"
 	"gin-quickstart/backend/internal/notifysettings"
 	"gin-quickstart/backend/internal/proposal"
-	"gin-quickstart/backend/internal/segundoturno"
+	"gin-quickstart/backend/internal/enquete"
 
 	"github.com/gin-gonic/gin"
 )
@@ -46,8 +46,8 @@ func (a *app) wireEngagement() {
 
 	// Banner "fez o L no segundo turno?": o sim reavalia o badge na hora e só
 	// contas criadas antes do corte do Pioneiro veem o banner.
-	segundoTurnoHandler := segundoturno.SegundoTurnoHandler(segundoturno.SegundoTurnoService(
-		segundoturno.SegundoTurnoRepository(a.db), badgeService, badge.FounderCutoff,
+	segundoTurnoHandler := enquete.SegundoTurnoHandler(enquete.SegundoTurnoService(
+		enquete.SegundoTurnoRepository(a.db), badgeService, badge.FounderCutoff,
 	))
 
 	// Card novo no quadro já reavalia o badge Contribuinte de quem criou.
@@ -68,7 +68,7 @@ func (a *app) wireEngagement() {
 	a.route(func(_ *gin.Engine, api *gin.RouterGroup) {
 		level.LevelRoutes(api, levelHandler, a.authMiddleware)
 		badge.BadgeRoutes(api, badgeHandler, a.authMiddleware)
-		segundoturno.SegundoTurnoRoutes(api, segundoTurnoHandler, a.authMiddleware)
+		enquete.SegundoTurnoRoutes(api, segundoTurnoHandler, a.authMiddleware)
 		notifysettings.Routes(api, notifySettingsHandler, a.authMiddleware)
 		proposal.ProposalRoutes(api, proposalHandler, a.authMiddleware, a.requireVerified)
 		birthday.BirthdayRoutes(api, birthdayHandler, a.authMiddleware)

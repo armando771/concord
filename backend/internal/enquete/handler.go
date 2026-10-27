@@ -1,4 +1,4 @@
-package segundoturno
+package enquete
 
 import (
 	"context"
@@ -39,7 +39,7 @@ func responde(c *gin.Context, estado Estado, err error) {
 	case errors.Is(err, ErrUsuarioNaoEncontrado):
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 	default:
-		log.Printf("[segundoturno] %v", err)
+		log.Printf("[enquete] %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to process"})
 	}
 }

@@ -167,7 +167,7 @@ var Catalog = []Category{
 		},
 	},
 	{
-		// Quem respondeu "sim" ao banner do segundo turno (internal/segundoturno).
+		// Quem respondeu "sim" ao banner do segundo turno (internal/enquete).
 		// A resposta é única e fica em segundo_turno_respostas.
 		Key:         "l",
 		Name:        "Fez o L",

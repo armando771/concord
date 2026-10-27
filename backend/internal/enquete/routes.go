@@ -1,4 +1,4 @@
-package segundoturno
+package enquete
 
 import "github.com/gin-gonic/gin"
 
