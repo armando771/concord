@@ -1,0 +1,76 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+// No render de servidor o zustand devolve o estado inicial; os mocks deixam
+// cada teste escolher o usuário.
+const state = vi.hoisted(() => ({
+  auth: {
+    user: null as Record<string, unknown> | null,
+    setUser: vi.fn()
+  },
+  settings: { setDirty: vi.fn(), blockedAt: 0 }
+}))
+vi.mock('../../../auth/store/authStore', () => ({
+  useAuthStore: Object.assign((sel: (s: typeof state.auth) => unknown) => sel(state.auth), {
+    getState: () => state.auth
+  })
+}))
+vi.mock('../../store/settingsStore', () => ({
+  useSettingsStore: (sel: (s: typeof state.settings) => unknown) => sel(state.settings)
+}))
+
+// AppSettings puxa o áudio da call (não existe no node); o aniversário tem teste próprio.
+vi.mock('../AppSettings', () => ({ BirthdaySettings: () => null }))
+// O corpo do cartão puxa a atividade (e a call); aqui basta o que a prévia recebe.
+vi.mock('../../../profile/components/ProfileCardBody', () => ({
+  default: ({ profile }: { profile: { display_name: string; links: string[] } }) => (
+    <div data-preview={profile.display_name}>{profile.links.join(' ')}</div>
+  )
+}))
+
+import { renderToStaticMarkup } from 'react-dom/server'
+import ProfilesSection from './ProfilesSection'
+
+const render = (): string => renderToStaticMarkup(<ProfilesSection />)
+
+beforeEach(() => {
+  state.auth.user = {
+    id: 'u1',
+    username: 'ana',
+    display_name: 'Ana',
+    email: 'a@x.com',
+    bio: 'oi',
+    links: [{ url: 'https://github.com/ana' }],
+    banner_color: '#112233',
+    avatar_url: '/a.png',
+    banner_url: '/b.png',
+    status: 'online'
+  }
+})
+
+describe('ProfilesSection', () => {
+  it('sem usuário não desenha nada', () => {
+    state.auth.user = null
+    expect(render()).toBe('')
+  })
+
+  it('mostra os campos, o tema e a prévia', () => {
+    const html = render()
+    expect(html).toContain('Nome de exibição')
+    expect(html).toContain('Tema do perfil')
+    expect(html).toContain('Sobre mim')
+    expect(html).toContain('Remover avatar')
+    expect(html).toContain('Remover banner')
+    expect(html).toContain('Usar a cor padrão')
+    expect(html).toContain('https://github.com/ana')
+    // Sem alterações, sem a barra de aviso.
+    expect(html).not.toContain('alterações não salvas')
+  })
+
+  it('sem avatar, banner nem cor: sem os botões de remover', () => {
+    state.auth.user = { ...state.auth.user, avatar_url: null, banner_url: null, banner_color: null }
+    const html = render()
+    expect(html).not.toContain('Remover avatar')
+    expect(html).not.toContain('Remover banner')
+    expect(html).not.toContain('Usar a cor padrão')
+  })
+})
