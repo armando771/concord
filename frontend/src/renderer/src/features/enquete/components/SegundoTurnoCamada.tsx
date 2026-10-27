@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { trapTab } from '../../../shared/lib/focusTrap'
 import { XIcon } from '../../../shared/ui/icons'
-import '../../../assets/segundoTurno.css'
+import '../../../assets/enquete.css'
 
 interface Props {
   /** id do título dentro de `children` (aria-labelledby). */

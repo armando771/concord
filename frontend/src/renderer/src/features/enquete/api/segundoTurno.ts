@@ -1,6 +1,6 @@
 import { request } from '../../../shared/api/client'
 
-/** Backend: internal/segundoturno. */
+/** Backend: internal/enquete. */
 export interface SegundoTurnoEstado {
   /** Conta criada antes do corte: vê o banner. */
   elegivel: boolean
