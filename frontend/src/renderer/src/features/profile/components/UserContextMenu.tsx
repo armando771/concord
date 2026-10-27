@@ -12,7 +12,6 @@ import {
 } from './UserContextMenuSections'
 import {
   openUserProfile,
-  copyUserId,
   sendDirectMessage,
   closeDirectMessage,
   startUserCall,
@@ -233,18 +232,6 @@ function StandardUserMenu({
         onMoveTo={(id, name) => void moveTo(id, name)}
       />
 
-      <div className="my-1 h-px bg-fg/10" />
-      <button
-        role="menuitem"
-        onClick={() => {
-          close()
-          copyUserId(target.userId)
-        }}
-        className={itemClass}
-      >
-        Copiar ID do usuário
-      </button>
-
       <StandardUserServerSection
         server={server}
         member={member}
@@ -409,10 +396,6 @@ function UserContextMenu(): React.JSX.Element | null {
         onOpenProfile={() => {
           close()
           openUserProfile({ ...target, username: member?.username })
-        }}
-        onCopyId={() => {
-          close()
-          copyUserId(target.userId)
         }}
         itemClass={itemClass}
       />
