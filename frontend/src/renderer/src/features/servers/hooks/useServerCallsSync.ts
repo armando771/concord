@@ -2,6 +2,9 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { listActiveServerCalls } from '../../call/api/calls'
 import { useCallStore } from '../../call/store/callStore'
+import { useAuthStore } from '../../auth/store/authStore'
+import { voiceMembers } from '../../call/lib/recentArrivals'
+import { useRecentArrivalsStore } from '../../call/store/recentArrivalsStore'
 import { useLevelStore } from '../../levels/store/levelStore'
 import { callsByChannel, voiceUserIdsKey } from '../lib/channelSidebar'
 
@@ -25,7 +28,12 @@ export function useServerCallsSync(serverId: string | undefined): void {
     const refresh = (): void => {
       listActiveServerCalls(serverId)
         .then((states) => {
-          if (!cancelled) useCallStore.getState().setServerCalls(callsByChannel(states))
+          if (cancelled) return
+          const calls = callsByChannel(states)
+          useCallStore.getState().setServerCalls(calls)
+          useRecentArrivalsStore
+            .getState()
+            .ingest(serverId, voiceMembers(calls), useAuthStore.getState().user?.id)
         })
         .catch(() => {})
     }
