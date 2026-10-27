@@ -132,9 +132,10 @@ export function MembersAside({ children }: { children: React.ReactNode }): React
 
 /**
  * Membros do servidor aberto, agrupados como no Discord: dono, cargos exibidos
- * separadamente (online), membros e offline.
+ * separadamente (online), membros e offline. Sem moldura: vai na coluna da
+ * direita (ServerMemberList) ou na gaveta do celular.
  */
-function ServerMemberList({ server }: { server: Server }): React.JSX.Element {
+export function ServerMemberGroups({ server }: { server: Server }): React.JSX.Element {
   const me = useAuthStore((s) => s.user)
   const currentMembers = useServerStore((s) => s.currentMembers)
   const roles = useServerStore((s) => s.roles)
@@ -150,7 +151,7 @@ function ServerMemberList({ server }: { server: Server }): React.JSX.Element {
   })
 
   return (
-    <MembersAside>
+    <>
       {memberGroups.map((group) => {
         const offline = group.key === 'offline'
         return (
@@ -182,6 +183,15 @@ function ServerMemberList({ server }: { server: Server }): React.JSX.Element {
           </div>
         )
       })}
+    </>
+  )
+}
+
+/** A coluna de membros à direita (do lg em diante). */
+function ServerMemberList({ server }: { server: Server }): React.JSX.Element {
+  return (
+    <MembersAside>
+      <ServerMemberGroups server={server} />
     </MembersAside>
   )
 }
