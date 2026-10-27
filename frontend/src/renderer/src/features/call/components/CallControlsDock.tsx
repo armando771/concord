@@ -2,7 +2,6 @@ import { useUIStore } from '../../../shared/store/uiStore'
 import { ChevronDownIcon, ChevronUpIcon } from '../../../shared/ui/icons'
 import VoiceControls from './VoiceControls'
 import ActivityBar from './ActivityBar'
-import InviteFriendsButton from './InviteFriendsButton'
 
 /**
  * Faixa dos controles da chamada embaixo do palco. Ela ocupa o próprio espaço
@@ -38,7 +37,6 @@ function CallControlsDock(): React.JSX.Element {
       <ActivityBar />
       <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 pb-4">
         <VoiceControls />
-        <InviteFriendsButton />
         <button
           type="button"
           onClick={toggle}

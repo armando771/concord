@@ -22,7 +22,7 @@ startEntranceSounds()
 // Selo "Chegou" de quem entra no canal de voz.
 startArrivalBadges()
 
-// Convites de amigos para a call (cartão com Aceitar/Recusar).
+// Cartões de convite para a call na DM: viram "inválidos" quando a call acaba.
 startCallInvites()
 
 // Soltar um arquivo fora do chat não pode fazer o Electron abrir o arquivo no

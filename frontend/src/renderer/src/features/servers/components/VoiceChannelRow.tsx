@@ -9,10 +9,17 @@ import type { ChannelBadge } from '../lib/channelBadge'
 import { useVoiceUserDrop, type ChannelDropTarget } from '../hooks/useVoiceUserDrop'
 import { Perm } from '../lib/permissions'
 import type { ServerAccess } from '../lib/serverAccess'
-import { isConnectedTo, voiceRowClass, voiceRowTitle, WRAP_NAME } from '../lib/voiceChannelRow'
+import {
+  inviteCallId,
+  isConnectedTo,
+  voiceRowClass,
+  voiceRowTitle,
+  WRAP_NAME
+} from '../lib/voiceChannelRow'
 import VoiceKnockOverlay from './VoiceKnockOverlay'
 import VoiceChannelMembers from './VoiceChannelMembers'
 import VoiceChatButton from './VoiceChatButton'
+import VoiceInviteButton from './VoiceInviteButton'
 
 /** Esconde no hover (sm em diante): o balão do chat e o "•••" ficam no lugar. */
 const FADE_ON_HOVER = 'transition-opacity sm:group-hover/voicech:opacity-0'
@@ -67,6 +74,8 @@ interface VoiceChannelButtonProps {
   locked: boolean
   dropActive: boolean
   hasMenu: boolean
+  /** Tem o botão "Convidar amigos" (estou conectado neste canal). */
+  hasInvite: boolean
   badge: ChannelBadge | null
   onJoin: () => void
   onContextMenu?: (e: React.MouseEvent) => void
@@ -82,6 +91,7 @@ function VoiceChannelButton({
   locked,
   dropActive,
   hasMenu,
+  hasInvite,
   badge,
   onJoin,
   onContextMenu
@@ -96,6 +106,7 @@ function VoiceChannelButton({
       className={voiceRowClass({
         canConnect,
         hasMenu,
+        hasInvite,
         hasPeople: people > 0,
         dropActive,
         connectedHere
@@ -165,6 +176,7 @@ function VoiceChannelRow({
   const serverId = useServerStore((s) => s.currentServer?.id)
   const entry = useCallStore((s) => s.serverCalls[channel.id])
   const connectedHere = useCallStore((s) => isConnectedTo(s, channel.id))
+  const inviteCall = useCallStore((s) => inviteCallId(s, channel.id))
   const participants = useVoiceParticipants(entry, serverId)
   const drop = useVoiceUserDrop(channel.id, participants, dropTarget)
   const badge = useChannelBadge(serverId, channel.id)
@@ -187,6 +199,7 @@ function VoiceChannelRow({
           locked={locked}
           dropActive={drop.active}
           hasMenu={Boolean(renderMenuButton)}
+          hasInvite={inviteCall !== null}
           badge={badge}
           onJoin={onJoin}
           onContextMenu={onContextMenu}
@@ -203,7 +216,11 @@ function VoiceChannelRow({
           serverId={serverId}
           channelId={channel.id}
           besideMenu={Boolean(renderMenuButton)}
+          besideInvite={inviteCall !== null}
         />
+        {inviteCall && (
+          <VoiceInviteButton callId={inviteCall} besideMenu={Boolean(renderMenuButton)} />
+        )}
       </div>
       <VoiceChannelMembers
         channelId={channel.id}

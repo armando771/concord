@@ -51,11 +51,7 @@ function InviteFriendsModal({
     <Modal open={open} title={INVITE_COPY.modalTitle} onClose={onClose}>
       {phase === 'ok' ? (
         <>
-          <InviteResultsList
-            callId={callId}
-            results={results}
-            nameOf={(id) => nameFrom(friends, id)}
-          />
+          <InviteResultsList results={results} nameOf={(id) => nameFrom(friends, id)} />
           <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button variant="ghost" className="min-h-10" onClick={onClose}>
               {INVITE_COPY.close}

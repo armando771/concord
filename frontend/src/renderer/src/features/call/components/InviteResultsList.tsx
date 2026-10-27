@@ -1,4 +1,3 @@
-import { useCallInviteStore, sentKey } from '../store/callInviteStore'
 import {
   resultLine,
   sendHeadline,
@@ -13,17 +12,8 @@ const TONE_CLASS: Record<ResultTone, string> = {
   bad: 'text-danger'
 }
 
-function ResultRow({
-  callId,
-  result,
-  name
-}: {
-  callId: string
-  result: InviteResult
-  name: string
-}): React.JSX.Element {
-  const live = useCallInviteStore((s) => s.sentStatus[sentKey(callId, result.user_id)])
-  const line = resultLine(result.status, live)
+function ResultRow({ result, name }: { result: InviteResult; name: string }): React.JSX.Element {
+  const line = resultLine(result.status)
   return (
     <li className="flex min-h-10 items-center justify-between gap-3 rounded-lg px-2 py-1.5">
       <span className="min-w-0 truncate text-sm text-strong">{name}</span>
@@ -33,15 +23,13 @@ function ResultRow({
 }
 
 /**
- * Depois do envio: quantos convites saíram e, por pessoa, o que aconteceu.
- * Quem recebeu atualiza em tempo real (aceitou, recusou, expirou).
+ * Depois do envio: quantos convites saíram (cada um virou uma mensagem na
+ * conversa privada) e, por pessoa, o que aconteceu.
  */
 function InviteResultsList({
-  callId,
   results,
   nameOf
 }: {
-  callId: string
   results: InviteResult[]
   nameOf: (userId: string) => string
 }): React.JSX.Element {
@@ -53,7 +41,7 @@ function InviteResultsList({
       </p>
       <ul className="flex flex-col gap-1">
         {results.map((r) => (
-          <ResultRow key={r.user_id} callId={callId} result={r} name={nameOf(r.user_id)} />
+          <ResultRow key={r.user_id} result={r} name={nameOf(r.user_id)} />
         ))}
       </ul>
     </div>

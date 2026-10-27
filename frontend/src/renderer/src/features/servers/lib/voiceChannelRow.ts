@@ -18,6 +18,18 @@ export function isConnectedTo(call: CallPosition, channelId: string): boolean {
   return call.status !== 'idle' && call.type === 'channel' && call.channelId === channelId
 }
 
+/**
+ * A call a que "Convidar amigos" se refere: a do canal em que estou conectado
+ * (chamada de canal já ativa). Fora disso, não há convite a fazer (null).
+ */
+export function inviteCallId(
+  call: CallPosition & { callId: string | null },
+  channelId: string
+): string | null {
+  if (!isConnectedTo(call, channelId) || call.status !== 'active') return null
+  return call.callId ?? null
+}
+
 export type KnockView = 'pending' | 'declined' | null
 
 /** O meu pedido para entrar na sala trancada, se for deste canal. */
@@ -42,6 +54,8 @@ export interface VoiceRowLook {
   /** Alguém está sendo arrastado sobre o canal. */
   dropActive: boolean
   connectedHere: boolean
+  /** Tem o botão "Convidar amigos" (estou conectado neste canal). */
+  hasInvite?: boolean
 }
 
 /** Classes do botão do canal de voz. */
@@ -50,7 +64,8 @@ export function voiceRowClass(look: VoiceRowLook): string {
   // À direita ficam o balão "Abrir chat" e o "•••" (moderadores). Na tela
   // estreita (toque) eles estão sempre lá; do sm em diante só no hover, e com
   // gente no canal tomam o lugar da contagem, que some.
-  const buttons = look.hasMenu ? 'pr-12' : 'pr-7'
+  // "Convidar amigos" (quem está conectado) ganha mais um botão à esquerda do balão.
+  const buttons = look.hasMenu ? (look.hasInvite ? 'pr-20' : 'pr-12') : look.hasInvite ? 'pr-14' : 'pr-7'
   const pad = `${buttons} ${look.hasPeople ? 'sm:pr-2.5' : `sm:${buttons}`}`
   let tone = 'text-gray-400 hover:bg-fg/6 hover:text-gray-200'
   if (look.dropActive) tone = 'bg-brand/25 text-strong ring-2 ring-brand'

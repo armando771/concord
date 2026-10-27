@@ -54,6 +54,8 @@ type Message struct {
 	Sticker         *StickerPreview `json:"sticker,omitempty"`
 	GifURL          *string         `json:"gif_url,omitempty"`
 	GifMetadata     *GifMetadata    `json:"gif_metadata,omitempty"`
+	// Convite para a call de um canal de voz (cartão na DM); nil = mensagem comum.
+	CallInvite *CallInvite `json:"call_invite,omitempty"`
 	CreatedAt       time.Time    `json:"created_at"`
 	// Quando o autor editou o texto pela última vez; nil = nunca editada.
 	EditedAt *time.Time `json:"edited_at,omitempty"`

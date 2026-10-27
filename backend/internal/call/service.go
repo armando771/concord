@@ -104,9 +104,7 @@ type Service struct {
 	userService         *user.Service
 	isOnline            func(userID string) bool
 	perms               PermissionSource
-	friends             FriendChecker
-	channelNames        channelFinder
-	serverNames         serverFinder
+	invite              inviteDeps
 	media               MediaAdmin
 
 	mu    sync.RWMutex
@@ -1172,7 +1170,7 @@ func (s *Service) joinLocked(ctx context.Context, ac *activeCall, userID string,
 		return nil, ErrBusy
 	}
 
-	userInfo, err := s.userInfo(ctx, userID)
+	userInfo, err := s.lookupUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -1188,6 +1186,7 @@ func (s *Service) joinLocked(ctx context.Context, ac *activeCall, userID string,
 		s.markCallActive(ac.info.ID)
 	}
 	s.busy[userID] = ac.info.ID
+	s.consumeInviteLocked(ac, userID)
 
 	if err := s.addParticipant(ctx, &CallParticipant{
 		CallID: ac.info.ID,

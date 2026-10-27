@@ -47,7 +47,8 @@ var messageColumns = `
 	stk.name,
 	stk.content_type,
 	m.gif_url,
-	m.gif_metadata
+	m.gif_metadata,
+	m.call_invite
 `
 
 const messageFrom = `
@@ -66,8 +67,8 @@ func (r *Repository) Create(ctx context.Context, msg *Message) error {
 	return r.db.QueryRow(
 		ctx,
 		`
-		INSERT INTO messages (id, author_id, channel_id, conversation_id, reply_to_id, content, system_kind, mention_everyone, sticker_id, gif_url, gif_metadata)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO messages (id, author_id, channel_id, conversation_id, reply_to_id, content, system_kind, mention_everyone, sticker_id, gif_url, gif_metadata, call_invite)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING
 			id,
 			author_id,
@@ -88,6 +89,7 @@ func (r *Repository) Create(ctx context.Context, msg *Message) error {
 		msg.StickerID,
 		msg.GifURL,
 		gifMetaBytes,
+		callInviteBytes(msg.CallInvite),
 	).Scan(
 		&msg.ID,
 		&msg.AuthorID,
@@ -309,111 +311,4 @@ func (r *Repository) attachReactions(ctx context.Context, messages []Message) er
 	}
 
 	return nil
-}
-
-type scannable interface {
-	Scan(dest ...any) error
-}
-
-type rowScanner interface {
-	Next() bool
-	Scan(dest ...any) error
-}
-
-func populateMedia(msg *Message, stickerServerID, stickerName, stickerContentType *string, rawGifMeta []byte) {
-	if msg.StickerID != nil && stickerName != nil && stickerServerID != nil && stickerContentType != nil {
-		msg.Sticker = &StickerPreview{
-			ID:          *msg.StickerID,
-			ServerID:    *stickerServerID,
-			Name:        *stickerName,
-			ContentType: *stickerContentType,
-		}
-	}
-	if len(rawGifMeta) > 0 {
-		var gm GifMetadata
-		if err := json.Unmarshal(rawGifMeta, &gm); err == nil {
-			msg.GifMetadata = &gm
-		}
-	}
-}
-
-func scanMessages(rows rowScanner) ([]Message, error) {
-	var messages []Message
-	for rows.Next() {
-		msg, err := scanMessageRow(rows)
-		if err != nil {
-			return nil, err
-		}
-		messages = append(messages, msg)
-	}
-
-	if messages == nil {
-		messages = []Message{}
-	}
-
-	return messages, nil
-}
-
-// scanMessageRow lê uma linha de messageColumns; extra recebe as colunas
-// que vierem depois delas.
-func scanMessageRow(row scannable, extra ...any) (Message, error) {
-	var msg Message
-	var replyID, replyAuthorID, replyUsername, replyDisplayName, replyContent *string
-	var replyAvatarURL *string
-	var replyStyle namestyle.Style
-	var stickerServerID, stickerName, stickerContentType *string
-	var rawGifMeta []byte
-
-	msg.Author = &Author{}
-	dest := []any{
-		&msg.ID,
-		&msg.AuthorID,
-		&msg.Author.Username,
-		&msg.Author.DisplayName,
-		&msg.Author.AvatarURL,
-		&msg.Author.NameStyle,
-		&msg.ChannelID,
-		&msg.ConversationID,
-		&msg.ReplyToID,
-		&msg.Content,
-		&msg.SystemKind,
-		&msg.MentionEveryone,
-		&msg.CreatedAt,
-		&msg.EditedAt,
-		&replyID,
-		&replyAuthorID,
-		&replyUsername,
-		&replyDisplayName,
-		&replyAvatarURL,
-		&replyStyle,
-		&replyContent,
-		&msg.StickerID,
-		&stickerServerID,
-		&stickerName,
-		&stickerContentType,
-		&msg.GifURL,
-		&rawGifMeta,
-	}
-	if err := row.Scan(append(dest, extra...)...); err != nil {
-		return Message{}, err
-	}
-	msg.Author.ID = msg.AuthorID
-
-	if replyID != nil && replyAuthorID != nil && replyUsername != nil && replyDisplayName != nil && replyContent != nil {
-		msg.ReplyTo = &ReplyPreview{
-			ID:       *replyID,
-			AuthorID: *replyAuthorID,
-			Author: &Author{
-				ID:          *replyAuthorID,
-				Username:    *replyUsername,
-				DisplayName: *replyDisplayName,
-				AvatarURL:   replyAvatarURL,
-				NameStyle:   replyStyle,
-			},
-			Content: *replyContent,
-		}
-	}
-
-	populateMedia(&msg, stickerServerID, stickerName, stickerContentType, rawGifMeta)
-	return msg, nil
 }

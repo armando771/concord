@@ -10,6 +10,7 @@ import MessageText from './MessageText'
 import MessageEditor from './MessageEditor'
 import ReplyReference from './ReplyReference'
 import PollCard from './PollCard'
+import CallInviteCard from '../../call/components/CallInviteCard'
 import MessageAttachments from './MessageAttachments'
 import MessageSticker from './MessageSticker'
 import MessageGif from './MessageGif'
@@ -187,7 +188,7 @@ function MessageStickerSlot({ message }: { message: Message }): React.JSX.Elemen
   )
 }
 
-/** Texto (ou o editor), figurinha, GIF, anexos e enquete. */
+/** Texto (ou o editor), cartão de convite, figurinha, GIF, anexos e enquete. */
 export function MessageContent({
   message,
   mentionLabels,
@@ -220,7 +221,8 @@ export function MessageContent({
           onCancel={onCancelEdit}
         />
       ) : (
-        message.content && (
+        message.content &&
+        !message.call_invite && (
           <MessageText
             content={message.content}
             everyone={message.mention_everyone ?? null}
@@ -228,6 +230,7 @@ export function MessageContent({
           />
         )
       )}
+      {message.call_invite && <CallInviteCard message={message} />}
       <MessageStickerSlot message={message} />
       {message.gif_url && <MessageGif gifUrl={message.gif_url} metadata={message.gif_metadata} />}
       {message.attachments?.length ? (

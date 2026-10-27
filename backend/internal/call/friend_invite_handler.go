@@ -29,32 +29,36 @@ func (h *Handler) InviteFriends(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"results": results})
 }
 
-// AcceptFriendInvite: POST /calls/:id/invites/accept (feito pelo convidado).
-func (h *Handler) AcceptFriendInvite(c *gin.Context) {
-	h.answerInvite(c, h.service.AcceptFriendInvite)
-}
-
-// DeclineFriendInvite: POST /calls/:id/invites/decline (feito pelo convidado).
-func (h *Handler) DeclineFriendInvite(c *gin.Context) {
-	h.answerInvite(c, h.service.DeclineFriendInvite)
-}
-
-func (h *Handler) answerInvite(c *gin.Context, answer func(callID, userID string) error) {
+// InviteStatus: GET /calls/:id/invite -> {"valid": bool}. O cartão de convite
+// na DM pergunta se a chamada ainda existe (mensagem antiga = inválido).
+func (h *Handler) InviteStatus(c *gin.Context) {
 	userID, ok := c.Get("userID")
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	if err := answer(c.Param("id"), userID.(string)); err != nil {
+	asInviter := c.Query("as") == "inviter"
+	c.JSON(http.StatusOK, gin.H{"valid": h.service.InviteValid(c.Param("id"), userID.(string), asInviter)})
+}
+
+// OpenFriendInvite: POST /calls/:id/invites/open (feito pelo convidado, no "Abrir").
+func (h *Handler) OpenFriendInvite(c *gin.Context) {
+	userID, ok := c.Get("userID")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	admitted, err := h.service.OpenFriendInvite(c.Param("id"), userID.(string))
+	if err != nil {
 		c.JSON(mapInviteError(err), gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	c.JSON(http.StatusOK, gin.H{"admitted": admitted})
 }
 
 func mapInviteError(err error) int {
 	switch {
-	case errors.Is(err, ErrNotFound), errors.Is(err, ErrNoInvite):
+	case errors.Is(err, ErrNotFound), errors.Is(err, ErrInviteInvalid):
 		return http.StatusNotFound
 	case errors.Is(err, ErrInviteNotAllowed):
 		return http.StatusForbidden
