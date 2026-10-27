@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const djMigration = "../../migrations/000080_badge_dj.up.sql"
+const djMigration = "../../migrations/000070_badge_dj.up.sql"
 
 func TestDJTiers(t *testing.T) {
 	c := category(t, "dj")

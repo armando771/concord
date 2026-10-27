@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const votanteMigration = "../../migrations/000085_badge_votante.up.sql"
+const votanteMigration = "../../migrations/000075_badge_votante.up.sql"
 
 func TestVotanteTiers(t *testing.T) {
 	c := category(t, "votante")

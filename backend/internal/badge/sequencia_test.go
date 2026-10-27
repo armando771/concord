@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const sequenciaMigration = "../../migrations/000083_badge_sequencia.up.sql"
+const sequenciaMigration = "../../migrations/000073_badge_sequencia.up.sql"
 
 func TestSequenciaTiers(t *testing.T) {
 	c := category(t, "sequencia")

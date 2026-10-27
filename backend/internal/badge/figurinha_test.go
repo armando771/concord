@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const figurinhaMigration = "../../migrations/000082_badge_figurinha.up.sql"
+const figurinhaMigration = "../../migrations/000072_badge_figurinha.up.sql"
 
 func TestFigurinhaTiers(t *testing.T) {
 	c := category(t, "figurinha")

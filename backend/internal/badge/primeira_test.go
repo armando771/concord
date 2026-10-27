@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const primeiraMigration = "../../migrations/000086_badge_primeira.up.sql"
+const primeiraMigration = "../../migrations/000076_badge_primeira.up.sql"
 
 func TestPrimeiraTiers(t *testing.T) {
 	c := category(t, "primeira")
