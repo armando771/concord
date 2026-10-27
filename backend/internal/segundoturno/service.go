@@ -62,7 +62,9 @@ func (s *Service) Responder(ctx context.Context, userID string, fezOL bool) (Est
 		return Estado{}, ErrJaRespondeu
 	}
 	if fezOL {
-		s.badges.Refresh(ctx, userID)
+		// A resposta já está gravada: se quem pediu desconectar agora, o
+		// badge ainda precisa ser concedido e anunciado.
+		s.badges.Refresh(context.WithoutCancel(ctx), userID)
 	}
 	return Estado{Elegivel: true, Respondeu: true, FezOL: fezOL}, nil
 }

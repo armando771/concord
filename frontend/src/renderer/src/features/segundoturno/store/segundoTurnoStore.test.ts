@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const ensureBadges = vi.hoisted(() => vi.fn())
+vi.mock('../../levels/store/badgeStore', () => ({
+  useBadgeStore: { getState: () => ({ ensureBadges }) }
+}))
 vi.mock('../api/segundoTurno', () => ({
   fetchSegundoTurno: vi.fn(),
   responderSegundoTurno: vi.fn()
@@ -35,6 +39,7 @@ describe('segundoTurnoStore', () => {
     storageEmMemoria()
     fetchMock.mockReset()
     responderMock.mockReset()
+    ensureBadges.mockReset()
     fetchMock.mockResolvedValue(elegivel)
     estado().reset()
   })
@@ -83,6 +88,16 @@ describe('segundoTurnoStore', () => {
     expect(estado().estado).toBeNull()
   })
 
+  it('carregar de novo depois de uma falha busca outra vez (janela voltou ao foco)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    fetchMock.mockRejectedValueOnce(new Error('sem rede'))
+    await estado().carregar('ana')
+    expect(estado().estado).toBeNull()
+    await estado().carregar('ana')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(estado().estado).toEqual(elegivel)
+  })
+
   it('responder sim guarda a resposta e abre a celebração', async () => {
     await estado().carregar('ana')
     responderMock.mockResolvedValue(respondido(true))
@@ -91,6 +106,20 @@ describe('segundoTurnoStore', () => {
     expect(estado().reacao).toBe('sim')
     expect(estado().estado?.respondeu).toBe(true)
     expect(estado().enviando).toBe(false)
+  })
+
+  it('responder sim recarrega os badges de quem respondeu, sem esperar o aviso do servidor', async () => {
+    await estado().carregar('ana')
+    responderMock.mockResolvedValue(respondido(true))
+    await estado().responder(true)
+    expect(ensureBadges).toHaveBeenCalledWith('ana', true)
+  })
+
+  it('responder não deixa os badges como estão', async () => {
+    await estado().carregar('ana')
+    responderMock.mockResolvedValue(respondido(false))
+    await estado().responder(false)
+    expect(ensureBadges).not.toHaveBeenCalled()
   })
 
   it('responder não abre a reação triste', async () => {

@@ -39,10 +39,15 @@ func (f *fakeStore) Gravar(_ context.Context, userID string, fezOL bool) (bool, 
 	return true, nil
 }
 
-type fakeRefresher struct{ chamados []string }
+type fakeRefresher struct {
+	chamados []string
+	// ctxErr é o erro do contexto que o Refresh recebeu.
+	ctxErr error
+}
 
-func (f *fakeRefresher) Refresh(_ context.Context, userID string) {
+func (f *fakeRefresher) Refresh(ctx context.Context, userID string) {
 	f.chamados = append(f.chamados, userID)
+	f.ctxErr = ctx.Err()
 }
 
 func novoServico(contas map[string]Conta) (*Service, *fakeStore, *fakeRefresher) {
@@ -139,5 +144,18 @@ func TestResponderUsuarioInexistente(t *testing.T) {
 	s, _, _ := novoServico(map[string]Conta{})
 	if _, err := s.Responder(context.Background(), "ninguem", true); !errors.Is(err, ErrUsuarioNaoEncontrado) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// Se quem pediu desconectar logo depois de gravar, o badge ainda tem que sair.
+func TestResponderSimReavaliaMesmoComPedidoCancelado(t *testing.T) {
+	s, _, rf := novoServico(map[string]Conta{"ana": antes()})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := s.Responder(ctx, "ana", true); err != nil {
+		t.Fatal(err)
+	}
+	if len(rf.chamados) != 1 || rf.ctxErr != nil {
+		t.Fatalf("Refresh chamado = %v, ctx.Err() = %v, quer 1 chamada com contexto vivo", rf.chamados, rf.ctxErr)
 	}
 }

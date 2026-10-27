@@ -21,6 +21,15 @@ function SegundoTurnoHost(): React.JSX.Element | null {
     else reset()
   }, [userId, carregar, reset])
 
+  // Falha de rede ao abrir o app: tenta de novo quando a janela volta ao foco
+  // (sem custo se o estado já foi carregado).
+  useEffect(() => {
+    if (!userId) return
+    const retry = (): void => void carregar(userId)
+    window.addEventListener('focus', retry)
+    return () => window.removeEventListener('focus', retry)
+  }, [userId, carregar])
+
   if (fase === 'banner') return <SegundoTurnoBanner />
   if (fase === 'celebracao') return <SegundoTurnoCelebracao />
   if (fase === 'triste') return <SegundoTurnoTriste />

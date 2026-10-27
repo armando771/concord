@@ -5,6 +5,7 @@ import {
   responderSegundoTurno,
   type SegundoTurnoEstado
 } from '../api/segundoTurno'
+import { useBadgeStore } from '../../levels/store/badgeStore'
 import { gravarDispensa, lerDispensa, type Reacao } from '../lib/segundoTurno'
 
 interface SegundoTurnoState {
@@ -60,6 +61,8 @@ export const useSegundoTurnoStore = create<SegundoTurnoState>()((set, get) => ({
       const estado = await responderSegundoTurno(fezOL)
       if (get().userId !== userId) return
       set({ estado, enviando: false, reacao: fezOL ? 'sim' : 'nao' })
+      // O badge já existe no servidor; não depende do aviso pelo websocket.
+      if (fezOL) void useBadgeStore.getState().ensureBadges(userId, true)
     } catch (err) {
       if (get().userId !== userId) return
       if (jaDecidido(err)) {
