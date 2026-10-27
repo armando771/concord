@@ -17,6 +17,12 @@ export function statusOf(err: unknown): number | null | undefined {
   return err instanceof TypeError ? null : undefined
 }
 
+/** Nem chegou ao servidor (rede, DNS, bloqueio): a tela oferece os detalhes da conexão. */
+export function isConnectionError(err: unknown): boolean {
+  const status = statusOf(err)
+  return status === null || status === 0
+}
+
 export function commonMessage(status: number | null | undefined): string | null {
   if (status === null || status === 0) return 'Sem conexão com o servidor.'
   if (status === undefined) return null

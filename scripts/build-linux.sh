@@ -20,6 +20,7 @@ docker run --rm --platform linux/amd64 \
   -v "$ROOT/frontend/dist:/out" \
   -v concord-builder-linux-cache:/root/.cache \
   -e VITE_SERVER_URL="$SERVER_URL" \
+  -e VITE_SERVER_FALLBACK_URLS="${SERVER_FALLBACK_URLS:-}" \
   -e CONCORD_UPDATE_URL="${SERVER_URL%/}/updates/" \
   -e CONCORD_UPDATE_PUBKEY="${CONCORD_UPDATE_PUBKEY:-}" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \

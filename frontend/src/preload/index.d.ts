@@ -5,6 +5,7 @@ import type { CallResume, PendingCallResume } from '../shared/callResume'
 import type { AppMetrics } from '../shared/appMetrics'
 import type { PerfEvent } from '../shared/perfLog'
 import type { PortalStatus, ScreenShareFlow } from '../shared/screenShareFlow'
+import type { ServerDiagnostics } from '../shared/serverConnection'
 
 export interface ScreenSourceInfo {
   id: string
@@ -128,6 +129,13 @@ export interface OverlayShortcutStatus {
   taken: boolean
 }
 
+export interface ServerApi {
+  /** Endereço que respondeu ao abrir o app; null = o do build. */
+  url: string | null
+  /** Versão, endereço em uso e testes de rede (`retest`: testa de novo agora). */
+  diagnostics(retest?: boolean): Promise<ServerDiagnostics | null>
+}
+
 export interface WindowThemeApi {
   /** Pinta a barra de título nativa (Windows/Linux) com as cores do tema. */
   setTitleBarColors(colors: { color: string; symbolColor: string }): void
@@ -182,6 +190,7 @@ declare global {
       games?: GamesApi
       keybinds?: KeybindsApi
       windowTheme?: WindowThemeApi
+      server?: ServerApi
     }
   }
 }

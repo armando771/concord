@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { loginErrorMessage, registerErrorMessage } from './loginError'
+import { isConnectionError, loginErrorMessage, registerErrorMessage } from './loginError'
 
 // Mesmo formato do ApiError (status + message), sem importar o client.
 function apiError(status: number, message: string): Error & { status: number } {
@@ -68,5 +68,18 @@ describe('registerErrorMessage', () => {
   it('o resto cai no genérico do cadastro', () => {
     expect(registerErrorMessage(apiError(404, 'x'))).toBe('Falha ao criar conta.')
     expect(registerErrorMessage(new Error('boom'))).toBe('Falha ao criar conta.')
+  })
+})
+
+describe('isConnectionError', () => {
+  it('fetch rejeitado ou status 0: não chegou ao servidor (mostra os detalhes da conexão)', () => {
+    expect(isConnectionError(new TypeError('Failed to fetch'))).toBe(true)
+    expect(isConnectionError(apiError(0, 'Request timed out'))).toBe(true)
+  })
+
+  it('o servidor respondeu: não é falta de conexão', () => {
+    expect(isConnectionError(apiError(500, 'boom'))).toBe(false)
+    expect(isConnectionError(apiError(429, 'slow down'))).toBe(false)
+    expect(isConnectionError(new Error('x'))).toBe(false)
   })
 })
