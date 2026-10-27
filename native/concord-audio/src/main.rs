@@ -2,12 +2,16 @@
 //! de tela e escreve PCM float32 48 kHz estéreo intercalado em stdout.
 //! Escreve "ready" em stderr quando a captura começa; erros também em stderr.
 //! No modo `foreground`, informa em stdout a janela em tela cheia na frente
-//! (overlay de jogo).
+//! (overlay de jogo). No modo `overlay`, desenha o overlay de jogo numa janela
+//! nativa com o estado que chega em stdin.
 
 mod args;
 // Regra pura (testada no Linux); só o laço do Windows a usa.
 #[cfg_attr(not(windows), allow(dead_code))]
 mod fullscreen;
+// Puro em boa parte (testado no Linux); a janela só existe no Windows.
+#[cfg_attr(not(windows), allow(dead_code))]
+mod overlay;
 #[cfg(windows)]
 mod capture;
 #[cfg(windows)]
@@ -24,7 +28,10 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    exit_when_parent_goes_away();
+    // No overlay o stdin é o canal do estado: quem lê (e sai no fim dele) é o próprio modo.
+    if mode != args::Mode::Overlay {
+        exit_when_parent_goes_away();
+    }
     run(&mode)
 }
 
@@ -48,6 +55,7 @@ fn exit_when_parent_goes_away() {
 fn run(mode: &args::Mode) -> ExitCode {
     let result = match mode {
         args::Mode::Foreground => foreground::run(),
+        args::Mode::Overlay => overlay::run(),
         _ => capture::run(mode),
     };
     match result {

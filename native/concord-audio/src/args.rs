@@ -4,6 +4,7 @@
 //!   concord-audio include <pid>    som do processo <pid> (e filhos)
 //!   concord-audio exclude <pid>    som do sistema todo, menos <pid> (e filhos)
 //!   concord-audio foreground       informa a janela em tela cheia (overlay de jogo)
+//!   concord-audio overlay          janela nativa do overlay de jogo (estado em stdin)
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -11,12 +12,14 @@ pub enum Mode {
     Include(u32),
     Exclude(u32),
     Foreground,
+    Overlay,
 }
 
 pub fn parse_args(args: &[String]) -> Result<Mode, String> {
-    let usage = || "uso: concord-audio window <hwnd> | include <pid> | exclude <pid> | foreground".to_string();
+    let usage = || "uso: concord-audio window <hwnd> | include <pid> | exclude <pid> | foreground | overlay".to_string();
     match args {
         [mode] if mode == "foreground" => Ok(Mode::Foreground),
+        [mode] if mode == "overlay" => Ok(Mode::Overlay),
         [mode, value] => {
             let number = |v: &str| v.parse::<u64>().map_err(|_| format!("número inválido: {v}"));
             match mode.as_str() {
@@ -72,5 +75,11 @@ mod tests {
     fn modo_foreground() {
         assert_eq!(parse_args(&args(&["foreground"])), Ok(Mode::Foreground));
         assert!(parse_args(&args(&["foreground", "1"])).is_err());
+    }
+
+    #[test]
+    fn modo_overlay() {
+        assert_eq!(parse_args(&args(&["overlay"])), Ok(Mode::Overlay));
+        assert!(parse_args(&args(&["overlay", "1"])).is_err());
     }
 }
