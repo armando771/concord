@@ -1,12 +1,8 @@
-import type { Role } from '../../servers/lib/permissions'
 import UserContextMenuModeration from './UserContextMenuModeration'
-import { RoleAssignMenuItems } from './UserContextMenuSubmenus'
 
 interface ServerSectionProps {
   server?: { id: string } | null
-  member?: { user_id: string; role_ids?: string[]; nickname?: string | null; display_name?: string | null } | null
   canNick: boolean
-  givable: Role[]
   voiceCallId?: string
   voiceState?: { server_muted?: boolean; server_deafened?: boolean }
   canMuteInVoice: boolean
@@ -19,15 +15,12 @@ interface ServerSectionProps {
   close: () => void
   itemClass: string
   onEditNickname: () => void
-  onToggleRole: (roleId: string, has: boolean) => void
   onModerate: (action: () => Promise<unknown>, fallback: string) => Promise<void>
 }
 
 export function StandardUserServerSection({
   server,
-  member,
   canNick,
-  givable,
   voiceCallId,
   voiceState,
   canMuteInVoice,
@@ -40,7 +33,6 @@ export function StandardUserServerSection({
   close,
   itemClass,
   onEditNickname,
-  onToggleRole,
   onModerate
 }: ServerSectionProps): React.JSX.Element {
   return (
@@ -52,16 +44,6 @@ export function StandardUserServerSection({
             Alterar apelido
           </button>
         </>
-      )}
-
-      {member && server && (
-        <RoleAssignMenuItems
-          givable={givable}
-          memberRoleIds={member.role_ids}
-          saving={saving}
-          itemClass={itemClass}
-          onToggleRole={onToggleRole}
-        />
       )}
 
       <UserContextMenuModeration

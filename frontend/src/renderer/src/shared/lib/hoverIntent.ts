@@ -1,8 +1,8 @@
 export interface HoverIntent {
   /** Ponteiro ou foco entrou: abre depois de `openDelay`. */
   enter(): void
-  /** Ponteiro ou foco saiu: fecha depois de `closeDelay`. */
-  leave(): void
+  /** Ponteiro ou foco saiu: fecha depois de `closeDelay` (ou de `delay`, se passado). */
+  leave(delay?: number): void
   /** Abre na hora (foco pelo teclado). */
   show(): void
   /** Fecha na hora (Escape). */
@@ -38,7 +38,7 @@ export function createHoverIntent({
   }
   return {
     enter: () => schedule(true, openDelay),
-    leave: () => schedule(false, closeDelay),
+    leave: (delay) => schedule(false, delay ?? closeDelay),
     show: () => {
       cancel()
       onOpenChange(true)

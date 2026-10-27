@@ -7,9 +7,7 @@ describe('UserContextMenuServerSections', () => {
     const html = renderToStaticMarkup(
       <StandardUserServerSection
         server={{ id: 's1' }}
-        member={{ user_id: 'u1', role_ids: [] }}
         canNick={true}
-        givable={[]}
         canMuteInVoice={false}
         canDeafenInVoice={false}
         canDisconnect={false}
@@ -20,7 +18,6 @@ describe('UserContextMenuServerSections', () => {
         close={vi.fn()}
         itemClass="item"
         onEditNickname={vi.fn()}
-        onToggleRole={vi.fn()}
         onModerate={vi.fn()}
       />
     )

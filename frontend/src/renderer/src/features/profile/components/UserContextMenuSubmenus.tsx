@@ -1,6 +1,12 @@
+import ContextSubmenu from '../../../shared/ui/ContextSubmenu'
+import { VolumeIcon } from '../../../shared/ui/icons'
 import { roleColorCss, type Role } from '../../servers/lib/permissions'
 
-interface RoleAssignMenuItemsProps {
+/** Itens dos submenus: mais altos no toque, para o dedo acertar (40 px). */
+const submenuItem = (itemClass: string): string =>
+  `${itemClass} flex items-center gap-2 py-2.5 sm:py-1.5 pointer-coarse:py-2.5`
+
+interface RoleItemsProps {
   givable: Role[]
   memberRoleIds?: string[]
   saving: boolean
@@ -8,79 +14,124 @@ interface RoleAssignMenuItemsProps {
   onToggleRole: (roleId: string, has: boolean) => void
 }
 
-export function RoleAssignMenuItems({
+/** Cargos atribuíveis: bolinha de cor, nome e caixa marcada se a pessoa tem o cargo. */
+export function RoleSubmenuItems({
   givable,
   memberRoleIds,
   saving,
   itemClass,
   onToggleRole
-}: RoleAssignMenuItemsProps): React.JSX.Element | null {
-  if (givable.length === 0) return null
-
+}: RoleItemsProps): React.JSX.Element {
   return (
     <>
-      <div className="my-1 h-px bg-fg/10" />
-      <p className="px-2 pt-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-500">
-        Cargos
-      </p>
-      <div className="flex max-h-40 flex-col gap-0.5 overflow-y-auto">
-        {givable.map((role) => {
-          const has = !!memberRoleIds?.includes(role.id)
-          return (
-            <button
-              key={role.id}
-              role="menuitemcheckbox"
-              aria-checked={has}
-              disabled={saving}
-              onClick={() => onToggleRole(role.id, has)}
-              className={`${itemClass} flex items-center gap-2`}
+      {givable.map((role) => {
+        const has = !!memberRoleIds?.includes(role.id)
+        return (
+          <button
+            key={role.id}
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={has}
+            aria-disabled={saving}
+            onClick={saving ? undefined : () => onToggleRole(role.id, has)}
+            className={`${submenuItem(itemClass)} ${saving ? 'opacity-50' : ''}`}
+          >
+            <span
+              aria-hidden
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ background: roleColorCss(role.color) ?? '#99aab5' }}
+            />
+            <span className="min-w-0 flex-1 truncate">{role.name}</span>
+            <span
+              aria-hidden
+              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[11px] font-black leading-none ${
+                has ? 'border-brand bg-brand text-white' : 'border-gray-500'
+              }`}
             >
-              <span
-                aria-hidden
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ background: roleColorCss(role.color) ?? '#99aab5' }}
-              />
-              <span className="min-w-0 flex-1 truncate">{role.name}</span>
-              {has && <span className="text-success">✓</span>}
-            </button>
-          )
-        })}
-      </div>
+              {has && '✓'}
+            </span>
+          </button>
+        )
+      })}
     </>
   )
 }
 
-export function UserVoiceMoveSection({
-  moveTargets,
-  saving,
-  itemClass,
-  onMoveTo
-}: {
+interface MoveItemsProps {
   moveTargets: Array<{ id: string; name: string }>
   saving: boolean
   itemClass: string
   onMoveTo: (channelId: string, channelName: string) => void
-}): React.JSX.Element | null {
-  if (moveTargets.length === 0) return null
+}
+
+/** Canais de voz para onde mover a pessoa. */
+export function VoiceMoveSubmenuItems({
+  moveTargets,
+  saving,
+  itemClass,
+  onMoveTo
+}: MoveItemsProps): React.JSX.Element {
+  return (
+    <>
+      {moveTargets.map((ch) => (
+        <button
+          key={ch.id}
+          type="button"
+          role="menuitem"
+          disabled={saving}
+          onClick={() => onMoveTo(ch.id, ch.name)}
+          className={submenuItem(itemClass)}
+        >
+          <VolumeIcon className="h-4 w-4 shrink-0 text-gray-400" />
+          <span className="min-w-0 flex-1 truncate">{ch.name}</span>
+        </button>
+      ))}
+    </>
+  )
+}
+
+interface MemberSubmenusProps extends RoleItemsProps, MoveItemsProps {}
+
+/**
+ * "Cargos ›" e "Mover para ›": itens compactos que abrem submenus ao lado.
+ * Cada um só aparece se há o que mostrar (as permissões já filtram a lista).
+ */
+export function UserMemberSubmenus({
+  givable,
+  memberRoleIds,
+  moveTargets,
+  saving,
+  itemClass,
+  onToggleRole,
+  onMoveTo
+}: MemberSubmenusProps): React.JSX.Element | null {
+  const hasRoles = givable.length > 0
+  const hasMove = moveTargets.length > 0
+  if (!hasRoles && !hasMove) return null
   return (
     <>
       <div className="my-1 h-px bg-fg/10" />
-      <p className="px-2 pt-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-500">
-        Mover para
-      </p>
-      <div className="flex max-h-40 flex-col gap-0.5 overflow-y-auto">
-        {moveTargets.map((ch) => (
-          <button
-            key={ch.id}
-            role="menuitem"
-            disabled={saving}
-            onClick={() => onMoveTo(ch.id, ch.name)}
-            className={`${itemClass} truncate`}
-          >
-            🔊 {ch.name}
-          </button>
-        ))}
-      </div>
+      {hasRoles && (
+        <ContextSubmenu label="Cargos" triggerClass={itemClass}>
+          <RoleSubmenuItems
+            givable={givable}
+            memberRoleIds={memberRoleIds}
+            saving={saving}
+            itemClass={itemClass}
+            onToggleRole={onToggleRole}
+          />
+        </ContextSubmenu>
+      )}
+      {hasMove && (
+        <ContextSubmenu label="Mover para" triggerClass={itemClass}>
+          <VoiceMoveSubmenuItems
+            moveTargets={moveTargets}
+            saving={saving}
+            itemClass={itemClass}
+            onMoveTo={onMoveTo}
+          />
+        </ContextSubmenu>
+      )}
     </>
   )
 }
