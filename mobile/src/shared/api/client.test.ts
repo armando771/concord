@@ -13,7 +13,7 @@ const json = (status: number, body: unknown = {}) =>
 beforeEach(() => {
   jest.clearAllMocks()
   tokens = { accessToken: 'a1', refreshToken: 'r1' }
-  bindSession({ tokens: () => tokens, setTokens, expire })
+  bindSession({ tokens: () => tokens, userId: () => 'u1', setTokens, expire })
   global.fetch = fetchMock as unknown as typeof fetch
 })
 

@@ -4,6 +4,8 @@ import type { StoredTokens, Tokens } from '../lib/authRefresh'
 // importa de features, então o authStore se liga aqui no boot (bindSession).
 export interface SessionPort {
   tokens(): StoredTokens
+  /** Id da conta logada (a sala `user:<id>` do WebSocket), ou null. */
+  userId(): string | null
   setTokens(tokens: Tokens): Promise<void>
   /** Sessão recusada pelo servidor: sai da conta com o aviso de expirada. */
   expire(): Promise<void>

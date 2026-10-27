@@ -15,6 +15,12 @@ describe('bindAuthSession', () => {
     expect(session().tokens()).toEqual({ accessToken: 'a', refreshToken: 'r' })
   })
 
+  it('a porta lê o id do usuário logado', () => {
+    expect(session().userId()).toBeNull()
+    useAuthStore.setState({ user: { id: 'u9', username: 'x', display_name: 'X', email: 'x@x.co' } })
+    expect(session().userId()).toBe('u9')
+  })
+
   it('setTokens grava no authStore', async () => {
     await session().setTokens({ accessToken: 'a2', refreshToken: 'r2' })
     expect(useAuthStore.getState()).toMatchObject({ accessToken: 'a2', refreshToken: 'r2' })

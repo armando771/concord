@@ -8,6 +8,7 @@ export function bindAuthSession(): void {
       const { accessToken, refreshToken } = useAuthStore.getState()
       return { accessToken, refreshToken }
     },
+    userId: () => useAuthStore.getState().user?.id ?? null,
     setTokens: (tokens) => useAuthStore.getState().setTokens(tokens),
     expire: () => useAuthStore.getState().expire()
   })
