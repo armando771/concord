@@ -27,6 +27,8 @@ type Stats struct {
 	Proposals int64
 	// Está em dev_badge_users (Fundador).
 	IsDev bool
+	// Respondeu "sim" no banner do segundo turno (Fez o L).
+	FezOL bool
 }
 
 // Unlocks: categoria -> tier -> quando foi desbloqueado (o que está gravado).
@@ -127,6 +129,7 @@ var valueFns = map[string]valueFn{
 	"reacoes":      func(s Stats, _ time.Time) int64 { return s.Reactions },
 	"contribuinte": func(s Stats, _ time.Time) int64 { return s.Proposals },
 	"criador":      func(s Stats, _ time.Time) int64 { return flag(s.IsDev) },
+	"l":            func(s Stats, _ time.Time) int64 { return flag(s.FezOL) },
 }
 
 func valueOf(c Category, s Stats, now time.Time) int64 {

@@ -133,7 +133,7 @@ func TestBadgesAnnouncesNewTiersOnlyOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if full, ok := res.Badges.([]Badge); !ok || len(full) != len(Catalog)-1 || res.UserID != "ana" || !res.Self {
+	if full, ok := res.Badges.([]Badge); !ok || len(full) != nonExclusiveCount() || res.UserID != "ana" || !res.Self {
 		t.Fatalf("response = %+v", res)
 	}
 	if len(pub.events) != 1 || len(pub.events[0].Unlocks) != 1 {

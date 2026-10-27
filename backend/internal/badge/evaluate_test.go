@@ -30,8 +30,8 @@ func TestCatalogIsWellFormed(t *testing.T) {
 			t.Fatalf("category %q incomplete", c.Key)
 		}
 		for i, tier := range c.Tiers {
-			// Mítico é só dos badges concedidos à mão.
-			if (tier.Rarity == RarityMythic) != c.Exclusive {
+			// Mítico é só dos badges exclusivos (nem todo exclusivo é mítico).
+			if tier.Rarity == RarityMythic && !c.Exclusive {
 				t.Fatalf("%s tier %d: rarity %q with exclusive=%v", c.Key, i+1, tier.Rarity, c.Exclusive)
 			}
 			if !valid[tier.Rarity] {
@@ -304,4 +304,54 @@ func TestPublicViewOfCreatorHasNoNumbers(t *testing.T) {
 	if pub == nil || pub.Rarity != RarityMythic || pub.TierName != "Fundador" || pub.UnlockedAt == "" {
 		t.Fatalf("public criador = %+v", pub)
 	}
+}
+
+func TestEvaluateLOnlyForWhoSaidYes(t *testing.T) {
+	badges, fresh := Evaluate(Stats{CreatedAt: FounderCutoff}, nil, now)
+	if hasBadge(badges, "l") {
+		t.Fatal("quem não fez o L vê o badge")
+	}
+	for _, u := range fresh {
+		if u.Category == "l" {
+			t.Fatalf("quem não fez o L desbloqueou: %+v", u)
+		}
+	}
+
+	badges, fresh = Evaluate(Stats{CreatedAt: FounderCutoff, FezOL: true}, nil, now)
+	l := find(t, badges, "l")
+	if l.Tier != 1 || l.TierName != "Fez o L" || l.Rarity != RarityLegendary || l.Progress != 1 || l.NextThreshold != nil {
+		t.Fatalf("badge l = %+v", l)
+	}
+	var got bool
+	for _, u := range fresh {
+		got = got || (u.Category == "l" && u.Tier == 1)
+	}
+	if !got {
+		t.Fatalf("fresh = %+v, want l/1", fresh)
+	}
+}
+
+func TestEvaluateLKeepsDateOnceStored(t *testing.T) {
+	granted := now.AddDate(0, 0, -3)
+	badges, fresh := Evaluate(Stats{CreatedAt: FounderCutoff, FezOL: true}, Unlocks{"l": {1: granted}}, now)
+	l := find(t, badges, "l")
+	if l.UnlockedAt == nil || !l.UnlockedAt.Equal(granted) {
+		t.Fatalf("unlocked_at = %v, want %v", l.UnlockedAt, granted)
+	}
+	for _, u := range fresh {
+		if u.Category == "l" {
+			t.Fatalf("já gravado, não pode vir de novo: %+v", u)
+		}
+	}
+}
+
+// nonExclusiveCount é quantas categorias quem não tem nenhum exclusivo vê.
+func nonExclusiveCount() int {
+	n := 0
+	for _, c := range Catalog {
+		if !c.Exclusive {
+			n++
+		}
+	}
+	return n
 }
