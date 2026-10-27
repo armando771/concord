@@ -15,6 +15,21 @@ const SYMBOL = /\p{So}/u
 const VS16_BASE = /[\p{So}\p{Sm}\p{Sk}\p{Nd}\p{P}]/u
 const VISIBLE = /[\p{L}\p{N}\p{P}\p{S}]/u
 
+/** ZWJ só vale entre emoji (ou VS16) e um símbolo. */
+function zwjValid(prev: string | undefined, next: string | undefined): boolean {
+  const prevOk = prev !== undefined && (EMOJI_PART.test(prev) || prev.codePointAt(0) === VS16)
+  return prevOk && next !== undefined && SYMBOL.test(next)
+}
+
+/** VS16 só vale depois de símbolo, dígito ou pontuação. */
+function vs16Valid(prev: string | undefined): boolean {
+  return prev !== undefined && VS16_BASE.test(prev)
+}
+
+function isForbidden(ch: string, code: number): boolean {
+  return code === REPLACEMENT || INVISIBLE.has(code) || CONTROL.test(ch)
+}
+
 /**
  * Problema nos caracteres de um nome já sem espaços nas pontas: "invalid"
  * (controle, NUL, invisível, bidi), "blank" (nada visível) ou null (ok). O ZWJ
@@ -27,19 +42,14 @@ export function nameCharsError(name: string): 'invalid' | 'blank' | null {
     const ch = chars[i]
     const code = ch.codePointAt(0) ?? 0
     if (code === ZWJ) {
-      const prev = chars[i - 1]
-      const next = chars[i + 1]
-      const prevOk = prev !== undefined && (EMOJI_PART.test(prev) || prev.codePointAt(0) === VS16)
-      if (!prevOk || next === undefined || !SYMBOL.test(next)) return 'invalid'
-      continue
+      if (!zwjValid(chars[i - 1], chars[i + 1])) return 'invalid'
+    } else if (code === VS16) {
+      if (!vs16Valid(chars[i - 1])) return 'invalid'
+    } else if (isForbidden(ch, code)) {
+      return 'invalid'
+    } else if (VISIBLE.test(ch)) {
+      visible = true
     }
-    if (code === VS16) {
-      const prev = chars[i - 1]
-      if (prev === undefined || !VS16_BASE.test(prev)) return 'invalid'
-      continue
-    }
-    if (code === REPLACEMENT || INVISIBLE.has(code) || CONTROL.test(ch)) return 'invalid'
-    if (VISIBLE.test(ch)) visible = true
   }
   return visible ? null : 'blank'
 }
