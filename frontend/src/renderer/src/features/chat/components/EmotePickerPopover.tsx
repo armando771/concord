@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { filterEmoteCategories } from '../lib/emotes'
+import { useEmotePickerPlacement } from '../hooks/useEmotePickerPlacement'
 
 /** Seletor de emoji das reações (busca + categorias). Posiciona-se no canto da linha. */
 function EmotePickerPopover({
@@ -12,6 +13,8 @@ function EmotePickerPopover({
   const ref = useRef<HTMLDivElement>(null)
   const [search, setSearch] = useState('')
   const categories = filterEmoteCategories(search)
+  // Perto do fim da lista abre para cima (não fica cortado atrás do campo).
+  const placement = useEmotePickerPlacement(ref)
 
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent): void => {
@@ -33,9 +36,10 @@ function EmotePickerPopover({
   return (
     <div
       ref={ref}
+      style={placement}
       onClick={(e) => e.stopPropagation()}
       // Celular: folha de baixo na largura toda (o canto da linha pode estar no fim da tela).
-      className="absolute right-4 top-8 z-30 w-64 rounded-xl border border-subtle bg-floating p-3 shadow-2xl max-md:animate-sheet-in max-md:fixed max-md:inset-x-0 max-md:top-auto max-md:bottom-0 max-md:z-50 max-md:w-full max-md:rounded-b-none max-md:pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      className="absolute right-4 top-8 z-30 flex w-64 flex-col rounded-xl border border-subtle bg-floating p-3 shadow-2xl max-md:animate-sheet-in max-md:fixed max-md:inset-x-0 max-md:top-auto max-md:bottom-0 max-md:z-50 max-md:w-full max-md:rounded-b-none max-md:pb-[max(0.75rem,env(safe-area-inset-bottom))]"
     >
       <input
         type="text"
@@ -44,7 +48,7 @@ function EmotePickerPopover({
         placeholder="Buscar emote..."
         className="mb-2 w-full rounded-md border border-subtle bg-input px-2.5 py-1 text-xs text-strong max-md:py-2 max-md:text-base placeholder:text-gray-500 outline-none focus:border-violet-500/50"
       />
-      <div className="max-h-56 overflow-y-auto overscroll-contain pr-1 max-md:max-h-[45dvh]">
+      <div className="max-h-56 min-h-0 overflow-y-auto overscroll-contain pr-1 max-md:max-h-[45dvh]">
         {categories.map((category) => (
           <div key={category.id} className="mb-2 last:mb-0">
             <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
