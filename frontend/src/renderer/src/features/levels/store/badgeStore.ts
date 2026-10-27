@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { WsEvent } from '../../../shared/api/ws'
 import { fetchBadges, type Badge, type BadgeUnlockEvent } from '../api/badges'
 import { useAuthStore } from '../../auth/store/authStore'
+import { unlocksComAviso } from '../lib/badges'
 
 /** Cartão aberto de novo depois disso busca os badges outra vez. */
 const MAX_AGE_MS = 60_000
@@ -76,12 +77,14 @@ export const useBadgeStore = create<BadgeState>()((set, get) => ({
     if (event.type !== 'badge:unlock') return
     const payload = event.payload as BadgeUnlockEvent
     if (!payload?.unlocks?.length) return
+    void get().ensureBadges(payload.user_id, true)
+    const unlocks = unlocksComAviso(payload.unlocks)
+    if (!unlocks.length) return
     const key = ++toastSeq
-    set({ toast: { key, unlocks: payload.unlocks } })
+    set({ toast: { key, unlocks } })
     setTimeout(() => {
       if (get().toast?.key === key) set({ toast: null })
     }, UNLOCK_TOAST_MS)
-    void get().ensureBadges(payload.user_id, true)
   },
 
   reset: () => {

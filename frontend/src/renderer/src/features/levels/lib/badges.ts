@@ -284,6 +284,14 @@ export function selectedBadge<T extends { category?: string }>(
   return visible.find((b) => b.category === wanted) ?? visible[0]
 }
 
+/** Badges que têm celebração própria na tela e ficam de fora do aviso genérico. */
+const CELEBRACAO_PROPRIA = new Set(['l'])
+
+/** Os desbloqueios que o aviso genérico mostra. */
+export function unlocksComAviso(unlocks: BadgeUnlockEvent['unlocks']): BadgeUnlockEvent['unlocks'] {
+  return unlocks.filter((u) => !CELEBRACAO_PROPRIA.has(u.category))
+}
+
 /** Quantos badges (categorias) o aviso de desbloqueio tem, não tiers. */
 export function unlockCount(unlocks: BadgeUnlockEvent['unlocks']): number {
   return new Set(unlocks.map((u) => u.category)).size
