@@ -1653,3 +1653,31 @@ body.boost-quake #root {
 .msg-jump-highlight {
   animation: msg-jump-highlight 2s ease-out;
 }
+
+/*
+ * Selo "Chegou" (call/components/ArrivalBadge): entra com fade e sai com fade
+ * no fim dos 5 s (ARRIVAL_BADGE_MS, lib/recentArrivals), quando o store o tira.
+ */
+@keyframes arrival-badge {
+  0% {
+    opacity: 0;
+  }
+  6%,
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.arrival-badge {
+  animation: arrival-badge 5s ease-in-out both;
+}
+
+/* Sem movimento: o selo só aparece e some, sem fade. */
+@media (prefers-reduced-motion: reduce) {
+  .arrival-badge {
+    animation: none;
+  }
+}
