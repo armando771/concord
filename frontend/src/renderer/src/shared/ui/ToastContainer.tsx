@@ -93,7 +93,7 @@ export function ToastContainer(): React.JSX.Element {
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-none fixed inset-x-4 top-[calc(var(--titlebar-height,0px)+1rem)] z-50 flex flex-col gap-2 sm:left-auto sm:w-full sm:max-w-sm"
+      className="pointer-events-none fixed inset-x-4 top-[calc(var(--titlebar-height,0px)+1rem)] z-[100] flex flex-col gap-2 sm:left-auto sm:w-full sm:max-w-sm"
     >
       {toasts.map((toast) => (
         <Toast key={toast.id} toast={toast} />
