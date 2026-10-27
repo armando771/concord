@@ -21,14 +21,9 @@ import {
   confirmUserBlock,
   unblockUserTarget,
   promptEditNickname,
-  computeVoiceMoveTargets,
   getAudioKey,
-  canChangeServerNickname,
-  resolveTargetUsername,
-  computeGivableRoles,
-  computeServerModerationPerms
+  canChangeServerNickname
 } from '../lib/userMenuActions'
-import { canMoveVoiceUser, voiceChannelOf } from '../../call/lib/voiceMove'
 import router from '../../../app/router'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useCallStore } from '../../call/store/callStore'
@@ -37,11 +32,11 @@ import { useServerStore } from '../../servers/store/serverStore'
 import { useServerAccess } from '../../servers/hooks/useServerAccess'
 import { useModerationStore } from '../../call/store/moderationStore'
 import { actionErrorMessage } from '../../servers/lib/permissionErrors'
-import { Perm, type Role } from '../../servers/lib/permissions'
 import { showToast } from '../../../shared/store/toastStore'
 import { useUserAudioStore } from '../../call/store/userAudioStore'
 import { useUserMenuStore, type UserMenuTarget } from '../store/userMenuStore'
 import { isMaestroUser } from '../../music/lib/music'
+import { useStandardUserMenuModel } from '../hooks/useStandardUserMenuModel'
 
 const itemClass = 'cursor-pointer rounded px-2 py-1.5 text-left hover:bg-fg/5 disabled:opacity-50'
 
@@ -75,57 +70,20 @@ function StandardUserMenu({
   const unblock = useFriendStore((s) => s.unblock)
   const callIdle = useCallStore((s) => s.status === 'idle')
   const startDMCall = useCallStore((s) => s.startDMCall)
-  const server = useServerStore((s) => s.currentServer)
-  const member = useServerStore((s) => s.currentMembers.find((m) => m.user_id === target.userId))
-  const roles = useServerStore((s) => s.roles)
+  const {
+    server,
+    member,
+    username,
+    inCallWith,
+    givable,
+    voiceState,
+    voiceCallId,
+    moveTargets,
+    canNick,
+    modPerms
+  } = useStandardUserMenuModel(target, meId)
   const addMemberRole = useServerStore((s) => s.addMemberRole)
   const removeMemberRole = useServerStore((s) => s.removeMemberRole)
-  const channels = useServerStore((s) => s.channels)
-  const serverCalls = useCallStore((s) => s.serverCalls)
-  const access = useServerAccess()
-
-  const inCallWith = useCallStore(
-    (s) => s.status === 'active' && s.participants.some((p) => p.id === target.userId)
-  )
-  const callUsername = useCallStore(
-    (s) => s.participants.find((p) => p.id === target.userId)?.username
-  )
-  const username = resolveTargetUsername(target.username, member?.username, callUsername)
-  const inServer = Boolean(server && member)
-  const canAct = inServer && access.canActOnMember(target.userId)
-  const givable: Role[] = computeGivableRoles(inServer, roles, access)
-
-  const fromChannel = voiceChannelOf(serverCalls, target.userId)
-  const voiceCall = fromChannel ? serverCalls[fromChannel] : undefined
-  const voiceState = voiceCall?.participants.find((p) => p.user_id === target.userId)
-  const voiceCallId = voiceCall?.call?.id
-
-  const inFrom = (want: number): boolean =>
-    Boolean(fromChannel && voiceCallId && access.canInChannel(fromChannel, want))
-
-  const canMove = Boolean(
-    fromChannel &&
-      canMoveVoiceUser({
-        meId,
-        targetId: target.userId,
-        canMoveMembers: access.canInChannel(fromChannel, Perm.MOVE_MEMBERS),
-        canMoveTarget: access.canMoveMember(target.userId)
-      })
-  )
-  const moveTargets = computeVoiceMoveTargets(fromChannel, channels, canMove)
-  const canNick = canChangeServerNickname(
-    inServer,
-    router.state.location.pathname,
-    server?.id ?? undefined,
-    access.canChangeNickname(target.userId)
-  )
-
-  const modPerms = computeServerModerationPerms(
-    canAct,
-    access.canDisconnectMember(target.userId),
-    inFrom,
-    access.can
-  )
 
   const moveTo = async (channelId: string, channelName: string): Promise<void> => {
     setSaving(true)

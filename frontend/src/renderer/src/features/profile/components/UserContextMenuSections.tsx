@@ -368,8 +368,5 @@ export function StandardUserDMSection({
   )
 }
 
-export {
-  RoleAssignMenuItems,
-  UserVoiceMoveSection,
-  StandardUserServerSection
-} from './UserContextMenuServerSections'
+export { StandardUserServerSection } from './UserContextMenuServerSections'
+export { RoleAssignMenuItems, UserVoiceMoveSection } from './UserContextMenuSubmenus'
