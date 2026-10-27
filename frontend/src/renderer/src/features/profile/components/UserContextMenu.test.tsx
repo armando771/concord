@@ -114,18 +114,18 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import UserContextMenu from './UserContextMenu'
 
 describe('UserContextMenu', () => {
-  it('renderiza opções padrão de usuário (Perfil, Mensagem, Copiar ID)', () => {
+  it('renderiza opções padrão de usuário (Perfil, Mensagem) sem Copiar ID', () => {
     const html = renderToStaticMarkup(<UserContextMenu />)
     expect(html).toContain('Perfil')
     expect(html).toContain('Mensagem')
-    expect(html).toContain('Copiar ID do usuário')
+    expect(html).not.toContain('Copiar ID')
   })
 
   it('renderiza menu de si mesmo quando o alvo é o próprio usuário', () => {
     mockState.target = { userId: 'me-id', name: 'Eu Mesmo', x: 10, y: 10 }
     const html = renderToStaticMarkup(<UserContextMenu />)
     expect(html).toContain('Perfil')
-    expect(html).toContain('Copiar ID do usuário')
+    expect(html).not.toContain('Copiar ID')
     expect(html).not.toContain('Mensagem')
   })
 

@@ -69,4 +69,14 @@ describe('hoverIntent', () => {
     vi.advanceTimersByTime(1000)
     expect(onOpenChange).not.toHaveBeenCalled()
   })
+
+  it('leave aceita um atraso próprio, mais longo, para a travessia na diagonal', () => {
+    const { intent, onOpenChange } = setup()
+    intent.show()
+    intent.leave(500)
+    vi.advanceTimersByTime(499)
+    expect(onOpenChange).toHaveBeenLastCalledWith(true)
+    vi.advanceTimersByTime(1)
+    expect(onOpenChange).toHaveBeenLastCalledWith(false)
+  })
 })

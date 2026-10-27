@@ -392,16 +392,6 @@ function UserProfileCard(): React.JSX.Element | null {
     />
   )
 
-  const copyId = async (): Promise<void> => {
-    try {
-      await navigator.clipboard.writeText(target.userId)
-      showToast.success('ID do usuário copiado.')
-    } catch {
-      showToast.error('Não foi possível copiar o ID.')
-    }
-    close()
-  }
-
   const sendMessage = (): void => {
     close()
     void router.navigate(`/dm/${target.userId}`)
@@ -646,17 +636,6 @@ function UserProfileCard(): React.JSX.Element | null {
               {nicknameButton}
               <div className="mx-2 my-1 h-px bg-fg/10" />
               <StatusMenu status={status} />
-            </div>
-            <div className="mt-2 rounded-lg bg-input p-1.5">
-              <MenuButton
-                icon={
-                  <span className="rounded-[3px] border border-current px-0.5 text-[8px] font-black leading-tight">
-                    ID
-                  </span>
-                }
-                label="Copiar ID do usuário"
-                onClick={() => void copyId()}
-              />
             </div>
           </>
         ) : isBot ? null : (
