@@ -74,6 +74,7 @@ const HOUR = 3600
 
 const DEV_TEXT = 'Dev do Salinha'
 const DEV_ONLY = 'Só para os devs'
+const VOTE_TEXT = 'Fez o L no segundo turno'
 
 function num(n: number): string {
   return Math.floor(n).toLocaleString('pt-BR')
@@ -107,34 +108,26 @@ const TIME_SUFFIX: Record<string, string> = {
   maratona: 'seguidas numa call'
 }
 
+/** O texto da estatística de cada unidade; unidade sem entrada mostra o número. */
+const STAT_TEXT: Partial<Record<BadgeUnit, (b: Badge, value: number) => string>> = {
+  seconds: (b, value) => `${hoursText(value)} ${TIME_SUFFIX[b.category] ?? 'em call'}`,
+  months: (_, value) => `${monthsText(value)} de conta`,
+  messages: (_, value) => (value === 1 ? '1 mensagem enviada' : `${num(value)} mensagens enviadas`),
+  reactions: (_, value) => plural(value, 'reação', 'reações'),
+  level: (_, value) => `Nível ${num(value)}`,
+  people: (_, value) => `Call com até ${plural(value, 'pessoa', 'pessoas')}`,
+  servers: (_, value) => `Dono de ${plural(value, 'servidor', 'servidores')}`,
+  proposals: (_, value) => (value === 1 ? '1 proposta criada' : `${num(value)} propostas criadas`),
+  founder: (_, value) =>
+    value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas',
+  dev: () => DEV_TEXT,
+  vote: () => VOTE_TEXT
+}
+
 /** A estatística da linha "798 horas em call • Desbloqueado em … • RARO". */
 export function statText(b: Badge): string {
   const value = b.value ?? 0
-  switch (b.unit) {
-    case 'seconds': {
-      const suffix = TIME_SUFFIX[b.category] ?? 'em call'
-      return `${hoursText(value)} ${suffix}`
-    }
-    case 'months':
-      return `${monthsText(value)} de conta`
-    case 'messages':
-      return value === 1 ? '1 mensagem enviada' : `${num(value)} mensagens enviadas`
-    case 'reactions':
-      return plural(value, 'reação', 'reações')
-    case 'level':
-      return `Nível ${num(value)}`
-    case 'people':
-      return `Call com até ${plural(value, 'pessoa', 'pessoas')}`
-    case 'servers':
-      return `Dono de ${plural(value, 'servidor', 'servidores')}`
-    case 'proposals':
-      return value === 1 ? '1 proposta criada' : `${num(value)} propostas criadas`
-    case 'founder':
-      return value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas'
-    case 'dev':
-      return DEV_TEXT
-  }
-  return num(value)
+  return STAT_TEXT[b.unit]?.(b, value) ?? num(value)
 }
 
 /**
@@ -144,6 +137,7 @@ export function statText(b: Badge): string {
 export function publicStatText(b: Badge): string {
   if (b.unit === 'founder') return 'Chegou nas primeiras semanas'
   if (b.unit === 'dev') return DEV_TEXT
+  if (b.unit === 'vote') return VOTE_TEXT
   const reached = b.tiers[b.tier - 1]
   if (!reached) return ''
   const label = `${formatThreshold(b.unit, reached.threshold)}`
@@ -177,6 +171,8 @@ export function formatThreshold(unit: BadgeUnit, threshold: number): string {
       return 'Até 31/10/26'
     case 'dev':
       return DEV_ONLY
+    case 'vote':
+      return 'Fez o L'
   }
   return num(threshold)
 }
@@ -286,6 +282,14 @@ export function selectedBadge<T extends { category?: string }>(
 ): Badge | undefined {
   const wanted = picked?.target === target ? picked.category : target.category
   return visible.find((b) => b.category === wanted) ?? visible[0]
+}
+
+/** Badges que têm celebração própria na tela e ficam de fora do aviso genérico. */
+const CELEBRACAO_PROPRIA = new Set(['l'])
+
+/** Os desbloqueios que o aviso genérico mostra. */
+export function unlocksComAviso(unlocks: BadgeUnlockEvent['unlocks']): BadgeUnlockEvent['unlocks'] {
+  return unlocks.filter((u) => !CELEBRACAO_PROPRIA.has(u.category))
 }
 
 /** Quantos badges (categorias) o aviso de desbloqueio tem, não tiers. */

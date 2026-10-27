@@ -27,6 +27,8 @@ type Stats struct {
 	Proposals int64
 	// Está em dev_badge_users (Fundador).
 	IsDev bool
+	// Respondeu "sim" no banner do segundo turno (Fez o L).
+	FezOL bool
 }
 
 // Unlocks: categoria -> tier -> quando foi desbloqueado (o que está gravado).
@@ -98,43 +100,41 @@ func isFounder(createdAt time.Time) bool {
 	return createdAt.Before(FounderCutoff)
 }
 
-func valueOf(c Category, s Stats, now time.Time) int64 {
-	switch c.Key {
-	case "voz":
-		return s.VoiceSeconds
-	case "conta":
-		return monthsBetween(s.CreatedAt, now)
-	case "mensagens":
-		return s.MessagesSent
-	case "streamer":
-		return s.StreamSeconds
-	case "nivel":
+// valueFn calcula o valor de uma categoria para uma pessoa.
+type valueFn func(s Stats, now time.Time) int64
+
+func flag(on bool) int64 {
+	if on {
+		return 1
+	}
+	return 0
+}
+
+// valueFns é o valor de cada categoria; categoria sem entrada vale 0.
+var valueFns = map[string]valueFn{
+	"voz":       func(s Stats, _ time.Time) int64 { return s.VoiceSeconds },
+	"conta":     func(s Stats, now time.Time) int64 { return monthsBetween(s.CreatedAt, now) },
+	"mensagens": func(s Stats, _ time.Time) int64 { return s.MessagesSent },
+	"streamer":  func(s Stats, _ time.Time) int64 { return s.StreamSeconds },
+	"nivel": func(s Stats, _ time.Time) int64 {
 		lvl, _, _ := level.FromXP(s.XP)
 		return int64(lvl)
-	case "coruja":
-		return s.NightSeconds
-	case "madrugador":
-		return s.MorningSeconds
-	case "fundador":
-		if isFounder(s.CreatedAt) {
-			return 1
-		}
-		return 0
-	case "dono":
-		return s.OwnedServers
-	case "festeiro":
-		return s.PeakCallSize
-	case "maratona":
-		return s.LongestSessionSeconds
-	case "reacoes":
-		return s.Reactions
-	case "contribuinte":
-		return s.Proposals
-	case "criador":
-		if s.IsDev {
-			return 1
-		}
-		return 0
+	},
+	"coruja":       func(s Stats, _ time.Time) int64 { return s.NightSeconds },
+	"madrugador":   func(s Stats, _ time.Time) int64 { return s.MorningSeconds },
+	"fundador":     func(s Stats, _ time.Time) int64 { return flag(isFounder(s.CreatedAt)) },
+	"dono":         func(s Stats, _ time.Time) int64 { return s.OwnedServers },
+	"festeiro":     func(s Stats, _ time.Time) int64 { return s.PeakCallSize },
+	"maratona":     func(s Stats, _ time.Time) int64 { return s.LongestSessionSeconds },
+	"reacoes":      func(s Stats, _ time.Time) int64 { return s.Reactions },
+	"contribuinte": func(s Stats, _ time.Time) int64 { return s.Proposals },
+	"criador":      func(s Stats, _ time.Time) int64 { return flag(s.IsDev) },
+	"l":            func(s Stats, _ time.Time) int64 { return flag(s.FezOL) },
+}
+
+func valueOf(c Category, s Stats, now time.Time) int64 {
+	if fn, ok := valueFns[c.Key]; ok {
+		return fn(s, now)
 	}
 	return 0
 }

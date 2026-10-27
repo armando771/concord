@@ -48,8 +48,8 @@ func TestHandlerOwnerGetsTheFullView(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
 		t.Fatal(err)
 	}
-	// Fundador (dev) só aparece para os devs.
-	if !res.Self || len(res.Badges) != len(Catalog)-1 {
+	// Os exclusivos (Fundador, Fez o L) só aparecem para quem tem.
+	if !res.Self || len(res.Badges) != nonExclusiveCount() {
 		t.Fatalf("owner body = %s", w.Body.String())
 	}
 	if msgs := find(t, res.Badges, "mensagens"); msgs.Value != 2345 || msgs.NextThreshold == nil {

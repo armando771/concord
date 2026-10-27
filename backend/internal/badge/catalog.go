@@ -24,6 +24,8 @@ const (
 	UnitFounder   = "founder"
 	UnitDev       = "dev"
 	UnitProposals = "proposals"
+	// UnitVote: badge de uma resposta única (o L do segundo turno).
+	UnitVote = "vote"
 )
 
 // FounderCutoff: quem criou a conta antes desta data (horário de Brasília)
@@ -45,9 +47,9 @@ type Category struct {
 	Description string
 	Unit        string
 	Tiers       []Tier
-	// Exclusive: concedido à mão (tabela no banco), não por número. Só
-	// aparece para quem tem e some se a concessão for retirada, mesmo com o
-	// tier gravado em user_badges.
+	// Exclusive: vem de uma tabela no banco (concessão à mão ou resposta da
+	// pessoa), não de um número. Só aparece para quem tem e some se a linha
+	// for retirada, mesmo com o tier gravado em user_badges.
 	Exclusive bool
 }
 
@@ -163,6 +165,18 @@ var Catalog = []Category{
 		Tiers: []Tier{
 			{"Pioneiro", 1, RarityLegendary},
 		},
+	},
+	{
+		// Quem respondeu "sim" ao banner do segundo turno (internal/segundoturno).
+		// A resposta é única e fica em segundo_turno_respostas.
+		Key:         "l",
+		Name:        "Fez o L",
+		Description: "Fez o L no segundo turno. Ganho respondendo ao banner.",
+		Unit:        UnitVote,
+		Tiers: []Tier{
+			{"Fez o L", 1, RarityLegendary},
+		},
+		Exclusive: true,
 	},
 	{
 		Key:         "dono",

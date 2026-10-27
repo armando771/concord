@@ -41,7 +41,8 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			COALESCE(b.longest_session_seconds, 0),
 			(SELECT COUNT(*) FROM servers sv WHERE sv.owner_id = u.id),
 			(SELECT COUNT(*) FROM proposals p WHERE p.author_id = u.id),
-			EXISTS (SELECT 1 FROM dev_badge_users d WHERE d.user_id = u.id)
+			EXISTS (SELECT 1 FROM dev_badge_users d WHERE d.user_id = u.id),
+			EXISTS (SELECT 1 FROM segundo_turno_respostas r WHERE r.user_id = u.id AND r.fez_o_l)
 		FROM users u
 		LEFT JOIN user_levels l ON l.user_id = u.id
 		LEFT JOIN user_badge_stats b ON b.user_id = u.id
@@ -62,6 +63,7 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 		&s.OwnedServers,
 		&s.Proposals,
 		&s.IsDev,
+		&s.FezOL,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Stats{}, ErrUserNotFound
