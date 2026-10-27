@@ -308,4 +308,20 @@ var Catalog = []Category{
 			{"Chama Eterna", 365, RarityLegendary},
 		},
 	},
+	{
+		// Tempo em call com a câmera ligada, com as regras do Streamer: na
+		// call com mais alguém ouvindo. Quem está de câmera vem do LiveKit
+		// (Service.WithCameras).
+		Key:         "camera",
+		Name:        "Câmera ligada",
+		Description: "Fique em call com a câmera ligada e mais gente ouvindo.",
+		Unit:        UnitSeconds,
+		Tiers: []Tier{
+			{"Rostinho", 1 * hour, RarityCommon},
+			{"Ao Vivo", 10 * hour, RarityCommon},
+			{"Galã", 50 * hour, RarityRare},
+			{"Celebridade", 150 * hour, RarityEpic},
+			{"Big Brother", 500 * hour, RarityLegendary},
+		},
+	},
 }

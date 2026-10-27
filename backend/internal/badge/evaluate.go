@@ -38,6 +38,8 @@ type Stats struct {
 	// Dias seguidos usando o app: a sequência atual e a maior já feita.
 	StreakDays        int64
 	LongestStreakDays int64
+	// Tempo em call com a câmera ligada e alguém ouvindo (Câmera ligada).
+	CameraSeconds int64
 }
 
 // Unlocks: categoria -> tier -> quando foi desbloqueado (o que está gravado).
@@ -143,6 +145,7 @@ var valueFns = map[string]valueFn{
 	"barulhento":   func(s Stats, _ time.Time) int64 { return s.SoundsPlayed },
 	"figurinha":    func(s Stats, _ time.Time) int64 { return s.StickersSent },
 	"sequencia":    func(s Stats, _ time.Time) int64 { return s.LongestStreakDays },
+	"camera":       func(s Stats, _ time.Time) int64 { return s.CameraSeconds },
 }
 
 func valueOf(c Category, s Stats, now time.Time) int64 {

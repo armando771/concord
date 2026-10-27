@@ -96,3 +96,20 @@ describe('Sequência (dias seguidos usando o app)', () => {
     expect(publicStatText(b({ tier: 1 }))).toBe('3+ dias seguidos')
   })
 })
+
+describe('Câmera ligada (horas de câmera em call)', () => {
+  const b = (over: Partial<Badge>): Badge =>
+    badge({
+      category: 'camera',
+      name: 'Câmera ligada',
+      unit: 'seconds',
+      tiers: [{ tier: 1, name: 'Rostinho', threshold: 3600, rarity: 'comum' }],
+      ...over
+    })
+
+  it('fala das horas com a câmera ligada', () => {
+    expect(statText(b({ value: 2 * 3600 }))).toBe('2 horas com a câmera ligada')
+    expect(publicStatText(b({ tier: 1 }))).toBe('1+ hora com a câmera ligada')
+    expect(remainingText(b({ value: 1800, next_threshold: 3600 }))).toBe('Faltam 30 min')
+  })
+})

@@ -48,7 +48,8 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			COALESCE(b.sounds_played, 0),
 			COALESCE(b.stickers_sent, 0),
 			COALESCE(b.streak_days, 0),
-			COALESCE(b.longest_streak_days, 0)
+			COALESCE(b.longest_streak_days, 0),
+			COALESCE(b.camera_seconds, 0)
 		FROM users u
 		LEFT JOIN user_levels l ON l.user_id = u.id
 		LEFT JOIN user_badge_stats b ON b.user_id = u.id
@@ -75,6 +76,7 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 		&s.StickersSent,
 		&s.StreakDays,
 		&s.LongestStreakDays,
+		&s.CameraSeconds,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Stats{}, ErrUserNotFound
@@ -189,17 +191,18 @@ func (r *Repository) AddCallStats(ctx context.Context, userID string, d Delta) e
 	_, err := r.db.Exec(
 		ctx,
 		`
-		INSERT INTO user_badge_stats (user_id, stream_seconds, night_seconds, morning_seconds, peak_call_size, longest_session_seconds)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO user_badge_stats (user_id, stream_seconds, night_seconds, morning_seconds, peak_call_size, longest_session_seconds, camera_seconds)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (user_id) DO UPDATE SET
 			stream_seconds = user_badge_stats.stream_seconds + EXCLUDED.stream_seconds,
+			camera_seconds = user_badge_stats.camera_seconds + EXCLUDED.camera_seconds,
 			night_seconds = user_badge_stats.night_seconds + EXCLUDED.night_seconds,
 			morning_seconds = user_badge_stats.morning_seconds + EXCLUDED.morning_seconds,
 			peak_call_size = GREATEST(user_badge_stats.peak_call_size, EXCLUDED.peak_call_size),
 			longest_session_seconds = GREATEST(user_badge_stats.longest_session_seconds, EXCLUDED.longest_session_seconds),
 			updated_at = NOW()
 		`,
-		userID, d.Stream, d.Night, d.Morning, d.PeakCallSize, d.LongestSession,
+		userID, d.Stream, d.Night, d.Morning, d.PeakCallSize, d.LongestSession, d.Camera,
 	)
 	return err
 }

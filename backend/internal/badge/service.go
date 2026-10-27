@@ -85,6 +85,9 @@ type Service struct {
 	ticks   int
 	// Quem já teve o dia de uso gravado hoje (Sequência); só o tick usa.
 	days activeDays
+	// Quem está de câmera ligada (LiveKit); nil = Câmera ligada não conta.
+	cameras     CameraSource
+	cameraErrAt time.Time
 }
 
 // BadgeService monta o serviço. loc é o fuso das horas de Coruja/Madrugador;
@@ -273,8 +276,11 @@ func (s *Service) flush(ctx context.Context, deltas map[string]Delta) map[string
 }
 
 func (s *Service) tick(ctx context.Context, now time.Time) {
+	snaps := s.calls.CallSnapshots()
+	cams := s.camerasOn(ctx, snaps)
 	s.mu.Lock()
-	s.tracker.accrue(s.calls.CallSnapshots(), now)
+	s.tracker.setCameras(cams)
+	s.tracker.accrue(snaps, now)
 	s.ticks++
 	flush := s.ticks%flushEvery == 0
 	sweep := s.ticks%onlineSweepEvery == 0

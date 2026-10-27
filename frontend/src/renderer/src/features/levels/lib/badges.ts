@@ -105,7 +105,8 @@ const TIME_SUFFIX: Record<string, string> = {
   streamer: 'transmitindo',
   coruja: 'em call de madrugada',
   madrugador: 'em call de manhãzinha',
-  maratona: 'seguidas numa call'
+  maratona: 'seguidas numa call',
+  camera: 'com a câmera ligada'
 }
 
 /** O texto da estatística de cada unidade; unidade sem entrada mostra o número. */
