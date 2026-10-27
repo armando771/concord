@@ -93,3 +93,14 @@
     font-size: 16px;
   }
 }
+
+/*
+ * "+ Criar DM" da barra de DMs: o ícone tem 16 px; no toque a área de toque
+ * cresce sem mudar o desenho (margem negativa compensa o padding).
+ */
+@media (pointer: coarse) {
+  button[aria-label='Criar DM'] {
+    margin: -0.625rem;
+    padding: 0.625rem;
+  }
+}
