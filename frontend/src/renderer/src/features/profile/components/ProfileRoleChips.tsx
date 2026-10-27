@@ -1,5 +1,5 @@
 import { roleColorCss } from '../../servers/lib/permissions'
-import type { Ink } from '../lib/profileTheme'
+import type { Ink } from '../lib/profileInk'
 import { readableColor } from '../lib/readableColor'
 
 /** Cor de cargo sem cor definida. */

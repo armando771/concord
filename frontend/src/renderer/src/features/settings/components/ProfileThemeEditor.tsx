@@ -2,13 +2,13 @@ import {
   PROFILE_BACKGROUNDS,
   PROFILE_BORDERS,
   PROFILE_EFFECTS,
-  PROFILE_PRESETS,
   profileThemeLook,
   sameTheme,
   withBackground,
   withBorder,
   type ProfileTheme
 } from '../../profile/lib/profileTheme'
+import { PROFILE_PRESETS } from '../../profile/lib/profilePresets'
 import ProfileCardFrame from '../../profile/components/ProfileCardFrame'
 
 const optionClass = (active: boolean): string =>

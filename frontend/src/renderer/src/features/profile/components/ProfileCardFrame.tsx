@@ -1,5 +1,6 @@
 import { useMemo, type CSSProperties, type ReactNode, type Ref } from 'react'
-import { effectParticles, type ProfileThemeLook } from '../lib/profileTheme'
+import type { ProfileThemeLook } from '../lib/profileTheme'
+import { effectParticles } from '../lib/profileParticles'
 import '../../../assets/profileTheme.css'
 
 /** Estrelinha dos brilhos (o mesmo ✦ do efeito de nome). */
