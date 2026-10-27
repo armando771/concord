@@ -41,3 +41,75 @@ func TestEditRejectsCallInviteMessages(t *testing.T) {
 		t.Fatalf("convite: err = %v", err)
 	}
 }
+
+type fakeInviteStore struct {
+	created *Message
+	err     error
+}
+
+func (f *fakeInviteStore) Create(_ context.Context, m *Message) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.created = m
+	return nil
+}
+
+func (f *fakeInviteStore) FindByID(context.Context, string) (*Message, error) {
+	copied := *f.created
+	return &copied, nil
+}
+
+type captureCreates struct {
+	fakePublisher
+	events []CreateEvent
+}
+
+func (c *captureCreates) PublishMessageCreate(e CreateEvent) { c.events = append(c.events, e) }
+
+func TestPostCallInvitePublishesToBothParticipants(t *testing.T) {
+	store, pub := &fakeInviteStore{}, &captureCreates{}
+	msg := newCallInviteMessage("dm1", "ana", CallInvite{CallID: "c1", ChannelID: "ch"})
+	full, err := postCallInvite(context.Background(), store, fakeRooms{}, pub, msg)
+	if err != nil || full.CallInvite == nil {
+		t.Fatalf("full=%+v err=%v", full, err)
+	}
+	if len(pub.events) != 1 || len(pub.events[0].UserIDs) != 2 || pub.events[0].Message.CallInvite.CallID != "c1" {
+		t.Fatalf("events = %+v", pub.events)
+	}
+}
+
+func TestPostCallInviteStoreFailure(t *testing.T) {
+	store, pub := &fakeInviteStore{err: errors.New("db")}, &captureCreates{}
+	msg := newCallInviteMessage("dm1", "ana", CallInvite{CallID: "c1", ChannelID: "ch"})
+	if _, err := postCallInvite(context.Background(), store, nil, pub, msg); err == nil || len(pub.events) != 0 {
+		t.Fatalf("err=%v events=%d", err, len(pub.events))
+	}
+}
+
+type fakeRow struct{ invite []byte }
+
+func (r fakeRow) Scan(dest ...any) error {
+	for i, d := range dest {
+		switch p := d.(type) {
+		case *string:
+			*p = "x"
+		case *[]byte:
+			if i == len(dest)-1 {
+				*p = r.invite
+			}
+		}
+	}
+	return nil
+}
+
+func TestScanMessageRowReadsCallInvite(t *testing.T) {
+	msg, err := scanMessageRow(fakeRow{invite: []byte(`{"call_id":"c1","channel_id":"ch"}`)})
+	if err != nil || msg.CallInvite == nil || msg.CallInvite.CallID != "c1" {
+		t.Fatalf("msg=%+v err=%v", msg, err)
+	}
+	plain, err := scanMessageRow(fakeRow{})
+	if err != nil || plain.CallInvite != nil {
+		t.Fatalf("plain=%+v err=%v", plain, err)
+	}
+}

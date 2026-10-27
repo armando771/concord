@@ -59,29 +59,33 @@ func newCallInviteMessage(conversationID, authorID string, invite CallInvite) *M
 	}
 }
 
+// inviteStore: o que o convite usa do Repository (trocável nos testes).
+type inviteStore interface {
+	Create(ctx context.Context, msg *Message) error
+	FindByID(ctx context.Context, id string) (*Message, error)
+}
+
 // CreateCallInviteMessage posta, na DM, o cartão de convite do convidador.
 // Quem chama já validou amizade e bloqueio; a DM reabre para quem a fechou.
 func (s *Service) CreateCallInviteMessage(ctx context.Context, conversationID, authorID string, invite CallInvite) (*Message, error) {
-	msg := newCallInviteMessage(conversationID, authorID, invite)
-	if err := s.repository.Create(ctx, msg); err != nil {
+	return postCallInvite(ctx, s.repository, s.convResolver, s.publisher, newCallInviteMessage(conversationID, authorID, invite))
+}
+
+func postCallInvite(ctx context.Context, store inviteStore, convs ConversationResolver, pub EventPublisher, msg *Message) (*Message, error) {
+	if err := store.Create(ctx, msg); err != nil {
 		return nil, err
 	}
-	full, err := s.repository.FindByID(ctx, msg.ID)
+	full, err := store.FindByID(ctx, msg.ID)
 	if err != nil {
 		return nil, err
 	}
-
 	var userIDs []string
-	if s.convResolver != nil {
-		if err := s.convResolver.RevealConversation(ctx, conversationID); err != nil {
-			log.Printf("[message] reveal conversation %s: %v", conversationID, err)
+	if convs != nil {
+		if err := convs.RevealConversation(ctx, *msg.ConversationID); err != nil {
+			log.Printf("[message] reveal conversation %s: %v", *msg.ConversationID, err)
 		}
-		userIDs, _ = s.convResolver.ConversationParticipantIDs(ctx, conversationID)
+		userIDs, _ = convs.ConversationParticipantIDs(ctx, *msg.ConversationID)
 	}
-	s.publisher.PublishMessageCreate(CreateEvent{
-		ConversationID: full.ConversationID,
-		UserIDs:        userIDs,
-		Message:        *full,
-	})
+	pub.PublishMessageCreate(CreateEvent{ConversationID: full.ConversationID, UserIDs: userIDs, Message: *full})
 	return full, nil
 }
