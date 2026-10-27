@@ -79,43 +79,57 @@ func (t *tracker) accrue(snaps []call.CallSnapshot, now time.Time) {
 
 	inSession := make(map[string]bool)
 	for _, s := range snaps {
-		// Festeiro: quantas pessoas estão ouvindo (surdo não conta), e só
-		// quem está ouvindo leva o crédito.
-		if size := int64(len(s.Listeners)); size >= 2 {
-			for _, userID := range s.Listeners {
-				p := t.get(userID)
-				if size > p.peak {
-					p.peak = size
-				}
-			}
-		}
-		// Coruja, Madrugador e Maratona seguem o XP de voz: sem mute, sem
-		// surdo e com mais alguém ouvindo.
-		for _, userID := range s.Voice {
-			p := t.get(userID)
-			switch {
-			case hour < 5:
-				p.night += elapsed
-			case hour < 8:
-				p.morning += elapsed
-			}
-			inSession[userID] = true
-			t.sessions[userID] += elapsed
-			if t.sessions[userID] > p.longest {
-				p.longest = t.sessions[userID]
-			}
-		}
-		// Streamer: precisa de mais alguém ouvindo (quem transmite pode
-		// estar mutado).
-		for _, userID := range s.ScreenSharers {
-			if hasOtherListener(s.Listeners, userID) {
-				t.get(userID).stream += elapsed
-			}
-		}
+		t.accruePeak(s)
+		t.accrueVoice(s, elapsed, hour, inSession)
+		t.accrueStream(s, elapsed)
 	}
 	for userID := range t.sessions {
 		if !inSession[userID] {
 			delete(t.sessions, userID)
+		}
+	}
+}
+
+// accruePeak (Festeiro): quantas pessoas estão ouvindo (surdo não conta), e
+// só quem está ouvindo leva o crédito.
+func (t *tracker) accruePeak(s call.CallSnapshot) {
+	size := int64(len(s.Listeners))
+	if size < 2 {
+		return
+	}
+	for _, userID := range s.Listeners {
+		p := t.get(userID)
+		if size > p.peak {
+			p.peak = size
+		}
+	}
+}
+
+// accrueVoice: Coruja, Madrugador e Maratona seguem o XP de voz (sem mute,
+// sem surdo e com mais alguém ouvindo).
+func (t *tracker) accrueVoice(s call.CallSnapshot, elapsed time.Duration, hour int, inSession map[string]bool) {
+	for _, userID := range s.Voice {
+		p := t.get(userID)
+		switch {
+		case hour < 5:
+			p.night += elapsed
+		case hour < 8:
+			p.morning += elapsed
+		}
+		inSession[userID] = true
+		t.sessions[userID] += elapsed
+		if t.sessions[userID] > p.longest {
+			p.longest = t.sessions[userID]
+		}
+	}
+}
+
+// accrueStream (Streamer): precisa de mais alguém ouvindo (quem transmite
+// pode estar mutado).
+func (t *tracker) accrueStream(s call.CallSnapshot, elapsed time.Duration) {
+	for _, userID := range s.ScreenSharers {
+		if hasOtherListener(s.Listeners, userID) {
+			t.get(userID).stream += elapsed
 		}
 	}
 }
