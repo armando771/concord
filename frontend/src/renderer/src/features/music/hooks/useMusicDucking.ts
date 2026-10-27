@@ -2,9 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useCallStore } from '../../call/store/callStore'
 import { useMusicStore } from '../store/musicStore'
-import { duckTarget, isMaestroIdentity, stepGain } from '../lib/music'
+import { duckSettled, duckTarget, isMaestroIdentity, stepGain } from '../lib/music'
 
-/** Ganho atual da música (1 = normal), com rampas a cada frame. */
+/**
+ * Ganho atual da música (1 = normal), com rampas a cada frame. O laço de quadros
+ * só roda enquanto há rampa ou espera: parado, ele obrigava o Chromium a montar um
+ * quadro a cada 16 ms com o app aberto (mesmo sem música, minimizado ou sem call).
+ */
 export function useMusicDucking(): number {
   const speakingIds = useCallStore((s) => s.speakingIds)
   const meId = useAuthStore((s) => s.user?.id)
@@ -22,20 +26,14 @@ export function useMusicDucking(): number {
     let raf = 0
     let last = performance.now()
     const tick = (now: number): void => {
-      const target = duckTarget({
-        speakingIds,
-        meId,
-        enabled,
-        lastOtherSpeechAt: lastSpeech.current,
-        now
-      })
-      const next = stepGain(gainRef.current, target, now - last)
+      const input = { speakingIds, meId, enabled, lastOtherSpeechAt: lastSpeech.current, now }
+      const next = stepGain(gainRef.current, duckTarget(input), now - last)
       last = now
       if (next !== gainRef.current) {
         gainRef.current = next
         setGain(next)
       }
-      raf = requestAnimationFrame(tick)
+      if (!duckSettled(input, next)) raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
