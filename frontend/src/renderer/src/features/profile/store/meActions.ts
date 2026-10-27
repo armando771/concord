@@ -5,10 +5,8 @@ import type { ChosenStatus } from '../../friends/lib/presenceStatus'
 import router from '../../../app/router'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useChannelNameStore } from '../../servers/store/channelNameStore'
-import { useCallStore } from '../../call/store/callStore'
 import { useChatStore } from '../../chat/store/chatStore'
-import { useDraftStore } from '../../chat/store/draftStore'
-import { useSearchStore } from '../../chat/store/searchStore'
+import { endSessionState } from '../../auth/store/sessionEnd'
 import { useFriendStore } from '../../friends/store/friendStore'
 import { useInviteStore } from '../../servers/store/inviteStore'
 import { useProfileCardStore } from './profileCardStore'
@@ -24,7 +22,7 @@ import { showToast } from '../../../shared/store/toastStore'
 export async function logoutAndReset(): Promise<void> {
   // Antes de fechar o WebSocket: o aviso de saída da chamada vai por ele, e a
   // chamada (microfone, LiveKit) não pode passar para a próxima conta.
-  useCallStore.getState().endCall()
+  endSessionState()
   try {
     await logout()
   } catch {
@@ -36,8 +34,6 @@ export async function logoutAndReset(): Promise<void> {
     useProfileStore.getState().reset()
     useChannelNameStore.getState().reset()
     useChatStore.getState().disconnect()
-    useSearchStore.getState().close()
-    useDraftStore.getState().clear()
     useProfileCardStore.getState().close()
     useSettingsStore.getState().forceClose()
     await clearSession()
