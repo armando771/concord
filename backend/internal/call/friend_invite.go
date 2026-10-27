@@ -9,24 +9,26 @@ import (
 	"gin-quickstart/backend/internal/server"
 )
 
-// Convite de amigos para a chamada de um canal de voz. Segue o molde do
-// lock.go (pedido pendente em memória, com timer de expiração e eventos por
-// SendToUser). Aceitar não põe ninguém na chamada pelo servidor: dá o passe
-// curto (admitted) e o cliente do convidado entra pelo fluxo normal, que
-// valida permissão, sala trancada e "ocupado em outra chamada".
+// Convite de amigos para a chamada de um canal de voz. O convite é uma
+// mensagem na DM do convidador com o amigo (cartão com o botão "Abrir"); aqui
+// ficam as regras de quem pode ser convidado e o registro em memória de quem
+// já foi (anti-spam, passe de entrada e aviso quando a chamada acaba). Abrir
+// não põe ninguém na chamada pelo servidor: dá o passe curto (admitted) e o
+// cliente entra pelo fluxo normal, que valida permissão, sala trancada e
+// "ocupado em outra chamada".
 
 var (
-	ErrNoInvite         = errors.New("esse convite não existe mais")
 	ErrNoInvitees       = errors.New("escolha pelo menos um amigo para convidar")
 	ErrTooManyInvitees  = errors.New("convide no máximo 20 amigos por vez")
 	ErrInviteNotAllowed = errors.New("só quem está na chamada pode convidar")
+	// O convite não vale (nunca existiu para a pessoa, já foi usado ou ela já está na chamada).
+	ErrInviteInvalid = errors.New("convite inválido")
 )
 
 const (
-	// Quanto tempo um convite fica aberto sem resposta.
-	inviteTTL = 60 * time.Second
-	// Espera depois de uma recusa para convidar a mesma pessoa de novo.
-	inviteCooldown = 30 * time.Second
+	// Depois disso o mesmo amigo pode ser convidado de novo para a mesma
+	// chamada (antes, "já convidado"): segura o spam sem prender a pessoa.
+	inviteResendAfter = 60 * time.Second
 	// Máximo de pessoas por requisição (anti-spam).
 	maxInviteesPerRequest = 20
 )
@@ -38,18 +40,10 @@ const (
 	InviteAlreadyInCall  = "already_in_call"
 	InviteNotFriend      = "not_friend"
 	InviteBlocked        = "blocked"
-	InviteOffline        = "offline"
 	InviteBusy           = "busy"
 	InviteNoAccess       = "no_access"
-	InviteCooldown       = "cooldown"
-)
-
-// Estado final de um convite (call:friend_invite_update).
-const (
-	InviteAccepted  = "accepted"
-	InviteDeclined  = "declined"
-	InviteExpired   = "expired"
-	InviteCancelled = "cancelled"
+	// A mensagem na DM não pôde ser postada.
+	InviteFailed = "failed"
 )
 
 // FriendChecker é o que a chamada usa do friendship.Service.
@@ -58,81 +52,38 @@ type FriendChecker interface {
 }
 
 // SetFriendChecker liga a checagem de amizade dos convites.
-func (s *Service) SetFriendChecker(f FriendChecker) { s.friends = f }
+func (s *Service) SetFriendChecker(f FriendChecker) { s.invite.friends = f }
+
+// InviteCard: o que o cartão do convite guarda (a foto do momento do convite).
+type InviteCard struct {
+	CallID      string
+	ChannelID   string
+	ServerID    *string
+	ChannelName string
+	ServerName  string
+}
+
+// InviteDMPoster posta o cartão de convite na DM entre quem convida e o amigo
+// (cria a conversa se não existir, respeitando as regras de DM).
+type InviteDMPoster interface {
+	PostCallInvite(ctx context.Context, inviterID, inviteeID string, card InviteCard) error
+}
+
+// inviteDeps: o que o convite de amigos usa de fora do pacote (ligado em cmd/wire_calls.go).
+type inviteDeps struct {
+	friends      FriendChecker
+	channelNames channelFinder
+	serverNames  serverFinder
+	poster       InviteDMPoster
+}
+
+// SetInvitePoster liga o envio do convite para a DM.
+func (s *Service) SetInvitePoster(p InviteDMPoster) { s.invite.poster = p }
 
 // InviteResult: o que aconteceu com cada convidado da requisição.
 type InviteResult struct {
 	UserID string `json:"user_id"`
 	Status string `json:"status"`
-}
-
-// FriendInviteEvent: convite recebido (call:friend_invite, só para o convidado).
-type FriendInviteEvent struct {
-	CallID      string    `json:"call_id"`
-	ChannelID   *string   `json:"channel_id,omitempty"`
-	ServerID    *string   `json:"server_id,omitempty"`
-	ChannelName string    `json:"channel_name,omitempty"`
-	ServerName  string    `json:"server_name,omitempty"`
-	By          UserInfo  `json:"by"`
-	ExpiresAt   time.Time `json:"expires_at"`
-}
-
-// FriendInviteUpdateEvent: o convite mudou de estado (call:friend_invite_update,
-// para quem convidou e para o convidado).
-type FriendInviteUpdateEvent struct {
-	CallID string `json:"call_id"`
-	UserID string `json:"user_id"`
-	Status string `json:"status"`
-}
-
-type friendInvite struct {
-	inviterID string
-	timer     *time.Timer
-}
-
-// inviteBook guarda os convites de uma chamada (criado sob demanda).
-type inviteBook struct {
-	pending    map[string]*friendInvite // convidado -> convite aberto
-	declinedAt map[string]time.Time     // convidado -> última recusa (anti-spam)
-}
-
-func (ac *activeCall) invitesLocked() *inviteBook {
-	if ac.invites == nil {
-		ac.invites = &inviteBook{
-			pending:    make(map[string]*friendInvite),
-			declinedAt: make(map[string]time.Time),
-		}
-	}
-	return ac.invites
-}
-
-// takeInviteLocked tira o convite aberto e para o timer.
-func takeInviteLocked(ac *activeCall, inviteeID string) (*friendInvite, bool) {
-	if ac.invites == nil {
-		return nil, false
-	}
-	inv, ok := ac.invites.pending[inviteeID]
-	if !ok {
-		return nil, false
-	}
-	delete(ac.invites.pending, inviteeID)
-	if inv.timer != nil {
-		inv.timer.Stop()
-	}
-	return inv, true
-}
-
-// cancelInvitesLocked esvazia os convites (chamada acabando): convidado -> quem convidou.
-func cancelInvitesLocked(ac *activeCall) map[string]string {
-	out := map[string]string{}
-	if ac.invites == nil {
-		return out
-	}
-	for uid, inv := range ac.invites.pending {
-		takeInviteLocked(ac, uid)
-		out[uid] = inv.inviterID
-	}
-	return out
 }
 
 // inviteContext: a chamada e quem convida, já validados.
@@ -220,26 +171,26 @@ type serverFinder interface {
 
 // SetPlaceSources liga a busca do nome do canal e do servidor (texto do convite).
 func (s *Service) SetPlaceSources(ch channelFinder, srv serverFinder) {
-	s.channelNames, s.serverNames = ch, srv
+	s.invite.channelNames, s.invite.serverNames = ch, srv
 }
 
-// placeNames busca o nome do canal e do servidor para o texto do convite
+// placeNames busca o nome do canal e do servidor para o cartão do convite
 // (vazio se não der: o cliente tem fallback).
 func (s *Service) placeNames(ctx context.Context, channelID string, serverID *string) (channelName, serverName string) {
-	if s.channelNames != nil {
-		if ch, err := s.channelNames.FindByID(ctx, channelID); err == nil && ch != nil {
+	if s.invite.channelNames != nil {
+		if ch, err := s.invite.channelNames.FindByID(ctx, channelID); err == nil && ch != nil {
 			channelName = ch.Name
 		}
 	}
-	if s.serverNames != nil && serverID != nil {
-		if srv, err := s.serverNames.FindByID(ctx, *serverID); err == nil && srv != nil {
+	if s.invite.serverNames != nil && serverID != nil {
+		if srv, err := s.invite.serverNames.FindByID(ctx, *serverID); err == nil && srv != nil {
 			serverName = srv.Name
 		}
 	}
 	return channelName, serverName
 }
 
-// inviteOne valida um convidado e, estando tudo certo, registra e envia.
+// inviteOne valida um convidado e, estando tudo certo, registra e posta na DM.
 func (s *Service) inviteOne(ctx context.Context, ic inviteContext, inviteeID string) string {
 	s.mu.RLock()
 	st := s.inviteStateStatusLocked(ic.callID, inviteeID, time.Now())
@@ -250,7 +201,7 @@ func (s *Service) inviteOne(ctx context.Context, ic inviteContext, inviteeID str
 	if st := s.inviteeEligibility(ctx, ic, inviteeID); st != "" {
 		return st
 	}
-	return s.registerInvite(ic, inviteeID)
+	return s.sendInvite(ctx, ic, inviteeID)
 }
 
 // inviteStateStatusLocked: motivos que dependem só do estado da chamada (sob s.mu).
@@ -263,11 +214,8 @@ func (s *Service) inviteStateStatusLocked(callID, inviteeID string, now time.Tim
 		return InviteAlreadyInCall
 	}
 	if ac.invites != nil {
-		if _, pending := ac.invites.pending[inviteeID]; pending {
+		if last, ok := ac.invites.sent[inviteeID]; ok && !last.used && now.Sub(last.at) < inviteResendAfter {
 			return InviteAlreadyInvited
-		}
-		if last, ok := ac.invites.declinedAt[inviteeID]; ok && now.Sub(last) < inviteCooldown {
-			return InviteCooldown
 		}
 	}
 	if other, busy := s.busy[inviteeID]; busy && other != callID {
@@ -276,12 +224,13 @@ func (s *Service) inviteStateStatusLocked(callID, inviteeID string, now time.Tim
 	return ""
 }
 
-// inviteeEligibility: amizade, bloqueio, presença e acesso ao canal.
+// inviteeEligibility: amizade, bloqueio e acesso ao canal. Presença não conta:
+// o convite fica salvo na DM e o amigo vê quando voltar.
 func (s *Service) inviteeEligibility(ctx context.Context, ic inviteContext, inviteeID string) string {
-	if s.friends == nil {
+	if s.invite.friends == nil {
 		return InviteNotFriend
 	}
-	if ok, err := s.friends.AreFriends(ctx, ic.inviter.ID, inviteeID); err != nil || !ok {
+	if ok, err := s.invite.friends.AreFriends(ctx, ic.inviter.ID, inviteeID); err != nil || !ok {
 		return InviteNotFriend
 	}
 	if s.blockedCheck != nil {
@@ -289,106 +238,61 @@ func (s *Service) inviteeEligibility(ctx context.Context, ic inviteContext, invi
 			return InviteBlocked
 		}
 	}
-	if s.isOnline == nil || !s.isOnline(inviteeID) {
-		return InviteOffline
-	}
 	if s.requireConnect(ctx, ic.channelID, inviteeID) != nil {
 		return InviteNoAccess
 	}
 	return ""
 }
 
-// registerInvite guarda o convite (rechecando o estado sob o mutex) e avisa.
-func (s *Service) registerInvite(ic inviteContext, inviteeID string) string {
-	now := time.Now()
-	s.mu.Lock()
-	if st := s.inviteStateStatusLocked(ic.callID, inviteeID, now); st != "" {
-		s.mu.Unlock()
+// sendInvite reserva o convite (rechecando o estado sob o mutex, para duas
+// requisições juntas não duplicarem) e posta o cartão na DM. Se a DM falhar,
+// a reserva é desfeita.
+func (s *Service) sendInvite(ctx context.Context, ic inviteContext, inviteeID string) string {
+	if s.invite.poster == nil {
+		return InviteFailed
+	}
+	prev, st := s.reserveInvite(ic, inviteeID)
+	if st != "" {
 		return st
 	}
-	ac := s.calls[ic.callID]
-	inv := &friendInvite{inviterID: ic.inviter.ID}
-	inv.timer = time.AfterFunc(inviteTTL, func() { s.expireInvite(ic.callID, inviteeID, inv) })
-	ac.invitesLocked().pending[inviteeID] = inv
-	s.mu.Unlock()
-
-	s.publisher.SendToUser(inviteeID, marshalEvent("call:friend_invite", FriendInviteEvent{
-		CallID: ic.callID, ChannelID: &ic.channelID, ServerID: ic.serverID,
+	card := InviteCard{
+		CallID: ic.callID, ChannelID: ic.channelID, ServerID: ic.serverID,
 		ChannelName: ic.channelName, ServerName: ic.serverName,
-		By: ic.inviter, ExpiresAt: now.Add(inviteTTL),
-	}))
+	}
+	if err := s.invite.poster.PostCallInvite(ctx, ic.inviter.ID, inviteeID, card); err != nil {
+		s.releaseInvite(ic.callID, inviteeID, prev)
+		return InviteFailed
+	}
 	return InviteSent
 }
 
-func (s *Service) expireInvite(callID, inviteeID string, inv *friendInvite) {
-	s.mu.Lock()
-	ac, ok := s.calls[callID]
-	if !ok || ac.invites == nil || ac.invites.pending[inviteeID] != inv {
-		s.mu.Unlock()
-		return
-	}
-	takeInviteLocked(ac, inviteeID)
-	// Entrou por outro caminho (sidebar) antes de responder: conta como aceito.
-	_, joined := ac.participants[inviteeID]
-	s.mu.Unlock()
-	status := InviteExpired
-	if joined {
-		status = InviteAccepted
-	}
-	s.notifyInviteUpdate(callID, inv.inviterID, inviteeID, status)
-}
-
-// AcceptFriendInvite: o convidado aceita. Dá o passe de entrada (vale para sala
-// trancada, já que quem convidou está dentro); o cliente entra pelo fluxo normal.
-func (s *Service) AcceptFriendInvite(callID, inviteeID string) error {
-	inv, err := s.closeInvite(callID, inviteeID, true)
-	if err != nil {
-		return err
-	}
-	s.notifyInviteUpdate(callID, inv.inviterID, inviteeID, InviteAccepted)
-	return nil
-}
-
-// DeclineFriendInvite: o convidado recusa. A chamada segue (não usa Decline,
-// que encerra a chamada de DM).
-func (s *Service) DeclineFriendInvite(callID, inviteeID string) error {
-	inv, err := s.closeInvite(callID, inviteeID, false)
-	if err != nil {
-		return err
-	}
-	s.notifyInviteUpdate(callID, inv.inviterID, inviteeID, InviteDeclined)
-	return nil
-}
-
-func (s *Service) closeInvite(callID, inviteeID string, accept bool) (*friendInvite, error) {
+// reserveInvite anota o convite; devolve o anterior (para desfazer) ou o motivo da recusa.
+func (s *Service) reserveInvite(ic inviteContext, inviteeID string) (prev *invitation, status string) {
 	now := time.Now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if st := s.inviteStateStatusLocked(ic.callID, inviteeID, now); st != "" {
+		return nil, st
+	}
+	book := s.calls[ic.callID].invitesLocked()
+	if old, ok := book.sent[inviteeID]; ok {
+		prev = &old
+	}
+	book.sent[inviteeID] = invitation{inviterID: ic.inviter.ID, at: now}
+	return prev, ""
+}
+
+func (s *Service) releaseInvite(callID, inviteeID string, prev *invitation) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	ac, ok := s.calls[callID]
-	if !ok || ac.info.Status == StatusEnded {
-		return nil, ErrNotFound
+	if !ok || ac.invites == nil {
+		return
 	}
-	inv, ok := takeInviteLocked(ac, inviteeID)
-	if !ok {
-		return nil, ErrNoInvite
+	if prev != nil {
+		ac.invites.sent[inviteeID] = *prev
+		return
 	}
-	if accept {
-		admitLocked(ac, inviteeID, now.Add(admitTTL))
-	} else {
-		ac.invitesLocked().declinedAt[inviteeID] = now
-	}
-	return inv, nil
+	delete(ac.invites.sent, inviteeID)
 }
 
-// notifyCancelledInvites avisa que a chamada acabou (convidado -> quem convidou).
-func (s *Service) notifyCancelledInvites(callID string, cancelled map[string]string) {
-	for inviteeID, inviterID := range cancelled {
-		s.notifyInviteUpdate(callID, inviterID, inviteeID, InviteCancelled)
-	}
-}
-
-func (s *Service) notifyInviteUpdate(callID, inviterID, inviteeID, status string) {
-	ev := marshalEvent("call:friend_invite_update", FriendInviteUpdateEvent{CallID: callID, UserID: inviteeID, Status: status})
-	s.publisher.SendToUser(inviterID, ev)
-	s.publisher.SendToUser(inviteeID, ev)
-}

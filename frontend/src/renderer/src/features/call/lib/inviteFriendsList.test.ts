@@ -41,10 +41,10 @@ describe('summarizeResults', () => {
   it('conta os enviados e lista quem ficou de fora', () => {
     const out = summarizeResults([
       { user_id: 'a', status: 'sent' },
-      { user_id: 'b', status: 'offline' }
+      { user_id: 'b', status: 'busy' }
     ])
     expect(out.sent).toBe(1)
-    expect(out.failed).toEqual([{ user_id: 'b', status: 'offline' }])
+    expect(out.failed).toEqual([{ user_id: 'b', status: 'busy' }])
   })
 })
 
@@ -58,11 +58,13 @@ describe('sendHeadline', () => {
 })
 
 describe('resultLine', () => {
-  it('falha é ruim, enviado é bom, resposta ao vivo muda o texto', () => {
-    expect(resultLine('offline', undefined).tone).toBe('bad')
-    expect(resultLine('sent', undefined)).toEqual({ text: 'Convite enviado', tone: 'good' })
-    expect(resultLine('sent', 'accepted').tone).toBe('good')
-    expect(resultLine('sent', 'declined')).toEqual({ text: 'Recusou o convite', tone: 'neutral' })
+  it('falha é ruim, enviado é bom', () => {
+    expect(resultLine('busy').tone).toBe('bad')
+    expect(resultLine('failed').tone).toBe('bad')
+    expect(resultLine('sent')).toEqual({
+      text: 'Convite enviado na conversa privada',
+      tone: 'good'
+    })
   })
 })
 

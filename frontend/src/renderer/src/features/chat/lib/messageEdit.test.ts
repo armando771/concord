@@ -99,6 +99,9 @@ describe('canEditMessage / lastEditableMessage', () => {
     expect(canEditMessage(msg('a', 1, { author_id: 'outro' }), 'me')).toBe(false)
     expect(canEditMessage(msg('a', 1, { system_kind: 'birthday' }), 'me')).toBe(false)
     expect(
+      canEditMessage(msg('a', 1, { call_invite: { call_id: 'c1', channel_id: 'ch' } }), 'me')
+    ).toBe(false)
+    expect(
       canEditMessage(
         msg('a', 1, {
           content: '',

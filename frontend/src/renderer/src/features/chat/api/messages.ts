@@ -61,6 +61,16 @@ export interface Attachment {
 /** Menção em massa num canal: @all (todo mundo) ou @here (quem está online). */
 export type MentionEveryone = 'all' | 'here'
 
+/** Convite para a call de um canal de voz, embutido numa mensagem da DM. */
+export interface CallInvite {
+  call_id: string
+  channel_id: string
+  server_id?: string | null
+  /** Nomes na hora do convite (a validade vem do estado da call). */
+  channel_name?: string
+  server_name?: string
+}
+
 export interface Message {
   id: string
   author_id: string
@@ -79,6 +89,8 @@ export interface Message {
    */
   mention_everyone?: MentionEveryone | null
   poll?: Poll | null
+  /** Cartão de convite para a call (mensagem do convidador na DM). */
+  call_invite?: CallInvite | null
   attachments?: Attachment[] | null
   sticker_id?: string | null
   sticker?: { id: string; server_id: string; name: string; content_type: string } | null

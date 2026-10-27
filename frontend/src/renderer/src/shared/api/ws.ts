@@ -42,8 +42,7 @@ export type WsEventType =
   | 'friend:request:declined'
   | 'friend:request:cancelled'
   | 'friend:removed'
-  | 'call:friend_invite'
-  | 'call:friend_invite_update'
+  | 'call:invite_ended'
   | 'typing'
   | 'typing:stop'
 

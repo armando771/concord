@@ -10,12 +10,17 @@ import { knockView } from '../lib/voiceChannelRow'
  */
 const TOUCH_AREA =
   "before:absolute before:inset-0 before:content-[''] pointer-coarse:before:-inset-y-2.5 pointer-coarse:before:-left-5"
+/** Com o "Convidar amigos" ao lado (8 px), a área extra à esquerda encolhe para não invadir o dele. */
+const TOUCH_AREA_BESIDE_INVITE =
+  "before:absolute before:inset-0 before:content-[''] pointer-coarse:before:-inset-y-2.5 pointer-coarse:before:-left-1"
 
 interface VoiceChatButtonProps {
   serverId: string | undefined
   channelId: string
   /** O "•••" ocupa a ponta direita: o balão fica à esquerda dele. */
   besideMenu: boolean
+  /** O "Convidar amigos" fica à esquerda do balão. */
+  besideInvite?: boolean
 }
 
 /**
@@ -26,7 +31,8 @@ interface VoiceChatButtonProps {
 function VoiceChatButton({
   serverId,
   channelId,
-  besideMenu
+  besideMenu,
+  besideInvite = false
 }: VoiceChatButtonProps): React.JSX.Element | null {
   const navigate = useNavigate()
   const openChat = useVoiceChatPanelStore((s) => s.open)
@@ -44,7 +50,9 @@ function VoiceChatButton({
       onClick={open}
       aria-label="Abrir chat"
       title="Abrir chat"
-      className={`absolute top-1.5 z-20 flex h-5 w-5 cursor-pointer items-center justify-center rounded-md text-gray-400 transition-[color,background-color,opacity] hover:bg-fg/10 hover:text-strong focus-visible:opacity-100 sm:opacity-0 sm:group-hover/voicech:opacity-100 ${TOUCH_AREA} ${
+      className={`absolute top-1.5 z-20 flex h-5 w-5 cursor-pointer items-center justify-center rounded-md text-gray-400 transition-[color,background-color,opacity] hover:bg-fg/10 hover:text-strong focus-visible:opacity-100 sm:opacity-0 sm:group-hover/voicech:opacity-100 ${
+        besideInvite ? TOUCH_AREA_BESIDE_INVITE : TOUCH_AREA
+      } ${
         besideMenu ? 'right-7' : 'right-1.5'
       }`}
     >

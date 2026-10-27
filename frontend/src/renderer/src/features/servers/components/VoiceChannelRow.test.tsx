@@ -18,6 +18,9 @@ vi.mock('../../call/components/CallActivityBadge', () => ({
 
 vi.mock('../../activity/components/ActivityLine', () => ({ GameBadge: () => null }))
 
+// A janela de convidar amigos puxa lista de amigos e presença; aqui só importa o botão.
+vi.mock('../../call/components/InviteFriendsModal', () => ({ default: () => null }))
+
 // O chatStore de verdade puxa o resto do app (e o áudio); aqui só as contagens.
 const chat = vi.hoisted(() => ({
   state: { unreadByRoom: {}, mentionsByRoom: {} } as Record<string, unknown>
@@ -204,6 +207,36 @@ describe('VoiceChannelRow', () => {
     const html = render({ access })
     expect(html).toContain('SUPERIOR')
     expect(html).not.toContain('Arraste para outro canal de voz')
+  })
+
+  describe('Convidar amigos na linha do canal', () => {
+    const connected = { status: 'active', type: 'channel', channelId: 'v1', callId: 'c1' }
+
+    it('conectado: botão entre o balão e o "•••", com nome acessível e espaço reservado', () => {
+      inCall([participant('eu')])
+      setCall(connected)
+      const html = render({ renderMenuButton: () => <span data-menu="" /> })
+      expect(html).toContain('aria-label="Convidar amigos"')
+      expect(html).toContain('right-14')
+      expect(html).toContain('pr-20 sm:pr-2.5')
+      // O balão do chat continua ali, ao lado.
+      expect(html).toContain('aria-label="Abrir chat"')
+    })
+
+    it('sem o "•••" o botão chega mais perto da borda', () => {
+      inCall([participant('eu')])
+      setCall(connected)
+      const html = render()
+      expect(html).toContain('right-[34px]')
+      expect(html).toContain('pr-14 sm:pr-2.5')
+    })
+
+    it('fora do canal (ou em outro canal) não aparece', () => {
+      inCall([participant('ana')])
+      expect(render()).not.toContain('Convidar amigos')
+      setCall({ ...connected, channelId: 'v2' })
+      expect(render()).not.toContain('Convidar amigos')
+    })
   })
 
   it('sala trancada, eu fora: pedir permissão', () => {

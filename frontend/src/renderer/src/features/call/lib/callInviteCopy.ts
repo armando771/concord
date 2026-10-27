@@ -1,5 +1,4 @@
-import type { AppNotification } from '../../notifications/lib/notifications'
-import type { InviteResultStatus, InviteUpdateStatus } from '../api/callInvites'
+import type { InviteResultStatus } from '../api/callInvites'
 
 /**
  * Todos os textos do convite de amigos para a call, num lugar só (para o
@@ -28,59 +27,27 @@ export const INVITE_COPY = {
   retry: 'Tentar de novo',
   close: 'Fechar',
   inviteMore: 'Convidar mais gente',
-  cardTitle: (name: string): string => `${name} te convidou para a call`,
-  cardPlace: (channel: string, server: string): string =>
-    server ? `${channel} em ${server}` : channel,
-  fallbackChannel: 'um canal de voz',
-  accept: 'Aceitar',
-  decline: 'Recusar',
-  acceptFailed: 'Não foi possível entrar na call. O convite pode ter expirado.',
-  declineFailed: 'Não foi possível recusar o convite.',
-  notificationBody: 'Clique para ver o convite'
+  cardTitleForGuest: (name: string): string => `${name} convidou você para a call`,
+  cardTitleForAuthor: 'Você convidou para a call',
+  fallbackPlace: 'Canal de voz',
+  cardOpen: 'Abrir',
+  cardInvalidTitle: 'Convite inválido',
+  cardInvalidHint: 'Peça um novo convite',
+  alreadyInDmCall: 'Você já está em uma chamada.',
+  openFailed: 'Não foi possível abrir a call. Tente de novo.'
 } as const
 
 const RESULT_TEXT: Record<InviteResultStatus, string> = {
-  sent: 'Convite enviado',
-  already_invited: 'Já tem um convite pendente',
+  sent: 'Convite enviado na conversa privada',
+  already_invited: 'Já foi convidado há pouco',
   already_in_call: 'Já está na call',
   not_friend: 'Não é seu amigo',
   blocked: 'Não pode ser convidado',
-  offline: 'Está offline',
   busy: 'Está em outra call',
   no_access: 'Sem acesso a este canal de voz',
-  cooldown: 'Recusou há pouco, tente daqui a pouco'
-}
-
-const UPDATE_TEXT: Record<InviteUpdateStatus, string> = {
-  accepted: 'Aceitou o convite',
-  declined: 'Recusou o convite',
-  expired: 'O convite expirou',
-  cancelled: 'Convite cancelado (a call acabou)'
+  failed: 'Não foi possível enviar o convite'
 }
 
 export function resultText(status: InviteResultStatus | string): string {
   return RESULT_TEXT[status as InviteResultStatus] ?? 'Não foi possível convidar'
-}
-
-export function updateText(status: InviteUpdateStatus | string): string {
-  return UPDATE_TEXT[status as InviteUpdateStatus] ?? ''
-}
-
-/** Aviso do sistema quando chega um convite (clicar abre o servidor/canal). */
-export function inviteNotification(invite: {
-  by: { display_name?: string; username?: string }
-  server_id?: string | null
-  channel_id?: string | null
-}): AppNotification {
-  const name = invite.by.display_name || invite.by.username || 'Alguém'
-  return {
-    kind: 'call',
-    title: INVITE_COPY.cardTitle(name),
-    body: INVITE_COPY.notificationBody,
-    route:
-      invite.server_id && invite.channel_id
-        ? `/servers/${invite.server_id}/channels/${invite.channel_id}`
-        : '/',
-    urgent: true
-  }
 }
