@@ -28,6 +28,8 @@ const (
 	UnitVote = "vote"
 	// UnitSongs: músicas postas na fila do Maestro (DJ).
 	UnitSongs = "songs"
+	// UnitSounds: sons tocados na mesa de áudio (Barulhento).
+	UnitSounds = "sounds"
 )
 
 // FounderCutoff: quem criou a conta antes desta data (horário de Brasília)
@@ -256,6 +258,20 @@ var Catalog = []Category{
 			{"DJ de Churrasco", 200, RarityRare},
 			{"DJ Residente", 1000, RarityEpic},
 			{"Lenda das Pick-ups", 5000, RarityLegendary},
+		},
+	},
+	{
+		// Sons tocados na mesa de áudio (soundboard) de uma call com alguém
+		// ouvindo. Somados pelo backend a cada som (Service.Count).
+		Key:         "barulhento",
+		Name:        "Barulhento",
+		Description: "Toque sons da mesa de áudio numa call com mais gente ouvindo.",
+		Unit:        UnitSounds,
+		Tiers: []Tier{
+			{"Buzina", 25, RarityCommon},
+			{"Fanfarrão", 250, RarityRare},
+			{"Trio Elétrico", 1000, RarityEpic},
+			{"Caixa de Som do Vizinho", 5000, RarityLegendary},
 		},
 	},
 }

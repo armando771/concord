@@ -13,4 +13,9 @@ func (a *app) wireBadgeEvents(badges *badge.Service) {
 	a.musicManager.OnQueued(func(userID string, n int) {
 		badges.Count(context.Background(), userID, "dj", int64(n))
 	})
+	// Barulhento: sons da mesa de áudio tocados com alguém ouvindo. Fora do
+	// WebSocket de quem tocou: gravar não atrasa o próximo som.
+	a.callService.OnSoundPlayed(func(_, userID string) {
+		go badges.Count(context.Background(), userID, "barulhento", 1)
+	})
 }

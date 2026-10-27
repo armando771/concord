@@ -16,6 +16,7 @@ export type BadgeUnit =
   | 'proposals'
   | 'vote'
   | 'songs'
+  | 'sounds'
 
 export interface BadgeTier {
   tier: number

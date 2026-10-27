@@ -38,3 +38,22 @@ describe('DJ (músicas na fila do Maestro)', () => {
     expect(publicStatText(dj({ tier: 1 }))).toBe('10+ músicas')
   })
 })
+
+describe('Barulhento (sons da mesa de áudio)', () => {
+  const b = (over: Partial<Badge>): Badge =>
+    badge({
+      category: 'barulhento',
+      name: 'Barulhento',
+      unit: 'sounds',
+      tiers: [{ tier: 1, name: 'Buzina', threshold: 25, rarity: 'comum' }],
+      ...over
+    })
+
+  it('estatística, escada e quanto falta', () => {
+    expect(statText(b({ value: 1 }))).toBe('1 som tocado')
+    expect(statText(b({ value: 30 }))).toBe('30 sons tocados')
+    expect(formatThreshold('sounds', 25)).toBe('25 sons')
+    expect(remainingText(b({ value: 20, next_threshold: 25 }))).toBe('Faltam 5 sons')
+    expect(publicStatText(b({ tier: 1 }))).toBe('25+ sons')
+  })
+})

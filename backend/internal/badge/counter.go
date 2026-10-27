@@ -9,7 +9,8 @@ import (
 // counterColumns: badges contados por evento que o backend vê (e não por
 // trigger nem COUNT), com a coluna de user_badge_stats de cada um.
 var counterColumns = map[string]string{
-	"dj": "songs_queued",
+	"dj":         "songs_queued",
+	"barulhento": "sounds_played",
 }
 
 // Gravar a contagem não pode travar quem a disparou (o comando do Maestro).

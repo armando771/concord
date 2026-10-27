@@ -125,8 +125,8 @@ type Service struct {
 	// Nome exibido no token do LiveKit (ver Handler.Token).
 	mediaName func(ctx context.Context, userID string) string
 	// Dados do usuário nos eventos de tela (trocável nos testes).
-	lookupUser  func(ctx context.Context, userID string) (UserInfo, error)
-	soundLookup SoundLookup
+	lookupUser func(ctx context.Context, userID string) (UserInfo, error)
+	soundboard soundboardDeps
 
 	// Hooks do bot de música (internal/music): saída de alguém e fim da call.
 	onParticipantLeft []func(callID, userID string)

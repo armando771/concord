@@ -31,6 +31,8 @@ type Stats struct {
 	FezOL bool
 	// Músicas postas na fila do Maestro (DJ).
 	SongsQueued int64
+	// Sons da mesa de áudio tocados com alguém ouvindo (Barulhento).
+	SoundsPlayed int64
 }
 
 // Unlocks: categoria -> tier -> quando foi desbloqueado (o que está gravado).
@@ -133,6 +135,7 @@ var valueFns = map[string]valueFn{
 	"criador":      func(s Stats, _ time.Time) int64 { return flag(s.IsDev) },
 	"l":            func(s Stats, _ time.Time) int64 { return flag(s.FezOL) },
 	"dj":           func(s Stats, _ time.Time) int64 { return s.SongsQueued },
+	"barulhento":   func(s Stats, _ time.Time) int64 { return s.SoundsPlayed },
 }
 
 func valueOf(c Category, s Stats, now time.Time) int64 {

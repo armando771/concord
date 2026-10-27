@@ -42,10 +42,24 @@ type SoundboardEvent struct {
 	User   UserInfo  `json:"user"`
 }
 
+// soundboardDeps: de onde vêm os sons e quem quer saber dos tocados.
+type soundboardDeps struct {
+	lookup SoundLookup
+	// onPlayed: som tocado com alguém ouvindo (badge Barulhento).
+	onPlayed []func(callID, userID string)
+}
+
 func (s *Service) SetSoundLookup(lookup SoundLookup) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.soundLookup = lookup
+	s.soundboard.lookup = lookup
+}
+
+// OnSoundPlayed registra quem quer saber dos sons tocados para alguém ouvir.
+func (s *Service) OnSoundPlayed(fn func(callID, userID string)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.soundboard.onPlayed = append(s.soundboard.onPlayed, fn)
 }
 
 // soundboardTarget é o que TriggerSoundboard precisa depois de soltar o lock.
@@ -54,6 +68,9 @@ type soundboardTarget struct {
 	perms     PermissionSource
 	serverID  string
 	channelID string
+	// heard: alguém além de quem tocou está ouvindo (não surdo).
+	heard    bool
+	onPlayed []func(callID, userID string)
 }
 
 // soundboardCheckLocked confere a chamada e quem toca (s.mu travado) e marca
@@ -63,7 +80,7 @@ func (s *Service) soundboardCheckLocked(callID, userID string, now time.Time) (s
 	if !ok || ac.info.Status == StatusEnded {
 		return soundboardTarget{}, ErrNotFound
 	}
-	if ac.info.Type != TypeChannel || ac.info.ServerID == nil || s.soundLookup == nil {
+	if ac.info.Type != TypeChannel || ac.info.ServerID == nil || s.soundboard.lookup == nil {
 		return soundboardTarget{}, ErrSoundboardUnavailable
 	}
 	p, ok := ac.participants[userID]
@@ -74,7 +91,10 @@ func (s *Service) soundboardCheckLocked(callID, userID string, now time.Time) (s
 		return soundboardTarget{}, err
 	}
 	p.lastSoundAt = now
-	t := soundboardTarget{lookup: s.soundLookup, perms: s.perms, serverID: *ac.info.ServerID}
+	t := soundboardTarget{
+		lookup: s.soundboard.lookup, perms: s.perms, serverID: *ac.info.ServerID,
+		heard: someoneElseHears(ac, userID), onPlayed: s.soundboard.onPlayed,
+	}
 	if ac.info.ChannelID != nil {
 		t.channelID = *ac.info.ChannelID
 	}
@@ -91,6 +111,15 @@ func soundboardVoiceCheck(p *participantState, now time.Time) error {
 		return ErrSoundboardCooldown
 	}
 	return nil
+}
+
+func someoneElseHears(ac *activeCall, userID string) bool {
+	for id, p := range ac.participants {
+		if id != userID && !p.deafened && !p.serverDeafened {
+			return true
+		}
+	}
+	return false
 }
 
 func (t soundboardTarget) allowed(ctx context.Context, userID string) bool {
@@ -127,6 +156,11 @@ func (s *Service) TriggerSoundboard(ctx context.Context, callID, userID, soundID
 		Sound:  sound,
 		User:   userInfo,
 	}))
+	if t.heard {
+		for _, fn := range t.onPlayed {
+			fn(callID, userID)
+		}
+	}
 	return nil
 }
 
