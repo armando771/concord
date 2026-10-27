@@ -3,7 +3,7 @@ import { useSegundoTurnoStore } from '../store/segundoTurnoStore'
 import SegundoTurnoCamada from './SegundoTurnoCamada'
 
 const BOTAO =
-  'flex min-h-11 w-full cursor-pointer items-center justify-center rounded-xl px-4 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60 sm:flex-1'
+  'flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center rounded-xl px-4 text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-1'
 
 /**
  * "Você fez o L no segundo turno?" Sim dá o badge e abre a celebração, não
@@ -24,7 +24,7 @@ function SegundoTurnoBanner(): React.JSX.Element {
       >
         L
       </span>
-      <h2 id={titleId} className="text-lg font-bold text-strong">
+      <h2 id={titleId} className="text-balance text-lg font-bold text-strong">
         Você fez o L no segundo turno?
       </h2>
       <p className="mt-2 text-sm text-gray-400">

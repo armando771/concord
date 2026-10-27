@@ -35,7 +35,7 @@ function SegundoTurnoCelebracao(): React.JSX.Element {
           className="segundo-turno-badge relative max-w-full"
         />
       </div>
-      <h2 id={titleId} className="mt-4 text-xl font-bold text-strong">
+      <h2 id={titleId} className="mt-4 text-balance text-xl font-bold text-strong">
         Badge conquistado!
       </h2>
       <p className="mt-1 text-sm font-bold" style={{ color: cor }}>

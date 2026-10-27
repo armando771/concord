@@ -44,7 +44,7 @@ function SegundoTurnoCamada({ titleId, onFechar, children }: Props): React.JSX.E
 
   return createPortal(
     <div
-      className="app-no-drag fixed inset-x-0 bottom-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm"
+      className="app-no-drag fixed inset-x-0 bottom-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain bg-black/60 p-4 backdrop-blur-sm"
       style={{ top: 'var(--titlebar-height, 0px)' }}
       onClick={onFechar}
     >
@@ -61,7 +61,7 @@ function SegundoTurnoCamada({ titleId, onFechar, children }: Props): React.JSX.E
           type="button"
           onClick={onFechar}
           aria-label="Fechar"
-          className="absolute right-1 top-1 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+          className="absolute right-1 top-1 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-gray-400 transition-colors touch-manipulation hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-violet-400"
         >
           <XIcon className="h-5 w-5" />
         </button>
