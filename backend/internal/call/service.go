@@ -104,10 +104,7 @@ type Service struct {
 	userService         *user.Service
 	isOnline            func(userID string) bool
 	perms               PermissionSource
-	friends             FriendChecker
-	channelNames        channelFinder
-	serverNames         serverFinder
-	invitePoster        InviteDMPoster
+	invite              inviteDeps
 	media               MediaAdmin
 
 	mu    sync.RWMutex

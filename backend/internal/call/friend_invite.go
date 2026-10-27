@@ -50,7 +50,7 @@ type FriendChecker interface {
 }
 
 // SetFriendChecker liga a checagem de amizade dos convites.
-func (s *Service) SetFriendChecker(f FriendChecker) { s.friends = f }
+func (s *Service) SetFriendChecker(f FriendChecker) { s.invite.friends = f }
 
 // InviteCard: o que o cartão do convite guarda (a foto do momento do convite).
 type InviteCard struct {
@@ -67,8 +67,16 @@ type InviteDMPoster interface {
 	PostCallInvite(ctx context.Context, inviterID, inviteeID string, card InviteCard) error
 }
 
+// inviteDeps: o que o convite de amigos usa de fora do pacote (ligado em cmd/wire_calls.go).
+type inviteDeps struct {
+	friends      FriendChecker
+	channelNames channelFinder
+	serverNames  serverFinder
+	poster       InviteDMPoster
+}
+
 // SetInvitePoster liga o envio do convite para a DM.
-func (s *Service) SetInvitePoster(p InviteDMPoster) { s.invitePoster = p }
+func (s *Service) SetInvitePoster(p InviteDMPoster) { s.invite.poster = p }
 
 // InviteResult: o que aconteceu com cada convidado da requisição.
 type InviteResult struct {
@@ -198,19 +206,19 @@ type serverFinder interface {
 
 // SetPlaceSources liga a busca do nome do canal e do servidor (texto do convite).
 func (s *Service) SetPlaceSources(ch channelFinder, srv serverFinder) {
-	s.channelNames, s.serverNames = ch, srv
+	s.invite.channelNames, s.invite.serverNames = ch, srv
 }
 
 // placeNames busca o nome do canal e do servidor para o cartão do convite
 // (vazio se não der: o cliente tem fallback).
 func (s *Service) placeNames(ctx context.Context, channelID string, serverID *string) (channelName, serverName string) {
-	if s.channelNames != nil {
-		if ch, err := s.channelNames.FindByID(ctx, channelID); err == nil && ch != nil {
+	if s.invite.channelNames != nil {
+		if ch, err := s.invite.channelNames.FindByID(ctx, channelID); err == nil && ch != nil {
 			channelName = ch.Name
 		}
 	}
-	if s.serverNames != nil && serverID != nil {
-		if srv, err := s.serverNames.FindByID(ctx, *serverID); err == nil && srv != nil {
+	if s.invite.serverNames != nil && serverID != nil {
+		if srv, err := s.invite.serverNames.FindByID(ctx, *serverID); err == nil && srv != nil {
 			serverName = srv.Name
 		}
 	}
@@ -254,10 +262,10 @@ func (s *Service) inviteStateStatusLocked(callID, inviteeID string, now time.Tim
 // inviteeEligibility: amizade, bloqueio e acesso ao canal. Presença não conta:
 // o convite fica salvo na DM e o amigo vê quando voltar.
 func (s *Service) inviteeEligibility(ctx context.Context, ic inviteContext, inviteeID string) string {
-	if s.friends == nil {
+	if s.invite.friends == nil {
 		return InviteNotFriend
 	}
-	if ok, err := s.friends.AreFriends(ctx, ic.inviter.ID, inviteeID); err != nil || !ok {
+	if ok, err := s.invite.friends.AreFriends(ctx, ic.inviter.ID, inviteeID); err != nil || !ok {
 		return InviteNotFriend
 	}
 	if s.blockedCheck != nil {
@@ -275,7 +283,7 @@ func (s *Service) inviteeEligibility(ctx context.Context, ic inviteContext, invi
 // requisições juntas não duplicarem) e posta o cartão na DM. Se a DM falhar,
 // a reserva é desfeita.
 func (s *Service) sendInvite(ctx context.Context, ic inviteContext, inviteeID string) string {
-	if s.invitePoster == nil {
+	if s.invite.poster == nil {
 		return InviteFailed
 	}
 	prev, st := s.reserveInvite(ic, inviteeID)
@@ -286,7 +294,7 @@ func (s *Service) sendInvite(ctx context.Context, ic inviteContext, inviteeID st
 		CallID: ic.callID, ChannelID: ic.channelID, ServerID: ic.serverID,
 		ChannelName: ic.channelName, ServerName: ic.serverName,
 	}
-	if err := s.invitePoster.PostCallInvite(ctx, ic.inviter.ID, inviteeID, card); err != nil {
+	if err := s.invite.poster.PostCallInvite(ctx, ic.inviter.ID, inviteeID, card); err != nil {
 		s.releaseInvite(ic.callID, inviteeID, prev)
 		return InviteFailed
 	}

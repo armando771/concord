@@ -69,10 +69,10 @@ func (f *fakePoster) postedTo(id string) int {
 // podem entrar; eli não é amiga.
 func inviteService(pub *fakePublisher) (*Service, *fakePoster) {
 	s := lockedCallWith(pub, "ana")
-	s.friends = fakeFriends{"ana:bia": true, "ana:caio": true, "ana:davi": true, "ana:fred": true}
+	s.invite.friends = fakeFriends{"ana:bia": true, "ana:caio": true, "ana:davi": true, "ana:fred": true}
 	s.perms = fakeAccess{"bia": true, "caio": true, "davi": true, "eli": true}
 	poster := &fakePoster{}
-	s.invitePoster = poster
+	s.invite.poster = poster
 	return s, poster
 }
 
@@ -193,7 +193,7 @@ func TestInviteFailedResendRestoresPreviousReservation(t *testing.T) {
 
 func TestInviteWithoutPosterFails(t *testing.T) {
 	s, _ := inviteService(&fakePublisher{})
-	s.invitePoster = nil
+	s.invite.poster = nil
 	res, _ := s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
 	if got := statusOf(res, "bia"); got != InviteFailed {
 		t.Fatalf("bia = %q", got)
