@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -32,6 +32,10 @@ vi.mock('../components/ChannelHeaderParts', () => ({
 vi.mock('../../chat/components/SearchResultsPanel', () => ({
   default: () => <aside data-resultados="" />
 }))
+vi.mock('../../chat/components/VoiceChatPanel', () => ({
+  VOICE_CHAT_WIDE_QUERY: '(min-width: 768px)',
+  default: ({ channelId }: { channelId: string }) => <aside data-chat-call={channelId} />
+}))
 
 // SSR lê o estado atual do zustand (mesmo truque do ImageContextMenu.test).
 vi.spyOn(React, 'useSyncExternalStore').mockImplementation((_subscribe, getSnapshot) =>
@@ -41,6 +45,7 @@ vi.spyOn(React, 'useSyncExternalStore').mockImplementation((_subscribe, getSnaps
 import { useAuthStore } from '../../auth/store/authStore'
 import { useServerStore } from '../store/serverStore'
 import { useSearchStore } from '../../chat/store/searchStore'
+import { useVoiceChatPanelStore } from '../../chat/store/voiceChatPanelStore'
 import { DEFAULT_EVERYONE } from '../lib/permissions'
 import { ServerView } from './ServerView'
 
@@ -55,8 +60,27 @@ function render(path = '/servers/s1/channels/t1'): string {
   )
 }
 
+function screen(wide: boolean): void {
+  vi.stubGlobal('window', {
+    matchMedia: () => ({
+      matches: wide,
+      addEventListener: () => {},
+      removeEventListener: () => {}
+    })
+  })
+}
+
+/** As classes da célula da grade que contém o marcador. */
+function cellOf(html: string, marker: string): string {
+  const at = html.indexOf(marker)
+  const open = html.lastIndexOf('<div class="', at)
+  return html.slice(open, html.indexOf('>', open))
+}
+
 describe('ServerView', () => {
+  afterEach(() => vi.unstubAllGlobals())
   beforeEach(() => {
+    useVoiceChatPanelStore.setState({ channelId: null })
     useAuthStore.setState({ user: { id: 'ana', username: 'ana' } as never })
     useSearchStore.setState({ scope: null })
     useServerStore.setState({
@@ -84,6 +108,41 @@ describe('ServerView', () => {
     const html = render()
     expect(html).toContain('Carregando servidor…')
     expect(html).toContain('data-membros-esqueleto')
+  })
+
+  it('a barra de cima atravessa o conteúdo e a coluna de membros; a busca fica sobre ela', () => {
+    const html = render()
+    expect(html).toContain('data-coluna-direita="members"')
+    expect(html).toMatch(/<header class="col-span-2[^"]*grid-cols-subgrid/)
+    expect(cellOf(html, 'data-busca')).toContain('lg:contain-inline-size')
+    expect(cellOf(html, 'data-membros=""')).toContain('row-start-2')
+  })
+
+  it('chat da call aberto (tela larga): toma a coluna da direita de cima a baixo, sem membros', () => {
+    screen(true)
+    useVoiceChatPanelStore.setState({ channelId: 'v1' })
+    const html = render('/servers/s1/channels/v1')
+    expect(html).toContain('data-coluna-direita="voiceChat"')
+    expect(cellOf(html, 'data-chat-call="v1"')).toContain('row-span-2')
+    expect(html).toMatch(/<header class="col-start-1/)
+    expect(html).not.toContain('data-membros=""')
+  })
+
+  it('chat da call em tela estreita: sobreposição, a grade continua com membros', () => {
+    screen(false)
+    useVoiceChatPanelStore.setState({ channelId: 'v1' })
+    const html = render('/servers/s1/channels/v1')
+    expect(html).toContain('data-coluna-direita="members"')
+    expect(html).toContain('data-chat-call="v1"')
+    expect(html).toContain('data-membros=""')
+  })
+
+  it('chat de um canal de voz aberto, mas na tela de um canal de texto: só membros', () => {
+    screen(true)
+    useVoiceChatPanelStore.setState({ channelId: 'v1' })
+    const html = render()
+    expect(html).toContain('data-coluna-direita="members"')
+    expect(html).not.toContain('data-chat-call')
   })
 
   it('canal de texto: barra com título, ações e busca; conteúdo; membros e convite', () => {
