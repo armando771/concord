@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"gin-quickstart/backend/internal/platform/database"
@@ -85,5 +86,64 @@ func TestRepositoryReadsBugHunters(t *testing.T) {
 	}
 	if s.BugsReported != 3 {
 		t.Fatalf("bugs = %d, want 3", s.BugsReported)
+	}
+}
+
+// O Top 10 é uma tabela só para o app inteiro: o teste esvazia a fila (o
+// banco de teste é descartável).
+func TestRepositoryClaimTop10IsRaceSafe(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	reset := func() {
+		if _, err := db.Exec(ctx, `DELETE FROM badge_top10`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reset()
+	t.Cleanup(reset)
+	repo := BadgeRepository(db)
+
+	users := make([]string, 15)
+	for i := range users {
+		users[i] = newTestUser(t, db)
+	}
+	ranks := make([]int64, len(users))
+	var wg sync.WaitGroup
+	for i, id := range users {
+		wg.Add(1)
+		go func(i int, id string) {
+			defer wg.Done()
+			r, err := repo.ClaimTop10(ctx, id)
+			if err != nil {
+				t.Error(err)
+			}
+			ranks[i] = r
+		}(i, id)
+	}
+	wg.Wait()
+
+	seen := map[int64]bool{}
+	for _, r := range ranks {
+		if r == 0 {
+			continue
+		}
+		if r < 1 || r > Top10Slots || seen[r] {
+			t.Fatalf("posições = %v, want 1..10 sem repetir", ranks)
+		}
+		seen[r] = true
+	}
+	if len(seen) != Top10Slots {
+		t.Fatalf("%d vagas preenchidas, want %d: %v", len(seen), Top10Slots, ranks)
+	}
+	// Pedir de novo devolve a mesma posição; quem ficou de fora continua fora.
+	for i, id := range users {
+		again, err := repo.ClaimTop10(ctx, id)
+		if err != nil || again != ranks[i] {
+			t.Fatalf("de novo %s = %d (%v), want %d", id, again, err, ranks[i])
+		}
+	}
+	s, err := repo.Stats(ctx, users[0])
+	if err != nil || s.Top10Rank != ranks[0] {
+		t.Fatalf("Stats.Top10Rank = %d (%v), want %d", s.Top10Rank, err, ranks[0])
 	}
 }

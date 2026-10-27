@@ -15,6 +15,7 @@
 - Badges: o badge Idade da conta agora vai até 10 anos, com oito tiers novos depois da Sequoia (Bosque, Floresta, Jequitibá, Baobá, Árvore Ancestral, Árvore Celestial, Árvore da Vida e Yggdrasil, de 3 a 10 anos). Os limites aparecem em anos ("1 ano", "2 anos").
 - Badges: novo badge Amigos pelo número de amizades (Enturmado, Popular, Galera Toda, Celebridade e Prefeito da Salinha, de 5 a 100 amigos). Sobe na hora em que um pedido de amizade é aceito, e desfazer uma amizade não tira o tier já conquistado.
 - Badges: novo badge Caçador de bugs para quem reporta bugs ao time (Olho Vivo, Detetive, Exterminador e Lenda do QA, de 1 a 25 bugs). O time concede a cada bug confirmado.
+- Badges: novo badge mítico Top 10 do Nível 100, o mais raro do app: só os 10 primeiros a chegar no nível 100 ganham, e o perfil mostra a posição de chegada ("#3 de 10").
 
 ## Correções
 - Janela estreita: Configurações, Configurações do servidor, badges e cargos agora cabem em telas pequenas, com a navegação em cima do conteúdo, e as setas para ordenar cargos aparecem em telas de toque.

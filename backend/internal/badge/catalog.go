@@ -8,7 +8,8 @@ const (
 	RarityRare      = "raro"
 	RarityEpic      = "epico"
 	RarityLegendary = "lendario"
-	// Acima de lendário: só badges concedidos à mão (Fundador).
+	// Acima de lendário, a mais rara: só badges exclusivos (Fundador, dos
+	// devs, e o Top 10 do nível 100, que só dez pessoas vão ter).
 	RarityMythic = "mitico"
 )
 
@@ -28,6 +29,8 @@ const (
 	UnitVote    = "vote"
 	UnitFriends = "friends"
 	UnitBugs    = "bugs"
+	// UnitRank: posição de chegada (Top 10 do nível 100).
+	UnitRank = "rank"
 )
 
 // FounderCutoff: quem criou a conta antes desta data (horário de Brasília)
@@ -59,6 +62,19 @@ const hour = int64(60 * 60)
 
 // Catalog é a lista de badges, na ordem em que o app mostra.
 var Catalog = []Category{
+	{
+		// Os 10 primeiros a chegar no nível 100, na ordem em badge_top10
+		// (ver top10.go). O valor é a posição (1 a 10). Primeiro do catálogo:
+		// entre os míticos, é o que aparece na frente.
+		Key:         "top10",
+		Name:        "Top 10 do Nível 100",
+		Description: "Um dos 10 primeiros a chegar no nível 100. Só 10 pessoas no Salinha vão ter este badge.",
+		Unit:        UnitRank,
+		Tiers: []Tier{
+			{"Panteão", 1, RarityMythic},
+		},
+		Exclusive: true,
+	},
 	{
 		Key:         "voz",
 		Name:        "Tempo em call",

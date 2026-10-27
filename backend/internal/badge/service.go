@@ -6,6 +6,7 @@ import (
 	"log"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gin-quickstart/backend/internal/call"
@@ -31,6 +32,7 @@ type store interface {
 	AddCallStats(ctx context.Context, userID string, d Delta) error
 	SaveSessions(ctx context.Context, sessions map[string]int64) error
 	LoadSessions(ctx context.Context, maxAge time.Duration) (map[string]int64, error)
+	ClaimTop10(ctx context.Context, userID string) (int64, error)
 }
 
 // EventPublisher avisa a própria pessoa (o hub do websocket implementa).
@@ -81,6 +83,8 @@ type Service struct {
 	mu      sync.Mutex
 	tracker *tracker
 	ticks   int
+	// As 10 vagas do Top 10 do nível 100 acabaram (ver top10.go).
+	top10Full atomic.Bool
 }
 
 // BadgeService monta o serviço. loc é o fuso das horas de Coruja/Madrugador;
@@ -123,6 +127,7 @@ func (s *Service) sync(ctx context.Context, userID string) ([]Badge, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.claimTop10(ctx, userID, &stats)
 	stored, err := s.store.Unlocks(ctx, userID)
 	if err != nil {
 		return nil, err

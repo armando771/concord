@@ -867,6 +867,22 @@ DELETE FROM user_badges WHERE category = 'criador' AND user_id IN (SELECT id FRO
 
 Na VPS: `psql "$DATABASE_URL" -c "..."` com o SQL acima.
 
+## Badge Top 10 do Nível 100
+
+O badge mítico **Top 10 do Nível 100** é automático: os 10 primeiros a chegar
+no nível 100 ganham, na ordem de chegada, gravada em `badge_top10`
+(migration 000069). A vaga é dada quando os badges da pessoa são avaliados
+(a cada minuto em call, ao abrir o perfil ou a cada 5 minutos online), com
+uma trava por transação: dois chegando juntos entram um depois do outro, e a
+tabela não aceita mais de 10. Quem já estava no nível 100 no deploy entrou
+pela data do tier Imortal do badge Nível (empate: mais XP, depois conta mais
+antiga). Conta apagada não devolve a vaga.
+
+Conferir a fila:
+```sql
+SELECT t.posicao, u.username, t.reached_at FROM badge_top10 t LEFT JOIN users u ON u.id = t.user_id ORDER BY t.posicao;
+```
+
 ## Badge Caçador de bugs
 
 O badge **Caçador de bugs** é concedido à mão pelo time, na tabela

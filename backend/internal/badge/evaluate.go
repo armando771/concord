@@ -35,6 +35,8 @@ type Stats struct {
 	FezOL bool
 	// Bugs reportados, concedidos à mão em bug_hunters (Caçador de bugs).
 	BugsReported int64
+	// Posição (1 a 10) no Top 10 do nível 100; 0 se não está.
+	Top10Rank int64
 }
 
 // Unlocks: categoria -> tier -> quando foi desbloqueado (o que está gravado).
@@ -136,6 +138,7 @@ var valueFns = map[string]valueFn{
 	"reacoes":      func(s Stats, _ time.Time) int64 { return s.Reactions },
 	"amigos":       func(s Stats, _ time.Time) int64 { return s.Friends },
 	"bugs":         func(s Stats, _ time.Time) int64 { return s.BugsReported },
+	"top10":        func(s Stats, _ time.Time) int64 { return s.Top10Rank },
 	"contribuinte": func(s Stats, _ time.Time) int64 { return s.Proposals },
 	"criador":      func(s Stats, _ time.Time) int64 { return flag(s.IsDev) },
 	"l":            func(s Stats, _ time.Time) int64 { return flag(s.FezOL) },

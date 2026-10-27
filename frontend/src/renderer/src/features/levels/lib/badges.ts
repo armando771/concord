@@ -76,6 +76,11 @@ const DEV_TEXT = 'Dev do Salinha'
 const DEV_ONLY = 'Só para os devs'
 const VOTE_TEXT = 'Fez o L no segundo turno'
 
+/** "#3 de 10 a chegar no nível 100" (a posição vem também para os outros). */
+function rankText(value: number | undefined): string {
+  return value ? `#${num(value)} de 10 a chegar no nível 100` : 'Um dos 10 primeiros no nível 100'
+}
+
 function num(n: number): string {
   return Math.floor(n).toLocaleString('pt-BR')
 }
@@ -121,6 +126,7 @@ const STAT_TEXT: Partial<Record<BadgeUnit, (b: Badge, value: number) => string>>
   proposals: (_, value) => (value === 1 ? '1 proposta criada' : `${num(value)} propostas criadas`),
   friends: (_, value) => plural(value, 'amigo', 'amigos'),
   bugs: (_, value) => (value === 1 ? '1 bug reportado' : `${num(value)} bugs reportados`),
+  rank: (_, value) => rankText(value),
   founder: (_, value) =>
     value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas',
   dev: () => DEV_TEXT,
@@ -141,6 +147,7 @@ export function publicStatText(b: Badge): string {
   if (b.unit === 'founder') return 'Chegou nas primeiras semanas'
   if (b.unit === 'dev') return DEV_TEXT
   if (b.unit === 'vote') return VOTE_TEXT
+  if (b.unit === 'rank') return rankText(b.value)
   const reached = b.tiers[b.tier - 1]
   if (!reached) return ''
   const label = `${formatThreshold(b.unit, reached.threshold)}`
@@ -163,6 +170,7 @@ const THRESHOLD_TEXT: Partial<Record<BadgeUnit, (threshold: number) => string>> 
   proposals: (t) => plural(t, 'proposta', 'propostas'),
   friends: (t) => plural(t, 'amigo', 'amigos'),
   bugs: (t) => plural(t, 'bug', 'bugs'),
+  rank: () => 'Top 10',
   // Corte do backend: contas criadas antes de 01/11/2026.
   founder: () => 'Até 31/10/26',
   dev: () => DEV_ONLY,

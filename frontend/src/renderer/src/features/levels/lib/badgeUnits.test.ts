@@ -88,3 +88,24 @@ describe('Caçador de bugs', () => {
     expect(publicStatText(pub)).toBe('1+ bug')
   })
 })
+
+describe('Top 10 do Nível 100', () => {
+  const top10 = (over: Partial<Badge> = {}): Badge =>
+    badge({
+      category: 'top10',
+      name: 'Top 10 do Nível 100',
+      unit: 'rank',
+      tier: 1,
+      rarity: 'mitico',
+      tiers: [{ tier: 1, name: 'Panteão', threshold: 1, rarity: 'mitico' }],
+      ...over
+    })
+
+  it('mostra a posição para todo mundo', () => {
+    expect(statText(top10({ value: 3 }))).toBe('#3 de 10 a chegar no nível 100')
+    expect(publicStatText(top10({ value: 1 }))).toBe('#1 de 10 a chegar no nível 100')
+    expect(publicStatText(top10({ value: undefined }))).toBe('Um dos 10 primeiros no nível 100')
+    expect(formatThreshold('rank', 1)).toBe('Top 10')
+    expect(remainingText(top10({ value: 3 }), now)).toBe('Tier máximo!')
+  })
+})

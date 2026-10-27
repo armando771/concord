@@ -48,7 +48,12 @@ func TestCatalogIsWellFormed(t *testing.T) {
 }
 
 func TestTierForValue(t *testing.T) {
-	voz := Catalog[0]
+	var voz Category
+	for _, c := range Catalog {
+		if c.Key == "voz" {
+			voz = c
+		}
+	}
 	cases := []struct {
 		value int64
 		want  int
