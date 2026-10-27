@@ -42,9 +42,12 @@ por cópia adaptada, com os testes. Se a duplicação doer, extrair um pacote
 compartilhado das partes que de fato repetiram, num novo ADR que substitui este.
 
 Dependências novas (regra 7): `expo`, `expo-router`, `expo-secure-store`,
-`expo-notifications` (spec do chat), `@react-native-community/netinfo`,
-`react-native-gesture-handler`, `react-native-reanimated`, `zustand`,
-`jest-expo`, `@testing-library/react-native`. Tokens e refresh token ficam no
+`expo-constants`, `expo-linking`, `expo-status-bar`, `expo-splash-screen`,
+`expo-font`, `@expo/vector-icons`, `expo-notifications` (spec do chat),
+`@react-native-community/netinfo`, `react-native-gesture-handler`,
+`react-native-reanimated`, `react-native-worklets`, `react-native-screens`,
+`react-native-safe-area-context`, `zustand`; de desenvolvimento: `jest`,
+`jest-expo`, `@react-native/jest-preset`, `@testing-library/react-native`. Tokens e refresh token ficam no
 `expo-secure-store` (Keystore do Android), nunca em `AsyncStorage`.
 
 ## Consequências
