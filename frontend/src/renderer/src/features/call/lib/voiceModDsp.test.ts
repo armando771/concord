@@ -29,7 +29,48 @@ function frequency(out: Float32Array): number {
   return crossings / ((out.length - from) / RATE)
 }
 
+/**
+ * A fórmula de antes da otimização (dois senos por amostra e `%` no buffer),
+ * como referência: o laço novo tem de dar o mesmo resultado.
+ */
+function referenceRun(ratio: number, input: Float32Array): Float32Array {
+  const size = Math.round((RATE * VOICE_MOD_LATENCY_MS * 2) / 1000)
+  const buffer = new Float32Array(size * 2 + 4)
+  const n = buffer.length
+  const out = new Float32Array(input.length)
+  const sin2 = (x: number): number => Math.sin(Math.PI * x) ** 2
+  const read = (pos: number, delay: number): number => {
+    const p = pos - delay
+    const i0 = Math.floor(p)
+    const a = buffer[((i0 % n) + n) % n]
+    return a + (buffer[(((i0 + 1) % n) + n) % n] - a) * (p - i0)
+  }
+  let pos = 0
+  let phase = 0
+  const step = (1 - ratio) / size
+  for (let i = 0; i < input.length; i++) {
+    buffer[pos] = input[i]
+    const phaseB = (phase + 0.5) % 1
+    out[i] = read(pos, phase * size) * sin2(phase) + read(pos, phaseB * size) * sin2(phaseB)
+    phase += step
+    phase -= Math.floor(phase)
+    pos = (pos + 1) % n
+  }
+  return out
+}
+
 describe('VoiceModDsp', () => {
+  it.each([0.5, 1, 2 ** (7 / 12), 2])('razão %f: mesmo resultado da fórmula original', (ratio) => {
+    const dsp = new VoiceModDsp(RATE)
+    dsp.ratio = ratio
+    const input = signal((i) => 0.4 * Math.sin(i / 9) + 0.1 * Math.sin(i / 2.3))
+    const out = run(dsp, input)
+    const expected = referenceRun(ratio, input)
+    let max = 0
+    for (let i = 0; i < out.length; i++) max = Math.max(max, Math.abs(out[i] - expected[i]))
+    expect(max).toBeLessThan(1e-6)
+  })
+
   it('razão 1 devolve a entrada atrasada em 25 ms', () => {
     const delay = Math.round((RATE * VOICE_MOD_LATENCY_MS) / 1000)
     const input = sine(440)

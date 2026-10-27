@@ -15,6 +15,7 @@
 // O caminho seco tem o mesmo atraso do pitch shifter para não haver filtro
 // pente ao misturar os dois; por isso o limitador é um WaveShaper (sem atraso)
 // e não um DynamicsCompressor (que tem look-ahead).
+import { dspProcessorOptions } from './dspModule'
 import voiceModWorkletUrl from './voiceModWorklet.ts?worker&url'
 import { driveCurve, reverbImpulse, softLimitCurve } from './voiceModCurves'
 import {
@@ -43,7 +44,10 @@ export interface VoiceModNode {
 
 /** Rejeita se o worklet não carregar; quem chama segue sem voice mod. */
 export async function createVoiceMod(ctx: AudioContext): Promise<VoiceModNode> {
-  await ctx.audioWorklet.addModule(voiceModWorkletUrl)
+  const [, processorOptions] = await Promise.all([
+    ctx.audioWorklet.addModule(voiceModWorkletUrl),
+    dspProcessorOptions()
+  ])
 
   const input = ctx.createGain()
   input.channelCount = 1
@@ -57,7 +61,8 @@ export async function createVoiceMod(ctx: AudioContext): Promise<VoiceModNode> {
   const shifter = new AudioWorkletNode(ctx, VOICE_MOD_PROCESSOR, {
     numberOfInputs: 1,
     numberOfOutputs: 1,
-    outputChannelCount: [1]
+    outputChannelCount: [1],
+    processorOptions
   })
   const highpass = ctx.createBiquadFilter()
   highpass.type = 'highpass'

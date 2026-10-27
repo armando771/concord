@@ -272,3 +272,77 @@ O banco automatizado (`scripts/perf-bench.mjs`) também roda no Windows (usa
 `focus`/`blur`/`minimize` do Electron), mas precisa de backend e LiveKit locais
 (no Windows, o `livekit-server.exe` nativo: o do Docker Desktop não passa mídia)
 e não lê a GPU.
+
+## DSP de áudio (JS → WASM)
+
+O laço por amostra do voice mod roda em Rust compilado para WebAssembly, com o
+JS de fallback ([ADR 0005](adr/0005-dsp-de-audio-em-wasm.md)). Para medir de novo:
+
+```bash
+node scripts/bench-dsp.mjs            # Node, sem DOM: os worklets (o voice mod em JS e em WASM)
+node scripts/bench-dsp-chromium.mjs   # Electron (precisa de tela): OfflineAudioContext com o worklet de verdade
+```
+
+Custo por quantum (128 amostras a 48 kHz; o áudio pede 375 por segundo).
+"JS antes" é o código anterior; "JS depois" é o JS com o laço otimizado (um
+seno por amostra em vez de dois, sem `%` nos buffers circulares); "WASM" é o
+que o app usa no voice mod. Arch Linux, Ryzen 7 5700U; ±1 µs de ruído.
+
+**Node 26** (`bench-dsp.mjs`, média por quantum em ns):
+
+| Cenário | JS antes | JS depois | WASM | antes → depois |
+|---|---|---|---|---|
+| voz/normal (bypass: o nó roda igual) | 5460 | 2983 | 2009 | 2,7× |
+| voz/grave · esquilo · monstro (tom) | 5593–5682 | 3593–4012 | 2698–2873 | 2,1× |
+| voz/eco · rádio · caverna · telefone · megafone | 5083–5154 | 2749–3746 | 1942–1959 | 2,6× |
+| voz/robô (anel) | 6933 | 4947 | 3806 | 1,8× |
+| voz/alien · fantasma (vibrato/tremolo) | 7173–7295 | 5232–5355 | 4352–4374 | 1,7× |
+| fala/portão desligado (não portado¹) | 1422 | 1266 | — | 1,1× |
+| fala/portão ligado (não portado¹) | 1932 | 1912 | — | 1,0× |
+| tela/pcm estéreo (não portado) | 1184 | 1182 | — | — |
+
+¹ A detecção chegou a rodar em WASM (538 e 1005 ns aqui), mas no Chromium e no
+app o custo fixo de chamar o `process()` domina (tabelas abaixo) e o ganho
+sumiu no ruído; ficou em JS.
+
+Reverb e distorção não custam nada aqui: são nós nativos (ConvolverNode,
+WaveShaper); o JS só gera o impulso (3,5 ms) e as curvas (< 0,5 ms) uma vez
+por preset.
+
+**Chromium 152 / Electron 44** (`bench-dsp-chromium.mjs`, ns por quantum,
+inclui o custo de o motor chamar o `process()`; o grafo vazio é descontado):
+
+| Cenário | JS antes | JS depois | WASM |
+|---|---|---|---|
+| voz/normal | 10 876 | 7 027 | 5 862 |
+| voz/esquilo | 12 829 | 8 996 | 6 664 |
+| voz/alien | 15 891 | 14 920 | 9 740 |
+| fala/portão ligado | 5 956 | 5 896 | 5 180 (descartado) |
+
+**No app** (`perf-bench.mjs --scenarios d --trace d`, call de voz sem foco,
+3 × 60 s; antes = `origin/develop` com #310, depois = esta branch; trace de
+10 s da thread "Realtime AudioWorklet", ms de CPU por segundo):
+
+| | antes | depois |
+|---|---|---|
+| CPU total (% de um núcleo, média / p95) | 40,6 / 47,9 | 36,0 / 42,9 |
+| renderer (Tab) | 26,2 | 24,1 |
+| thread do AudioWorklet (tudo) | 113,6 | 119,8 |
+| · worklet do voice mod | 7,4 (mediana 18 µs) | 4,8 (mediana 10 µs) |
+| · worklet da detecção de fala² | 4,3 | 4,9 |
+| · worklet do RNNoise (não mexido) | 31,6 | 34,9 |
+| · coleta de lixo (MinorGC) | 1,7 | 1,2 |
+
+² Medido com a detecção ainda em WASM; como não ganhou nada, ela voltou
+ao JS (com o `%` otimizado, ~igual ao antes).
+
+A queda do voice mod (−2,6 ms/s, ~0,26 % de um núcleo) é a única mudança que
+sai do ruído: a thread do AudioWorklet inteira oscila ±5 % entre traces (o
+RNNoise, que não mudou, foi de 31,6 a 34,9), e a diferença do CPU total vem
+quase toda da GPU e do processo de áudio, que este trabalho não toca. Dos ~114
+ms/s da thread, ~41 são JS dos worklets (o RNNoise sozinho ~32, já WASM; a cola
+JS dele chama o modelo a cada 480 amostras) e ~70 são o grafo nativo do Web
+Audio (filtros, delays, waveshapers, analisador, destino). O próximo ganho de
+áudio, se houver, está aí: tirar do grafo os nós do voice mod quando o preset
+é Normal (hoje eles processam com os ganhos em zero) e o RNNoise quando a
+supressão está desligada.
