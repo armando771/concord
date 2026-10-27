@@ -56,7 +56,24 @@ function ConnectionBanner(): React.JSX.Element | null {
 
   const banner = connectionBanner(ws, online, now)
   if (!banner) return null
+  return <BannerView banner={banner} />
+}
 
+/** Botão do aviso: "Tentar agora" na queda. */
+function BannerActions({ kind }: { kind: Banner['kind'] }): React.JSX.Element | null {
+  if (kind !== 'lost') return null
+  return (
+    <button
+      type="button"
+      onClick={() => useChatStore.getState().retryWsNow()}
+      className={`shrink-0 cursor-pointer rounded font-semibold underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand ${ACCENT[kind]}`}
+    >
+      Tentar agora
+    </button>
+  )
+}
+
+export function BannerView({ banner }: { banner: Banner }): React.JSX.Element {
   return (
     <div
       role="status"
@@ -72,15 +89,7 @@ function ConnectionBanner(): React.JSX.Element | null {
         />
       )}
       <span className="min-w-0 flex-1 truncate">{bannerText(banner)}</span>
-      {banner.kind === 'lost' && (
-        <button
-          type="button"
-          onClick={() => useChatStore.getState().retryWsNow()}
-          className={`shrink-0 cursor-pointer rounded font-semibold underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand ${ACCENT[banner.kind]}`}
-        >
-          Tentar agora
-        </button>
-      )}
+      <BannerActions kind={banner.kind} />
     </div>
   )
 }
