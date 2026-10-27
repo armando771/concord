@@ -19,6 +19,12 @@ func reactionErrorResponse(err error, fallback string) (int, gin.H) {
 		return http.StatusForbidden, gin.H{"error": err.Error(), "code": "bot_conversation"}
 	case errors.Is(err, ErrMessageNotFound):
 		return http.StatusNotFound, gin.H{"error": err.Error()}
+	case errors.Is(err, ErrTooManyReactions):
+		return http.StatusConflict, gin.H{
+			"error": err.Error(),
+			"code":  "too_many_reactions",
+			"max":   MaxDistinctReactions,
+		}
 	default:
 		return http.StatusInternalServerError, gin.H{"error": fallback}
 	}
