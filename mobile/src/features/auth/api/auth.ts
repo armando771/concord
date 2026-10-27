@@ -1,3 +1,6 @@
+import { rawRequest, request } from '../../../shared/api/client'
+import type { User } from '../store/authStore'
+
 export interface AuthResponse {
   access_token: string
   refresh_token: string
@@ -10,3 +13,24 @@ export interface LoginInput {
   email: string
   password: string
 }
+
+export interface RegisterInput {
+  username: string
+  display_name: string
+  email: string
+  password: string
+}
+
+const post = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) })
+
+export const login = (input: LoginInput): Promise<AuthResponse> => rawRequest('/auth/login', post(input))
+
+export const register = (input: RegisterInput): Promise<AuthResponse> =>
+  rawRequest('/auth/register', post(input))
+
+export const forgotPassword = (email: string): Promise<void> =>
+  rawRequest('/auth/forgot-password', post({ email }))
+
+export const logout = (): Promise<void> => request('/auth/logout', { method: 'POST' })
+
+export const getMe = (): Promise<User> => request('/users/me')

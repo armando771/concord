@@ -1,5 +1,5 @@
 import * as SecureStore from 'expo-secure-store'
-import type { StoredTokens, Tokens } from './authRefresh'
+import type { StoredTokens, Tokens } from '../../../shared/lib/authRefresh'
 
 // Tokens são credenciais: ficam no Keystore do Android (expo-secure-store),
 // nunca em AsyncStorage. Um item só, em JSON.

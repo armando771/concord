@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Tokens } from '../lib/authRefresh'
+import type { Tokens } from '../../../shared/lib/authRefresh'
 import { clearTokens, loadTokens, saveTokens } from '../lib/secureTokens'
 
 /** A própria conta (/users/me): com o e-mail. Só o que o app mobile usa por ora. */

@@ -13,8 +13,6 @@ export interface Tokens {
   refreshToken: string
 }
 
-const str = (value: unknown): string | null => (typeof value === 'string' && value ? value : null)
-
 export type RefreshPlan =
   | { kind: 'refresh'; refreshToken: string }
   | { kind: 'adopt'; tokens: Tokens }
