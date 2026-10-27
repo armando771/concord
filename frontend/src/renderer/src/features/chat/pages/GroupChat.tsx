@@ -9,6 +9,8 @@ import GroupChatPlaceholder from '../components/GroupChatPlaceholder'
 import GroupMembersAside from '../components/GroupMembersAside'
 import MembersToggleButton from '../components/MembersToggleButton'
 import MessageSearchBar from '../components/MessageSearchBar'
+import CollapsibleSearch from '../components/CollapsibleSearch'
+import MobileNavButton from '../../navigation/components/MobileNavButton'
 import SearchResultsPanel from '../components/SearchResultsPanel'
 import { useSearchStore } from '../store/searchStore'
 import GroupIcon from '../../friends/components/GroupIcon'
@@ -90,13 +92,14 @@ function GroupChat(): React.JSX.Element {
       className="flex h-full w-full flex-col overflow-hidden text-gray-100"
       style={{ background: MAIN_BG }}
     >
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-subtle px-4">
+      <header className="relative flex h-14 shrink-0 items-center gap-2 border-b border-subtle px-4 sm:gap-3">
+        <MobileNavButton />
         <button
           type="button"
           title="Trocar ícone"
           aria-label="Trocar ícone do grupo"
           onClick={() => fileRef.current?.click()}
-          className="cursor-pointer rounded-full transition-opacity hover:opacity-80"
+          className="shrink-0 cursor-pointer rounded-full transition-opacity hover:opacity-80"
         >
           <GroupIcon id={conv.id} iconUrl={conv.icon_url} size={32} />
         </button>
@@ -127,14 +130,14 @@ function GroupChat(): React.JSX.Element {
           aria-label="Nome do grupo"
           className="min-w-0 max-w-xs flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-ds-md font-semibold text-strong outline-none placeholder:text-strong hover:border-black/40 focus:border-brand focus:bg-floating"
         />
-        <div className="ml-auto flex items-center gap-3 text-gray-400">
+        <div className="ml-auto flex shrink-0 items-center gap-1 text-gray-400 sm:gap-3">
           <button
             type="button"
             title="Adicionar amigos ao grupo"
             aria-label="Adicionar amigos ao grupo"
             disabled={conv.members.length >= MAX_GROUP_MEMBERS}
             onClick={() => setAdding(true)}
-            className="cursor-pointer hover:text-strong disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex size-10 cursor-pointer items-center justify-center hover:text-strong disabled:cursor-not-allowed disabled:opacity-40 md:size-auto"
           >
             <UserPlusIcon className="h-5 w-5" />
           </button>
@@ -142,20 +145,24 @@ function GroupChat(): React.JSX.Element {
           <button
             type="button"
             onClick={() => setLeaving(true)}
-            className="cursor-pointer rounded-md px-2 py-1 text-ds-sm font-medium text-danger hover:bg-danger/10"
+            aria-label="Sair do grupo"
+            className="cursor-pointer rounded-md px-2 py-1 text-ds-sm font-medium text-danger hover:bg-danger/10 max-md:min-h-10"
           >
-            Sair do grupo
+            <span className="max-sm:hidden">Sair do grupo</span>
+            <span className="sm:hidden">Sair</span>
           </button>
-          <MessageSearchBar
-            scope={{ kind: 'conversation', id: conv.id }}
-            name={title}
-            users={conv.members.map((m) => ({
-              id: m.id,
-              username: m.username,
-              displayName: m.display_name,
-              avatarUrl: m.avatar_url
-            }))}
-          />
+          <CollapsibleSearch>
+            <MessageSearchBar
+              scope={{ kind: 'conversation', id: conv.id }}
+              name={title}
+              users={conv.members.map((m) => ({
+                id: m.id,
+                username: m.username,
+                displayName: m.display_name,
+                avatarUrl: m.avatar_url
+              }))}
+            />
+          </CollapsibleSearch>
         </div>
       </header>
 

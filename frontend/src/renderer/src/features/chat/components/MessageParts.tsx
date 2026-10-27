@@ -156,12 +156,13 @@ export function MessageHeader({
     ) : null
   }
   return (
-    <div className="flex items-baseline gap-2">
+    <div className="flex min-w-0 items-baseline gap-2">
+      {/* Nome longo: corta com reticências (no celular ele quebrava centralizado). */}
       <button
         type="button"
         onClick={onOpenProfile}
         style={nameColor ? { color: nameColor } : undefined}
-        className={`cursor-pointer text-ds-chat font-medium hover:underline ${
+        className={`min-w-0 cursor-pointer truncate text-left text-ds-chat font-medium hover:underline ${
           nameColor ? '' : 'text-strong'
         }`}
       >
@@ -171,7 +172,9 @@ export function MessageHeader({
           <StyledName name={name} userId={message.author_id} style={message.author?.name_style} />
         )}
       </button>
-      <span className="text-ds-xs font-medium text-gray-500">{formatTime(message.created_at)}</span>
+      <span className="shrink-0 text-ds-xs font-medium text-gray-500">
+        {formatTime(message.created_at)}
+      </span>
       <MessageBadges message={message} />
     </div>
   )

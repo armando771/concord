@@ -29,6 +29,13 @@ import { useInviteLinkClicks } from '../features/servers/hooks/useInviteLinkClic
 import { useAuthStore } from '../features/auth/store/authStore'
 import { useSessionConnection } from '../features/auth/hooks/useSessionConnection'
 import { useUIStore } from '../shared/store/uiStore'
+import { useAppViewportHeight } from '../shared/hooks/useAppViewportHeight'
+import { useMobileShell } from '../features/navigation/hooks/useMobileShell'
+
+// Celular: a barra de canais/DMs (a <aside> depois da do trilho) ocupa o resto
+// da largura, sem a largura arrastável do desktop.
+const NAV_FILL =
+  'max-md:[&>aside~aside]:w-auto! max-md:[&>aside~aside]:min-w-0 max-md:[&>aside~aside]:flex-1'
 
 function AppShell(): React.JSX.Element {
   useFlushPendingLevelUp()
@@ -41,12 +48,17 @@ function AppShell(): React.JSX.Element {
   const hasToken = Boolean(useAuthStore((s) => s.accessToken))
 
   useSessionConnection(hasToken)
+  useAppViewportHeight()
+  // Celular: uma coluna por vez (a lista ou o conteúdo). Desktop: as duas.
+  const { columns, contentRef } = useMobileShell()
 
   return (
     <div className="flex h-full">
-      <ServerRail />
-      {isServerPage ? <ServerSidebar /> : <FriendsSidebar />}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className={`${columns.nav} ${NAV_FILL}`}>
+        <ServerRail />
+        {isServerPage ? <ServerSidebar /> : <FriendsSidebar />}
+      </div>
+      <div ref={contentRef} className={`flex min-w-0 flex-1 flex-col ${columns.content}`}>
         <ConnectionBanner />
         <EmailVerifyBanner />
         <main className="min-h-0 min-w-0 flex-1 overflow-hidden">

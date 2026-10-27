@@ -2,6 +2,7 @@ import { useId, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useModalBehavior } from '../hooks/useModalBehavior'
 import { trapTab } from '../lib/focusTrap'
+import { modalLayout } from '../lib/modalLayout'
 
 interface ModalProps {
   open: boolean
@@ -28,11 +29,12 @@ function Modal({
   useModalBehavior(open, onClose, dialogRef)
 
   if (!open) return null
+  const layout = modalLayout({ wide, xl })
 
   // Fora dos painéis com blur/transform, para que o viewport seja sempre a janela.
   return createPortal(
     <div
-      className="app-no-drag fixed inset-x-0 bottom-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      className={layout.backdrop}
       style={{ top: 'var(--titlebar-height, 0px)' }}
       onClick={onClose}
     >
@@ -41,9 +43,7 @@ function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
-        className={`flex max-h-full min-h-0 w-full flex-col overflow-hidden p-6 rounded-2xl border border-subtle bg-modal shadow-2xl shadow-black/70 ${
-          xl ? 'max-w-5xl' : wide ? 'max-w-3xl' : 'max-w-md'
-        }`}
+        className={layout.dialog}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => trapTab(e, dialogRef.current)}
       >
@@ -56,7 +56,7 @@ function Modal({
           {onClose && (
             <button
               type="button"
-              className="app-no-drag ml-auto flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-strong/60 transition-colors hover:bg-fg/10 hover:text-strong focus-visible:outline-2 focus-visible:outline-violet-400"
+              className="app-no-drag ml-auto flex size-10 shrink-0 cursor-pointer sm:size-8 items-center justify-center rounded-md text-strong/60 transition-colors hover:bg-fg/10 hover:text-strong focus-visible:outline-2 focus-visible:outline-violet-400"
               onClick={onClose}
               aria-label="Fechar"
             >

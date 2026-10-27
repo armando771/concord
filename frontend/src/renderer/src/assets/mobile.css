@@ -1,0 +1,125 @@
+/*
+ * Celular e toque (app web). A casca ocupa a área visível de verdade:
+ * 100dvh acompanha a barra do navegador e o teclado no Android
+ * (interactive-widget=resizes-content no index.html); no iOS o
+ * --app-height vem do visualViewport (shared/hooks/useAppViewportHeight).
+ * As safe areas (notch, barra de gestos) só existem com viewport-fit=cover.
+ */
+@layer base {
+  /* Seletores um pouco mais fortes que o `html, body, #root` do main.css. */
+  html > body,
+  body > #root {
+    height: var(--app-height, 100dvh);
+  }
+
+  body > #root {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
+    box-sizing: border-box;
+  }
+
+  /*
+   * Sem o "puxar para recarregar" e o quique da página atrás do app: num chat
+   * puxar a lista para cima (ler mensagens antigas) recarregaria tudo.
+   * manipulation: sem o atraso do toque duplo para zoom (a pinça continua).
+   */
+  html,
+  body {
+    overscroll-behavior: none;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+}
+
+/* Margens das safe areas em camadas fixas (modais, gavetas, folhas de baixo). */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@utility pl-safe {
+  padding-left: env(safe-area-inset-left);
+}
+@utility pr-safe {
+  padding-right: env(safe-area-inset-right);
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@utility animate-drawer-in {
+  animation: drawer-in 180ms ease-out;
+}
+
+@utility animate-sheet-in {
+  animation: sheet-in 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-drawer-in,
+  .animate-sheet-in {
+    animation: none;
+  }
+}
+
+/*
+ * Toque: segurar o dedo numa mensagem abre o menu "Mais" (useMessageActionsState).
+ * Sem isto o navegador seleciona o texto e abre o balão de copiar por cima
+ * (o "Copiar texto" está no próprio menu).
+ */
+@media (pointer: coarse) {
+  [data-message-row],
+  [data-message-row] .select-text {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+}
+
+/*
+ * iOS dá zoom ao focar campo com fonte menor que 16 px (e não volta). No
+ * celular de toque todo campo tem 16 px. Fora de camada para ganhar das
+ * classes de tamanho de texto.
+ */
+@media (max-width: 767px) and (pointer: coarse) {
+  input:not([type='checkbox'], [type='radio'], [type='range'], [type='color']),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/*
+ * "+ Criar DM" da barra de DMs: o ícone tem 16 px; no toque a área de toque
+ * cresce sem mudar o desenho (margem negativa compensa o padding).
+ */
+@media (pointer: coarse) {
+  button[aria-label='Criar DM'] {
+    margin: -0.625rem;
+    padding: 0.625rem;
+  }
+}
+
+/*
+ * Resultados da busca no celular: cobrem o chat (o pai — a coluna da direita
+ * do servidor, a DM ou o grupo — é relative); fechar a busca volta ao chat.
+ */
+@media (max-width: 767px) {
+  aside[aria-label='Resultados da busca'] {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    width: 100%;
+    border-left-width: 0;
+  }
+}

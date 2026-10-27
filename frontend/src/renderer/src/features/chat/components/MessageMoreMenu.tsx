@@ -6,9 +6,14 @@ import {
   type MessageMenuAction,
   type MessageMenuItem
 } from '../lib/messageMenu'
+import { useIsMobile } from '../../navigation/hooks/useIsMobile'
 
 const MENU_WIDTH = 220
 const ITEM_SELECTOR = '[role="menuitem"]'
+const POPOVER_CLASS =
+  'fixed z-50 max-h-[calc(100dvh-16px)] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-subtle bg-floating p-1.5 shadow-2xl'
+const SHEET_CLASS =
+  'animate-sheet-in fixed inset-x-0 bottom-0 z-50 max-h-[70dvh] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-subtle bg-floating px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-2xl'
 
 const menuItems = (menu: HTMLElement | null): HTMLElement[] => [
   ...(menu?.querySelectorAll<HTMLElement>(ITEM_SELECTOR) ?? [])
@@ -34,6 +39,8 @@ function MessageMoreMenu({
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState(0)
+  // Celular: folha que sobe de baixo, com alvos grandes (o dedo não acerta 32 px).
+  const sheet = useIsMobile()
 
   // Mede antes de pintar (a posição final já sai no primeiro quadro) e foca o
   // primeiro item para o teclado.
@@ -80,30 +87,33 @@ function MessageMoreMenu({
   )
 
   return createPortal(
-    <div
-      ref={ref}
-      role="menu"
-      aria-label="Mais ações"
-      onKeyDown={onKeyDown}
-      style={{ ...position, width: MENU_WIDTH }}
-      className="fixed z-50 max-h-[calc(100dvh-16px)] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-subtle bg-floating p-1.5 shadow-2xl"
-    >
-      {groups.map((group, i) => (
-        <Fragment key={group[0].action}>
-          {i > 0 && <div role="separator" className="mx-1 my-1 h-px bg-fg/10" />}
-          {group.map((item) => (
-            <MenuItem
-              key={item.action}
-              item={item}
-              onClick={() => {
-                onClose()
-                onAction(item.action)
-              }}
-            />
-          ))}
-        </Fragment>
-      ))}
-    </div>,
+    <>
+      {sheet && <div aria-hidden="true" className="fixed inset-0 z-50 bg-black/50" />}
+      <div
+        ref={ref}
+        role="menu"
+        aria-label="Mais ações"
+        onKeyDown={onKeyDown}
+        style={sheet ? undefined : { ...position, width: MENU_WIDTH }}
+        className={sheet ? SHEET_CLASS : POPOVER_CLASS}
+      >
+        {groups.map((group, i) => (
+          <Fragment key={group[0].action}>
+            {i > 0 && <div role="separator" className="mx-1 my-1 h-px bg-fg/10" />}
+            {group.map((item) => (
+              <MenuItem
+                key={item.action}
+                item={item}
+                onClick={() => {
+                  onClose()
+                  onAction(item.action)
+                }}
+              />
+            ))}
+          </Fragment>
+        ))}
+      </div>
+    </>,
     document.body
   )
 }
@@ -124,7 +134,7 @@ function MenuItem({
       role="menuitem"
       tabIndex={-1}
       onClick={onClick}
-      className={`flex min-h-8 w-full cursor-pointer items-center rounded px-2 py-1.5 text-left text-ds-sm font-medium outline-none transition-colors ${tone}`}
+      className={`flex min-h-8 w-full cursor-pointer items-center rounded px-2 py-1.5 text-left text-ds-sm font-medium outline-none transition-colors max-md:min-h-12 max-md:px-3 max-md:text-ds-md ${tone}`}
     >
       {item.label}
     </button>

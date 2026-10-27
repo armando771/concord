@@ -48,8 +48,14 @@ describe('SettingsShell', () => {
     expect(html).not.toMatch(/[\s"]w-\[260px\]/)
   })
 
-  it('a navegação não toma a tela inteira quando empilhada', () => {
-    expect(render()).toContain('max-h-[40%]')
+  it('no celular abre na lista de seções (a seção some até escolher)', () => {
+    const html = render()
+    expect(html).toMatch(/<main class="[^"]*max-md:hidden/)
+    expect(html).not.toMatch(/<aside[^>]*max-md:hidden/)
+  })
+
+  it('a seção tem "voltar" para a lista, só no celular', () => {
+    expect(render()).toMatch(/md:hidden[^"]*">.*Configurações<\/button>/)
   })
 
   it('o conteúdo tem margem pequena em tela estreita', () => {

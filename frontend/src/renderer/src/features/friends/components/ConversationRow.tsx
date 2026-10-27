@@ -146,7 +146,7 @@ function ConversationTail({
           e.stopPropagation()
           onClose()
         }}
-        className="shrink-0 cursor-pointer text-gray-400 hover:text-strong [@media(hover:hover)]:sr-only [@media(hover:hover)]:group-hover:not-sr-only focus-visible:not-sr-only"
+        className="shrink-0 cursor-pointer text-gray-400 hover:text-strong [@media(pointer:coarse)]:-my-2 [@media(pointer:coarse)]:-mr-2 [@media(pointer:coarse)]:p-3 [@media(hover:hover)]:sr-only [@media(hover:hover)]:group-hover:not-sr-only focus-visible:not-sr-only"
       >
         <XIcon className="h-4 w-4" />
       </button>

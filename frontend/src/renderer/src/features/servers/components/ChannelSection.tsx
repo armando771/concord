@@ -50,7 +50,7 @@ function ChannelSection({
             onClick={onAdd}
             title={addLabel}
             aria-label={addLabel}
-            className="cursor-pointer rounded-md p-0.5 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
+            className="cursor-pointer rounded-md p-0.5 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong [@media(pointer:coarse)]:-my-2 [@media(pointer:coarse)]:p-2.5"
           >
             <PlusIcon className="h-4 w-4" />
           </button>

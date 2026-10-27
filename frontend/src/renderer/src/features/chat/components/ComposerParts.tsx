@@ -2,10 +2,11 @@ import type { ReactNode } from 'react'
 import type { Message } from '../api/messages'
 import type { ServerSticker } from '../api/stickers'
 import type { GiphyItem } from '../api/giphy'
-import { PaperclipIcon } from '../../../shared/ui/icons'
+import { PaperclipIcon, PollIcon, SmileyIcon } from '../../../shared/ui/icons'
 import SlashSuggestions from '../../music/components/SlashSuggestions'
 import UnifiedMediaPickerPopover from './UnifiedMediaPickerPopover'
 import VoiceRecordButton from './VoiceRecordButton'
+import MobileSheet from '../../../shared/ui/MobileSheet'
 import { messagePreview } from '../lib/polls'
 import { submitLabel } from '../lib/chatPaneView'
 
@@ -75,13 +76,15 @@ export function MediaPicker({
 }): React.JSX.Element | null {
   if (!open) return null
   return (
-    <UnifiedMediaPickerPopover
-      serverId={serverId}
-      onSelectEmoji={onSelectEmoji}
-      onSelectGif={onSelectGif}
-      onSelectSticker={onSelectSticker}
-      onClose={onClose}
-    />
+    <MobileSheet>
+      <UnifiedMediaPickerPopover
+        serverId={serverId}
+        onSelectEmoji={onSelectEmoji}
+        onSelectGif={onSelectGif}
+        onSelectSticker={onSelectSticker}
+        onClose={onClose}
+      />
+    </MobileSheet>
   )
 }
 
@@ -116,9 +119,39 @@ export function AttachButton({
       onClick={onClick}
       title="Anexar arquivo"
       aria-label="Anexar arquivo"
-      className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
+      className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong max-md:p-2"
     >
       <PaperclipIcon className="h-5 w-5" />
+    </button>
+  )
+}
+
+/** Abre o modal de criar enquete. */
+export function PollButton({ onClick }: { onClick: () => void }): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Criar enquete"
+      aria-label="Criar enquete"
+      className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong max-md:p-2"
+    >
+      <PollIcon className="h-5 w-5" />
+    </button>
+  )
+}
+
+/** Abre e fecha o seletor de emojis, GIFs e figurinhas. */
+export function MediaPickerButton({ onClick }: { onClick: () => void }): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Emojis, GIFs e Figurinhas"
+      aria-label="Emojis, GIFs e Figurinhas"
+      className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white max-md:p-2"
+    >
+      <SmileyIcon className="h-5 w-5" />
     </button>
   )
 }
@@ -136,7 +169,13 @@ export function VoiceButton({
   onRecorded: (blob: Blob, durationMs: number) => Promise<void>
 }): React.JSX.Element | null {
   if (!show) return null
-  return <VoiceRecordButton key={room} disabled={disabled} onRecorded={onRecorded} />
+  // Segurar para gravar: sem o navegador roubar o gesto para rolar (touch-none)
+  // e com 36 px no celular.
+  return (
+    <span className="contents [&>button]:touch-none max-md:[&>button]:p-2">
+      <VoiceRecordButton key={room} disabled={disabled} onRecorded={onRecorded} />
+    </span>
+  )
 }
 
 /** Enviar: desligado enquanto envia ou sem nada para enviar. */
@@ -153,7 +192,7 @@ export function SubmitButton({
     <button
       type="submit"
       disabled={sending || !submittable}
-      className="cursor-pointer rounded-lg bg-brand px-3 py-1.5 text-ds-sm font-medium text-white transition-all hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-40"
+      className="cursor-pointer rounded-lg bg-brand px-3 py-1.5 text-ds-sm font-medium text-white transition-all hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-40 max-md:min-h-9 max-md:px-2.5"
     >
       {submitLabel(uploading, sending)}
     </button>

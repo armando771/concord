@@ -1,5 +1,13 @@
+import { useReducer } from 'react'
 import { createPortal } from 'react-dom'
 import { XIcon } from './icons'
+import { ArrowLeftIcon } from './iconsExtra'
+import {
+  settingsMobileStart,
+  settingsMobileView,
+  settingsShellClasses,
+  tappedCurrentSection
+} from '../lib/settingsMobileView'
 
 const NAV_BG = 'var(--bg-secondary)'
 const CONTENT_BG = 'var(--bg-primary)'
@@ -9,6 +17,11 @@ interface SettingsShellProps {
   ariaLabel: string
   /** O que fica na coluna da esquerda (perfil, busca, lista de seções). */
   nav: React.ReactNode
+  /**
+   * Seção aberta. No celular, quando muda (escolheram na lista), a tela passa
+   * da lista para a seção.
+   */
+  sectionKey?: string
   title: string
   titleClassName: string
   /** Largura máxima da coluna do conteúdo (ex.: `max-w-[740px]`). */
@@ -22,11 +35,13 @@ interface SettingsShellProps {
 
 /**
  * Casco das telas de configuração em tela cheia (usuário e servidor):
- * navegação à esquerda, seção à direita e o ✕ com ESC.
+ * navegação à esquerda, seção à direita e o ✕ com ESC. No celular é uma
+ * coluna por vez: a lista de seções e, ao escolher, a seção com "voltar".
  */
 function SettingsShell({
   ariaLabel,
   nav,
+  sectionKey,
   title,
   titleClassName,
   contentClassName,
@@ -35,38 +50,57 @@ function SettingsShell({
   overlay,
   children
 }: SettingsShellProps): React.JSX.Element {
+  const [mobile, dispatch] = useReducer(settingsMobileView, sectionKey, settingsMobileStart)
+  // Trocou de seção pela lista: no celular, abre a seção.
+  if (mobile.key !== sectionKey) dispatch({ type: 'section', key: sectionKey })
+  const columns = settingsShellClasses(mobile.view)
+
   return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel}
-      className="app-no-drag fixed inset-x-0 bottom-0 z-50 flex flex-col text-gray-200 md:flex-row"
+      className="app-no-drag fixed inset-x-0 bottom-0 z-50 flex flex-col pl-safe pr-safe pt-safe text-gray-200 md:flex-row"
       style={{ top: 'var(--titlebar-height, 0px)', background: CONTENT_BG }}
     >
       <aside
-        className="flex max-h-[40%] w-full shrink-0 flex-col border-b border-subtle md:max-h-none md:w-[260px] md:border-b-0 md:border-r"
+        // Tocar na seção já marcada também abre ela (no celular).
+        onClickCapture={(e) => {
+          if (tappedCurrentSection(e.target)) dispatch({ type: 'pickCurrent' })
+        }}
+        className={`flex w-full shrink-0 flex-col border-b border-subtle pb-safe max-md:pt-12 md:w-[260px] md:border-b-0 md:border-r ${columns.nav}`}
         style={{ background: NAV_BG }}
       >
         {nav}
       </aside>
 
-      <main className="relative min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <div className={`mx-auto w-full px-4 pb-28 pt-6 sm:px-10 md:pt-14 ${contentClassName}`}>
+      <main className={`relative min-h-0 min-w-0 flex-1 overflow-y-auto ${columns.main}`}>
+        <div className={`mx-auto w-full px-4 pb-28 pt-3 sm:px-10 md:pt-14 ${contentClassName}`}>
+          <button
+            type="button"
+            onClick={() => dispatch({ type: 'back' })}
+            className="-ml-2 mb-3 flex min-h-10 cursor-pointer items-center gap-2 rounded-lg px-2 text-ds-md font-medium text-gray-300 hover:bg-fg/10 hover:text-strong focus-visible:outline-2 focus-visible:outline-violet-400 md:hidden"
+          >
+            <ArrowLeftIcon className="size-5" />
+            {ariaLabel}
+          </button>
           <h1 className={`mb-6 ${titleClassName}`}>{title}</h1>
           {children}
         </div>
-        <div className="fixed right-3 top-[calc(var(--titlebar-height,0px)+0.5rem)] flex flex-col items-center gap-1 md:right-8 md:top-[calc(var(--titlebar-height,0px)+56px)]">
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={closeLabel}
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-2 border-gray-500 text-gray-400 transition-colors hover:border-[var(--text-strong)] hover:text-strong"
-          >
-            <XIcon className="h-4 w-4" />
-          </button>
-          <span className="hidden text-[11px] font-bold text-gray-500 md:block">ESC</span>
-        </div>
       </main>
+
+      {/* Fixo no canto: aparece na lista e na seção. */}
+      <div className="fixed right-3 top-[calc(var(--titlebar-height,0px)+env(safe-area-inset-top)+0.5rem)] flex flex-col items-center gap-1 md:right-8 md:top-[calc(var(--titlebar-height,0px)+56px)]">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={closeLabel}
+          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-2 border-gray-500 text-gray-400 transition-colors hover:border-[var(--text-strong)] hover:text-strong max-md:size-10"
+        >
+          <XIcon className="h-4 w-4" />
+        </button>
+        <span className="hidden text-[11px] font-bold text-gray-500 md:block">ESC</span>
+      </div>
 
       {overlay}
     </div>,

@@ -234,9 +234,12 @@ func TestManagerCallEndedClosesPlayer(t *testing.T) {
 	eventually(t, "player", func() bool { return len(m.Presence("srv1")) == 1 })
 	m.OnCallEnded("call1")
 	eventually(t, "fechado", func() bool { return len(m.Presence("srv1")) == 0 })
-	if s := hub.last("music:state"); s == nil || s.body["closed"] != true {
-		t.Fatalf("estado final = %+v", s)
-	}
+	// O estado "closed" sai logo depois de a presença zerar: espera por ele
+	// em vez de olhar o último evento no mesmo instante (falhava sob carga).
+	eventually(t, "estado fechado", func() bool {
+		s := hub.last("music:state")
+		return s != nil && s.body["closed"] == true
+	})
 }
 
 func TestManagerConcurrentPlaySharesStartedPlayer(t *testing.T) {
