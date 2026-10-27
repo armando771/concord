@@ -195,11 +195,14 @@ try {
     (s) => s === 'live')
     await pageA.waitForTimeout(2000)
 
-    const onBefore = await receivedFromAna(pageB, ana.id)
-    // Abre o popover pelo botão de ondas do painel "Voz conectada".
+    // Abre o popover pelo botão de ondas do painel "Voz conectada" e liga
+    // (a supressão vem desligada por padrão).
     await pageA.getByRole('button', { name: 'Supressão de ruído' }).click()
     await pageA.getByRole('dialog', { name: 'Supressão de ruído' }).waitFor()
     await pageA.screenshot({ path: join(SHOTS, 'concord-e2e-noise-popover.png') })
+    await setNoiseSuppression(pageA, true)
+    await pageA.waitForTimeout(1500)
+    const onBefore = await receivedFromAna(pageB, ana.id)
     await setNoiseSuppression(pageA, false)
     await pageA.waitForTimeout(1500)
     const off = await receivedFromAna(pageB, ana.id)

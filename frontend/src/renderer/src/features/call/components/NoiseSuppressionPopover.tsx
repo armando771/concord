@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useNoiseSuppressionStore } from '../store/noiseSuppressionStore'
+import { useRnnoiseStatusStore } from '../store/rnnoiseStatusStore'
 import MicTest from './MicTest'
 import Switch from '../../../shared/ui/Switch'
 
@@ -12,7 +13,7 @@ const MARGIN = 8
 /** Conteúdo do popover (também usado em Configurações → Voz). */
 export function NoiseSuppressionSettings(): React.JSX.Element {
   const enabled = useNoiseSuppressionStore((s) => s.enabled)
-  const available = useNoiseSuppressionStore((s) => s.available)
+  const available = useRnnoiseStatusStore((s) => s.available)
   const setEnabled = useNoiseSuppressionStore((s) => s.setEnabled)
 
   return (
@@ -25,7 +26,8 @@ export function NoiseSuppressionSettings(): React.JSX.Element {
         Ative a supressão de ruído RNNoise! Ruídos de fundo como ventilador, teclado e
         ar-condicionado são removidos enquanto você fala. Seus amigos só ouvirão a sua voz.
       </p>
-      {!available && (
+      {/* Desligada não há supressão nenhuma: o aviso do fallback só vale ligada. */}
+      {enabled && !available && (
         <p className="text-xs text-warning">
           O RNNoise não carregou neste computador — usando a supressão padrão.
         </p>

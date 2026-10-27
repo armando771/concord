@@ -220,6 +220,7 @@ vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: fake.getUserMedia } }
 
 const { openMicrophone } = await import('./noiseSuppression')
 const { useNoiseSuppressionStore } = await import('../store/noiseSuppressionStore')
+const { useRnnoiseStatusStore } = await import('../store/rnnoiseStatusStore')
 const { useVoiceAudioStore } = await import('../store/voiceAudioStore')
 const { useVoiceModStore } = await import('../store/voiceModStore')
 
@@ -236,7 +237,8 @@ describe('openMicrophone', () => {
     node.instances.length = 0
     fake.addModule.mockReset().mockResolvedValue(undefined)
     fake.getUserMedia.mockReset().mockImplementation(async () => rawStream())
-    useNoiseSuppressionStore.setState({ enabled: true, available: true })
+    useNoiseSuppressionStore.setState({ enabled: true })
+    useRnnoiseStatusStore.setState({ available: true })
   })
 
   it('abre o microfone sem a supressão do Chromium e passa pelo RNNoise', async () => {
@@ -277,6 +279,20 @@ describe('openMicrophone', () => {
     expect(wetDry()).toEqual([1, 0])
   })
 
+  it('fallback com a supressão desligada: sem supressão nenhuma (nem a do Chromium)', async () => {
+    useNoiseSuppressionStore.setState({ enabled: false })
+    fake.addModule.mockRejectedValueOnce(new Error('CSP'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const mic = await openMicrophone()
+
+    expect(fake.getUserMedia).toHaveBeenLastCalledWith({
+      audio: expect.objectContaining({ noiseSuppression: false }),
+      video: false
+    })
+    mic.stop()
+  })
+
   it('se o RNNoise não carrega: libera tudo e usa a supressão do Chromium', async () => {
     const raw = rawStream()
     fake.getUserMedia.mockResolvedValueOnce(raw)
@@ -291,7 +307,7 @@ describe('openMicrophone', () => {
       audio: expect.objectContaining({ noiseSuppression: true }),
       video: false
     })
-    expect(useNoiseSuppressionStore.getState().available).toBe(false)
+    expect(useRnnoiseStatusStore.getState().available).toBe(false)
     mic.stop()
   })
 })
@@ -302,7 +318,8 @@ describe('openMicrophone — detecção de fala, portão e volume de entrada', (
     FakeWorkletNode.instances.length = 0
     fake.addModule.mockReset().mockResolvedValue(undefined)
     fake.getUserMedia.mockReset().mockImplementation(async () => rawStream())
-    useNoiseSuppressionStore.setState({ enabled: true, available: true })
+    useNoiseSuppressionStore.setState({ enabled: true })
+    useRnnoiseStatusStore.setState({ available: true })
     useVoiceAudioStore.setState({ inputVolume: 1, detectionEnabled: true, sensitivity: 60 })
   })
 

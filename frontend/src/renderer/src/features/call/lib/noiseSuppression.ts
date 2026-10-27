@@ -28,6 +28,7 @@ import {
   type VoiceActivitySettings
 } from './voiceActivity'
 import { useNoiseSuppressionStore } from '../store/noiseSuppressionStore'
+import { useRnnoiseStatusStore } from '../store/rnnoiseStatusStore'
 import { useVoiceAudioStore, type VoiceAudioSettings } from '../store/voiceAudioStore'
 import { createVoiceMod, type VoiceModNode } from './voiceMod'
 import type { VoiceModSettings } from './voiceModPresets'
@@ -129,8 +130,8 @@ useVoiceModStore.subscribe((state, prev) => {
 
 /**
  * Abre o microfone com o RNNoise no caminho. Se o RNNoise não carregar, libera
- * tudo o que abriu e devolve o microfone com a supressão padrão do Chromium —
- * nunca pior do que sem o RNNoise.
+ * tudo o que abriu e devolve o microfone cru, com a supressão padrão do
+ * Chromium se a do usuário estiver ligada — nunca pior do que sem o RNNoise.
  */
 export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
   const raw = await captureMic(deviceId, false)
@@ -224,7 +225,7 @@ export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
     applyVoice(useVoiceAudioStore.getState(), true)
     mod?.apply(useVoiceModStore.getState(), true)
     if (useVoiceModStore.getState().monitoring) monitor.gain.value = 1
-    useNoiseSuppressionStore.getState().setAvailable(true)
+    useRnnoiseStatusStore.getState().setAvailable(true)
 
     const levels = new Float32Array(analyser.fftSize)
     let stopped = false
@@ -281,9 +282,10 @@ export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
     rnnoise?.destroy()
     void ctx?.close()
     raw.getTracks().forEach((t) => t.stop())
-    useNoiseSuppressionStore.getState().setAvailable(false)
+    useRnnoiseStatusStore.getState().setAvailable(false)
     useVoiceModStore.getState().setAvailable(false)
-    const fallback = await captureMic(deviceId, true)
+    // A do Chromium só substitui o RNNoise ligado: desligada é sem supressão nenhuma.
+    const fallback = await captureMic(deviceId, useNoiseSuppressionStore.getState().enabled)
     return {
       stream: fallback,
       setNoiseSuppression: () => {},
