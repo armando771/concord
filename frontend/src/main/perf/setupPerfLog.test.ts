@@ -33,6 +33,7 @@ const win = {
   isDestroyed: () => false,
   isMinimized: () => false,
   isVisible: () => true,
+  isFocused: () => true,
   webContents
 } as unknown as BrowserWindow
 
@@ -125,6 +126,7 @@ describe('setupPerfLog', () => {
       isDestroyed: () => false,
       isMinimized: () => true,
       isVisible: () => false,
+      isFocused: () => false,
       webContents,
       on,
       once: on
