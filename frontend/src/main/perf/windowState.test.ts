@@ -5,16 +5,20 @@ interface FakeWindow {
   isDestroyed(): boolean
   isMinimized(): boolean
   isVisible(): boolean
+  isFocused(): boolean
 }
 
-const win = (destroyed: boolean, minimized: boolean, visible: boolean): FakeWindow => ({
+const win = (destroyed: boolean, minimized: boolean, visible: boolean, focused = true): FakeWindow => ({
   isDestroyed: () => destroyed,
   isMinimized: () => minimized,
-  isVisible: () => visible
+  isVisible: () => visible,
+  isFocused: () => focused
 })
 
 describe('windowState', () => {
   it('visível', () => expect(windowState(win(false, false, true), false)).toBe('visible'))
+  it('visível sem foco (atrás do jogo, outro monitor)', () =>
+    expect(windowState(win(false, false, true, false), false)).toBe('unfocused'))
   it('minimizada', () => expect(windowState(win(false, true, false), false)).toBe('minimized'))
   it('oculta (bandeja)', () => expect(windowState(win(false, false, false), false)).toBe('tray'))
 

@@ -1,7 +1,12 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import ScreenWatchersOverlay from './ScreenWatchersOverlay'
 import type { CallUserInfo } from '../store/callStore'
+
+// O CallAvatar lê quem fala do callStore (que puxa o áudio da call): ninguém fala aqui.
+vi.mock('../store/callStore', () => ({
+  useCallStore: (select: (s: { speakingIds: string[] }) => unknown) => select({ speakingIds: [] })
+}))
 
 describe('ScreenWatchersOverlay', () => {
   it('não renderiza nada se lista de watchers estiver vazia', () => {
@@ -39,7 +44,7 @@ describe('ScreenWatchersOverlay', () => {
     expect(html).toContain('User 1')
   })
 
-  it('mantém o GIF do espectador animado, sem o quadro parado', () => {
+  it('GIF do espectador fica no quadro parado e anima com o mouse em cima', () => {
     const gif = '/api/profile-media/a_22222222-2222-2222-2222-222222222222'
     const watchers: CallUserInfo[] = [
       { id: 'u1', username: 'alice', display_name: 'Alice', avatar_url: gif }
@@ -47,7 +52,7 @@ describe('ScreenWatchersOverlay', () => {
 
     const html = renderToStaticMarkup(<ScreenWatchersOverlay watchers={watchers} />)
 
-    expect(html).toContain(`${gif}"`)
-    expect(html).not.toContain('/static')
+    expect(html).toContain(`${gif}/static"`)
+    expect(html).toContain('group-hover:visible')
   })
 })

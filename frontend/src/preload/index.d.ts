@@ -179,6 +179,8 @@ declare global {
     api?: {
       appMetrics?: { sample(reset?: boolean): Promise<AppMetrics | null> }
       perf?: { enabled(): Promise<boolean>; report(event: PerfEvent): void }
+      /** Foco/visibilidade da janela; o renderer valida com parseWindowActivity. */
+      windowActivity?: { onChange(cb: (activity: unknown) => void): () => void }
       screenPicker: ScreenPickerApi
       background?: BackgroundApi
       updates?: UpdatesApi

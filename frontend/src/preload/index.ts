@@ -30,6 +30,14 @@ const api = {
       return ipcRenderer.invoke('app-metrics:sample', reset)
     }
   },
+  windowActivity: {
+    /** Foco e visibilidade da janela (o main avisa a cada mudança). Retorna unsubscribe. */
+    onChange(cb: (activity: unknown) => void): () => void {
+      const listener = (_event: unknown, activity: unknown): void => cb(activity)
+      ipcRenderer.on('window:activity', listener)
+      return () => ipcRenderer.removeListener('window:activity', listener)
+    }
+  },
   perf: {
     /** O main responde true só quando o app foi aberto com --perf-log. */
     enabled(): Promise<boolean> {

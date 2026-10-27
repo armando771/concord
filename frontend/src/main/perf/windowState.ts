@@ -4,6 +4,7 @@ interface WindowLike {
   isDestroyed(): boolean
   isMinimized(): boolean
   isVisible(): boolean
+  isFocused(): boolean
 }
 
 interface ShowHideEmitter {
@@ -30,5 +31,6 @@ export function trackHidden(win: ShowHideEmitter): () => boolean {
 export function windowState(win: WindowLike | null, hidden: boolean): WindowState {
   if (!win || win.isDestroyed() || hidden) return 'tray'
   if (win.isMinimized()) return 'minimized'
-  return win.isVisible() ? 'visible' : 'tray'
+  if (!win.isVisible()) return 'tray'
+  return win.isFocused() ? 'visible' : 'unfocused'
 }

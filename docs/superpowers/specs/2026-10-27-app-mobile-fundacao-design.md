@@ -1,7 +1,7 @@
 # App mobile, fatia 1: Fundação
 
 Primeira fatia do [roadmap](2026-10-27-app-mobile-roadmap-design.md). Decisão de
-arquitetura: [ADR 0004](../../adr/0004-app-mobile-expo.md). Worktree:
+arquitetura: [ADR 0006](../../adr/0006-app-mobile-expo.md). Worktree:
 `concord-app-mobile`, branch `feat/app-mobile`, a partir da `develop`.
 
 ## Objetivo

@@ -11,6 +11,13 @@ test('classify separa Go, TS e scripts e detecta código compartilhado', () => {
   assert.equal(classify(['backend/internal/platform/database/db.go']).shared, true)
 })
 
+test('classify: mexer no DSP em Rust ou no .wasm dele confere o .wasm commitado', () => {
+  for (const file of ['native/concord-dsp/src/voice_mod.rs', 'frontend/src/renderer/src/features/call/lib/concordDsp.wasm']) {
+    assert.deepEqual(classify([file]).scripts, ['scripts/dsp-wasm.mjs'], file)
+  }
+  assert.deepEqual(classify(['native/concord-audio/src/main.rs']).scripts, [])
+})
+
 test('goPackages: diretórios únicos relativos a backend/', () => {
   assert.deepEqual(goPackages(['backend/internal/call/a.go', 'backend/internal/call/b_test.go', 'backend/cmd/main.go']), ['./cmd', './internal/call'])
 })

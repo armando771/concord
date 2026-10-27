@@ -1,18 +1,34 @@
 // AudioWorklet do voice mod: pitch shift, vibrato e modulação de amplitude (ver
 // voiceModDsp.ts). Roda na thread de áudio e só recebe a mensagem pela porta.
-import { VOICE_MOD_PROCESSOR, VoiceModDsp, type VoiceModWorkletMessage } from './voiceModDsp'
+// Com o módulo WASM em `processorOptions.dspModule` (dspModule.ts) o laço roda
+// em Rust; sem ele, ou se não instanciar, no JS — o som é o mesmo.
+import {
+  VOICE_MOD_PROCESSOR,
+  VoiceModDsp,
+  type VoiceModProcessor,
+  type VoiceModWorkletMessage
+} from './voiceModDsp'
+import { VoiceModWasm } from './voiceModWasm'
 
 declare class AudioWorkletProcessor {
   readonly port: MessagePort
 }
-declare function registerProcessor(name: string, ctor: new () => AudioWorkletProcessor): void
+declare function registerProcessor(
+  name: string,
+  ctor: new (options?: AudioWorkletNodeOptions) => AudioWorkletProcessor
+): void
 declare const sampleRate: number
 
 class ConcordVoiceModProcessor extends AudioWorkletProcessor {
-  private dsp = new VoiceModDsp(sampleRate)
+  private dsp: VoiceModProcessor
+  /** Qual implementação está rodando (diagnóstico e testes). */
+  readonly engine: 'wasm' | 'js'
 
-  constructor() {
+  constructor(options?: AudioWorkletNodeOptions) {
     super()
+    const wasm = VoiceModWasm.create(sampleRate, options?.processorOptions?.dspModule)
+    this.dsp = wasm ?? new VoiceModDsp(sampleRate)
+    this.engine = wasm ? 'wasm' : 'js'
     this.port.onmessage = (event: MessageEvent<VoiceModWorkletMessage>) => {
       this.dsp.configure(event.data)
     }

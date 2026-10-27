@@ -1,7 +1,7 @@
 import type { ExpoConfig } from 'expo/config'
 
 // O package id e o keystore ficam fixos: trocar depois quebra as atualizações
-// do APK instalado e as credenciais do FCM (ADR 0004).
+// do APK instalado e as credenciais do FCM (ADR 0006).
 const config: ExpoConfig = {
   name: 'Salinha',
   slug: 'salinha',

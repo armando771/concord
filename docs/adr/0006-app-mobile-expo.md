@@ -1,4 +1,4 @@
-# 0004. Criar o app mobile em `mobile/` com Expo, Expo Router e Zustand
+# 0006. Criar o app mobile em `mobile/` com Expo, Expo Router e Zustand
 
 - Status: proposto
 - Data: 2026-10-27
