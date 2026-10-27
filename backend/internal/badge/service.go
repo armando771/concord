@@ -285,27 +285,11 @@ func (s *Service) tick(ctx context.Context, now time.Time) {
 		return
 	}
 	touched := s.flush(ctx, deltas)
-	// Quem está em call com XP também sobe Tempo em call e Nível.
-	for _, snap := range s.calls.CallSnapshots() {
-		for _, userID := range snap.Voice {
-			touched[userID] = true
-		}
+	s.touchVoice(touched)
+	if sweep {
+		s.touchOnline(touched)
 	}
-	if sweep && s.online != nil {
-		for _, userID := range s.online.OnlineUserIDs() {
-			touched[userID] = true
-		}
-	}
-	ids := make([]string, 0, len(touched))
-	for userID := range touched {
-		ids = append(ids, userID)
-	}
-	sort.Strings(ids)
-	for _, userID := range ids {
-		if _, err := s.sync(ctx, userID); err != nil {
-			log.Printf("[badge] sync %s: %v", userID, err)
-		}
-	}
+	s.syncAll(ctx, touched)
 }
 
 func marshalEvent(typ string, payload interface{}) []byte {
