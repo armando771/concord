@@ -14,7 +14,8 @@ import CallControlsDock from './CallControlsDock'
 import CallStage from './CallStage'
 import { formatDuration, useElapsed } from '../lib/callUtils'
 import useSpeaking from '../hooks/useSpeaking'
-import Avatar from '../../../shared/ui/Avatar'
+// Avatar de quem está na chamada: o GIF segue a regra da call (ver CallAvatar).
+import Avatar from './CallAvatar'
 import StyledName from '../../profile/components/StyledName'
 
 function DmCallView({ children }: { children?: React.ReactNode }): React.JSX.Element | null {

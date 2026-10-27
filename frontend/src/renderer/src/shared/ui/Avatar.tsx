@@ -76,7 +76,7 @@ function Avatar({
             alt=""
             draggable={false}
             onError={() => setFailedSrc(still)}
-            className={`h-full w-full rounded-full object-cover ${moving ? 'group-hover:invisible' : ''}`}
+            className={`h-full w-full rounded-full object-cover ${moving ? 'group-hover:invisible group-focus-within:invisible' : ''}`}
           />
           {moving && (
             <img
@@ -84,7 +84,7 @@ function Avatar({
               alt=""
               draggable={false}
               loading="lazy"
-              className="invisible absolute inset-0 h-full w-full rounded-full object-cover group-hover:visible"
+              className="invisible absolute inset-0 h-full w-full rounded-full object-cover group-hover:visible group-focus-within:visible"
             />
           )}
         </>
