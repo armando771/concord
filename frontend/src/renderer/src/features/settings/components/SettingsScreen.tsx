@@ -82,6 +82,7 @@ function SettingsContent(): React.JSX.Element {
   return (
     <SettingsShell
       ariaLabel="Configurações"
+      sectionKey={current.id}
       title={current.label}
       titleClassName="text-ds-lg font-semibold text-strong"
       contentClassName={settingsContentWidth(current.id)}
