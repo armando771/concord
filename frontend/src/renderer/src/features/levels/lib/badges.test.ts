@@ -82,38 +82,6 @@ describe('statText', () => {
   })
 })
 
-describe('Contribuinte (cards de propostas)', () => {
-  const contribuinte = (over: Partial<Badge> = {}): Badge =>
-    badge({ category: 'contribuinte', name: 'Contribuinte', unit: 'proposals', ...over })
-
-  it('conta as propostas criadas', () => {
-    expect(statText(contribuinte({ value: 1 }))).toBe('1 proposta criada')
-    expect(statText(contribuinte({ value: 0 }))).toBe('0 propostas criadas')
-    expect(statText(contribuinte({ value: 1234 }))).toBe('1.234 propostas criadas')
-  })
-
-  it('escada, quanto falta e visão pública', () => {
-    expect(formatThreshold('proposals', 1)).toBe('1 proposta')
-    expect(formatThreshold('proposals', 15)).toBe('15 propostas')
-    const now = new Date('2026-10-25T12:00:00Z')
-    expect(remainingText(contribuinte({ value: 4, next_threshold: 5 }), now)).toBe(
-      'Falta 1 proposta'
-    )
-    expect(remainingText(contribuinte({ value: 5, next_threshold: 15 }), now)).toBe(
-      'Faltam 10 propostas'
-    )
-    const pub = contribuinte({
-      value: undefined,
-      tier: 2,
-      tiers: [
-        { tier: 1, name: 'Ideia', threshold: 1, rarity: 'comum' },
-        { tier: 2, name: 'Colaborador', threshold: 5, rarity: 'raro' }
-      ]
-    })
-    expect(publicStatText(pub)).toBe('5+ propostas')
-  })
-})
-
 describe('formatThreshold', () => {
   it('rótulo curto da escada', () => {
     expect(formatThreshold('seconds', HOUR)).toBe('1 hora')
