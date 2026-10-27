@@ -1,0 +1,59 @@
+import { describe, expect, it } from 'vitest'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { DEFAULT_PROFILE_THEME, type ProfileTheme } from '../../../../profile/lib/profileTheme'
+import { PROFILE_PRESETS } from '../../../../profile/lib/profilePresets'
+import ProfileThemeEditor from './ProfileThemeEditor'
+
+const render = (theme: Partial<ProfileTheme>): string =>
+  renderToStaticMarkup(
+    <ProfileThemeEditor value={{ ...DEFAULT_PROFILE_THEME, ...theme }} onChange={() => {}} />
+  )
+
+describe('ProfileThemeEditor', () => {
+  it('padrão: seções e predefinições, sem opções de borda nem de efeito', () => {
+    const html = render({})
+    for (const t of ['Predefinições', 'Borda', 'Fundo do perfil', 'Efeito', 'Textura']) {
+      expect(html).toContain(t)
+    }
+    for (const p of PROFILE_PRESETS) expect(html).toContain(p.label)
+    expect(html).not.toContain('Espessura')
+    expect(html).not.toContain('Quantidade')
+    expect(html).not.toContain('Direção do degradê')
+    // "Padrão" é a predefinição escolhida.
+    expect(html).toMatch(/aria-pressed="true" title="Padrão"/)
+  })
+
+  it('borda e fundo em degradê: cores, espessura, animação e direção', () => {
+    const html = render({
+      border: 'gradient',
+      border_colors: ['#111111', '#222222'],
+      background: 'gradient',
+      background_colors: ['#333333', '#444444']
+    })
+    expect(html).toContain('Cor inicial')
+    expect(html).toContain('Cor final')
+    expect(html).toContain('Espessura')
+    expect(html).toContain('2 px')
+    expect(html).toContain('Girar')
+    expect(html).toContain('Direção do degradê')
+    expect(html).toContain('aria-label="Para baixo"')
+    expect(html).toContain('O texto fica claro ou escuro sozinho')
+  })
+
+  it('efeito com cor: quantidade, velocidade e a cor', () => {
+    const html = render({ effect: 'fire', effect_color: '#00ff00' })
+    expect(html).toContain('Quantidade')
+    expect(html).toContain('Velocidade')
+    expect(html).toContain('Média')
+    expect(html).toContain('Cor do efeito')
+    expect(html).toContain('value="#00ff00"')
+    expect(html).toContain('Usar a cor original')
+  })
+
+  it('efeito sem cor própria (confete): sem a cor', () => {
+    const html = render({ effect: 'confetti' })
+    expect(html).toContain('Quantidade')
+    expect(html).not.toContain('Cor do efeito')
+    expect(html).not.toContain('Usar a cor original')
+  })
+})

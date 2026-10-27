@@ -1,26 +1,12 @@
-import { QUICK_EMOTES } from '../lib/emotes'
+import { useState } from 'react'
+import { messageMenuGroups, quickReactions, type MessageMenuAction } from '../lib/messageMenu'
+import { AddReactionIcon, MoreIcon, ReplyIcon } from './messageActionIcons'
+import MessageMoreMenu from './MessageMoreMenu'
 
-const textButton =
-  'flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-fg/10 hover:text-strong'
+const iconButton =
+  'flex h-8 w-8 cursor-pointer items-center justify-center rounded text-gray-300 transition-colors hover:bg-fg/10 hover:text-strong focus-visible:outline-2 focus-visible:outline-brand'
 
-/**
- * Barra que aparece sobre a mensagem ao passar o mouse: reações rápidas,
- * seletor de emoji, responder, copiar, editar, fixar e excluir. Cada ação só aparece
- * quando o handler vem (copiar sem texto, editar de outro autor etc. ficam de fora).
- */
-function MessageActionsBar({
-  canReact,
-  onReact,
-  onTogglePicker,
-  onReply,
-  onCopy,
-  onEdit,
-  canPin,
-  isPinned,
-  onTogglePin,
-  onDelete,
-  deleteTitle = 'Excluir mensagem'
-}: {
+interface MessageActionsBarProps {
   canReact: boolean
   onReact: (emoji: string) => void
   onTogglePicker: () => void
@@ -32,63 +18,124 @@ function MessageActionsBar({
   onTogglePin?: () => void
   onDelete?: () => void
   deleteTitle?: string
+  /** Menu "Mais" controlado por fora (a barra fica na tela enquanto ele está aberto). */
+  menuOpen?: boolean
+  onMenuOpenChange?: (open: boolean) => void
+}
+
+/** Roda o handler do item escolhido no "Mais". */
+function runMenuAction(action: MessageMenuAction, props: MessageActionsBarProps): void {
+  const handlers: Record<MessageMenuAction, (() => void) | undefined> = {
+    react: props.onTogglePicker,
+    edit: props.onEdit,
+    reply: props.onReply,
+    pin: props.onTogglePin,
+    unpin: props.onTogglePin,
+    copy: props.onCopy,
+    delete: props.onDelete
+  }
+  handlers[action]?.()
+}
+
+/** Itens do "Mais" pelo que veio: cada ação só entra quando o handler vem. */
+function menuGroups(props: MessageActionsBarProps): ReturnType<typeof messageMenuGroups> {
+  return messageMenuGroups({
+    canReact: props.canReact,
+    canEdit: Boolean(props.onEdit),
+    canPin: Boolean(props.canPin && props.onTogglePin),
+    isPinned: Boolean(props.isPinned),
+    canCopy: Boolean(props.onCopy),
+    canDelete: Boolean(props.onDelete),
+    deleteLabel: props.deleteTitle ?? 'Excluir mensagem'
+  })
+}
+
+/** Reações rápidas, a divisória e o "Adicionar reação" (só com permissão de reagir). */
+function ReactionButtons({
+  onReact,
+  onTogglePicker
+}: {
+  onReact: (emoji: string) => void
+  onTogglePicker: () => void
 }): React.JSX.Element {
   return (
-    <div className="absolute -top-3 right-4 z-20 flex items-center gap-0.5 rounded-lg border border-subtle bg-floating px-1 py-0.5 shadow-lg">
-      {canReact &&
-        QUICK_EMOTES.map((emoji) => (
-          <button
-            key={emoji}
-            type="button"
-            onClick={() => onReact(emoji)}
-            title={`Reagir com ${emoji}`}
-            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded text-sm transition-transform hover:scale-110 hover:bg-fg/10"
-          >
-            {emoji}
-          </button>
-        ))}
-      {canReact && (
+    <>
+      {quickReactions().map((emoji) => (
         <button
+          key={emoji}
           type="button"
-          onClick={onTogglePicker}
-          title="Mais reações"
-          className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs text-gray-300 transition-colors hover:bg-fg/10 hover:text-strong"
+          onClick={() => onReact(emoji)}
+          title={`Reagir com ${emoji}`}
+          aria-label={`Reagir com ${emoji}`}
+          className={`${iconButton} text-[20px] leading-none hover:scale-110`}
         >
-          😀+
+          {emoji}
         </button>
-      )}
-      <button type="button" onClick={onReply} title="Responder" className={textButton}>
-        Responder
+      ))}
+      <div role="separator" aria-orientation="vertical" className="mx-0.5 h-5 w-px bg-fg/15" />
+      <button
+        type="button"
+        onClick={onTogglePicker}
+        title="Adicionar reação"
+        aria-label="Adicionar reação"
+        className={iconButton}
+      >
+        <AddReactionIcon className="h-5 w-5" />
       </button>
-      {canPin && onTogglePin && (
-        <button
-          type="button"
-          onClick={onTogglePin}
-          title={isPinned ? 'Desafixar mensagem' : 'Fixar mensagem'}
-          className={textButton}
-        >
-          {isPinned ? 'Desafixar' : 'Fixar'}
-        </button>
+    </>
+  )
+}
+
+/**
+ * Barra compacta de ícones sobre a mensagem (como no Discord): 3 reações
+ * rápidas, adicionar reação, responder e "Mais", que abre o menu com as
+ * outras ações (editar, fixar, copiar, excluir...). Cada ação do menu só
+ * aparece quando o handler vem.
+ */
+function MessageActionsBar(props: MessageActionsBarProps): React.JSX.Element {
+  // O "…" vira a âncora do menu (estado, não ref: o render lê).
+  const [moreButton, setMoreButton] = useState<HTMLButtonElement | null>(null)
+  const [ownMenuOpen, setOwnMenuOpen] = useState(false)
+  const menuOpen = props.menuOpen ?? ownMenuOpen
+  const setMenuOpen = props.onMenuOpenChange ?? setOwnMenuOpen
+
+  return (
+    <div
+      role="toolbar"
+      aria-label="Ações da mensagem"
+      className="absolute -top-4 right-4 z-20 flex items-center gap-0.5 rounded-lg border border-subtle bg-floating p-0.5 shadow-lg"
+    >
+      {props.canReact && (
+        <ReactionButtons onReact={props.onReact} onTogglePicker={props.onTogglePicker} />
       )}
-      {onCopy && (
-        <button type="button" onClick={onCopy} title="Copiar texto" className={textButton}>
-          Copiar texto
-        </button>
-      )}
-      {onEdit && (
-        <button type="button" onClick={onEdit} title="Editar mensagem" className={textButton}>
-          Editar
-        </button>
-      )}
-      {onDelete && (
-        <button
-          type="button"
-          onClick={onDelete}
-          title={deleteTitle}
-          className="flex h-6 cursor-pointer items-center justify-center rounded px-1.5 text-xs font-semibold text-gray-400 transition-colors hover:bg-red-500/15 hover:text-red-400"
-        >
-          Excluir
-        </button>
+      <button
+        type="button"
+        onClick={props.onReply}
+        title="Responder"
+        aria-label="Responder"
+        className={iconButton}
+      >
+        <ReplyIcon className="h-5 w-5" />
+      </button>
+      <button
+        ref={setMoreButton}
+        type="button"
+        onClick={() => setMenuOpen(!menuOpen)}
+        title="Mais"
+        aria-label="Mais"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        className={`${iconButton} ${menuOpen ? 'bg-fg/10 text-strong' : ''}`}
+      >
+        <MoreIcon className="h-5 w-5" />
+      </button>
+      {menuOpen && moreButton && (
+        <MessageMoreMenu
+          anchor={moreButton}
+          groups={menuGroups(props)}
+          onAction={(action) => runMenuAction(action, props)}
+          onClose={() => setMenuOpen(false)}
+        />
       )}
     </div>
   )

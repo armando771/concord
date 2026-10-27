@@ -3,31 +3,27 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   CARD_BG,
-  DARK_INK,
   DEFAULT_PROFILE_THEME,
-  LIGHT_INK,
   PROFILE_BACKGROUNDS,
   PROFILE_BORDERS,
   PROFILE_EFFECTS,
-  PROFILE_PRESETS,
-  contrastRatio,
-  effectParticles,
-  pickInk,
   profileThemeLook,
-  relativeLuminance,
+  effectDef,
   resolveProfileTheme,
-  sameTheme,
   withBackground,
   withBorder
 } from './profileTheme'
+import { DEFAULT_EXTRAS, PROFILE_BORDER_ANIMATIONS, PROFILE_TEXTURES } from './profileThemeExtras'
 
 // Lê as listas e as contagens de cor do Go: mudou só de um lado, quebra aqui.
-const goSrc = readFileSync(
-  fileURLToPath(
-    new URL('../../../../../../../backend/internal/profiletheme/profiletheme.go', import.meta.url)
-  ),
-  'utf8'
-)
+const goFile = (name: string): string =>
+  readFileSync(
+    fileURLToPath(
+      new URL(`../../../../../../../backend/internal/profiletheme/${name}`, import.meta.url)
+    ),
+    'utf8'
+  )
+const goSrc = goFile('profiletheme.go') + goFile('extras.go')
 function goList(name: string): string[] {
   const body = new RegExp(`var ${name} = \\[\\]string\\{([^}]*)\\}`).exec(goSrc)?.[1] ?? ''
   return Array.from(body.matchAll(/"([a-z0-9]+)"/g), (m) => m[1])
@@ -44,6 +40,8 @@ describe('paridade com o backend', () => {
     expect(PROFILE_BORDERS.map((b) => b.id)).toEqual(goList('Borders'))
     expect(PROFILE_BACKGROUNDS.map((b) => b.id)).toEqual(goList('Backgrounds'))
     expect(PROFILE_EFFECTS.map((e) => e.id)).toEqual(goList('Effects'))
+    expect(PROFILE_BORDER_ANIMATIONS.map((a) => a.id)).toEqual(goList('BorderAnimations'))
+    expect(PROFILE_TEXTURES.map((t) => t.id)).toEqual(goList('Textures'))
   })
   it('as contagens de cor são as mesmas', () => {
     expect(Object.fromEntries(PROFILE_BORDERS.map((b) => [b.id, b.colors]))).toEqual(
@@ -74,8 +72,43 @@ describe('resolveProfileTheme', () => {
       border_colors: ['#00ffaa'],
       background: 'gradient',
       background_colors: ['#1e1b4b', '#0f172a'],
-      effect: 'snow'
+      effect: 'snow',
+      ...DEFAULT_EXTRAS
     })
+  })
+  it('tema salvo antes das opções novas: extras no padrão e o mesmo visual', () => {
+    const old = {
+      border: 'neon',
+      border_colors: ['#ec4899'],
+      background: 'gradient',
+      background_colors: ['#fce7f3', '#f9a8d4'],
+      effect: 'particles'
+    }
+    const t = resolveProfileTheme(old)
+    expect(t).toEqual({ ...old, ...DEFAULT_EXTRAS })
+    const look = profileThemeLook(t)
+    expect(look.className).toBe('profile-frame pt-border-neon pt-ink-dark')
+    expect(look.style).toMatchObject({
+      '--pt-bg': 'linear-gradient(180deg, #fce7f3, #f9a8d4)',
+      '--pt-bw': '2px'
+    })
+    expect(look.style).not.toHaveProperty('--pt-fxc')
+  })
+  it('efeitos novos valem', () => {
+    for (const id of [
+      'fire',
+      'matrix',
+      'glitch',
+      'storm',
+      'galaxy',
+      'aurora',
+      'hearts',
+      'confetti',
+      'synthwave',
+      'rain'
+    ]) {
+      expect(resolveProfileTheme({ ...DEFAULT_PROFILE_THEME, effect: id }).effect).toBe(id)
+    }
   })
   it('cada parte inválida cai no padrão sozinha', () => {
     const t = resolveProfileTheme({
@@ -120,51 +153,47 @@ describe('withBorder / withBackground', () => {
   })
 })
 
-describe('contraste', () => {
-  it('luminância e razão batem com a WCAG', () => {
-    expect(relativeLuminance('#000000')).toBe(0)
-    expect(relativeLuminance('#ffffff')).toBeCloseTo(1)
-    expect(contrastRatio('#000000', '#ffffff')).toBeCloseTo(21)
-    expect(contrastRatio('#777777', '#ffffff')).toBeCloseTo(4.48, 1)
+describe('profileThemeLook com extras', () => {
+  it('ângulo, espessura, animação, textura e cor do efeito', () => {
+    const look = profileThemeLook({
+      ...DEFAULT_PROFILE_THEME,
+      border: 'gradient',
+      border_colors: ['#111111', '#222222'],
+      background: 'gradient',
+      background_colors: ['#000000', '#333333'],
+      effect: 'fire',
+      effect_color: '#00ff00',
+      effect_density: 100,
+      border_animation: 'spin',
+      border_width: 5,
+      background_angle: 45,
+      texture: 'dots'
+    })
+    expect(look.style).toMatchObject({
+      '--pt-bg': 'linear-gradient(45deg, #000000, #333333)',
+      '--pt-bw': '5px',
+      '--pt-fxc': '#00ff00'
+    })
+    expect(look.className).toContain('pt-anim-spin')
+    expect(look.className).toContain('pt-tex-dots')
+    expect(look.fx).toMatchObject({ id: 'fire', kind: 'canvas', params: { color: '#00ff00' } })
+    expect(look.fx.params.density).toBeGreaterThan(2)
   })
-  it('fundo escuro ou saturado escuro → texto claro', () => {
-    expect(pickInk(['#111214'])).toBe('light')
-    // O fundo padrão vem do tema (var()), não dá para medir: fica o texto do app.
-    expect(pickInk([CARD_BG])).toBe('light')
-    expect(pickInk(['#1e1b4b', '#0b1020'])).toBe('light')
-    expect(pickInk(['#6b1d12', '#4b4f58'])).toBe('light')
-    expect(pickInk(['#5865f2'])).toBe('light')
+  it('sem borda não anima; efeito sem cor própria usa a padrão', () => {
+    const look = profileThemeLook({
+      ...DEFAULT_PROFILE_THEME,
+      border_animation: 'pulse',
+      effect: 'matrix'
+    })
+    expect(look.className).not.toContain('pt-anim')
+    expect(look.fx.params).toEqual({ density: 1, speed: 1, color: '#22ff88' })
+    expect(profileThemeLook({ ...DEFAULT_PROFILE_THEME, effect: 'confetti' }).fx.params.color).toBe(
+      '#ffffff'
+    )
   })
-  it('fundo claro → texto escuro', () => {
-    expect(pickInk(['#ffffff'])).toBe('dark')
-    expect(pickInk(['#fce7f3', '#f9a8d4'])).toBe('dark')
-    expect(pickInk(['#fde047'])).toBe('dark')
-    expect(pickInk(['#22d3ee'])).toBe('dark')
-  })
-  it('no degradê vale o pior ponto', () => {
-    // Do branco ao preto nenhum texto vai bem nas duas pontas: fica o que
-    // perde menos no pior ponto (pontas e meio).
-    const points = ['#ffffff', '#000000', '#808080']
-    const worst = (c: string): number => Math.min(...points.map((p) => contrastRatio(c, p)))
-    const ink = pickInk(['#ffffff', '#000000'])
-    const [chosen, other] = ink === 'dark' ? [DARK_INK, LIGHT_INK] : [LIGHT_INK, DARK_INK]
-    expect(worst(chosen)).toBeGreaterThanOrEqual(worst(other))
-    // Claro em cima, médio embaixo: o escuro ainda ganha.
-    expect(pickInk(['#e0f2fe', '#7dd3fc'])).toBe('dark')
-  })
-  it('sempre escolhe o de maior contraste mínimo (varredura)', () => {
-    for (let v = 0; v <= 255; v += 5) {
-      const hex = `#${v.toString(16).padStart(2, '0').repeat(3)}`
-      const ink = pickInk([hex])
-      const chosen = contrastRatio(ink === 'dark' ? DARK_INK : LIGHT_INK, hex)
-      const other = contrastRatio(ink === 'dark' ? LIGHT_INK : DARK_INK, hex)
-      expect(chosen).toBeGreaterThanOrEqual(other)
-      // Com uma cor só, o melhor dos dois textos nunca fica abaixo de 4:1.
-      expect(chosen).toBeGreaterThanOrEqual(4)
-    }
-  })
-  it('cor inválida é ignorada', () => {
-    expect(pickInk(['nope'])).toBe('light')
+  it('effectDef: desconhecido vira Nenhum', () => {
+    expect(effectDef('nope').id).toBe('none')
+    expect(effectDef('glitch').color).toBeNull()
   })
 })
 
@@ -201,31 +230,5 @@ describe('profileThemeLook', () => {
     expect(look.ink).toBe('light')
     expect(look.className).toContain('pt-ink-light')
     expect(look.className).not.toContain('pt-ink-dark')
-  })
-})
-
-describe('effectParticles', () => {
-  it('determinístico e dentro do cartão', () => {
-    for (const e of ['particles', 'sparkles', 'snow']) {
-      const a = effectParticles(e)
-      expect(a.length).toBeGreaterThan(0)
-      expect(effectParticles(e)).toEqual(a)
-      for (const p of a) {
-        expect(p.left).toBeGreaterThanOrEqual(0)
-        expect(p.left).toBeLessThanOrEqual(100)
-        expect(p.top).toBeGreaterThanOrEqual(0)
-        expect(p.top).toBeLessThanOrEqual(100)
-      }
-    }
-    expect(effectParticles('none')).toEqual([])
-  })
-})
-
-describe('predefinições', () => {
-  it('todas são temas válidos', () => {
-    for (const p of PROFILE_PRESETS) {
-      expect(sameTheme(resolveProfileTheme(p.theme), p.theme), p.id).toBe(true)
-      expect(resolveProfileTheme(p.theme), p.id).toEqual(p.theme)
-    }
   })
 })

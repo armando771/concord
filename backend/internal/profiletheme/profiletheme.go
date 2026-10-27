@@ -1,5 +1,6 @@
 // Package profiletheme é o visual do cartão de perfil: borda, fundo do corpo
-// (cor ou degradê, como o tema de perfil do Nitro) e um efeito por cima.
+// (cor ou degradê, como o tema de perfil do Nitro), um efeito por cima e as
+// opções finas (extras.go).
 // Os IDs daqui têm de ser os mesmos do app (frontend lib/profileTheme.ts; um
 // teste de lá confere as listas).
 package profiletheme
@@ -18,7 +19,11 @@ var Borders = []string{"none", "solid", "neon", "rainbow", "gradient"}
 
 var Backgrounds = []string{"default", "solid", "gradient"}
 
-var Effects = []string{"none", "particles", "sparkles", "snow"}
+// Os três primeiros são CSS; os outros, canvas no app.
+var Effects = []string{
+	"none", "particles", "sparkles", "snow",
+	"fire", "matrix", "glitch", "storm", "galaxy", "aurora", "hearts", "confetti", "synthwave", "rain",
+}
 
 // borderColors e backgroundColors: quantas cores cada opção usa (exatamente).
 var borderColors = map[string]int{"none": 0, "solid": 1, "neon": 1, "rainbow": 0, "gradient": 2}
@@ -33,6 +38,8 @@ type Theme struct {
 	Background       string   `json:"background"`
 	BackgroundColors []string `json:"background_colors"`
 	Effect           string   `json:"effect"`
+	// Extras sai no JSON no mesmo nível (campo embutido).
+	Extras
 }
 
 func Default() Theme {
@@ -42,6 +49,7 @@ func Default() Theme {
 		Background:       "default",
 		BackgroundColors: []string{},
 		Effect:           "none",
+		Extras:           DefaultExtras(),
 	}
 }
 
@@ -83,11 +91,16 @@ func Validate(t Theme) (Theme, error) {
 	if err != nil {
 		return Theme{}, err
 	}
+	extras, err := validateExtras(t.Extras)
+	if err != nil {
+		return Theme{}, err
+	}
 	return Theme{
 		Border:           t.Border,
 		BorderColors:     border,
 		Background:       t.Background,
 		BackgroundColors: background,
 		Effect:           t.Effect,
+		Extras:           extras,
 	}, nil
 }

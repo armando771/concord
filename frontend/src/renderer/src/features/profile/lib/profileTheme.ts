@@ -1,10 +1,21 @@
 import type { CSSProperties } from 'react'
+import { pickInk, type Ink } from './profileInk'
+import type { EffectParams } from './effects/types'
+import {
+  DEFAULT_EXTRAS,
+  effectParams,
+  extrasClasses,
+  extrasVars,
+  resolveExtras,
+  type ProfileThemeExtras
+} from './profileThemeExtras'
 
-// Tema do cartão de perfil: borda, fundo do corpo (cor ou degradê em pé, como
-// o tema de perfil do Nitro) e um efeito por cima. Os IDs são os do backend
-// (internal/profiletheme); profileTheme.test.ts confere as listas.
+// Tema do cartão de perfil: borda, fundo do corpo (cor ou degradê, como o
+// tema de perfil do Nitro), um efeito por cima e as opções finas
+// (profileThemeExtras.ts). Os IDs são os do backend (internal/profiletheme);
+// profileTheme.test.ts confere as listas.
 
-export interface ProfileTheme {
+export interface ProfileTheme extends ProfileThemeExtras {
   border: string
   border_colors: string[]
   background: string
@@ -17,7 +28,8 @@ export const DEFAULT_PROFILE_THEME: ProfileTheme = {
   border_colors: [],
   background: 'default',
   background_colors: [],
-  effect: 'none'
+  effect: 'none',
+  ...DEFAULT_EXTRAS
 }
 
 /**
@@ -40,12 +52,37 @@ export const PROFILE_BACKGROUNDS = [
   { id: 'gradient', label: 'Degradê', colors: 2 }
 ] as const
 
-export const PROFILE_EFFECTS = [
-  { id: 'none', label: 'Nenhum' },
-  { id: 'particles', label: 'Partículas' },
-  { id: 'sparkles', label: 'Brilhos' },
-  { id: 'snow', label: 'Neve' }
-] as const
+/**
+ * Efeitos: os três primeiros são CSS (profileParticles.ts), os outros canvas
+ * (lib/effects/). `color` é a cor de sempre do efeito; null = não tem cor
+ * para escolher (paleta própria).
+ */
+export const PROFILE_EFFECTS: readonly {
+  id: string
+  label: string
+  kind: 'none' | 'css' | 'canvas'
+  color: string | null
+}[] = [
+  { id: 'none', label: 'Nenhum', kind: 'none', color: null },
+  { id: 'particles', label: 'Partículas', kind: 'css', color: '#c4b5fd' },
+  { id: 'sparkles', label: 'Brilhos', kind: 'css', color: '#ffd84d' },
+  { id: 'snow', label: 'Neve', kind: 'css', color: '#ffffff' },
+  { id: 'fire', label: 'Fogo', kind: 'canvas', color: '#ff7a1a' },
+  { id: 'matrix', label: 'Matrix', kind: 'canvas', color: '#22ff88' },
+  { id: 'glitch', label: 'Glitch', kind: 'canvas', color: null },
+  { id: 'storm', label: 'Tempestade', kind: 'canvas', color: '#9ecbff' },
+  { id: 'galaxy', label: 'Galáxia', kind: 'canvas', color: '#a78bfa' },
+  { id: 'aurora', label: 'Aurora', kind: 'canvas', color: '#34d399' },
+  { id: 'hearts', label: 'Corações', kind: 'canvas', color: '#ff4d8d' },
+  { id: 'confetti', label: 'Confete', kind: 'canvas', color: null },
+  { id: 'synthwave', label: 'Synthwave', kind: 'canvas', color: '#ff2bd6' },
+  { id: 'rain', label: 'Chuva', kind: 'canvas', color: '#7cc4ff' }
+]
+
+/** Definição do efeito (desconhecido = "Nenhum"). */
+export function effectDef(id: string): (typeof PROFILE_EFFECTS)[number] {
+  return PROFILE_EFFECTS.find((e) => e.id === id) ?? PROFILE_EFFECTS[0]
+}
 
 const COLOR = /^#[0-9a-f]{6}$/i
 const BORDER_FALLBACK = ['#8b5cf6', '#ec4899']
@@ -77,7 +114,8 @@ export function resolveProfileTheme(raw?: Partial<ProfileTheme> | null): Profile
     border_colors: border && borderColors ? borderColors : [],
     background: background && backgroundColors ? background.id : 'default',
     background_colors: background && backgroundColors ? backgroundColors : [],
-    effect: effect?.id ?? 'none'
+    effect: effect?.id ?? 'none',
+    ...resolveExtras(raw)
   }
 }
 
@@ -100,225 +138,56 @@ export function withBackground(theme: ProfileTheme, id: string): ProfileTheme {
   return { ...theme, background: id, background_colors: colors.slice(0, def.colors) }
 }
 
-// --- Contraste (WCAG 2.x) ---
-
-function channel(v: number): number {
-  const c = v / 255
-  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-}
-
-function rgb(hex: string): [number, number, number] {
-  const n = parseInt(hex.slice(1), 16)
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
-}
-
-/** Luminância relativa (0 = preto, 1 = branco). */
-export function relativeLuminance(hex: string): number {
-  const [r, g, b] = rgb(hex)
-  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
-}
-
-/** Razão de contraste entre duas cores (1 a 21). */
-export function contrastRatio(a: string, b: string): number {
-  const la = relativeLuminance(a)
-  const lb = relativeLuminance(b)
-  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
-}
-
-function mix(a: string, b: string): string {
-  const ca = rgb(a)
-  const cb = rgb(b)
-  return `#${ca
-    .map((v, i) =>
-      Math.round((v + cb[i]) / 2)
-        .toString(16)
-        .padStart(2, '0')
-    )
-    .join('')}`
-}
-
-/** Texto claro e escuro do cartão (o claro é o do app). */
-export const LIGHT_INK = '#ffffff'
-export const DARK_INK = '#1e1f22'
-export type Ink = 'light' | 'dark'
-
-/**
- * Cor do texto que dá mais contraste em todo o fundo: no degradê conta o pior
- * ponto (as duas pontas e o meio). Empate fica com o claro, o do app.
- */
-export function pickInk(background: string[]): Ink {
-  const valid = background.filter((c) => COLOR.test(c))
-  if (valid.length === 0) return 'light'
-  const points = valid.length > 1 ? [...valid, mix(valid[0], valid[valid.length - 1])] : valid
-  const worst = (ink: string): number => Math.min(...points.map((p) => contrastRatio(ink, p)))
-  return worst(DARK_INK) > worst(LIGHT_INK) ? 'dark' : 'light'
-}
-
 export interface ProfileThemeLook {
-  /** Classes do cartão (borda, texto escuro). */
+  /** Classes do cartão (borda, animação, textura, texto escuro). */
   className: string
   /** Variáveis que o CSS lê (assets/profileTheme.css). */
   style: CSSProperties
   /** Cor do fundo logo abaixo do banner: o anel do avatar e o recorte do status. */
   surface: string
   ink: Ink
+  /** O efeito por cima e com que parâmetros (ProfileCardFrame desenha). */
+  fx: { id: string; kind: 'none' | 'css' | 'canvas'; params: EffectParams }
+}
+
+/** Fundo do corpo: sempre uma imagem (no "background" em camadas a cor só vai na última). */
+function bodyBackground(theme: ProfileTheme, surface: string): string {
+  const bg = theme.background_colors
+  return theme.background === 'gradient'
+    ? `linear-gradient(${theme.background_angle}deg, ${bg[0]}, ${bg[1]})`
+    : `linear-gradient(${surface}, ${surface})`
+}
+
+function themeVars(theme: ProfileTheme, surface: string): Record<string, string> {
+  const [b1, b2] = theme.border_colors
+  const vars: Record<string, string> = { '--pt-bg': bodyBackground(theme, surface) }
+  if (b1) vars['--pt-b1'] = b1
+  if (b2) vars['--pt-b2'] = b2
+  vars['--pt-fx'] = b1 ?? theme.background_colors[1] ?? '#c4b5fd'
+  return { ...vars, ...extrasVars(theme) }
+}
+
+/** Sem fundo próprio o texto é o do tema do app; com fundo, o de mais contraste. */
+function inkClass(bg: string[], ink: Ink): string[] {
+  if (!bg.length) return []
+  return [ink === 'dark' ? 'pt-ink-dark' : 'pt-ink-light']
 }
 
 /** Como desenhar o cartão com o tema (já resolvido). */
 export function profileThemeLook(theme: ProfileTheme): ProfileThemeLook {
   const bg = theme.background_colors
   const surface = bg[0] ?? CARD_BG
-  // Sempre uma imagem: no "background" em camadas a cor só pode ir na última.
-  const body =
-    theme.background === 'gradient'
-      ? `linear-gradient(180deg, ${bg[0]}, ${bg[1]})`
-      : `linear-gradient(${surface}, ${surface})`
-  const [b1, b2] = theme.border_colors
-  const vars: Record<string, string> = { '--pt-bg': body }
-  if (b1) vars['--pt-b1'] = b1
-  if (b2) vars['--pt-b2'] = b2
-  vars['--pt-fx'] = b1 ?? bg[1] ?? '#c4b5fd'
-  // Sem fundo próprio o texto é o do tema do app; com fundo, o de mais contraste.
   const ink = bg.length ? pickInk(bg) : 'light'
-  const inkClass = bg.length ? (ink === 'dark' ? 'pt-ink-dark' : 'pt-ink-light') : null
-  const className = ['profile-frame', `pt-border-${theme.border}`, inkClass]
-    .filter(Boolean)
-    .join(' ')
-  return { className, style: vars as CSSProperties, surface, ink }
+  const className = [
+    'profile-frame',
+    `pt-border-${theme.border}`,
+    ...extrasClasses(theme, theme.border),
+    ...inkClass(bg, ink)
+  ].join(' ')
+  const def = effectDef(theme.effect)
+  const fx = { id: def.id, kind: def.kind, params: effectParams(theme, def.color ?? '#ffffff') }
+  return { className, style: themeVars(theme, surface) as CSSProperties, surface, ink, fx }
 }
-
-// --- Efeitos (partículas, brilhos, neve) ---
-
-export interface Particle {
-  /** Posição em % do cartão. */
-  left: number
-  top: number
-  /** Tamanho em px. */
-  size: number
-  /** Segundos. */
-  delay: number
-  duration: number
-}
-
-const PARTICLE_COUNT: Record<string, number> = { particles: 14, sparkles: 10, snow: 18 }
-
-/**
- * Posições fixas (sempre as mesmas para o mesmo efeito): o desenho não muda a
- * cada render e o CSS só anima transform/opacity.
- */
-export function effectParticles(effect: string): Particle[] {
-  const count = PARTICLE_COUNT[effect] ?? 0
-  let seed = effect.length * 7919 + 17
-  const rand = (): number => {
-    seed = (seed * 1103515245 + 12345) % 2147483648
-    return seed / 2147483648
-  }
-  return Array.from({ length: count }, (_, i) => {
-    const r = [rand(), rand(), rand(), rand()]
-    return {
-      // Espalha por faixas para não amontoar.
-      left: Math.round(((i + r[0]) / count) * 1000) / 10,
-      top: Math.round(r[1] * 1000) / 10,
-      size: effect === 'sparkles' ? 8 + Math.round(r[2] * 6) : 2 + Math.round(r[2] * 3),
-      delay: Math.round(r[3] * (effect === 'snow' ? 8 : 4) * 10) / 10,
-      duration: effect === 'snow' ? 7 + Math.round(r[2] * 50) / 10 : 3 + Math.round(r[0] * 30) / 10
-    }
-  })
-}
-
-// --- Predefinições do editor ---
-
-export const PROFILE_PRESETS: { id: string; label: string; theme: ProfileTheme }[] = [
-  { id: 'default', label: 'Padrão', theme: DEFAULT_PROFILE_THEME },
-  {
-    id: 'midnight',
-    label: 'Meia-noite',
-    theme: {
-      border: 'neon',
-      border_colors: ['#8b5cf6'],
-      background: 'gradient',
-      background_colors: ['#1e1b4b', '#0b1020'],
-      effect: 'sparkles'
-    }
-  },
-  {
-    id: 'wine',
-    label: 'Vinho',
-    theme: {
-      border: 'none',
-      border_colors: [],
-      background: 'gradient',
-      background_colors: ['#6b1d12', '#4b4f58'],
-      effect: 'none'
-    }
-  },
-  {
-    id: 'amethyst',
-    label: 'Ametista',
-    theme: {
-      border: 'gradient',
-      border_colors: ['#a78bfa', '#57534e'],
-      background: 'gradient',
-      background_colors: ['#2e1065', '#57534e'],
-      effect: 'none'
-    }
-  },
-  {
-    id: 'sakura',
-    label: 'Sakura',
-    theme: {
-      border: 'solid',
-      border_colors: ['#ec4899'],
-      background: 'gradient',
-      background_colors: ['#fce7f3', '#f9a8d4'],
-      effect: 'particles'
-    }
-  },
-  {
-    id: 'ocean',
-    label: 'Oceano',
-    theme: {
-      border: 'gradient',
-      border_colors: ['#22d3ee', '#3b82f6'],
-      background: 'gradient',
-      background_colors: ['#0c4a6e', '#082f49'],
-      effect: 'none'
-    }
-  },
-  {
-    id: 'ember',
-    label: 'Brasa',
-    theme: {
-      border: 'neon',
-      border_colors: ['#f97316'],
-      background: 'gradient',
-      background_colors: ['#7f1d1d', '#1c0a05'],
-      effect: 'particles'
-    }
-  },
-  {
-    id: 'snowy',
-    label: 'Noite de neve',
-    theme: {
-      border: 'solid',
-      border_colors: ['#94a3b8'],
-      background: 'gradient',
-      background_colors: ['#1e293b', '#0f172a'],
-      effect: 'snow'
-    }
-  },
-  {
-    id: 'party',
-    label: 'Festa',
-    theme: {
-      border: 'rainbow',
-      border_colors: [],
-      background: 'default',
-      background_colors: [],
-      effect: 'sparkles'
-    }
-  }
-]
 
 /** Mesmo tema (compara já resolvido). */
 export function sameTheme(a: ProfileTheme, b: ProfileTheme): boolean {

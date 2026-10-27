@@ -3,7 +3,8 @@ import {
   SETTINGS_SECTIONS,
   accountName,
   currentSettingsSection,
-  filterSections
+  filterSections,
+  settingsContentWidth
 } from './settingsNav'
 
 const ids = (query: string): string[] => filterSections(query).map((s) => s.id)
@@ -23,6 +24,8 @@ describe('filterSections', () => {
     expect(ids('rnnoise')).toEqual(['voice'])
     expect(ids('overlay')).toEqual(['app'])
     expect(ids('tema')).toEqual(['appearance'])
+    expect(ids('efeito')).toEqual(['profiles'])
+    expect(ids('borda')).toEqual(['profiles'])
     expect(ids('modo escuro')).toEqual(['appearance'])
   })
 
@@ -65,5 +68,12 @@ describe('currentSettingsSection', () => {
     expect(currentSettingsSection(SETTINGS_SECTIONS, 'voice').id).toBe('voice')
     const semApp = SETTINGS_SECTIONS.filter((s) => s.id !== 'app')
     expect(currentSettingsSection(semApp, 'app').id).toBe(semApp[0].id)
+  })
+})
+
+describe('settingsContentWidth', () => {
+  it('Perfis é mais largo; o resto, a coluna de sempre', () => {
+    expect(settingsContentWidth('profiles')).toBe('max-w-[1080px]')
+    expect(settingsContentWidth('account')).toBe('max-w-[740px]')
   })
 })

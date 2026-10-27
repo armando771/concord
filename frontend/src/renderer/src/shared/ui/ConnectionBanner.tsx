@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useConnectionStore } from '../store/connectionStore'
 import { useChatStore } from '../../features/chat/store/chatStore'
+import ConnectionDetails from './ConnectionDetails'
 import {
   connectionBanner,
   nextBannerChange,
@@ -20,6 +21,14 @@ const ACCENT: Record<Banner['kind'], string> = {
   lost: 'text-danger',
   restarting: 'text-brand',
   reconnected: 'text-success'
+}
+
+/** Sem conexão: oferece "Detalhes" (versão, endereço e o erro real, para copiar). */
+const DETAILS: Record<Banner['kind'], boolean> = {
+  offline: true,
+  lost: true,
+  restarting: false,
+  reconnected: false
 }
 
 function bannerText(banner: Banner): string {
@@ -56,14 +65,35 @@ function ConnectionBanner(): React.JSX.Element | null {
 
   const banner = connectionBanner(ws, online, now)
   if (!banner) return null
+  return <BannerView banner={banner} />
+}
 
+/** Botões do aviso: "Tentar agora" na queda; "Detalhes" quando falta conexão. */
+function BannerActions({ kind }: { kind: Banner['kind'] }): React.JSX.Element {
+  return (
+    <>
+      {kind === 'lost' && (
+        <button
+          type="button"
+          onClick={() => useChatStore.getState().retryWsNow()}
+          className={`shrink-0 cursor-pointer rounded font-semibold underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand ${ACCENT[kind]}`}
+        >
+          Tentar agora
+        </button>
+      )}
+      {DETAILS[kind] && <ConnectionDetails className={ACCENT[kind]} />}
+    </>
+  )
+}
+
+export function BannerView({ banner }: { banner: Banner }): React.JSX.Element {
   return (
     <div
       role="status"
       aria-live="polite"
       data-testid="connection-banner"
       data-kind={banner.kind}
-      className={`flex items-center gap-3 border-b px-4 py-2 text-sm text-normal ${TONE[banner.kind]}`}
+      className={`flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2 text-sm text-normal ${TONE[banner.kind]}`}
     >
       {banner.kind !== 'reconnected' && (
         <span
@@ -72,15 +102,7 @@ function ConnectionBanner(): React.JSX.Element | null {
         />
       )}
       <span className="min-w-0 flex-1 truncate">{bannerText(banner)}</span>
-      {banner.kind === 'lost' && (
-        <button
-          type="button"
-          onClick={() => useChatStore.getState().retryWsNow()}
-          className={`shrink-0 cursor-pointer rounded font-semibold underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand ${ACCENT[banner.kind]}`}
-        >
-          Tentar agora
-        </button>
-      )}
+      <BannerActions kind={banner.kind} />
     </div>
   )
 }

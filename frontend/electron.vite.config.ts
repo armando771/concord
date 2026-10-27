@@ -1,13 +1,24 @@
 import { resolve } from 'path'
 import { defineConfig } from 'electron-vite'
-import { buildConnectSrc, buildMediaSrc } from './src/renderer/src/shared/lib/serverUrl'
+import {
+  buildConnectSrc,
+  buildMediaSrc,
+  serverCandidates
+} from './src/renderer/src/shared/lib/serverUrl'
 import { cspPlugin, rendererShared } from './vite.renderer.shared'
 
-// A CSP do renderer precisa liberar o servidor embutido no build (API,
-// WebSocket e os arquivos de mídia do chat).
+// Endereço do servidor e os alternativos (o app usa o primeiro que responde
+// ao abrir; ver src/main/server/serverChoice.ts).
+const servers = serverCandidates(
+  process.env.VITE_SERVER_URL,
+  process.env.VITE_SERVER_FALLBACK_URLS
+)
+
+// A CSP do renderer precisa liberar o servidor embutido no build e os
+// alternativos (API, WebSocket e os arquivos de mídia do chat).
 const connectSrcPlugin = cspPlugin(
-  buildConnectSrc(process.env.VITE_SERVER_URL),
-  buildMediaSrc(process.env.VITE_SERVER_URL)
+  buildConnectSrc(process.env.VITE_SERVER_URL, servers.slice(1)),
+  buildMediaSrc(process.env.VITE_SERVER_URL, servers.slice(1))
 )
 
 // Atualizações: servidas pelo próprio servidor e assinadas pelo dono.
@@ -18,6 +29,7 @@ export default defineConfig({
   main: {
     define: {
       __CONCORD_UPDATE_URL__: JSON.stringify(updateUrl),
+      __CONCORD_SERVER_URLS__: JSON.stringify(servers),
       __CONCORD_UPDATE_PUBKEY__: JSON.stringify(process.env.CONCORD_UPDATE_PUBKEY ?? '')
     }
   },
