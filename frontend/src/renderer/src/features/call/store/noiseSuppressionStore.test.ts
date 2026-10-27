@@ -55,7 +55,10 @@ describe('noiseSuppressionStore', () => {
     storage.setItem(KEY, JSON.stringify({ state: { enabled: true }, version: 0 }))
     const { useNoiseSuppressionStore } = await load()
     expect(useNoiseSuppressionStore.getState().enabled).toBe(false)
-    expect(JSON.parse(storage.getItem(KEY)!)).toMatchObject({ state: { enabled: false }, version: 1 })
+    expect(JSON.parse(storage.getItem(KEY)!)).toMatchObject({
+      state: { enabled: false },
+      version: 1
+    })
   })
 
   it('sem escolha, abrir o app não grava nada (o padrão não fica salvo como escolha)', async () => {
