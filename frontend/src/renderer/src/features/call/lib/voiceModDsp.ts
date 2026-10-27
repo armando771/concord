@@ -39,11 +39,6 @@ export interface VoiceModWorkletMessage {
 
 const TWO_PI = 2 * Math.PI
 
-function sinSquared(phase: number): number {
-  const s = Math.sin(Math.PI * phase)
-  return s * s
-}
-
 export class VoiceModDsp implements VoiceModWorkletMessage {
   ratio = 1
   modHz = 0
@@ -77,10 +72,13 @@ export class VoiceModDsp implements VoiceModWorkletMessage {
     const modStep = (TWO_PI * this.modHz) / this.rate
     for (let i = 0; i < output.length; i++) {
       this.buffer[this.pos] = input?.[i] ?? 0
+      // As pontas estão meia janela defasadas: a janela da segunda é
+      // sen²(π(p + ½)) = cos²(πp) = 1 − sen²(πp). Um seno por amostra.
+      const s = Math.sin(Math.PI * this.phase)
+      const weightA = s * s
       const phaseB = (this.phase + 0.5) % 1
       let y =
-        this.read(this.phase * this.size) * sinSquared(this.phase) +
-        this.read(phaseB * this.size) * sinSquared(phaseB)
+        this.read(this.phase * this.size) * weightA + this.read(phaseB * this.size) * (1 - weightA)
       if (this.modHz > 0) {
         y *= 1 - this.modDepth + this.modDepth * Math.sin(this.modPhase)
         this.modPhase = (this.modPhase + modStep) % TWO_PI
@@ -88,7 +86,7 @@ export class VoiceModDsp implements VoiceModWorkletMessage {
       output[i] = y
       this.phase += step
       this.phase -= Math.floor(this.phase)
-      this.pos = (this.pos + 1) % this.buffer.length
+      this.pos = this.pos + 1 === this.buffer.length ? 0 : this.pos + 1
     }
   }
 
@@ -104,10 +102,12 @@ export class VoiceModDsp implements VoiceModWorkletMessage {
   private read(delay: number): number {
     const n = this.buffer.length
     const p = this.pos - delay
-    const i0 = Math.floor(p)
-    const frac = p - i0
-    const a = this.buffer[((i0 % n) + n) % n]
-    const b = this.buffer[(((i0 + 1) % n) + n) % n]
+    const floor = Math.floor(p)
+    const frac = p - floor
+    // delay ∈ [0, janela): o índice cai em [−janela, n), uma volta basta (sem %).
+    const i0 = floor < 0 ? floor + n : floor
+    const a = this.buffer[i0]
+    const b = this.buffer[i0 + 1 === n ? 0 : i0 + 1]
     return a + (b - a) * frac
   }
 }

@@ -81,7 +81,7 @@ export class VoiceActivityGate implements VoiceActivityProcessor {
       }
       const delayed = this.line[this.pos]
       this.line[this.pos] = x
-      this.pos = (this.pos + 1) % this.line.length
+      this.pos = this.pos + 1 === this.line.length ? 0 : this.pos + 1
       if (output) output[i] = this.gate ? delayed * this.envelope() : x
     }
     return change
