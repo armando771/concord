@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { focusableIn, trapTab } from '../../../shared/lib/focusTrap'
+import { initialFocusTarget, trapTab } from '../../../shared/lib/focusTrap'
 import { XIcon } from '../../../shared/ui/icons'
 import '../../../assets/enquete.css'
 
@@ -21,10 +21,11 @@ interface Props {
 function EnqueteCamada({ titleId, onFechar, children }: Props): React.JSX.Element {
   const dialogRef = useRef<HTMLDivElement | null>(null)
 
-  // Foco no primeiro item (o X, quando existe) e, ao sair, de volta para onde estava.
+  // Foco no item marcado com data-autofocus (o Voltar da confirmação, para Enter
+  // repetido não confirmar) ou no primeiro (o X, quando existe) e, ao sair, de volta para onde estava.
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
-    if (dialogRef.current) focusableIn(dialogRef.current)[0]?.focus()
+    if (dialogRef.current) initialFocusTarget(dialogRef.current)?.focus()
     return () => {
       if (previous?.isConnected) previous.focus()
     }

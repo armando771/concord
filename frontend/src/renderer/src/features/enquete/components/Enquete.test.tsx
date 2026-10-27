@@ -75,6 +75,10 @@ describe('enquete (componentes)', () => {
       expect(html.match(/type="radio"/g)?.length).toBe(3)
     })
 
+    it('a pergunta não marca foco: começa na primeira opção', () => {
+      expect(render()).not.toContain('data-autofocus')
+    })
+
     it('é obrigatório: sem botão de fechar', () => {
       expect(render()).not.toContain('aria-label="Fechar"')
     })
@@ -105,6 +109,14 @@ describe('enquete (componentes)', () => {
       expect(html).toMatch(/>Confirmar</)
       expect(html).toMatch(/>Voltar</)
       expect(html).not.toContain('aria-label="Fechar"')
+    })
+
+    it('o foco inicial é o Voltar (o menos destrutivo), com Confirmar primeiro na ordem', () => {
+      estado({ etapa: 'confirmacao', selecao: 'l' })
+      const html = render()
+      expect(html.match(/data-autofocus/g)?.length).toBe(1)
+      expect(html).toMatch(/<button[^>]*data-autofocus="true"[^>]*>Voltar/)
+      expect(html.indexOf('>Confirmar<')).toBeLessThan(html.indexOf('>Voltar<'))
     })
 
     it('enquanto envia, desabilita Confirmar e Voltar', () => {

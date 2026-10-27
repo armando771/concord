@@ -40,6 +40,7 @@ function EnqueteConfirmacao({ enquete }: { enquete: Enquete }): React.JSX.Elemen
         <button
           type="button"
           disabled={enviando}
+          data-autofocus
           onClick={voltar}
           className={`${BOTAO} border border-subtle bg-surface text-gray-200 hover:bg-white/10`}
         >
