@@ -10,3 +10,27 @@ describe('predefinições', () => {
     }
   })
 })
+
+describe('predefinições novas', () => {
+  it('cada efeito em canvas tem pelo menos uma predefinição', () => {
+    const used = new Set(PROFILE_PRESETS.map((p) => p.theme.effect))
+    for (const id of [
+      'fire',
+      'matrix',
+      'glitch',
+      'storm',
+      'galaxy',
+      'aurora',
+      'hearts',
+      'confetti',
+      'synthwave',
+      'rain'
+    ]) {
+      expect(used.has(id), id).toBe(true)
+    }
+  })
+  it('IDs e nomes únicos', () => {
+    expect(new Set(PROFILE_PRESETS.map((p) => p.id)).size).toBe(PROFILE_PRESETS.length)
+    expect(new Set(PROFILE_PRESETS.map((p) => p.label)).size).toBe(PROFILE_PRESETS.length)
+  })
+})
