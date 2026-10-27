@@ -27,12 +27,13 @@ function goAffected(goFiles) {
 }
 
 function loop(files) {
-  const { go, ts, mobile: mob, scripts } = classify(files)
+  const { go, ts, mobile: mob, mobileShared, scripts } = classify(files)
   const codes = []
   const pkgs = goAffected(go)
   if (pkgs.length) codes.push(run(GO, ['test', ...pkgs], backend))
   if (ts.length) codes.push(run('npx', ['vitest', 'related', '--run', '--passWithNoTests', ...ts.map((f) => f.slice('frontend/'.length))], frontend))
-  if (mob.length) codes.push(run('npx', ['jest', '--findRelatedTests', '--passWithNoTests', ...mob.map((f) => f.slice('mobile/'.length))], mobile))
+  if (mobileShared) codes.push(run('npx', ['jest'], mobile))
+  else if (mob.length) codes.push(run('npx', ['jest', '--findRelatedTests', '--passWithNoTests', ...mob.map((f) => f.slice('mobile/'.length))], mobile))
   const tests = scriptTests(scripts)
   if (tests.length) codes.push(run('node', ['--test', ...tests]))
   if (!codes.length) console.log('Nada a testar no diff.')

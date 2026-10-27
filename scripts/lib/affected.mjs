@@ -10,14 +10,15 @@ export const SHARED = [
   'backend/internal/platform/',
   'backend/internal/permission/',
   'frontend/package.json',
-  'mobile/package.json',
-  'mobile/src/shared/',
   'frontend/src/renderer/src/shared/',
   'frontend/src/preload/'
 ]
 
 const isGo = (f) => f.startsWith('backend/') && f.endsWith('.go')
 const isTs = (f) => f.startsWith('frontend/src/') && /\.(ts|tsx)$/.test(f)
+// Código usado por todo o mobile: mexeu aqui, roda a suíte inteira do mobile.
+export const MOBILE_SHARED = ['mobile/package.json', 'mobile/src/shared/']
+
 const isMobile = (f) => /^mobile\/(src|app)\/.*\.(ts|tsx)$/.test(f)
 const isScript = (f) => f.startsWith('scripts/') && f.endsWith('.mjs')
 
@@ -27,7 +28,8 @@ export function classify(files) {
     ts: files.filter(isTs),
     mobile: files.filter(isMobile),
     scripts: files.filter(isScript),
-    shared: files.some((f) => SHARED.some((prefix) => f.startsWith(prefix)))
+    shared: files.some((f) => SHARED.some((prefix) => f.startsWith(prefix))),
+    mobileShared: files.some((f) => MOBILE_SHARED.some((prefix) => f.startsWith(prefix)))
   }
 }
 

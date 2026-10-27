@@ -52,6 +52,9 @@ test('classify: arquivos de mobile/src e mobile/app viram o grupo mobile', () =>
   assert.deepEqual(result.mobile, ['mobile/src/features/auth/lib/x.ts', 'mobile/app/_layout.tsx', 'mobile/src/features/auth/lib/x.test.ts'])
   assert.deepEqual(result.ts, [])
   assert.equal(result.shared, false)
-  assert.equal(classify(['mobile/package.json']).shared, true)
-  assert.equal(classify(['mobile/src/shared/api/client.ts']).shared, true)
+  // código compartilhado do mobile roda a suíte do mobile, não a do backend/desktop
+  assert.equal(classify(['mobile/package.json']).shared, false)
+  assert.equal(classify(['mobile/package.json']).mobileShared, true)
+  assert.equal(classify(['mobile/src/shared/api/client.ts']).mobileShared, true)
+  assert.equal(classify(['mobile/src/features/auth/lib/x.ts']).mobileShared, false)
 })
