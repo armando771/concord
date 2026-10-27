@@ -3,8 +3,8 @@ import type { OverlayLayout } from '../../renderer/src/features/overlay/lib/over
 import type { Foreground } from './overlayPolicy'
 
 // Contrato entre o controlador do overlay (overlay.ts: estado da call, jogo na
-// frente, atalhos) e quem desenha a lista por cima do jogo (a janela do
-// Electron, electronOverlay.ts).
+// frente, atalhos) e quem desenha a lista por cima do jogo: a janela do
+// Electron (electronOverlay.ts) ou a janela nativa do helper (nativeOverlay.ts).
 
 /** O que a superfície pede ao controlador. */
 export interface OverlayHost {
@@ -18,6 +18,8 @@ export interface OverlayHost {
   saveLayout: (layout: OverlayLayout) => void
   /** A janela sumiu (a página caiu): o controlador refaz o que estiver à vista. */
   lost: () => void
+  /** A superfície não tem conserto nesta sessão (helper nativo saiu): troque de superfície. */
+  failed: (reason: string) => void
 }
 
 /** Quem desenha o overlay por cima do jogo. */
@@ -29,7 +31,7 @@ export interface OverlaySurface {
   hide: () => void
   /** O controlador ligou/desligou a edição. */
   setEditing: (editing: boolean) => void
-  /** Já dá para ligar a edição (a página carregou e ouve os eventos). */
+  /** Já dá para ligar a edição (a página carregou / o helper respondeu). */
   canEdit: () => boolean
   /** Fim da call, overlay desligado ou saindo do app. */
   destroy: () => void
