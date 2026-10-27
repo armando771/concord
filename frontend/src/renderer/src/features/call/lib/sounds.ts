@@ -26,6 +26,12 @@ const tone = (freq: number, at: number, duration = 0.09, volume?: number): Note 
   ...(volume === undefined ? {} : { volume })
 })
 
+/** Nota no volume padrão que desliza de `freq` até `to` (sons de transmissão). */
+const sweep = (freq: number, to: number, at: number, duration: number): Note => ({
+  ...tone(freq, at, duration),
+  slide: to
+})
+
 export const noteVolume = (note: Note): number => note.volume ?? BASE_VOLUME
 
 /**
@@ -195,6 +201,12 @@ export const SOUNDS = {
   mention: [tone(988, 0, 0.12), tone(1319, 0.13, 0.22)],
   // Versão nova do app: três notas subindo, mais lentas que a menção.
   update: [tone(784, 0, 0.09), tone(988, 0.1, 0.09), tone(1319, 0.2, 0.2)],
+  // Alguém abriu transmissão na call: varrida subindo e duas notas ("liga").
+  liveStart: [sweep(440, 880, 0, 0.12), tone(1175, 0.13, 0.07), tone(1568, 0.21, 0.18)],
+  // A transmissão acabou: o espelho do anterior, descendo ("desliga").
+  liveEnd: [tone(1568, 0, 0.07), tone(1175, 0.08, 0.07), sweep(880, 440, 0.16, 0.16)],
+  // Alguém começou a assistir a live que estou vendo: "blip" agudo e curto.
+  liveJoin: [sweep(1200, 1800, 0, 0.07), tone(2093, 0.08, 0.09)],
   // Subir de nível (40+): arpejo curto subindo (dó-mi-sol).
   levelChime: [soft(1047, 0, 0.1, 0.38), soft(1319, 0.07, 0.1, 0.38), soft(1568, 0.14, 0.25, 0.38)],
   // 80+: arpejo mais longo terminando num acorde que soa um pouco.

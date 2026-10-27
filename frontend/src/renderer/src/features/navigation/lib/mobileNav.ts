@@ -1,7 +1,7 @@
 // Navegação do celular (abaixo de 768 px) no padrão do Discord mobile: uma
 // coluna por vez. A "lista" (trilho de servidores + canais/DMs) ou o
 // "conteúdo" (chat, chamada, amigos). Quem decide qual aparece é a rota: estas
-// funções puras traduzem cada navegação no painel da frente. Ver ADR 0006.
+// funções puras traduzem cada navegação no painel da frente. Ver ADR 0007.
 
 /** Qual coluna aparece no celular. No desktop as duas aparecem sempre. */
 export type MobilePanel = 'nav' | 'content'

@@ -1,6 +1,6 @@
 import { THEMES, type ThemeInfo } from '../../lib/themes'
 import { useThemeStore } from '../../store/themeStore'
-import { Toggle } from '../AppSettings'
+import { Toggle } from '../Toggle'
 
 /**
  * Miniatura do app pintada com o próprio tema: o data-theme no cartão faz os

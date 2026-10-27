@@ -60,3 +60,29 @@ export function birthdayError(
 export function birthdayModalKey(userId: string, date: string): string {
   return `concord:birthday-modal:${userId}:${date}`
 }
+
+/** "7 de março de 1998" (sem ano, só o dia e o mês); sem data, "Não informado". */
+export function formatBirthday({ day, month, year }: BirthdayValue): string {
+  if (!day || !month) return 'Não informado'
+  const date = `${day} de ${MONTHS[month - 1].toLowerCase()}`
+  return year ? `${date} de ${year}` : date
+}
+
+export type BirthdaySave<T> = { saved: T; error?: undefined } | { error: string; saved?: undefined }
+
+/**
+ * Salva o aniversário (Minha conta): só manda quando a data vale (tudo vazio
+ * ou dia, mês e ano). Devolve o que o servidor gravou ou a mensagem de erro.
+ */
+export async function trySaveBirthday<T extends BirthdayValue>(
+  next: T,
+  send: (value: T) => Promise<T>
+): Promise<BirthdaySave<T>> {
+  const invalid = birthdayError(next)
+  if (invalid) return { error: invalid }
+  try {
+    return { saved: await send(next) }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Não foi possível salvar o aniversário.' }
+  }
+}

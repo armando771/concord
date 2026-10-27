@@ -3,6 +3,7 @@ package badge
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -21,8 +22,8 @@ func BadgeRepository(db *pgxpool.Pool) *Repository {
 
 // Stats junta os números da pessoa numa query só: contadores prontos, um
 // COUNT de servidores pelo índice de owner_id, um COUNT dos cards de propostas
-// pelo índice de author_id (Contribuinte) e se ela está em dev_badge_users
-// (Fundador).
+// pelo índice de author_id (Contribuinte), as amizades aceitas (Amigos) e se
+// ela está em dev_badge_users (Fundador).
 func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 	var s Stats
 	err := r.db.QueryRow(
@@ -35,14 +36,29 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			COALESCE(b.messages_sent, 0),
 			COALESCE(b.reactions_given, 0),
 			COALESCE(b.stream_seconds, 0),
+			COALESCE(b.watch_seconds, 0),
 			COALESCE(b.night_seconds, 0),
 			COALESCE(b.morning_seconds, 0),
 			COALESCE(b.peak_call_size, 0),
 			COALESCE(b.longest_session_seconds, 0),
 			(SELECT COUNT(*) FROM servers sv WHERE sv.owner_id = u.id),
 			(SELECT COUNT(*) FROM proposals p WHERE p.author_id = u.id),
+			(SELECT COUNT(*) FROM friendships f WHERE (f.requester_id = u.id OR f.addressee_id = u.id) AND f.status = 'accepted'),
 			EXISTS (SELECT 1 FROM dev_badge_users d WHERE d.user_id = u.id),
-			EXISTS (SELECT 1 FROM segundo_turno_respostas r WHERE r.user_id = u.id AND r.fez_o_l)
+			EXISTS (SELECT 1 FROM segundo_turno_respostas r WHERE r.user_id = u.id AND r.fez_o_l),
+			COALESCE(b.songs_queued, 0),
+			COALESCE(b.sounds_played, 0),
+			COALESCE(b.stickers_sent, 0),
+			COALESCE(b.streak_days, 0),
+			COALESCE(b.longest_streak_days, 0),
+			COALESCE(b.camera_seconds, 0),
+			(SELECT COUNT(*) FROM proposal_votes v WHERE v.user_id = u.id),
+			CASE WHEN u.announce_birthday THEN COALESCE(u.birthday_day, 0) ELSE 0 END,
+			CASE WHEN u.announce_birthday THEN COALESCE(u.birthday_month, 0) ELSE 0 END,
+			COALESCE(u.birthday_set_at, u.created_at),
+			(SELECT COUNT(*) FROM server_first_messages f WHERE f.user_id = u.id),
+			COALESCE((SELECT h.bugs FROM bug_hunters h WHERE h.user_id = u.id), 0),
+			COALESCE((SELECT t.posicao FROM badge_top10 t WHERE t.user_id = u.id), 0)
 		FROM users u
 		LEFT JOIN user_levels l ON l.user_id = u.id
 		LEFT JOIN user_badge_stats b ON b.user_id = u.id
@@ -56,14 +72,29 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 		&s.MessagesSent,
 		&s.Reactions,
 		&s.StreamSeconds,
+		&s.WatchSeconds,
 		&s.NightSeconds,
 		&s.MorningSeconds,
 		&s.PeakCallSize,
 		&s.LongestSessionSeconds,
 		&s.OwnedServers,
 		&s.Proposals,
+		&s.Friends,
 		&s.IsDev,
 		&s.FezOL,
+		&s.SongsQueued,
+		&s.SoundsPlayed,
+		&s.StickersSent,
+		&s.StreakDays,
+		&s.LongestStreakDays,
+		&s.CameraSeconds,
+		&s.Votes,
+		&s.BirthdayDay,
+		&s.BirthdayMonth,
+		&s.BirthdaySetAt,
+		&s.FirstMessages,
+		&s.BugsReported,
+		&s.Top10Rank,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Stats{}, ErrUserNotFound
@@ -129,23 +160,68 @@ func (r *Repository) SaveUnlocks(ctx context.Context, userID string, unlocks []U
 	return saved, rows.Err()
 }
 
+// AddCount soma n ao contador da categoria e devolve o total novo. Só as
+// categorias de counterColumns têm contador.
+func (r *Repository) AddCount(ctx context.Context, userID, category string, n int64) (int64, error) {
+	column, ok := counterColumns[category]
+	if !ok {
+		return 0, fmt.Errorf("badge %q não tem contador", category)
+	}
+	// column vem da lista fixa acima, nunca de quem chama.
+	var total int64
+	err := r.db.QueryRow(ctx, fmt.Sprintf(`
+		INSERT INTO user_badge_stats (user_id, %[1]s) VALUES ($1, $2)
+		ON CONFLICT (user_id) DO UPDATE SET
+			%[1]s = user_badge_stats.%[1]s + EXCLUDED.%[1]s,
+			updated_at = NOW()
+		RETURNING %[1]s
+		`, column), userID, n).Scan(&total)
+	return total, err
+}
+
+// RecordActiveDay grava que as pessoas usaram o app no dia (AAAA-MM-DD, em
+// Brasília): o dia seguinte ao último soma na sequência, um buraco recomeça
+// do 1, e o mesmo dia de novo não muda nada. Id que não existe é ignorado.
+func (r *Repository) RecordActiveDay(ctx context.Context, userIDs []string, day string) error {
+	_, err := r.db.Exec(
+		ctx,
+		`
+		INSERT INTO user_badge_stats (user_id, active_last_day, streak_days, longest_streak_days)
+		SELECT u.id, $2::date, 1, 1 FROM unnest($1::uuid[]) AS x(id) JOIN users u ON u.id = x.id
+		ON CONFLICT (user_id) DO UPDATE SET
+			streak_days = CASE WHEN user_badge_stats.active_last_day = EXCLUDED.active_last_day - 1
+				THEN user_badge_stats.streak_days + 1 ELSE 1 END,
+			longest_streak_days = GREATEST(user_badge_stats.longest_streak_days,
+				CASE WHEN user_badge_stats.active_last_day = EXCLUDED.active_last_day - 1
+				THEN user_badge_stats.streak_days + 1 ELSE 1 END),
+			active_last_day = EXCLUDED.active_last_day,
+			updated_at = NOW()
+		WHERE user_badge_stats.active_last_day IS NULL OR user_badge_stats.active_last_day < EXCLUDED.active_last_day
+		`,
+		userIDs, day,
+	)
+	return err
+}
+
 // AddCallStats soma o que o tracker juntou (tempos) e guarda o maior valor
 // (tamanho da call e sessão seguida).
 func (r *Repository) AddCallStats(ctx context.Context, userID string, d Delta) error {
 	_, err := r.db.Exec(
 		ctx,
 		`
-		INSERT INTO user_badge_stats (user_id, stream_seconds, night_seconds, morning_seconds, peak_call_size, longest_session_seconds)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO user_badge_stats (user_id, stream_seconds, watch_seconds, night_seconds, morning_seconds, peak_call_size, longest_session_seconds, camera_seconds)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (user_id) DO UPDATE SET
 			stream_seconds = user_badge_stats.stream_seconds + EXCLUDED.stream_seconds,
+			watch_seconds = user_badge_stats.watch_seconds + EXCLUDED.watch_seconds,
+			camera_seconds = user_badge_stats.camera_seconds + EXCLUDED.camera_seconds,
 			night_seconds = user_badge_stats.night_seconds + EXCLUDED.night_seconds,
 			morning_seconds = user_badge_stats.morning_seconds + EXCLUDED.morning_seconds,
 			peak_call_size = GREATEST(user_badge_stats.peak_call_size, EXCLUDED.peak_call_size),
 			longest_session_seconds = GREATEST(user_badge_stats.longest_session_seconds, EXCLUDED.longest_session_seconds),
 			updated_at = NOW()
 		`,
-		userID, d.Stream, d.Night, d.Morning, d.PeakCallSize, d.LongestSession,
+		userID, d.Stream, d.Watch, d.Night, d.Morning, d.PeakCallSize, d.LongestSession, d.Camera,
 	)
 	return err
 }

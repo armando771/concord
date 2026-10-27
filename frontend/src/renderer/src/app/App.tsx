@@ -7,6 +7,7 @@ import PerfBridge from './PerfBridge'
 import WindowActivityBridge from './WindowActivityBridge'
 import OverlayBridge from '../features/overlay/components/OverlayBridge'
 import GameActivityBridge from '../features/activity/components/GameActivityBridge'
+import MusicActivityBridge from '../features/activity/components/MusicActivityBridge'
 import UpdateBridge from '../features/updates/components/UpdateBridge'
 import NoticeStack from '../features/updates/components/NoticeStack'
 import SandboxNotice from '../features/updates/components/SandboxNotice'
@@ -47,6 +48,7 @@ function App(): React.JSX.Element {
           <PerfBridge />
           <OverlayBridge />
           <GameActivityBridge />
+          <MusicActivityBridge />
           <UpdateBridge />
           <NoticeStack>
             <SandboxNotice />

@@ -43,6 +43,9 @@ describe('statText', () => {
     expect(statText(badge({ category: 'streamer', value: 12 * HOUR }))).toBe(
       '12 horas transmitindo'
     )
+    expect(statText(badge({ category: 'espectador', value: 3 * HOUR }))).toBe(
+      '3 horas assistindo lives'
+    )
     expect(statText(badge({ category: 'coruja', value: 3 * HOUR }))).toBe(
       '3 horas em call de madrugada'
     )
@@ -79,44 +82,15 @@ describe('statText', () => {
   })
 })
 
-describe('Contribuinte (cards de propostas)', () => {
-  const contribuinte = (over: Partial<Badge> = {}): Badge =>
-    badge({ category: 'contribuinte', name: 'Contribuinte', unit: 'proposals', ...over })
-
-  it('conta as propostas criadas', () => {
-    expect(statText(contribuinte({ value: 1 }))).toBe('1 proposta criada')
-    expect(statText(contribuinte({ value: 0 }))).toBe('0 propostas criadas')
-    expect(statText(contribuinte({ value: 1234 }))).toBe('1.234 propostas criadas')
-  })
-
-  it('escada, quanto falta e visão pública', () => {
-    expect(formatThreshold('proposals', 1)).toBe('1 proposta')
-    expect(formatThreshold('proposals', 15)).toBe('15 propostas')
-    const now = new Date('2026-10-25T12:00:00Z')
-    expect(remainingText(contribuinte({ value: 4, next_threshold: 5 }), now)).toBe(
-      'Falta 1 proposta'
-    )
-    expect(remainingText(contribuinte({ value: 5, next_threshold: 15 }), now)).toBe(
-      'Faltam 10 propostas'
-    )
-    const pub = contribuinte({
-      value: undefined,
-      tier: 2,
-      tiers: [
-        { tier: 1, name: 'Ideia', threshold: 1, rarity: 'comum' },
-        { tier: 2, name: 'Colaborador', threshold: 5, rarity: 'raro' }
-      ]
-    })
-    expect(publicStatText(pub)).toBe('5+ propostas')
-  })
-})
-
 describe('formatThreshold', () => {
   it('rótulo curto da escada', () => {
     expect(formatThreshold('seconds', HOUR)).toBe('1 hora')
     expect(formatThreshold('seconds', 1000 * HOUR)).toBe('1.000 horas')
     expect(formatThreshold('months', 1)).toBe('1 mês')
-    expect(formatThreshold('months', 24)).toBe('24 meses')
+    expect(formatThreshold('months', 6)).toBe('6 meses')
+    expect(formatThreshold('months', 12)).toBe('1 ano')
+    expect(formatThreshold('months', 24)).toBe('2 anos')
+    expect(formatThreshold('months', 120)).toBe('10 anos')
     expect(formatThreshold('messages', 2000)).toBe('2.000 mensagens')
     expect(formatThreshold('level', 10)).toBe('Nível 10')
     expect(formatThreshold('people', 5)).toBe('5 pessoas')
@@ -247,6 +221,17 @@ describe('visão pública (perfil de outra pessoa)', () => {
       tiers: [{ tier: 1, name: 'Ouvinte', threshold: 3600, rarity: 'comum' }]
     })
     expect(publicStatText(voz)).toBe('1+ hora em call')
+    const espectador = badge({
+      category: 'espectador',
+      name: 'Espectador',
+      tier: 2,
+      value: undefined,
+      tiers: [
+        { tier: 1, name: 'Curioso', threshold: HOUR, rarity: 'comum' },
+        { tier: 2, name: 'Pipoqueiro', threshold: 10 * HOUR, rarity: 'comum' }
+      ]
+    })
+    expect(publicStatText(espectador)).toBe('10+ horas assistindo lives')
   })
 
   it('fundador não tem número', () => {

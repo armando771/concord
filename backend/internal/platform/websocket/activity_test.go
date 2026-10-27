@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"gin-quickstart/backend/internal/user"
 )
@@ -17,8 +18,9 @@ func (f fakeAudience) Audience(_ context.Context, id string) ([]string, error) {
 type activityEvent struct {
 	Type    string `json:"type"`
 	Payload struct {
-		UserID   string    `json:"user_id"`
-		Activity *Activity `json:"activity"`
+		UserID    string     `json:"user_id"`
+		Activity  *Activity  `json:"activity"`
+		Listening *Listening `json:"listening"`
 	} `json:"payload"`
 }
 
@@ -171,5 +173,27 @@ func TestActivityInvalidAppIDDropped(t *testing.T) {
 		if len(evs) != 1 || evs[0].Payload.Activity.AppID != 0 || evs[0].Payload.Activity.IconHash != "" {
 			t.Fatalf("%s deveria perder o ícone: %+v", raw, evs)
 		}
+	}
+}
+
+func TestActivitySameGameNotRepublished(t *testing.T) {
+	h, _, friend, _ := activityHub()
+	setGame(h, "a", "VALORANT")
+	drainActivity(t, friend)
+
+	// Passado o limite de trocas, o mesmo jogo não avisa ninguém; outro, sim.
+	h.mu.Lock()
+	h.rich.games.setAt["a"] = time.Now().Add(-2 * activityMinInterval)
+	h.mu.Unlock()
+	setGame(h, "a", "VALORANT")
+	if evs := drainActivity(t, friend); len(evs) != 0 {
+		t.Fatalf("mesmo jogo republicado: %+v", evs)
+	}
+	h.mu.Lock()
+	h.rich.games.setAt["a"] = time.Now().Add(-2 * activityMinInterval)
+	h.mu.Unlock()
+	setGame(h, "a", "PUBG")
+	if evs := drainActivity(t, friend); len(evs) != 1 {
+		t.Fatalf("troca de jogo devia publicar: %+v", evs)
 	}
 }

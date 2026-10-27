@@ -10,8 +10,10 @@ import { AppErrorBoundary } from './shared/ui/AppErrorScreen'
 import { useLevelStore } from './features/levels/store/levelStore'
 import { startThemeSync } from './features/settings/store/themeStore'
 import { startEntranceSounds } from './features/call/lib/entranceSoundStart'
+import { startScreenSounds } from './features/call/lib/screenSoundsStart'
 import { startArrivalBadges } from './features/call/lib/arrivalEventsStart'
 import { startCallInvites } from './features/call/lib/callInviteStart'
+import { startPresenceActivity } from './features/activity/lib/presenceActivityStart'
 
 // Tema salvo antes do primeiro render: o app já abre com as cores certas.
 startThemeSync()
@@ -19,11 +21,17 @@ startThemeSync()
 // Som de quem entra na call (o som de entrada da pessoa ou o padrão).
 startEntranceSounds()
 
+// Sons da transmissão: live aberta, encerrada e alguém entrando nela.
+startScreenSounds()
+
 // Selo "Chegou" de quem entra no canal de voz.
 startArrivalBadges()
 
 // Cartões de convite para a call na DM: viram "inválidos" quando a call acaba.
 startCallInvites()
+
+// O jogo e a música dos outros agora (presence:activity).
+startPresenceActivity()
 
 // Soltar um arquivo fora do chat não pode fazer o Electron abrir o arquivo no
 // lugar do app (o chat trata o próprio drop).

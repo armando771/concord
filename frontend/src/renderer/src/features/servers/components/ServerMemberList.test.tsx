@@ -3,7 +3,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 // O chatStore de verdade puxa o resto do app; aqui só a presença.
-const chat = vi.hoisted(() => ({ presence: {} as Record<string, unknown>, activity: '' }))
+const chat = vi.hoisted(() => ({ presence: {} as Record<string, unknown>, activity: '', listening: '' }))
 vi.mock('../../chat/store/chatStore', () => ({
   useChatStore: (sel: (s: unknown) => unknown) => sel({ presence: chat.presence }),
   usePresenceStatus: (id: string) => (chat.presence[id] ? 'online' : 'offline')
@@ -11,6 +11,9 @@ vi.mock('../../chat/store/chatStore', () => ({
 vi.mock('../../activity/store/presenceActivityStore', () => ({
   useActivity: (id: string) => (id === chat.activity ? { name: 'Jogo' } : null),
   useInVoice: () => false
+}))
+vi.mock('../../activity/store/listeningStore', () => ({
+  useListening: (id: string) => (id === chat.listening ? { app: 'Spotify', title: 'x', started_at: 0 } : null)
 }))
 vi.mock('../../activity/components/ActivityLine', () => ({
   ActivityLine: ({ statusLabel }: { statusLabel: string }) => <i data-atividade={statusLabel} />
@@ -55,6 +58,7 @@ describe('ServerMemberList', () => {
   beforeEach(() => {
     chat.presence = { dono: true, ana: true }
     chat.activity = ''
+    chat.listening = ''
     useAuthStore.setState({ user: { id: 'eu', username: 'eu', display_name: 'Eu' } as never })
     useServerStore.setState({
       roles: [
@@ -98,5 +102,12 @@ describe('ServerMemberList', () => {
     expect(html).toContain('title="Bibi"')
     expect(html).toContain('>@dono</p>')
     expect(html).toContain('data-atividade="@ana"')
+  })
+
+  it('quem só está ouvindo música também ganha a linha de atividade', () => {
+    chat.listening = 'dono'
+    const html = render()
+    expect(html).toContain('data-atividade="@dono"')
+    expect(html).not.toContain('>@dono</p>')
   })
 })

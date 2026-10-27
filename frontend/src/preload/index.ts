@@ -251,6 +251,21 @@ const api = {
       return () => ipcRenderer.removeListener('games:current', listener)
     }
   },
+  music: {
+    /** Liga/desliga a detecção da música tocando (Ouvindo). Windows e Linux. */
+    watch(enabled: boolean): void {
+      ipcRenderer.send('music:watch', enabled)
+    },
+    current(): Promise<unknown> {
+      return ipcRenderer.invoke('music:current')
+    },
+    /** A música mudou (null = parou); o renderer valida. Retorna unsubscribe. */
+    onChange(cb: (track: unknown) => void): () => void {
+      const listener = (_e: unknown, track: unknown): void => cb(track)
+      ipcRenderer.on('music:current', listener)
+      return () => ipcRenderer.removeListener('music:current', listener)
+    }
+  },
   activities: {
     /** Abre o jogo numa janela própria; false = link recusado pelo main. */
     open(activityId: string, url: string): Promise<boolean> {

@@ -3,10 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import {
   StreamContextMenu,
   MaestroContextMenu,
-  FriendMenuItems,
-  RoleAssignMenuItems
+  FriendMenuItems
 } from './UserContextMenuSections'
-import type { Role } from '../../servers/lib/permissions'
 
 describe('UserContextMenuSections', () => {
   it('StreamContextMenu renderiza volume', () => {
@@ -88,31 +86,5 @@ describe('UserContextMenuSections', () => {
       />
     )
     expect(blockedHtml).toContain('Desbloquear')
-  })
-
-  it('RoleAssignMenuItems renderiza cargos atribuíveis', () => {
-    const roles: Role[] = [
-      {
-        id: 'r1',
-        server_id: 's1',
-        name: 'VIP',
-        color: 0xff0000,
-        position: 1,
-        permissions: 0,
-        hoist: false,
-        is_default: false
-      }
-    ]
-    const html = renderToStaticMarkup(
-      <RoleAssignMenuItems
-        givable={roles}
-        memberRoleIds={['r1']}
-        saving={false}
-        itemClass="btn"
-        onToggleRole={vi.fn()}
-      />
-    )
-    expect(html).toContain('VIP')
-    expect(html).toContain('✓')
   })
 })

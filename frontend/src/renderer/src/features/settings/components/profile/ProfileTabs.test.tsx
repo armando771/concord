@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-// O som de entrada e o aniversário puxam a call/rede; têm testes próprios.
-vi.mock('../AppSettings', () => ({ BirthdaySettings: () => null }))
+// O som de entrada puxa a call/rede; tem teste próprio.
 vi.mock('../../../profile/components/EntranceSoundSettings', () => ({ default: () => null }))
 vi.mock('../../../profile/components/ProfileCardBody', () => ({ default: () => null }))
 
@@ -31,10 +30,21 @@ describe('abas do editor', () => {
     expect(html).toMatch(/aria-selected="true"[^>]*tabindex="0"[^>]*>Aparência/)
     expect(html).toMatch(/aria-selected="false"[^>]*tabindex="-1"[^>]*>Identidade/)
   })
-  it('Aparência mostra o tema e o estilo do nome', () => {
-    const html = renderToStaticMarkup(<AppearanceTab editor={editor()} />)
+  it('Aparência mostra o tema e o estilo do nome, que abre o modal', () => {
+    const html = renderToStaticMarkup(<AppearanceTab editor={editor()} onEditName={() => {}} />)
     expect(html).toContain('Predefinições')
     expect(html).toContain('Estilo do nome')
+    expect(html).toContain('Mudar estilo')
+    expect(html).toContain('Ana')
+  })
+  it('Aparência sem nome mostra o @', () => {
+    const html = renderToStaticMarkup(
+      <AppearanceTab
+        editor={editor({ draft: draftFromProfile({ display_name: ' ' }) })}
+        onEditName={() => {}}
+      />
+    )
+    expect(html).toContain('ana')
   })
   it('Identidade sem avatar mostra a inicial; sem nome, a do @', () => {
     const html = renderToStaticMarkup(
@@ -48,6 +58,10 @@ describe('abas do editor', () => {
     expect(html).toContain('>A</span>')
     expect(html).toContain('src="/b.png"')
     expect(html).toContain('Remover banner')
+    // Nome, pronomes e aniversário saíram daqui (cartão e Minha conta).
+    expect(html).not.toContain('Pronomes')
+    expect(html).not.toContain('Aniversário')
+    expect(html).not.toContain('salvam na hora')
   })
 })
 
@@ -59,11 +73,25 @@ describe('ProfilePreviewPanel', () => {
         draft={draftFromProfile({ display_name: 'Ana' })}
         avatarUrl={null}
         bannerUrl={null}
-        onEditAvatar={() => {}}
-        onEditBanner={() => {}}
+        onEdit={() => {}}
       />
     )
     expect(html).toContain('aria-expanded="true"')
     expect(html).toContain('Recolher')
+    expect(html).toContain('qualquer parte do cartão')
+    expect(html).not.toContain('role="alert"')
+  })
+  it('mostra o aviso de erro do nome/pronomes', () => {
+    const html = renderToStaticMarkup(
+      <ProfilePreviewPanel
+        user={{ id: 'u', username: 'ana', email: 'a@x', display_name: 'Ana' } as never}
+        draft={draftFromProfile({ display_name: 'Ana' })}
+        avatarUrl={null}
+        bannerUrl={null}
+        notice="corrija o nome"
+      />
+    )
+    expect(html).toContain('role="alert"')
+    expect(html).toContain('corrija o nome')
   })
 })

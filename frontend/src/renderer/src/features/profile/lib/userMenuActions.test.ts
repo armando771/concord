@@ -41,7 +41,6 @@ vi.mock('../../friends/store/friendActionsStore', () => ({
 
 import {
   openUserProfile,
-  copyUserId,
   sendDirectMessage,
   closeDirectMessage,
   startUserCall,
@@ -81,18 +80,6 @@ describe('userMenuActions', () => {
       side: 'right',
       anchor: { top: 200, left: 100, right: 100, bottom: 200 }
     })
-  })
-
-  it('copyUserId writes to clipboard and shows success toast', async () => {
-    Object.assign(navigator, {
-      clipboard: {
-        writeText: vi.fn().mockResolvedValue(undefined)
-      }
-    })
-    copyUserId('u1')
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('u1')
-    await Promise.resolve()
-    expect(showToast.success).toHaveBeenCalledWith('ID copiado.')
   })
 
   it('sendDirectMessage navigates to dm path', () => {

@@ -113,6 +113,15 @@ export interface GamesApi {
   onChange(cb: (game: DetectedGameInfo | null) => void): () => void
 }
 
+export interface MusicApi {
+  /** Liga/desliga a detecção da música tocando (Ouvindo). Windows e Linux. */
+  watch(enabled: boolean): void
+  /** Música atual; o renderer valida (sanitizeDetectedTrack). */
+  current(): Promise<unknown>
+  /** A música mudou (null = parou). Retorna unsubscribe. */
+  onChange(cb: (track: unknown) => void): () => void
+}
+
 export interface ActivitiesApi {
   /** Abre o jogo numa janela própria; false = link recusado pelo main. */
   open(activityId: string, url: string): Promise<boolean>
@@ -190,6 +199,7 @@ declare global {
       inviteLinks?: InviteLinksApi
       activities?: ActivitiesApi
       games?: GamesApi
+      music?: MusicApi
       keybinds?: KeybindsApi
       windowTheme?: WindowThemeApi
       server?: ServerApi

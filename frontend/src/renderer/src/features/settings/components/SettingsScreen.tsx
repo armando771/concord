@@ -3,6 +3,7 @@ import { useAuthStore } from '../../auth/store/authStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { logoutAndReset } from '../../profile/store/meActions'
 import {
+  escClosesSettings,
   SETTINGS_SECTIONS,
   accountName,
   currentSettingsSection,
@@ -10,6 +11,7 @@ import {
   settingsContentWidth,
   type SettingsSectionId
 } from '../lib/settingsNav'
+import { modalStack } from '../../../shared/lib/modalStack'
 import { IS_WEB } from '../../../shared/lib/config'
 import SettingsShell from '../../../shared/ui/SettingsShell'
 import SettingsNav from './SettingsNav'
@@ -62,8 +64,8 @@ function SettingsContent(): React.JSX.Element {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      // ESC dentro do recorte de imagem fecha só o recorte (ele para o evento).
-      if (e.key === 'Escape' && !e.defaultPrevented) close()
+      // ESC no recorte de imagem ou num modal por cima fecha só ele.
+      if (escClosesSettings(e, modalStack.hasOpen())) close()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

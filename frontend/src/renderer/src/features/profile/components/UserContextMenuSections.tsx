@@ -187,7 +187,6 @@ interface SelfMenuProps {
   menuRef: React.RefObject<HTMLDivElement | null>
   nicknameItem?: React.JSX.Element | false | null
   openProfile: () => void
-  copyId: () => void
   itemClass: string
 }
 
@@ -198,7 +197,6 @@ export function SelfContextMenu({
   menuRef,
   nicknameItem,
   openProfile,
-  copyId,
   itemClass
 }: SelfMenuProps): React.JSX.Element {
   return (
@@ -217,10 +215,6 @@ export function SelfContextMenu({
         Perfil
       </button>
       {nicknameItem}
-      <div className="my-1 h-px bg-fg/10" />
-      <button role="menuitem" onClick={copyId} className={itemClass}>
-        Copiar ID do usuário
-      </button>
     </div>
   )
 }
@@ -280,7 +274,6 @@ interface SelfUserMenuProps {
   close: () => void
   onEditNickname: () => void
   onOpenProfile: () => void
-  onCopyId: () => void
   itemClass: string
 }
 
@@ -292,7 +285,6 @@ export function SelfUserMenu({
   menuRef,
   onEditNickname,
   onOpenProfile,
-  onCopyId,
   itemClass
 }: SelfUserMenuProps): React.JSX.Element {
   const nicknameItem = canNick && (
@@ -308,7 +300,6 @@ export function SelfUserMenu({
       menuRef={menuRef}
       nicknameItem={nicknameItem}
       openProfile={onOpenProfile}
-      copyId={onCopyId}
       itemClass={itemClass}
     />
   )
@@ -377,8 +368,4 @@ export function StandardUserDMSection({
   )
 }
 
-export {
-  RoleAssignMenuItems,
-  UserVoiceMoveSection,
-  StandardUserServerSection
-} from './UserContextMenuServerSections'
+export { StandardUserServerSection } from './UserContextMenuServerSections'

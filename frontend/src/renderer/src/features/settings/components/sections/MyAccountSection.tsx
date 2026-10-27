@@ -1,124 +1,55 @@
 import { useState } from 'react'
 import { useAuthStore } from '../../../auth/store/authStore'
 import { useSettingsStore } from '../../store/settingsStore'
-import { maskEmail } from '../../../auth/lib/account'
 import { formatMemberSince } from '../../../profile/lib/profileCard'
-import { API_BASE_URL } from '../../../../shared/lib/config'
-import { profileMediaSrc } from '../../../profile/lib/profileMedia'
-import Avatar from '../../../../shared/ui/Avatar'
-import StyledName from '../../../profile/components/StyledName'
-
-const CARD_BG = 'var(--bg-floating)'
-
-function Row({
-  label,
-  value,
-  action
-}: {
-  label: string
-  value: React.ReactNode
-  action?: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <div className="flex items-center justify-between gap-4 py-3">
-      <div className="min-w-0">
-        <p className="text-ds-sm font-medium text-gray-400">{label}</p>
-        <div className="truncate text-ds-md text-strong">{value}</div>
-      </div>
-      {action}
-    </div>
-  )
-}
+import { formatBirthday } from '../../../profile/lib/birthday'
+import { useBirthday } from '../../../profile/hooks/useBirthday'
+import AccountHeader, { ACCOUNT_CARD_BG } from '../account/AccountHeader'
+import AccountModals, { type AccountModal } from '../account/AccountModals'
+import { AccountRow, MaskedEmail } from '../account/AccountRow'
 
 /**
  * Configurações → Minha conta, como no Discord: cartão com banner e avatar e
- * os dados da conta. Por enquanto só leitura (trocar @ e senha fica para
- * depois); o nome de exibição se edita em Perfis.
+ * os dados da conta. Cada linha que dá para mudar tem um "Editar" que abre o
+ * modal dela e salva na hora (o @ e o e-mail pedem a senha atual).
  */
 function MyAccountSection(): React.JSX.Element | null {
   const user = useAuthStore((s) => s.user)
   const goTo = useSettingsStore((s) => s.goTo)
-  const [showEmail, setShowEmail] = useState(false)
+  const [modal, setModal] = useState<AccountModal | null>(null)
+  const birthday = useBirthday()
 
   if (!user) return null
 
-  const name = user.display_name || user.username
-  const bannerSrc = profileMediaSrc(user.banner_url, API_BASE_URL)
   const since = formatMemberSince(user.created_at)
-  const editButton = (
-    <button
-      type="button"
-      onClick={() => goTo('profiles')}
-      className="shrink-0 cursor-pointer rounded-md bg-fg/10 px-4 py-1.5 text-ds-sm font-medium text-strong transition-colors hover:bg-fg/15"
-    >
-      Editar
-    </button>
-  )
+  const edit = (target: AccountModal) => () => setModal(target)
 
   return (
     <div
       className="overflow-hidden rounded-xl border border-subtle"
-      style={{ background: CARD_BG }}
+      style={{ background: ACCOUNT_CARD_BG }}
     >
-      <div
-        className="h-[100px]"
-        style={
-          bannerSrc
-            ? undefined
-            : { background: user.banner_color || 'linear-gradient(135deg, #5865f2, #8b5cf6)' }
-        }
-      >
-        {bannerSrc && <img src={bannerSrc} alt="" className="h-full w-full object-cover" />}
-      </div>
+      <AccountHeader user={user} onEditProfile={() => goTo('profiles')} />
 
       <div className="px-4 pb-4">
-        <div className="-mt-10 flex items-end justify-between gap-4">
-          <div className="flex min-w-0 items-end gap-3">
-            <div className="rounded-full p-1.5" style={{ background: CARD_BG }}>
-              <Avatar
-                userId={user.id}
-                name={name}
-                avatarUrl={user.avatar_url}
-                size={80}
-                animate="always"
-                status={user.status ?? 'online'}
-                cutoutColor={CARD_BG}
-              />
-            </div>
-            <p className="mb-2 truncate text-xl font-bold text-strong">
-              <StyledName name={name} userId={user.id} style={user.name_style} />
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => goTo('profiles')}
-            className="mb-2 shrink-0 cursor-pointer rounded-md bg-brand px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-brand-hover"
-          >
-            Editar perfil de usuário
-          </button>
-        </div>
-
         <div className="mt-4 divide-y divide-subtle rounded-lg bg-input px-4">
-          <Row label="Nome de exibição" value={name} action={editButton} />
-          <Row label="Nome de usuário" value={user.username} />
-          <Row
-            label="E-mail"
-            value={
-              <>
-                {showEmail ? user.email : maskEmail(user.email)}{' '}
-                <button
-                  type="button"
-                  onClick={() => setShowEmail((v) => !v)}
-                  className="cursor-pointer text-link hover:underline"
-                >
-                  {showEmail ? 'Ocultar' : 'Mostrar'}
-                </button>
-              </>
-            }
+          <AccountRow
+            label="Nome de exibição"
+            value={user.display_name || user.username}
+            onEdit={edit('name')}
           />
-          {since && <Row label="Membro desde" value={since} />}
+          <AccountRow label="Nome de usuário" value={user.username} onEdit={edit('username')} />
+          <AccountRow label="E-mail" value={<MaskedEmail email={user.email} />} onEdit={edit('email')} />
+          <AccountRow
+            label="Aniversário"
+            value={birthday.birthday ? formatBirthday(birthday.birthday) : 'Carregando…'}
+            onEdit={birthday.birthday ? edit('birthday') : undefined}
+          />
+          {since && <AccountRow label="Membro desde" value={since} />}
         </div>
       </div>
+
+      <AccountModals modal={modal} user={user} birthday={birthday} onClose={() => setModal(null)} />
     </div>
   )
 }

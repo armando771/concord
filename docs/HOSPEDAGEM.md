@@ -867,6 +867,58 @@ DELETE FROM user_badges WHERE category = 'criador' AND user_id IN (SELECT id FRO
 
 Na VPS: `psql "$DATABASE_URL" -c "..."` com o SQL acima.
 
+## Badge Top 10 do Nível 100
+
+O badge mítico **Top 10 do Nível 100** é automático: os 10 primeiros a chegar
+no nível 100 ganham, na ordem de chegada, gravada em `badge_top10`
+(migration 000069). A vaga é dada quando os badges da pessoa são avaliados
+(a cada minuto em call, ao abrir o perfil ou a cada 5 minutos online), com
+uma trava por transação: dois chegando juntos entram um depois do outro, e a
+tabela não aceita mais de 10. Quem já estava no nível 100 no deploy entrou
+pela data do tier Imortal do badge Nível (empate: mais XP, depois conta mais
+antiga). Conta apagada não devolve a vaga.
+
+Conferir a fila:
+```sql
+SELECT t.posicao, u.username, t.reached_at FROM badge_top10 t LEFT JOIN users u ON u.id = t.user_id ORDER BY t.posicao;
+```
+
+## Badge Caçador de bugs
+
+O badge **Caçador de bugs** é concedido à mão pelo time, na tabela
+`bug_hunters` (migration 000068), que guarda quantos bugs cada pessoa
+reportou. Os tiers vão por quantidade: Olho Vivo (1), Detetive (3),
+Exterminador (10) e Lenda do QA (25). Sem linha (ou com 0 bugs) o badge nem
+aparece. Ele chega no próximo carregamento dos badges da pessoa (abrir o
+perfil ou até 5 minutos online), com o aviso de badge novo.
+
+Conceder ou somar bugs (troque o nome e a quantidade; a comparação ignora
+maiúsculas; quem ainda não tinha entra com essa quantidade, quem já tinha
+soma):
+```sql
+INSERT INTO bug_hunters (user_id, bugs)
+SELECT id, 1 FROM users WHERE lower(username) = lower('fulano')
+ON CONFLICT (user_id) DO UPDATE SET bugs = bug_hunters.bugs + EXCLUDED.bugs, updated_at = NOW();
+```
+
+Conferir quem tem:
+```sql
+SELECT u.username, h.bugs, h.updated_at FROM bug_hunters h JOIN users u ON u.id = h.user_id ORDER BY h.bugs DESC;
+```
+
+Corrigir para um número exato (tier já conquistado não se perde):
+```sql
+UPDATE bug_hunters SET bugs = 5, updated_at = NOW() WHERE user_id = (SELECT id FROM users WHERE lower(username) = lower('fulano'));
+```
+
+Tirar (o badge some na hora; a segunda linha apaga também as datas dos tiers):
+```sql
+DELETE FROM bug_hunters WHERE user_id IN (SELECT id FROM users WHERE lower(username) IN ('fulano'));
+DELETE FROM user_badges WHERE category = 'bugs' AND user_id IN (SELECT id FROM users WHERE lower(username) IN ('fulano'));
+```
+
+Na VPS: `psql "$DATABASE_URL" -c "..."` com o SQL acima.
+
 ## Bot de música (Maestro)
 
 O Maestro toca música do YouTube nas chamadas de voz (`/play`, `/skip`...). Ele

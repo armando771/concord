@@ -37,6 +37,7 @@ import { serverArgs } from '../shared/serverConnection'
 import { setupOverlay } from './overlay/overlay'
 import { setupGlobalKeybinds } from './overlay/globalKeybinds'
 import { setupGames } from './activity/games'
+import { setupMusic } from './activity/music'
 import { setupAppMetrics } from './app/appMetrics'
 import { setupPerfLog } from './perf/setupPerfLog'
 import { handleInviteArgs, handleInviteUrl, setupInviteProtocol } from './app/inviteProtocol'
@@ -333,6 +334,7 @@ app.whenReady().then(() => {
   setupGlobalKeybinds(() => mainWindow)
   setupActivities(() => mainWindow)
   setupGames(() => mainWindow)
+  setupMusic(() => mainWindow)
   setupAppMetrics(() => mainWindow)
 
   // Default open or close DevTools by F12 in development

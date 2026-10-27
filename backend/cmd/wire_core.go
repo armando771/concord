@@ -55,7 +55,8 @@ func (a *app) wireCore() {
 	a.moderationService = server.ModerationService(serverRepository, a.permissionService, a.hub)
 	a.nicknameService = server.NicknameService(serverRepository, a.permissionService, a.hub)
 
-	a.friendshipService = friendship.FriendshipService(friendship.FriendshipRepository(a.db), a.userService, a.hub)
+	a.friendAccepted = friendship.WithAcceptHook(a.hub)
+	a.friendshipService = friendship.FriendshipService(friendship.FriendshipRepository(a.db), a.userService, a.friendAccepted)
 	friendshipHandler := friendship.FriendshipHandler(a.friendshipService)
 
 	a.channelRepository = channel.ChannelRepository(a.db)

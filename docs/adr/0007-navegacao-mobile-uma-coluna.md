@@ -1,4 +1,4 @@
-# 0006. Navegar no celular uma coluna por vez, com o painel decidido pela rota
+# 0007. Navegar no celular uma coluna por vez, com o painel decidido pela rota
 
 - Status: aceito
 - Data: 2026-10-27

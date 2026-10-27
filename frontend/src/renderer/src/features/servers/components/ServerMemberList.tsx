@@ -17,6 +17,7 @@ import { roleColorCss } from '../lib/permissions'
 import { serverDisplayName } from '../lib/serverNames'
 import { ActivityLine } from '../../activity/components/ActivityLine'
 import { useActivity, useInVoice } from '../../activity/store/presenceActivityStore'
+import { useListening } from '../../activity/store/listeningStore'
 import StyledName from '../../profile/components/StyledName'
 import type { NameStyle } from '../../profile/lib/nameStyle'
 import type { Server } from '../api/servers'
@@ -53,8 +54,10 @@ export function MemberRow({
 }: MemberRowProps): React.JSX.Element {
   const meId = useAuthStore((s) => s.user?.id)
   const status = usePresenceStatus(userId)
-  // Só troca o @handle quando há jogo (ou "Em voz"): sem atividade, igual a antes.
-  const hasActivity = useActivity(userId) !== null
+  // Só troca o @handle quando há jogo, música (ou "Em voz"): sem atividade, igual a antes.
+  const playing = useActivity(userId) !== null
+  const listening = useListening(userId) !== null
+  const hasActivity = playing || listening
   const inVoice = useInVoice(userId)
   const activityShown = hasActivity || inVoice
   const look = useUserLook(userId, { name: displayName, avatarUrl })

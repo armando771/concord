@@ -4,23 +4,32 @@ import ProfileCardFrame from '../../../profile/components/ProfileCardFrame'
 import { linkError, normalizeLink } from '../../../profile/lib/profileLinks'
 import { profileThemeLook, resolveProfileTheme } from '../../../profile/lib/profileTheme'
 import type { ProfileDraft } from '../../../profile/lib/profileValidation'
+import type { CardSpot } from '../../../profile/lib/cardSpots'
 import { DEFAULT_BANNER } from './ProfileMediaFields'
 
-/** O cartão de perfil como os outros vão ver, com o rascunho por cima do salvo. */
+/** O que a prévia precisa além do rascunho: a conta e as imagens já resolvidas. */
+export interface PreviewBase {
+  user: User
+  avatarUrl: string | null
+  bannerUrl: string | null
+}
+
+/**
+ * O cartão de perfil como os outros vão ver (o mesmo ProfileCardBody), com o
+ * rascunho por cima do salvo. Com `onEdit`, cada parte abre o editor dela.
+ */
 export default function ProfilePreview({
   user,
   draft,
   avatarUrl,
   bannerUrl,
-  onEditAvatar,
-  onEditBanner
+  onEdit
 }: {
   user: User
   draft: ProfileDraft
   avatarUrl: string | null
   bannerUrl: string | null
-  onEditAvatar: () => void
-  onEditBanner: () => void
+  onEdit?: (spot: CardSpot) => void
 }): React.JSX.Element {
   const theme = resolveProfileTheme(draft.profile_theme)
   const look = profileThemeLook(theme)
@@ -34,8 +43,7 @@ export default function ProfilePreview({
         preview
         isMe
         surface={look.surface}
-        onEditAvatar={onEditAvatar}
-        onEditBanner={onEditBanner}
+        onEdit={onEdit}
         profile={{
           display_name: draft.display_name.trim() || user.username,
           name_style: draft.name_style,
