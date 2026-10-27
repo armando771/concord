@@ -64,7 +64,6 @@ import type { PinnedMessage } from '../api/messages'
 import { useActivityStore } from '../../activity/store/activityStore'
 import { useTypingStore } from './typingStore'
 import { usePresenceActivityStore } from '../../activity/store/presenceActivityStore'
-import { sanitizeActivity } from '../../activity/lib/presenceActivity'
 import { showToast } from '../../../shared/store/toastStore'
 import { useConnectionStore } from '../../../shared/store/connectionStore'
 import {
@@ -1308,14 +1307,6 @@ loadOlderUntil: async (room, messageId, maxPages = JUMP_MAX_PAGES) => {
       if (serverId && userId) {
         useServerStore.getState().removeMember(serverId, userId)
       }
-      return
-    }
-
-    // Jogo em andamento de alguém (null = parou).
-    if (event.type === 'presence:activity') {
-      usePresenceActivityStore
-        .getState()
-        .setActivity(payload.user_id as string, sanitizeActivity(payload.activity))
       return
     }
 
