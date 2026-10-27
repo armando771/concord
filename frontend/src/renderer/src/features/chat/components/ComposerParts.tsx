@@ -169,7 +169,13 @@ export function VoiceButton({
   onRecorded: (blob: Blob, durationMs: number) => Promise<void>
 }): React.JSX.Element | null {
   if (!show) return null
-  return <VoiceRecordButton key={room} disabled={disabled} onRecorded={onRecorded} />
+  // Segurar para gravar: sem o navegador roubar o gesto para rolar (touch-none)
+  // e com 36 px no celular.
+  return (
+    <span className="contents [&>button]:touch-none max-md:[&>button]:p-2">
+      <VoiceRecordButton key={room} disabled={disabled} onRecorded={onRecorded} />
+    </span>
+  )
 }
 
 /** Enviar: desligado enquanto envia ou sem nada para enviar. */

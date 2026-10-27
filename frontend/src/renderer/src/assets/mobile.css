@@ -104,3 +104,17 @@
     padding: 0.625rem;
   }
 }
+
+/*
+ * Resultados da busca no celular: cobrem o chat (o pai — a coluna da direita
+ * do servidor, a DM ou o grupo — é relative); fechar a busca volta ao chat.
+ */
+@media (max-width: 767px) {
+  aside[aria-label='Resultados da busca'] {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    width: 100%;
+    border-left-width: 0;
+  }
+}

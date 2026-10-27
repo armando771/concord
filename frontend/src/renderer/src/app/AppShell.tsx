@@ -1,4 +1,3 @@
-import { useRef } from 'react'
 import NotifySettingsModal from '../features/notifications/components/NotifySettingsModal'
 import { Outlet, useLocation } from 'react-router-dom'
 import ServerRail from '../features/servers/components/ServerRail'
@@ -31,11 +30,7 @@ import { useAuthStore } from '../features/auth/store/authStore'
 import { useSessionConnection } from '../features/auth/hooks/useSessionConnection'
 import { useUIStore } from '../shared/store/uiStore'
 import { useAppViewportHeight } from '../shared/hooks/useAppViewportHeight'
-import { useMobileNavSync } from '../features/navigation/hooks/useMobileNavSync'
-import { useMobileNavStore } from '../features/navigation/store/mobileNavStore'
-import { shellPanelClasses } from '../features/navigation/lib/mobileNav'
-import { useIsMobile } from '../features/navigation/hooks/useIsMobile'
-import { useSwipeToList } from '../features/navigation/hooks/useSwipeToList'
+import { useMobileShell } from '../features/navigation/hooks/useMobileShell'
 
 // Celular: a barra de canais/DMs (a <aside> depois da do trilho) ocupa o resto
 // da largura, sem a largura arrastável do desktop.
@@ -53,13 +48,9 @@ function AppShell(): React.JSX.Element {
   const hasToken = Boolean(useAuthStore((s) => s.accessToken))
 
   useSessionConnection(hasToken)
-  useMobileNavSync()
   useAppViewportHeight()
   // Celular: uma coluna por vez (a lista ou o conteúdo). Desktop: as duas.
-  const panel = useMobileNavStore((s) => s.panel)
-  const columns = shellPanelClasses(panel)
-  const contentRef = useRef<HTMLDivElement>(null)
-  useSwipeToList(contentRef, useIsMobile() && panel === 'content')
+  const { columns, contentRef } = useMobileShell()
 
   return (
     <div className="flex h-full">

@@ -20,3 +20,27 @@ export function isSwipeToList(s: {
   // Bem mais horizontal que vertical (não é rolagem).
   return Math.abs(s.dy) * 2 < s.dx
 }
+
+export interface SwipeTracker {
+  /** Dedo encostou: quantos dedos e se começou num lugar com gesto próprio. */
+  start: (p: { x: number; y: number; t: number; fingers: number; own: boolean }) => void
+  /** Dedo saiu (null se o navegador não disse onde). */
+  end: (p: { x: number; y: number; t: number; width: number } | null) => void
+}
+
+/** Junta o começo e o fim do toque e chama onSwipe quando foi o gesto. */
+export function createSwipeTracker(onSwipe: () => void): SwipeTracker {
+  let from: { x: number; y: number; t: number } | null = null
+  return {
+    start: (p) => {
+      from = p.fingers === 1 && !p.own ? { x: p.x, y: p.y, t: p.t } : null
+    },
+    end: (p) => {
+      const s = from
+      from = null
+      if (!s || !p) return
+      const swipe = { startX: s.x, width: p.width, dx: p.x - s.x, dy: p.y - s.y, ms: p.t - s.t }
+      if (isSwipeToList(swipe)) onSwipe()
+    }
+  }
+}

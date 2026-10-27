@@ -1,5 +1,5 @@
 import { useEffect, type RefObject } from 'react'
-import { isSwipeToList } from '../lib/swipe'
+import { createSwipeTracker } from '../lib/swipe'
 import { useMobileNavStore } from '../store/mobileNavStore'
 
 // Onde arrastar na horizontal já tem outro significado (rolar código, a
@@ -11,24 +11,18 @@ export function useSwipeToList(ref: RefObject<HTMLElement | null>, enabled: bool
   useEffect(() => {
     const el = ref.current
     if (!el || !enabled) return
-    let start: { x: number; y: number; t: number } | null = null
-    const onStart = (e: TouchEvent): void => {
-      const t = e.touches[0]
-      const own = (e.target as Element | null)?.closest?.(OWN_GESTURE)
-      start = e.touches.length === 1 && !own ? { x: t.clientX, y: t.clientY, t: e.timeStamp } : null
-    }
+    const tracker = createSwipeTracker(() => useMobileNavStore.getState().showNav())
+    const onStart = (e: TouchEvent): void =>
+      tracker.start({
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        t: e.timeStamp,
+        fingers: e.touches.length,
+        own: Boolean((e.target as Element | null)?.closest?.(OWN_GESTURE))
+      })
     const onEnd = (e: TouchEvent): void => {
       const t = e.changedTouches[0]
-      if (!start || !t) return
-      const swipe = isSwipeToList({
-        startX: start.x,
-        width: window.innerWidth,
-        dx: t.clientX - start.x,
-        dy: t.clientY - start.y,
-        ms: e.timeStamp - start.t
-      })
-      start = null
-      if (swipe) useMobileNavStore.getState().showNav()
+      tracker.end(t ? { x: t.clientX, y: t.clientY, t: e.timeStamp, width: window.innerWidth } : null)
     }
     el.addEventListener('touchstart', onStart, { passive: true })
     el.addEventListener('touchend', onEnd, { passive: true })
