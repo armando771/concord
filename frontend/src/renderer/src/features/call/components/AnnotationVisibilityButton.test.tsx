@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+// O CallAvatar lê quem fala do callStore (que puxa o áudio da call): ninguém fala aqui.
+vi.mock('../store/callStore', () => ({
+  useCallStore: (select: (s: { speakingIds: string[] }) => unknown) => select({ speakingIds: [] })
+}))
 vi.mock('../../chat/store/chatStore', () => ({
   useChatStore: { getState: vi.fn(() => ({ sendEvent: vi.fn() })) }
 }))

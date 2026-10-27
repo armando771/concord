@@ -17,12 +17,17 @@ export const SHARED = [
 const isGo = (f) => f.startsWith('backend/') && f.endsWith('.go')
 const isTs = (f) => f.startsWith('frontend/src/') && /\.(ts|tsx)$/.test(f)
 const isScript = (f) => f.startsWith('scripts/') && f.endsWith('.mjs')
+// O DSP em Rust e o .wasm gerado dele: o scripts/dsp-wasm.test.mjs confere que andam juntos.
+const isDsp = (f) => f.startsWith('native/concord-dsp/') || f.startsWith('frontend/src/renderer/src/features/call/lib/concordDsp.wasm')
+const DSP_CHECK = 'scripts/dsp-wasm.mjs'
 
 export function classify(files) {
+  const scripts = files.filter(isScript)
+  if (files.some(isDsp) && !scripts.includes(DSP_CHECK)) scripts.push(DSP_CHECK)
   return {
     go: files.filter(isGo),
     ts: files.filter(isTs),
-    scripts: files.filter(isScript),
+    scripts,
     shared: files.some((f) => SHARED.some((prefix) => f.startsWith(prefix)))
   }
 }

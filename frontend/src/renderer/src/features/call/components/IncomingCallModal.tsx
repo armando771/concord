@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useCallStore } from '../store/callStore'
 import { PhoneIcon, PhoneOffIcon } from '../../../shared/ui/icons'
 import Button from '../../../shared/ui/Button'
-import Avatar from '../../../shared/ui/Avatar'
+// Avatar de quem está na chamada: o GIF segue a regra da call (ver CallAvatar).
+import Avatar from './CallAvatar'
 import StyledName from '../../profile/components/StyledName'
 
 function useRingtone(ringing: boolean): void {

@@ -19,6 +19,7 @@ import { RnnoiseWorkletNode } from '@sapphi-red/web-noise-suppressor'
 import rnnoiseWorkletUrl from '@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url'
 // Inline (data URL): o app empacotado roda em file://, onde fetch não funciona.
 import rnnoiseWasmDataUrl from '@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?inline'
+import { decodeDataUrl } from './dataUrl'
 import voiceActivityWorkletUrl from './voiceActivityWorklet.ts?worker&url'
 import {
   rmsDb,
@@ -72,12 +73,6 @@ export interface SpeakingTap {
 }
 
 let wasmBinary: ArrayBuffer | null = null
-
-export function decodeDataUrl(dataUrl: string): ArrayBuffer {
-  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
-  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
-  return bytes.buffer
-}
 
 function rnnoiseWasm(): ArrayBuffer {
   wasmBinary ??= decodeDataUrl(rnnoiseWasmDataUrl)

@@ -14,15 +14,16 @@ function CallOverlay(): React.JSX.Element | null {
   const streams = useCallStore((s) => s.streams)
   const screenAudioStreams = useCallStore((s) => s.screenAudioStreams)
   const deafened = useCallStore((s) => s.deafened)
-  const musicGain = useMusicDucking()
+  // Vozes seguem o ensurdecer; o som das telas (jogo, vídeo…) não.
+  const entries = remoteAudioEntries({ streams, screenAudioStreams, deafened })
+  const musicGain = useMusicDucking(entries.some((e) => e.music))
   useForgetEndedLives()
 
   if (status === 'idle' || status === 'ringing') return null
 
-  // Vozes seguem o ensurdecer; o som das telas (jogo, vídeo…) não.
   return (
     <>
-      {remoteAudioEntries({ streams, screenAudioStreams, deafened }).map((e) => (
+      {entries.map((e) => (
         <RemoteAudio
           key={e.key}
           stream={e.stream}

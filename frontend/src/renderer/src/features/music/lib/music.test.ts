@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   canSwap,
   DUCK_GAIN,
+  duckSettled,
   duckTarget,
   formatDuration,
   isMaestroIdentity,
@@ -97,6 +98,19 @@ describe('ducking', () => {
     expect(stepGain(1, DUCK_GAIN, 75)).toBeCloseTo(1 - (1 - DUCK_GAIN) / 2)
     expect(stepGain(DUCK_GAIN, 1, 300)).toBeCloseTo(DUCK_GAIN + (1 - DUCK_GAIN) / 2)
     expect(stepGain(DUCK_GAIN, 1, 10_000)).toBe(1)
+  })
+  it('parado (nada a rampear nem segurando): o laço de quadros pode parar', () => {
+    const base = { meId: 'me', enabled: true, now: 10_000, speakingIds: [], lastOtherSpeechAt: 0 }
+    // Ninguém fala e o ganho já está em 1: parado (é o caso de quase todo o tempo).
+    expect(duckSettled(base, 1)).toBe(true)
+    // Voltando ao normal depois de alguém falar: ainda rampa.
+    expect(duckSettled(base, 0.5)).toBe(false)
+    // Alguém fala e o ganho já chegou lá: parado até a fala mudar.
+    expect(duckSettled({ ...base, speakingIds: ['ana'], lastOtherSpeechAt: 10_000 }, DUCK_GAIN)).toBe(true)
+    // Parou de falar agora: segura 600 ms e depois sobe sozinho, então não para.
+    expect(duckSettled({ ...base, lastOtherSpeechAt: 9_800 }, DUCK_GAIN)).toBe(false)
+    // Ducking desligado: 1 e pronto.
+    expect(duckSettled({ ...base, enabled: false, speakingIds: ['ana'] }, 1)).toBe(true)
   })
 })
 

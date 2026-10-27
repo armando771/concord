@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  overlayEditHint,
   acceleratorFromKey,
   normalizeOverlayShortcut,
   OVERLAY_SHORTCUT_DEFAULT,
@@ -127,5 +128,13 @@ describe('acceleratorFromKey', () => {
       kind: 'invalid'
     })
     expect(acceleratorFromKey(key('KeyA', { shiftKey: true }))).toMatchObject({ kind: 'invalid' })
+  })
+})
+
+describe('overlayEditHint', () => {
+  it('diz como mover, redimensionar e sair com o atalho configurado', () => {
+    expect(overlayEditHint('Ctrl+Shift+O')).toBe(
+      'Arraste para mover · canto para redimensionar · Ctrl+Shift+O ou Esc para sair'
+    )
   })
 })

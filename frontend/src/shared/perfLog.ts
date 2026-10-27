@@ -1,6 +1,7 @@
 /** Linhas do JSONL de performance e o evento que o renderer manda ao main (`--perf-log`). */
 
-export type WindowState = 'visible' | 'minimized' | 'tray'
+/** 'unfocused' = visível sem foco (atrás do jogo ou noutro monitor). */
+export type WindowState = 'visible' | 'unfocused' | 'minimized' | 'tray'
 
 export interface PerfContext {
   route: string

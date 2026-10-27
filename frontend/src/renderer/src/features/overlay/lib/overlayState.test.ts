@@ -336,3 +336,13 @@ describe('atalho no estado do overlay', () => {
     )
   })
 })
+
+describe('buildOverlaySnapshot: tema', () => {
+  it('leva as cores do tema (dentro e fora da call); sem tema, null', () => {
+    const theme = { floating: '#111214', brand: '#5865f2' }
+    expect(buildOverlaySnapshot(input({ theme })).theme).toEqual(theme)
+    expect(buildOverlaySnapshot(input({ theme, status: 'idle' })).theme).toEqual(theme)
+    expect(buildOverlaySnapshot(input({ theme }), 2).theme).toEqual(theme)
+    expect(buildOverlaySnapshot(input()).theme).toBeNull()
+  })
+})
