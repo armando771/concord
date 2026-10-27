@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { SearchIcon, XIcon } from '../../../shared/ui/icons'
-import { useIsMobile } from '../../navigation/hooks/useIsMobile'
+import { useMediaQuery } from '../../../shared/hooks/useMediaQuery'
 
 const ICON_BUTTON =
   'flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong focus-visible:outline-2 focus-visible:outline-violet-400'
 
+/** Abaixo do lg a barra de busca (208–288 px) espreme o título do cabeçalho. */
+const COMPACT_QUERY = '(max-width: 1023px)'
+
 /**
- * No celular a barra de busca do cabeçalho vira uma lupa: tocar abre a busca
+ * No celular e no tablet a barra de busca do cabeçalho vira uma lupa: tocar abre a busca
  * por cima do cabeçalho, na largura toda (o ✕ ou Esc fecham). No desktop
- * mostra a barra como sempre.
+ * (lg em diante) mostra a barra como sempre.
  */
 function CollapsibleSearch({ children }: { children: React.ReactNode }): React.JSX.Element {
-  const mobile = useIsMobile()
+  const mobile = useMediaQuery(COMPACT_QUERY)
   const [open, setOpen] = useState(false)
   const boxRef = useRef<HTMLDivElement>(null)
 
