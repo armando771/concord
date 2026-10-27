@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import type { Message } from '../api/messages'
 import type { ServerSticker } from '../api/stickers'
 import type { GiphyItem } from '../api/giphy'
-import { PaperclipIcon } from '../../../shared/ui/icons'
+import { PaperclipIcon, PollIcon, SmileyIcon } from '../../../shared/ui/icons'
 import SlashSuggestions from '../../music/components/SlashSuggestions'
 import UnifiedMediaPickerPopover from './UnifiedMediaPickerPopover'
 import VoiceRecordButton from './VoiceRecordButton'
@@ -119,6 +119,36 @@ export function AttachButton({
       className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
     >
       <PaperclipIcon className="h-5 w-5" />
+    </button>
+  )
+}
+
+/** Abre o modal de criar enquete. */
+export function PollButton({ onClick }: { onClick: () => void }): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Criar enquete"
+      aria-label="Criar enquete"
+      className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
+    >
+      <PollIcon className="h-5 w-5" />
+    </button>
+  )
+}
+
+/** Abre e fecha o seletor de emojis, GIFs e figurinhas. */
+export function MediaPickerButton({ onClick }: { onClick: () => void }): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Emojis, GIFs e Figurinhas"
+      aria-label="Emojis, GIFs e Figurinhas"
+      className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+    >
+      <SmileyIcon className="h-5 w-5" />
     </button>
   )
 }

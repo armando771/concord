@@ -14,7 +14,6 @@ import { copyText } from '../../../shared/lib/clipboard'
 import CreatePollModal from './CreatePollModal'
 import type { ServerSticker } from '../api/stickers'
 import type { GiphyItem } from '../api/giphy'
-import { PollIcon, SmileyIcon } from '../../../shared/ui/icons'
 import { usePinStore } from '../store/pinStore'
 import {
   ACCEPT_ATTRIBUTE,
@@ -60,6 +59,8 @@ import {
   ChannelSlashSuggestions,
   ComposerGate,
   MediaPicker,
+  MediaPickerButton,
+  PollButton,
   ReplyBar,
   SubmitButton,
   VoiceButton
@@ -686,15 +687,7 @@ function ChatPane({
                 e.target.value = ''
               }}
             />
-            <button
-              type="button"
-              onClick={() => setPollOpen(true)}
-              title="Criar enquete"
-              aria-label="Criar enquete"
-              className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
-            >
-              <PollIcon className="h-5 w-5" />
-            </button>
+            <PollButton onClick={() => setPollOpen(true)} />
             <input
               ref={inputRef}
               value={draft}
@@ -711,15 +704,7 @@ function ChatPane({
               maxLength={2000}
               className="min-w-0 flex-1 bg-transparent text-ds-chat text-strong placeholder:text-gray-500 outline-none"
             />
-            <button
-              type="button"
-              onClick={() => setMediaPickerOpen((v) => !v)}
-              title="Emojis, GIFs e Figurinhas"
-              aria-label="Emojis, GIFs e Figurinhas"
-              className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              <SmileyIcon className="h-5 w-5" />
-            </button>
+            <MediaPickerButton onClick={() => setMediaPickerOpen((v) => !v)} />
             <VoiceButton
               show={permissions.canAttach}
               room={room}
