@@ -120,6 +120,7 @@ const STAT_TEXT: Partial<Record<BadgeUnit, (b: Badge, value: number) => string>>
   proposals: (_, value) => (value === 1 ? '1 proposta criada' : `${num(value)} propostas criadas`),
   songs: (_, value) => plural(value, 'música pedida', 'músicas pedidas'),
   sounds: (_, value) => plural(value, 'som tocado', 'sons tocados'),
+  stickers: (_, value) => plural(value, 'figurinha ou GIF enviado', 'figurinhas e GIFs enviados'),
   founder: (_, value) =>
     value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas',
   dev: () => DEV_TEXT,
@@ -156,7 +157,8 @@ const COUNT_NOUN: Partial<Record<BadgeUnit, [string, string]>> = {
   servers: ['servidor', 'servidores'],
   proposals: ['proposta', 'propostas'],
   songs: ['música', 'músicas'],
-  sounds: ['som', 'sons']
+  sounds: ['som', 'sons'],
+  stickers: ['figurinha ou GIF', 'figurinhas e GIFs']
 }
 
 /** O rótulo do limite das unidades que não são só uma contagem. */

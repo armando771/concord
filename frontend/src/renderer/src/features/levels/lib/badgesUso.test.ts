@@ -57,3 +57,22 @@ describe('Barulhento (sons da mesa de áudio)', () => {
     expect(publicStatText(b({ tier: 1 }))).toBe('25+ sons')
   })
 })
+
+describe('Figurinha (figurinhas e GIFs)', () => {
+  const b = (over: Partial<Badge>): Badge =>
+    badge({
+      category: 'figurinha',
+      name: 'Figurinha',
+      unit: 'stickers',
+      tiers: [{ tier: 1, name: 'Figurinha Repetida', threshold: 10, rarity: 'comum' }],
+      ...over
+    })
+
+  it('estatística, escada e quanto falta', () => {
+    expect(statText(b({ value: 1 }))).toBe('1 figurinha ou GIF enviado')
+    expect(statText(b({ value: 12 }))).toBe('12 figurinhas e GIFs enviados')
+    expect(formatThreshold('stickers', 10)).toBe('10 figurinhas e GIFs')
+    expect(remainingText(b({ value: 9, next_threshold: 10 }))).toBe('Falta 1 figurinha ou GIF')
+    expect(publicStatText(b({ tier: 1 }))).toBe('10+ figurinhas e GIFs')
+  })
+})

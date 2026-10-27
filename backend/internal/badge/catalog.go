@@ -30,6 +30,8 @@ const (
 	UnitSongs = "songs"
 	// UnitSounds: sons tocados na mesa de áudio (Barulhento).
 	UnitSounds = "sounds"
+	// UnitStickers: figurinhas e GIFs enviados (Figurinha).
+	UnitStickers = "stickers"
 )
 
 // FounderCutoff: quem criou a conta antes desta data (horário de Brasília)
@@ -272,6 +274,20 @@ var Catalog = []Category{
 			{"Fanfarrão", 250, RarityRare},
 			{"Trio Elétrico", 1000, RarityEpic},
 			{"Caixa de Som do Vizinho", 5000, RarityLegendary},
+		},
+	},
+	{
+		// Mensagens com figurinha ou GIF, contadas por trigger como as
+		// mensagens (mensagem apagada não desconta).
+		Key:         "figurinha",
+		Name:        "Figurinha",
+		Description: "Mande figurinhas e GIFs nos canais e nas DMs.",
+		Unit:        UnitStickers,
+		Tiers: []Tier{
+			{"Figurinha Repetida", 10, RarityCommon},
+			{"Colecionador", 100, RarityRare},
+			{"Álbum da Copa", 500, RarityEpic},
+			{"Rei do GIF", 2000, RarityLegendary},
 		},
 	},
 }

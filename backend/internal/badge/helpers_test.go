@@ -135,3 +135,16 @@ func (d *testDB) conversation(a, b string) string {
 	})
 	return id
 }
+
+// server cria um servidor de owner com um canal de texto (apagados no fim).
+func (d *testDB) server(owner string) (serverID, channelID string) {
+	d.t.Helper()
+	serverID, channelID = uuid.NewString(), uuid.NewString()
+	d.exec(`INSERT INTO servers (id, name, owner_id) VALUES ($1, 's', $2)`, serverID, owner)
+	d.exec(`INSERT INTO channels (id, server_id, name, created_by) VALUES ($1, $2, 'geral', $3)`, channelID, serverID, owner)
+	d.t.Cleanup(func() {
+		d.db.Exec(d.ctx, `DELETE FROM messages WHERE channel_id IN (SELECT id FROM channels WHERE server_id = $1)`, serverID)
+		d.db.Exec(d.ctx, `DELETE FROM servers WHERE id = $1`, serverID)
+	})
+	return serverID, channelID
+}

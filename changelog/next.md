@@ -13,6 +13,7 @@
 - Badges: novo badge "Fez o L" para quem fez o L no segundo turno. Um aviso pergunta se você fez; quem responde sim ganha o badge com uma animação, e quem responde não vê uma reação triste. Se você fechar o aviso sem responder, um botão "L" fica na barra lateral para responder depois. Só contas criadas antes de 1º de novembro de 2026 veem o aviso.
 - Badges: novo badge DJ para quem põe músicas na fila do Maestro (Pede Música, Dono da Playlist, DJ de Churrasco, DJ Residente e Lenda das Pick-ups, de 10 a 5.000 músicas). Os pedidos antigos contam pelos avisos do Maestro no chat.
 - Badges: novo badge Barulhento para quem toca sons da mesa de áudio numa call com mais gente ouvindo (Buzina, Fanfarrão, Trio Elétrico e Caixa de Som do Vizinho, de 25 a 5.000 sons). Conta a partir de agora.
+- Badges: novo badge Figurinha para quem manda figurinhas e GIFs (Figurinha Repetida, Colecionador, Álbum da Copa e Rei do GIF, de 10 a 2.000). As que você já mandou contam, com a data certa.
 
 ## Correções
 - Janela estreita: Configurações, Configurações do servidor, badges e cargos agora cabem em telas pequenas, com a navegação em cima do conteúdo, e as setas para ordenar cargos aparecem em telas de toque.
