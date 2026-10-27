@@ -7,16 +7,15 @@ import {
   Track,
   type RemoteParticipant
 } from 'livekit-client'
+import { RemoteSubscriptions, watchHiddenWindow } from './remoteSubscriptions'
 import {
   groupTracks,
   listScreenPublishers,
   StreamCache,
-  wantsSubscription,
   type MediaKind,
   type PublicationEntry,
   type TrackEntry
 } from './callMedia'
-import { pruneWatched } from './screenWatch'
 import { canPublishSource, type PublishSource } from './mediaPermissions'
 import { reportLatency } from './connectionStats'
 import {
@@ -89,8 +88,9 @@ export class CallMedia {
   private closing = false
   /** Tela/câmera pedidas antes disso são publicadas por quem chamou connect(). */
   private connected = false
-  /** De quem baixar a tela: transmissão dos outros começa pausada (ver setWatchedScreens). */
-  private watched = new Set<string>()
+  /** O que baixar de cada pessoa (tela só de quem assisto; vídeo pausado fora da tela). */
+  private subscriptions = new RemoteSubscriptions()
+  private stopWindowWatch: () => void
   private refreshQueued = false
   /** Microfone da chamada, guardado para publicar quando a permissão de falar chegar. */
   private micTrack: MediaStreamTrack | null = null
@@ -110,6 +110,9 @@ export class CallMedia {
         // A qualidade de tela é definida por publicação, não pela sala.
         videoCodec: 'vp8'
       }
+    })
+    this.stopWindowWatch = watchHiddenWindow((hidden) => {
+      if (this.subscriptions.setVideoPaused(hidden)) this.applySubscriptions()
     })
 
     // Rajadas de eventos viram uma emissão só, depois do handler do SDK. Numa
@@ -398,22 +401,17 @@ export class CallMedia {
 
   /** Passa a baixar a tela (e o som dela) só dessas pessoas. */
   setWatchedScreens(userIds: string[]): void {
-    this.watched = new Set(userIds)
+    this.subscriptions.setWatched(userIds)
     this.applySubscriptions()
   }
 
   private applySubscriptions(): void {
-    this.room.remoteParticipants.forEach((participant: RemoteParticipant) => {
-      participant.trackPublications.forEach((publication) => {
-        const want = wantsSubscription(publication.source, participant.identity, this.watched)
-        // Com autoSubscribe desligado, isDesired começa false.
-        if (publication.isDesired !== want) publication.setSubscribed(want)
-      })
-    })
+    this.subscriptions.apply(this.room.remoteParticipants.values())
   }
 
   disconnect(): void {
     this.closing = true
+    this.stopWindowWatch()
     this.cache.clear()
     void this.room.disconnect()
   }
@@ -454,7 +452,7 @@ export class CallMedia {
     const reconnecting = this.room.state !== ConnectionState.Connected
     // Parou de transmitir: sai dos assistidos — se voltar, começa pausada de novo.
     // Reconectando, a lista está vazia por engano: poda no Reconnected.
-    if (!reconnecting) this.watched = new Set(pruneWatched([...this.watched], availableScreens))
+    if (!reconnecting) this.subscriptions.prune(availableScreens)
 
     const media: RemoteMedia = {
       streams: toStreams('voice'),

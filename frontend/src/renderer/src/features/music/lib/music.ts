@@ -106,9 +106,24 @@ export function duckTarget(input: {
   now: number
 }): number {
   if (!input.enabled) return 1
-  const othersSpeaking = input.speakingIds.some((id) => id !== input.meId && !isMaestroIdentity(id))
-  if (othersSpeaking || input.now - input.lastOtherSpeechAt < DUCK_HOLD_MS) return DUCK_GAIN
+  if (othersSpeaking(input) || input.now - input.lastOtherSpeechAt < DUCK_HOLD_MS) return DUCK_GAIN
   return 1
+}
+
+type DuckInput = Parameters<typeof duckTarget>[0]
+
+const othersSpeaking = (input: Pick<DuckInput, 'speakingIds' | 'meId'>): boolean =>
+  input.speakingIds.some((id) => id !== input.meId && !isMaestroIdentity(id))
+
+/**
+ * O ganho já chegou ao alvo e o alvo não muda sozinho com o tempo (só muda quando
+ * a fala muda): o laço de quadros pode parar até a próxima mudança.
+ */
+export function duckSettled(input: DuckInput, gain: number): boolean {
+  const target = duckTarget(input)
+  if (gain !== target) return false
+  // Segurando depois da última fala: daqui a pouco o alvo volta a 1 sem aviso.
+  return target !== DUCK_GAIN || othersSpeaking(input)
 }
 
 export function stepGain(current: number, target: number, dtMs: number): number {
