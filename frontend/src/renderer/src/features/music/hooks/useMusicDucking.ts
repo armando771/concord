@@ -9,7 +9,7 @@ import { duckSettled, duckTarget, isMaestroIdentity, stepGain } from '../lib/mus
  * só roda enquanto há rampa ou espera: parado, ele obrigava o Chromium a montar um
  * quadro a cada 16 ms com o app aberto (mesmo sem música, minimizado ou sem call).
  */
-export function useMusicDucking(): number {
+export function useMusicDucking(active: boolean): number {
   const speakingIds = useCallStore((s) => s.speakingIds)
   const meId = useAuthStore((s) => s.user?.id)
   const enabled = useMusicStore((s) => s.duckingEnabled)
@@ -23,6 +23,12 @@ export function useMusicDucking(): number {
   }, [speakingIds, meId])
 
   useEffect(() => {
+    // Sem música tocando na call não há o que abaixar: nada de laço de quadros
+    // (com alguém falando ele rodaria quase o tempo todo).
+    if (!active) {
+      gainRef.current = 1
+      return
+    }
     let raf = 0
     let last = performance.now()
     const tick = (now: number): void => {
@@ -37,7 +43,7 @@ export function useMusicDucking(): number {
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [speakingIds, meId, enabled])
+  }, [speakingIds, meId, enabled, active])
 
-  return gain
+  return active ? gain : 1
 }
