@@ -37,9 +37,15 @@ export interface VoiceModWorkletMessage {
   vibratoSemitones: number
 }
 
+/** O que o worklet usa por bloco: este VoiceModDsp (JS) ou o VoiceModWasm. */
+export interface VoiceModProcessor {
+  configure: (message: VoiceModWorkletMessage) => void
+  process: (input: Float32Array | undefined, output: Float32Array) => void
+}
+
 const TWO_PI = 2 * Math.PI
 
-export class VoiceModDsp implements VoiceModWorkletMessage {
+export class VoiceModDsp implements VoiceModWorkletMessage, VoiceModProcessor {
   ratio = 1
   modHz = 0
   modDepth = 0

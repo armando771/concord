@@ -1,15 +1,20 @@
+import { readFileSync } from 'fs'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { VOICE_MOD_PROCESSOR, type VoiceModWorkletMessage } from './voiceModDsp'
 
 const RATE = 48_000
 const BLOCK = 128
+const dspModule = new WebAssembly.Module(
+  readFileSync(new URL('./concordDsp.wasm', import.meta.url))
+)
 
 interface Processor {
+  engine: 'wasm' | 'js'
   port: { onmessage: ((event: { data: VoiceModWorkletMessage }) => void) | null }
   process: (inputs: Float32Array[][], outputs: Float32Array[][]) => boolean
 }
 
-let Processor: new () => Processor
+let Processor: new (options?: { processorOptions?: unknown }) => Processor
 let registeredName = ''
 
 beforeAll(async () => {
@@ -20,7 +25,7 @@ beforeAll(async () => {
     }
   )
   vi.stubGlobal('sampleRate', RATE)
-  vi.stubGlobal('registerProcessor', (name: string, ctor: new () => Processor) => {
+  vi.stubGlobal('registerProcessor', (name: string, ctor: typeof Processor) => {
     registeredName = name
     Processor = ctor
   })
@@ -59,6 +64,21 @@ describe('voiceModWorklet', () => {
       data: { ratio: 2, modHz: 0, modDepth: 0, vibratoHz: 0, vibratoSemitones: 0 }
     })
     expect(frequency(run(processor, sine(1000)))).toBeCloseTo(2000, -2)
+  })
+
+  it('com o módulo WASM em processorOptions roda em Rust, com o mesmo efeito', () => {
+    const processor = new Processor({ processorOptions: { dspModule } })
+    expect(processor.engine).toBe('wasm')
+    processor.port.onmessage!({
+      data: { ratio: 2, modHz: 0, modDepth: 0, vibratoHz: 0, vibratoSemitones: 0 }
+    })
+    expect(frequency(run(processor, sine(1000)))).toBeCloseTo(2000, -2)
+  })
+
+  it('sem o módulo (ou se ele não serve) roda em JS', () => {
+    expect(new Processor().engine).toBe('js')
+    expect(new Processor({ processorOptions: { dspModule: null } }).engine).toBe('js')
+    expect(new Processor({ processorOptions: { dspModule: 'lixo' } }).engine).toBe('js')
   })
 
   it('sem entrada devolve silêncio e continua vivo', () => {

@@ -4,8 +4,8 @@
 //   node scripts/bench-dsp.mjs              # todos os cenários
 //   node scripts/bench-dsp.mjs voz          # só os que têm "voz" no nome
 //
-// Cada worklet roda em JS (sem módulo) e em WASM (com o concordDsp.wasm em
-// processorOptions.dspModule, como no app).
+// O voice mod roda em JS (sem módulo) e em WASM (com o concordDsp.wasm em
+// processorOptions.dspModule, como no app); os outros worklets só têm JS.
 //
 // Os worklets de verdade (frontend/.../call/lib/*Worklet.ts) são empacotados
 // com o esbuild do frontend e rodam com AudioWorkletProcessor/registerProcessor
@@ -143,7 +143,6 @@ async function voiceActivityScenarios() {
   const Processor = await loadWorklet('voiceActivityWorklet.ts')
   return [false, true].map((gate) => ({
     name: `fala/portão-${gate ? 'ligado' : 'desligado'}`,
-    wasm: true,
     make: (dspModule) => {
       const processor = new Processor({ processorOptions: { dspModule } })
       processor.port.onmessage({ data: { config: voiceActivityFor(60), gate } })

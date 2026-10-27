@@ -43,12 +43,14 @@ class FakeConvolver extends FakeNode {
 
 class FakeWorklet extends FakeNode {
   port = { postMessage: vi.fn() }
+  options: AudioWorkletNodeOptions | undefined
 }
 vi.stubGlobal(
   'AudioWorkletNode',
   class extends FakeWorklet {
-    constructor(ctx: FakeContext) {
+    constructor(ctx: FakeContext, _name: string, options?: AudioWorkletNodeOptions) {
       super('worklet')
+      this.options = options
       ctx.nodes.push(this)
     }
   }
@@ -124,6 +126,16 @@ describe('createVoiceMod', () => {
     const { ctx, mod } = await build()
     const output = mod.output as unknown as FakeNode
     for (const node of ctx.nodes) expect(reachesOutput(node, output), node.kind).toBe(true)
+  })
+
+  it('o worklet recebe o DSP em WASM já compilado (sem recompilar por microfone)', async () => {
+    const { ctx } = await build()
+    const { ctx: other } = await build()
+    const options = (c: FakeContext): AudioWorkletNodeOptions | undefined =>
+      c.nodes.find((n): n is FakeWorklet => n.kind === 'worklet')!.options
+    const module = options(ctx)?.processorOptions?.dspModule
+    expect(module).toBeInstanceOf(WebAssembly.Module)
+    expect(options(other)?.processorOptions?.dspModule).toBe(module)
   })
 
   it('o reverb usa um impulso próprio, sem a normalização do navegador', async () => {
