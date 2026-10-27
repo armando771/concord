@@ -32,7 +32,7 @@ export function AccountPanel({ logout = logoutRequest }: AccountPanelProps) {
 }
 
 const styles = StyleSheet.create({
-  panel: { gap: spacing.xl, padding: spacing.xl },
+  panel: { flex: 1, gap: spacing.xl, padding: spacing.xl, backgroundColor: colors.bgPrimary },
   name: { color: colors.textStrong, fontSize: fontSize.xl, fontWeight: '700' },
   username: { color: colors.textMuted, fontSize: fontSize.md }
 })

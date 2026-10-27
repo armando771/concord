@@ -33,4 +33,12 @@ export const forgotPassword = (email: string): Promise<void> =>
 
 export const logout = (): Promise<void> => request('/auth/logout', { method: 'POST' })
 
-export const getMe = (): Promise<User> => request('/users/me')
+let meInflight: Promise<User> | null = null
+
+/** /users/me; chamadas simultâneas (login + boot) compartilham a mesma requisição. */
+export function getMe(): Promise<User> {
+  meInflight ??= request<User>('/users/me').finally(() => {
+    meInflight = null
+  })
+  return meInflight
+}

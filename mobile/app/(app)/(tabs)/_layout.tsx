@@ -16,6 +16,8 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        // O padrão do React Navigation é o tema claro: sem isso as abas sem fundo próprio ficam brancas.
+        sceneStyle: { backgroundColor: colors.bgPrimary },
         tabBarActiveTintColor: colors.textStrong,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: { backgroundColor: colors.bgSecondary, borderTopColor: colors.borderSubtle, minHeight: MIN_TOUCH + 12 }
