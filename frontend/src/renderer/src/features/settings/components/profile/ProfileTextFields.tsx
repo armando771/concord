@@ -74,7 +74,7 @@ export function BioField({ value, error, onChange }: TextProps): React.JSX.Eleme
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        rows={4}
+        rows={3}
         className={`${inputClass} resize-none`}
         aria-label="Sobre mim"
       />

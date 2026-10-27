@@ -24,12 +24,12 @@ export function Field({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div className="border-b border-subtle pb-6">
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <p className="text-ds-sm font-medium text-gray-300">{label}</p>
+    <div className="min-w-0">
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <p className="text-xs font-medium text-gray-300">{label}</p>
         {counter && <Counter {...counter} />}
       </div>
-      {hint && <p className="-mt-1 mb-2 text-xs text-gray-400">{hint}</p>}
+      {hint && <p className="-mt-1 mb-1.5 text-xs text-gray-400">{hint}</p>}
       {children}
       {error && <p className="mt-1.5 text-xs text-danger">{error}</p>}
     </div>

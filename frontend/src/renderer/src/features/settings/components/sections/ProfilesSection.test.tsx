@@ -20,6 +20,7 @@ vi.mock('../../store/settingsStore', () => ({
 
 // AppSettings puxa o áudio da call (não existe no node); o aniversário tem teste próprio.
 vi.mock('../AppSettings', () => ({ BirthdaySettings: () => null }))
+vi.mock('../../../profile/components/EntranceSoundSettings', () => ({ default: () => null }))
 // O corpo do cartão puxa a atividade (e a call); aqui basta o que a prévia recebe.
 vi.mock('../../../profile/components/ProfileCardBody', () => ({
   default: ({ profile }: { profile: { display_name: string; links: string[] } }) => (
@@ -53,10 +54,15 @@ describe('ProfilesSection', () => {
     expect(render()).toBe('')
   })
 
-  it('mostra os campos, o tema e a prévia', () => {
+  it('abre em Identidade, com as abas e a prévia', () => {
     const html = render()
+    expect(html).toContain('role="tablist"')
+    expect(html).toContain('Identidade')
+    expect(html).toContain('Aparência')
+    expect(html).toContain('Prévia do cartão')
+    expect(html).toContain('data-preview="Ana"')
     expect(html).toContain('Nome de exibição')
-    expect(html).toContain('Tema do perfil')
+    expect(html).toContain('Estes dois salvam na hora')
     expect(html).toContain('Sobre mim')
     expect(html).toContain('Remover avatar')
     expect(html).toContain('Remover banner')
@@ -64,6 +70,12 @@ describe('ProfilesSection', () => {
     expect(html).toContain('https://github.com/ana')
     // Sem alterações, sem a barra de aviso.
     expect(html).not.toContain('alterações não salvas')
+    expect(html).not.toContain('tem campo com erro')
+  })
+
+  it('campo com erro marca a aba Identidade', () => {
+    state.auth.user = { ...state.auth.user, display_name: '' }
+    expect(render()).toContain('tem campo com erro')
   })
 
   it('sem avatar, banner nem cor: sem os botões de remover', () => {

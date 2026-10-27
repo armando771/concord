@@ -11,8 +11,8 @@ function withEffect(style: NameStyle, effectId: string): NameStyle {
 }
 
 const optionClass = (active: boolean): string =>
-  `cursor-pointer rounded-md border px-3 py-2 text-left text-ds-sm text-strong transition-colors ${
-    active ? 'border-brand bg-fg/10' : 'border-subtle bg-input hover:bg-fg/10'
+  `min-h-10 min-w-0 cursor-pointer truncate rounded-lg border px-2.5 py-1.5 text-left text-ds-sm text-strong transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+    active ? 'border-brand bg-brand/15' : 'border-subtle bg-fg/5 hover:bg-fg/10'
   }`
 
 export default function NameStyleEditor({
@@ -26,14 +26,16 @@ export default function NameStyleEditor({
 }): React.JSX.Element {
   const effect = NAME_EFFECTS.find((e) => e.id === value.effect) ?? NAME_EFFECTS[0]
   return (
-    <div className="space-y-4">
-      <div className="truncate rounded-md bg-input px-4 py-3 text-lg text-strong">
+    <div className="space-y-3">
+      <div className="truncate rounded-lg bg-input px-3 py-2 text-lg text-strong">
         <StyledName name={previewName || 'Seu nome'} style={value} />
       </div>
 
       <div>
-        <p className="mb-2 text-xs text-gray-400">Fonte</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+          Fonte
+        </p>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-1.5">
           {NAME_FONTS.map((f) => (
             <button
               key={f.id}
@@ -49,8 +51,10 @@ export default function NameStyleEditor({
       </div>
 
       <div>
-        <p className="mb-2 text-xs text-gray-400">Efeito</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+          Efeito
+        </p>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-1.5">
           {NAME_EFFECTS.map((e) => (
             <button
               key={e.id}
@@ -80,7 +84,7 @@ export default function NameStyleEditor({
                 colors[i] = ev.target.value
                 onChange({ ...value, colors })
               }}
-              className="h-8 w-12 cursor-pointer rounded border border-subtle bg-transparent"
+              className="h-10 w-12 cursor-pointer rounded-lg border border-subtle bg-transparent"
             />
           ))}
         </div>

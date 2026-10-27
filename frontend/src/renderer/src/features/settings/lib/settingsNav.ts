@@ -52,7 +52,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       'twitch',
       'aniversário',
       'som de entrada',
-      'entrada na call'
+      'entrada na call',
+      'personalizar',
+      'efeito',
+      'borda',
+      'fundo do perfil',
+      'textura',
+      'estilo do nome'
     ]
   },
   {
@@ -157,4 +163,12 @@ export function currentSettingsSection(
   id: SettingsSectionId
 ): SettingsSection {
   return sections.find((s) => s.id === id) ?? sections[0]
+}
+
+/**
+ * Largura da coluna do conteúdo: Perfis tem editor + prévia lado a lado e
+ * precisa de mais espaço; o resto fica na coluna estreita de leitura.
+ */
+export function settingsContentWidth(id: SettingsSectionId): string {
+  return id === 'profiles' ? 'max-w-[1080px]' : 'max-w-[740px]'
 }

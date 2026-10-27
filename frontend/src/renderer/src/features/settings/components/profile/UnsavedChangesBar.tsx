@@ -20,20 +20,27 @@ export default function UnsavedChangesBar({
   onSave: () => void
 }): React.JSX.Element {
   return (
-    <div className="sticky bottom-6 z-10 mt-8">
+    <div className="sticky bottom-4 z-10 mt-6">
       <div
         role="status"
-        className={`flex items-center justify-between gap-4 rounded-lg px-4 py-2.5 shadow-2xl transition-colors ${
+        className={`flex flex-col gap-2 rounded-xl px-4 py-2.5 shadow-2xl transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-4 ${
           shaking ? 'unsaved-shake bg-danger-strong' : 'bg-floating border border-subtle'
         }`}
       >
-        <p className="text-sm font-medium text-strong">Cuidado — você tem alterações não salvas!</p>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-strong">
+            Cuidado — você tem alterações não salvas!
+          </p>
+          {invalid && (
+            <p className="text-xs text-gray-300">Corrija os campos em vermelho para salvar.</p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center justify-end gap-2">
           <button
             type="button"
             onClick={onReset}
             disabled={saving}
-            className="cursor-pointer text-sm text-strong hover:underline disabled:opacity-50"
+            className="min-h-10 cursor-pointer rounded-lg px-3 text-sm text-strong hover:underline disabled:opacity-50"
           >
             Redefinir
           </button>
@@ -42,7 +49,7 @@ export default function UnsavedChangesBar({
             onClick={onSave}
             disabled={saving || invalid}
             title={invalid ? 'Corrija os campos em vermelho' : undefined}
-            className="cursor-pointer rounded-md bg-success-strong px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-success-strong-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-10 cursor-pointer rounded-lg bg-success-strong px-4 text-ds-sm font-medium text-white transition-colors hover:bg-success-strong-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saveLabel(saving, progress)}
           </button>
