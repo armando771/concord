@@ -107,34 +107,25 @@ const TIME_SUFFIX: Record<string, string> = {
   maratona: 'seguidas numa call'
 }
 
+/** O texto da estatística de cada unidade; unidade sem entrada mostra o número. */
+const STAT_TEXT: Partial<Record<BadgeUnit, (b: Badge, value: number) => string>> = {
+  seconds: (b, value) => `${hoursText(value)} ${TIME_SUFFIX[b.category] ?? 'em call'}`,
+  months: (_, value) => `${monthsText(value)} de conta`,
+  messages: (_, value) => (value === 1 ? '1 mensagem enviada' : `${num(value)} mensagens enviadas`),
+  reactions: (_, value) => plural(value, 'reação', 'reações'),
+  level: (_, value) => `Nível ${num(value)}`,
+  people: (_, value) => `Call com até ${plural(value, 'pessoa', 'pessoas')}`,
+  servers: (_, value) => `Dono de ${plural(value, 'servidor', 'servidores')}`,
+  proposals: (_, value) => (value === 1 ? '1 proposta criada' : `${num(value)} propostas criadas`),
+  founder: (_, value) =>
+    value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas',
+  dev: () => DEV_TEXT
+}
+
 /** A estatística da linha "798 horas em call • Desbloqueado em … • RARO". */
 export function statText(b: Badge): string {
   const value = b.value ?? 0
-  switch (b.unit) {
-    case 'seconds': {
-      const suffix = TIME_SUFFIX[b.category] ?? 'em call'
-      return `${hoursText(value)} ${suffix}`
-    }
-    case 'months':
-      return `${monthsText(value)} de conta`
-    case 'messages':
-      return value === 1 ? '1 mensagem enviada' : `${num(value)} mensagens enviadas`
-    case 'reactions':
-      return plural(value, 'reação', 'reações')
-    case 'level':
-      return `Nível ${num(value)}`
-    case 'people':
-      return `Call com até ${plural(value, 'pessoa', 'pessoas')}`
-    case 'servers':
-      return `Dono de ${plural(value, 'servidor', 'servidores')}`
-    case 'proposals':
-      return value === 1 ? '1 proposta criada' : `${num(value)} propostas criadas`
-    case 'founder':
-      return value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas'
-    case 'dev':
-      return DEV_TEXT
-  }
-  return num(value)
+  return STAT_TEXT[b.unit]?.(b, value) ?? num(value)
 }
 
 /**
