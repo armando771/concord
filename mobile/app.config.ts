@@ -13,14 +13,19 @@ const config: ExpoConfig = {
   android: {
     package: 'com.salinha.app',
     adaptiveIcon: {
-      backgroundColor: '#1e1f22',
+      backgroundColor: '#3a17a8',
       foregroundImage: './assets/android-icon-foreground.png',
       backgroundImage: './assets/android-icon-background.png',
       monochromeImage: './assets/android-icon-monochrome.png'
     },
     predictiveBackGestureEnabled: false
   },
-  plugins: ['expo-router', 'expo-secure-store', 'expo-status-bar'],
+  plugins: [
+    'expo-router',
+    'expo-secure-store',
+    'expo-status-bar',
+    ['expo-splash-screen', { image: './assets/splash-icon.png', backgroundColor: '#121214', imageWidth: 200 }]
+  ],
   experiments: { typedRoutes: true }
 }
 
