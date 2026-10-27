@@ -48,7 +48,7 @@ export default function CardBanner({
           title="Alterar banner"
           className="group/edit absolute inset-0 cursor-pointer outline-none"
         >
-          <span className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-black/60 text-white opacity-0 shadow-lg ring-white/70 transition-opacity group-hover/banner:opacity-100 group-focus-visible/edit:opacity-100 group-focus-visible/edit:ring-2">
+          <span className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-black/60 text-white shadow-lg ring-white/70 transition-opacity group-focus-visible/edit:ring-2 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/banner:opacity-100 [@media(hover:hover)]:group-focus-visible/edit:opacity-100">
             <PencilIcon className="h-4 w-4" />
           </span>
         </button>

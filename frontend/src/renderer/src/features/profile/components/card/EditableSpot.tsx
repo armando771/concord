@@ -5,8 +5,8 @@ import { SPOT_LABEL, type CardSpot } from '../../lib/cardSpots'
 /**
  * Parte do cartão que abre o editor dela (só na prévia de Configurações →
  * Perfis). O botão cobre a parte inteira e o conteúdo continua igual ao
- * que os outros veem. O lápis aparece no hover, no foco do teclado e
- * sempre nas telas de toque.
+ * que os outros veem. O lápis fica sempre à mostra no toque; com mouse,
+ * aparece no hover e no foco do teclado.
  */
 export default function EditableSpot({
   spot,
@@ -35,7 +35,7 @@ export default function EditableSpot({
       />
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute right-1 top-1/2 z-10 flex size-6 -translate-y-1/2 items-center justify-center rounded-md bg-black/60 text-white opacity-0 shadow transition-opacity group-hover/spot:opacity-100 group-has-[:focus-visible]/spot:opacity-100 pointer-coarse:opacity-100"
+        className="pointer-events-none absolute right-1 top-1/2 z-10 flex size-6 -translate-y-1/2 items-center justify-center rounded-md bg-black/60 text-white shadow transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/spot:opacity-100 [@media(hover:hover)]:group-has-[:focus-visible]/spot:opacity-100"
       >
         <PencilIcon className="size-3.5" />
       </span>
