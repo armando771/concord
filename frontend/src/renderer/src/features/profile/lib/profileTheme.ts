@@ -1,11 +1,21 @@
 import type { CSSProperties } from 'react'
 import { pickInk, type Ink } from './profileInk'
+import type { EffectParams } from './effects/types'
+import {
+  DEFAULT_EXTRAS,
+  effectParams,
+  extrasClasses,
+  extrasVars,
+  resolveExtras,
+  type ProfileThemeExtras
+} from './profileThemeExtras'
 
-// Tema do cartão de perfil: borda, fundo do corpo (cor ou degradê em pé, como
-// o tema de perfil do Nitro) e um efeito por cima. Os IDs são os do backend
-// (internal/profiletheme); profileTheme.test.ts confere as listas.
+// Tema do cartão de perfil: borda, fundo do corpo (cor ou degradê, como o
+// tema de perfil do Nitro), um efeito por cima e as opções finas
+// (profileThemeExtras.ts). Os IDs são os do backend (internal/profiletheme);
+// profileTheme.test.ts confere as listas.
 
-export interface ProfileTheme {
+export interface ProfileTheme extends ProfileThemeExtras {
   border: string
   border_colors: string[]
   background: string
@@ -18,7 +28,8 @@ export const DEFAULT_PROFILE_THEME: ProfileTheme = {
   border_colors: [],
   background: 'default',
   background_colors: [],
-  effect: 'none'
+  effect: 'none',
+  ...DEFAULT_EXTRAS
 }
 
 /**
@@ -41,12 +52,37 @@ export const PROFILE_BACKGROUNDS = [
   { id: 'gradient', label: 'Degradê', colors: 2 }
 ] as const
 
-export const PROFILE_EFFECTS = [
-  { id: 'none', label: 'Nenhum' },
-  { id: 'particles', label: 'Partículas' },
-  { id: 'sparkles', label: 'Brilhos' },
-  { id: 'snow', label: 'Neve' }
-] as const
+/**
+ * Efeitos: os três primeiros são CSS (profileParticles.ts), os outros canvas
+ * (lib/effects/). `color` é a cor de sempre do efeito; null = não tem cor
+ * para escolher (paleta própria).
+ */
+export const PROFILE_EFFECTS: readonly {
+  id: string
+  label: string
+  kind: 'none' | 'css' | 'canvas'
+  color: string | null
+}[] = [
+  { id: 'none', label: 'Nenhum', kind: 'none', color: null },
+  { id: 'particles', label: 'Partículas', kind: 'css', color: '#c4b5fd' },
+  { id: 'sparkles', label: 'Brilhos', kind: 'css', color: '#ffd84d' },
+  { id: 'snow', label: 'Neve', kind: 'css', color: '#ffffff' },
+  { id: 'fire', label: 'Fogo', kind: 'canvas', color: '#ff7a1a' },
+  { id: 'matrix', label: 'Matrix', kind: 'canvas', color: '#22ff88' },
+  { id: 'glitch', label: 'Glitch', kind: 'canvas', color: null },
+  { id: 'storm', label: 'Tempestade', kind: 'canvas', color: '#9ecbff' },
+  { id: 'galaxy', label: 'Galáxia', kind: 'canvas', color: '#a78bfa' },
+  { id: 'aurora', label: 'Aurora', kind: 'canvas', color: '#34d399' },
+  { id: 'hearts', label: 'Corações', kind: 'canvas', color: '#ff4d8d' },
+  { id: 'confetti', label: 'Confete', kind: 'canvas', color: null },
+  { id: 'synthwave', label: 'Synthwave', kind: 'canvas', color: '#ff2bd6' },
+  { id: 'rain', label: 'Chuva', kind: 'canvas', color: '#7cc4ff' }
+]
+
+/** Definição do efeito (desconhecido = "Nenhum"). */
+export function effectDef(id: string): (typeof PROFILE_EFFECTS)[number] {
+  return PROFILE_EFFECTS.find((e) => e.id === id) ?? PROFILE_EFFECTS[0]
+}
 
 const COLOR = /^#[0-9a-f]{6}$/i
 const BORDER_FALLBACK = ['#8b5cf6', '#ec4899']
@@ -78,7 +114,8 @@ export function resolveProfileTheme(raw?: Partial<ProfileTheme> | null): Profile
     border_colors: border && borderColors ? borderColors : [],
     background: background && backgroundColors ? background.id : 'default',
     background_colors: background && backgroundColors ? backgroundColors : [],
-    effect: effect?.id ?? 'none'
+    effect: effect?.id ?? 'none',
+    ...resolveExtras(raw)
   }
 }
 
@@ -102,36 +139,54 @@ export function withBackground(theme: ProfileTheme, id: string): ProfileTheme {
 }
 
 export interface ProfileThemeLook {
-  /** Classes do cartão (borda, texto escuro). */
+  /** Classes do cartão (borda, animação, textura, texto escuro). */
   className: string
   /** Variáveis que o CSS lê (assets/profileTheme.css). */
   style: CSSProperties
   /** Cor do fundo logo abaixo do banner: o anel do avatar e o recorte do status. */
   surface: string
   ink: Ink
+  /** O efeito por cima e com que parâmetros (ProfileCardFrame desenha). */
+  fx: { id: string; kind: 'none' | 'css' | 'canvas'; params: EffectParams }
+}
+
+/** Fundo do corpo: sempre uma imagem (no "background" em camadas a cor só vai na última). */
+function bodyBackground(theme: ProfileTheme, surface: string): string {
+  const bg = theme.background_colors
+  return theme.background === 'gradient'
+    ? `linear-gradient(${theme.background_angle}deg, ${bg[0]}, ${bg[1]})`
+    : `linear-gradient(${surface}, ${surface})`
+}
+
+function themeVars(theme: ProfileTheme, surface: string): Record<string, string> {
+  const [b1, b2] = theme.border_colors
+  const vars: Record<string, string> = { '--pt-bg': bodyBackground(theme, surface) }
+  if (b1) vars['--pt-b1'] = b1
+  if (b2) vars['--pt-b2'] = b2
+  vars['--pt-fx'] = b1 ?? theme.background_colors[1] ?? '#c4b5fd'
+  return { ...vars, ...extrasVars(theme) }
+}
+
+/** Sem fundo próprio o texto é o do tema do app; com fundo, o de mais contraste. */
+function inkClass(bg: string[], ink: Ink): string[] {
+  if (!bg.length) return []
+  return [ink === 'dark' ? 'pt-ink-dark' : 'pt-ink-light']
 }
 
 /** Como desenhar o cartão com o tema (já resolvido). */
 export function profileThemeLook(theme: ProfileTheme): ProfileThemeLook {
   const bg = theme.background_colors
   const surface = bg[0] ?? CARD_BG
-  // Sempre uma imagem: no "background" em camadas a cor só pode ir na última.
-  const body =
-    theme.background === 'gradient'
-      ? `linear-gradient(180deg, ${bg[0]}, ${bg[1]})`
-      : `linear-gradient(${surface}, ${surface})`
-  const [b1, b2] = theme.border_colors
-  const vars: Record<string, string> = { '--pt-bg': body }
-  if (b1) vars['--pt-b1'] = b1
-  if (b2) vars['--pt-b2'] = b2
-  vars['--pt-fx'] = b1 ?? bg[1] ?? '#c4b5fd'
-  // Sem fundo próprio o texto é o do tema do app; com fundo, o de mais contraste.
   const ink = bg.length ? pickInk(bg) : 'light'
-  const inkClass = bg.length ? (ink === 'dark' ? 'pt-ink-dark' : 'pt-ink-light') : null
-  const className = ['profile-frame', `pt-border-${theme.border}`, inkClass]
-    .filter(Boolean)
-    .join(' ')
-  return { className, style: vars as CSSProperties, surface, ink }
+  const className = [
+    'profile-frame',
+    `pt-border-${theme.border}`,
+    ...extrasClasses(theme, theme.border),
+    ...inkClass(bg, ink)
+  ].join(' ')
+  const def = effectDef(theme.effect)
+  const fx = { id: def.id, kind: def.kind, params: effectParams(theme, def.color ?? '#ffffff') }
+  return { className, style: themeVars(theme, surface) as CSSProperties, surface, ink, fx }
 }
 
 /** Mesmo tema (compara já resolvido). */

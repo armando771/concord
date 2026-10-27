@@ -45,6 +45,7 @@ const userColumns = `
 	profile_background,
 	profile_background_colors,
 	profile_effect,
+	profile_theme_extras,
 	friend_request_policy,
 	allow_server_dms,
 	active,
@@ -78,6 +79,7 @@ func scanUser(row pgx.Row) (*User, error) {
 		&user.ProfileTheme.Background,
 		&user.ProfileTheme.BackgroundColors,
 		&user.ProfileTheme.Effect,
+		&user.ProfileTheme.Extras,
 		&user.FriendRequestPolicy,
 		&user.AllowServerDMs,
 		&user.Active,
@@ -91,6 +93,7 @@ func scanUser(row pgx.Row) (*User, error) {
 	if user.Links == nil {
 		user.Links = []ProfileLink{}
 	}
+	user.ProfileTheme.Extras = user.ProfileTheme.Extras.Filled()
 	return user, nil
 }
 

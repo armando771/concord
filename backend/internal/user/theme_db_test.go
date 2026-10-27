@@ -41,21 +41,23 @@ func TestProfileThemeDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.ProfileTheme.Border != "none" || u.ProfileTheme.Background != "default" || u.ProfileTheme.Effect != "none" || u.ProfileTheme.BorderColors == nil {
+	// Conta sem extras salvos ('{}') já sai com o padrão de tudo.
+	if u.ProfileTheme.Border != "none" || u.ProfileTheme.Background != "default" || u.ProfileTheme.Effect != "none" || u.ProfileTheme.BorderColors == nil || u.ProfileTheme.Extras != profiletheme.DefaultExtras() {
 		t.Fatalf("padrão = %+v", u.ProfileTheme)
 	}
 
 	theme := profiletheme.Theme{
 		Border: "neon", BorderColors: []string{"#00ffaa"},
 		Background: "gradient", BackgroundColors: []string{"#1e1b4b", "#0f172a"},
-		Effect: "snow",
+		Effect: "fire",
+		Extras: profiletheme.Extras{EffectColor: "#ff8800", EffectDensity: 90, EffectSpeed: 20, BorderAnimation: "spin", BorderWidth: 4, BackgroundAngle: 45, Texture: "grain"},
 	}
 	in := ProfileInput{DisplayName: "Tema", Links: []ProfileLink{}, ProfileTheme: &theme}
 	u, err = repo.UpdateProfile(ctx, id, in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.ProfileTheme.Border != "neon" || u.ProfileTheme.BackgroundColors[1] != "#0f172a" || u.ProfileTheme.Effect != "snow" {
+	if u.ProfileTheme.Border != "neon" || u.ProfileTheme.BackgroundColors[1] != "#0f172a" || u.ProfileTheme.Effect != "fire" || u.ProfileTheme.Extras != theme.Extras {
 		t.Fatalf("gravado = %+v", u.ProfileTheme)
 	}
 
@@ -64,7 +66,7 @@ func TestProfileThemeDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.ProfileTheme.Border != "neon" || len(u.ProfileTheme.BorderColors) != 1 {
+	if u.ProfileTheme.Border != "neon" || len(u.ProfileTheme.BorderColors) != 1 || u.ProfileTheme.Texture != "grain" {
 		t.Fatalf("sem campo apagou o tema: %+v", u.ProfileTheme)
 	}
 
@@ -75,7 +77,7 @@ func TestProfileThemeDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.ProfileTheme.Border != "none" || u.ProfileTheme.BorderColors == nil || len(u.ProfileTheme.BackgroundColors) != 0 {
+	if u.ProfileTheme.Border != "none" || u.ProfileTheme.BorderColors == nil || len(u.ProfileTheme.BackgroundColors) != 0 || u.ProfileTheme.Extras != profiletheme.DefaultExtras() {
 		t.Fatalf("padrão de novo = %+v", u.ProfileTheme)
 	}
 }

@@ -23,6 +23,7 @@ func (r *Repository) UpdateProfile(ctx context.Context, id string, in ProfileInp
 			profile_background = COALESCE($13, profile_background),
 			profile_background_colors = COALESCE($14, profile_background_colors),
 			profile_effect = COALESCE($15, profile_effect),
+			profile_theme_extras = COALESCE($16, profile_theme_extras),
 			updated_at = NOW()
 		WHERE id = $1
 		RETURNING `+userColumns,
@@ -41,5 +42,6 @@ func (r *Repository) UpdateProfile(ctx context.Context, id string, in ProfileInp
 		themeField(in.ProfileTheme, func(t *profiletheme.Theme) string { return t.Background }),
 		themeColors(in.ProfileTheme, func(t *profiletheme.Theme) []string { return t.BackgroundColors }),
 		themeField(in.ProfileTheme, func(t *profiletheme.Theme) string { return t.Effect }),
+		themeExtras(in.ProfileTheme),
 	))
 }

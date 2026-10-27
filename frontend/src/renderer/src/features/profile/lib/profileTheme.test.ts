@@ -8,18 +8,22 @@ import {
   PROFILE_BORDERS,
   PROFILE_EFFECTS,
   profileThemeLook,
+  effectDef,
   resolveProfileTheme,
   withBackground,
   withBorder
 } from './profileTheme'
+import { DEFAULT_EXTRAS, PROFILE_BORDER_ANIMATIONS, PROFILE_TEXTURES } from './profileThemeExtras'
 
 // Lê as listas e as contagens de cor do Go: mudou só de um lado, quebra aqui.
-const goSrc = readFileSync(
-  fileURLToPath(
-    new URL('../../../../../../../backend/internal/profiletheme/profiletheme.go', import.meta.url)
-  ),
-  'utf8'
-)
+const goFile = (name: string): string =>
+  readFileSync(
+    fileURLToPath(
+      new URL(`../../../../../../../backend/internal/profiletheme/${name}`, import.meta.url)
+    ),
+    'utf8'
+  )
+const goSrc = goFile('profiletheme.go') + goFile('extras.go')
 function goList(name: string): string[] {
   const body = new RegExp(`var ${name} = \\[\\]string\\{([^}]*)\\}`).exec(goSrc)?.[1] ?? ''
   return Array.from(body.matchAll(/"([a-z0-9]+)"/g), (m) => m[1])
@@ -36,6 +40,8 @@ describe('paridade com o backend', () => {
     expect(PROFILE_BORDERS.map((b) => b.id)).toEqual(goList('Borders'))
     expect(PROFILE_BACKGROUNDS.map((b) => b.id)).toEqual(goList('Backgrounds'))
     expect(PROFILE_EFFECTS.map((e) => e.id)).toEqual(goList('Effects'))
+    expect(PROFILE_BORDER_ANIMATIONS.map((a) => a.id)).toEqual(goList('BorderAnimations'))
+    expect(PROFILE_TEXTURES.map((t) => t.id)).toEqual(goList('Textures'))
   })
   it('as contagens de cor são as mesmas', () => {
     expect(Object.fromEntries(PROFILE_BORDERS.map((b) => [b.id, b.colors]))).toEqual(
@@ -66,8 +72,43 @@ describe('resolveProfileTheme', () => {
       border_colors: ['#00ffaa'],
       background: 'gradient',
       background_colors: ['#1e1b4b', '#0f172a'],
-      effect: 'snow'
+      effect: 'snow',
+      ...DEFAULT_EXTRAS
     })
+  })
+  it('tema salvo antes das opções novas: extras no padrão e o mesmo visual', () => {
+    const old = {
+      border: 'neon',
+      border_colors: ['#ec4899'],
+      background: 'gradient',
+      background_colors: ['#fce7f3', '#f9a8d4'],
+      effect: 'particles'
+    }
+    const t = resolveProfileTheme(old)
+    expect(t).toEqual({ ...old, ...DEFAULT_EXTRAS })
+    const look = profileThemeLook(t)
+    expect(look.className).toBe('profile-frame pt-border-neon pt-ink-dark')
+    expect(look.style).toMatchObject({
+      '--pt-bg': 'linear-gradient(180deg, #fce7f3, #f9a8d4)',
+      '--pt-bw': '2px'
+    })
+    expect(look.style).not.toHaveProperty('--pt-fxc')
+  })
+  it('efeitos novos valem', () => {
+    for (const id of [
+      'fire',
+      'matrix',
+      'glitch',
+      'storm',
+      'galaxy',
+      'aurora',
+      'hearts',
+      'confetti',
+      'synthwave',
+      'rain'
+    ]) {
+      expect(resolveProfileTheme({ ...DEFAULT_PROFILE_THEME, effect: id }).effect).toBe(id)
+    }
   })
   it('cada parte inválida cai no padrão sozinha', () => {
     const t = resolveProfileTheme({
@@ -109,6 +150,50 @@ describe('withBorder / withBackground', () => {
     expect(withBorder(solid, 'rainbow').border_colors).toEqual([])
     expect(withBackground(DEFAULT_PROFILE_THEME, 'gradient').background_colors).toHaveLength(2)
     expect(withBackground(DEFAULT_PROFILE_THEME, 'nope')).toBe(DEFAULT_PROFILE_THEME)
+  })
+})
+
+describe('profileThemeLook com extras', () => {
+  it('ângulo, espessura, animação, textura e cor do efeito', () => {
+    const look = profileThemeLook({
+      ...DEFAULT_PROFILE_THEME,
+      border: 'gradient',
+      border_colors: ['#111111', '#222222'],
+      background: 'gradient',
+      background_colors: ['#000000', '#333333'],
+      effect: 'fire',
+      effect_color: '#00ff00',
+      effect_density: 100,
+      border_animation: 'spin',
+      border_width: 5,
+      background_angle: 45,
+      texture: 'dots'
+    })
+    expect(look.style).toMatchObject({
+      '--pt-bg': 'linear-gradient(45deg, #000000, #333333)',
+      '--pt-bw': '5px',
+      '--pt-fxc': '#00ff00'
+    })
+    expect(look.className).toContain('pt-anim-spin')
+    expect(look.className).toContain('pt-tex-dots')
+    expect(look.fx).toMatchObject({ id: 'fire', kind: 'canvas', params: { color: '#00ff00' } })
+    expect(look.fx.params.density).toBeGreaterThan(2)
+  })
+  it('sem borda não anima; efeito sem cor própria usa a padrão', () => {
+    const look = profileThemeLook({
+      ...DEFAULT_PROFILE_THEME,
+      border_animation: 'pulse',
+      effect: 'matrix'
+    })
+    expect(look.className).not.toContain('pt-anim')
+    expect(look.fx.params).toEqual({ density: 1, speed: 1, color: '#22ff88' })
+    expect(profileThemeLook({ ...DEFAULT_PROFILE_THEME, effect: 'confetti' }).fx.params.color).toBe(
+      '#ffffff'
+    )
+  })
+  it('effectDef: desconhecido vira Nenhum', () => {
+    expect(effectDef('nope').id).toBe('none')
+    expect(effectDef('glitch').color).toBeNull()
   })
 })
 
