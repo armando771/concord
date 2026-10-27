@@ -14,6 +14,7 @@ import {
   type LoginFailure,
   type LoginOutcome
 } from '../lib/loginFlow'
+import ConnectionDetails from '../../../shared/ui/ConnectionDetails'
 import { getMe } from '../../profile/api/users'
 import { useAuthStore } from '../store/authStore'
 import { useInviteLinkStore } from '../../servers/store/inviteLinkStore'
@@ -52,12 +53,14 @@ function LoginNotices({
   )
 }
 
+/** Erro do login; sem conexão, com os detalhes (versão, endereço, erro real). */
 function LoginError({ error }: { error: LoginFailure | null }): React.JSX.Element | null {
   if (!error) return null
   return (
-    <p className="rounded-lg border border-red-400/30 bg-red-500/15 px-3 py-2 text-sm text-red-300">
-      {error.message}
-    </p>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-red-400/30 bg-red-500/15 px-3 py-2 text-sm text-red-300">
+      <p className="min-w-0 flex-1">{error.message}</p>
+      {error.offline && <ConnectionDetails className="text-red-200" />}
+    </div>
   )
 }
 

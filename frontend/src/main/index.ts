@@ -23,6 +23,9 @@ import { checkScreenCastPortal } from './screen/screenPortal'
 import { portalMissingMessage, screenShareFlow } from '../shared/screenShareFlow'
 import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './window/background'
 import { setupUpdater } from './updates/updater'
+import { updateFeedFor } from './server/serverChoice'
+import { registerServerDiagnostics, startServerChoice } from './server/serverSetup'
+import { serverArgs } from '../shared/serverConnection'
 import { setupOverlay } from './overlay/overlay'
 import { setupGlobalKeybinds } from './overlay/globalKeybinds'
 import { setupGames } from './activity/games'
@@ -49,6 +52,8 @@ import {
 } from './screen/screenAudio'
 
 let mainWindow: BrowserWindow | null = null
+/** Endereço do servidor que respondeu ao abrir (undefined no dev: o do build). */
+let serverUrl: string | undefined
 
 // Picker de tela (Fase 3): o getDisplayMedia do renderer dispara este handler,
 // que pede ao renderer para abrir o modal de seleção e resolve com a fonte
@@ -215,7 +220,8 @@ function createWindow(): void {
       sandbox: false,
       // Sem isso o Chromium reduz timers/render da janela em segundo plano e a
       // live (captura de tela/WebRTC) trava para quem assiste.
-      backgroundThrottling: false
+      backgroundThrottling: false,
+      additionalArguments: serverArgs(serverUrl)
     }
   })
 
@@ -299,6 +305,9 @@ if (
 app.whenReady().then(() => {
   // Primeiro de tudo: o tempo de abertura medido começa daqui. Sem --perf-log não faz nada.
   setupPerfLog(() => mainWindow)
+  // Testa os endereços do servidor enquanto o resto inicia.
+  const serverChoice = startServerChoice(__CONCORD_SERVER_URLS__)
+  registerServerDiagnostics(serverChoice, __CONCORD_SERVER_URLS__)
   // Set app user model id for windows. Mantém o id do Concord (nome antigo):
   // é o que liga notificações, atalho de login e instalação ao mesmo app.
   electronApp.setAppUserModelId(APP_USER_MODEL_ID)
@@ -316,10 +325,6 @@ app.whenReady().then(() => {
   setupActivities(() => mainWindow)
   setupGames(() => mainWindow)
   setupAppMetrics(() => mainWindow)
-  setupUpdater(() => mainWindow, {
-    feedUrl: __CONCORD_UPDATE_URL__,
-    publicKeyPem: __CONCORD_UPDATE_PUBKEY__
-  })
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -328,7 +333,16 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  createWindow()
+  // A janela abre já com o endereço que responde (o principal ou um
+  // alternativo, se o principal estiver bloqueado na rede de quem usa).
+  void serverChoice.then((choice) => {
+    serverUrl = choice?.url
+    setupUpdater(() => mainWindow, {
+      feedUrl: updateFeedFor(__CONCORD_UPDATE_URL__, serverUrl),
+      publicKeyPem: __CONCORD_UPDATE_PUBKEY__
+    })
+    createWindow()
+  })
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

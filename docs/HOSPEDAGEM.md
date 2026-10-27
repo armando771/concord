@@ -329,7 +329,7 @@ O [`deploy/Caddyfile`](../deploy/Caddyfile) é a cópia versionada do
 | `:8080` | repasse antigo (apps que falam com o endereço do playit): igual ao de cima |
 | `salinha.bhrx.com.br` | página de download (`/opt/concord/site`) e `/updates/*` |
 | `concord.bhrx.com.br` | redireciona para `salinha.bhrx.com.br` |
-| `app-salinha.bhrx.com.br` | app no navegador (`/opt/concord/web`), `/rtc*`, `/api`, `/ws` |
+| `app-salinha.bhrx.com.br` | app no navegador (`/opt/concord/web`), `/rtc*`, `/api`, `/ws`, `/updates/*`; também o endereço alternativo do app desktop |
 
 Os dois `bhrx.com.br` estão atrás do proxy do Cloudflare (nuvem laranja) e
 funcionam assim, inclusive os WebSockets e o `/rtc` do app web.
@@ -781,6 +781,15 @@ Para ligar, em **Settings → Secrets and variables → Actions**:
   - `SITE_URL=https://<página de download>` (opcional; padrão `https://salinha.bhrx.com.br`);
   - `WEB_URL=https://app-salinha.bhrx.com.br` (opcional): confere o app web
     depois do deploy. Ligue só depois do DNS e do bloco do Caddy prontos.
+  - `SERVER_FALLBACK_URLS` (opcional; padrão o `WEB_URL` ou
+    `https://app-salinha.bhrx.com.br`): endereços alternativos do mesmo
+    servidor embutidos no app desktop. Ao abrir, o app testa o `PUBLIC_URL` e
+    os alternativos (`/healthz`) e usa o primeiro que responde; o resultado vai
+    para `%APPDATA%\Concord\logs\conexao.log` e para o "Detalhes" do aviso
+    de conexão. Existe porque o `*.sslip.io` não resolve (ou é bloqueado por
+    antivírus/filtro de DNS) na rede de alguns usuários. O alternativo precisa
+    servir `/api`, `/ws`, `/rtc*` e `/updates/*` (bloco `app-salinha` do
+    [`deploy/Caddyfile`](../deploy/Caddyfile)).
 
 Sem `DEPLOY_ENABLED`, o workflow só roda os testes.
 

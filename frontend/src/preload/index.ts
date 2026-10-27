@@ -6,6 +6,7 @@ import type { CallResume, PendingCallResume } from '../shared/callResume'
 import type { AppMetrics } from '../shared/appMetrics'
 import type { PerfEvent } from '../shared/perfLog'
 import { screenShareFlow, type PortalStatus } from '../shared/screenShareFlow'
+import { serverFromArgv, type ServerDiagnostics } from '../shared/serverConnection'
 
 interface ScreenSourceInfo {
   id: string
@@ -17,6 +18,13 @@ interface ScreenSourceInfo {
 
 // Custom APIs for renderer
 const api = {
+  server: {
+    /** Endereço escolhido pelo main ao abrir (ver main/server); null = o do build. */
+    url: serverFromArgv(process.argv),
+    diagnostics(retest = false): Promise<ServerDiagnostics | null> {
+      return ipcRenderer.invoke('server:diagnostics', retest)
+    }
+  },
   appMetrics: {
     sample(reset = false): Promise<AppMetrics | null> {
       return ipcRenderer.invoke('app-metrics:sample', reset)

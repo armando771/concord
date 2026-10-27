@@ -15,6 +15,9 @@
 #     PUBLIC_URL       ex.: https://1-2-3-4.sslip.io
 #     SITE_URL         (opcional) página de download a conferir (padrão: https://salinha.bhrx.com.br)
 #     WEB_URL          (opcional) app web a conferir, ex.: https://app-salinha.bhrx.com.br
+#     SERVER_FALLBACK_URLS (opcional) endereços alternativos do servidor embutidos
+#                      no app desktop (padrão: WEB_URL ou https://app-salinha.bhrx.com.br);
+#                      o app usa o primeiro que responde se o PUBLIC_URL falhar
 name: Deploy
 
 on:
@@ -42,6 +45,8 @@ jobs:
       VPS_HOST: ${{ vars.VPS_HOST }}
       SITE_URL: ${{ vars.SITE_URL || 'https://salinha.bhrx.com.br' }}
       WEB_URL: ${{ vars.WEB_URL }}
+      # Domínio próprio como reserva do sslip.io (bloqueado na rede de alguns usuários).
+      SERVER_FALLBACK_URLS: ${{ vars.SERVER_FALLBACK_URLS || vars.WEB_URL || 'https://app-salinha.bhrx.com.br' }}
     steps:
       - uses: actions/checkout@v7
 

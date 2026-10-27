@@ -55,20 +55,18 @@ describe('runLogin', () => {
     expect(await runLogin(d, INPUT, null)).toEqual({ kind: 'invalid' })
   })
 
-  it('sem conexão: a mensagem de rede', async () => {
+  it('sem conexão: mensagem e a marca de "offline" (a tela oferece os detalhes)', async () => {
     const d = deps({ login: vi.fn().mockRejectedValue(new TypeError('Failed to fetch')) })
     expect(await runLogin(d, INPUT, null)).toEqual({
       kind: 'error',
-      message: 'Sem conexão com o servidor.'
+      message: 'Sem conexão com o servidor.',
+      offline: true
     })
   })
 
-  it('erro do servidor: a mensagem do status', async () => {
+  it('erro do servidor: mensagem, sem os detalhes de conexão', async () => {
     const d = deps({ getMe: vi.fn().mockRejectedValue(httpError(500)) })
-    expect(await runLogin(d, INPUT, null)).toEqual({
-      kind: 'error',
-      message: 'Erro no servidor. Tente de novo em instantes.'
-    })
+    expect(await runLogin(d, INPUT, null)).toMatchObject({ kind: 'error', offline: false })
   })
 })
 

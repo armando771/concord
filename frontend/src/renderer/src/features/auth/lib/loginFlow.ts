@@ -3,7 +3,7 @@
 import type { AuthResponse, LoginInput } from '../api/auth'
 import type { User } from '../store/authStore'
 import { loginIdentifierError } from './loginIdentifier'
-import { loginErrorMessage, statusOf } from './loginError'
+import { isConnectionError, loginErrorMessage, statusOf } from './loginError'
 
 export interface LoginFieldErrors {
   identifier: string | null
@@ -23,6 +23,8 @@ export function hasFieldErrors(errors: LoginFieldErrors): boolean {
 
 export interface LoginFailure {
   message: string
+  /** Nem chegou ao servidor: a tela oferece os detalhes da conexão. */
+  offline: boolean
 }
 
 export type LoginOutcome = { kind: 'ok' } | { kind: 'invalid' } | ({ kind: 'error' } & LoginFailure)
@@ -49,7 +51,7 @@ export async function runLogin(
   } catch (err) {
     // Como no Discord: 401 não diz qual dos dois está errado.
     if (statusOf(err) === 401) return { kind: 'invalid' }
-    return { kind: 'error', message: loginErrorMessage(err) }
+    return { kind: 'error', message: loginErrorMessage(err), offline: isConnectionError(err) }
   }
 }
 
