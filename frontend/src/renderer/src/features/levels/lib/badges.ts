@@ -121,6 +121,7 @@ const STAT_TEXT: Partial<Record<BadgeUnit, (b: Badge, value: number) => string>>
   songs: (_, value) => plural(value, 'música pedida', 'músicas pedidas'),
   sounds: (_, value) => plural(value, 'som tocado', 'sons tocados'),
   stickers: (_, value) => plural(value, 'figurinha ou GIF enviado', 'figurinhas e GIFs enviados'),
+  days: (_, value) => `Recorde de ${plural(value, 'dia seguido', 'dias seguidos')}`,
   founder: (_, value) =>
     value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas',
   dev: () => DEV_TEXT,
@@ -167,6 +168,7 @@ const THRESHOLD_TEXT: Partial<Record<BadgeUnit, (threshold: number) => string>> 
   months: (t) => plural(t, 'mês', 'meses'),
   level: (t) => `Nível ${num(t)}`,
   people: (t) => plural(t, 'pessoa', 'pessoas'),
+  days: (t) => plural(t, 'dia seguido', 'dias seguidos'),
   // Corte do backend: contas criadas antes de 01/11/2026.
   founder: () => 'Até 31/10/26',
   dev: () => DEV_ONLY,
@@ -204,6 +206,7 @@ const REMAINING_TEXT: Partial<Record<BadgeUnit, (b: Badge, left: number, now: Da
   months: monthsRemaining,
   level: (_, left) => falta(left, 'nível', 'níveis'),
   people: (b) => `Uma call com ${plural(b.next_threshold ?? 0, 'pessoa', 'pessoas')}`,
+  days: (b) => `Uma sequência de ${plural(b.next_threshold ?? 0, 'dia', 'dias')}`,
   founder: () => 'Só para quem chegou nas primeiras semanas',
   dev: () => DEV_ONLY
 }

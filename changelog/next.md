@@ -14,6 +14,7 @@
 - Badges: novo badge DJ para quem põe músicas na fila do Maestro (Pede Música, Dono da Playlist, DJ de Churrasco, DJ Residente e Lenda das Pick-ups, de 10 a 5.000 músicas). Os pedidos antigos contam pelos avisos do Maestro no chat.
 - Badges: novo badge Barulhento para quem toca sons da mesa de áudio numa call com mais gente ouvindo (Buzina, Fanfarrão, Trio Elétrico e Caixa de Som do Vizinho, de 25 a 5.000 sons). Conta a partir de agora.
 - Badges: novo badge Figurinha para quem manda figurinhas e GIFs (Figurinha Repetida, Colecionador, Álbum da Copa e Rei do GIF, de 10 a 2.000). As que você já mandou contam, com a data certa.
+- Badges: novo badge Sequência para quem abre o Salinha todo dia, sem pular nenhum (Faísca, Foguinho, Fogueira, Incêndio e Chama Eterna, de 3 a 365 dias seguidos). Vale a sua maior sequência, então perder a sequência não tira o badge. Os dias em que você já mandou mensagem, reagiu, entrou em call ou votou contam.
 
 ## Correções
 - Janela estreita: Configurações, Configurações do servidor, badges e cargos agora cabem em telas pequenas, com a navegação em cima do conteúdo, e as setas para ordenar cargos aparecem em telas de toque.

@@ -46,7 +46,9 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			EXISTS (SELECT 1 FROM segundo_turno_respostas r WHERE r.user_id = u.id AND r.fez_o_l),
 			COALESCE(b.songs_queued, 0),
 			COALESCE(b.sounds_played, 0),
-			COALESCE(b.stickers_sent, 0)
+			COALESCE(b.stickers_sent, 0),
+			COALESCE(b.streak_days, 0),
+			COALESCE(b.longest_streak_days, 0)
 		FROM users u
 		LEFT JOIN user_levels l ON l.user_id = u.id
 		LEFT JOIN user_badge_stats b ON b.user_id = u.id
@@ -71,6 +73,8 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 		&s.SongsQueued,
 		&s.SoundsPlayed,
 		&s.StickersSent,
+		&s.StreakDays,
+		&s.LongestStreakDays,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Stats{}, ErrUserNotFound
@@ -153,6 +157,30 @@ func (r *Repository) AddCount(ctx context.Context, userID, category string, n in
 		RETURNING %[1]s
 		`, column), userID, n).Scan(&total)
 	return total, err
+}
+
+// RecordActiveDay grava que as pessoas usaram o app no dia (AAAA-MM-DD, em
+// Brasília): o dia seguinte ao último soma na sequência, um buraco recomeça
+// do 1, e o mesmo dia de novo não muda nada. Id que não existe é ignorado.
+func (r *Repository) RecordActiveDay(ctx context.Context, userIDs []string, day string) error {
+	_, err := r.db.Exec(
+		ctx,
+		`
+		INSERT INTO user_badge_stats (user_id, active_last_day, streak_days, longest_streak_days)
+		SELECT u.id, $2::date, 1, 1 FROM unnest($1::uuid[]) AS x(id) JOIN users u ON u.id = x.id
+		ON CONFLICT (user_id) DO UPDATE SET
+			streak_days = CASE WHEN user_badge_stats.active_last_day = EXCLUDED.active_last_day - 1
+				THEN user_badge_stats.streak_days + 1 ELSE 1 END,
+			longest_streak_days = GREATEST(user_badge_stats.longest_streak_days,
+				CASE WHEN user_badge_stats.active_last_day = EXCLUDED.active_last_day - 1
+				THEN user_badge_stats.streak_days + 1 ELSE 1 END),
+			active_last_day = EXCLUDED.active_last_day,
+			updated_at = NOW()
+		WHERE user_badge_stats.active_last_day IS NULL OR user_badge_stats.active_last_day < EXCLUDED.active_last_day
+		`,
+		userIDs, day,
+	)
+	return err
 }
 
 // AddCallStats soma o que o tracker juntou (tempos) e guarda o maior valor

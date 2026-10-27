@@ -32,6 +32,7 @@ type store interface {
 	SaveSessions(ctx context.Context, sessions map[string]int64) error
 	LoadSessions(ctx context.Context, maxAge time.Duration) (map[string]int64, error)
 	AddCount(ctx context.Context, userID, category string, n int64) (int64, error)
+	RecordActiveDay(ctx context.Context, userIDs []string, day string) error
 }
 
 // EventPublisher avisa a própria pessoa (o hub do websocket implementa).
@@ -82,6 +83,8 @@ type Service struct {
 	mu      sync.Mutex
 	tracker *tracker
 	ticks   int
+	// Quem já teve o dia de uso gravado hoje (Sequência); só o tick usa.
+	days activeDays
 }
 
 // BadgeService monta o serviço. loc é o fuso das horas de Coruja/Madrugador;
@@ -288,6 +291,9 @@ func (s *Service) tick(ctx context.Context, now time.Time) {
 	s.touchVoice(touched)
 	if sweep {
 		s.touchOnline(touched)
+	}
+	for _, userID := range s.recordActiveDays(ctx, now) {
+		touched[userID] = true
 	}
 	s.syncAll(ctx, touched)
 }

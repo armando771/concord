@@ -24,10 +24,25 @@ type fakeStore struct {
 	failAdd       bool
 	// Contadores por categoria (DJ, Barulhento).
 	counts map[string]map[string]int64
+	// Dias de uso gravados ("id@dia") e falha na gravação (Sequência).
+	activeDays []string
+	failDays   bool
 }
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{stats: map[string]Stats{}, unlocks: map[string]Unlocks{}, deltas: map[string]Delta{}, counts: map[string]map[string]int64{}}
+}
+
+func (f *fakeStore) RecordActiveDay(_ context.Context, userIDs []string, day string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failDays {
+		return errors.New("db down")
+	}
+	for _, id := range userIDs {
+		f.activeDays = append(f.activeDays, id+"@"+day)
+	}
+	return nil
 }
 
 func (f *fakeStore) AddCount(_ context.Context, userID, category string, n int64) (int64, error) {
@@ -203,6 +218,8 @@ func TestTickFlushesCallStatsAndSyncs(t *testing.T) {
 		CallID: "c1", Participants: []string{"ana", "bia"}, Listeners: []string{"ana", "bia"}, Voice: []string{"ana", "bia"}, ScreenSharers: []string{"ana"},
 	}}
 	online.ids = []string{"caio"}
+	// O dia de uso de caio já foi gravado (Sequência): só a varredura o reavalia.
+	s.days.fresh(t0.Add(flushEvery*tickInterval).Format(time.DateOnly), []string{"caio"})
 
 	at := t0
 	for i := 0; i < flushEvery; i++ {

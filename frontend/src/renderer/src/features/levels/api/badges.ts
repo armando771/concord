@@ -18,6 +18,7 @@ export type BadgeUnit =
   | 'songs'
   | 'sounds'
   | 'stickers'
+  | 'days'
 
 export interface BadgeTier {
   tier: number

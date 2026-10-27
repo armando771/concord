@@ -76,3 +76,23 @@ describe('Figurinha (figurinhas e GIFs)', () => {
     expect(publicStatText(b({ tier: 1 }))).toBe('10+ figurinhas e GIFs')
   })
 })
+
+describe('Sequência (dias seguidos usando o app)', () => {
+  const b = (over: Partial<Badge>): Badge =>
+    badge({
+      category: 'sequencia',
+      name: 'Sequência',
+      unit: 'days',
+      tiers: [{ tier: 1, name: 'Faísca', threshold: 3, rarity: 'comum' }],
+      ...over
+    })
+
+  it('mostra o recorde, a escada e a próxima meta', () => {
+    expect(statText(b({ value: 1 }))).toBe('Recorde de 1 dia seguido')
+    expect(statText(b({ value: 12 }))).toBe('Recorde de 12 dias seguidos')
+    expect(formatThreshold('days', 7)).toBe('7 dias seguidos')
+    // O recorde não é a sequência atual: a meta é uma sequência, não "faltam N".
+    expect(remainingText(b({ value: 2, next_threshold: 7 }))).toBe('Uma sequência de 7 dias')
+    expect(publicStatText(b({ tier: 1 }))).toBe('3+ dias seguidos')
+  })
+})

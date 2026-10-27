@@ -32,6 +32,8 @@ const (
 	UnitSounds = "sounds"
 	// UnitStickers: figurinhas e GIFs enviados (Figurinha).
 	UnitStickers = "stickers"
+	// UnitDays: dias seguidos usando o app (Sequência).
+	UnitDays = "days"
 )
 
 // FounderCutoff: quem criou a conta antes desta data (horário de Brasília)
@@ -288,6 +290,22 @@ var Catalog = []Category{
 			{"Colecionador", 100, RarityRare},
 			{"Álbum da Copa", 500, RarityEpic},
 			{"Rei do GIF", 2000, RarityLegendary},
+		},
+	},
+	{
+		// Dias seguidos com o app aberto (horário de Brasília), como a
+		// ofensiva do Duolingo. O tier vem da maior sequência já feita: perder
+		// a sequência não tira o que foi conquistado.
+		Key:         "sequencia",
+		Name:        "Sequência",
+		Description: "Abra o Salinha todo dia, sem pular nenhum (horário de Brasília). Vale a sua maior sequência.",
+		Unit:        UnitDays,
+		Tiers: []Tier{
+			{"Faísca", 3, RarityCommon},
+			{"Foguinho", 7, RarityCommon},
+			{"Fogueira", 30, RarityRare},
+			{"Incêndio", 100, RarityEpic},
+			{"Chama Eterna", 365, RarityLegendary},
 		},
 	},
 }
