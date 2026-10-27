@@ -13,6 +13,7 @@ import AutoUpdateUnavailableNotice from '../features/updates/components/AutoUpda
 import UpdateCallBridge from '../features/updates/components/UpdateCallBridge'
 import UserContextMenu from '../features/profile/components/UserContextMenu'
 import ImageContextMenu from '../features/chat/components/ImageContextMenu'
+import ReactionLimitModal from '../features/chat/components/ReactionLimitModal'
 import UserProfileCard from '../features/profile/components/UserProfileCard'
 import FriendActionsHost from '../features/friends/components/FriendActionsHost'
 import SettingsScreen from '../features/settings/components/SettingsScreen'
@@ -55,6 +56,7 @@ function App(): React.JSX.Element {
       <UserProfileCard />
       <UserContextMenu />
       <ImageContextMenu />
+      <ReactionLimitModal />
       <FriendActionsHost />
       <SettingsScreen />
       <ServerSettingsScreen />
