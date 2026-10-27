@@ -1,14 +1,6 @@
-import { NAME_EFFECTS, NAME_FONTS, defaultColorsFor, type NameStyle } from '../../profile/lib/nameStyle'
+import { NAME_EFFECTS, NAME_FONTS, type NameStyle } from '../../profile/lib/nameStyle'
+import { withEffect } from '../../profile/lib/nameStylePicker'
 import StyledName from '../../profile/components/StyledName'
-
-/** Troca o efeito mantendo as cores que ainda servem e completando as que faltam. */
-function withEffect(style: NameStyle, effectId: string): NameStyle {
-  const def = NAME_EFFECTS.find((e) => e.id === effectId)
-  if (!def) return style
-  const kept = style.colors.slice(0, def.maxColors)
-  const fill = defaultColorsFor(effectId).slice(kept.length)
-  return { ...style, effect: effectId, colors: [...kept, ...fill] }
-}
 
 const optionClass = (active: boolean): string =>
   `min-h-10 min-w-0 cursor-pointer truncate rounded-lg border px-2.5 py-1.5 text-left text-ds-sm text-strong transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
