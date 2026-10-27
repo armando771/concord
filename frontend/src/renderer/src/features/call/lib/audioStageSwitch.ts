@@ -15,11 +15,37 @@
 // etapa inativa é destruída (o worklet devolve false) e recriada ao voltar —
 // com estado limpo, sem resto de áudio antigo nos buffers. Os nós nativos
 // (filtros, delays, convolver) sem caminho até o destino não são processados.
+//
+// Rampas sem estalo (medido no Electron 44, trocando uma senoide pelo inverso):
+// - começam um pouco no futuro: o `currentTime` que a página lê fica atrás do
+//   que a thread de áudio já renderizou (até um buffer, `baseLatency`); uma
+//   rampa marcada "agora" já começa no passado e o ganho salta;
+// - nunca cancelam nada: cada rampa entra depois do fim da anterior. O
+//   `cancelAndHoldAtTime` seguido de rampa saltava de 1 para 0,13 na hora no
+//   Chromium, e o `cancelScheduledValues` no meio de uma rampa volta o ganho
+//   ao valor de antes dela. Inverter no meio custa no máximo os 15 ms da rampa.
 
 /** Rampa linear do crossfade (10–20 ms: sem estalo e sem demora perceptível). */
 export const STAGE_FADE_SECONDS = 0.015
-/** Desmonta a etapa depois de a rampa de saída terminar (com folga). */
-export const STAGE_TEARDOWN_MS = 60
+/** Antecedência mínima das rampas, além da `baseLatency` do contexto. */
+export const STAGE_LEAD_SECONDS = 0.02
+/** Folga entre o fim da rampa de saída e a desmontagem. */
+export const STAGE_TEARDOWN_MARGIN_MS = 50
+
+type StageContext = Pick<BaseAudioContext, 'currentTime'> & { baseLatency?: number }
+
+/** Quando a rampa pode começar sem cair no passado da thread de áudio. */
+export function stageLead(ctx: StageContext): number {
+  return STAGE_LEAD_SECONDS + (ctx.baseLatency ?? 0)
+}
+
+/**
+ * Início da próxima rampa: com a antecedência e nunca antes do fim da
+ * anterior (`lastEnd`), mais a espera da etapa recém-criada (`delay`).
+ */
+export function fadeStart(ctx: StageContext, lastEnd: number, delay: number): number {
+  return Math.max(ctx.currentTime + stageLead(ctx), lastEnd) + delay
+}
 
 export interface AudioStage {
   input: AudioNode
@@ -28,16 +54,8 @@ export interface AudioStage {
   destroy: () => void
 }
 
-/** Quais etapas entram no grafo do microfone. */
-export function micStages(settings: { voiceModActive: boolean; noiseSuppression: boolean }): {
-  rnnoise: boolean
-  voiceMod: boolean
-} {
-  return { rnnoise: settings.noiseSuppression, voiceMod: settings.voiceModActive }
-}
-
 export interface StageSwitchOptions<T extends AudioStage> {
-  ctx: { currentTime: number }
+  ctx: StageContext
   source: AudioNode
   /** Caminho sem a etapa (1 com ela fora). Já ligado à saída. */
   direct: GainNode
@@ -56,40 +74,28 @@ export interface StageSwitch<T extends AudioStage> {
   destroy: () => void
 }
 
-/** Segura o valor de agora e descarta o que estava agendado depois. */
-function holdAt(param: AudioParam, t: number): void {
-  if (typeof param.cancelAndHoldAtTime === 'function') {
-    param.cancelAndHoldAtTime(t)
-    return
-  }
-  // Firefox não tem cancelAndHoldAtTime.
-  const value = param.value
-  param.cancelScheduledValues(t)
-  param.setValueAtTime(value, t)
-}
-
-/**
- * Crossfade para `on`. Com `start` depois de agora (etapa recém-criada), os
- * ganhos ficam parados até lá: o direto em 1 e a etapa em 0.
- */
-function crossfade(direct: GainNode, through: GainNode, now: number, start: number, on: boolean): void {
-  const targets: [AudioParam, number][] = [
-    [through.gain, on ? 1 : 0],
-    [direct.gain, on ? 0 : 1]
-  ]
-  for (const [param, to] of targets) {
-    holdAt(param, now)
-    if (start > now) param.setValueAtTime(1 - to, start)
-    param.linearRampToValueAtTime(to, start + STAGE_FADE_SECONDS)
-  }
-}
-
 export function switchStage<T extends AudioStage>(options: StageSwitchOptions<T>): StageSwitch<T> {
   const { ctx, source, direct, through, create, warmupSeconds } = options
   let stage: T | null = null
   let wanted = false
+  let lastEnd = 0
   let teardown: ReturnType<typeof setTimeout> | null = null
 
+  /** Crossfade para `on`; devolve quando termina (tempo do áudio). */
+  const crossfade = (on: boolean, delay: number): number => {
+    const start = fadeStart(ctx, lastEnd, delay)
+    lastEnd = start + STAGE_FADE_SECONDS
+    const targets: [AudioParam, number][] = [
+      [through.gain, on ? 1 : 0],
+      [direct.gain, on ? 0 : 1]
+    ]
+    for (const [param, to] of targets) {
+      // Até o início vale o alvo da rampa anterior (o oposto deste).
+      param.setValueAtTime(1 - to, start)
+      param.linearRampToValueAtTime(to, lastEnd)
+    }
+    return lastEnd
+  }
   const cancelTeardown = (): void => {
     if (teardown !== null) clearTimeout(teardown)
     teardown = null
@@ -110,20 +116,20 @@ export function switchStage<T extends AudioStage>(options: StageSwitchOptions<T>
     return true
   }
   const enter = (): void => {
-    const now = ctx.currentTime
     if (stage) {
       cancelTeardown()
-      crossfade(direct, through, now, now, true)
+      crossfade(true, 0)
     } else if (mount()) {
-      crossfade(direct, through, now, now + warmupSeconds, true)
+      crossfade(true, warmupSeconds)
     } else {
       wanted = false
     }
   }
   const leave = (): void => {
     if (!stage) return
-    crossfade(direct, through, ctx.currentTime, ctx.currentTime, false)
-    teardown = setTimeout(unmount, STAGE_TEARDOWN_MS)
+    const end = crossfade(false, 0)
+    const ms = Math.ceil((end - ctx.currentTime) * 1000) + STAGE_TEARDOWN_MARGIN_MS
+    teardown = setTimeout(unmount, ms)
   }
 
   return {

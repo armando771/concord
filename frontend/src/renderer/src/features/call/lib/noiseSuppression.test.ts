@@ -120,6 +120,7 @@ vi.mock('@sapphi-red/web-noise-suppressor', () => ({
     channelCountMode = 'max'
     destroy = vi.fn()
     connect = (next: unknown): unknown => next
+    disconnect = vi.fn()
     constructor() {
       node.instances.push(this)
     }
@@ -132,6 +133,8 @@ interface FakeGain {
     cancelScheduledValues: () => void
     setValueAtTime: (v: number) => void
     setTargetAtTime: (v: number) => void
+    cancelAndHoldAtTime: () => void
+    linearRampToValueAtTime: (v: number) => void
   }
   connect: ReturnType<typeof vi.fn>
   disconnect: ReturnType<typeof vi.fn>
@@ -152,6 +155,10 @@ function fakeGain(): FakeGain {
         g.gain.value = v
       },
       setTargetAtTime: (v) => {
+        g.gain.value = v
+      },
+      cancelAndHoldAtTime: () => {},
+      linearRampToValueAtTime: (v) => {
         g.gain.value = v
       }
     },
@@ -190,7 +197,10 @@ class FakeAudioContext {
   constructor() {
     fake.contexts.push(this)
   }
-  createMediaStreamSource = (): { connect: (n: unknown) => unknown } => ({ connect: (n) => n })
+  createMediaStreamSource = (): { connect: (n: unknown) => unknown; disconnect: () => void } => ({
+    connect: (n) => n,
+    disconnect: () => {}
+  })
   createGain = (): FakeGain => {
     const g = fakeGain()
     this.gains.push(g)
@@ -242,17 +252,48 @@ describe('openMicrophone', () => {
   })
 
   it('abre o microfone sem a supressão do Chromium e passa pelo RNNoise', async () => {
-    await openMicrophone('mic-usb')
+    const mic = await openMicrophone('mic-usb')
     expect(fake.getUserMedia).toHaveBeenCalledWith({
       audio: expect.objectContaining({ deviceId: { exact: 'mic-usb' }, noiseSuppression: false }),
       video: false
     })
     expect(wetDry()).toEqual([1, 0])
+    mic.stop()
+  })
+
+  it('com a supressão desligada o RNNoise nem é criado: o sinal passa direto', async () => {
+    useNoiseSuppressionStore.setState({ enabled: false })
+    const mic = await openMicrophone()
+    expect(node.instances).toHaveLength(0)
+    expect(wetDry()).toEqual([0, 1])
+    mic.stop()
+  })
+
+  it('ligar no meio cria um RNNoise novo; desligar o destrói depois da rampa', async () => {
+    vi.useFakeTimers()
+    try {
+      useNoiseSuppressionStore.setState({ enabled: false })
+      const mic = await openMicrophone()
+      useNoiseSuppressionStore.getState().setEnabled(true)
+      expect(node.instances).toHaveLength(1)
+      expect(wetDry()).toEqual([1, 0])
+      useNoiseSuppressionStore.getState().setEnabled(false)
+      expect(wetDry()).toEqual([0, 1])
+      expect(node.instances[0].destroy).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1000)
+      expect(node.instances[0].destroy).toHaveBeenCalled()
+      useNoiseSuppressionStore.getState().setEnabled(true)
+      expect(node.instances).toHaveLength(2)
+      mic.stop()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('microfone estéreo vira mono antes do RNNoise', async () => {
-    await openMicrophone()
+    const mic = await openMicrophone()
     expect(node.instances[0]).toMatchObject({ channelCount: 1, channelCountMode: 'explicit' })
+    mic.stop()
   })
 
   it('liga/desliga ao vivo sem trocar o stream enviado', async () => {
@@ -321,6 +362,12 @@ describe('openMicrophone — detecção de fala, portão e volume de entrada', (
     useNoiseSuppressionStore.setState({ enabled: true })
     useRnnoiseStatusStore.setState({ available: true })
     useVoiceAudioStore.setState({ inputVolume: 1, detectionEnabled: true, sensitivity: 60 })
+    // Módulos na ordem: RNNoise, detecção, voice mod. Sem o voice mod, a cauda é o ganho de entrada.
+    fake.addModule
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('sem voice mod'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   it('o detector fica no caminho do áudio, depois do ganho de entrada, sem outro AudioContext', async () => {
@@ -337,8 +384,18 @@ describe('openMicrophone — detecção de fala, portão e volume de entrada', (
     mic.stop()
   })
 
-  it('sem o voice mod (o fake não tem createDelay) o microfone segue e o store marca indisponível', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('com o voice mod no Normal o grafo dele nem é montado: o detector recebe o caminho direto', async () => {
+    fake.addModule.mockReset().mockResolvedValue(undefined)
+    useVoiceModStore.getState().selectPreset('normal')
+    const mic = await openMicrophone()
+    expect(useVoiceModStore.getState().available).toBe(true)
+    expect(mic.setVoiceMod).toBeDefined()
+    // Só o worklet da detecção existe (o do voice mod não foi criado).
+    expect(FakeWorkletNode.instances.map((w) => w.name)).toEqual(['concord-voice-activity'])
+    mic.stop()
+  })
+
+  it('sem o voice mod o microfone segue e o store marca indisponível', async () => {
     useVoiceModStore.setState({ available: true })
     const mic = await openMicrophone()
     expect(useVoiceModStore.getState().available).toBe(false)
@@ -365,8 +422,11 @@ describe('openMicrophone — detecção de fala, portão e volume de entrada', (
   })
 
   it('sem o worklet de detecção o microfone segue, sem portão nem watchSpeaking', async () => {
-    fake.addModule.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('CSP'))
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    fake.addModule
+      .mockReset()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('CSP'))
+      .mockRejectedValueOnce(new Error('sem voice mod'))
     const mic = await openMicrophone()
     expect(mic.watchSpeaking).toBeUndefined()
     expect(mic.stream).toBeDefined()
@@ -412,7 +472,7 @@ describe('openMicrophone — detecção de fala, portão e volume de entrada', (
   })
 
   it('no fallback do Chromium não há detecção no contexto', async () => {
-    fake.addModule.mockRejectedValueOnce(new Error('CSP'))
+    fake.addModule.mockReset().mockRejectedValueOnce(new Error('CSP'))
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const mic = await openMicrophone()
     expect(mic.watchSpeaking).toBeUndefined()

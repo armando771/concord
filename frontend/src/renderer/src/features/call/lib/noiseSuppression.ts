@@ -7,8 +7,10 @@
 //                                          │             └─ monitor (mudo, "Ouvir minha voz")
 //                                          └─ analisador (medidor, mudo)
 //
-// Ligar/desligar a supressão só cruza os ganhos: a track de saída é sempre a
-// mesma, então muda ao vivo na chamada sem republicar nada no LiveKit. O
+// O RNNoise só existe com a supressão ligada e o voice mod só com uma voz
+// ativa: fora disso saem do grafo e o sinal passa direto (audioStageSwitch.ts).
+// Ligar/desligar no meio da chamada cruza os ganhos em 15 ms: a track de saída
+// é sempre a mesma, então muda ao vivo sem republicar nada no LiveKit. O
 // volume de entrada e a sensibilidade também mudam ao vivo.
 //
 // A detecção de fala do próprio usuário (voiceActivityWorklet) roda neste
@@ -30,14 +32,21 @@ import {
 import { useNoiseSuppressionStore } from '../store/noiseSuppressionStore'
 import { useRnnoiseStatusStore } from '../store/rnnoiseStatusStore'
 import { useVoiceAudioStore, type VoiceAudioSettings } from '../store/voiceAudioStore'
-import { createVoiceMod, type VoiceModNode } from './voiceMod'
+import { switchStage, type AudioStage } from './audioStageSwitch'
+import { loadVoiceMod, voiceModPath, type VoiceModNode, type VoiceModPath } from './voiceMod'
 import type { VoiceModSettings } from './voiceModPresets'
 import { useVoiceModStore } from '../store/voiceModStore'
 
 /** O RNNoise trabalha em quadros de 10 ms a 48 kHz. */
 const SAMPLE_RATE = 48_000
-/** Constante de tempo do crossfade ao ligar/desligar e ao mexer nos volumes. */
+/** Constante de tempo do crossfade ao mexer nos volumes e no monitor. */
 const FADE_SECONDS = 0.015
+/**
+ * Espera do RNNoise recém-criado antes do crossfade: o WASM instancia na
+ * thread de áudio e o anel de 1920 amostras enche. No Electron 44 o primeiro
+ * som sai em 17–26 ms; 100 ms dá folga para máquinas mais lentas.
+ */
+const RNNOISE_WARMUP_SECONDS = 0.1
 /** Janela do medidor de nível (~21 ms a 48 kHz). */
 const METER_FFT_SIZE = 1024
 
@@ -97,6 +106,35 @@ function captureMic(deviceId: string, browserSuppression: boolean): Promise<Medi
 
 const active = new Set<MicHandle>()
 
+/** Um RNNoise novo (estado limpo); `null` se não instanciar. */
+function rnnoiseStage(ctx: AudioContext): AudioStage | null {
+  try {
+    const node = new RnnoiseWorkletNode(ctx, { maxChannels: 1, wasmBinary: rnnoiseWasm() })
+    // Microfone estéreo vira mono antes do RNNoise (nenhum canal passa cru).
+    node.channelCount = 1
+    node.channelCountMode = 'explicit'
+    return {
+      input: node,
+      output: node,
+      // O processador passa a devolver false e o Chromium para de chamá-lo.
+      destroy: () => node.destroy()
+    }
+  } catch (err) {
+    console.error('[RNNoise] não instanciou — seguindo sem a supressão:', err)
+    return null
+  }
+}
+
+/** Sem o voice mod o microfone segue: só não há mudança de voz. */
+async function loadVoiceModOrNull(ctx: AudioContext): Promise<(() => VoiceModNode) | null> {
+  try {
+    return await loadVoiceMod(ctx)
+  } catch (err) {
+    console.error('[voz] voice mod indisponível:', err)
+    return null
+  }
+}
+
 // O toggle vale na hora para todo microfone aberto (chamada e teste).
 useNoiseSuppressionStore.subscribe((state, prev) => {
   if (state.enabled === prev.enabled) return
@@ -136,14 +174,12 @@ useVoiceModStore.subscribe((state, prev) => {
 export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
   const raw = await captureMic(deviceId, false)
   let ctx: AudioContext | null = null
-  let rnnoise: RnnoiseWorkletNode | null = null
   try {
     ctx = new AudioContext({ sampleRate: SAMPLE_RATE, latencyHint: 'interactive' })
+    // O módulo e o WASM ficam prontos já na abertura: ligar a supressão depois
+    // só instancia o nó (sem esperar rede nem decodificação).
     await ctx.audioWorklet.addModule(rnnoiseWorkletUrl)
-    rnnoise = new RnnoiseWorkletNode(ctx, { maxChannels: 1, wasmBinary: rnnoiseWasm() })
-    // Microfone estéreo vira mono antes do RNNoise (nenhum canal passa cru).
-    rnnoise.channelCount = 1
-    rnnoise.channelCountMode = 'explicit'
+    rnnoiseWasm()
 
     // Sem o worklet de detecção o microfone segue: só não há portão nem detecção.
     let vad: AudioWorkletNode | null = null
@@ -158,8 +194,10 @@ export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
       console.error('[fala] detecção do microfone indisponível:', err)
     }
 
+    const context = ctx
     const source = ctx.createMediaStreamSource(raw)
     const wet = ctx.createGain()
+    wet.gain.value = 0
     const dry = ctx.createGain()
     const inputGain = ctx.createGain()
     const analyser = ctx.createAnalyser()
@@ -168,19 +206,23 @@ export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
     const silent = ctx.createGain()
     silent.gain.value = 0
     const destination = ctx.createMediaStreamDestination()
-    // Sem o voice mod o microfone segue: só não há mudança de voz.
-    let mod: VoiceModNode | null = null
-    try {
-      mod = await createVoiceMod(ctx)
-    } catch (err) {
-      console.error('[voz] voice mod indisponível:', err)
-    }
-    useVoiceModStore.getState().setAvailable(mod !== null)
-    source.connect(rnnoise).connect(wet).connect(inputGain)
+    const createMod = await loadVoiceModOrNull(ctx)
+    useVoiceModStore.getState().setAvailable(createMod !== null)
     source.connect(dry).connect(inputGain)
+    wet.connect(inputGain)
+    const rnnoise = switchStage({
+      ctx,
+      source,
+      direct: dry,
+      through: wet,
+      create: () => rnnoiseStage(context),
+      warmupSeconds: RNNOISE_WARMUP_SECONDS
+    })
+    const mod: VoiceModPath | null = createMod
+      ? voiceModPath(ctx, inputGain, createMod, useVoiceModStore.getState())
+      : null
     // Cauda da cadeia: depois do voice mod (se carregou), alimenta detecção e monitor.
     const tail: AudioNode = mod ? mod.output : inputGain
-    if (mod) inputGain.connect(mod.input)
     if (vad) tail.connect(vad).connect(destination)
     else tail.connect(destination)
     inputGain.connect(analyser).connect(silent).connect(destination)
@@ -190,8 +232,6 @@ export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
     tail.connect(monitor).connect(ctx.destination)
     if (ctx.state === 'suspended') await ctx.resume()
 
-    const context = ctx
-    const node = rnnoise
     const listeners = new Set<(speaking: boolean) => void>()
     if (vad) {
       vad.port.onmessage = (event: MessageEvent<boolean>) => {
@@ -199,17 +239,6 @@ export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
       }
     }
 
-    const apply = (on: boolean, instant: boolean): void => {
-      const t = context.currentTime
-      for (const [gain, value] of [
-        [wet.gain, on ? 1 : 0],
-        [dry.gain, on ? 0 : 1]
-      ] as const) {
-        gain.cancelScheduledValues(t)
-        if (instant) gain.setValueAtTime(value, t)
-        else gain.setTargetAtTime(value, t, FADE_SECONDS)
-      }
-    }
     const applyVoice = (settings: MicVoiceSettings, instant: boolean): void => {
       const t = context.currentTime
       inputGain.gain.cancelScheduledValues(t)
@@ -221,9 +250,8 @@ export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
       }
       vad?.port.postMessage(message)
     }
-    apply(useNoiseSuppressionStore.getState().enabled, true)
+    rnnoise.set(useNoiseSuppressionStore.getState().enabled)
     applyVoice(useVoiceAudioStore.getState(), true)
-    mod?.apply(useVoiceModStore.getState(), true)
     if (useVoiceModStore.getState().monitoring) monitor.gain.value = 1
     useRnnoiseStatusStore.getState().setAvailable(true)
 
@@ -232,14 +260,14 @@ export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
     const handle: MicHandle = {
       stream: destination.stream,
       setNoiseSuppression: (on) => {
-        if (!stopped) apply(on, false)
+        if (!stopped) rnnoise.set(on)
       },
       setVoiceAudio: (settings) => {
         if (!stopped) applyVoice(settings, false)
       },
       setVoiceMod: mod
         ? (settings) => {
-            if (!stopped) mod.apply(settings, false)
+            if (!stopped) mod.apply(settings)
           }
         : undefined,
       setMonitor: (on) => {
@@ -271,7 +299,7 @@ export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
         if (active.size === 0) useVoiceModStore.getState().setMonitoring(false)
         raw.getTracks().forEach((t) => t.stop())
         destination.stream.getTracks().forEach((t) => t.stop())
-        node.destroy()
+        rnnoise.destroy()
         void context.close()
       }
     }
@@ -279,7 +307,6 @@ export async function openMicrophone(deviceId = ''): Promise<MicHandle> {
     return handle
   } catch (err) {
     console.error('[RNNoise] não carregou — usando a supressão do Chromium:', err)
-    rnnoise?.destroy()
     void ctx?.close()
     raw.getTracks().forEach((t) => t.stop())
     useRnnoiseStatusStore.getState().setAvailable(false)

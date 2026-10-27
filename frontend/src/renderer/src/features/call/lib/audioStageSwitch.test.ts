@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  micStages,
+  fadeStart,
   STAGE_FADE_SECONDS,
-  STAGE_TEARDOWN_MS,
+  STAGE_LEAD_SECONDS,
+  STAGE_TEARDOWN_MARGIN_MS,
+  stageLead,
   switchStage,
   type AudioStage
 } from './audioStageSwitch'
@@ -10,17 +12,15 @@ import {
 // Web Audio falso: guarda as ligações e a automação de cada ganho, para
 // conferir a ordem (ligar → esperar → rampa; rampa → desligar).
 
-type Event = [kind: string, value: number, time: number]
+type Event = [kind: 'set' | 'ramp', value: number, time: number]
 
 class FakeParam {
   events: Event[] = []
   constructor(public value: number) {}
-  cancelAndHoldAtTime = (t: number): void => void this.events.push(['hold', this.value, t])
   setValueAtTime = (v: number, t: number): void => void this.events.push(['set', v, t])
-  linearRampToValueAtTime = (v: number, t: number): void => {
-    this.events.push(['ramp', v, t])
-    this.value = v
-  }
+  linearRampToValueAtTime = (v: number, t: number): void => void this.events.push(['ramp', v, t])
+  /** Os eventos nunca voltam no tempo (nada é cancelado). */
+  ordered = (): boolean => this.events.every((e, i) => i === 0 || e[2] >= this.events[i - 1][2])
 }
 
 class FakeNode {
@@ -48,8 +48,11 @@ interface FakeStage extends AudioStage {
   destroy: ReturnType<typeof vi.fn>
 }
 
+const BASE_LATENCY = 0.01
+const LEAD = STAGE_LEAD_SECONDS + BASE_LATENCY
+
 function setup(warmupSeconds = 0.1): {
-  ctx: { currentTime: number }
+  ctx: { currentTime: number; baseLatency: number }
   source: FakeNode
   direct: FakeGain
   through: FakeGain
@@ -57,7 +60,7 @@ function setup(warmupSeconds = 0.1): {
   create: ReturnType<typeof vi.fn>
   stage: ReturnType<typeof switchStage<FakeStage>>
 } {
-  const ctx = { currentTime: 10 }
+  const ctx = { currentTime: 10, baseLatency: BASE_LATENCY }
   const source = new FakeNode('source')
   const direct = new FakeGain('direct', 1)
   const through = new FakeGain('through', 0)
@@ -80,6 +83,7 @@ function setup(warmupSeconds = 0.1): {
 }
 
 const node = (stage: AudioStage): FakeNode => stage.input as unknown as FakeNode
+const kinds = (events: Event[]): [string, number][] => events.map(([k, v]) => [k, v])
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -89,24 +93,25 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('micStages', () => {
-  it('cada etapa só entra no grafo quando faz algo', () => {
-    expect(micStages({ voiceModActive: false, noiseSuppression: false })).toEqual({
-      rnnoise: false,
-      voiceMod: false
-    })
-    expect(micStages({ voiceModActive: true, noiseSuppression: false })).toEqual({
-      rnnoise: false,
-      voiceMod: true
-    })
-    expect(micStages({ voiceModActive: false, noiseSuppression: true })).toEqual({
-      rnnoise: true,
-      voiceMod: false
-    })
+describe('fadeStart', () => {
+  it('começa depois do que a thread de áudio já pode ter renderizado', () => {
+    expect(stageLead({ currentTime: 0, baseLatency: 0.01 })).toBeCloseTo(0.01 + STAGE_LEAD_SECONDS)
+    expect(stageLead({ currentTime: 0 })).toBe(STAGE_LEAD_SECONDS)
+    expect(fadeStart({ currentTime: 5 }, 0, 0)).toBeCloseTo(5 + STAGE_LEAD_SECONDS)
+  })
+
+  it('nunca antes do fim da rampa anterior, e soma a espera da etapa nova', () => {
+    expect(fadeStart({ currentTime: 5 }, 5.5, 0)).toBe(5.5)
+    expect(fadeStart({ currentTime: 5 }, 5.5, 0.1)).toBeCloseTo(5.6)
   })
 })
 
 describe('switchStage', () => {
+  it('a rampa fica entre 10 e 20 ms (sem estalo e sem demora)', () => {
+    expect(STAGE_FADE_SECONDS).toBeGreaterThanOrEqual(0.01)
+    expect(STAGE_FADE_SECONDS).toBeLessThanOrEqual(0.02)
+  })
+
   it('desligada não cria nada: o sinal só passa pelo caminho direto', () => {
     const { stage, create } = setup()
     stage.set(false)
@@ -120,49 +125,57 @@ describe('switchStage', () => {
     const [s] = created
     expect(source.outputs.has(node(s))).toBe(true)
     expect(node(s).outputs.has(through)).toBe(true)
-    const start = 10 + 0.1
-    const end = start + STAGE_FADE_SECONDS
-    // Segura o valor atual até o aquecimento acabar, depois rampa linear curta.
-    expect(through.gain.events).toEqual([
-      ['hold', 0, 10],
-      ['set', 0, start],
-      ['ramp', 1, end]
+    const start = 10 + LEAD + 0.1
+    expect(kinds(through.gain.events)).toEqual([
+      ['set', 0],
+      ['ramp', 1]
     ])
-    expect(direct.gain.events).toEqual([
-      ['hold', 1, 10],
-      ['set', 1, start],
-      ['ramp', 0, end]
+    expect(kinds(direct.gain.events)).toEqual([
+      ['set', 1],
+      ['ramp', 0]
     ])
+    expect(through.gain.events[0][2]).toBeCloseTo(start)
+    expect(through.gain.events[1][2]).toBeCloseTo(start + STAGE_FADE_SECONDS)
+    expect(direct.gain.events[1][2]).toBeCloseTo(start + STAGE_FADE_SECONDS)
   })
 
-  it('a rampa fica entre 10 e 20 ms (sem estalo e sem demora)', () => {
-    expect(STAGE_FADE_SECONDS).toBeGreaterThanOrEqual(0.01)
-    expect(STAGE_FADE_SECONDS).toBeLessThanOrEqual(0.02)
-  })
-
-  it('ao sair: cruza de volta na hora e só desliga/destrói depois da rampa', () => {
+  it('ao sair: cruza de volta e só desliga/destrói depois da rampa', () => {
     const { stage, ctx, source, through, direct, created } = setup()
     stage.set(true)
     ctx.currentTime = 20
     stage.set(false)
-    expect(through.gain.events.slice(-2)).toEqual([
-      ['hold', 1, 20],
-      ['ramp', 0, 20 + STAGE_FADE_SECONDS]
+    expect(kinds(through.gain.events.slice(-2))).toEqual([
+      ['set', 1],
+      ['ramp', 0]
     ])
-    expect(direct.gain.events.slice(-2)).toEqual([
-      ['hold', 0, 20],
-      ['ramp', 1, 20 + STAGE_FADE_SECONDS]
+    expect(kinds(direct.gain.events.slice(-2))).toEqual([
+      ['set', 0],
+      ['ramp', 1]
     ])
+    expect(through.gain.events.at(-2)![2]).toBeCloseTo(20 + LEAD)
     const [s] = created
     expect(s.destroy).not.toHaveBeenCalled()
     expect(source.outputs.has(node(s))).toBe(true)
 
-    vi.advanceTimersByTime(STAGE_TEARDOWN_MS)
-    expect(STAGE_TEARDOWN_MS).toBeGreaterThan(STAGE_FADE_SECONDS * 1000)
+    vi.advanceTimersByTime((LEAD + STAGE_FADE_SECONDS) * 1000)
+    expect(s.destroy).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(STAGE_TEARDOWN_MARGIN_MS + 1)
     expect(s.destroy).toHaveBeenCalledOnce()
     expect(source.outputs.has(node(s))).toBe(false)
     expect(node(s).outputs.has(through)).toBe(false)
     expect(stage.current()).toBeNull()
+  })
+
+  it('inverter no meio de uma rampa espera ela acabar (nada é cancelado, sem salto)', () => {
+    const { stage, ctx, through, direct } = setup(0.1)
+    stage.set(true)
+    // Ainda no aquecimento: a rampa de entrada está agendada no futuro.
+    ctx.currentTime = 10.01
+    stage.set(false)
+    const enterEnd = 10 + LEAD + 0.1 + STAGE_FADE_SECONDS
+    expect(through.gain.events.at(-2)![2]).toBeCloseTo(enterEnd)
+    expect(through.gain.ordered()).toBe(true)
+    expect(direct.gain.ordered()).toBe(true)
   })
 
   it('voltar antes de desmontar reaproveita a etapa (sem aquecer de novo)', () => {
@@ -170,15 +183,16 @@ describe('switchStage', () => {
     stage.set(true)
     ctx.currentTime = 20
     stage.set(false)
-    ctx.currentTime = 20.005
+    ctx.currentTime = 20.06
     stage.set(true)
-    vi.advanceTimersByTime(STAGE_TEARDOWN_MS * 2)
+    vi.advanceTimersByTime(1000)
     expect(create).toHaveBeenCalledOnce()
     expect(created[0].destroy).not.toHaveBeenCalled()
-    expect(through.gain.events.slice(-2)).toEqual([
-      ['hold', 0, 20.005],
-      ['ramp', 1, 20.005 + STAGE_FADE_SECONDS]
+    expect(kinds(through.gain.events.slice(-2))).toEqual([
+      ['set', 0],
+      ['ramp', 1]
     ])
+    expect(through.gain.events.at(-2)![2]).toBeCloseTo(20.06 + LEAD)
     expect(stage.current()).toBe(created[0])
   })
 
@@ -186,7 +200,7 @@ describe('switchStage', () => {
     const { stage, create, created } = setup()
     stage.set(true)
     stage.set(false)
-    vi.advanceTimersByTime(STAGE_TEARDOWN_MS)
+    vi.advanceTimersByTime(1000)
     stage.set(true)
     expect(create).toHaveBeenCalledTimes(2)
     expect(stage.current()).toBe(created[1])
@@ -219,25 +233,7 @@ describe('switchStage', () => {
     stage.destroy()
     expect(created[0].destroy).toHaveBeenCalledOnce()
     expect(source.outputs.size).toBe(0)
-    vi.advanceTimersByTime(STAGE_TEARDOWN_MS)
+    vi.advanceTimersByTime(1000)
     expect(created[0].destroy).toHaveBeenCalledOnce()
-  })
-
-  it('sem cancelAndHoldAtTime (Firefox): segura o valor com cancel + set', () => {
-    const { stage, through } = setup()
-    const param = through.gain as unknown as Record<string, unknown>
-    delete param.cancelAndHoldAtTime
-    const calls: Event[] = []
-    param.cancelScheduledValues = (t: number): void => void calls.push(['cancel', 0, t])
-    const set = through.gain.setValueAtTime
-    param.setValueAtTime = (v: number, t: number): void => {
-      calls.push(['set', v, t])
-      set(v, t)
-    }
-    stage.set(true)
-    expect(calls.slice(0, 2)).toEqual([
-      ['cancel', 0, 10],
-      ['set', 0, 10]
-    ])
   })
 })

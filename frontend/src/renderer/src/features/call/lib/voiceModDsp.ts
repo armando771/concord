@@ -37,6 +37,15 @@ export interface VoiceModWorkletMessage {
   vibratoSemitones: number
 }
 
+/**
+ * Para o processador de vez: o process() passa a devolver false e o Chromium
+ * não o chama mais (ver audioStageSwitch.ts).
+ */
+export const VOICE_MOD_STOP = 'stop'
+
+/** O que a página manda pela porta do worklet. */
+export type VoiceModPortMessage = VoiceModWorkletMessage | typeof VOICE_MOD_STOP
+
 /** O que o worklet usa por bloco: este VoiceModDsp (JS) ou o VoiceModWasm. */
 export interface VoiceModProcessor {
   configure: (message: VoiceModWorkletMessage) => void
