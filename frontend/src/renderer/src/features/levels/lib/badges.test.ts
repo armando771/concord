@@ -437,7 +437,7 @@ describe('unlocksComAviso', () => {
     rarity: 'lendario'
   })
 
-  it('l e v22 têm celebração própria e ficam fora do aviso genérico', () => {
+  it('l e v22 tÃªm celebraÃ§Ã£o prÃ³pria e ficam fora do aviso genÃ©rico', () => {
     const lista = [unlock('l'), unlock('voz'), unlock('v22')]
     expect(unlocksComAviso(lista).map((u) => u.category)).toEqual(['voz'])
   })
