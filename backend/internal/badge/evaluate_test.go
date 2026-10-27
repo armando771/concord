@@ -369,3 +369,32 @@ func TestEvaluateSpectatorFromWatchTime(t *testing.T) {
 		t.Fatalf("espectador top tier = %+v, want lendário", last)
 	}
 }
+
+func TestEvaluateAccountAgeGoesUpToTenYears(t *testing.T) {
+	// Os 5 primeiros tiers (1 a 24 meses) ficam como eram: ninguém perde nada.
+	want := []string{"Semente", "Broto", "Muda", "Árvore", "Sequoia",
+		"Bosque", "Floresta", "Jequitibá", "Baobá", "Árvore Ancestral", "Árvore Celestial", "Árvore da Vida", "Yggdrasil"}
+	created := now.AddDate(-3, 0, -1)
+	badges, fresh := Evaluate(Stats{CreatedAt: created}, nil, now)
+	conta := find(t, badges, "conta")
+	if len(conta.Tiers) != len(want) {
+		t.Fatalf("conta tem %d tiers, want %d", len(conta.Tiers), len(want))
+	}
+	for i, name := range want {
+		if conta.Tiers[i].Name != name {
+			t.Fatalf("conta tier %d = %q, want %q", i+1, conta.Tiers[i].Name, name)
+		}
+	}
+	if conta.Tiers[5].Threshold != 36 || conta.Tiers[12].Threshold != 120 || conta.Tiers[12].Rarity != RarityLegendary {
+		t.Fatalf("3 anos/10 anos = %+v / %+v", conta.Tiers[5], conta.Tiers[12])
+	}
+	if conta.Tier != 6 || conta.NextAt == nil || !conta.NextAt.Equal(created.AddDate(0, 48, 0)) {
+		t.Fatalf("3 anos = tier %d next_at %v, want 6 e o dia dos 4 anos", conta.Tier, conta.NextAt)
+	}
+	// O dia exato em que fez 3 anos.
+	for _, u := range fresh {
+		if u.Category == "conta" && u.Tier == 6 && !u.At.Equal(created.AddDate(0, 36, 0)) {
+			t.Fatalf("conta/6 at %v", u.At)
+		}
+	}
+}

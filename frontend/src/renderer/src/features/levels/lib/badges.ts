@@ -151,7 +151,8 @@ export function publicStatText(b: Badge): string {
 /** Rótulo de um degrau da escada, por unidade; unidade sem entrada mostra o número. */
 const THRESHOLD_TEXT: Partial<Record<BadgeUnit, (threshold: number) => string>> = {
   seconds: (t) => plural(Math.floor(t / HOUR), 'hora', 'horas'),
-  months: (t) => plural(t, 'mês', 'meses'),
+  // "6 meses", "1 ano", "10 anos".
+  months: (t) => monthsText(t),
   messages: (t) => plural(t, 'mensagem', 'mensagens'),
   reactions: (t) => plural(t, 'reação', 'reações'),
   level: (t) => `Nível ${num(t)}`,

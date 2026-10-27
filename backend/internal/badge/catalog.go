@@ -82,6 +82,16 @@ var Catalog = []Category{
 			{"Muda", 6, RarityRare},
 			{"Árvore", 12, RarityEpic},
 			{"Sequoia", 24, RarityLegendary},
+			// De 3 a 10 anos. Acima de lendário só há mítico, que é dos
+			// exclusivos: a raridade fica no topo e a arte é que cresce.
+			{"Bosque", 36, RarityLegendary},
+			{"Floresta", 48, RarityLegendary},
+			{"Jequitibá", 60, RarityLegendary},
+			{"Baobá", 72, RarityLegendary},
+			{"Árvore Ancestral", 84, RarityLegendary},
+			{"Árvore Celestial", 96, RarityLegendary},
+			{"Árvore da Vida", 108, RarityLegendary},
+			{"Yggdrasil", 120, RarityLegendary},
 		},
 	},
 	{

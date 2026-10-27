@@ -4,7 +4,7 @@ import { badgeArt } from './badgeArt'
 // Mesma escada do catálogo do backend (internal/badge/catalog.go).
 const TIERS: Record<string, number> = {
   voz: 6,
-  conta: 5,
+  conta: 13,
   mensagens: 5,
   streamer: 5,
   espectador: 5,

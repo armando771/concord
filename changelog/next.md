@@ -12,6 +12,7 @@
 - Chamadas: novo botão "Convidar amigos" na linha do canal de voz em que você está, na barra lateral (o ícone de pessoa com "+", ao lado do balão do chat). Escolha um ou vários amigos e cada um recebe o convite como mensagem na conversa privada com você, num cartão com o canal e o botão "Abrir", que leva direto para a call. Quando a call acaba, o cartão vira "Convite inválido".
 - Badges: novo badge "Fez o L" para quem fez o L no segundo turno. Um aviso pergunta se você fez; quem responde sim ganha o badge com uma animação, e quem responde não vê uma reação triste. Se você fechar o aviso sem responder, um botão "L" fica na barra lateral para responder depois. Só contas criadas antes de 1º de novembro de 2026 veem o aviso.
 - Badges: novo badge Espectador para quem assiste à transmissão de tela de outra pessoa numa call (Curioso, Pipoqueiro, Cinéfilo, Crítico e Camarote, de 1 a 500 horas). Conta só sem estar com o fone mutado (surdo), e ver duas lives ao mesmo tempo conta uma vez.
+- Badges: o badge Idade da conta agora vai até 10 anos, com oito tiers novos depois da Sequoia (Bosque, Floresta, Jequitibá, Baobá, Árvore Ancestral, Árvore Celestial, Árvore da Vida e Yggdrasil, de 3 a 10 anos). Os limites aparecem em anos ("1 ano", "2 anos").
 
 ## Correções
 - Janela estreita: Configurações, Configurações do servidor, badges e cargos agora cabem em telas pequenas, com a navegação em cima do conteúdo, e as setas para ordenar cargos aparecem em telas de toque.
