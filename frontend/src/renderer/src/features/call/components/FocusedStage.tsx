@@ -3,8 +3,11 @@ import type { ScreenEntry } from '../lib/screenWatch'
 import type { CallUserInfo } from '../store/callStore'
 import { useCallStore } from '../store/callStore'
 import { useScreenTileProps } from '../hooks/useScreenTileProps'
+import { participantStripState } from '../lib/participantStrip'
 import { watchedExtras } from '../lib/stagePeople'
+import { useParticipantStripStore } from '../store/participantStripStore'
 import { ChevronDownIcon, XIcon } from '../../../shared/ui/icons'
+import ParticipantStrip from './ParticipantStrip'
 import ParticipantTile from './ParticipantTile'
 
 const overlayButton =
@@ -12,7 +15,8 @@ const overlayButton =
 
 /**
  * Foco grande (estilo Go Live): a transmissão em destaque em cima e, embaixo,
- * a faixa com os demais (`strip`, já montada por quem chama).
+ * a faixa com os demais (`strip`, já montada por quem chama), que dá para ocultar
+ * e deixar a live com todo o espaço.
  */
 function FocusedStage({
   entry,
@@ -26,6 +30,9 @@ function FocusedStage({
   const tile = useScreenTileProps(user)
   const setFocused = useCallStore((s) => s.setFocusedScreenUser)
   const stopWatchingScreen = useCallStore((s) => s.stopWatchingScreen)
+  const hiddenPref = useParticipantStripStore((s) => s.hidden)
+  const toggleStrip = useParticipantStripStore((s) => s.toggle)
+  const { visible } = participantStripState(true, hiddenPref)
   const extras = watchedExtras(entry, stopWatchingScreen)
 
   return (
@@ -62,7 +69,9 @@ function FocusedStage({
           fullscreenable={extras.fullscreenable}
         />
       </div>
-      {strip}
+      <ParticipantStrip hidden={!visible} onToggle={toggleStrip}>
+        {strip}
+      </ParticipantStrip>
     </div>
   )
 }
