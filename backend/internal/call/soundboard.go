@@ -48,51 +48,72 @@ func (s *Service) SetSoundLookup(lookup SoundLookup) {
 	s.soundLookup = lookup
 }
 
-func (s *Service) TriggerSoundboard(ctx context.Context, callID, userID, soundID string) error {
-	now := time.Now()
+// soundboardTarget é o que TriggerSoundboard precisa depois de soltar o lock.
+type soundboardTarget struct {
+	lookup    SoundLookup
+	perms     PermissionSource
+	serverID  string
+	channelID string
+}
 
-	s.mu.Lock()
-	lookup := s.soundLookup
+// soundboardCheckLocked confere a chamada e quem toca (s.mu travado) e marca
+// a hora do som para o intervalo mínimo.
+func (s *Service) soundboardCheckLocked(callID, userID string, now time.Time) (soundboardTarget, error) {
 	ac, ok := s.calls[callID]
 	if !ok || ac.info.Status == StatusEnded {
-		s.mu.Unlock()
-		return ErrNotFound
+		return soundboardTarget{}, ErrNotFound
 	}
-	if ac.info.Type != TypeChannel || ac.info.ServerID == nil || lookup == nil {
-		s.mu.Unlock()
-		return ErrSoundboardUnavailable
+	if ac.info.Type != TypeChannel || ac.info.ServerID == nil || s.soundLookup == nil {
+		return soundboardTarget{}, ErrSoundboardUnavailable
 	}
 	p, ok := ac.participants[userID]
 	if !ok {
-		s.mu.Unlock()
-		return ErrNotAllowed
+		return soundboardTarget{}, ErrNotAllowed
 	}
+	if err := soundboardVoiceCheck(p, now); err != nil {
+		return soundboardTarget{}, err
+	}
+	p.lastSoundAt = now
+	t := soundboardTarget{lookup: s.soundLookup, perms: s.perms, serverID: *ac.info.ServerID}
+	if ac.info.ChannelID != nil {
+		t.channelID = *ac.info.ChannelID
+	}
+	return t, nil
+}
+
+// soundboardVoiceCheck: mudo (próprio ou de moderador) não toca, e há um
+// intervalo mínimo entre dois sons.
+func soundboardVoiceCheck(p *participantState, now time.Time) error {
 	if p.muted || p.deafened || p.serverMuted || p.serverDeafened {
-		s.mu.Unlock()
 		return ErrSoundboardMuted
 	}
 	if !p.lastSoundAt.IsZero() && now.Sub(p.lastSoundAt) < soundboardCooldown {
-		s.mu.Unlock()
 		return ErrSoundboardCooldown
 	}
-	serverID := *ac.info.ServerID
-	var channelID string
-	if ac.info.ChannelID != nil {
-		channelID = *ac.info.ChannelID
+	return nil
+}
+
+func (t soundboardTarget) allowed(ctx context.Context, userID string) bool {
+	if t.perms == nil {
+		return true
 	}
-	perms := s.perms
-	p.lastSoundAt = now
+	got, err := t.perms.ChannelPerms(ctx, t.channelID, userID)
+	return err == nil && permission.Has(got, permission.UseSoundboard)
+}
+
+func (s *Service) TriggerSoundboard(ctx context.Context, callID, userID, soundID string) error {
+	s.mu.Lock()
+	t, err := s.soundboardCheckLocked(callID, userID, time.Now())
 	s.mu.Unlock()
-
-	if perms != nil {
-		got, err := perms.ChannelPerms(ctx, channelID, userID)
-		if err != nil || !permission.Has(got, permission.UseSoundboard) {
-			return ErrSoundboardNoPermission
-		}
+	if err != nil {
+		return err
+	}
+	if !t.allowed(ctx, userID) {
+		return ErrSoundboardNoPermission
 	}
 
-	sound, err := lookup.FindSound(ctx, soundID)
-	if err != nil || sound.ServerID != serverID {
+	sound, err := t.lookup.FindSound(ctx, soundID)
+	if err != nil || sound.ServerID != t.serverID {
 		return ErrSoundNotFound
 	}
 

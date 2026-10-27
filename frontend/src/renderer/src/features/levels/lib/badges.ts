@@ -147,34 +147,31 @@ export function publicStatText(b: Badge): string {
   return `${n}+ ${rest.join(' ')}${suffix}`
 }
 
+/** Unidades que são só uma contagem: [singular, plural]. */
+const COUNT_NOUN: Partial<Record<BadgeUnit, [string, string]>> = {
+  messages: ['mensagem', 'mensagens'],
+  reactions: ['reação', 'reações'],
+  servers: ['servidor', 'servidores'],
+  proposals: ['proposta', 'propostas']
+}
+
+/** O rótulo do limite das unidades que não são só uma contagem. */
+const THRESHOLD_TEXT: Partial<Record<BadgeUnit, (threshold: number) => string>> = {
+  seconds: (t) => plural(Math.floor(t / HOUR), 'hora', 'horas'),
+  months: (t) => plural(t, 'mês', 'meses'),
+  level: (t) => `Nível ${num(t)}`,
+  people: (t) => plural(t, 'pessoa', 'pessoas'),
+  // Corte do backend: contas criadas antes de 01/11/2026.
+  founder: () => 'Até 31/10/26',
+  dev: () => DEV_ONLY,
+  vote: () => 'Fez o L'
+}
+
 /** Rótulo de um degrau da escada: "1 hora", "3 meses", "2.000 mensagens". */
 export function formatThreshold(unit: BadgeUnit, threshold: number): string {
-  switch (unit) {
-    case 'seconds':
-      return plural(Math.floor(threshold / HOUR), 'hora', 'horas')
-    case 'months':
-      return plural(threshold, 'mês', 'meses')
-    case 'messages':
-      return plural(threshold, 'mensagem', 'mensagens')
-    case 'reactions':
-      return plural(threshold, 'reação', 'reações')
-    case 'level':
-      return `Nível ${num(threshold)}`
-    case 'people':
-      return plural(threshold, 'pessoa', 'pessoas')
-    case 'servers':
-      return plural(threshold, 'servidor', 'servidores')
-    case 'proposals':
-      return plural(threshold, 'proposta', 'propostas')
-    case 'founder':
-      // Corte do backend: contas criadas antes de 01/11/2026.
-      return 'Até 31/10/26'
-    case 'dev':
-      return DEV_ONLY
-    case 'vote':
-      return 'Fez o L'
-  }
-  return num(threshold)
+  const noun = COUNT_NOUN[unit]
+  if (noun) return plural(threshold, noun[0], noun[1])
+  return THRESHOLD_TEXT[unit]?.(threshold) ?? num(threshold)
 }
 
 function falta(n: number, one: string, many: string): string {
@@ -183,38 +180,35 @@ function falta(n: number, one: string, many: string): string {
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
+function hoursRemaining(left: number): string {
+  if (left < HOUR) return `Faltam ${Math.max(1, Math.ceil(left / 60))} min`
+  return falta(Math.ceil(left / HOUR), 'hora', 'horas')
+}
+
+function monthsRemaining(b: Badge, left: number, now: Date): string {
+  if (!b.next_at) return falta(left, 'mês', 'meses')
+  const days = Math.max(1, Math.ceil((new Date(b.next_at).getTime() - now.getTime()) / DAY_MS))
+  if (days >= 60) return falta(Math.round(days / 30.44), 'mês', 'meses')
+  return falta(days, 'dia', 'dias')
+}
+
+/** O "falta quanto" das unidades que não são só uma contagem. */
+const REMAINING_TEXT: Partial<Record<BadgeUnit, (b: Badge, left: number, now: Date) => string>> = {
+  seconds: (_, left) => hoursRemaining(left),
+  months: monthsRemaining,
+  level: (_, left) => falta(left, 'nível', 'níveis'),
+  people: (b) => `Uma call com ${plural(b.next_threshold ?? 0, 'pessoa', 'pessoas')}`,
+  founder: () => 'Só para quem chegou nas primeiras semanas',
+  dev: () => DEV_ONLY
+}
+
 /** "Faltam 20 horas", "Faltam 4 meses", "Tier máximo!". */
 export function remainingText(b: Badge, now: Date = new Date()): string {
   if (b.next_threshold === undefined || b.next_threshold === null) return 'Tier máximo!'
   const left = Math.max(0, b.next_threshold - (b.value ?? 0))
-  switch (b.unit) {
-    case 'seconds':
-      if (left < HOUR) return `Faltam ${Math.max(1, Math.ceil(left / 60))} min`
-      return falta(Math.ceil(left / HOUR), 'hora', 'horas')
-    case 'months': {
-      if (!b.next_at) return falta(left, 'mês', 'meses')
-      const days = Math.max(1, Math.ceil((new Date(b.next_at).getTime() - now.getTime()) / DAY_MS))
-      if (days >= 60) return falta(Math.round(days / 30.44), 'mês', 'meses')
-      return falta(days, 'dia', 'dias')
-    }
-    case 'messages':
-      return falta(left, 'mensagem', 'mensagens')
-    case 'reactions':
-      return falta(left, 'reação', 'reações')
-    case 'level':
-      return falta(left, 'nível', 'níveis')
-    case 'people':
-      return `Uma call com ${plural(b.next_threshold, 'pessoa', 'pessoas')}`
-    case 'servers':
-      return falta(left, 'servidor', 'servidores')
-    case 'proposals':
-      return falta(left, 'proposta', 'propostas')
-    case 'founder':
-      return 'Só para quem chegou nas primeiras semanas'
-    case 'dev':
-      return DEV_ONLY
-  }
-  return ''
+  const noun = COUNT_NOUN[b.unit]
+  if (noun) return falta(left, noun[0], noun[1])
+  return REMAINING_TEXT[b.unit]?.(b, left, now) ?? ''
 }
 
 /** 0–100 para a barra de progresso. */
