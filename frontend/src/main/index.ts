@@ -21,7 +21,15 @@ import { WindowWatch } from './screen/windowWatch'
 import { PreferredSource, findGameWindow, listProcessWindows } from './screen/gameWindow'
 import { checkScreenCastPortal } from './screen/screenPortal'
 import { portalMissingMessage, screenShareFlow } from '../shared/screenShareFlow'
-import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './window/background'
+import {
+  attachCloseToTray,
+  ensureSingleInstance,
+  isInCall,
+  onCallStateChange,
+  setupBackground,
+  startHidden
+} from './window/background'
+import { watchWindowActivity } from './window/windowActivity'
 import { setupUpdater } from './updates/updater'
 import { updateFeedFor } from './server/serverChoice'
 import { registerServerDiagnostics, startServerChoice } from './server/serverSetup'
@@ -218,8 +226,8 @@ function createWindow(): void {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
-      // Sem isso o Chromium reduz timers/render da janela em segundo plano e a
-      // live (captura de tela/WebRTC) trava para quem assiste.
+      // Em chamada o throttling de segundo plano fica desligado (a live travaria
+      // para quem assiste); fora dela, ligado. Quem decide é o watchWindowActivity.
       backgroundThrottling: false,
       additionalArguments: serverArgs(serverUrl)
     }
@@ -230,6 +238,7 @@ function createWindow(): void {
     if (!startHidden()) mainWindow?.show()
   })
   attachCloseToTray(mainWindow)
+  watchWindowActivity(mainWindow, { inCall: isInCall, onCallStateChange })
 
   mainWindow.on('closed', () => {
     pendingDisplay.deny()
