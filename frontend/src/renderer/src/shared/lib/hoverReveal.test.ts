@@ -17,7 +17,7 @@ const INFORMATIVO = [
   'features/friends/components/PersonRow.tsx', // mostra o @ ao passar o mouse
   'features/levels/components/BadgeRow.tsx', // balão com o nome do badge
   'features/chat/components/MessageSticker.tsx', // balão com o nome da figurinha
-  'features/chat/components/ChatPane.tsx', // hora da mensagem compacta
+  'features/chat/components/MessageParts.tsx', // hora da mensagem compacta
   'features/profile/components/ProfileCardBody.tsx', // botão invisível sobre o avatar/banner, que já abre ao toque
   'features/servers/components/VoiceKnockOverlay.tsx', // tocar no canal já pede para entrar
   'shared/ui/Avatar.tsx', // o GIF só anima no hover

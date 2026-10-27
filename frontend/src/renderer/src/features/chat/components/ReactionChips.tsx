@@ -87,7 +87,7 @@ function AddReactionChip({ onClick }: { onClick: () => void }): React.JSX.Elemen
       onClick={onClick}
       title="Adicionar reação"
       aria-label="Adicionar reação"
-      className="inline-flex h-7 w-9 cursor-pointer items-center justify-center rounded-lg border border-transparent bg-fg/5 text-gray-400 opacity-0 transition-colors hover:border-strong hover:bg-fg/10 hover:text-strong focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-brand group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
+      className="inline-flex h-7 w-9 cursor-pointer items-center justify-center rounded-lg border border-transparent bg-fg/5 text-gray-400 transition-colors hover:border-strong hover:bg-fg/10 hover:text-strong focus-visible:outline-2 focus-visible:outline-brand [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
     >
       <AddReactionIcon className="h-5 w-5" />
     </button>
