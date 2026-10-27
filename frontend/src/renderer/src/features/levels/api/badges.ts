@@ -21,6 +21,7 @@ export type BadgeUnit =
   | 'days'
   | 'votes'
   | 'birthday'
+  | 'firsts'
 
 export interface BadgeTier {
   tier: number

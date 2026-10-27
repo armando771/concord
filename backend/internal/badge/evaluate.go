@@ -46,6 +46,8 @@ type Stats struct {
 	// Dia e mês do aniversário de quem deixa anunciar; 0 sem data.
 	BirthdayDay   int64
 	BirthdayMonth int64
+	// Servidores em que a pessoa mandou a primeira mensagem.
+	FirstMessages int64
 }
 
 // Unlocks: categoria -> tier -> quando foi desbloqueado (o que está gravado).
@@ -161,6 +163,7 @@ var valueFns = map[string]valueFn{
 	"sequencia":    func(s Stats, _ time.Time) int64 { return s.LongestStreakDays },
 	"camera":       func(s Stats, _ time.Time) int64 { return s.CameraSeconds },
 	"votante":      func(s Stats, _ time.Time) int64 { return s.Votes },
+	"primeira":     func(s Stats, _ time.Time) int64 { return s.FirstMessages },
 	"aniversariante": func(s Stats, now time.Time) int64 {
 		return flag(isBirthday(s, now))
 	},

@@ -18,6 +18,7 @@
 - Badges: novo badge Câmera ligada para quem fica em call com a câmera aberta e mais gente ouvindo (Rostinho, Ao Vivo, Galã, Celebridade e Big Brother, de 1 a 500 horas). Conta a partir de agora.
 - Badges: novo badge Votante para quem vota nos cards do quadro de propostas (Eleitor, Cidadão, Fiscal de Urna, Mesário e Voto de Minerva, de 1 a 150 votos). Sobe na hora do voto, e quem já votou ganha os tiers com a data certa.
 - Badges: novo badge Aniversariante, ganho no dia do seu aniversário e seu para sempre. Vale para quem tem a data cadastrada e deixa ligado "Anunciar meu aniversário nos servidores".
+- Badges: novo badge exclusivo Primeira mensagem, de quem mandou a primeira mensagem de um servidor (Quebra-gelo, Desbravador e Big Bang, em 1, 3 e 10 servidores). Nos servidores que já existem, vale a mensagem mais antiga que ainda está lá.
 
 ## Correções
 - Janela estreita: Configurações, Configurações do servidor, badges e cargos agora cabem em telas pequenas, com a navegação em cima do conteúdo, e as setas para ordenar cargos aparecem em telas de toque.

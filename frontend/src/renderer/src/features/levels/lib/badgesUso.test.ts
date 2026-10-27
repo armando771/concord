@@ -155,3 +155,25 @@ describe('Aniversariante (ganho no dia do aniversário)', () => {
     expect(publicStatText(b({ tier: 1 }))).toBe('Comemorou o aniversário no Salinha')
   })
 })
+
+describe('Primeira mensagem (primeira mensagem de um servidor)', () => {
+  const b = (over: Partial<Badge>): Badge =>
+    badge({
+      category: 'primeira',
+      name: 'Primeira mensagem',
+      unit: 'firsts',
+      tiers: [
+        { tier: 1, name: 'Quebra-gelo', threshold: 1, rarity: 'raro' },
+        { tier: 2, name: 'Desbravador', threshold: 3, rarity: 'epico' }
+      ],
+      ...over
+    })
+
+  it('estatística, escada e quanto falta', () => {
+    expect(statText(b({ value: 1 }))).toBe('Primeira mensagem de 1 servidor')
+    expect(statText(b({ value: 4 }))).toBe('Primeira mensagem de 4 servidores')
+    expect(formatThreshold('firsts', 3)).toBe('3 servidores')
+    expect(remainingText(b({ value: 1, tier: 1, next_threshold: 3 }))).toBe('Faltam 2 servidores')
+    expect(publicStatText(b({ tier: 2 }))).toBe('Primeira mensagem de 3+ servidores')
+  })
+})

@@ -52,7 +52,8 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			COALESCE(b.camera_seconds, 0),
 			(SELECT COUNT(*) FROM proposal_votes v WHERE v.user_id = u.id),
 			CASE WHEN u.announce_birthday THEN COALESCE(u.birthday_day, 0) ELSE 0 END,
-			CASE WHEN u.announce_birthday THEN COALESCE(u.birthday_month, 0) ELSE 0 END
+			CASE WHEN u.announce_birthday THEN COALESCE(u.birthday_month, 0) ELSE 0 END,
+			(SELECT COUNT(*) FROM server_first_messages f WHERE f.user_id = u.id)
 		FROM users u
 		LEFT JOIN user_levels l ON l.user_id = u.id
 		LEFT JOIN user_badge_stats b ON b.user_id = u.id
@@ -83,6 +84,7 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 		&s.Votes,
 		&s.BirthdayDay,
 		&s.BirthdayMonth,
+		&s.FirstMessages,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Stats{}, ErrUserNotFound

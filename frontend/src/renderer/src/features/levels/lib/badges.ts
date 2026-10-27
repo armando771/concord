@@ -130,6 +130,7 @@ const STAT_TEXT: Partial<Record<BadgeUnit, (b: Badge, value: number) => string>>
   stickers: (_, value) => plural(value, 'figurinha ou GIF enviado', 'figurinhas e GIFs enviados'),
   votes: (_, value) => plural(value, 'voto dado', 'votos dados'),
   birthday: birthdayText,
+  firsts: (_, value) => `Primeira mensagem de ${plural(value, 'servidor', 'servidores')}`,
   days: (_, value) => `Recorde de ${plural(value, 'dia seguido', 'dias seguidos')}`,
   founder: (_, value) =>
     value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas',
@@ -151,6 +152,11 @@ const PUBLIC_FIXED_TEXT: Partial<Record<BadgeUnit, string>> = {
   birthday: BIRTHDAY_TEXT
 }
 
+/** O que vem antes do número no perfil dos outros ("Primeira mensagem de 3+ servidores"). */
+const PUBLIC_PREFIX: Partial<Record<BadgeUnit, string>> = {
+  firsts: 'Primeira mensagem de '
+}
+
 /**
  * Estatística no perfil de outra pessoa: o limite do tier conquistado
  * ("2.000+ mensagens"), nunca o número exato.
@@ -164,7 +170,7 @@ export function publicStatText(b: Badge): string {
   if (b.unit === 'level') return `${label}+`
   const [n, ...rest] = label.split(' ')
   const suffix = b.unit === 'seconds' ? ` ${TIME_SUFFIX[b.category] ?? 'em call'}` : ''
-  return `${n}+ ${rest.join(' ')}${suffix}`
+  return `${PUBLIC_PREFIX[b.unit] ?? ''}${n}+ ${rest.join(' ')}${suffix}`
 }
 
 /** Unidades que são só uma contagem: [singular, plural]. */
@@ -176,7 +182,8 @@ const COUNT_NOUN: Partial<Record<BadgeUnit, [string, string]>> = {
   songs: ['música', 'músicas'],
   sounds: ['som', 'sons'],
   stickers: ['figurinha ou GIF', 'figurinhas e GIFs'],
-  votes: ['voto', 'votos']
+  votes: ['voto', 'votos'],
+  firsts: ['servidor', 'servidores']
 }
 
 /** O rótulo do limite das unidades que não são só uma contagem. */

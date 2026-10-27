@@ -38,6 +38,8 @@ const (
 	UnitVotes = "votes"
 	// UnitBirthday: badge ganho no dia do aniversário (Aniversariante).
 	UnitBirthday = "birthday"
+	// UnitFirsts: servidores em que a pessoa mandou a primeira mensagem.
+	UnitFirsts = "firsts"
 )
 
 // FounderCutoff: quem criou a conta antes desta data (horário de Brasília)
@@ -355,5 +357,20 @@ var Catalog = []Category{
 		Tiers: []Tier{
 			{"Aniversariante", 1, RarityCommon},
 		},
+	},
+	{
+		// Quem mandou a primeira mensagem de um servidor (server_first_messages,
+		// gravada por trigger; os servidores antigos vieram do histórico).
+		// Exclusivo: só aparece para quem foi a primeira em algum.
+		Key:         "primeira",
+		Name:        "Primeira mensagem",
+		Description: "Mande a primeira mensagem de um servidor, antes de todo mundo.",
+		Unit:        UnitFirsts,
+		Tiers: []Tier{
+			{"Quebra-gelo", 1, RarityRare},
+			{"Desbravador", 3, RarityEpic},
+			{"Big Bang", 10, RarityLegendary},
+		},
+		Exclusive: true,
 	},
 }
