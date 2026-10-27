@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import { buildPlan } from './mobileBuild.mjs'
+
+const SIGNING = {
+  SALINHA_KEYSTORE_PATH: 'C:/chaves/salinha.jks',
+  SALINHA_KEYSTORE_PASSWORD: 'senha-loja',
+  SALINHA_KEY_ALIAS: 'salinha',
+  SALINHA_KEY_PASSWORD: 'senha-chave'
+}
+
+const OK = { ANDROID_HOME: 'C:/Android/Sdk', EXPO_PUBLIC_SERVER_URL: 'https://salinha.exemplo.com' }
+
+test('sem ANDROID_HOME nem ANDROID_SDK_ROOT: aponta o que falta', () => {
+  const plan = buildPlan({ EXPO_PUBLIC_SERVER_URL: 'https://x.co' })
+  assert.match(plan.problems.join('\n'), /ANDROID_HOME/)
+})
+
+test('sem EXPO_PUBLIC_SERVER_URL: o APK apontaria para o localhost', () => {
+  const plan = buildPlan({ ANDROID_HOME: 'C:/Android/Sdk' })
+  assert.match(plan.problems.join('\n'), /EXPO_PUBLIC_SERVER_URL/)
+})
+
+test('ANDROID_SDK_ROOT também vale', () => {
+  const plan = buildPlan({ ANDROID_SDK_ROOT: 'C:/Android/Sdk', EXPO_PUBLIC_SERVER_URL: 'https://x.co' })
+  assert.deepEqual(plan.problems, [])
+})
+
+test('com o keystore completo: argumentos de assinatura do Gradle', () => {
+  const plan = buildPlan({ ...OK, ...SIGNING })
+  assert.deepEqual(plan.problems, [])
+  assert.deepEqual(plan.warnings, [])
+  assert.deepEqual(plan.gradleArgs, [
+    '-Pandroid.injected.signing.store.file=C:/chaves/salinha.jks',
+    '-Pandroid.injected.signing.store.password=senha-loja',
+    '-Pandroid.injected.signing.key.alias=salinha',
+    '-Pandroid.injected.signing.key.password=senha-chave'
+  ])
+})
+
+test('sem keystore: avisa que o APK sai com a chave de debug', () => {
+  const plan = buildPlan(OK)
+  assert.deepEqual(plan.problems, [])
+  assert.deepEqual(plan.gradleArgs, [])
+  assert.match(plan.warnings.join('\n'), /chave de debug/)
+})
+
+test('keystore pela metade é erro (não assina calado com a chave errada)', () => {
+  const plan = buildPlan({ ...OK, SALINHA_KEYSTORE_PATH: 'C:/chaves/salinha.jks' })
+  assert.match(plan.problems.join('\n'), /SALINHA_KEYSTORE_PASSWORD/)
+  assert.match(plan.problems.join('\n'), /SALINHA_KEY_ALIAS/)
+})
+
+test('nunca imprime as senhas nos avisos nem nos problemas', () => {
+  const plan = buildPlan({ ...OK, ...SIGNING })
+  const text = [...plan.problems, ...plan.warnings].join('\n')
+  assert.ok(!text.includes('senha-loja') && !text.includes('senha-chave'))
+})
