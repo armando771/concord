@@ -84,6 +84,8 @@ type Manager struct {
 	searches map[string]searchSession
 	// Um comando por vez por usuário: não deixa ninguém disparar yt-dlp sem limite.
 	busy map[string]struct{}
+	// onQueued: quem pediu e quantas músicas entraram (badge DJ).
+	onQueued func(userID string, n int)
 }
 
 func NewManager(cfg Config, deps ManagerDeps) *Manager {

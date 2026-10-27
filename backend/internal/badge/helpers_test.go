@@ -1,0 +1,137 @@
+package badge
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"regexp"
+	"strings"
+	"testing"
+
+	"gin-quickstart/backend/internal/platform/database"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// category devolve a categoria do catálogo (falha se não existir).
+func category(t *testing.T, key string) Category {
+	t.Helper()
+	for _, c := range Catalog {
+		if c.Key == key {
+			return c
+		}
+	}
+	t.Fatalf("%s missing from the catalog", key)
+	return Category{}
+}
+
+// assertTiers confere nome, limite e raridade de cada tier.
+func assertTiers(t *testing.T, key string, want []Tier) {
+	t.Helper()
+	c := category(t, key)
+	if len(c.Tiers) != len(want) {
+		t.Fatalf("%s tiers = %+v", key, c.Tiers)
+	}
+	for i, w := range want {
+		if c.Tiers[i] != w {
+			t.Errorf("%s tier %d = %+v, want %+v", key, i+1, c.Tiers[i], w)
+		}
+	}
+}
+
+// assertBackfillMatchesCatalog: toda lista "(tier, limite)" da migration usa
+// os mesmos limites do catálogo.
+func assertBackfillMatchesCatalog(t *testing.T, key, migration string) {
+	t.Helper()
+	raw, err := os.ReadFile(migration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	for i, tier := range category(t, key).Tiers {
+		want = append(want, fmt.Sprintf("(%d, %d)", i+1, tier.Threshold))
+	}
+	lists := regexp.MustCompile(`VALUES\s*(\(\d+, \d+\)(?:, \(\d+, \d+\))*)\s*\)?\s*AS t`).FindAllStringSubmatch(string(raw), -1)
+	if len(lists) == 0 {
+		t.Fatal("VALUES list not found in the migration")
+	}
+	for _, m := range lists {
+		if got := m[1]; got != strings.Join(want, ", ") {
+			t.Fatalf("migration thresholds = %s, want %s", got, strings.Join(want, ", "))
+		}
+	}
+}
+
+// testDB é um Postgres de verdade (TEST_DATABASE_URL, banco descartável) com
+// as migrations aplicadas; pula o teste sem ele.
+type testDB struct {
+	t   *testing.T
+	ctx context.Context
+	db  *pgxpool.Pool
+}
+
+func openTestDB(t *testing.T) *testDB {
+	t.Helper()
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL não definido")
+	}
+	db, err := database.Connect(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(db.Close)
+	if err := database.Migrate(db, "../../migrations"); err != nil {
+		t.Fatal(err)
+	}
+	return &testDB{t: t, ctx: context.Background(), db: db}
+}
+
+func (d *testDB) exec(sql string, args ...any) {
+	d.t.Helper()
+	if _, err := d.db.Exec(d.ctx, sql, args...); err != nil {
+		d.t.Fatal(err)
+	}
+}
+
+// runFile roda um .sql inteiro (o backfill de uma migration).
+func (d *testDB) runFile(path string) {
+	d.t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		d.t.Fatal(err)
+	}
+	d.exec(string(raw))
+}
+
+// user cria uma pessoa (apagada no fim do teste) e devolve id e @.
+func (d *testDB) user() (string, string) {
+	d.t.Helper()
+	id := uuid.NewString()
+	name := "t" + strings.ReplaceAll(id, "-", "")[:12]
+	d.exec(`INSERT INTO users (id, username, display_name, email, password_hash) VALUES ($1, $2::text, $2::text, $2::text || '@ex.com', 'x')`, id, name)
+	d.t.Cleanup(func() {
+		d.db.Exec(d.ctx, `DELETE FROM messages WHERE author_id = $1`, id)
+		d.db.Exec(d.ctx, `DELETE FROM users WHERE id = $1`, id)
+	})
+	return id, name
+}
+
+// conversation abre uma DM entre a e b (para gravar mensagens nos testes).
+func (d *testDB) conversation(a, b string) string {
+	d.t.Helper()
+	if b < a {
+		a, b = b, a
+	}
+	var id string
+	err := d.db.QueryRow(d.ctx, `INSERT INTO conversations (id, user_a_id, user_b_id) VALUES (gen_random_uuid(), $1, $2) RETURNING id`, a, b).Scan(&id)
+	if err != nil {
+		d.t.Fatal(err)
+	}
+	d.t.Cleanup(func() {
+		d.db.Exec(d.ctx, `DELETE FROM messages WHERE conversation_id = $1`, id)
+		d.db.Exec(d.ctx, `DELETE FROM conversations WHERE id = $1`, id)
+	})
+	return id
+}

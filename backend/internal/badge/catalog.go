@@ -26,6 +26,8 @@ const (
 	UnitProposals = "proposals"
 	// UnitVote: badge de uma resposta única (o L do segundo turno).
 	UnitVote = "vote"
+	// UnitSongs: músicas postas na fila do Maestro (DJ).
+	UnitSongs = "songs"
 )
 
 // FounderCutoff: quem criou a conta antes desta data (horário de Brasília)
@@ -238,6 +240,22 @@ var Catalog = []Category{
 			{"Inovador", 15, RarityEpic},
 			{"Visionário", 40, RarityEpic},
 			{"Arquiteto", 100, RarityLegendary},
+		},
+	},
+	{
+		// Músicas que a pessoa pôs na fila do Maestro (internal/music); a
+		// playlist conta cada música que entrou. Somadas pelo backend a cada
+		// pedido (Service.Count).
+		Key:         "dj",
+		Name:        "DJ",
+		Description: "Ponha músicas na fila do Maestro, o bot de música das calls.",
+		Unit:        UnitSongs,
+		Tiers: []Tier{
+			{"Pede Música", 10, RarityCommon},
+			{"Dono da Playlist", 50, RarityCommon},
+			{"DJ de Churrasco", 200, RarityRare},
+			{"DJ Residente", 1000, RarityEpic},
+			{"Lenda das Pick-ups", 5000, RarityLegendary},
 		},
 	},
 }

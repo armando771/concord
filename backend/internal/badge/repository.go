@@ -3,6 +3,7 @@ package badge
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -42,7 +43,8 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			(SELECT COUNT(*) FROM servers sv WHERE sv.owner_id = u.id),
 			(SELECT COUNT(*) FROM proposals p WHERE p.author_id = u.id),
 			EXISTS (SELECT 1 FROM dev_badge_users d WHERE d.user_id = u.id),
-			EXISTS (SELECT 1 FROM segundo_turno_respostas r WHERE r.user_id = u.id AND r.fez_o_l)
+			EXISTS (SELECT 1 FROM segundo_turno_respostas r WHERE r.user_id = u.id AND r.fez_o_l),
+			COALESCE(b.songs_queued, 0)
 		FROM users u
 		LEFT JOIN user_levels l ON l.user_id = u.id
 		LEFT JOIN user_badge_stats b ON b.user_id = u.id
@@ -64,6 +66,7 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 		&s.Proposals,
 		&s.IsDev,
 		&s.FezOL,
+		&s.SongsQueued,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Stats{}, ErrUserNotFound
@@ -127,6 +130,25 @@ func (r *Repository) SaveUnlocks(ctx context.Context, userID string, unlocks []U
 		saved = append(saved, u)
 	}
 	return saved, rows.Err()
+}
+
+// AddCount soma n ao contador da categoria e devolve o total novo. Só as
+// categorias de counterColumns têm contador.
+func (r *Repository) AddCount(ctx context.Context, userID, category string, n int64) (int64, error) {
+	column, ok := counterColumns[category]
+	if !ok {
+		return 0, fmt.Errorf("badge %q não tem contador", category)
+	}
+	// column vem da lista fixa acima, nunca de quem chama.
+	var total int64
+	err := r.db.QueryRow(ctx, fmt.Sprintf(`
+		INSERT INTO user_badge_stats (user_id, %[1]s) VALUES ($1, $2)
+		ON CONFLICT (user_id) DO UPDATE SET
+			%[1]s = user_badge_stats.%[1]s + EXCLUDED.%[1]s,
+			updated_at = NOW()
+		RETURNING %[1]s
+		`, column), userID, n).Scan(&total)
+	return total, err
 }
 
 // AddCallStats soma o que o tracker juntou (tempos) e guarda o maior valor

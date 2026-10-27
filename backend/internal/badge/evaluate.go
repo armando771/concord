@@ -29,6 +29,8 @@ type Stats struct {
 	IsDev bool
 	// Respondeu "sim" no banner do segundo turno (Fez o L).
 	FezOL bool
+	// Músicas postas na fila do Maestro (DJ).
+	SongsQueued int64
 }
 
 // Unlocks: categoria -> tier -> quando foi desbloqueado (o que está gravado).
@@ -130,6 +132,7 @@ var valueFns = map[string]valueFn{
 	"contribuinte": func(s Stats, _ time.Time) int64 { return s.Proposals },
 	"criador":      func(s Stats, _ time.Time) int64 { return flag(s.IsDev) },
 	"l":            func(s Stats, _ time.Time) int64 { return flag(s.FezOL) },
+	"dj":           func(s Stats, _ time.Time) int64 { return s.SongsQueued },
 }
 
 func valueOf(c Category, s Stats, now time.Time) int64 {

@@ -22,10 +22,22 @@ type fakeStore struct {
 	savedSessions map[string]int64
 	loadSessions  map[string]int64
 	failAdd       bool
+	// Contadores por categoria (DJ, Barulhento).
+	counts map[string]map[string]int64
 }
 
 func newFakeStore() *fakeStore {
-	return &fakeStore{stats: map[string]Stats{}, unlocks: map[string]Unlocks{}, deltas: map[string]Delta{}}
+	return &fakeStore{stats: map[string]Stats{}, unlocks: map[string]Unlocks{}, deltas: map[string]Delta{}, counts: map[string]map[string]int64{}}
+}
+
+func (f *fakeStore) AddCount(_ context.Context, userID, category string, n int64) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.counts[userID] == nil {
+		f.counts[userID] = map[string]int64{}
+	}
+	f.counts[userID][category] += n
+	return f.counts[userID][category], nil
 }
 
 func (f *fakeStore) Stats(_ context.Context, userID string) (Stats, error) {
