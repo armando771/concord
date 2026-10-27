@@ -398,3 +398,31 @@ describe('visibleBadges e selectedBadge (modal de badges)', () => {
     expect(selectedBadge([], alvo(), null)).toBeUndefined()
   })
 })
+
+describe('Fez o L (resposta única do segundo turno)', () => {
+  const l = badge({
+    category: 'l',
+    name: 'Fez o L',
+    unit: 'vote',
+    value: 1,
+    tier: 1,
+    tier_name: 'Fez o L',
+    rarity: 'lendario',
+    tiers: [{ tier: 1, name: 'Fez o L', threshold: 1, rarity: 'lendario' }]
+  })
+
+  it('não mostra número: diz o que a pessoa fez', () => {
+    expect(statText(l)).toBe('Fez o L no segundo turno')
+    expect(formatThreshold('vote', 1)).toBe('Fez o L')
+  })
+
+  it('no perfil dos outros não vira "Fez+ o L"', () => {
+    expect(publicStatText({ ...l, value: undefined, progress: undefined })).toBe(
+      'Fez o L no segundo turno'
+    )
+  })
+
+  it('o nome não se repete no rótulo', () => {
+    expect(badgeLabel(l)).toBe('Fez o L')
+  })
+})

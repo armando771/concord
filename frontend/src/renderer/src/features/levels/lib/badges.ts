@@ -74,6 +74,7 @@ const HOUR = 3600
 
 const DEV_TEXT = 'Dev do Salinha'
 const DEV_ONLY = 'Só para os devs'
+const VOTE_TEXT = 'Fez o L no segundo turno'
 
 function num(n: number): string {
   return Math.floor(n).toLocaleString('pt-BR')
@@ -119,7 +120,8 @@ const STAT_TEXT: Partial<Record<BadgeUnit, (b: Badge, value: number) => string>>
   proposals: (_, value) => (value === 1 ? '1 proposta criada' : `${num(value)} propostas criadas`),
   founder: (_, value) =>
     value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas',
-  dev: () => DEV_TEXT
+  dev: () => DEV_TEXT,
+  vote: () => VOTE_TEXT
 }
 
 /** A estatística da linha "798 horas em call • Desbloqueado em … • RARO". */
@@ -135,6 +137,7 @@ export function statText(b: Badge): string {
 export function publicStatText(b: Badge): string {
   if (b.unit === 'founder') return 'Chegou nas primeiras semanas'
   if (b.unit === 'dev') return DEV_TEXT
+  if (b.unit === 'vote') return VOTE_TEXT
   const reached = b.tiers[b.tier - 1]
   if (!reached) return ''
   const label = `${formatThreshold(b.unit, reached.threshold)}`
@@ -168,6 +171,8 @@ export function formatThreshold(unit: BadgeUnit, threshold: number): string {
       return 'Até 31/10/26'
     case 'dev':
       return DEV_ONLY
+    case 'vote':
+      return 'Fez o L'
   }
   return num(threshold)
 }
