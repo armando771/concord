@@ -1,5 +1,4 @@
 import NotifySettingsModal from '../features/notifications/components/NotifySettingsModal'
-import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import ServerRail from '../features/servers/components/ServerRail'
 import FriendsSidebar from '../features/friends/components/FriendsSidebar'
@@ -27,7 +26,7 @@ import ShortcutsModal from '../features/settings/components/ShortcutsModal'
 import { useGlobalShortcuts } from '../features/settings/hooks/useGlobalShortcuts'
 import { useInviteLinkClicks } from '../features/servers/hooks/useInviteLinkClicks'
 import { useAuthStore } from '../features/auth/store/authStore'
-import { useChatStore } from '../features/chat/store/chatStore'
+import { useSessionConnection } from '../features/auth/hooks/useSessionConnection'
 import { useUIStore } from '../shared/store/uiStore'
 
 function AppShell(): React.JSX.Element {
@@ -40,14 +39,7 @@ function AppShell(): React.JSX.Element {
   const isServerPage = location.pathname.startsWith('/servers/')
   const hasToken = Boolean(useAuthStore((s) => s.accessToken))
 
-  useEffect(() => {
-    if (hasToken) {
-      useChatStore.getState().connect()
-    }
-    return () => {
-      useChatStore.getState().disconnect()
-    }
-  }, [hasToken])
+  useSessionConnection(hasToken)
 
   return (
     <div className="flex h-full">

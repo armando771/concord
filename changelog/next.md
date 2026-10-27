@@ -19,3 +19,4 @@
 - Chat: o texto que você está digitando agora fica guardado em cada canal e conversa, e não passa mais de um para o outro.
 - Sair da conta agora encerra a chamada em andamento.
 - Celular e teclado: fechar uma DM, sair de um grupo, remover alguém do grupo, apagar figurinha e imagem de fundo, o controle de volume da transmissão e o menu "•••" do canal de voz agora aparecem no toque e ao navegar com o Tab, não só com o mouse em cima.
+- Sessão expirada: se a sua sessão expira no meio de uma chamada, a chamada agora é encerrada (antes o microfone continuava aberto até você fechar o app).
