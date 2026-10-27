@@ -15,6 +15,7 @@ import InviteLanding from '../features/servers/pages/InviteLanding'
 import RequireAuth from '../features/auth/components/RequireAuth'
 import RedirectIfAuthed from '../features/auth/components/RedirectIfAuthed'
 import AppShell from './AppShell'
+import MobileBackFrame from '../features/navigation/components/MobileBackFrame'
 import { RouteErrorScreen } from '../shared/ui/AppErrorScreen'
 import { IS_WEB } from '../shared/lib/config'
 
@@ -38,8 +39,22 @@ export const router = createRouter([
       { path: 'friends', element: <Friends /> },
       // Antiga página de convites: agora é a aba "Convites" do Início.
       { path: 'invites', element: <Navigate to="/friends?tab=invites" replace /> },
-      { path: 'proposals', element: <Proposals /> },
-      { path: 'changelog', element: <Changelog /> },
+      {
+        path: 'proposals',
+        element: (
+          <MobileBackFrame>
+            <Proposals />
+          </MobileBackFrame>
+        )
+      },
+      {
+        path: 'changelog',
+        element: (
+          <MobileBackFrame>
+            <Changelog />
+          </MobileBackFrame>
+        )
+      },
       { path: 'dm/:userId', element: <DmChat /> },
       { path: 'dm/c/:conversationId', element: <GroupChat /> },
       { path: 'servers/:id', element: <ServerView /> },

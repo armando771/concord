@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import NotifySettingsModal from '../features/notifications/components/NotifySettingsModal'
 import { Outlet, useLocation } from 'react-router-dom'
 import ServerRail from '../features/servers/components/ServerRail'
@@ -33,6 +34,8 @@ import { useAppViewportHeight } from '../shared/hooks/useAppViewportHeight'
 import { useMobileNavSync } from '../features/navigation/hooks/useMobileNavSync'
 import { useMobileNavStore } from '../features/navigation/store/mobileNavStore'
 import { shellPanelClasses } from '../features/navigation/lib/mobileNav'
+import { useIsMobile } from '../features/navigation/hooks/useIsMobile'
+import { useSwipeToList } from '../features/navigation/hooks/useSwipeToList'
 
 // Celular: a barra de canais/DMs (a <aside> depois da do trilho) ocupa o resto
 // da largura, sem a largura arrastável do desktop.
@@ -53,7 +56,10 @@ function AppShell(): React.JSX.Element {
   useMobileNavSync()
   useAppViewportHeight()
   // Celular: uma coluna por vez (a lista ou o conteúdo). Desktop: as duas.
-  const columns = shellPanelClasses(useMobileNavStore((s) => s.panel))
+  const panel = useMobileNavStore((s) => s.panel)
+  const columns = shellPanelClasses(panel)
+  const contentRef = useRef<HTMLDivElement>(null)
+  useSwipeToList(contentRef, useIsMobile() && panel === 'content')
 
   return (
     <div className="flex h-full">
@@ -61,7 +67,7 @@ function AppShell(): React.JSX.Element {
         <ServerRail />
         {isServerPage ? <ServerSidebar /> : <FriendsSidebar />}
       </div>
-      <div className={`flex min-w-0 flex-1 flex-col ${columns.content}`}>
+      <div ref={contentRef} className={`flex min-w-0 flex-1 flex-col ${columns.content}`}>
         <ConnectionBanner />
         <EmailVerifyBanner />
         <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
