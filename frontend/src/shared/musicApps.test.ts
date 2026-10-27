@@ -16,7 +16,9 @@ describe('musicSourceFor', () => {
   })
 
   it('o site do player vence o navegador', () => {
-    expect(musicSourceFor('chromium.instance42 Google Chrome', 'https://music.youtube.com/watch?v=x')).toEqual({
+    expect(
+      musicSourceFor('chromium.instance42 Google Chrome', 'https://music.youtube.com/watch?v=x')
+    ).toEqual({
       app: 'YouTube Music',
       browser: false
     })

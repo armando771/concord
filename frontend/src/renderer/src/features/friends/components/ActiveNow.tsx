@@ -1,13 +1,10 @@
 import { useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import type { PublicUser } from '../../auth/store/authStore'
 import { useCallStore } from '../../call/store/callStore'
 import { useUserLook } from '../../profile/store/profileStore'
 import Avatar from '../../../shared/ui/Avatar'
 import StyledName from '../../profile/components/StyledName'
-import { ActivityCard } from '../../activity/components/ActivityCard'
-import { playingFriends } from '../../activity/lib/presenceActivity'
-import { usePresenceActivityStore } from '../../activity/store/presenceActivityStore'
+import { FriendsActivity } from '../../activity/components/FriendsActivity'
 import { friendsInVoice } from '../lib/onlineFriends'
 
 function ActiveVoiceFriendCard({ friend }: { friend: PublicUser }): React.JSX.Element {
@@ -30,29 +27,12 @@ function ActiveVoiceFriendCard({ friend }: { friend: PublicUser }): React.JSX.El
 
 /** Coluna "Ativo agora": amigos em canais de voz que o app conhece. */
 export default function ActiveNow({ friends }: { friends: PublicUser[] }): React.JSX.Element {
-  const navigate = useNavigate()
-  const byUser = usePresenceActivityStore((s) => s.byUser)
-  const playing = useMemo(() => playingFriends(friends, byUser), [friends, byUser])
   const serverCalls = useCallStore((s) => s.serverCalls)
   const inVoice = useMemo(() => friendsInVoice(friends, serverCalls), [serverCalls, friends])
 
   return (
     <aside className="hidden w-[360px] shrink-0 border-l border-subtle px-4 py-4 xl:block">
-      {playing.length > 0 && (
-        <>
-          <h2 className="text-ds-lg font-bold text-strong">Atividade — {playing.length}</h2>
-          <div className="mt-3 mb-6 flex flex-col gap-2">
-            {playing.map(({ friend, activity }) => (
-              <ActivityCard
-                key={friend.id}
-                user={friend}
-                activity={activity}
-                onClick={() => navigate(`/dm/${friend.id}`)}
-              />
-            ))}
-          </div>
-        </>
-      )}
+      <FriendsActivity friends={friends} />
       <h2 className="text-ds-lg font-bold text-strong">Ativo agora</h2>
       {inVoice.length === 0 ? (
         <div className="mt-4 text-center">

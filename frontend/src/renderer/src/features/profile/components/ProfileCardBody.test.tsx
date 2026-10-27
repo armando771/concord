@@ -28,7 +28,9 @@ const ana: CardProfile = {
 }
 
 const render = (props: Partial<React.ComponentProps<typeof ProfileCardBody>> = {}): string =>
-  renderToStaticMarkup(<ProfileCardBody profile={ana} fallbackBanner="linear-gradient(red, blue)" {...props} />)
+  renderToStaticMarkup(
+    <ProfileCardBody profile={ana} fallbackBanner="linear-gradient(red, blue)" {...props} />
+  )
 
 describe('ProfileCardBody', () => {
   it('mostra nome, @usuário, pronomes, nota, Sobre mim com link e os links', () => {
@@ -59,21 +61,33 @@ describe('ProfileCardBody', () => {
   })
 
   it('próprio perfil sem nota oferece adicionar uma', () => {
-    const html = render({ profile: { ...ana, status_text: '' }, isMe: true, onEditProfile: () => {} })
+    const html = render({
+      profile: { ...ana, status_text: '' },
+      isMe: true,
+      onEditProfile: () => {}
+    })
     expect(html).toContain('Adicionar uma nota')
     expect(html).toContain('Editar perfil')
     expect(render({ profile: { ...ana, status_text: '' } })).not.toContain('Adicionar uma nota')
   })
 
   it('carregando: banner e Sobre mim em skeleton; sem cor, o gradiente padrão', () => {
-    const html = render({ profile: { id: 'u1', display_name: 'Ana' }, loading: true, badge: <b>7</b> })
+    const html = render({
+      profile: { id: 'u1', display_name: 'Ana' },
+      loading: true,
+      badge: <b>7</b>
+    })
     expect(html.match(/class="skeleton/g)?.length).toBeGreaterThanOrEqual(3)
     expect(html).toContain('<b>7</b>')
-    expect(render({ profile: { id: 'u1', display_name: 'Ana' } })).toContain('linear-gradient(red, blue)')
+    expect(render({ profile: { id: 'u1', display_name: 'Ana' } })).toContain(
+      'linear-gradient(red, blue)'
+    )
   })
 
   it('Maestro: banner animado, selo BOT e o passo a passo', () => {
-    const html = render({ profile: { id: MAESTRO_USER_ID, display_name: 'Maestro', username: 'maestro', is_bot: true } })
+    const html = render({
+      profile: { id: MAESTRO_USER_ID, display_name: 'Maestro', username: 'maestro', is_bot: true }
+    })
     expect(html).toContain('<img')
     expect(html).toContain('Bot')
     expect(html).toContain(MAESTRO_HOWTO.title)

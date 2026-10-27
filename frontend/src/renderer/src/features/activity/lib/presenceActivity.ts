@@ -1,5 +1,8 @@
-// "Em atividade" (rich presence): o jogo que a pessoa está jogando agora. Não
-// confundir com lib/activityState.ts (jogos web abertos numa chamada). Puro.
+import type { ListeningActivity } from './listeningActivity'
+
+// "Em atividade" (rich presence): o jogo que a pessoa está jogando agora (a
+// música fica em listeningActivity.ts). Não confundir com lib/activityState.ts
+// (jogos web abertos numa chamada). Puro.
 
 export interface PresenceActivity {
   name: string
@@ -46,7 +49,7 @@ export function activityElapsed(startedAt: number, now: number): string {
   return `há ${Math.floor(hours / 24)} d`
 }
 
-export type ActivityLineKind = 'game' | 'voice' | 'note' | 'status'
+export type ActivityLineKind = 'game' | 'listening' | 'voice' | 'note' | 'status'
 
 export interface ActivityLine {
   kind: ActivityLineKind
@@ -54,16 +57,18 @@ export interface ActivityLine {
 }
 
 /**
- * Linha embaixo do nome, na ordem do Discord: jogo, "Em voz", nota
+ * Linha embaixo do nome, na ordem do Discord: jogo, música, "Em voz", nota
  * personalizada e, por fim, o status.
  */
 export function activityLine(user: {
   activity: PresenceActivity | null | undefined
+  listening?: ListeningActivity | null
   inVoice: boolean
   note: string | null | undefined
   statusLabel: string
 }): ActivityLine {
   if (user.activity) return { kind: 'game', text: user.activity.name }
+  if (user.listening) return { kind: 'listening', text: `Ouvindo ${user.listening.title}` }
   if (user.inVoice) return { kind: 'voice', text: 'Em voz' }
   const note = user.note?.trim()
   if (note) return { kind: 'note', text: note }

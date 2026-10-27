@@ -61,11 +61,7 @@ export function ProfileNames({
           className="truncate text-ds-sm font-semibold text-gray-200"
           title="Nome de exibição (fora deste servidor)"
         >
-          <StyledName
-            name={profile.display_name}
-            userId={profile.id}
-            style={profile.name_style}
-          />
+          <StyledName name={profile.display_name} userId={profile.id} style={profile.name_style} />
         </p>
       )}
       <ProfileHandleRow profile={profile} badges={badges} />

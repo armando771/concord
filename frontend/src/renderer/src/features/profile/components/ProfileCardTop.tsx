@@ -23,7 +23,9 @@ function bannerBackground(
   fallbackBanner: string
 ): React.CSSProperties | undefined {
   if (bannerSrc) return undefined
-  return profile.banner_color ? { background: profile.banner_color } : { backgroundImage: fallbackBanner }
+  return profile.banner_color
+    ? { background: profile.banner_color }
+    : { backgroundImage: fallbackBanner }
 }
 
 /** Banner: imagem/GIF, cor escolhida ou o gradiente padrão. */

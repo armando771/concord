@@ -26,7 +26,7 @@ startArrivalBadges()
 // Cartões de convite para a call na DM: viram "inválidos" quando a call acaba.
 startCallInvites()
 
-// O jogo que os outros estão jogando agora (presence:activity).
+// O jogo e a música dos outros agora (presence:activity).
 startPresenceActivity()
 
 // Soltar um arquivo fora do chat não pode fazer o Electron abrir o arquivo no

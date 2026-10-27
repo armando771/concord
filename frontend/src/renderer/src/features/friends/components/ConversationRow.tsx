@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { GameLine } from '../../activity/components/ActivityLine'
+import { CompactActivityLine } from '../../activity/components/ActivityLine'
 import type { ConversationOtherUser, ConversationSummary } from '../../chat/api/conversations'
 import { conversationRoute, conversationTitle } from '../../chat/lib/conversations'
 import { usePresenceStatus } from '../../chat/store/chatStore'
@@ -113,7 +113,9 @@ function ConversationText({
             {(conv.members ?? []).length} membros
           </p>
         )) ||
-        (other && <GameLine userId={other.id} className="text-ds-xs font-medium text-gray-500" />)
+        (other && (
+          <CompactActivityLine userId={other.id} className="text-ds-xs font-medium text-gray-500" />
+        ))
       )}
     </div>
   )
