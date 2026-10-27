@@ -79,7 +79,7 @@ function SettingsShell({
           <button
             type="button"
             onClick={() => dispatch({ type: 'back' })}
-            className="-ml-2 mb-3 flex min-h-10 cursor-pointer items-center gap-2 rounded-lg px-2 text-ds-md font-medium text-gray-300 hover:bg-fg/10 hover:text-strong md:hidden"
+            className="-ml-2 mb-3 flex min-h-10 cursor-pointer items-center gap-2 rounded-lg px-2 text-ds-md font-medium text-gray-300 hover:bg-fg/10 hover:text-strong focus-visible:outline-2 focus-visible:outline-violet-400 md:hidden"
           >
             <ArrowLeftIcon className="size-5" />
             {ariaLabel}

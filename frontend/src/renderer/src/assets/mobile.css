@@ -18,10 +18,15 @@
     box-sizing: border-box;
   }
 
-  /* Sem o "puxar para recarregar" e o quique da página atrás do app. */
+  /*
+   * Sem o "puxar para recarregar" e o quique da página atrás do app: num chat
+   * puxar a lista para cima (ler mensagens antigas) recarregaria tudo.
+   * manipulation: sem o atraso do toque duplo para zoom (a pinça continua).
+   */
   html,
   body {
     overscroll-behavior: none;
+    touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
   }
