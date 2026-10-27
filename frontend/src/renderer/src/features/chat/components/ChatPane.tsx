@@ -631,7 +631,7 @@ function ChatPane({
         </RoomLoadingGate>
       </div>
 
-      <div className="relative shrink-0 px-4">
+      <div className="relative shrink-0 px-4 max-md:px-2">
         <JumpToPresentButton
           visible={jump.visible}
           newCount={jump.newCount}
@@ -661,7 +661,7 @@ function ChatPane({
             />
             <form
             onSubmit={handleSubmit}
-            className="relative flex items-center gap-2 rounded-xl border border-subtle bg-input px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
+            className="relative flex items-center gap-2 rounded-xl border border-subtle bg-input px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40 max-md:gap-0.5 max-md:px-1 max-md:py-1"
           >
             <ChannelSlashSuggestions
               isChannel={isChannel}

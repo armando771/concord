@@ -81,6 +81,17 @@ function authorContextMenu(
   }
 }
 
+/** Segurar o dedo abre o "Mais" da mensagem; o botão direito, o menu do autor. */
+function rowContextMenu(
+  actions: MessageActionsState,
+  onAuthorMenu: ((e: React.MouseEvent) => void) | undefined
+): (e: React.MouseEvent<HTMLDivElement>) => void {
+  const authorMenu = authorContextMenu(onAuthorMenu)
+  return (e) => {
+    if (!actions.touchMenu(e)) authorMenu(e)
+  }
+}
+
 interface MessageAuthorView {
   me: ReturnType<typeof useAuthStore.getState>['user']
   isMine: boolean
@@ -184,13 +195,14 @@ function MessageRow({
   return (
     <div
       id={`msg-${message.id}`}
+      data-message-row=""
       className={messageRowClass(
         compact,
         messageMentionsMe(message, author.me),
         item.isHighlighted
       )}
       {...actions.rowProps}
-      onContextMenu={authorContextMenu(author.onMenu)}
+      onContextMenu={rowContextMenu(actions, author.onMenu)}
     >
       {hasReplyReference(message) && (
         <MessageReplyReference
