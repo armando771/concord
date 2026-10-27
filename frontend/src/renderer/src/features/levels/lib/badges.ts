@@ -285,7 +285,7 @@ export function selectedBadge<T extends { category?: string }>(
 }
 
 /** Badges que têm celebração própria na tela e ficam de fora do aviso genérico. */
-const CELEBRACAO_PROPRIA = new Set(['l'])
+const CELEBRACAO_PROPRIA = new Set(['l', 'v22'])
 
 /** Os desbloqueios que o aviso genérico mostra. */
 export function unlocksComAviso(unlocks: BadgeUnlockEvent['unlocks']): BadgeUnlockEvent['unlocks'] {

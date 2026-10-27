@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Badge } from '../api/badges'
+import type { Badge, BadgeUnlockEvent } from '../api/badges'
 import {
   badgeLabel,
   formatThreshold,
@@ -15,6 +15,7 @@ import {
   statText,
   unlockCount,
   selectedBadge,
+  unlocksComAviso,
   visibleBadges
 } from './badges'
 
@@ -424,5 +425,20 @@ describe('Fez o L (resposta Ãºnica do segundo turno)', () => {
 
   it('o nome nÃ£o se repete no rÃ³tulo', () => {
     expect(badgeLabel(l)).toBe('Fez o L')
+  })
+})
+
+describe('unlocksComAviso', () => {
+  const unlock = (category: string): BadgeUnlockEvent['unlocks'][number] => ({
+    category,
+    name: category,
+    tier: 1,
+    tier_name: category,
+    rarity: 'lendario'
+  })
+
+  it('l e v22 têm celebração própria e ficam fora do aviso genérico', () => {
+    const lista = [unlock('l'), unlock('voz'), unlock('v22')]
+    expect(unlocksComAviso(lista).map((u) => u.category)).toEqual(['voz'])
   })
 })
