@@ -2117,8 +2117,6 @@ export const useCallStore = create<CallState>()((set, get) => {
           })
           if (get().callId === p.call_id) {
             playSound(p.locked ? 'lock' : 'unlock')
-            const byName = p.by.display_name || p.by.username || 'Alguém'
-            showToast.info(p.locked ? `${byName} trancou a sala.` : `${byName} destrancou a sala.`)
           }
           return
         }
