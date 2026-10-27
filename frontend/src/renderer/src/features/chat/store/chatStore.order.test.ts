@@ -45,7 +45,11 @@ vi.mock('../../../shared/api/ws', () => ({
     isConnected = (): boolean => true
   }
 }))
-vi.mock('../api/conversations', () => ({ listConversations: vi.fn(async () => []) }))
+// markConversationRead: o "lido" sai num timer que pode disparar depois do teste (máquina lenta).
+vi.mock('../api/conversations', () => ({
+  listConversations: vi.fn(async () => []),
+  markConversationRead: vi.fn(async () => {})
+}))
 vi.mock('../../friends/api/presence', () => ({ fetchPresence: vi.fn(async () => ({})) }))
 vi.mock('../../servers/api/channels', () => ({ listChannels: vi.fn(async () => []) }))
 vi.mock('../../../app/router', () => ({ router: { navigate: vi.fn() } }))
