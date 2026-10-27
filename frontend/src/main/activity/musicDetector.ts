@@ -10,7 +10,9 @@ import { INITIAL_TRACKER, stepTracker, type DetectedTrack, type TrackerState } f
 export type SessionWatcher = (onSessions: (sessions: MediaSession[]) => void) => () => void
 
 /** A fonte desta plataforma; null onde não há (macOS). */
-export function platformWatcher(platform: NodeJS.Platform = process.platform): SessionWatcher | null {
+export function platformWatcher(
+  platform: NodeJS.Platform = process.platform
+): SessionWatcher | null {
   if (platform === 'win32') return watchSmtc
   if (platform === 'linux') return watchMpris
   return null

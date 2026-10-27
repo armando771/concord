@@ -62,7 +62,12 @@ function sameSong(a: DetectedTrack, b: DetectedTrack): boolean {
 }
 
 /** Mesma faixa: só reenvia se o início andou de verdade e a janela já passou. */
-function needsResend(state: TrackerState, playing: NowPlaying, track: DetectedTrack, now: number): boolean {
+function needsResend(
+  state: TrackerState,
+  playing: NowPlaying,
+  track: DetectedTrack,
+  now: number
+): boolean {
   const sent = state.sent as DetectedTrack
   // Posição zero na mesma faixa: o player não informa a posição; mantém o início.
   if (playing.positionMs === 0) return false

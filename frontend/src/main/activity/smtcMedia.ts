@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'child_process'
 import type { MediaSession } from './mediaSessions'
-import { lineSplitter, restartDelay } from './processLines'
+import { lineSplitter, nextFailures, restartDelay } from './processLines'
 
 // Windows: as sessões de mídia do sistema (SMTC, a mesma fonte do painel de
 // volume do Windows) lidas por um PowerShell que fica aberto e escreve uma
@@ -106,7 +106,12 @@ export function parseSmtcLine(line: string, now: number): MediaSession[] | null 
 }
 
 function spawnSmtc(): ChildProcess {
-  const args = ['-NoProfile', '-NonInteractive', '-EncodedCommand', encodePowerShell(SMTC_SCRIPT(process.pid))]
+  const args = [
+    '-NoProfile',
+    '-NonInteractive',
+    '-EncodedCommand',
+    encodePowerShell(SMTC_SCRIPT(process.pid))
+  ]
   return spawn('powershell', args, { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] })
 }
 
@@ -126,6 +131,12 @@ export function watchSmtc(onSessions: (sessions: MediaSession[]) => void): () =>
     if (sessions) onSessions(sessions)
   }
 
+  const scheduleRestart = (): void => {
+    const delay = restartDelay(failures)
+    if (stopped || delay === null) return
+    retry = setTimeout(start, delay)
+  }
+
   const start = (): void => {
     const openedAt = Date.now()
     child = spawnSmtc()
@@ -133,9 +144,8 @@ export function watchSmtc(onSessions: (sessions: MediaSession[]) => void): () =>
     child.stdout?.on('data', lineSplitter(onLine))
     child.on('error', () => {})
     child.on('exit', () => {
-      failures = Date.now() - openedAt < 10_000 ? failures + 1 : 0
-      const delay = restartDelay(failures)
-      if (!stopped && delay !== null) retry = setTimeout(start, delay)
+      failures = nextFailures(failures, Date.now() - openedAt)
+      scheduleRestart()
     })
   }
 

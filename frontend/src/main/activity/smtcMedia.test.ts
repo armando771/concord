@@ -58,14 +58,28 @@ describe('parseSmtcLine', () => {
       updated: NOW - 60_000
     })
     expect(parseSmtcLine(line, NOW)?.[0].positionMs).toBe(225_000)
-    const future = JSON.stringify({ app: 'a', title: 'x', status: 4, position: 5000, updated: NOW + 9000 })
+    const future = JSON.stringify({
+      app: 'a',
+      title: 'x',
+      status: 4,
+      position: 5000,
+      updated: NOW + 9000
+    })
     expect(parseSmtcLine(future, NOW)?.[0].positionMs).toBe(5000)
   })
 
   it('ignora itens que não são objetos e campos de tipo errado', () => {
     const line = JSON.stringify([1, null, { app: 7, title: 'x', status: '4' }])
     expect(parseSmtcLine(line, NOW)).toEqual([
-      { source: '', title: 'x', artist: '', album: '', playing: false, positionMs: 0, durationMs: 0 }
+      {
+        source: '',
+        title: 'x',
+        artist: '',
+        album: '',
+        playing: false,
+        positionMs: 0,
+        durationMs: 0
+      }
     ])
   })
 })

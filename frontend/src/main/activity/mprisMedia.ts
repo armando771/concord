@@ -75,7 +75,11 @@ export function parsePlayer(json: string): Omit<MediaSession, 'source'> | null {
   }
 }
 
-async function identityOf(run: BusctlRun, name: string, cache: Map<string, string>): Promise<string> {
+async function identityOf(
+  run: BusctlRun,
+  name: string,
+  cache: Map<string, string>
+): Promise<string> {
   const cached = cache.get(name)
   if (cached !== undefined) return cached
   const out = await run(['get-property', name, MPRIS_PATH, 'org.mpris.MediaPlayer2', 'Identity'])
@@ -90,7 +94,13 @@ async function readPlayer(
   identities: Map<string, string>
 ): Promise<MediaSession | null> {
   const out = await run([
-    'call', name, MPRIS_PATH, 'org.freedesktop.DBus.Properties', 'GetAll', 's', 'org.mpris.MediaPlayer2.Player'
+    'call',
+    name,
+    MPRIS_PATH,
+    'org.freedesktop.DBus.Properties',
+    'GetAll',
+    's',
+    'org.mpris.MediaPlayer2.Player'
   ])
   const player = out ? parsePlayer(out) : null
   if (!player) return null
@@ -104,7 +114,13 @@ export async function readMprisSessions(
   ownPid: number,
   identities = new Map<string, string>()
 ): Promise<MediaSession[]> {
-  const list = await run(['call', 'org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus', 'ListNames'])
+  const list = await run([
+    'call',
+    'org.freedesktop.DBus',
+    '/org/freedesktop/DBus',
+    'org.freedesktop.DBus',
+    'ListNames'
+  ])
   const names = list ? parseBusNames(list, ownPid) : []
   // Player que fechou sai do cache (o Firefox troca de nome a cada abertura).
   for (const known of identities.keys()) if (!names.includes(known)) identities.delete(known)

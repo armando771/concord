@@ -27,3 +27,11 @@ export function restartDelay(failures: number): number | null {
   if (failures >= 3) return null
   return failures < 2 ? 30_000 : 60_000
 }
+
+/** Caiu logo ao abrir (menos que isso de vida) conta como falha seguida. */
+const QUICK_EXIT_MS = 10_000
+
+/** Quedas seguidas logo ao abrir: soma uma; se ele viveu bem, zera. */
+export function nextFailures(failures: number, livedMs: number): number {
+  return livedMs < QUICK_EXIT_MS ? failures + 1 : 0
+}

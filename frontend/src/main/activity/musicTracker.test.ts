@@ -75,7 +75,11 @@ describe('stepTracker', () => {
     expect(early.sent).toHaveLength(1)
 
     const later = 100_000 + MIN_RESEND_MS
-    const { sent } = run([[song, 100_000], jump(100_000, 101_000), jump(100_000 + later - 101_000, later)])
+    const { sent } = run([
+      [song, 100_000],
+      jump(100_000, 101_000),
+      jump(100_000 + later - 101_000, later)
+    ])
     expect(sent).toHaveLength(2)
     expect(sent[1]).toMatchObject({ startedAt: 1_000 })
   })

@@ -14,7 +14,11 @@ const spotify: MediaSession = {
 }
 
 /** Fonte de sessões falsa: o teste empurra leituras com `push`. */
-function fakeWatcher(): { watcher: SessionWatcher; push: (s: MediaSession[]) => void; stopped: () => boolean } {
+function fakeWatcher(): {
+  watcher: SessionWatcher
+  push: (s: MediaSession[]) => void
+  stopped: () => boolean
+} {
   let emit: ((s: MediaSession[]) => void) | null = null
   let stopped = false
   return {
@@ -42,7 +46,9 @@ describe('createMusicDetector', () => {
     const detector = createMusicDetector(fake.watcher)
     detector.start(onChange)
     fake.push([spotify])
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ title: 'Águas de Março', startedAt: 90_000 }))
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Águas de Março', startedAt: 90_000 })
+    )
     expect(detector.current()?.app).toBe('Spotify')
   })
 

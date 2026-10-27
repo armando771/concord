@@ -72,10 +72,7 @@ describe('readMprisSessions', () => {
     }
     const identities = new Map<string, string>()
     const sessions = await readMprisSessions(run, 4242, identities)
-    expect(sessions.map((s) => s.source)).toEqual([
-      'spotify Spotify',
-      'firefox.instance_1_37'
-    ])
+    expect(sessions.map((s) => s.source)).toEqual(['spotify Spotify', 'firefox.instance_1_37'])
     expect(sessions[1].url).toBe('https://music.youtube.com/watch?v=abc')
 
     calls.length = 0
