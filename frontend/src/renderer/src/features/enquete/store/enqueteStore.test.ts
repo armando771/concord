@@ -1,0 +1,175 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const ensureBadges = vi.hoisted(() => vi.fn())
+vi.mock('../../levels/store/badgeStore', () => ({
+  useBadgeStore: { getState: () => ({ ensureBadges }) }
+}))
+vi.mock('../api/enquete', () => ({
+  fetchPendentes: vi.fn(),
+  responderEnquete: vi.fn()
+}))
+
+import { ApiError } from '../../../shared/api/client'
+import { fetchPendentes, responderEnquete, type Enquete } from '../api/enquete'
+import { useEnqueteStore } from './enqueteStore'
+
+const fetchMock = vi.mocked(fetchPendentes)
+const responderMock = vi.mocked(responderEnquete)
+
+const enquete: Enquete = {
+  id: 'segundo-turno',
+  titulo: 'T',
+  descricao: 'D',
+  opcoes: [
+    { id: 'l', rotulo: 'Fez o L', badge: 'l' },
+    { id: '22', rotulo: 'Fez o 22', badge: 'v22' },
+    { id: 'nenhum', rotulo: 'Prefiro não dizer' }
+  ]
+}
+const outra: Enquete = { ...enquete, id: 'outra' }
+
+const estado = (): ReturnType<typeof useEnqueteStore.getState> => useEnqueteStore.getState()
+
+async function ate(etapa: 'confirmacao', opcao: string): Promise<void> {
+  await estado().carregar('ana')
+  estado().selecionar(opcao)
+  estado().continuar()
+  expect(estado().etapa).toBe(etapa)
+}
+
+describe('enqueteStore', () => {
+  beforeEach(() => {
+    fetchMock.mockReset()
+    responderMock.mockReset()
+    ensureBadges.mockReset()
+    fetchMock.mockResolvedValue([enquete])
+    estado().reset()
+  })
+
+  it('carrega as pendentes uma vez por pessoa', async () => {
+    await estado().carregar('ana')
+    await estado().carregar('ana')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(estado().pendentes).toEqual([enquete])
+  })
+
+  it('troca de pessoa descarta o estado da anterior', async () => {
+    await estado().carregar('ana')
+    estado().selecionar('l')
+    fetchMock.mockResolvedValue([])
+    await estado().carregar('bia')
+    expect(estado().pendentes).toEqual([])
+    expect(estado().selecao).toBeNull()
+  })
+
+  it('sem pendentes (já respondeu ou fora do corte) nada aparece', async () => {
+    fetchMock.mockResolvedValue([])
+    await estado().carregar('ana')
+    expect(estado().pendentes).toEqual([])
+  })
+
+  it('erro ao carregar deixa sem modal e carregar de novo tenta outra vez (foco da janela)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    fetchMock.mockRejectedValueOnce(new Error('sem rede'))
+    await estado().carregar('ana')
+    expect(estado().pendentes).toEqual([])
+    await estado().carregar('ana')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(estado().pendentes).toEqual([enquete])
+  })
+
+  it('continuar sem opção marcada não sai da pergunta; voltar mantém a escolha', async () => {
+    await estado().carregar('ana')
+    estado().continuar()
+    expect(estado().etapa).toBe('pergunta')
+    estado().selecionar('l')
+    estado().continuar()
+    expect(estado().etapa).toBe('confirmacao')
+    estado().voltar()
+    expect(estado().etapa).toBe('pergunta')
+    expect(estado().selecao).toBe('l')
+  })
+
+  it('selecionar ignora opção que a enquete não tem', async () => {
+    await estado().carregar('ana')
+    estado().selecionar('zzz')
+    expect(estado().selecao).toBeNull()
+  })
+
+  it('confirmar opção com badge: celebra, tira a enquete e recarrega os badges', async () => {
+    await ate('confirmacao', '22')
+    responderMock.mockResolvedValue({ enquete: 'segundo-turno', opcao: '22', badge: 'v22' })
+    await estado().confirmar()
+    expect(responderMock).toHaveBeenCalledWith('segundo-turno', '22')
+    expect(estado().reacao).toEqual({ tipo: 'celebracao', badge: 'v22', rotulo: 'Fez o 22' })
+    expect(estado().pendentes).toEqual([])
+    expect(estado().etapa).toBe('pergunta')
+    expect(estado().selecao).toBeNull()
+    expect(estado().enviando).toBe(false)
+    expect(ensureBadges).toHaveBeenCalledWith('ana', true)
+  })
+
+  it('confirmar "nenhum": aviso neutro e os badges ficam como estão', async () => {
+    await ate('confirmacao', 'nenhum')
+    responderMock.mockResolvedValue({ enquete: 'segundo-turno', opcao: 'nenhum' })
+    await estado().confirmar()
+    expect(estado().reacao).toEqual({ tipo: 'neutra' })
+    expect(ensureBadges).not.toHaveBeenCalled()
+  })
+
+  it('fecharReacao limpa a reação e mostra a próxima pendente', async () => {
+    fetchMock.mockResolvedValue([enquete, outra])
+    await ate('confirmacao', 'l')
+    responderMock.mockResolvedValue({ enquete: 'segundo-turno', opcao: 'l', badge: 'l' })
+    await estado().confirmar()
+    expect(estado().pendentes).toEqual([outra])
+    estado().fecharReacao()
+    expect(estado().reacao).toBeNull()
+    expect(estado().pendentes[0].id).toBe('outra')
+  })
+
+  it('falha ao enviar mantém a confirmação aberta, marca o erro e libera os botões', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await ate('confirmacao', 'l')
+    responderMock.mockRejectedValue(new Error('sem rede'))
+    await estado().confirmar()
+    expect(estado().etapa).toBe('confirmacao')
+    expect(estado().erro).toBe(true)
+    expect(estado().enviando).toBe(false)
+    expect(estado().reacao).toBeNull()
+  })
+
+  it('409 (respondeu em outro aparelho) recarrega as pendentes em vez de mostrar erro', async () => {
+    await ate('confirmacao', 'l')
+    responderMock.mockRejectedValue(new ApiError(409, 'already answered'))
+    fetchMock.mockResolvedValue([])
+    await estado().confirmar()
+    expect(estado().erro).toBe(false)
+    expect(estado().pendentes).toEqual([])
+    expect(estado().reacao).toBeNull()
+  })
+
+  it('dois cliques seguidos em confirmar enviam uma vez só', async () => {
+    await ate('confirmacao', 'l')
+    let liberar: (v: { enquete: string; opcao: string; badge: string }) => void = () => {}
+    responderMock.mockReturnValue(new Promise((r) => (liberar = r)))
+    const a = estado().confirmar()
+    const b = estado().confirmar()
+    liberar({ enquete: 'segundo-turno', opcao: 'l', badge: 'l' })
+    await Promise.all([a, b])
+    expect(responderMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('resposta que chega depois de trocar de pessoa é descartada', async () => {
+    await ate('confirmacao', 'l')
+    let liberar: (v: { enquete: string; opcao: string; badge: string }) => void = () => {}
+    responderMock.mockReturnValue(new Promise((r) => (liberar = r)))
+    const pendente = estado().confirmar()
+    estado().reset()
+    await estado().carregar('bia')
+    liberar({ enquete: 'segundo-turno', opcao: 'l', badge: 'l' })
+    await pendente
+    expect(estado().reacao).toBeNull()
+    expect(estado().pendentes).toEqual([enquete])
+  })
+})
