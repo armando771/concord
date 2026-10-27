@@ -55,6 +55,7 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			(SELECT COUNT(*) FROM proposal_votes v WHERE v.user_id = u.id),
 			CASE WHEN u.announce_birthday THEN COALESCE(u.birthday_day, 0) ELSE 0 END,
 			CASE WHEN u.announce_birthday THEN COALESCE(u.birthday_month, 0) ELSE 0 END,
+			COALESCE(u.birthday_set_at, u.created_at),
 			(SELECT COUNT(*) FROM server_first_messages f WHERE f.user_id = u.id),
 			COALESCE((SELECT h.bugs FROM bug_hunters h WHERE h.user_id = u.id), 0),
 			COALESCE((SELECT t.posicao FROM badge_top10 t WHERE t.user_id = u.id), 0)
@@ -90,6 +91,7 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 		&s.Votes,
 		&s.BirthdayDay,
 		&s.BirthdayMonth,
+		&s.BirthdaySetAt,
 		&s.FirstMessages,
 		&s.BugsReported,
 		&s.Top10Rank,

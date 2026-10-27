@@ -99,7 +99,8 @@ var usoCategories = []Category{
 	{
 		// Ganho no dia do aniversário (Brasília), com as regras do recado de
 		// aniversário (internal/birthday): só quem deixa anunciar, e 29/02
-		// comemora em 28/02 no ano não bissexto. Depois do dia, fica.
+		// comemora em 28/02 no ano não bissexto. A data precisa estar
+		// cadastrada há 30 dias (birthday_set_at). Depois do dia, fica.
 		Key:         "aniversariante",
 		Name:        "Aniversariante",
 		Description: "Ganhe no dia do seu aniversário. Cadastre a data em Configurações e deixe ligado anunciar o aniversário nos servidores.",

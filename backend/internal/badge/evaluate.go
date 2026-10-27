@@ -50,6 +50,9 @@ type Stats struct {
 	// Dia e mês do aniversário de quem deixa anunciar; 0 sem data.
 	BirthdayDay   int64
 	BirthdayMonth int64
+	// Quando dia/mês do aniversário foram cadastrados ou trocados pela
+	// última vez (anti-trapaça: precisa de birthdayGrace).
+	BirthdaySetAt time.Time
 	// Servidores em que a pessoa mandou a primeira mensagem.
 	FirstMessages int64
 	// Bugs reportados, concedidos à mão em bug_hunters (Caçador de bugs).
@@ -123,9 +126,14 @@ func monthsBetween(from, to time.Time) int64 {
 	return int64(n)
 }
 
-// isBirthday: hoje (Brasília) é o aniversário da pessoa.
+// birthdayGrace: a data do aniversário precisa estar cadastrada há esse
+// tempo para valer o badge (trocar a data para hoje não dá o badge).
+const birthdayGrace = 30 * 24 * time.Hour
+
+// isBirthday: hoje (Brasília) é o aniversário da pessoa, com a data
+// cadastrada há pelo menos birthdayGrace.
 func isBirthday(s Stats, now time.Time) bool {
-	if s.BirthdayDay == 0 || s.BirthdayMonth == 0 {
+	if s.BirthdayDay == 0 || s.BirthdayMonth == 0 || now.Sub(s.BirthdaySetAt) < birthdayGrace {
 		return false
 	}
 	return birthday.IsBirthday(int(s.BirthdayDay), int(s.BirthdayMonth), now.In(Brasilia()))
