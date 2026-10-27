@@ -53,12 +53,39 @@ func (h *Hub) SetAudience(a AudienceProvider) {
 	h.mu.Unlock()
 }
 
+// richPresence é o que cada usuário está fazendo agora, por tipo. Protegido
+// por Hub.mu.
+type richPresence struct {
+	games activitySlot[Activity]
+}
+
+func newRichPresence() richPresence {
+	return richPresence{games: newActivitySlot(sameGame)}
+}
+
+// sameGame: o mesmo jogo de novo (o início não conta) não avisa ninguém.
+func sameGame(prev, next Activity) bool {
+	return prev.Name == next.Name && prev.Kind == next.Kind && prev.AppID == next.AppID && prev.IconHash == next.IconHash
+}
+
+// drop esquece as atividades de quem saiu; devolve se havia alguma.
+func (r *richPresence) drop(userID string) bool {
+	return r.games.drop(userID)
+}
+
 // HandleActivity trata "activity:set" e "activity:clear" vindos do app.
 func (h *Hub) HandleActivity(userID, evType string, payload json.RawMessage) {
 	if evType == "activity:clear" {
 		h.SetActivity(userID, nil)
 		return
 	}
+	if a, ok := parseGameActivity(payload, time.Now()); ok {
+		h.SetActivity(userID, a)
+	}
+}
+
+// parseGameActivity valida o jogo que o app mandou; ok = false descarta.
+func parseGameActivity(payload json.RawMessage, now time.Time) (*Activity, bool) {
 	var p struct {
 		Name      string `json:"name"`
 		Kind      string `json:"kind"`
@@ -67,65 +94,82 @@ func (h *Hub) HandleActivity(userID, evType string, payload json.RawMessage) {
 		IconHash  string `json:"icon_hash"`
 	}
 	if err := json.Unmarshal(payload, &p); err != nil {
-		return
+		return nil, false
 	}
 	name := strings.TrimSpace(p.Name)
-	if name == "" || utf8.RuneCountInString(name) > maxActivityNameRunes {
-		return
+	if p.Kind != ActivityKindGame || !runesWithin(name, 1, maxActivityNameRunes) {
+		return nil, false
 	}
-	if p.Kind != ActivityKindGame {
-		return
-	}
-	now := time.Now().UnixMilli()
-	started := p.StartedAt
-	// Relógio do cliente não manda: início no futuro ou ausente vira agora.
-	if started <= 0 || started > now {
-		started = now
-	}
-	// O ícone só vale com appid e hash válidos; senão o cliente usa o genérico.
-	appID, iconHash := p.AppID, p.IconHash
-	if appID <= 0 || appID > maxSteamAppID || !steamIconHashRE.MatchString(iconHash) {
-		appID, iconHash = 0, ""
-	}
-	h.SetActivity(userID, &Activity{Name: name, Kind: p.Kind, StartedAt: started, AppID: appID, IconHash: iconHash})
+	appID, iconHash := steamIcon(p.AppID, p.IconHash)
+	return &Activity{Name: name, Kind: p.Kind, StartedAt: clampStart(p.StartedAt, now), AppID: appID, IconHash: iconHash}, true
 }
 
-// SetActivity guarda (ou limpa, com nil) a atividade e avisa o público. Sem
+// runesWithin: o texto tem entre min e max caracteres.
+func runesWithin(s string, min, max int) bool {
+	n := utf8.RuneCountInString(s)
+	return n >= min && n <= max
+}
+
+// clampStart: relógio do cliente não manda; início no futuro ou ausente vira agora.
+func clampStart(started int64, now time.Time) int64 {
+	ms := now.UnixMilli()
+	if started <= 0 || started > ms {
+		return ms
+	}
+	return started
+}
+
+// steamIcon: o ícone só vale com appid e hash válidos; senão o cliente usa o genérico.
+func steamIcon(appID int64, hash string) (int64, string) {
+	if appID <= 0 || appID > maxSteamAppID || !steamIconHashRE.MatchString(hash) {
+		return 0, ""
+	}
+	return appID, hash
+}
+
+// SetActivity guarda (ou limpa, com nil) o jogo e avisa o público. Sem
 // conexão aberta, não guarda nada.
 func (h *Hub) SetActivity(userID string, a *Activity) {
-	h.mu.Lock()
-	if h.presence[userID] <= 0 {
-		h.mu.Unlock()
-		return
-	}
-	prev, had := h.activities[userID]
-	if a == nil {
-		if !had {
-			h.mu.Unlock()
-			return
+	h.changeActivity(userID, func(r *richPresence, now time.Time) bool {
+		if a == nil {
+			return r.games.clear(userID)
 		}
-		delete(h.activities, userID)
-		h.mu.Unlock()
-		h.publishActivity(userID, nil)
-		return
-	}
-	now := time.Now()
-	if last, ok := h.activitySetAt[userID]; ok && now.Sub(last) < activityMinInterval {
-		h.mu.Unlock()
-		return
-	}
-	h.activitySetAt[userID] = now
-	if had && prev.Name == a.Name && prev.Kind == a.Kind && prev.AppID == a.AppID && prev.IconHash == a.IconHash {
+		return r.games.set(userID, *a, now)
+	})
+}
+
+// changeActivity aplica change sob o lock (só para quem está conectado) e, se
+// mudou algo, avisa o público. Invisível não avisa ninguém: já parece sem nada.
+func (h *Hub) changeActivity(userID string, change func(*richPresence, time.Time) bool) {
+	h.mu.Lock()
+	if h.presence[userID] <= 0 || !change(&h.rich, time.Now()) {
 		h.mu.Unlock()
 		return
 	}
-	h.activities[userID] = *a
+	game := h.rich.games.get(userID)
 	hidden := h.statuses[userID] == user.StatusInvisible
 	h.mu.Unlock()
 
 	if !hidden {
-		h.publishActivity(userID, a)
+		h.publishActivity(userID, game)
 	}
+}
+
+// republishOnVisibility: invisível esconde a atividade; ao voltar, ela reaparece.
+func (h *Hub) republishOnVisibility(userID string, wasInvisible, nowInvisible bool) {
+	if wasInvisible == nowInvisible || !h.IsOnline(userID) {
+		return
+	}
+	h.mu.RLock()
+	game := h.rich.games.get(userID)
+	h.mu.RUnlock()
+	if game == nil {
+		return
+	}
+	if nowInvisible {
+		game = nil
+	}
+	h.publishActivity(userID, game)
 }
 
 // publishActivity manda presence:activity para o público e para as conexões do
@@ -153,15 +197,6 @@ func (h *Hub) publishActivity(userID string, a *Activity) {
 	for _, id := range ids {
 		h.SendToUser(id, event)
 	}
-}
-
-// clearActivityLocked tira a atividade de quem saiu; devolve se havia uma.
-// Precisa de h.mu (escrita).
-func (h *Hub) clearActivityLocked(userID string) bool {
-	_, had := h.activities[userID]
-	delete(h.activities, userID)
-	delete(h.activitySetAt, userID)
-	return had
 }
 
 // ActivitiesFor devolve a atividade de cada id que viewerID pode ver (ele
@@ -192,11 +227,11 @@ func (h *Hub) ActivitiesFor(ctx context.Context, viewerID string, ids []string) 
 		if _, ok := allowed[id]; !ok {
 			continue
 		}
-		a, ok := h.activities[id]
-		if !ok || h.effectiveStatusLocked(id) == user.StatusOffline {
+		a := h.rich.games.get(id)
+		if a == nil || h.effectiveStatusLocked(id) == user.StatusOffline {
 			continue
 		}
-		result[id] = a
+		result[id] = *a
 	}
 	return result
 }
