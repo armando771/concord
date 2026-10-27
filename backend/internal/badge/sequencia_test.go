@@ -101,7 +101,7 @@ func TestSequenciaDB(t *testing.T) {
 	}
 	d.exec(`INSERT INTO messages (id, author_id, conversation_id, content, created_at) VALUES (gen_random_uuid(), $1, $2, 'oi', $3)`, ana, conv, day(5).Add(time.Hour)) // mesmo dia
 
-	d.runFile(sequenciaMigration)
+	d.runBackfill(sequenciaMigration)
 	repo := BadgeRepository(d.db)
 	s, err := repo.Stats(d.ctx, ana)
 	if err != nil || s.LongestStreakDays != 3 || s.StreakDays != 2 {

@@ -94,8 +94,8 @@ func TestDJDB(t *testing.T) {
 	music(1, "🎵 @"+anaName+" adicionou a playlist **Rock** (12 músicas, ~50 min) · 🔊 Sala")
 	music(2, "⚠️ **X** (pedido de @"+anaName+") não carregou e foi pulada · 🔊 Sala")
 
-	d.runFile(djMigration)
-	d.runFile(djMigration) // de novo não soma duas vezes
+	d.runBackfill(djMigration)
+	d.runBackfill(djMigration) // de novo não soma duas vezes
 	repo := BadgeRepository(d.db)
 	s, err := repo.Stats(d.ctx, ana)
 	if err != nil || s.SongsQueued != 13 {

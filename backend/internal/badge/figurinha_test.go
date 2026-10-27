@@ -57,7 +57,7 @@ func TestFigurinhaDB(t *testing.T) {
 	if err != nil || s.StickersSent != 10 {
 		t.Fatalf("trigger: stickers = %d, %v (want 10)", s.StickersSent, err)
 	}
-	d.runFile(figurinhaMigration) // o backfill recalcula o mesmo número
+	d.runBackfill(figurinhaMigration) // o backfill recalcula o mesmo número
 	if s, _ = repo.Stats(d.ctx, ana); s.StickersSent != 10 {
 		t.Fatalf("backfill: stickers = %d", s.StickersSent)
 	}

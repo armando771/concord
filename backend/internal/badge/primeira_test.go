@@ -100,14 +100,14 @@ func TestPrimeiraDB(t *testing.T) {
 
 	// Backfill: servidor antigo cuja primeira mensagem foi apagada fica com a
 	// mais antiga que existe; o tier entra com a data dela.
-	_, ch3 := d.server(bia)
-	d.exec(`ALTER TABLE messages DISABLE TRIGGER messages_badge_first`)
+	// (servidor de antes do trigger: sem dono gravado).
+	sv3, ch3 := d.server(bia)
 	gone := msg(bia, ch3, base.Add(-time.Hour), nil)
 	msg(ana, ch3, base.Add(-30*time.Minute), nil)
-	d.exec(`ALTER TABLE messages ENABLE TRIGGER messages_badge_first`)
+	d.exec(`DELETE FROM server_first_messages WHERE server_id = $1`, sv3)
 	d.exec(`DELETE FROM messages WHERE id = $1`, gone)
 	before := firsts(ana)
-	d.runFile(primeiraMigration)
+	d.runBackfill(primeiraMigration)
 	if firsts(ana) != before+1 {
 		t.Fatalf("backfill: ana firsts %d -> %d, want +1", before, firsts(ana))
 	}

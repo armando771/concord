@@ -58,7 +58,7 @@ func TestBirthdaySetAtDB(t *testing.T) {
 
 	// Backfill: quem já tinha data fica com a criação da conta.
 	d.exec(`UPDATE users SET birthday_set_at = NULL WHERE id = $1`, ana)
-	d.runFile(aniversarianteMigration)
+	d.runBackfill(aniversarianteMigration)
 	if at := setAt(); !at.Equal(old) {
 		t.Fatalf("backfill set_at = %v, want %v", at, old)
 	}

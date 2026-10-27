@@ -51,7 +51,7 @@ func TestVotanteDB(t *testing.T) {
 	if s, err := repo.Stats(d.ctx, ana); err != nil || s.Votes != 2 {
 		t.Fatalf("votes = %d, %v (want 2)", s.Votes, err)
 	}
-	d.runFile(votanteMigration)
+	d.runBackfill(votanteMigration)
 	unlocks, _ := repo.Unlocks(d.ctx, ana)
 	if got := unlocks["votante"]; len(got) != 1 || !got[1].Equal(base.Add(time.Hour)) {
 		t.Fatalf("backfill = %v", got)

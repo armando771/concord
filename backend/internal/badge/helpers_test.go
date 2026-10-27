@@ -81,14 +81,35 @@ func (d *testDB) exec(sql string, args ...any) {
 	}
 }
 
-// runFile roda um .sql inteiro (o backfill de uma migration).
-func (d *testDB) runFile(path string) {
+// runBackfill roda só o backfill de uma migration (os INSERT/UPDATE/WITH),
+// sem o DDL: ALTER TABLE e CREATE TRIGGER travam tabelas que os testes de
+// outros pacotes usam ao mesmo tempo no mesmo banco (deadlock).
+func (d *testDB) runBackfill(path string) {
 	d.t.Helper()
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		d.t.Fatal(err)
 	}
-	d.exec(string(raw))
+	for _, stmt := range backfillStatements(string(raw)) {
+		d.exec(stmt)
+	}
+}
+
+var (
+	functionBody = regexp.MustCompile(`(?s)\$\$.*?\$\$`)
+	sqlComment   = regexp.MustCompile(`(?m)^\s*--.*$`)
+	backfillVerb = regexp.MustCompile(`(?i)^(INSERT|UPDATE|WITH)\b`)
+)
+
+func backfillStatements(sql string) []string {
+	sql = sqlComment.ReplaceAllString(functionBody.ReplaceAllString(sql, "$$$$"), "")
+	var out []string
+	for _, stmt := range strings.Split(sql, ";") {
+		if stmt = strings.TrimSpace(stmt); backfillVerb.MatchString(stmt) {
+			out = append(out, stmt)
+		}
+	}
+	return out
 }
 
 // user cria uma pessoa (apagada no fim do teste) e devolve id e @.
