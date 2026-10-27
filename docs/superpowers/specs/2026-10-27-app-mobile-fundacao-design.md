@@ -66,6 +66,12 @@ Reconecta com o backoff do `wsReconnect`, ao voltar do segundo plano
 (`AppState`) e ao voltar a rede (`NetInfo`). Expõe `on(type, handler)`; sem
 consumidores nesta fatia.
 
+**Recuperar senha e confirmar e-mail.** Os e-mails apontam para o app web
+(`APP_URL` + `/reset-password?token=…` e `/verify-email?token=…`). No celular, a
+tela "Recuperar senha" só pede o e-mail (`POST /auth/forgot-password`) e avisa
+para abrir o link recebido; redefinir e confirmar acontecem no navegador. Deep
+link para dentro do app fica para depois.
+
 ## Erros
 
 - Sem rede: faixa "Sem conexão" no topo e botões de envio desativados.
