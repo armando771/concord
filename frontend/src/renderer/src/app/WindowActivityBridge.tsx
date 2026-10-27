@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import '../assets/background.css'
 import { parseWindowActivity } from '../../../shared/windowActivity'
 import { holdLoops } from '../shared/lib/perf/loopPauser'
 import { useInBackground, useWindowActivityStore } from '../shared/store/windowActivityStore'
@@ -23,7 +24,8 @@ function listenBrowser(): () => void {
 
 /**
  * Segundo plano (janela sem foco, minimizada ou na bandeja): guarda o estado no
- * store e pausa as animações CSS infinitas até a pessoa voltar ao app.
+ * store, pausa as animações CSS infinitas e corta as transições até a pessoa
+ * voltar ao app.
  */
 function WindowActivityBridge(): null {
   const background = useInBackground()
@@ -38,6 +40,8 @@ function WindowActivityBridge(): null {
   }, [])
 
   useEffect(() => {
+    // assets/background.css corta as transições com este atributo.
+    document.documentElement.toggleAttribute('data-app-background', background)
     if (!background) return
     return holdLoops(() => document.getAnimations())
   }, [background])
