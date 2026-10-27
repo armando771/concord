@@ -27,8 +27,8 @@ type Stats struct {
 	Proposals int64
 	// Está em dev_badge_users (Fundador).
 	IsDev bool
-	// Respondeu "sim" no banner do segundo turno (Fez o L).
-	FezOL bool
+	// Escolhas da enquete ("enquete:opcao"), de internal/enquete.
+	Escolhas map[string]bool
 }
 
 // Unlocks: categoria -> tier -> quando foi desbloqueado (o que está gravado).
@@ -129,7 +129,8 @@ var valueFns = map[string]valueFn{
 	"reacoes":      func(s Stats, _ time.Time) int64 { return s.Reactions },
 	"contribuinte": func(s Stats, _ time.Time) int64 { return s.Proposals },
 	"criador":      func(s Stats, _ time.Time) int64 { return flag(s.IsDev) },
-	"l":            func(s Stats, _ time.Time) int64 { return flag(s.FezOL) },
+	"l":            func(s Stats, _ time.Time) int64 { return flag(s.Escolhas["segundo-turno:l"]) },
+	"v22":          func(s Stats, _ time.Time) int64 { return flag(s.Escolhas["segundo-turno:22"]) },
 }
 
 func valueOf(c Category, s Stats, now time.Time) int64 {

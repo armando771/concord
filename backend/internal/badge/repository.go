@@ -25,6 +25,7 @@ func BadgeRepository(db *pgxpool.Pool) *Repository {
 // (Fundador).
 func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 	var s Stats
+	var escolhas []string
 	err := r.db.QueryRow(
 		ctx,
 		`
@@ -42,7 +43,7 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			(SELECT COUNT(*) FROM servers sv WHERE sv.owner_id = u.id),
 			(SELECT COUNT(*) FROM proposals p WHERE p.author_id = u.id),
 			EXISTS (SELECT 1 FROM dev_badge_users d WHERE d.user_id = u.id),
-			EXISTS (SELECT 1 FROM segundo_turno_respostas r WHERE r.user_id = u.id AND r.fez_o_l)
+			ARRAY(SELECT e.enquete || ':' || e.opcao FROM escolhas e WHERE e.user_id = u.id)
 		FROM users u
 		LEFT JOIN user_levels l ON l.user_id = u.id
 		LEFT JOIN user_badge_stats b ON b.user_id = u.id
@@ -63,10 +64,13 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 		&s.OwnedServers,
 		&s.Proposals,
 		&s.IsDev,
-		&s.FezOL,
+		&escolhas,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Stats{}, ErrUserNotFound
+	}
+	if err == nil {
+		s.Escolhas = escolhasSet(escolhas)
 	}
 	return s, err
 }
@@ -209,4 +213,13 @@ func (r *Repository) LoadSessions(ctx context.Context, maxAge time.Duration) (ma
 		}
 	}
 	return out, rows.Err()
+}
+
+// escolhasSet vira a lista "enquete:opcao" num conjunto (nunca nil).
+func escolhasSet(items []string) map[string]bool {
+	out := make(map[string]bool, len(items))
+	for _, it := range items {
+		out[it] = true
+	}
+	return out
 }
