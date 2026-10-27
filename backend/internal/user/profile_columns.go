@@ -28,6 +28,14 @@ func themeColors(t *profiletheme.Theme, get func(*profiletheme.Theme) []string) 
 	return []string{}
 }
 
+// themeExtras: tema nil vira NULL (COALESCE mantém); senão o JSONB inteiro.
+func themeExtras(t *profiletheme.Theme) *profiletheme.Extras {
+	if t == nil {
+		return nil
+	}
+	return &t.Extras
+}
+
 func styleFont(s *namestyle.Style) *string {
 	if s == nil {
 		return nil

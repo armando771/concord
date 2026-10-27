@@ -526,7 +526,8 @@ func TestUpdateProfileTheme(t *testing.T) {
 	for _, bad := range []string{
 		`{"border":"dotted","border_colors":[],"background":"default","background_colors":[],"effect":"none"}`,
 		`{"border":"none","border_colors":[],"background":"solid","background_colors":["red"],"effect":"none"}`,
-		`{"border":"none","border_colors":[],"background":"default","background_colors":[],"effect":"confetti"}`,
+		`{"border":"none","border_colors":[],"background":"default","background_colors":[],"effect":"fogos"}`,
+		`{"border":"none","border_colors":[],"background":"default","background_colors":[],"effect":"fire","texture":"marmore"}`,
 	} {
 		rec = e.do(t, http.MethodPut, "/api/users/me/profile", []byte(`{"display_name":"Mugis","links":[],"profile_theme":`+bad+`}`), "application/json")
 		if rec.Code != http.StatusBadRequest {
