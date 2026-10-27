@@ -1,5 +1,7 @@
-import { useId, type ReactNode } from 'react'
+import { useId, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useModalBehavior } from '../hooks/useModalBehavior'
+import { trapTab } from '../lib/focusTrap'
 
 interface ModalProps {
   open: boolean
@@ -21,6 +23,9 @@ function Modal({
   children
 }: ModalProps): React.JSX.Element | null {
   const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  // Foco entra e volta, Esc fecha o do topo (o Tab fica preso no onKeyDown abaixo).
+  useModalBehavior(open, onClose, dialogRef)
 
   if (!open) return null
 
@@ -32,6 +37,7 @@ function Modal({
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
@@ -39,6 +45,7 @@ function Modal({
           xl ? 'max-w-5xl' : wide ? 'max-w-3xl' : 'max-w-md'
         }`}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => trapTab(e, dialogRef.current)}
       >
         <div className="mb-4 flex shrink-0 items-center justify-between gap-4">
           {title && (
