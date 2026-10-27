@@ -1,4 +1,4 @@
-import { Toggle } from '../AppSettings'
+import { Toggle } from '../Toggle'
 import { usePresenceActivityStore } from '../../../activity/store/presenceActivityStore'
 import { useListeningStore } from '../../../activity/store/listeningStore'
 

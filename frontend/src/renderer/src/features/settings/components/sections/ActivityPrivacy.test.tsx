@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../AppSettings', () => ({
+vi.mock('../Toggle', () => ({
   Toggle: ({ title, checked }: { title: string; checked: boolean }) => (
     <i data-toggle={title} data-on={String(checked)} />
   )

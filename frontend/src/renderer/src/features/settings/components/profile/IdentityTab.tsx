@@ -1,14 +1,14 @@
 import type { ProfileEditor } from '../../hooks/useProfileEditor'
 import EntranceSoundSettings from '../../../profile/components/EntranceSoundSettings'
-import { BirthdaySettings } from '../AppSettings'
 import { EditorSection } from './controls'
 import ProfileLinksField from './ProfileLinksField'
 import ProfileMediaFields from './ProfileMediaFields'
-import { BioField, DisplayNameField, NoteField, PronounsField } from './ProfileTextFields'
+import { BioField, NoteField } from './ProfileTextFields'
 
 /**
- * Aba "Identidade": imagens, nome e pronomes, o que aparece no cartão e, no
- * fim, o que salva na hora (aniversário e som de entrada).
+ * Aba "Identidade": imagens, o que aparece no cartão e, no fim, o som de
+ * entrada (que salva na hora). Nome e pronomes se editam clicando no cartão
+ * ao lado; o aniversário fica em Minha conta.
  */
 export default function IdentityTab({
   editor,
@@ -34,20 +34,6 @@ export default function IdentityTab({
         onRemove={(kind) => editor.setMedia(kind, { kind: 'remove' })}
         onBannerColor={(c) => set('banner_color', c)}
       />
-      <EditorSection title="Nome">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <DisplayNameField
-            value={draft.display_name}
-            error={errors.display_name}
-            onChange={(v) => set('display_name', v)}
-          />
-          <PronounsField
-            value={draft.pronouns}
-            error={errors.pronouns}
-            onChange={(v) => set('pronouns', v)}
-          />
-        </div>
-      </EditorSection>
       <EditorSection title="Sobre você">
         <NoteField
           value={draft.status_text}
@@ -62,12 +48,8 @@ export default function IdentityTab({
           onChange={(links) => set('links', links)}
         />
       </EditorSection>
-      {/* Aniversário e som de entrada salvam na hora (fora do "Salvar alterações"). */}
-      <p className="-mb-1 px-1 text-xs text-gray-400">Estes dois salvam na hora:</p>
-      <div className="grid gap-3 xl:grid-cols-2">
-        <BirthdaySettings />
-        <EntranceSoundSettings />
-      </div>
+      {/* O som de entrada salva na hora (fora do "Salvar alterações"). */}
+      <EntranceSoundSettings />
     </>
   )
 }

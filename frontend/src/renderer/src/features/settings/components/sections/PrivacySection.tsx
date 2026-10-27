@@ -6,7 +6,7 @@ import {
   type Privacy
 } from '../../../profile/api/users'
 import { useFriendStore } from '../../../friends/store/friendStore'
-import { Toggle } from '../AppSettings'
+import { Toggle } from '../Toggle'
 import { ActivityPrivacy } from './ActivityPrivacy'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useUIStore } from '../../../../shared/store/uiStore'

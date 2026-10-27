@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Toggle } from '../AppSettings'
+import { Toggle } from '../Toggle'
 import Button from '../../../../shared/ui/Button'
 import { bindingFromKeyEvent, bindingFromMouseButton, bindingLabels } from '../../lib/keybinds'
 import { effectiveBindings } from '../../lib/keybindPrefs'
