@@ -24,6 +24,10 @@ const (
 // o app trataria como sessão vencida e tentaria renovar o token).
 const CodeWrongPassword = "wrong_password"
 
+// CodeUsernameCooldown vai no 429 de quem trocou o @ há menos de 7 dias,
+// com available_at (quando libera).
+const CodeUsernameCooldown = "username_cooldown"
+
 // accountLookup busca a conta para conferir a senha.
 type accountLookup interface {
 	FindByID(ctx context.Context, id string) (*user.User, error)
@@ -119,7 +123,14 @@ func (h *AccountHandler) ChangeEmail(c *gin.Context) {
 }
 
 func respondAccountError(c *gin.Context, err error) {
+	var cooldown *user.UsernameCooldownError
 	switch {
+	case errors.As(err, &cooldown):
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error":        err.Error(),
+			"code":         CodeUsernameCooldown,
+			"available_at": cooldown.Until.UTC(),
+		})
 	case errors.Is(err, user.ErrUsernameTaken), errors.Is(err, user.ErrEmailTaken):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	case errors.Is(err, user.ErrInvalidUsername), errors.Is(err, user.ErrUsernameReserved),

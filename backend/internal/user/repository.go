@@ -50,6 +50,7 @@ const userColumns = `
 	allow_server_dms,
 	active,
 	email_verified_at,
+	username_changed_at,
 	created_at,
 	updated_at
 `
@@ -84,6 +85,7 @@ func scanUser(row pgx.Row) (*User, error) {
 		&user.AllowServerDMs,
 		&user.Active,
 		&user.EmailVerifiedAt,
+		&user.UsernameChangedAt,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)

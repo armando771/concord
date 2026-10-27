@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -208,5 +209,21 @@ func TestAccountNoBcryptSlotIs429(t *testing.T) {
 	w := e.put(e.h.ChangeUsername, `{"username":"ana_2","password":"senha-certa"}`, "u1")
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("status = %d, quer 429", w.Code)
+	}
+}
+
+func TestChangeUsernameNoPrazoDiz429ComAData(t *testing.T) {
+	e := newAccountEnv()
+	until := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+	e.changes.err = &user.UsernameCooldownError{Until: until}
+	w := e.put(e.h.ChangeUsername, `{"username":"ana_2","password":"senha-certa"}`, "u1")
+	body := w.Body.String()
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d body = %s, quer 429", w.Code, body)
+	}
+	for _, want := range []string{`"code":"username_cooldown"`, `"available_at":"2026-11-03T12:00:00Z"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body = %s, quer %s", body, want)
+		}
 	}
 }

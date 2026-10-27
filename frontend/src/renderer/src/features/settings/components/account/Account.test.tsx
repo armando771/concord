@@ -130,6 +130,50 @@ describe('CredentialModal', () => {
   })
 })
 
+describe('prazo do nome de usuário', () => {
+  it('trocou há pouco: o modal já abre avisando e com o salvar travado', () => {
+    const future = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString()
+    const html = renderToStaticMarkup(
+      <AccountModals
+        modal="username"
+        user={{ ...user, username_change_available_at: future } as never}
+        birthday={{ birthday: null, save: vi.fn() }}
+        onClose={noop}
+      />
+    )
+    expect(html).toContain('Você pode trocar o nome de usuário de novo em')
+    expect(html).toMatch(/type="submit" disabled=""/)
+    expect(html).toMatch(/aria-label="Nome de usuário" disabled=""/)
+  })
+  it('prazo vencido ou nunca trocou: livre', () => {
+    const past = new Date(Date.now() - 1000).toISOString()
+    for (const at of [past, undefined]) {
+      const html = renderToStaticMarkup(
+        <AccountModals
+          modal="username"
+          user={{ ...user, username_change_available_at: at } as never}
+          birthday={{ birthday: null, save: vi.fn() }}
+          onClose={noop}
+        />
+      )
+      expect(html).not.toContain('de novo em')
+      expect(html).not.toMatch(/type="submit" disabled=""/)
+    }
+  })
+  it('o e-mail não tem prazo', () => {
+    const future = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString()
+    const html = renderToStaticMarkup(
+      <AccountModals
+        modal="email"
+        user={{ ...user, username_change_available_at: future } as never}
+        birthday={{ birthday: null, save: vi.fn() }}
+        onClose={noop}
+      />
+    )
+    expect(html).not.toContain('de novo em')
+  })
+})
+
 describe('BirthdayEditModal', () => {
   it('data, anúncio e Salvar', () => {
     const html = renderToStaticMarkup(

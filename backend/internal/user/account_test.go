@@ -7,14 +7,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // fakeAccountRepo guarda as contas em memória; os "taken" ignoram a caixa,
 // como o banco (índices em lower()).
 type fakeAccountRepo struct {
-	users     map[string]*User
-	uniqueErr bool // o UPDATE cai no UNIQUE (corrida entre dois pedidos)
+	users          map[string]*User
+	uniqueErr      bool  // o UPDATE cai no UNIQUE (corrida entre dois pedidos)
+	setUsernameErr error // erro forçado no UPDATE do @
 }
 
 func (r *fakeAccountRepo) FindByID(_ context.Context, id string) (*User, error) {
@@ -45,12 +47,26 @@ func (r *fakeAccountRepo) EmailTakenByOther(_ context.Context, id, email string)
 	return r.takenByOther(id, func(u *User) string { return u.Email }, email), nil
 }
 
-func (r *fakeAccountRepo) SetUsername(_ context.Context, id, username string) (*User, error) {
+// SetUsername faz o que o UPDATE faz: recusa (sem linha) dentro do prazo e
+// só marca a data quando o nome muda de verdade (não só a caixa).
+func (r *fakeAccountRepo) SetUsername(_ context.Context, id, username string, cutoff time.Time) (*User, error) {
 	if r.uniqueErr {
 		return nil, &pgconn.PgError{Code: "23505"}
 	}
-	r.users[id].Username = username
-	copied := *r.users[id]
+	if r.setUsernameErr != nil {
+		return nil, r.setUsernameErr
+	}
+	u := r.users[id]
+	caseOnly := strings.EqualFold(u.Username, username)
+	if !caseOnly && u.UsernameChangedAt != nil && u.UsernameChangedAt.After(cutoff) {
+		return nil, pgx.ErrNoRows
+	}
+	if !caseOnly {
+		changed := cutoff.Add(UsernameCooldown)
+		u.UsernameChangedAt = &changed
+	}
+	u.Username = username
+	copied := *u
 	return &copied, nil
 }
 
@@ -74,8 +90,12 @@ func newAccountEnv() (*AccountService, *fakeAccountRepo, *fakeEvents) {
 		otherID: {ID: otherID, Username: "Bruno", Email: "bruno@x.com"},
 	}}
 	events := &fakeEvents{statuses: map[string]string{}}
-	return NewAccountService(repo, events), repo, events
+	svc := NewAccountService(repo, events)
+	svc.now = func() time.Time { return accountNow }
+	return svc, repo, events
 }
+
+var accountNow = time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
 
 func TestChangeUsername(t *testing.T) {
 	tests := []struct {
@@ -173,5 +193,91 @@ func TestChangeEmail(t *testing.T) {
 				t.Error("trocar o e-mail não avisa os outros")
 			}
 		})
+	}
+}
+
+func TestChangeUsernameCooldown(t *testing.T) {
+	ago := func(d time.Duration) *time.Time {
+		at := accountNow.Add(-d)
+		return &at
+	}
+	tests := []struct {
+		name      string
+		changedAt *time.Time
+		input     string
+		wantErr   bool
+	}{
+		{"nunca trocou (só o cadastro)", nil, "ana_nova", false},
+		{"trocou há 3 dias", ago(3 * 24 * time.Hour), "ana_nova", true},
+		{"trocou há 3 dias, mas só muda a caixa", ago(3 * 24 * time.Hour), "ANA", false},
+		{"trocou há 7 dias certinhos", ago(UsernameCooldown), "ana_nova", false},
+		{"trocou há 8 dias", ago(8 * 24 * time.Hour), "ana_nova", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, repo, events := newAccountEnv()
+			repo.users[meID].UsernameChangedAt = tt.changedAt
+			_, err := svc.ChangeUsername(context.Background(), meID, tt.input)
+			var cooldown *UsernameCooldownError
+			if got := errors.As(err, &cooldown); got != tt.wantErr {
+				t.Fatalf("erro = %v, quer prazo = %v", err, tt.wantErr)
+			}
+			if !tt.wantErr {
+				return
+			}
+			if !errors.Is(err, ErrUsernameCooldown) {
+				t.Error("o erro do prazo precisa casar com ErrUsernameCooldown")
+			}
+			if want := tt.changedAt.Add(UsernameCooldown); !cooldown.Until.Equal(want) {
+				t.Errorf("libera em %v, quer %v", cooldown.Until, want)
+			}
+			if len(events.published) != 0 {
+				t.Error("recusado não avisa ninguém")
+			}
+		})
+	}
+}
+
+func TestChangeUsernameMarcaAData(t *testing.T) {
+	svc, repo, _ := newAccountEnv()
+	if _, err := svc.ChangeUsername(context.Background(), meID, "Ana"); err != nil {
+		t.Fatal(err)
+	}
+	if repo.users[meID].UsernameChangedAt != nil {
+		t.Fatal("só a caixa não conta como troca")
+	}
+	if _, err := svc.ChangeUsername(context.Background(), meID, "ana_nova"); err != nil {
+		t.Fatal(err)
+	}
+	if got := repo.users[meID].UsernameChangedAt; got == nil || !got.Equal(accountNow) {
+		t.Fatalf("data da troca = %v, quer %v", got, accountNow)
+	}
+	// Logo depois, uma segunda troca cai no prazo.
+	if _, err := svc.ChangeUsername(context.Background(), meID, "ana_3"); !errors.Is(err, ErrUsernameCooldown) {
+		t.Fatalf("segunda troca = %v, quer o prazo", err)
+	}
+}
+
+// Dois pedidos ao mesmo tempo: o UPDATE condicional recusa o segundo (sem
+// linha) e isso vira o erro do prazo, não "conta não encontrada".
+func TestChangeUsernameCorridaNoPrazo(t *testing.T) {
+	svc, repo, _ := newAccountEnv()
+	repo.setUsernameErr = pgx.ErrNoRows
+	_, err := svc.ChangeUsername(context.Background(), meID, "ana_nova")
+	var cooldown *UsernameCooldownError
+	if !errors.As(err, &cooldown) || !cooldown.Until.Equal(accountNow.Add(UsernameCooldown)) {
+		t.Fatalf("erro = %v, quer o prazo a partir de agora", err)
+	}
+}
+
+func TestSelfMostraQuandoPodeTrocarDeNovo(t *testing.T) {
+	u := &User{}
+	if u.Self().UsernameChangeAvailableAt != nil {
+		t.Error("sem troca registrada, nada de prazo")
+	}
+	changed := accountNow
+	u.UsernameChangedAt = &changed
+	if got := u.Self().UsernameChangeAvailableAt; got == nil || !got.Equal(accountNow.Add(UsernameCooldown)) {
+		t.Errorf("libera em %v, quer %v", got, accountNow.Add(UsernameCooldown))
 	}
 }

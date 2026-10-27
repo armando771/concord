@@ -20,7 +20,7 @@ const CREDENTIALS: Record<AccountField, CredentialConfig> = {
   username: {
     title: 'Mudar o nome de usuário',
     label: 'Nome de usuário',
-    hint: 'De 3 a 32 caracteres: letras, números ou _. É o seu @ no app e serve para entrar.',
+    hint: 'De 3 a 32 caracteres: letras, números ou _. É o seu @ no app e serve para entrar. Dá para trocar uma vez a cada 7 dias.',
     type: 'text',
     autoComplete: 'username',
     success: 'Nome de usuário trocado!',
@@ -37,14 +37,19 @@ const CREDENTIALS: Record<AccountField, CredentialConfig> = {
   }
 }
 
-/** Troca o @ ou o e-mail: o valor novo e a senha atual (exigida pelo servidor). */
+/**
+ * Troca o @ ou o e-mail: o valor novo e a senha atual (exigida pelo servidor).
+ * `locked` (o @ ainda no prazo de 7 dias) mostra o aviso e trava tudo.
+ */
 export default function CredentialModal({
   kind,
   current,
+  locked = null,
   onClose
 }: {
   kind: AccountField
   current: string
+  locked?: string | null
   onClose: () => void
 }): React.JSX.Element {
   const config = CREDENTIALS[kind]
@@ -52,6 +57,7 @@ export default function CredentialModal({
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const blocked = busy || Boolean(locked)
 
   const submit = async (): Promise<void> => {
     setBusy(true)
@@ -70,7 +76,7 @@ export default function CredentialModal({
         className="flex flex-col gap-4"
         onSubmit={(e) => {
           e.preventDefault()
-          void submit()
+          if (!blocked) void submit()
         }}
       >
         <Field label={config.label} hint={config.hint}>
@@ -81,6 +87,7 @@ export default function CredentialModal({
             onChange={(e) => setValue(e.target.value)}
             className={inputClass}
             aria-label={config.label}
+            disabled={Boolean(locked)}
             autoFocus
           />
         </Field>
@@ -92,8 +99,14 @@ export default function CredentialModal({
             onChange={(e) => setPassword(e.target.value)}
             className={inputClass}
             aria-label="Senha atual"
+            disabled={Boolean(locked)}
           />
         </Field>
+        {locked && (
+          <p role="status" className="rounded-md bg-fg/5 px-3 py-2 text-xs text-strong">
+            {locked}
+          </p>
+        )}
         {error && (
           <p role="alert" className="text-xs text-danger">
             {error}
@@ -103,7 +116,7 @@ export default function CredentialModal({
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy} className="min-h-10">
             Cancelar
           </Button>
-          <Button type="submit" disabled={busy} className="min-h-10">
+          <Button type="submit" disabled={blocked} className="min-h-10">
             {busy ? 'Salvando…' : 'Salvar'}
           </Button>
         </div>

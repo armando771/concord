@@ -23,10 +23,41 @@ const VALIDATE: Record<AccountField, (value: string) => string | null> = {
 
 const GENERIC = 'Não foi possível salvar. Tente de novo.'
 
+const COOLDOWN_RULE = 'Você só pode trocar o nome de usuário uma vez a cada 7 dias.'
+
+/** "03/11", no fuso de quem está vendo. */
+export function formatDayMonth(iso: string): string {
+  const date = new Date(iso)
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}`
+}
+
+const cooldownMessage = (iso: string): string =>
+  `Você pode trocar o nome de usuário de novo em ${formatDayMonth(iso)}.`
+
+/**
+ * O @ só troca uma vez a cada 7 dias: com a data em que libera
+ * (username_change_available_at) ainda no futuro, o aviso; senão null.
+ */
+export function usernameLock(
+  availableAt: string | null | undefined,
+  now: Date = new Date()
+): string | null {
+  if (!availableAt || new Date(availableAt) <= now) return null
+  return cooldownMessage(availableAt)
+}
+
+/** O 429 do prazo do @ traz a data em que libera (available_at). */
+function cooldownError(err: ApiError): string {
+  const at = err.body?.available_at
+  return typeof at === 'string' ? cooldownMessage(at) : COOLDOWN_RULE
+}
+
 /** Mensagem para o erro do PUT /users/me/username ou /users/me/email. */
 export function accountChangeError(err: unknown, field: AccountField): string {
   if (!(err instanceof ApiError)) return GENERIC
   if (err.code === 'wrong_password') return 'Senha incorreta.'
+  if (err.code === 'username_cooldown') return cooldownError(err)
   if (err.status === 409) return TAKEN[field]
   if (err.status === 429) return 'Muitas tentativas. Espere alguns minutos e tente de novo.'
   if (err.status === 400 && /reservado/.test(err.message)) return 'Esse nome de usuário é reservado.'

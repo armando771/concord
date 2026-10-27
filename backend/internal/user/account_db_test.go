@@ -2,13 +2,16 @@ package user
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"gin-quickstart/backend/internal/platform/database"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // Troca de @ e e-mail num Postgres de verdade (TEST_DATABASE_URL, banco
@@ -52,9 +55,26 @@ func TestAccountRepositoryDB(t *testing.T) {
 		t.Fatalf("e-mail de outra conta (outra caixa) = taken=%v err=%v", taken, err)
 	}
 
-	u, err := repo.SetUsername(ctx, me, myName+"_x")
-	if err != nil || u.Username != myName+"_x" {
+	// O cadastro não conta como troca.
+	if u, _ := repo.FindByID(ctx, me); u.UsernameChangedAt != nil {
+		t.Fatal("conta nova já com data de troca do @")
+	}
+	cutoff := time.Now().Add(-UsernameCooldown)
+	u, err := repo.SetUsername(ctx, me, strings.ToUpper(myName), cutoff)
+	if err != nil || u.UsernameChangedAt != nil {
+		t.Fatalf("só a caixa não marca a data: %+v, %v", u, err)
+	}
+	u, err = repo.SetUsername(ctx, me, myName+"_x", cutoff)
+	if err != nil || u.Username != myName+"_x" || u.UsernameChangedAt == nil {
 		t.Fatalf("SetUsername = %+v, %v", u, err)
+	}
+	// Dentro do prazo, o UPDATE não pega a linha (corrida entre dois pedidos).
+	if _, err := repo.SetUsername(ctx, me, myName+"_y", time.Now().Add(-UsernameCooldown)); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("dentro do prazo = %v, quer pgx.ErrNoRows", err)
+	}
+	// Só a caixa passa mesmo dentro do prazo.
+	if _, err := repo.SetUsername(ctx, me, strings.ToUpper(myName+"_x"), time.Now().Add(-UsernameCooldown)); err != nil {
+		t.Fatalf("só a caixa dentro do prazo: %v", err)
 	}
 	u, err = repo.SetEmail(ctx, me, strings.ToUpper(myName)+"@ex.com", true)
 	if err != nil || u.EmailVerifiedAt == nil {

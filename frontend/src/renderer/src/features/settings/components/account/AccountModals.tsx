@@ -1,4 +1,5 @@
 import type { User } from '../../../auth/store/authStore'
+import { usernameLock } from '../../../auth/lib/accountChange'
 import type { BirthdayState } from '../../../profile/hooks/useBirthday'
 import { draftFromProfile } from '../../../profile/lib/profileValidation'
 import { saveMyProfileFields } from '../../../profile/store/myProfileActions'
@@ -37,7 +38,15 @@ export default function AccountModals({
 }): React.JSX.Element | null {
   if (modal === 'name') return <AccountNameModal user={user} onClose={onClose} />
   if (modal === 'username' || modal === 'email') {
-    return <CredentialModal key={modal} kind={modal} current={user[modal]} onClose={onClose} />
+    return (
+      <CredentialModal
+        key={modal}
+        kind={modal}
+        current={user[modal]}
+        locked={modal === 'username' ? usernameLock(user.username_change_available_at) : null}
+        onClose={onClose}
+      />
+    )
   }
   if (modal === 'birthday' && birthday.birthday) {
     return <BirthdayEditModal initial={birthday.birthday} onSave={birthday.save} onClose={onClose} />
