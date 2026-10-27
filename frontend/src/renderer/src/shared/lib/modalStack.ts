@@ -7,6 +7,8 @@ export interface ModalStack {
   push: (id: string) => void
   remove: (id: string) => void
   isTop: (id: string) => boolean
+  /** Algum modal aberto (quem está por baixo deixa o Esc para ele). */
+  hasOpen: () => boolean
 }
 
 export function createModalStack(): ModalStack {
@@ -18,7 +20,8 @@ export function createModalStack(): ModalStack {
     remove: (id) => {
       open = open.filter((x) => x !== id)
     },
-    isTop: (id) => open[open.length - 1] === id
+    isTop: (id) => open[open.length - 1] === id,
+    hasOpen: () => open.length > 0
   }
 }
 

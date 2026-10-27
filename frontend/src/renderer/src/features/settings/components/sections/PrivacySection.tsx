@@ -5,7 +5,7 @@ import {
   type FriendRequestPolicy,
   type Privacy
 } from '../../../profile/api/users'
-import { Toggle } from '../AppSettings'
+import { Toggle } from '../Toggle'
 import { useFriendStore } from '../../../friends/store/friendStore'
 import { usePresenceActivityStore } from '../../../activity/store/presenceActivityStore'
 import { useSettingsStore } from '../../store/settingsStore'

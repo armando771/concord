@@ -24,3 +24,14 @@ func AuthRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin.Ha
 		}
 	}
 }
+
+// AccountRoutes: troca do nome de usuário e do e-mail (com a senha atual).
+// Sem RequireVerified: quem errou o e-mail precisa conseguir corrigir.
+func AccountRoutes(router *gin.RouterGroup, handler *AccountHandler, authMiddleware gin.HandlerFunc) {
+	me := router.Group("/users/me")
+	me.Use(authMiddleware, limitBody(maxLoginBodyBytes))
+	{
+		me.PUT("/username", handler.ChangeUsername)
+		me.PUT("/email", handler.ChangeEmail)
+	}
+}

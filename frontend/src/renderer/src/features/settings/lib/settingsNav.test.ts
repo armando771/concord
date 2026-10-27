@@ -4,6 +4,7 @@ import {
   accountName,
   currentSettingsSection,
   filterSections,
+  escClosesSettings,
   settingsContentWidth
 } from './settingsNav'
 
@@ -75,5 +76,18 @@ describe('settingsContentWidth', () => {
   it('Perfis é mais largo; o resto, a coluna de sempre', () => {
     expect(settingsContentWidth('profiles')).toBe('max-w-[1080px]')
     expect(settingsContentWidth('account')).toBe('max-w-[740px]')
+  })
+})
+
+describe('escClosesSettings', () => {
+  it('Esc fecha as configurações', () => {
+    expect(escClosesSettings({ key: 'Escape', defaultPrevented: false }, false)).toBe(true)
+  })
+  it('outra tecla ou Esc já tratado (recorte) não fecham', () => {
+    expect(escClosesSettings({ key: 'Enter', defaultPrevented: false }, false)).toBe(false)
+    expect(escClosesSettings({ key: 'Escape', defaultPrevented: true }, false)).toBe(false)
+  })
+  it('com um modal aberto por cima, o Esc é só dele', () => {
+    expect(escClosesSettings({ key: 'Escape', defaultPrevented: false }, true)).toBe(false)
   })
 })

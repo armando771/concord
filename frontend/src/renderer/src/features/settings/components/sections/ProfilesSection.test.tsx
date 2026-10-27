@@ -18,8 +18,6 @@ vi.mock('../../store/settingsStore', () => ({
   useSettingsStore: (sel: (s: typeof state.settings) => unknown) => sel(state.settings)
 }))
 
-// AppSettings puxa o áudio da call (não existe no node); o aniversário tem teste próprio.
-vi.mock('../AppSettings', () => ({ BirthdaySettings: () => null }))
 vi.mock('../../../profile/components/EntranceSoundSettings', () => ({ default: () => null }))
 // O corpo do cartão puxa a atividade (e a call); aqui basta o que a prévia recebe.
 vi.mock('../../../profile/components/ProfileCardBody', () => ({
@@ -61,8 +59,10 @@ describe('ProfilesSection', () => {
     expect(html).toContain('Aparência')
     expect(html).toContain('Prévia do cartão')
     expect(html).toContain('data-preview="Ana"')
-    expect(html).toContain('Nome de exibição')
-    expect(html).toContain('Estes dois salvam na hora')
+    // Nome e pronomes se editam no cartão; o aniversário, em Minha conta.
+    expect(html).not.toContain('Estes dois salvam na hora')
+    expect(html).not.toContain('Aniversário')
+    expect(html).toContain('qualquer parte do cartão')
     expect(html).toContain('Sobre mim')
     expect(html).toContain('Remover avatar')
     expect(html).toContain('Remover banner')
@@ -74,8 +74,19 @@ describe('ProfilesSection', () => {
   })
 
   it('campo com erro marca a aba Identidade', () => {
-    state.auth.user = { ...state.auth.user, display_name: '' }
+    state.auth.user = { ...state.auth.user, bio: 'x'.repeat(300) }
     expect(render()).toContain('tem campo com erro')
+  })
+
+  it('erro no nome avisa embaixo do cartão, não na aba', () => {
+    state.auth.user = { ...state.auth.user, display_name: '' }
+    const html = render()
+    expect(html).toContain('clique neles no cartão')
+    expect(html).not.toContain('tem campo com erro')
+  })
+
+  it('nenhum modal começa aberto', () => {
+    expect(render()).not.toContain('role="dialog"')
   })
 
   it('sem avatar, banner nem cor: sem os botões de remover', () => {

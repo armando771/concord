@@ -1,10 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { NotificationPrefs } from '../../notifications/lib/notifications'
 import { OVERLAY_OPACITY_MAX, OVERLAY_OPACITY_MIN, OVERLAY_OPACITY_STEP } from '../../overlay/lib/overlayState'
-import { getBirthday, setBirthday, type Birthday } from '../../profile/api/birthdays'
-import { birthdayError } from '../../profile/lib/birthday'
-import { showToast } from '../../../shared/store/toastStore'
-import BirthdayFields from '../../profile/components/BirthdayFields'
 import { useNotificationPrefsStore } from '../../notifications/store/notificationPrefsStore'
 import { useOverlayPrefsStore } from '../../overlay/store/overlayPrefsStore'
 import OverlayShortcutField from '../../overlay/components/OverlayShortcutField'
@@ -12,32 +8,8 @@ import { IS_WEB } from '../../../shared/lib/config'
 import { permissionView, type WebPermission } from '../../notifications/lib/webNotifications'
 import { browserPermission, requestBrowserPermission } from '../../notifications/lib/browserNotifications'
 import LevelUpPreview from '../../levels/components/LevelUpPreview'
-import Switch from '../../../shared/ui/Switch'
+import { Toggle } from './Toggle'
 import MutedNotifications from '../../notifications/components/MutedNotifications'
-import { SettingsCardSkeleton } from '../../../shared/ui/skeleton/layouts'
-
-/** Linha com título, descrição e o interruptor, como nas configurações do Discord. */
-export function Toggle({
-  title,
-  description,
-  checked,
-  onChange
-}: {
-  title: string
-  description: string
-  checked: boolean
-  onChange: () => void
-}): React.JSX.Element {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="min-w-0">
-        <span className="block text-ds-md font-medium text-strong">{title}</span>
-        <span className="block text-ds-sm text-gray-400">{description}</span>
-      </span>
-      <Switch checked={checked} onChange={onChange} label={title} />
-    </div>
-  )
-}
 
 type NotificationOption = { key: keyof NotificationPrefs; title: string; description: string }
 
@@ -106,59 +78,6 @@ function BrowserPermission(): React.JSX.Element {
           Permitir notificações
         </button>
       )}
-    </div>
-  )
-}
-
-/** Aniversário (opcional) e se os servidores podem anunciar. Salva na hora. */
-export function BirthdaySettings(): React.JSX.Element {
-  const [birthday, setLocal] = useState<Birthday | null>(null)
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    getBirthday()
-      .then(setLocal)
-      .catch(() => setLocal({ day: null, month: null, year: null, announce: true }))
-  }, [])
-
-  const save = async (next: Birthday): Promise<void> => {
-    setLocal(next)
-    // Só salva quando dá: os dois vazios ou dia e mês escolhidos.
-    if (birthdayError(next)) return
-    setSaving(true)
-    try {
-      setLocal(await setBirthday(next))
-    } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Não foi possível salvar o aniversário.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  if (!birthday) return <SettingsCardSkeleton />
-
-  const error = birthdayError(birthday)
-
-  return (
-    <div className="rounded-xl border border-subtle bg-fg/5 p-4">
-      <h3 className="mb-3 text-ds-sm font-medium text-gray-400">Aniversário</h3>
-      <div className="flex flex-col gap-3">
-        <BirthdayFields
-          value={birthday}
-          onChange={(value) => void save({ ...birthday, ...value })}
-        />
-        {error && <p className="text-xs text-amber-300">{error}</p>}
-        <p className="text-ds-xs text-gray-500">
-          Sua idade aparece só para você, no recado de feliz aniversário.
-        </p>
-        <Toggle
-          title="Anunciar meu aniversário nos servidores"
-          description="No seu dia, os servidores mandam uma mensagem de parabéns no canal principal e você vê um recado ao abrir o app."
-          checked={birthday.announce}
-          onChange={() => void save({ ...birthday, announce: !birthday.announce })}
-        />
-        {saving && <p className="text-ds-xs text-gray-500">Salvando…</p>}
-      </div>
     </div>
   )
 }
