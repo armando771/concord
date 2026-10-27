@@ -10,7 +10,7 @@
 - Badges: novo badge Contribuinte para quem cria cards no quadro de propostas de melhorias (Ideia, Colaborador, Inovador, Visionário e Arquiteto, de 1 a 100 cards). Sobe na hora em que você cria o card, e quem já tinha cards ganha os tiers com a data certa.
 - Vídeo: nova seção em Configurações → Vídeo, com escolha da câmera, prévia ao vivo e fundo do vídeo como no Discord: desfocar o fundo (Borrar), usar uma das imagens do app, a sua própria ou até um GIF animado, sem precisar de pano verde. A separação roda no seu computador. Na chamada, o microfone, o fone e a câmera ganharam uma setinha para trocar de dispositivo, e a câmera também abre o "Mudar fundo de vídeo". Com "Sempre ver prévia do vídeo" você confere como aparece antes de ligar a câmera. O chroma key da versão anterior saiu.
 - Chamadas: novo botão "Convidar amigos" na linha do canal de voz em que você está, na barra lateral (o ícone de pessoa com "+", ao lado do balão do chat). Escolha um ou vários amigos e cada um recebe o convite como mensagem na conversa privada com você, num cartão com o canal e o botão "Abrir", que leva direto para a call. Quando a call acaba, o cartão vira "Convite inválido".
-- Badges: quem já estava na Salinha até 25/10/2026 escolhe um badge do segundo turno (Fez o L, Fez o 22 ou nenhum). A escolha é definitiva e só aparece uma vez.
+- Badges: quem já estava na Salinha até 25/10/2026 escolhe um badge do segundo turno (Fez o L, Fez o 22 ou nenhum). A escolha é definitiva.
 
 ## Correções
 - Janela estreita: Configurações, Configurações do servidor, badges e cargos agora cabem em telas pequenas, com a navegação em cima do conteúdo, e as setas para ordenar cargos aparecem em telas de toque.
