@@ -69,3 +69,22 @@ describe('Amigos', () => {
     expect(publicStatText(pub)).toBe('5+ amigos')
   })
 })
+
+describe('Caçador de bugs', () => {
+  const bugs = (over: Partial<Badge> = {}): Badge =>
+    badge({ category: 'bugs', name: 'Caçador de bugs', unit: 'bugs', ...over })
+
+  it('conta, escada, quanto falta e visão pública', () => {
+    expect(statText(bugs({ value: 1 }))).toBe('1 bug reportado')
+    expect(statText(bugs({ value: 12 }))).toBe('12 bugs reportados')
+    expect(formatThreshold('bugs', 25)).toBe('25 bugs')
+    expect(remainingText(bugs({ value: 2, next_threshold: 3 }), now)).toBe('Falta 1 bug')
+    expect(remainingText(bugs({ value: 3, next_threshold: 10 }), now)).toBe('Faltam 7 bugs')
+    const pub = bugs({
+      value: undefined,
+      tier: 1,
+      tiers: [{ tier: 1, name: 'Olho Vivo', threshold: 1, rarity: 'comum' }]
+    })
+    expect(publicStatText(pub)).toBe('1+ bug')
+  })
+})

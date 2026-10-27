@@ -62,3 +62,28 @@ func TestRepositoryCountsAcceptedFriends(t *testing.T) {
 		t.Fatalf("friends = %d, want 2 (pendente não conta)", s.Friends)
 	}
 }
+
+func TestRepositoryReadsBugHunters(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	me := newTestUser(t, db)
+	// O SQL de docs/HOSPEDAGEM.md: conceder e somar pelo username.
+	var name string
+	if err := db.QueryRow(ctx, `SELECT username FROM users WHERE id = $1`, me).Scan(&name); err != nil {
+		t.Fatal(err)
+	}
+	grant := `INSERT INTO bug_hunters (user_id, bugs) SELECT id, $2 FROM users WHERE lower(username) = lower($1)
+		ON CONFLICT (user_id) DO UPDATE SET bugs = bug_hunters.bugs + EXCLUDED.bugs, updated_at = NOW()`
+	for _, n := range []int{1, 2} {
+		if _, err := db.Exec(ctx, grant, strings.ToUpper(name), n); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err := BadgeRepository(db).Stats(ctx, me)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.BugsReported != 3 {
+		t.Fatalf("bugs = %d, want 3", s.BugsReported)
+	}
+}

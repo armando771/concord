@@ -33,6 +33,8 @@ type Stats struct {
 	IsDev bool
 	// Respondeu "sim" no banner do segundo turno (Fez o L).
 	FezOL bool
+	// Bugs reportados, concedidos à mão em bug_hunters (Caçador de bugs).
+	BugsReported int64
 }
 
 // Unlocks: categoria -> tier -> quando foi desbloqueado (o que está gravado).
@@ -133,6 +135,7 @@ var valueFns = map[string]valueFn{
 	"maratona":     func(s Stats, _ time.Time) int64 { return s.LongestSessionSeconds },
 	"reacoes":      func(s Stats, _ time.Time) int64 { return s.Reactions },
 	"amigos":       func(s Stats, _ time.Time) int64 { return s.Friends },
+	"bugs":         func(s Stats, _ time.Time) int64 { return s.BugsReported },
 	"contribuinte": func(s Stats, _ time.Time) int64 { return s.Proposals },
 	"criador":      func(s Stats, _ time.Time) int64 { return flag(s.IsDev) },
 	"l":            func(s Stats, _ time.Time) int64 { return flag(s.FezOL) },

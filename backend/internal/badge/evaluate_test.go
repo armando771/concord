@@ -412,3 +412,18 @@ func TestEvaluateFriendsFromAcceptedFriendships(t *testing.T) {
 		t.Fatalf("amigos depois de desfazer = tier %d, want 2", b.Tier)
 	}
 }
+
+func TestEvaluateBugHunterIsGrantedByTheTeam(t *testing.T) {
+	// Sem linha em bug_hunters, nem aparece.
+	badges, _ := Evaluate(Stats{CreatedAt: now}, nil, now)
+	for _, b := range badges {
+		if b.Category == "bugs" {
+			t.Fatalf("bugs apareceu sem concessão: %+v", b)
+		}
+	}
+	badges, _ = Evaluate(Stats{CreatedAt: now, BugsReported: 3}, nil, now)
+	b := find(t, badges, "bugs")
+	if b.Unit != UnitBugs || b.Tier != 2 || b.TierName != "Detetive" || b.NextThreshold == nil || *b.NextThreshold != 10 {
+		t.Fatalf("bugs = %+v, want tier 2 Detetive e próximo em 10", b)
+	}
+}

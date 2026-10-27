@@ -44,7 +44,8 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			(SELECT COUNT(*) FROM proposals p WHERE p.author_id = u.id),
 			(SELECT COUNT(*) FROM friendships f WHERE (f.requester_id = u.id OR f.addressee_id = u.id) AND f.status = 'accepted'),
 			EXISTS (SELECT 1 FROM dev_badge_users d WHERE d.user_id = u.id),
-			EXISTS (SELECT 1 FROM segundo_turno_respostas r WHERE r.user_id = u.id AND r.fez_o_l)
+			EXISTS (SELECT 1 FROM segundo_turno_respostas r WHERE r.user_id = u.id AND r.fez_o_l),
+			COALESCE((SELECT h.bugs FROM bug_hunters h WHERE h.user_id = u.id), 0)
 		FROM users u
 		LEFT JOIN user_levels l ON l.user_id = u.id
 		LEFT JOIN user_badge_stats b ON b.user_id = u.id
@@ -68,6 +69,7 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 		&s.Friends,
 		&s.IsDev,
 		&s.FezOL,
+		&s.BugsReported,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Stats{}, ErrUserNotFound

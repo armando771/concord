@@ -27,6 +27,7 @@ const (
 	// UnitVote: badge de uma resposta única (o L do segundo turno).
 	UnitVote    = "vote"
 	UnitFriends = "friends"
+	UnitBugs    = "bugs"
 )
 
 // FounderCutoff: quem criou a conta antes desta data (horário de Brasília)
@@ -201,6 +202,21 @@ var Catalog = []Category{
 		Unit:        UnitVote,
 		Tiers: []Tier{
 			{"Fez o L", 1, RarityLegendary},
+		},
+		Exclusive: true,
+	},
+	{
+		// O time concede à mão em bug_hunters (SQL em docs/HOSPEDAGEM.md),
+		// somando os bugs reportados. Como o Fundador, some se a linha sair.
+		Key:         "bugs",
+		Name:        "Caçador de bugs",
+		Description: "Reporte bugs para o time do Salinha. Concedido pelo time a cada bug confirmado.",
+		Unit:        UnitBugs,
+		Tiers: []Tier{
+			{"Olho Vivo", 1, RarityCommon},
+			{"Detetive", 3, RarityRare},
+			{"Exterminador", 10, RarityEpic},
+			{"Lenda do QA", 25, RarityLegendary},
 		},
 		Exclusive: true,
 	},
