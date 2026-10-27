@@ -47,7 +47,8 @@ var messageColumns = `
 	stk.name,
 	stk.content_type,
 	m.gif_url,
-	m.gif_metadata
+	m.gif_metadata,
+	m.call_invite
 `
 
 const messageFrom = `
@@ -66,8 +67,8 @@ func (r *Repository) Create(ctx context.Context, msg *Message) error {
 	return r.db.QueryRow(
 		ctx,
 		`
-		INSERT INTO messages (id, author_id, channel_id, conversation_id, reply_to_id, content, system_kind, mention_everyone, sticker_id, gif_url, gif_metadata)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO messages (id, author_id, channel_id, conversation_id, reply_to_id, content, system_kind, mention_everyone, sticker_id, gif_url, gif_metadata, call_invite)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING
 			id,
 			author_id,
@@ -88,6 +89,7 @@ func (r *Repository) Create(ctx context.Context, msg *Message) error {
 		msg.StickerID,
 		msg.GifURL,
 		gifMetaBytes,
+		callInviteBytes(msg.CallInvite),
 	).Scan(
 		&msg.ID,
 		&msg.AuthorID,
@@ -362,7 +364,7 @@ func scanMessageRow(row scannable, extra ...any) (Message, error) {
 	var replyAvatarURL *string
 	var replyStyle namestyle.Style
 	var stickerServerID, stickerName, stickerContentType *string
-	var rawGifMeta []byte
+	var rawGifMeta, rawCallInvite []byte
 
 	msg.Author = &Author{}
 	dest := []any{
@@ -393,6 +395,7 @@ func scanMessageRow(row scannable, extra ...any) (Message, error) {
 		&stickerContentType,
 		&msg.GifURL,
 		&rawGifMeta,
+		&rawCallInvite,
 	}
 	if err := row.Scan(append(dest, extra...)...); err != nil {
 		return Message{}, err
@@ -415,5 +418,6 @@ func scanMessageRow(row scannable, extra ...any) (Message, error) {
 	}
 
 	populateMedia(&msg, stickerServerID, stickerName, stickerContentType, rawGifMeta)
+	msg.CallInvite = parseCallInvite(rawCallInvite)
 	return msg, nil
 }

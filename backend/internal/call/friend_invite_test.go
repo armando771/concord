@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,14 +36,44 @@ func (f fakeAccess) ChannelPerms(_ context.Context, _ string, userID string) (in
 	return 0, nil
 }
 
+// fakePoster guarda os cartões "postados" na DM.
+type fakePoster struct {
+	posts []postedInvite
+	err   error
+}
+
+type postedInvite struct {
+	inviter, invitee string
+	card             InviteCard
+}
+
+func (f *fakePoster) PostCallInvite(_ context.Context, inviterID, inviteeID string, card InviteCard) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.posts = append(f.posts, postedInvite{inviterID, inviteeID, card})
+	return nil
+}
+
+func (f *fakePoster) postedTo(id string) int {
+	n := 0
+	for _, p := range f.posts {
+		if p.invitee == id {
+			n++
+		}
+	}
+	return n
+}
+
 // inviteService: ana está na chamada; bia, caio e davi são amigos dela e
 // podem entrar; eli não é amiga.
-func inviteService(pub *fakePublisher) *Service {
+func inviteService(pub *fakePublisher) (*Service, *fakePoster) {
 	s := lockedCallWith(pub, "ana")
 	s.friends = fakeFriends{"ana:bia": true, "ana:caio": true, "ana:davi": true, "ana:fred": true}
 	s.perms = fakeAccess{"bia": true, "caio": true, "davi": true, "eli": true}
-	s.isOnline = func(string) bool { return true }
-	return s
+	poster := &fakePoster{}
+	s.invitePoster = poster
+	return s, poster
 }
 
 func statusOf(results []InviteResult, id string) string {
@@ -55,8 +86,7 @@ func statusOf(results []InviteResult, id string) string {
 }
 
 func TestInviteOnlyFriends(t *testing.T) {
-	pub := &fakePublisher{}
-	s := inviteService(pub)
+	s, poster := inviteService(&fakePublisher{})
 
 	res, err := s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia", "eli", "fred"})
 	if err != nil {
@@ -72,57 +102,106 @@ func TestInviteOnlyFriends(t *testing.T) {
 	if got := statusOf(res, "fred"); got != InviteNoAccess {
 		t.Fatalf("fred (sem acesso) = %q", got)
 	}
-	if n := len(pub.eventsOf("call:friend_invite")); n != 1 {
-		t.Fatalf("convites enviados = %d, want 1", n)
+	if len(poster.posts) != 1 || poster.postedTo("bia") != 1 {
+		t.Fatalf("posts = %+v, want só o da bia", poster.posts)
 	}
 }
 
 func TestInviteManyInOneAction(t *testing.T) {
-	pub := &fakePublisher{}
-	s := inviteService(pub)
+	s, poster := inviteService(&fakePublisher{})
 
 	res, err := s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia", "caio", "davi", "bia"})
 	if err != nil || len(res) != 3 {
 		t.Fatalf("res = %+v, err = %v", res, err)
 	}
-	if n := len(pub.eventsOf("call:friend_invite")); n != 3 {
-		t.Fatalf("convites enviados = %d, want 3", n)
+	if len(poster.posts) != 3 {
+		t.Fatalf("posts = %d, want 3", len(poster.posts))
 	}
 }
 
-func TestInvitePayloadIdentifiesInviterAndCall(t *testing.T) {
-	pub := &fakePublisher{}
-	s := inviteService(pub)
+func TestInviteCardIdentifiesCallChannelAndPlace(t *testing.T) {
+	s, poster := inviteService(&fakePublisher{})
+	s.SetPlaceSources(fakeChannels{}, fakeServers{})
 	if _, err := s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"}); err != nil {
 		t.Fatal(err)
 	}
-	evs := pub.eventsOf("call:friend_invite")
-	if len(evs) != 1 || evs[0].target != "user:bia" {
-		t.Fatalf("eventos = %+v", evs)
+	if len(poster.posts) != 1 {
+		t.Fatalf("posts = %+v", poster.posts)
 	}
-	var p FriendInviteEvent
-	_ = json.Unmarshal(evs[0].event["payload"], &p)
-	if p.CallID != "call-1" || p.By.ID != "ana" || p.ChannelID == nil || *p.ChannelID != "geral" || p.ExpiresAt.IsZero() {
-		t.Fatalf("payload = %+v", p)
+	p := poster.posts[0]
+	if p.inviter != "ana" || p.invitee != "bia" || p.card.CallID != "call-1" || p.card.ChannelID != "geral" ||
+		p.card.ServerID == nil || p.card.ChannelName != "Geral" || p.card.ServerName != "Salinha" {
+		t.Fatalf("post = %+v", p)
 	}
 }
 
-func TestInviteRejectsDuplicatePending(t *testing.T) {
-	pub := &fakePublisher{}
-	s := inviteService(pub)
+func TestInviteRejectsDuplicateWithinResendWindow(t *testing.T) {
+	s, poster := inviteService(&fakePublisher{})
 	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
 
 	res, _ := s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
 	if got := statusOf(res, "bia"); got != InviteAlreadyInvited {
 		t.Fatalf("segundo convite = %q", got)
 	}
-	if n := len(pub.eventsOf("call:friend_invite")); n != 1 {
-		t.Fatalf("convites enviados = %d, want 1", n)
+	if len(poster.posts) != 1 {
+		t.Fatalf("posts = %d, want 1", len(poster.posts))
+	}
+}
+
+func TestInviteAllowsResendAfterWindow(t *testing.T) {
+	s, poster := inviteService(&fakePublisher{})
+	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
+	// O convite não "expira" na DM, mas o anti-spam só segura por um tempo.
+	inv := s.calls["call-1"].invites.sent["bia"]
+	inv.at = time.Now().Add(-inviteResendAfter - time.Second)
+	s.calls["call-1"].invites.sent["bia"] = inv
+
+	res, _ := s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
+	if got := statusOf(res, "bia"); got != InviteSent || len(poster.posts) != 2 {
+		t.Fatalf("depois da janela = %q, posts = %d", got, len(poster.posts))
+	}
+}
+
+func TestInviteFailedPostReleasesReservation(t *testing.T) {
+	s, poster := inviteService(&fakePublisher{})
+	poster.err = errors.New("dm bloqueada")
+
+	res, _ := s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
+	if got := statusOf(res, "bia"); got != InviteFailed {
+		t.Fatalf("bia = %q, want failed", got)
+	}
+	// A falha não prende a pessoa: dá para tentar de novo.
+	poster.err = nil
+	res, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
+	if got := statusOf(res, "bia"); got != InviteSent {
+		t.Fatalf("retentativa = %q", got)
+	}
+}
+
+func TestInviteFailedResendRestoresPreviousReservation(t *testing.T) {
+	s, poster := inviteService(&fakePublisher{})
+	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
+	old := time.Now().Add(-inviteResendAfter - time.Second)
+	s.calls["call-1"].invites.sent["bia"] = invitation{inviterID: "ana", at: old}
+
+	poster.err = errors.New("falhou")
+	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
+	if got := s.calls["call-1"].invites.sent["bia"]; !got.at.Equal(old) {
+		t.Fatalf("a falha deveria devolver o registro antigo, got %+v", got)
+	}
+}
+
+func TestInviteWithoutPosterFails(t *testing.T) {
+	s, _ := inviteService(&fakePublisher{})
+	s.invitePoster = nil
+	res, _ := s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
+	if got := statusOf(res, "bia"); got != InviteFailed {
+		t.Fatalf("bia = %q", got)
 	}
 }
 
 func TestInviteRejectsPeopleAlreadyInCall(t *testing.T) {
-	s := inviteService(&fakePublisher{})
+	s, _ := inviteService(&fakePublisher{})
 	s.calls["call-1"].participants["bia"] = &participantState{userID: "bia"}
 
 	res, _ := s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
@@ -131,20 +210,21 @@ func TestInviteRejectsPeopleAlreadyInCall(t *testing.T) {
 	}
 }
 
-func TestInviteRejectsOfflineBusyAndBlocked(t *testing.T) {
-	s := inviteService(&fakePublisher{})
+func TestInviteRejectsBusyAndBlockedButNotOffline(t *testing.T) {
+	s, _ := inviteService(&fakePublisher{})
+	// Offline não impede: o convite fica salvo na DM.
 	s.isOnline = func(id string) bool { return id != "caio" }
 	s.busy["davi"] = "outra-call"
 	s.blockedCheck = func(_ context.Context, _, b string) (bool, error) { return b == "bia", nil }
 
 	res, _ := s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia", "caio", "davi"})
-	if statusOf(res, "bia") != InviteBlocked || statusOf(res, "caio") != InviteOffline || statusOf(res, "davi") != InviteBusy {
+	if statusOf(res, "bia") != InviteBlocked || statusOf(res, "caio") != InviteSent || statusOf(res, "davi") != InviteBusy {
 		t.Fatalf("res = %+v", res)
 	}
 }
 
 func TestInviteRequiresParticipantAndChannelCall(t *testing.T) {
-	s := inviteService(&fakePublisher{})
+	s, _ := inviteService(&fakePublisher{})
 	if _, err := s.InviteFriends(context.Background(), "call-1", "bia", []string{"caio"}); !errors.Is(err, ErrInviteNotAllowed) {
 		t.Fatalf("não participante: err = %v", err)
 	}
@@ -158,7 +238,7 @@ func TestInviteRequiresParticipantAndChannelCall(t *testing.T) {
 }
 
 func TestInviteLimitsRequestSize(t *testing.T) {
-	s := inviteService(&fakePublisher{})
+	s, _ := inviteService(&fakePublisher{})
 	if _, err := s.InviteFriends(context.Background(), "call-1", "ana", nil); !errors.Is(err, ErrNoInvitees) {
 		t.Fatalf("vazio: err = %v", err)
 	}
@@ -171,97 +251,81 @@ func TestInviteLimitsRequestSize(t *testing.T) {
 	}
 }
 
-func TestAcceptInviteAdmitsAndNotifies(t *testing.T) {
-	pub := &fakePublisher{}
-	s := inviteService(pub)
+func TestOpenInviteAdmitsInvitedPersonInLockedRoom(t *testing.T) {
+	s, _ := inviteService(&fakePublisher{})
 	s.calls["call-1"].info.Locked = true
 	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
 
-	if err := s.AcceptFriendInvite("call-1", "bia"); err != nil {
-		t.Fatalf("Accept: %v", err)
+	admitted, err := s.OpenFriendInvite("call-1", "bia")
+	if err != nil || !admitted {
+		t.Fatalf("Open: admitted=%v err=%v", admitted, err)
 	}
-	updates := pub.eventsOf("call:friend_invite_update")
-	if len(updates) != 2 {
-		t.Fatalf("updates = %d, want 2 (convidador e convidado)", len(updates))
-	}
-	var p FriendInviteUpdateEvent
-	_ = json.Unmarshal(updates[0].event["payload"], &p)
-	if p.Status != InviteAccepted || p.UserID != "bia" {
-		t.Fatalf("payload = %+v", p)
-	}
-	// O passe vale na sala trancada.
 	s.mu.Lock()
 	ok := canEnterLockedLocked(s.calls["call-1"], "bia", time.Now())
 	s.mu.Unlock()
 	if !ok {
-		t.Fatal("aceitar deveria dar o passe de entrada")
+		t.Fatal("abrir o convite deveria dar o passe de entrada")
 	}
-	if err := s.AcceptFriendInvite("call-1", "bia"); !errors.Is(err, ErrNoInvite) {
-		t.Fatalf("aceitar de novo: err = %v", err)
-	}
-}
-
-func TestDeclineInviteKeepsCallAndBlocksSpam(t *testing.T) {
-	pub := &fakePublisher{}
-	s := inviteService(pub)
-	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
-
-	if err := s.DeclineFriendInvite("call-1", "bia"); err != nil {
-		t.Fatalf("Decline: %v", err)
-	}
-	if _, ok := s.calls["call-1"]; !ok {
-		t.Fatal("recusar convite não pode encerrar a chamada")
-	}
-	var p FriendInviteUpdateEvent
-	_ = json.Unmarshal(pub.eventsOf("call:friend_invite_update")[0].event["payload"], &p)
-	if p.Status != InviteDeclined {
-		t.Fatalf("status = %q", p.Status)
-	}
-	res, _ := s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
-	if got := statusOf(res, "bia"); got != InviteCooldown {
-		t.Fatalf("logo após recusar = %q, want cooldown", got)
+	// Quem não foi convidado não ganha passe (mas também não dá erro).
+	admitted, err = s.OpenFriendInvite("call-1", "caio")
+	if err != nil || admitted {
+		t.Fatalf("sem convite: admitted=%v err=%v", admitted, err)
 	}
 }
 
-func TestInviteExpires(t *testing.T) {
-	pub := &fakePublisher{}
-	s := inviteService(pub)
-	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
-	inv := s.calls["call-1"].invites.pending["bia"]
-
-	s.expireInvite("call-1", "bia", inv)
-
-	var p FriendInviteUpdateEvent
-	_ = json.Unmarshal(pub.eventsOf("call:friend_invite_update")[0].event["payload"], &p)
-	if p.Status != InviteExpired {
-		t.Fatalf("status = %q", p.Status)
-	}
-	if err := s.AcceptFriendInvite("call-1", "bia"); !errors.Is(err, ErrNoInvite) {
-		t.Fatalf("aceitar expirado: err = %v", err)
-	}
-	// Convite antigo (timer atrasado) não mexe num convite novo.
-	res, _ := s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
-	if statusOf(res, "bia") != InviteSent {
-		t.Fatalf("reconvidar após expirar = %+v", res)
-	}
-	s.expireInvite("call-1", "bia", inv)
-	if _, ok := s.calls["call-1"].invites.pending["bia"]; !ok {
-		t.Fatal("timer velho derrubou o convite novo")
+func TestOpenInviteOfEndedCallIsNotFound(t *testing.T) {
+	s, _ := inviteService(&fakePublisher{})
+	if _, err := s.OpenFriendInvite("nao-existe", "bia"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v", err)
 	}
 }
 
-func TestClosingCallCancelsInvites(t *testing.T) {
+func TestInviteValidFollowsCallState(t *testing.T) {
+	s, _ := inviteService(&fakePublisher{})
+	if !s.InviteValid("call-1") {
+		t.Fatal("call ativa deveria ser válida")
+	}
+	if s.InviteValid("nao-existe") {
+		t.Fatal("call que não existe é inválida")
+	}
+	if err := s.closeCall("call-1"); err != nil {
+		t.Fatal(err)
+	}
+	if s.InviteValid("call-1") {
+		t.Fatal("call encerrada é inválida")
+	}
+}
+
+func TestClosingCallNotifiesInviterAndInviteesOnce(t *testing.T) {
 	pub := &fakePublisher{}
-	s := inviteService(pub)
-	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
+	s, _ := inviteService(pub)
+	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia", "caio"})
 
 	if err := s.closeCall("call-1"); err != nil {
 		t.Fatal(err)
 	}
-	var p FriendInviteUpdateEvent
-	_ = json.Unmarshal(pub.eventsOf("call:friend_invite_update")[0].event["payload"], &p)
-	if p.Status != InviteCancelled || p.UserID != "bia" {
-		t.Fatalf("payload = %+v", p)
+	got := map[string]int{}
+	for _, e := range pub.eventsOf("call:invite_ended") {
+		var p InviteEndedEvent
+		_ = json.Unmarshal(e.event["payload"], &p)
+		if p.CallID != "call-1" {
+			t.Fatalf("payload = %+v", p)
+		}
+		got[e.target]++
+	}
+	if len(got) != 3 || got["user:ana"] != 1 || got["user:bia"] != 1 || got["user:caio"] != 1 {
+		t.Fatalf("avisos = %+v", got)
+	}
+}
+
+func TestClosingCallWithoutInvitesSendsNothing(t *testing.T) {
+	pub := &fakePublisher{}
+	s, _ := inviteService(pub)
+	if err := s.closeCall("call-1"); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(pub.eventsOf("call:invite_ended")); n != 0 {
+		t.Fatalf("avisos = %d, want 0", n)
 	}
 }
 
@@ -270,26 +334,40 @@ func inviteRouter(s *Service, userID string) http.Handler {
 }
 
 func TestInviteHandlerStatusCodes(t *testing.T) {
-	s := inviteService(&fakePublisher{})
+	s, _ := inviteService(&fakePublisher{})
 	cases := []struct {
-		name, user, path, body string
-		want                   int
+		name, method, user, path, body string
+		want                           int
 	}{
-		{"ok", "ana", "/api/calls/call-1/invites", `{"user_ids":["bia"]}`, http.StatusOK},
-		{"payload inválido", "ana", "/api/calls/call-1/invites", `{`, http.StatusBadRequest},
-		{"sem ninguém", "ana", "/api/calls/call-1/invites", `{"user_ids":[]}`, http.StatusBadRequest},
-		{"não participante", "bia", "/api/calls/call-1/invites", `{"user_ids":["caio"]}`, http.StatusForbidden},
-		{"call inexistente", "ana", "/api/calls/x/invites", `{"user_ids":["bia"]}`, http.StatusNotFound},
-		{"aceitar sem convite", "caio", "/api/calls/call-1/invites/accept", ``, http.StatusNotFound},
-		{"aceitar", "bia", "/api/calls/call-1/invites/accept", ``, http.StatusOK},
-		{"recusar sem convite", "caio", "/api/calls/call-1/invites/decline", ``, http.StatusNotFound},
+		{"ok", "POST", "ana", "/api/calls/call-1/invites", `{"user_ids":["bia"]}`, http.StatusOK},
+		{"payload inválido", "POST", "ana", "/api/calls/call-1/invites", `{`, http.StatusBadRequest},
+		{"sem ninguém", "POST", "ana", "/api/calls/call-1/invites", `{"user_ids":[]}`, http.StatusBadRequest},
+		{"não participante", "POST", "bia", "/api/calls/call-1/invites", `{"user_ids":["caio"]}`, http.StatusForbidden},
+		{"call inexistente", "POST", "ana", "/api/calls/x/invites", `{"user_ids":["bia"]}`, http.StatusNotFound},
+		{"abrir", "POST", "bia", "/api/calls/call-1/invites/open", ``, http.StatusOK},
+		{"abrir call acabada", "POST", "bia", "/api/calls/x/invites/open", ``, http.StatusNotFound},
+		{"validade", "GET", "bia", "/api/calls/call-1/invite", ``, http.StatusOK},
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, c.path, bytes.NewBufferString(c.body))
+		req := httptest.NewRequest(c.method, c.path, bytes.NewBufferString(c.body))
 		inviteRouter(s, c.user).ServeHTTP(rec, req)
 		if rec.Code != c.want {
 			t.Errorf("%s: status = %d, want %d (%s)", c.name, rec.Code, c.want, rec.Body.String())
+		}
+	}
+}
+
+func TestInviteStatusHandlerBody(t *testing.T) {
+	s, _ := inviteService(&fakePublisher{})
+	for path, want := range map[string]string{
+		"/api/calls/call-1/invite": `{"valid":true}`,
+		"/api/calls/x/invite":      `{"valid":false}`,
+	} {
+		rec := httptest.NewRecorder()
+		inviteRouter(s, "bia").ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if strings.TrimSpace(rec.Body.String()) != want {
+			t.Errorf("%s: body = %s, want %s", path, rec.Body.String(), want)
 		}
 	}
 }
@@ -309,26 +387,15 @@ func (fakeServers) FindByID(context.Context, string) (*server.Server, error) {
 	return &server.Server{Name: "Salinha"}, nil
 }
 
-func TestInvitePayloadHasChannelAndServerNames(t *testing.T) {
-	pub := &fakePublisher{}
-	s := inviteService(pub)
-	s.SetPlaceSources(fakeChannels{}, fakeServers{})
-	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
-	var p FriendInviteEvent
-	_ = json.Unmarshal(pub.eventsOf("call:friend_invite")[0].event["payload"], &p)
-	if p.ChannelName != "Geral" || p.ServerName != "Salinha" {
-		t.Fatalf("payload = %+v", p)
-	}
-}
-
 func TestPlaceNamesFallsBackToEmpty(t *testing.T) {
-	s := inviteService(&fakePublisher{})
+	s, _ := inviteService(&fakePublisher{})
 	s.SetPlaceSources(fakeChannels{}, fakeServers{})
 	srv := "server-1"
 	if ch, sv := s.placeNames(context.Background(), "outro", &srv); ch != "" || sv != "Salinha" {
 		t.Fatalf("ch=%q sv=%q", ch, sv)
 	}
-	if ch, sv := inviteService(&fakePublisher{}).placeNames(context.Background(), "geral", nil); ch != "" || sv != "" {
+	bare, _ := inviteService(&fakePublisher{})
+	if ch, sv := bare.placeNames(context.Background(), "geral", nil); ch != "" || sv != "" {
 		t.Fatalf("sem fontes: ch=%q sv=%q", ch, sv)
 	}
 }

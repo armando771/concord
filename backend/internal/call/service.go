@@ -107,6 +107,7 @@ type Service struct {
 	friends             FriendChecker
 	channelNames        channelFinder
 	serverNames         serverFinder
+	invitePoster        InviteDMPoster
 	media               MediaAdmin
 
 	mu    sync.RWMutex

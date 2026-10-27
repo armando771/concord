@@ -45,7 +45,7 @@ func (s *Service) editMessage(ctx context.Context, channelID string, conversatio
 	if current.AuthorID != userID {
 		return nil, false, ErrNotEditAuthor
 	}
-	if current.SystemKind != nil {
+	if current.SystemKind != nil || current.CallInvite != nil {
 		return nil, false, ErrNotEditable
 	}
 	hasPoll, err := s.edits.HasPoll(ctx, messageID)
