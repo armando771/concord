@@ -16,6 +16,7 @@
 - Badges: novo badge Figurinha para quem manda figurinhas e GIFs (Figurinha Repetida, Colecionador, Álbum da Copa e Rei do GIF, de 10 a 2.000). As que você já mandou contam, com a data certa.
 - Badges: novo badge Sequência para quem abre o Salinha todo dia, sem pular nenhum (Faísca, Foguinho, Fogueira, Incêndio e Chama Eterna, de 3 a 365 dias seguidos). Vale a sua maior sequência, então perder a sequência não tira o badge. Os dias em que você já mandou mensagem, reagiu, entrou em call ou votou contam.
 - Badges: novo badge Câmera ligada para quem fica em call com a câmera aberta e mais gente ouvindo (Rostinho, Ao Vivo, Galã, Celebridade e Big Brother, de 1 a 500 horas). Conta a partir de agora.
+- Badges: novo badge Votante para quem vota nos cards do quadro de propostas (Eleitor, Cidadão, Fiscal de Urna, Mesário e Voto de Minerva, de 1 a 150 votos). Sobe na hora do voto, e quem já votou ganha os tiers com a data certa.
 
 ## Correções
 - Janela estreita: Configurações, Configurações do servidor, badges e cargos agora cabem em telas pequenas, com a navegação em cima do conteúdo, e as setas para ordenar cargos aparecem em telas de toque.

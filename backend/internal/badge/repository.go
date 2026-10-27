@@ -49,7 +49,8 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			COALESCE(b.stickers_sent, 0),
 			COALESCE(b.streak_days, 0),
 			COALESCE(b.longest_streak_days, 0),
-			COALESCE(b.camera_seconds, 0)
+			COALESCE(b.camera_seconds, 0),
+			(SELECT COUNT(*) FROM proposal_votes v WHERE v.user_id = u.id)
 		FROM users u
 		LEFT JOIN user_levels l ON l.user_id = u.id
 		LEFT JOIN user_badge_stats b ON b.user_id = u.id
@@ -77,6 +78,7 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 		&s.StreakDays,
 		&s.LongestStreakDays,
 		&s.CameraSeconds,
+		&s.Votes,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Stats{}, ErrUserNotFound

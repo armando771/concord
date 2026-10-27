@@ -34,6 +34,8 @@ const (
 	UnitStickers = "stickers"
 	// UnitDays: dias seguidos usando o app (Sequência).
 	UnitDays = "days"
+	// UnitVotes: votos no quadro de propostas (Votante).
+	UnitVotes = "votes"
 )
 
 // FounderCutoff: quem criou a conta antes desta data (horário de Brasília)
@@ -322,6 +324,22 @@ var Catalog = []Category{
 			{"Galã", 50 * hour, RarityRare},
 			{"Celebridade", 150 * hour, RarityEpic},
 			{"Big Brother", 500 * hour, RarityLegendary},
+		},
+	},
+	{
+		// Votos dados nos cards do quadro de propostas (o Contribuinte conta
+		// quem cria). Trocar o voto não conta de novo; voto retirado ou card
+		// apagado sai da contagem, mas o tier conquistado fica.
+		Key:         "votante",
+		Name:        "Votante",
+		Description: "Vote nos cards do quadro de propostas de melhorias.",
+		Unit:        UnitVotes,
+		Tiers: []Tier{
+			{"Eleitor", 1, RarityCommon},
+			{"Cidadão", 10, RarityCommon},
+			{"Fiscal de Urna", 30, RarityRare},
+			{"Mesário", 75, RarityEpic},
+			{"Voto de Minerva", 150, RarityLegendary},
 		},
 	},
 }

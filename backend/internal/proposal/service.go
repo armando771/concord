@@ -122,7 +122,7 @@ type fileRemover interface {
 }
 
 // BadgeRefresher reavalia os badges de alguém na hora (badge.Service): card
-// novo sobe o badge Contribuinte e manda o aviso de desbloqueio.
+// novo sobe o Contribuinte, voto sobe o Votante, e sai o aviso de desbloqueio.
 type BadgeRefresher interface {
 	Refresh(ctx context.Context, userID string)
 }

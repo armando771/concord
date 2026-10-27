@@ -113,3 +113,22 @@ describe('Câmera ligada (horas de câmera em call)', () => {
     expect(remainingText(b({ value: 1800, next_threshold: 3600 }))).toBe('Faltam 30 min')
   })
 })
+
+describe('Votante (votos no quadro de propostas)', () => {
+  const b = (over: Partial<Badge>): Badge =>
+    badge({
+      category: 'votante',
+      name: 'Votante',
+      unit: 'votes',
+      tiers: [{ tier: 1, name: 'Eleitor', threshold: 1, rarity: 'comum' }],
+      ...over
+    })
+
+  it('estatística, escada e quanto falta', () => {
+    expect(statText(b({ value: 1 }))).toBe('1 voto dado')
+    expect(statText(b({ value: 42 }))).toBe('42 votos dados')
+    expect(formatThreshold('votes', 10)).toBe('10 votos')
+    expect(remainingText(b({ value: 0, next_threshold: 1 }))).toBe('Falta 1 voto')
+    expect(publicStatText(b({ tier: 1 }))).toBe('1+ voto')
+  })
+})

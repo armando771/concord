@@ -17,6 +17,10 @@ func (s *Service) Vote(ctx context.Context, id, userID string, approve bool) (*P
 		return nil, ErrVotingClosed
 	}
 	s.publish("proposal:update", id)
+	// Votante: o voto novo pode subir o badge de quem votou.
+	if s.badges != nil {
+		s.badges.Refresh(ctx, userID)
+	}
 	return s.store.Get(ctx, id, &userID)
 }
 
