@@ -19,6 +19,17 @@ export interface PermissionGroup {
 
 export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
+    title: 'Administrador',
+    permissions: [
+      {
+        name: 'ADMINISTRATOR',
+        label: 'Administrador',
+        description:
+          'Membros com essa permissão têm todas as permissões e ignoram restrições de canais. Esta é uma permissão perigosa.'
+      }
+    ]
+  },
+  {
     title: 'Geral',
     permissions: [
       {
@@ -75,12 +86,6 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         name: 'MANAGE_NICKNAMES',
         label: 'Gerenciar apelidos',
         description: 'Mudar o apelido de quem está abaixo do seu cargo.'
-      },
-      {
-        name: 'ADMINISTRATOR',
-        label: 'Administrador',
-        description:
-          'Tem todas as permissões e ignora as restrições dos canais. Dê com muito cuidado.'
       }
     ]
   },
@@ -162,7 +167,13 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       {
         name: 'MOVE_MEMBERS',
         label: 'Mover membros',
-        description: 'Mover pessoas entre canais de voz e desconectá-las.',
+        description: 'Mover pessoas entre canais de voz.',
+        scope: 'voice'
+      },
+      {
+        name: 'DISCONNECT_MEMBERS',
+        label: 'Desconectar membros',
+        description: 'Desconectar membros da chamada de voz.',
         scope: 'voice'
       }
     ]
@@ -179,7 +190,7 @@ const groupTitled = (title: string): PermissionGroup =>
 export function channelPermissionGroups(kind: ChannelKind): PermissionGroup[] {
   const general: PermissionGroup = {
     title: 'Geral',
-    permissions: PERMISSION_GROUPS[0].permissions.filter((p) => p.name === 'VIEW_CHANNEL')
+    permissions: groupTitled('Geral').permissions.filter((p) => p.name === 'VIEW_CHANNEL')
   }
   const text = groupTitled('Canais de texto')
   if (kind === 'text') return [general, text]

@@ -31,6 +31,7 @@ export const Perm = {
   MOVE_MEMBERS: 1 << 21,
   USE_SOUNDBOARD: 1 << 22,
   MANAGE_EXPRESSIONS: 1 << 23,
+  DISCONNECT_MEMBERS: 1 << 24,
   CHANGE_NICKNAME: 1 << 26,
   MANAGE_NICKNAMES: 1 << 27
 } as const
@@ -180,6 +181,7 @@ function implicitChannel(perms: number, channelType: ChannelKind): number {
       Perm.MUTE_MEMBERS |
       Perm.DEAFEN_MEMBERS |
       Perm.MOVE_MEMBERS |
+      Perm.DISCONNECT_MEMBERS |
       Perm.USE_SOUNDBOARD
     )
   }
@@ -223,46 +225,87 @@ export function canActOn(
   return actorHighest > targetHighest
 }
 
+/**
+ * Pode alterar o apelido de outro membro: mesmo cargo ou superior.
+ * Alvo não pode ser o dono (exceto se o próprio ator for o dono).
+ */
+export function canManageNicknameOf(
+  ownerId: string | undefined,
+  actorId: string | undefined,
+  targetId: string,
+  actorHighest: number,
+  targetHighest: number
+): boolean {
+  if (!actorId) return false
+  if (targetId === ownerId) return actorId === ownerId
+  if (actorId === ownerId) return true
+  return actorHighest >= targetHighest
+}
+
+/**
+ * Pode desconectar outro membro da voz: mesmo cargo ou inferior.
+ * Alvo não pode ser o dono (exceto se o próprio ator for o dono).
+ */
+export function canDisconnectMember(
+  ownerId: string | undefined,
+  actorId: string | undefined,
+  targetId: string,
+  actorHighest: number,
+  targetHighest: number
+): boolean {
+  if (!actorId) return false
+  if (targetId === ownerId) return actorId === ownerId
+  if (actorId === ownerId) return true
+  return actorHighest >= targetHighest
+}
+
+/**
+ * Pode mover outro membro entre canais de voz: mesmo cargo ou inferior.
+ * Alvo não pode ser o dono (exceto se o próprio ator for o dono).
+ */
+export function canMoveMember(
+  ownerId: string | undefined,
+  actorId: string | undefined,
+  targetId: string,
+  actorHighest: number,
+  targetHighest: number
+): boolean {
+  if (!actorId) return false
+  if (targetId === ownerId) return actorId === ownerId
+  if (actorId === ownerId) return true
+  return actorHighest >= targetHighest
+}
+
+export {
+  PERMISSION_GROUPS,
+  channelPermissionGroups,
+  type PermissionInfo,
+  type PermissionGroup
+} from './permissionCatalog'
+
+const PERMISSION_ERROR_MESSAGES: Record<string, string> = {
+  missing_permission: 'Você não tem permissão para isso.',
+  not_member: 'Você não faz parte deste servidor.',
+  role_hierarchy: 'Você só pode fazer isso com cargos e pessoas abaixo do seu cargo mais alto.',
+  cannot_grant: 'Você não pode dar ou tirar uma permissão que você mesmo não tem.',
+  banned: 'Você foi banido deste servidor.',
+  everyone_role: 'O cargo @everyone não pode ser renomeado, movido nem apagado.',
+  bot_role: 'O cargo Bots é fixo do servidor e não pode ser apagado, movido nem atribuído a outros usuários.',
+  too_many_roles: 'O servidor atingiu o limite de cargos.',
+  role_not_found: 'Esse cargo não existe mais.',
+  member_not_found: 'Essa pessoa não está mais no servidor.',
+  ban_not_found: 'Essa pessoa não está banida.',
+  owner_cannot_leave: 'O dono não pode sair do servidor. Apague o servidor ou passe o cargo antes.',
+  self: 'Você não pode fazer isso consigo mesmo.',
+  channel_not_found: 'Esse canal não existe ou você não tem acesso a ele.',
+  invalid_target: 'Cargo ou membro não encontrado neste servidor.',
+  invalid_nickname: 'Apelido inválido: até 32 caracteres, sem caracteres invisíveis ou de controle.',
+  system_channel: 'Esse canal é fixo do servidor: não pode ser alterado nem ter mensagens excluídas.'
+}
 /** Mensagem em português para os códigos de erro de permissão do servidor. */
 export function permissionError(code: string | undefined, fallback = 'Algo deu errado'): string {
-  switch (code) {
-    case 'missing_permission':
-      return 'Você não tem permissão para isso.'
-    case 'not_member':
-      return 'Você não faz parte deste servidor.'
-    case 'role_hierarchy':
-      return 'Você só pode fazer isso com cargos e pessoas abaixo do seu cargo mais alto.'
-    case 'cannot_grant':
-      return 'Você não pode dar ou tirar uma permissão que você mesmo não tem.'
-    case 'banned':
-      return 'Você foi banido deste servidor.'
-    case 'everyone_role':
-      return 'O cargo @everyone não pode ser renomeado, movido nem apagado.'
-    case 'bot_role':
-      return 'O cargo Bots é fixo do servidor e não pode ser apagado, movido nem atribuído a outros usuários.'
-    case 'too_many_roles':
-      return 'O servidor atingiu o limite de cargos.'
-    case 'role_not_found':
-      return 'Esse cargo não existe mais.'
-    case 'member_not_found':
-      return 'Essa pessoa não está mais no servidor.'
-    case 'ban_not_found':
-      return 'Essa pessoa não está banida.'
-    case 'owner_cannot_leave':
-      return 'O dono não pode sair do servidor. Apague o servidor ou passe o cargo antes.'
-    case 'self':
-      return 'Você não pode fazer isso consigo mesmo.'
-    case 'channel_not_found':
-      return 'Esse canal não existe ou você não tem acesso a ele.'
-    case 'invalid_target':
-      return 'Cargo ou membro não encontrado neste servidor.'
-    case 'invalid_nickname':
-      return 'Apelido inválido: até 32 caracteres, sem caracteres invisíveis ou de controle.'
-    case 'system_channel':
-      return 'Esse canal é fixo do servidor: não pode ser alterado nem ter mensagens excluídas.'
-    default:
-      return fallback
-  }
+  if (!code) return fallback
+  return PERMISSION_ERROR_MESSAGES[code] ?? fallback
 }
 
 /** Cor do cargo em CSS (#rrggbb), ou undefined se não tem. */

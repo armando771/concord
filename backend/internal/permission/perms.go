@@ -33,6 +33,7 @@ const (
 	MoveMembers       int64 = 1 << 21
 	UseSoundboard     int64 = 1 << 22
 	ManageExpressions int64 = 1 << 23
+	DisconnectMembers int64 = 1 << 24
 	// Apelido no servidor: o próprio (todo mundo, como no Discord) e o dos
 	// outros (moderação, respeitando a hierarquia). Mesmos bits do Discord.
 	ChangeNickname  int64 = 1 << 26
@@ -63,6 +64,7 @@ var Names = map[string]int64{
 	"MOVE_MEMBERS":         MoveMembers,
 	"USE_SOUNDBOARD":       UseSoundboard,
 	"MANAGE_EXPRESSIONS":   ManageExpressions,
+	"DISCONNECT_MEMBERS":   DisconnectMembers,
 	"CHANGE_NICKNAME":      ChangeNickname,
 	"MANAGE_NICKNAMES":     ManageNicknames,
 }
@@ -71,7 +73,7 @@ var Names = map[string]int64{
 const All = ViewChannel | ManageChannels | ManageRoles | ManageServer | CreateInvite |
 	KickMembers | BanMembers | Administrator | SendMessages | AttachFiles | AddReactions |
 	MentionEveryone | ManageMessages | ReadHistory | Connect | Speak | Stream |
-	MuteMembers | DeafenMembers | MoveMembers | UseSoundboard | ManageExpressions |
+	MuteMembers | DeafenMembers | MoveMembers | DisconnectMembers | UseSoundboard | ManageExpressions |
 	ChangeNickname | ManageNicknames
 
 // DefaultEveryone: o que qualquer membro faz num servidor novo. Nos servidores
@@ -83,7 +85,7 @@ const DefaultEveryone = ViewChannel | SendMessages | AttachFiles | AddReactions 
 // servidor e da moderação, mas não mexe em cargos nem bane (só o dono fazia).
 const DefaultModerator = DefaultEveryone | ManageChannels | ManageServer | MentionEveryone |
 	ManageMessages | MoveMembers | MuteMembers | DeafenMembers | KickMembers | ManageExpressions |
-	ManageNicknames
+	ManageNicknames | DisconnectMembers
 
 // ModeratorName é o nome do cargo criado junto com o servidor.
 const ModeratorName = "Moderador"
