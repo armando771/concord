@@ -84,6 +84,11 @@ export function parseAccelerator(raw: string): ParsedShortcut {
   return { ok: true, accelerator: [...ordered, key].join('+') }
 }
 
+/** Dica do modo de edição no jogo (página do overlay e janela nativa). */
+export function overlayEditHint(shortcut: string): string {
+  return `Arraste para mover · canto para redimensionar · ${shortcut} ou Esc para sair`
+}
+
 /** Valor salvo/recebido → atalho válido (o que não valer volta ao padrão). */
 export function normalizeOverlayShortcut(raw: unknown): string {
   const parsed = parseAccelerator(raw as string)
