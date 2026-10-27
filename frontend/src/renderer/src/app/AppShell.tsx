@@ -1,5 +1,4 @@
 import NotifySettingsModal from '../features/notifications/components/NotifySettingsModal'
-import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import ServerRail from '../features/servers/components/ServerRail'
 import FriendsSidebar from '../features/friends/components/FriendsSidebar'
@@ -11,10 +10,8 @@ import EmailVerifyBanner from '../features/auth/components/EmailVerifyBanner'
 import ConnectionBanner from '../shared/ui/ConnectionBanner'
 import ScreenMiniPlayer from '../features/call/components/ScreenMiniPlayer'
 import ActivityPanel from '../features/call/components/ActivityPanel'
-import ScreenSharePickerModal from '../features/call/components/ScreenSharePickerModal'
-import ScreenQualityModal from '../features/call/components/ScreenQualityModal'
+import ScreenSharePrompt from '../features/call/components/ScreenSharePrompt'
 import VideoBackgroundModal from '../features/call/components/VideoBackgroundModal'
-import { usesNativePicker } from '../features/call/lib/displayMedia'
 import JoinRequestsStack from '../features/call/components/JoinRequestsStack'
 import LevelUpBanner from '../features/levels/components/LevelUpBanner'
 import BoostBanner from '../features/levels/components/BoostBanner'
@@ -29,15 +26,8 @@ import ShortcutsModal from '../features/settings/components/ShortcutsModal'
 import { useGlobalShortcuts } from '../features/settings/hooks/useGlobalShortcuts'
 import { useInviteLinkClicks } from '../features/servers/hooks/useInviteLinkClicks'
 import { useAuthStore } from '../features/auth/store/authStore'
-import { useChatStore } from '../features/chat/store/chatStore'
+import { useSessionConnection } from '../features/auth/hooks/useSessionConnection'
 import { useUIStore } from '../shared/store/uiStore'
-import { IS_WEB } from '../shared/lib/config'
-
-// Fixo durante a vida do app (a sessão Wayland/X11 não muda com ele aberto).
-const nativePicker = usesNativePicker(
-  IS_WEB,
-  typeof window !== 'undefined' ? window.api?.screenShare?.flow : undefined
-)
 
 function AppShell(): React.JSX.Element {
   useFlushPendingLevelUp()
@@ -49,14 +39,7 @@ function AppShell(): React.JSX.Element {
   const isServerPage = location.pathname.startsWith('/servers/')
   const hasToken = Boolean(useAuthStore((s) => s.accessToken))
 
-  useEffect(() => {
-    if (hasToken) {
-      useChatStore.getState().connect()
-    }
-    return () => {
-      useChatStore.getState().disconnect()
-    }
-  }, [hasToken])
+  useSessionConnection(hasToken)
 
   return (
     <div className="flex h-full">
@@ -75,10 +58,7 @@ function AppShell(): React.JSX.Element {
       <BirthdayModal />
       <ScreenMiniPlayer />
       <ActivityPanel />
-      {/* Navegador e Linux/Wayland: o seletor de tela é o do sistema; o app só
-          pergunta a qualidade antes. */}
-      {!nativePicker && <ScreenSharePickerModal />}
-      {nativePicker && <ScreenQualityModal />}
+      <ScreenSharePrompt />
       <VideoBackgroundModal />
       <LevelUpScreen />
       <InviteConfirmModal />
