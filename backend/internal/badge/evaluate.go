@@ -3,6 +3,7 @@ package badge
 import (
 	"time"
 
+	"gin-quickstart/backend/internal/birthday"
 	"gin-quickstart/backend/internal/level"
 )
 
@@ -33,6 +34,27 @@ type Stats struct {
 	IsDev bool
 	// Respondeu "sim" no banner do segundo turno (Fez o L).
 	FezOL bool
+	// Músicas postas na fila do Maestro (DJ).
+	SongsQueued int64
+	// Sons da mesa de áudio tocados com alguém ouvindo (Barulhento).
+	SoundsPlayed int64
+	// Mensagens com figurinha ou GIF (Figurinha).
+	StickersSent int64
+	// Dias seguidos usando o app: a sequência atual e a maior já feita.
+	StreakDays        int64
+	LongestStreakDays int64
+	// Tempo em call com a câmera ligada e alguém ouvindo (Câmera ligada).
+	CameraSeconds int64
+	// Votos nos cards do quadro de propostas (Votante).
+	Votes int64
+	// Dia e mês do aniversário de quem deixa anunciar; 0 sem data.
+	BirthdayDay   int64
+	BirthdayMonth int64
+	// Quando dia/mês do aniversário foram cadastrados ou trocados pela
+	// última vez (anti-trapaça: precisa de birthdayGrace).
+	BirthdaySetAt time.Time
+	// Servidores em que a pessoa mandou a primeira mensagem.
+	FirstMessages int64
 	// Bugs reportados, concedidos à mão em bug_hunters (Caçador de bugs).
 	BugsReported int64
 	// Posição (1 a 10) no Top 10 do nível 100; 0 se não está.
@@ -104,6 +126,19 @@ func monthsBetween(from, to time.Time) int64 {
 	return int64(n)
 }
 
+// birthdayGrace: a data do aniversário precisa estar cadastrada há esse
+// tempo para valer o badge (trocar a data para hoje não dá o badge).
+const birthdayGrace = 30 * 24 * time.Hour
+
+// isBirthday: hoje (Brasília) é o aniversário da pessoa, com a data
+// cadastrada há pelo menos birthdayGrace.
+func isBirthday(s Stats, now time.Time) bool {
+	if s.BirthdayDay == 0 || s.BirthdayMonth == 0 || now.Sub(s.BirthdaySetAt) < birthdayGrace {
+		return false
+	}
+	return birthday.IsBirthday(int(s.BirthdayDay), int(s.BirthdayMonth), now.In(Brasilia()))
+}
+
 func isFounder(createdAt time.Time) bool {
 	return createdAt.Before(FounderCutoff)
 }
@@ -142,6 +177,16 @@ var valueFns = map[string]valueFn{
 	"contribuinte": func(s Stats, _ time.Time) int64 { return s.Proposals },
 	"criador":      func(s Stats, _ time.Time) int64 { return flag(s.IsDev) },
 	"l":            func(s Stats, _ time.Time) int64 { return flag(s.FezOL) },
+	"dj":           func(s Stats, _ time.Time) int64 { return s.SongsQueued },
+	"barulhento":   func(s Stats, _ time.Time) int64 { return s.SoundsPlayed },
+	"figurinha":    func(s Stats, _ time.Time) int64 { return s.StickersSent },
+	"sequencia":    func(s Stats, _ time.Time) int64 { return s.LongestStreakDays },
+	"camera":       func(s Stats, _ time.Time) int64 { return s.CameraSeconds },
+	"votante":      func(s Stats, _ time.Time) int64 { return s.Votes },
+	"primeira":     func(s Stats, _ time.Time) int64 { return s.FirstMessages },
+	"aniversariante": func(s Stats, now time.Time) int64 {
+		return flag(isBirthday(s, now))
+	},
 }
 
 func valueOf(c Category, s Stats, now time.Time) int64 {

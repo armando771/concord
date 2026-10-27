@@ -26,7 +26,8 @@ func (a *app) wireCalls() {
 	a.callService = call.CallService(call.CallRepository(a.db), a.hub, a.conversationService, a.serverService, a.channelService, a.userService, a.hub.IsOnline)
 	a.callService.SetSoundLookup(soundboard.NewCallLookup(a.soundboardRepository))
 	a.callService.SetPermissions(a.permissionService)
-	a.callService.SetMediaAdmin(livekit.NewAdmin("http://127.0.0.1:"+a.liveKitPort, liveKitKey, liveKitSecret))
+	a.liveKitAdmin = livekit.NewAdmin("http://127.0.0.1:"+a.liveKitPort, liveKitKey, liveKitSecret)
+	a.callService.SetMediaAdmin(a.liveKitAdmin)
 	// Mudou cargo ou canal: quem está em voz sem acesso sai; quem perdeu falar
 	// ou transmitir tem a mídia atualizada na hora.
 	a.hub.SetPermissionsChangedHook(func(serverID string) {

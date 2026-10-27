@@ -75,6 +75,12 @@ const HOUR = 3600
 const DEV_TEXT = 'Dev do Salinha'
 const DEV_ONLY = 'Só para os devs'
 const VOTE_TEXT = 'Fez o L no segundo turno'
+const BIRTHDAY_TEXT = 'Comemorou o aniversário no Salinha'
+
+function birthdayText(b: Badge, value: number): string {
+  if (value > 0) return 'Hoje é o seu aniversário!'
+  return b.tier > 0 ? BIRTHDAY_TEXT : 'Ganho no dia do seu aniversário'
+}
 
 /** "#3 de 10 a chegar no nível 100" (a posição vem também para os outros). */
 function rankText(value: number | undefined): string {
@@ -111,7 +117,8 @@ const TIME_SUFFIX: Record<string, string> = {
   espectador: 'assistindo lives',
   coruja: 'em call de madrugada',
   madrugador: 'em call de manhãzinha',
-  maratona: 'seguidas numa call'
+  maratona: 'seguidas numa call',
+  camera: 'com a câmera ligada'
 }
 
 /** O texto da estatística de cada unidade; unidade sem entrada mostra o número. */
@@ -127,6 +134,13 @@ const STAT_TEXT: Partial<Record<BadgeUnit, (b: Badge, value: number) => string>>
   friends: (_, value) => plural(value, 'amigo', 'amigos'),
   bugs: (_, value) => (value === 1 ? '1 bug reportado' : `${num(value)} bugs reportados`),
   rank: (_, value) => rankText(value),
+  songs: (_, value) => plural(value, 'música pedida', 'músicas pedidas'),
+  sounds: (_, value) => plural(value, 'som tocado', 'sons tocados'),
+  stickers: (_, value) => plural(value, 'figurinha ou GIF enviado', 'figurinhas e GIFs enviados'),
+  days: (_, value) => `Recorde de ${plural(value, 'dia seguido', 'dias seguidos')}`,
+  votes: (_, value) => plural(value, 'voto dado', 'votos dados'),
+  birthday: birthdayText,
+  firsts: (_, value) => `Primeira mensagem de ${plural(value, 'servidor', 'servidores')}`,
   founder: (_, value) =>
     value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas',
   dev: () => DEV_TEXT,
@@ -139,22 +153,34 @@ export function statText(b: Badge): string {
   return STAT_TEXT[b.unit]?.(b, value) ?? num(value)
 }
 
+/** Badges sem escada de números: no perfil dos outros, uma frase. */
+const PUBLIC_FIXED_TEXT: Partial<Record<BadgeUnit, (b: Badge) => string>> = {
+  founder: () => 'Chegou nas primeiras semanas',
+  dev: () => DEV_TEXT,
+  vote: () => VOTE_TEXT,
+  rank: (b) => rankText(b.value),
+  birthday: () => BIRTHDAY_TEXT
+}
+
+/** O que vem antes do número no perfil dos outros ("Primeira mensagem de 3+ servidores"). */
+const PUBLIC_PREFIX: Partial<Record<BadgeUnit, string>> = {
+  firsts: 'Primeira mensagem de '
+}
+
 /**
  * Estatística no perfil de outra pessoa: o limite do tier conquistado
  * ("2.000+ mensagens"), nunca o número exato.
  */
 export function publicStatText(b: Badge): string {
-  if (b.unit === 'founder') return 'Chegou nas primeiras semanas'
-  if (b.unit === 'dev') return DEV_TEXT
-  if (b.unit === 'vote') return VOTE_TEXT
-  if (b.unit === 'rank') return rankText(b.value)
+  const fixed = PUBLIC_FIXED_TEXT[b.unit]
+  if (fixed) return fixed(b)
   const reached = b.tiers[b.tier - 1]
   if (!reached) return ''
   const label = `${formatThreshold(b.unit, reached.threshold)}`
   if (b.unit === 'level') return `${label}+`
   const [n, ...rest] = label.split(' ')
   const suffix = b.unit === 'seconds' ? ` ${TIME_SUFFIX[b.category] ?? 'em call'}` : ''
-  return `${n}+ ${rest.join(' ')}${suffix}`
+  return `${PUBLIC_PREFIX[b.unit] ?? ''}${n}+ ${rest.join(' ')}${suffix}`
 }
 
 /** Rótulo de um degrau da escada, por unidade; unidade sem entrada mostra o número. */
@@ -171,6 +197,13 @@ const THRESHOLD_TEXT: Partial<Record<BadgeUnit, (threshold: number) => string>> 
   friends: (t) => plural(t, 'amigo', 'amigos'),
   bugs: (t) => plural(t, 'bug', 'bugs'),
   rank: () => 'Top 10',
+  songs: (t) => plural(t, 'música', 'músicas'),
+  sounds: (t) => plural(t, 'som', 'sons'),
+  stickers: (t) => plural(t, 'figurinha ou GIF', 'figurinhas e GIFs'),
+  days: (t) => plural(t, 'dia seguido', 'dias seguidos'),
+  votes: (t) => plural(t, 'voto', 'votos'),
+  birthday: () => 'No dia do aniversário',
+  firsts: (t) => plural(t, 'servidor', 'servidores'),
   // Corte do backend: contas criadas antes de 01/11/2026.
   founder: () => 'Até 31/10/26',
   dev: () => DEV_ONLY,
@@ -215,6 +248,14 @@ const REMAINING_TEXT: Partial<Record<BadgeUnit, RemainingFn>> = {
   proposals: (_, left) => falta(left, 'proposta', 'propostas'),
   friends: (_, left) => falta(left, 'amigo', 'amigos'),
   bugs: (_, left) => falta(left, 'bug', 'bugs'),
+  songs: (_, left) => falta(left, 'música', 'músicas'),
+  sounds: (_, left) => falta(left, 'som', 'sons'),
+  stickers: (_, left) => falta(left, 'figurinha ou GIF', 'figurinhas e GIFs'),
+  // O valor é o recorde, não a sequência atual: a meta é uma sequência nova.
+  days: (b) => `Uma sequência de ${plural(b.next_threshold ?? 0, 'dia', 'dias')}`,
+  votes: (_, left) => falta(left, 'voto', 'votos'),
+  birthday: () => 'Chega no dia do seu aniversário',
+  firsts: (_, left) => falta(left, 'servidor', 'servidores'),
   founder: () => 'Só para quem chegou nas primeiras semanas',
   dev: () => DEV_ONLY
 }

@@ -17,6 +17,14 @@
 - Badges: novo badge Amigos pelo número de amizades (Enturmado, Popular, Galera Toda, Celebridade e Prefeito da Salinha, de 5 a 100 amigos). Sobe na hora em que um pedido de amizade é aceito, e desfazer uma amizade não tira o tier já conquistado.
 - Badges: novo badge Caçador de bugs para quem reporta bugs ao time (Olho Vivo, Detetive, Exterminador e Lenda do QA, de 1 a 25 bugs). O time concede a cada bug confirmado.
 - Badges: novo badge mítico Top 10 do Nível 100, o mais raro do app: só os 10 primeiros a chegar no nível 100 ganham, e o perfil mostra a posição de chegada ("#3 de 10").
+- Badges: novo badge DJ para quem põe músicas na fila do Maestro (Pede Música, Dono da Playlist, DJ de Churrasco, DJ Residente e Lenda das Pick-ups, de 10 a 5.000 músicas). Os pedidos antigos contam pelos avisos do Maestro no chat.
+- Badges: novo badge Barulhento para quem toca sons da mesa de áudio numa call com mais gente ouvindo (Buzina, Fanfarrão, Trio Elétrico e Caixa de Som do Vizinho, de 25 a 5.000 sons). Conta a partir de agora.
+- Badges: novo badge Figurinha para quem manda figurinhas e GIFs (Figurinha Repetida, Colecionador, Álbum da Copa e Rei do GIF, de 10 a 2.000). As que você já mandou contam, com a data certa.
+- Badges: novo badge Sequência para quem abre o Salinha todo dia, sem pular nenhum (Faísca, Foguinho, Fogueira, Incêndio e Chama Eterna, de 3 a 365 dias seguidos). Vale a sua maior sequência, então perder a sequência não tira o badge. Os dias em que você já mandou mensagem, reagiu, entrou em call ou votou contam.
+- Badges: novo badge Câmera ligada para quem fica em call com a câmera aberta e mais gente ouvindo (Rostinho, Ao Vivo, Galã, Influencer e Big Brother, de 1 a 500 horas). Conta a partir de agora.
+- Badges: novo badge Votante para quem vota nos cards do quadro de propostas (Eleitor, Cidadão, Fiscal de Urna, Mesário e Voto de Minerva, de 1 a 150 votos). Sobe na hora do voto, e quem já votou ganha os tiers com a data certa.
+- Badges: novo badge Aniversariante, ganho no dia do seu aniversário e seu para sempre. Vale para quem tem a data cadastrada e deixa ligado "Anunciar meu aniversário nos servidores".
+- Badges: novo badge exclusivo Primeira mensagem, de quem mandou a primeira mensagem de um servidor (Quebra-gelo, Desbravador e Big Bang, em 1, 3 e 10 servidores). Nos servidores que já existem, vale a mensagem mais antiga que ainda está lá.
 
 ## Correções
 - Janela estreita: Configurações, Configurações do servidor, badges e cargos agora cabem em telas pequenas, com a navegação em cima do conteúdo, e as setas para ordenar cargos aparecem em telas de toque.

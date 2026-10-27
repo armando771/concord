@@ -64,6 +64,7 @@ type app struct {
 	soundboardRepository *soundboard.Repository
 
 	liveKitTokens *livekit.TokenIssuer
+	liveKitAdmin  *livekit.Admin
 	liveKitPort   string
 	callService   *call.Service
 	musicManager  *music.Manager

@@ -43,6 +43,7 @@ func (a *app) wireEngagement() {
 	// desligamento grava o que estava na memória antes de fechar o banco.
 	badgeService := badge.BadgeService(badge.BadgeRepository(a.db), a.hub, a.callService, a.hub, nil)
 	badgeHandler := badge.BadgeHandler(badgeService)
+	a.wireBadgeEvents(badgeService)
 	// Amizade aceita já reavalia o badge Amigos das duas pessoas.
 	a.friendAccepted.OnAccepted(badgeService.Refresh)
 

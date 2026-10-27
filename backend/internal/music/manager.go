@@ -84,6 +84,8 @@ type Manager struct {
 	searches map[string]searchSession
 	// Um comando por vez por usuário: não deixa ninguém disparar yt-dlp sem limite.
 	busy map[string]struct{}
+	// onQueued: quem pediu e quantas músicas entraram (badge DJ).
+	onQueued func(userID string, n int)
 }
 
 func NewManager(cfg Config, deps ManagerDeps) *Manager {
@@ -266,70 +268,6 @@ func (m *Manager) play(ctx context.Context, loc Location, serverID, textChannelI
 			return
 		}
 		m.enqueueTracks(ctx, loc, textChannelID, userID, ok, name, say)
-	}
-}
-
-func (m *Manager) enqueueURL(ctx context.Context, loc Location, textChannelID, userID, url string, say func(string)) {
-	mctx, cancel := context.WithTimeout(ctx, metadataTimeout)
-	t, err := m.deps.Source.Resolve(mctx, url)
-	cancel()
-	switch {
-	case errors.Is(err, ErrPrivate):
-		say(TextPrivate)
-	case err != nil:
-		say(TextVideoGone)
-	case t.IsLive:
-		say(TextLive)
-	case t.DurationMs > maxVideoMs:
-		say(TextTooLong)
-	default:
-		m.enqueueTracks(ctx, loc, textChannelID, userID, []Track{t}, "", say)
-	}
-}
-
-// enqueueTracks: playlistName vazio = um vídeo só.
-func (m *Manager) enqueueTracks(ctx context.Context, loc Location, textChannelID, userID string, tracks []Track, playlistName string, say func(string)) {
-	p, err := m.playerFor(ctx, loc)
-	if errors.Is(err, errTooManyPlayers) {
-		say(TextTooManyPlayers)
-		return
-	}
-	if err != nil {
-		log.Printf("[music] criar player: %v", err)
-		say(TextUnavailable)
-		return
-	}
-	user, err := m.deps.User(ctx, userID)
-	if err != nil {
-		p.IdleIfEmpty() // player criado sem nada na fila não pode ficar na call para sempre
-		say(TextUnavailable)
-		return
-	}
-	items := make([]*Item, len(tracks))
-	for i, t := range tracks {
-		items[i] = NewItem(t, user, textChannelID)
-	}
-	res, err := p.Enqueue(items, textChannelID)
-	if errors.Is(err, ErrQueueFull) {
-		say(TextQueueFull(m.cfg.QueueMax))
-		return
-	}
-	if err != nil {
-		p.IdleIfEmpty()
-		say(TextUnavailable)
-		return
-	}
-	var text string
-	switch {
-	case playlistName != "":
-		text = TextAddedPlaylist(user.Username, playlistName, res.Added, res.AddedMs, p.ChannelName)
-	case res.StartsNow:
-		text = TextAddedNow(user.Username, tracks[0].Title, tracks[0].DurationMs, p.ChannelName)
-	default:
-		text = TextAdded(user.Username, tracks[0].Title, tracks[0].DurationMs, p.ChannelName, res.FirstPos, MinutesCeil(res.StartsInMs))
-	}
-	if err := m.deps.PostPublic(ctx, textChannelID, text); err != nil {
-		log.Printf("[music] aviso público: %v", err)
 	}
 }
 
