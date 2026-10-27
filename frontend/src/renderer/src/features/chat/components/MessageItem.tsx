@@ -157,6 +157,8 @@ function MessageActions({
           onTogglePin={item.onTogglePin}
           onDelete={bar.onDelete}
           deleteTitle={bar.deleteTitle}
+          menuOpen={actions.menuOpen}
+          onMenuOpenChange={actions.setMenuOpen}
         />
       )}
       {actions.pickerOpen && item.canReact && (
