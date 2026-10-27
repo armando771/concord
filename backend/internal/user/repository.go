@@ -327,42 +327,6 @@ func (r *Repository) Create(
 	)
 }
 
-func (r *Repository) UpdateProfile(ctx context.Context, id string, in ProfileInput) (*User, error) {
-	return scanUser(r.db.QueryRow(
-		ctx,
-		`
-		UPDATE users
-		SET display_name = $2, pronouns = $3, bio = $4, status_text = $5,
-			banner_color = $6, links = $7,
-			name_font = COALESCE($8, name_font),
-			name_effect = COALESCE($9, name_effect),
-			name_colors = COALESCE($10, name_colors),
-			profile_border = COALESCE($11, profile_border),
-			profile_border_colors = COALESCE($12, profile_border_colors),
-			profile_background = COALESCE($13, profile_background),
-			profile_background_colors = COALESCE($14, profile_background_colors),
-			profile_effect = COALESCE($15, profile_effect),
-			updated_at = NOW()
-		WHERE id = $1
-		RETURNING `+userColumns,
-		id,
-		in.DisplayName,
-		in.Pronouns,
-		in.Bio,
-		in.StatusText,
-		in.BannerColor,
-		in.Links,
-		styleFont(in.NameStyle),
-		styleEffect(in.NameStyle),
-		styleColors(in.NameStyle),
-		themeField(in.ProfileTheme, func(t *profiletheme.Theme) string { return t.Border }),
-		themeColors(in.ProfileTheme, func(t *profiletheme.Theme) []string { return t.BorderColors }),
-		themeField(in.ProfileTheme, func(t *profiletheme.Theme) string { return t.Background }),
-		themeColors(in.ProfileTheme, func(t *profiletheme.Theme) []string { return t.BackgroundColors }),
-		themeField(in.ProfileTheme, func(t *profiletheme.Theme) string { return t.Effect }),
-	))
-}
-
 // SetAvatar troca a URL do avatar e devolve a anterior (para apagar o arquivo).
 func (r *Repository) SetAvatar(ctx context.Context, id string, url *string) (*User, *string, error) {
 	return r.swapMedia(ctx, id, "avatar_url", url)
