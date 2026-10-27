@@ -6,23 +6,41 @@ import (
 )
 
 var (
-	// ErrNaoElegivel: a conta é de depois do corte (o banner não é para ela).
-	ErrNaoElegivel = errors.New("conta fora do corte do segundo turno")
-	// ErrJaRespondeu: a resposta é única e não muda.
-	ErrJaRespondeu          = errors.New("segundo turno já respondido")
+	ErrEnqueteInexistente   = errors.New("enquete não encontrada")
+	ErrOpcaoInvalida        = errors.New("opção inválida")
+	ErrNaoElegivel          = errors.New("conta fora do corte da enquete")
+	ErrJaRespondeu          = errors.New("enquete já respondida")
 	ErrUsuarioNaoEncontrado = errors.New("user not found")
 )
 
-// Conta é o que o serviço precisa saber de uma pessoa.
-type Conta struct {
-	CriadaEm  time.Time
-	Respondeu bool
-	FezOL     bool
+// Opcao é uma resposta possível. Badge é a categoria concedida a quem a
+// escolhe (internal/badge); vazio = nenhum badge.
+type Opcao struct {
+	ID     string `json:"id"`
+	Rotulo string `json:"rotulo"`
+	Badge  string `json:"badge,omitempty"`
 }
 
-// Estado é o que o app mostra: se há banner, e a resposta já dada.
-type Estado struct {
-	Elegivel  bool `json:"elegivel"`
-	Respondeu bool `json:"respondeu"`
-	FezOL     bool `json:"fez_o_l"`
+// Enquete é uma pergunta de escolha única, definida em código (definicoes.go).
+type Enquete struct {
+	ID        string `json:"id"`
+	Titulo    string `json:"titulo"`
+	Descricao string `json:"descricao"`
+	// Corte: só contas criadas antes dele veem a enquete.
+	Corte  time.Time `json:"-"`
+	Opcoes []Opcao   `json:"opcoes"`
+}
+
+// Conta é o que o serviço precisa saber de uma pessoa.
+type Conta struct {
+	CriadaEm time.Time
+	// Respostas já dadas: enquete -> opção.
+	Respostas map[string]string
+}
+
+// Resposta é o que o POST devolve.
+type Resposta struct {
+	Enquete string `json:"enquete"`
+	Opcao   string `json:"opcao"`
+	Badge   string `json:"badge,omitempty"`
 }

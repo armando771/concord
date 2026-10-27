@@ -3,13 +3,12 @@ package enquete
 import (
 	"context"
 	"fmt"
-	"time"
 )
 
 type store interface {
 	Carregar(ctx context.Context, userID string) (Conta, error)
 	// Gravar guarda a resposta; false se a pessoa já tinha respondido.
-	Gravar(ctx context.Context, userID string, fezOL bool) (bool, error)
+	Gravar(ctx context.Context, userID, enquete, opcao string) (bool, error)
 }
 
 // BadgeRefresher reavalia os badges de alguém na hora (badge.Service).
@@ -18,53 +17,84 @@ type BadgeRefresher interface {
 }
 
 type Service struct {
-	store  store
-	badges BadgeRefresher
-	// corte: só contas criadas antes dele veem o banner.
-	corte time.Time
+	store    store
+	badges   BadgeRefresher
+	enquetes []Enquete
 }
 
-func SegundoTurnoService(repository *Repository, badges BadgeRefresher, corte time.Time) *Service {
-	return &Service{store: repository, badges: badges, corte: corte}
+func EnqueteService(repository *Repository, badges BadgeRefresher, enquetes []Enquete) *Service {
+	return &Service{store: repository, badges: badges, enquetes: enquetes}
 }
 
-func (s *Service) estadoDe(c Conta) Estado {
-	return Estado{Elegivel: c.CriadaEm.Before(s.corte), Respondeu: c.Respondeu, FezOL: c.FezOL}
-}
+func elegivel(e Enquete, c Conta) bool { return c.CriadaEm.Before(e.Corte) }
 
-// Estado diz se userID vê o banner e o que respondeu.
-func (s *Service) Estado(ctx context.Context, userID string) (Estado, error) {
+// Pendentes são as enquetes que userID pode responder e ainda não respondeu.
+// Nunca devolve nil (o JSON precisa ser []).
+func (s *Service) Pendentes(ctx context.Context, userID string) ([]Enquete, error) {
 	c, err := s.store.Carregar(ctx, userID)
 	if err != nil {
-		return Estado{}, err
+		return nil, err
 	}
-	return s.estadoDe(c), nil
+	out := []Enquete{}
+	for _, e := range s.enquetes {
+		if _, respondeu := c.Respostas[e.ID]; elegivel(e, c) && !respondeu {
+			out = append(out, e)
+		}
+	}
+	return out, nil
 }
 
-// Responder grava a resposta única de userID. "Sim" reavalia os badges na
-// hora (o badge l e o aviso de desbloqueio saem do badge.Service); "não" só
-// impede o banner de voltar.
-func (s *Service) Responder(ctx context.Context, userID string, fezOL bool) (Estado, error) {
+func (s *Service) achar(id string) (Enquete, bool) {
+	for _, e := range s.enquetes {
+		if e.ID == id {
+			return e, true
+		}
+	}
+	return Enquete{}, false
+}
+
+func achaOpcao(e Enquete, id string) (Opcao, bool) {
+	for _, o := range e.Opcoes {
+		if o.ID == id {
+			return o, true
+		}
+	}
+	return Opcao{}, false
+}
+
+// Responder grava a resposta única de userID. Opção com badge reavalia os
+// badges na hora (o desbloqueio e o aviso saem do badge.Service); as outras só
+// impedem a pergunta de voltar.
+func (s *Service) Responder(ctx context.Context, userID, enqueteID, opcaoID string) (Resposta, error) {
+	e, ok := s.achar(enqueteID)
+	if !ok {
+		return Resposta{}, ErrEnqueteInexistente
+	}
+	op, ok := achaOpcao(e, opcaoID)
+	if !ok {
+		return Resposta{}, ErrOpcaoInvalida
+	}
 	c, err := s.store.Carregar(ctx, userID)
 	if err != nil {
-		return Estado{}, err
+		return Resposta{}, err
 	}
-	if st := s.estadoDe(c); !st.Elegivel {
-		return Estado{}, ErrNaoElegivel
-	} else if st.Respondeu {
-		return Estado{}, ErrJaRespondeu
+	if !elegivel(e, c) {
+		return Resposta{}, ErrNaoElegivel
 	}
-	gravou, err := s.store.Gravar(ctx, userID, fezOL)
+	if _, ja := c.Respostas[e.ID]; ja {
+		return Resposta{}, ErrJaRespondeu
+	}
+	gravou, err := s.store.Gravar(ctx, userID, e.ID, op.ID)
 	if err != nil {
-		return Estado{}, fmt.Errorf("gravar resposta: %w", err)
+		return Resposta{}, fmt.Errorf("gravar resposta: %w", err)
 	}
 	if !gravou {
-		return Estado{}, ErrJaRespondeu
+		return Resposta{}, ErrJaRespondeu
 	}
-	if fezOL {
+	if op.Badge != "" {
 		// A resposta já está gravada: se quem pediu desconectar agora, o
 		// badge ainda precisa ser concedido e anunciado.
 		s.badges.Refresh(context.WithoutCancel(ctx), userID)
 	}
-	return Estado{Elegivel: true, Respondeu: true, FezOL: fezOL}, nil
+	return Resposta{Enquete: e.ID, Opcao: op.ID, Badge: op.Badge}, nil
 }

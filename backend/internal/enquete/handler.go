@@ -9,33 +9,34 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type estadoSource interface {
-	Estado(ctx context.Context, userID string) (Estado, error)
-	Responder(ctx context.Context, userID string, fezOL bool) (Estado, error)
+type enqueteSource interface {
+	Pendentes(ctx context.Context, userID string) ([]Enquete, error)
+	Responder(ctx context.Context, userID, enqueteID, opcaoID string) (Resposta, error)
 }
 
 type Handler struct {
-	service estadoSource
+	service enqueteSource
 }
 
-func SegundoTurnoHandler(service *Service) *Handler {
+func EnqueteHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
 type respostaRequest struct {
-	// Ponteiro: "não" é false e precisa se distinguir de campo ausente.
-	FezOL *bool `json:"fez_o_l"`
+	Opcao string `json:"opcao"`
 }
 
-// responde traduz o erro de domínio em status HTTP; nil devolve o estado.
-func responde(c *gin.Context, estado Estado, err error) {
+// falha traduz o erro de domínio em status HTTP.
+func falha(c *gin.Context, err error) {
 	switch {
-	case err == nil:
-		c.JSON(http.StatusOK, estado)
+	case errors.Is(err, ErrOpcaoInvalida):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid option"})
 	case errors.Is(err, ErrNaoElegivel):
 		c.JSON(http.StatusForbidden, gin.H{"error": "not eligible"})
 	case errors.Is(err, ErrJaRespondeu):
 		c.JSON(http.StatusConflict, gin.H{"error": "already answered"})
+	case errors.Is(err, ErrEnqueteInexistente):
+		c.JSON(http.StatusNotFound, gin.H{"error": "poll not found"})
 	case errors.Is(err, ErrUsuarioNaoEncontrado):
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 	default:
@@ -54,27 +55,35 @@ func idDeQuemChama(c *gin.Context) (string, bool) {
 	return id, true
 }
 
-// Get: GET /users/me/segundo-turno, se há banner e o que a pessoa respondeu.
+// Get: GET /users/me/enquetes, as enquetes que a pessoa pode e ainda não respondeu.
 func (h *Handler) Get(c *gin.Context) {
 	id, ok := idDeQuemChama(c)
 	if !ok {
 		return
 	}
-	estado, err := h.service.Estado(c.Request.Context(), id)
-	responde(c, estado, err)
+	pendentes, err := h.service.Pendentes(c.Request.Context(), id)
+	if err != nil {
+		falha(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"enquetes": pendentes})
 }
 
-// Post: POST /users/me/segundo-turno {"fez_o_l": bool}. Resposta única.
+// Post: POST /users/me/enquetes/:id {"opcao": "l"}. Resposta única.
 func (h *Handler) Post(c *gin.Context) {
 	id, ok := idDeQuemChama(c)
 	if !ok {
 		return
 	}
 	var req respostaRequest
-	if err := c.ShouldBindJSON(&req); err != nil || req.FezOL == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "fez_o_l is required"})
+	if err := c.ShouldBindJSON(&req); err != nil || req.Opcao == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "opcao is required"})
 		return
 	}
-	estado, err := h.service.Responder(c.Request.Context(), id, *req.FezOL)
-	responde(c, estado, err)
+	res, err := h.service.Responder(c.Request.Context(), id, c.Param("id"), req.Opcao)
+	if err != nil {
+		falha(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, res)
 }

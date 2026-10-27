@@ -44,10 +44,10 @@ func (a *app) wireEngagement() {
 	badgeService := badge.BadgeService(badge.BadgeRepository(a.db), a.hub, a.callService, a.hub, nil)
 	badgeHandler := badge.BadgeHandler(badgeService)
 
-	// Banner "fez o L no segundo turno?": o sim reavalia o badge na hora e só
-	// contas criadas antes do corte do Pioneiro veem o banner.
-	segundoTurnoHandler := enquete.SegundoTurnoHandler(enquete.SegundoTurnoService(
-		enquete.SegundoTurnoRepository(a.db), badgeService, badge.FounderCutoff,
+	// Enquetes de escolha única (hoje: badge do segundo turno). Opção com badge
+	// reavalia os badges na hora; só contas anteriores ao corte da enquete a veem.
+	enqueteHandler := enquete.EnqueteHandler(enquete.EnqueteService(
+		enquete.EnqueteRepository(a.db), badgeService, enquete.Todas,
 	))
 
 	// Card novo no quadro já reavalia o badge Contribuinte de quem criou.
@@ -68,7 +68,7 @@ func (a *app) wireEngagement() {
 	a.route(func(_ *gin.Engine, api *gin.RouterGroup) {
 		level.LevelRoutes(api, levelHandler, a.authMiddleware)
 		badge.BadgeRoutes(api, badgeHandler, a.authMiddleware)
-		enquete.SegundoTurnoRoutes(api, segundoTurnoHandler, a.authMiddleware)
+		enquete.EnqueteRoutes(api, enqueteHandler, a.authMiddleware)
 		notifysettings.Routes(api, notifySettingsHandler, a.authMiddleware)
 		proposal.ProposalRoutes(api, proposalHandler, a.authMiddleware, a.requireVerified)
 		birthday.BirthdayRoutes(api, birthdayHandler, a.authMiddleware)

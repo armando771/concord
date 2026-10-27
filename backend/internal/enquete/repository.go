@@ -3,6 +3,7 @@ package enquete
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -12,36 +13,62 @@ type Repository struct {
 	db *pgxpool.Pool
 }
 
-func SegundoTurnoRepository(db *pgxpool.Pool) *Repository {
+func EnqueteRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
 }
 
-// Carregar junta a data da conta e a resposta (se houver) numa query só.
+// Carregar junta a data da conta e as respostas já dadas.
 func (r *Repository) Carregar(ctx context.Context, userID string) (Conta, error) {
-	var c Conta
-	err := r.db.QueryRow(
-		ctx,
-		`
-		SELECT u.created_at, r.user_id IS NOT NULL, COALESCE(r.fez_o_l, FALSE)
-		FROM users u
-		LEFT JOIN segundo_turno_respostas r ON r.user_id = u.id
-		WHERE u.id = $1
-		`,
-		userID,
-	).Scan(&c.CriadaEm, &c.Respondeu, &c.FezOL)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Conta{}, ErrUsuarioNaoEncontrado
+	criada, err := r.criadaEm(ctx, userID)
+	if err != nil {
+		return Conta{}, err
 	}
-	return c, err
+	respostas, err := r.respostas(ctx, userID)
+	if err != nil {
+		return Conta{}, err
+	}
+	return Conta{CriadaEm: criada, Respostas: respostas}, nil
+}
+
+func (r *Repository) criadaEm(ctx context.Context, userID string) (time.Time, error) {
+	var criada time.Time
+	err := r.db.QueryRow(ctx, `SELECT created_at FROM users WHERE id = $1`, userID).Scan(&criada)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return criada, ErrUsuarioNaoEncontrado
+	}
+	return criada, err
+}
+
+type escolha struct{ enquete, opcao string }
+
+// respostas são as escolhas já gravadas: enquete -> opção.
+func (r *Repository) respostas(ctx context.Context, userID string) (map[string]string, error) {
+	rows, err := r.db.Query(ctx, `SELECT enquete, opcao FROM escolhas WHERE user_id = $1`, userID)
+	if err != nil {
+		return nil, err
+	}
+	escolhas, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (escolha, error) {
+		var e escolha
+		return e, row.Scan(&e.enquete, &e.opcao)
+	})
+	return indexar(escolhas), err
+}
+
+func indexar(escolhas []escolha) map[string]string {
+	out := make(map[string]string, len(escolhas))
+	for _, e := range escolhas {
+		out[e.enquete] = e.opcao
+	}
+	return out
 }
 
 // Gravar insere a resposta; ON CONFLICT garante que a primeira vence mesmo
 // com dois pedidos ao mesmo tempo.
-func (r *Repository) Gravar(ctx context.Context, userID string, fezOL bool) (bool, error) {
+func (r *Repository) Gravar(ctx context.Context, userID, enquete, opcao string) (bool, error) {
 	tag, err := r.db.Exec(
 		ctx,
-		`INSERT INTO segundo_turno_respostas (user_id, fez_o_l) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-		userID, fezOL,
+		`INSERT INTO escolhas (user_id, enquete, opcao) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+		userID, enquete, opcao,
 	)
 	if err != nil {
 		return false, err
