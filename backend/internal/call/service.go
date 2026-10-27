@@ -85,6 +85,9 @@ type activeCall struct {
 	admitted     map[string]time.Time    // userID -> até quando pode entrar sem pedir
 	declinedAt   map[string]time.Time    // userID -> última recusa (anti-spam)
 
+	// Convites de amigos (ver friend_invite.go). Criado sob demanda.
+	invites *inviteBook
+
 	// Espectadores de tela: sharerID -> set de watcherUserIDs
 	screenWatchers map[string]map[string]struct{}
 	// Miniatura da tela de cada um, para o cartão de perfil (ver screen_preview.go).
@@ -101,6 +104,7 @@ type Service struct {
 	userService         *user.Service
 	isOnline            func(userID string) bool
 	perms               PermissionSource
+	friends             FriendChecker
 	media               MediaAdmin
 
 	mu    sync.RWMutex
@@ -675,6 +679,7 @@ func (s *Service) closeCall(callID string) error {
 	channelID := ac.info.ChannelID
 	srvID := ac.info.ServerID
 	knockers := pendingRequestersLocked(ac)
+	invited := cancelInvitesLocked(ac)
 	delete(s.calls, callID)
 	delete(s.screenSharers, callID)
 	endHooks := append([]func(string){}, s.onCallEnded...)
@@ -687,6 +692,7 @@ func (s *Service) closeCall(callID string) error {
 	for userID := range sharers {
 		s.publishLive(serverID, LiveEvent{CallID: callID, ChannelID: channelID, UserID: userID, Active: false})
 	}
+	s.notifyCancelledInvites(callID, invited)
 	// Sala esvaziou: quem esperava na porta já pode entrar (a próxima chamada
 	// nasce destrancada).
 	for _, uid := range knockers {
