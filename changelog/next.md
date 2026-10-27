@@ -20,3 +20,4 @@
 - Sair da conta agora encerra a chamada em andamento.
 - Celular e teclado: fechar uma DM, sair de um grupo, remover alguém do grupo, apagar figurinha e imagem de fundo, o controle de volume da transmissão e o menu "•••" do canal de voz agora aparecem no toque e ao navegar com o Tab, não só com o mouse em cima.
 - Avisos: os avisos (toasts) agora aparecem na frente das janelas abertas, em vez de ficarem escondidos atrás do fundo desfocado.
+- Grupos de DM: em janela estreita a lista de membros começa escondida e, ao abrir, aparece por cima do chat em vez de espremê-lo.

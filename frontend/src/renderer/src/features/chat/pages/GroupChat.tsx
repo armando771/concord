@@ -25,6 +25,7 @@ import {
   type ConversationOtherUser
 } from '../api/conversations'
 import { conversationTitle, otherMembers, removeMemberTitle } from '../lib/conversations'
+import { initialShowMembers } from '../lib/groupLayout'
 import { imageFileError } from '../../profile/lib/profileValidation'
 
 const MAIN_BG = 'var(--bg-primary)'
@@ -42,7 +43,7 @@ function GroupChat(): React.JSX.Element {
 
   // Texto do nome enquanto edita (null = mostra o nome salvo).
   const [editingName, setEditingName] = useState<string | null>(null)
-  const [showMembers, setShowMembers] = useState(true)
+  const [showMembers, setShowMembers] = useState(initialShowMembers)
   const searchOpen = useSearchStore(
     (s) => s.scope?.kind === 'conversation' && s.scope.id === conversationId
   )
@@ -158,7 +159,7 @@ function GroupChat(): React.JSX.Element {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
           <ChatPane
             room={`conversation:${conv.id}`}
