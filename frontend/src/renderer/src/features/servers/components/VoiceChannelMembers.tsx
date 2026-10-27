@@ -205,7 +205,7 @@ function VoiceChannelMembers({
             meId,
             targetId: p.user_id,
             canMoveMembers,
-            canActOnTarget: access.canActOnMember(p.user_id)
+            canMoveTarget: access.canMoveMember(p.user_id)
           })}
           onDragEnd={onDragEnd}
         />
