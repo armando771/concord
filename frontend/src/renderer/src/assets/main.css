@@ -1285,6 +1285,51 @@ body.boost-quake #root {
   }
 }
 
+/* Toasts: entram descendo de leve e saem sumindo (EXIT_MS em toastStore.ts). */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes toast-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes toast-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+.toast-in {
+  animation: toast-in 180ms ease-out both;
+}
+
+.toast-out {
+  animation: toast-out 160ms ease-in forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-in {
+    animation-name: toast-fade-in;
+  }
+
+  .toast-out {
+    animation-name: toast-fade-out;
+  }
+}
+
 /* Aviso de badge novo (BadgeUnlockToast): desce, fica e some. */
 @keyframes badge-toast {
   0% {
@@ -1652,4 +1697,32 @@ body.boost-quake #root {
 
 .msg-jump-highlight {
   animation: msg-jump-highlight 2s ease-out;
+}
+
+/*
+ * Selo "Chegou" (call/components/ArrivalBadge): entra com fade e sai com fade
+ * no fim dos 5 s (ARRIVAL_BADGE_MS, lib/recentArrivals), quando o store o tira.
+ */
+@keyframes arrival-badge {
+  0% {
+    opacity: 0;
+  }
+  6%,
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.arrival-badge {
+  animation: arrival-badge 5s ease-in-out both;
+}
+
+/* Sem movimento: o selo só aparece e some, sem fade. */
+@media (prefers-reduced-motion: reduce) {
+  .arrival-badge {
+    animation: none;
+  }
 }

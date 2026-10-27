@@ -20,9 +20,6 @@ vi.mock('./ParticipantTile', () => ({
     <span data-tile={user.display_name} data-tela={isScreen ? 'sim' : 'nao'} />
   )
 }))
-vi.mock('../../chat/components/VoiceChatPanel', () => ({
-  default: ({ channelId }: { channelId: string }) => <aside data-chat={channelId} />
-}))
 vi.mock('../../levels/hooks/useMyBoost', () => ({ useMyBoostPercent: () => call.state.boost }))
 
 // O chatStore de verdade puxa o resto do app (e o áudio); aqui só as contagens.
@@ -141,21 +138,15 @@ describe('VoiceChannelView', () => {
     expect(html).toContain('aria-label="Abrir chat"')
     expect(html).toContain('aria-pressed="false"')
     expect(html).toContain('>4</span>')
-    expect(html).not.toContain('data-chat')
   })
 
-  it('com o chat deste canal aberto: painel à direita e botão para fechar', () => {
+  it('com o chat deste canal aberto: botão para fechar, sem o painel (ele vai na coluna da direita do servidor)', () => {
     useVoiceChatPanelStore.setState({ channelId: 'v1' })
     useChatStore.setState({ unreadByRoom: { 'channel:v1': 4 } })
     const html = render()
-    expect(html).toContain('data-chat="v1"')
     expect(html).toContain('aria-label="Fechar chat"')
     expect(html).toContain('aria-pressed="true"')
     expect(html).not.toContain('>4</span>')
-  })
-
-  it('chat aberto de outro canal de voz não aparece aqui', () => {
-    useVoiceChatPanelStore.setState({ channelId: 'v2' })
-    expect(render()).not.toContain('data-chat')
+    expect(html).not.toContain('aria-label="Chat de')
   })
 })

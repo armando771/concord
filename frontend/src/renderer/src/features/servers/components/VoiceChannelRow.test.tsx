@@ -65,6 +65,8 @@ function fakeAccess(perms: number, opts: { isPrivate?: boolean } = {}): ServerAc
     highestOf: () => 0,
     canActOnMember: () => true,
     canChangeNickname: () => false,
+    canDisconnectMember: () => true,
+    canMoveMember: () => true,
     canManage: () => false,
     isPrivate: () => Boolean(opts.isPrivate)
   }
@@ -180,6 +182,28 @@ describe('VoiceChannelRow', () => {
     expect(html).toContain('group-hover/voicech:opacity-0')
     expect(html).toContain('text-success')
     expect(html).toContain('Arraste para outro canal de voz')
+  })
+
+  it('membro de mesma hierarquia pode ser arrastado se tiver permissão de mover', () => {
+    inCall([participant('colega')])
+    setCall({ status: 'active', type: 'channel', channelId: 'v1' })
+    const access = fakeAccess(Perm.VIEW_CHANNEL | Perm.CONNECT | Perm.MOVE_MEMBERS)
+    access.canActOnMember = () => false
+    access.canMoveMember = () => true
+    const html = render({ access })
+    expect(html).toContain('COLEGA')
+    expect(html).toContain('Arraste para outro canal de voz')
+  })
+
+  it('membro de hierarquia superior não pode ser arrastado', () => {
+    inCall([participant('superior')])
+    setCall({ status: 'active', type: 'channel', channelId: 'v1' })
+    const access = fakeAccess(Perm.VIEW_CHANNEL | Perm.CONNECT | Perm.MOVE_MEMBERS)
+    access.canActOnMember = () => false
+    access.canMoveMember = () => false
+    const html = render({ access })
+    expect(html).toContain('SUPERIOR')
+    expect(html).not.toContain('Arraste para outro canal de voz')
   })
 
   it('sala trancada, eu fora: pedir permissão', () => {

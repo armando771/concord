@@ -13,7 +13,7 @@ func TestProfileColumnsNilViraNull(t *testing.T) {
 	}
 	border := func(t *profiletheme.Theme) string { return t.Border }
 	colors := func(t *profiletheme.Theme) []string { return t.BorderColors }
-	if themeField(nil, border) != nil || themeColors(nil, colors) != nil {
+	if themeField(nil, border) != nil || themeColors(nil, colors) != nil || themeExtras(nil) != nil {
 		t.Fatal("tema nil deveria virar NULL")
 	}
 }
@@ -35,5 +35,12 @@ func TestProfileColumnsComValor(t *testing.T) {
 	theme.BorderColors = []string{"#000"}
 	if themeColors(theme, func(t *profiletheme.Theme) []string { return t.BorderColors })[0] != "#000" {
 		t.Fatal("cores do tema erradas")
+	}
+}
+
+func TestThemeExtrasColumn(t *testing.T) {
+	theme := &profiletheme.Theme{Extras: profiletheme.Extras{Texture: "dots"}}
+	if got := themeExtras(theme); got == nil || got.Texture != "dots" {
+		t.Fatalf("extras = %+v", got)
 	}
 }

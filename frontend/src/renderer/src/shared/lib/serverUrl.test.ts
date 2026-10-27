@@ -7,8 +7,35 @@ import {
   deriveServerUrls,
   fillCsp,
   resolveServerUrls,
+  serverCandidates,
   WEB_EXTRA_CSP
 } from './serverUrl'
+
+describe('serverCandidates', () => {
+  it('põe o principal primeiro e depois os alternativos, só a origem e sem repetir', () => {
+    expect(
+      serverCandidates(
+        'https://74-0-5-252.sslip.io/',
+        'https://app-salinha.bhrx.com.br, https://74-0-5-252.sslip.io  https://outro.exemplo/x'
+      )
+    ).toEqual([
+      'https://74-0-5-252.sslip.io',
+      'https://app-salinha.bhrx.com.br',
+      'https://outro.exemplo'
+    ])
+  })
+
+  it('ignora endereço inválido ou fora de http(s)', () => {
+    expect(serverCandidates('https://a.exemplo', 'nada, ftp://b.exemplo')).toEqual([
+      'https://a.exemplo'
+    ])
+  })
+
+  it('sem principal (dev) não há candidatos: fica o localhost do build', () => {
+    expect(serverCandidates(undefined, 'https://app-salinha.bhrx.com.br')).toEqual([])
+    expect(serverCandidates('  ', undefined)).toEqual([])
+  })
+})
 
 describe('deriveServerUrls', () => {
   it('deriva API, WebSocket e LiveKit de um endereço http', () => {
@@ -45,6 +72,14 @@ describe('buildConnectSrc', () => {
       "'self' https://concord.exemplo.com.br wss://concord.exemplo.com.br"
     )
   })
+
+  it('libera também os endereços alternativos (o app pode cair num deles ao abrir)', () => {
+    expect(
+      buildConnectSrc('https://74-0-5-252.sslip.io', ['https://app-salinha.bhrx.com.br'])
+    ).toBe(
+      "'self' https://74-0-5-252.sslip.io wss://74-0-5-252.sslip.io https://app-salinha.bhrx.com.br wss://app-salinha.bhrx.com.br"
+    )
+  })
 })
 
 describe('buildMediaSrc', () => {
@@ -58,6 +93,11 @@ describe('buildMediaSrc', () => {
   })
   it('usa o localhost:8080 sem endereço', () => {
     expect(buildMediaSrc(undefined)).toBe("'self' blob: http://localhost:8080")
+  })
+  it('inclui os endereços alternativos', () => {
+    expect(buildMediaSrc('https://a.exemplo', ['https://b.exemplo'])).toBe(
+      "'self' blob: https://a.exemplo https://b.exemplo"
+    )
   })
 })
 

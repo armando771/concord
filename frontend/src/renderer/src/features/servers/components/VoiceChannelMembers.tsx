@@ -7,6 +7,7 @@ import { liveUserIds } from '../../call/lib/liveBadge'
 import { canMoveVoiceUser, VOICE_USER_DRAG } from '../../call/lib/voiceMove'
 import VoiceStateIcons from '../../call/components/VoiceStateIcons'
 import LiveBadge from '../../call/components/LiveBadge'
+import ArrivalBadge from '../../call/components/ArrivalBadge'
 import CallActivityBadge from '../../call/components/CallActivityBadge'
 import { GameBadge } from '../../activity/components/ActivityLine'
 import { userMenuHandler } from '../../profile/store/userMenuStore'
@@ -26,12 +27,14 @@ import type { ServerAccess } from '../lib/serverAccess'
 import { shownVoiceState } from '../lib/voiceChannelRow'
 
 interface ParticipantProps {
+  channelId: string
   participant: CallParticipant
   connectedHere: boolean
 }
 
-/** Selos à direita: atividade, jogo, LIVE, silenciado por mim, microfone e fone. */
+/** Selos à direita: chegou, atividade, jogo, LIVE, silenciado por mim, microfone e fone. */
 function VoiceParticipantBadges({
+  channelId,
   participant: p,
   connectedHere,
   live,
@@ -46,8 +49,9 @@ function VoiceParticipantBadges({
   })
   return (
     <span className="ml-auto flex items-center gap-0.5 pr-1">
+      <ArrivalBadge channelId={channelId} userId={p.user_id} />
       {/* Atividade da chamada: só sabemos de quem joga na nossa. */}
-      {connectedHere && <CallActivityBadge userId={p.user_id} />}
+      {connectedHere && <CallActivityBadge userId={p.user_id} arrival={false} />}
       <GameBadge userId={p.user_id} />
       {live && <LiveBadge />}
       {!isMe && mutedByMe && (
@@ -67,6 +71,7 @@ function VoiceParticipantBadges({
 
 /** Uma pessoa no canal de voz; quem pode mover arrasta para outro canal. */
 function VoiceParticipantItem({
+  channelId,
   participant: p,
   connectedHere,
   live,
@@ -117,6 +122,7 @@ function VoiceParticipantItem({
       {/* Selo de nível só na lista de membros da direita; aqui o nível só
           ordena a lista (ver voiceOrder). */}
       <VoiceParticipantBadges
+        channelId={channelId}
         participant={p}
         connectedHere={connectedHere}
         live={live}
@@ -191,6 +197,7 @@ function VoiceChannelMembers({
       {participants.map((p) => (
         <VoiceParticipantItem
           key={p.user_id}
+          channelId={channelId}
           participant={p}
           connectedHere={connectedHere}
           live={live.has(p.user_id)}
@@ -198,7 +205,7 @@ function VoiceChannelMembers({
             meId,
             targetId: p.user_id,
             canMoveMembers,
-            canActOnTarget: access.canActOnMember(p.user_id)
+            canMoveTarget: access.canMoveMember(p.user_id)
           })}
           onDragEnd={onDragEnd}
         />

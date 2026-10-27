@@ -58,6 +58,8 @@ function fakeAccess(perms: number, isOwner = false): ServerAccess {
     highestOf: () => 0,
     canActOnMember: () => true,
     canChangeNickname: () => true,
+    canDisconnectMember: () => true,
+    canMoveMember: () => true,
     canManage: () => false,
     isPrivate: () => false
   }

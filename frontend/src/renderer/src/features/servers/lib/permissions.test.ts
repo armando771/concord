@@ -5,7 +5,10 @@ import {
   DEFAULT_EVERYONE,
   Perm,
   canActOn,
+  canDisconnectMember,
+  canMoveMember,
   canGrant,
+  canManageNicknameOf,
   canManageRole,
   computeBase,
   computeChannel,
@@ -160,6 +163,33 @@ describe('hierarquia (casos do backend)', () => {
       expect(canManageRole(tc.is_owner, tc.actor_highest, tc.role_position)).toBe(tc.expect)
     })
   }
+
+  it('canManageNicknameOf permite mesmo cargo ou superior, mas nunca o dono a menos que seja o dono', () => {
+    expect(canManageNicknameOf('dono', 'mod1', 'mod2', 2, 2)).toBe(true)
+    expect(canManageNicknameOf('dono', 'chefe', 'mod', 3, 2)).toBe(true)
+    expect(canManageNicknameOf('dono', 'mod', 'chefe', 2, 3)).toBe(false)
+    expect(canManageNicknameOf('dono', 'chefe', 'dono', 3, 0)).toBe(false)
+    expect(canManageNicknameOf('dono', 'dono', 'dono', 0, 0)).toBe(true)
+    expect(canManageNicknameOf('dono', 'dono', 'chefe', 0, 3)).toBe(true)
+    expect(canManageNicknameOf('dono', undefined, 'mod', 0, 2)).toBe(false)
+  })
+
+  it('canMoveMember permite mesmo cargo ou inferior, mas nunca o dono a menos que seja o dono', () => {
+    expect(canMoveMember('dono', 'mod1', 'mod2', 2, 2)).toBe(true)
+    expect(canMoveMember('dono', 'chefe', 'mod', 3, 2)).toBe(true)
+    expect(canMoveMember('dono', 'mod', 'chefe', 2, 3)).toBe(false)
+    expect(canMoveMember('dono', 'chefe', 'dono', 3, 0)).toBe(false)
+    expect(canMoveMember('dono', 'dono', 'chefe', 0, 3)).toBe(true)
+    expect(canMoveMember('dono', undefined, 'mod', 0, 2)).toBe(false)
+  })
+  it('canDisconnectMember permite mesmo cargo ou inferior, mas nunca o dono a menos que seja o dono', () => {
+    expect(canDisconnectMember('dono', 'mod1', 'mod2', 2, 2)).toBe(true)
+    expect(canDisconnectMember('dono', 'chefe', 'mod', 3, 2)).toBe(true)
+    expect(canDisconnectMember('dono', 'mod', 'chefe', 2, 3)).toBe(false)
+    expect(canDisconnectMember('dono', 'chefe', 'dono', 3, 0)).toBe(false)
+    expect(canDisconnectMember('dono', 'dono', 'chefe', 0, 3)).toBe(true)
+    expect(canDisconnectMember('dono', undefined, 'mod', 0, 2)).toBe(false)
+  })
   for (const tc of vectors.can_grant) {
     it(`canGrant: ${tc.name}`, () => {
       expect(canGrant(bits(tc.actor), bits(tc.changed))).toBe(tc.expect)
@@ -217,9 +247,28 @@ describe('cargos do membro', () => {
 
 describe('textos', () => {
   it('traduz os códigos de erro do servidor', () => {
-    expect(permissionError('missing_permission')).toMatch(/permissão/)
-    expect(permissionError('role_hierarchy')).toMatch(/abaixo do seu cargo/)
-    expect(permissionError('banned')).toMatch(/banido/)
+    const codes = [
+      'missing_permission',
+      'not_member',
+      'role_hierarchy',
+      'cannot_grant',
+      'banned',
+      'everyone_role',
+      'bot_role',
+      'too_many_roles',
+      'role_not_found',
+      'member_not_found',
+      'ban_not_found',
+      'owner_cannot_leave',
+      'self',
+      'channel_not_found',
+      'invalid_target',
+      'invalid_nickname',
+      'system_channel'
+    ]
+    for (const code of codes) {
+      expect(permissionError(code)).not.toBe('Algo deu errado')
+    }
     expect(permissionError('desconhecido', 'padrão')).toBe('padrão')
     expect(permissionError(undefined)).toBe('Algo deu errado')
   })

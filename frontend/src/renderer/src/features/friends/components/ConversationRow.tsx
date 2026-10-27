@@ -1,0 +1,218 @@
+import { useNavigate } from 'react-router-dom'
+import { GameLine } from '../../activity/components/ActivityLine'
+import type { ConversationOtherUser, ConversationSummary } from '../../chat/api/conversations'
+import { conversationRoute, conversationTitle } from '../../chat/lib/conversations'
+import { usePresenceStatus } from '../../chat/store/chatStore'
+import StyledName from '../../profile/components/StyledName'
+import type { NameStyle } from '../../profile/lib/nameStyle'
+import { useUserLook } from '../../profile/store/profileStore'
+import { useUserMenuStore } from '../../profile/store/userMenuStore'
+import Avatar from '../../../shared/ui/Avatar'
+import { XIcon } from '../../../shared/ui/icons'
+import GroupIcon from './GroupIcon'
+
+const SIDEBAR_BG = 'var(--bg-secondary)'
+
+function DmAvatar({
+  userId,
+  name,
+  avatarUrl
+}: {
+  userId: string
+  name: string
+  avatarUrl?: string | null
+}): React.JSX.Element {
+  const status = usePresenceStatus(userId)
+  return (
+    <Avatar
+      userId={userId}
+      name={name}
+      avatarUrl={avatarUrl}
+      size={32}
+      status={status}
+      cutoutColor={SIDEBAR_BG}
+    />
+  )
+}
+
+/** Nome da conversa, já com a troca mais nova (user:update). */
+function DmName({
+  userId,
+  name,
+  style
+}: {
+  userId: string
+  name: string
+  style?: NameStyle
+}): React.JSX.Element {
+  return <StyledName name={useUserLook(userId, { name }).name} userId={userId} style={style} />
+}
+
+/** Ícone do grupo, ou o avatar de quem está do outro lado da DM. */
+function ConversationLead({
+  conv,
+  other,
+  isGroup
+}: {
+  conv: ConversationSummary
+  other: ConversationOtherUser | undefined
+  isGroup: boolean
+}): React.JSX.Element {
+  if (isGroup || !other) return <GroupIcon id={conv.id} iconUrl={conv.icon_url} />
+  return (
+    <DmAvatar
+      userId={other.id}
+      name={other.display_name || other.username}
+      avatarUrl={other.avatar_url}
+    />
+  )
+}
+
+/** Título e a linha de baixo (digitando, quantos membros ou o jogo da pessoa). */
+function ConversationText({
+  conv,
+  other,
+  isGroup,
+  title,
+  active,
+  unread,
+  typing
+}: {
+  conv: ConversationSummary
+  other: ConversationOtherUser | undefined
+  isGroup: boolean
+  title: string
+  active: boolean
+  unread: number
+  typing: boolean
+}): React.JSX.Element {
+  return (
+    <div className="min-w-0 flex-1">
+      <p
+        className={`truncate text-ds-md ${
+          active || unread > 0
+            ? 'font-semibold text-strong'
+            : 'font-medium text-gray-400 group-hover:text-gray-200'
+        }`}
+      >
+        {!isGroup && other ? (
+          <DmName
+            userId={other.id}
+            name={other.display_name || other.username}
+            style={other.name_style}
+          />
+        ) : (
+          title
+        )}
+      </p>
+      {typing ? (
+        <p className="truncate text-ds-xs italic text-violet-300">digitando…</p>
+      ) : (
+        (isGroup && (
+          <p className="truncate text-ds-xs font-medium text-gray-500">
+            {(conv.members ?? []).length} membros
+          </p>
+        )) ||
+        (other && <GameLine userId={other.id} className="text-ds-xs font-medium text-gray-500" />)
+      )}
+    </div>
+  )
+}
+
+/** Contagem de não lidas e o botão de fechar a DM (ou sair do grupo). */
+function ConversationTail({
+  unread,
+  isGroup,
+  onClose
+}: {
+  unread: number
+  isGroup: boolean
+  onClose: () => void
+}): React.JSX.Element {
+  return (
+    <>
+      {unread > 0 && (
+        <span className="shrink-0 rounded-full bg-danger-strong px-1.5 text-[11px] font-bold text-white [@media(hover:hover)]:group-hover:hidden">
+          {unread > 99 ? '99+' : unread}
+        </span>
+      )}
+      <button
+        type="button"
+        aria-label={isGroup ? 'Sair do grupo' : 'Fechar DM'}
+        title={isGroup ? 'Sair do grupo' : 'Fechar DM'}
+        onClick={(e) => {
+          e.stopPropagation()
+          onClose()
+        }}
+        className="shrink-0 cursor-pointer text-gray-400 hover:text-strong [@media(hover:hover)]:sr-only [@media(hover:hover)]:group-hover:not-sr-only focus-visible:not-sr-only"
+      >
+        <XIcon className="h-4 w-4" />
+      </button>
+    </>
+  )
+}
+
+/** Uma conversa (DM ou grupo) na lista da barra lateral. */
+function ConversationRow({
+  conv,
+  active,
+  unread,
+  typing,
+  meId,
+  onClose
+}: {
+  conv: ConversationSummary
+  active: boolean
+  unread: number
+  /** Alguém digitando nesta conversa (DM ou grupo). */
+  typing: boolean
+  meId: string | undefined
+  onClose: (conv: ConversationSummary) => void
+}): React.JSX.Element {
+  const navigate = useNavigate()
+  const other = conv.other_user
+  const isGroup = conv.type === 'group'
+  const title = conversationTitle(conv, meId)
+
+  const onContextMenu = (e: React.MouseEvent): void => {
+    if (!other) return
+    e.preventDefault()
+    useUserMenuStore.getState().open({
+      userId: other.id,
+      name: other.display_name || other.username,
+      username: other.username,
+      conversationId: conv.id,
+      x: e.clientX,
+      y: e.clientY
+    })
+  }
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => navigate(conversationRoute(conv, meId))}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') navigate(conversationRoute(conv, meId))
+      }}
+      onContextMenu={onContextMenu}
+      className={`group flex w-full cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors ${
+        active ? 'bg-fg/10' : 'hover:bg-fg/6'
+      }`}
+    >
+      <ConversationLead conv={conv} other={other} isGroup={isGroup} />
+      <ConversationText
+        conv={conv}
+        other={other}
+        isGroup={isGroup}
+        title={title}
+        active={active}
+        unread={unread}
+        typing={typing}
+      />
+      <ConversationTail unread={unread} isGroup={isGroup} onClose={() => onClose(conv)} />
+    </div>
+  )
+}
+
+export default ConversationRow

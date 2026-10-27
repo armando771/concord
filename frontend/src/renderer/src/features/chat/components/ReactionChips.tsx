@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactionTooltip from './ReactionTooltip'
+import { AddReactionIcon } from './messageActionIcons'
 
 export interface ReactionSummary {
   emoji: string
@@ -16,6 +17,81 @@ const HOVER_CLOSE_MS = 120
 interface HoveredReaction {
   emoji: string
   anchor: HTMLElement
+}
+
+/** Pílula de uma reação, no tamanho do Discord: emoji de 20px e a contagem. */
+function ReactionChip({
+  reaction,
+  meId,
+  canReact,
+  onToggle,
+  onMouseEnter,
+  onMouseLeave
+}: {
+  reaction: ReactionSummary
+  meId: string | undefined
+  canReact: boolean
+  /** Põe ou tira a minha reação (só chega aqui quando é permitido). */
+  onToggle: () => void
+  onMouseEnter: (anchor: HTMLElement) => void
+  onMouseLeave: () => void
+}): React.JSX.Element {
+  const meReacted = meId ? reaction.user_ids.includes(meId) : false
+  // Sem permissão ainda dá para tirar a própria reação.
+  const locked = !canReact && !meReacted
+  const label = `${reaction.emoji}: ${reaction.count} ${reaction.count === 1 ? 'reação' : 'reações'}`
+  return (
+    <button
+      type="button"
+      // Sem `disabled`: botão desabilitado não dispara hover, e o popover
+      // de "quem reagiu" precisa abrir também nesse chip.
+      aria-disabled={locked || undefined}
+      aria-pressed={meReacted}
+      aria-label={label}
+      onClick={() => {
+        if (!locked) onToggle()
+      }}
+      onMouseEnter={(e) => onMouseEnter(e.currentTarget)}
+      onMouseLeave={onMouseLeave}
+      className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-1.5 transition-colors focus-visible:outline-2 focus-visible:outline-brand ${
+        locked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+      } ${
+        meReacted
+          ? 'border-brand bg-brand/15 hover:bg-brand/25'
+          : 'border-transparent bg-fg/5 hover:border-strong hover:bg-fg/10'
+      }`}
+    >
+      {/* Emoji (ou imagem de emoji) sempre em 20px. */}
+      <span className="flex h-5 min-w-5 items-center justify-center text-[20px] leading-none [&>img]:h-5 [&>img]:w-5 [&>img]:object-contain">
+        {reaction.emoji}
+      </span>
+      <span
+        className={`min-w-[9px] text-ds-sm font-semibold tabular-nums ${
+          meReacted ? 'text-brand' : 'text-gray-300'
+        }`}
+      >
+        {reaction.count}
+      </span>
+    </button>
+  )
+}
+
+/**
+ * "Adicionar reação" no fim das pílulas: aparece ao passar o mouse na
+ * mensagem (como no Discord), no foco do teclado e sempre no toque.
+ */
+function AddReactionChip({ onClick }: { onClick: () => void }): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Adicionar reação"
+      aria-label="Adicionar reação"
+      className="inline-flex h-7 w-9 cursor-pointer items-center justify-center rounded-lg border border-transparent bg-fg/5 text-gray-400 transition-colors hover:border-strong hover:bg-fg/10 hover:text-strong focus-visible:outline-2 focus-visible:outline-brand [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+    >
+      <AddReactionIcon className="h-5 w-5" />
+    </button>
+  )
 }
 
 /** Chips de reação sob a mensagem, com o "+" para abrir o seletor de emoji. */
@@ -93,48 +169,23 @@ function ReactionChips({
     : undefined
 
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-1">
-      {reactions.map((reaction) => {
-        const meReacted = meId ? reaction.user_ids.includes(meId) : false
-        const locked = !canReact && !meReacted
-        return (
-          <button
-            key={reaction.emoji}
-            type="button"
-            // Sem `disabled`: botão desabilitado não dispara hover, e o popover
-            // de "quem reagiu" precisa abrir também nesse chip.
-            aria-disabled={locked || undefined}
-            onClick={() => {
-              if (locked) return
-              onReact(reaction.emoji)
-              // A própria última reação: o chip some, então o popover também.
-              if (meReacted && reaction.count <= 1) closeTooltip()
-            }}
-            onMouseEnter={(e) => openTooltip(reaction.emoji, e.currentTarget)}
-            onMouseLeave={scheduleClose}
-            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors ${
-              locked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
-            } ${
-              meReacted
-                ? 'border-brand bg-brand/25 text-strong'
-                : 'border-subtle bg-fg/5 text-gray-300 hover:bg-fg/10'
-            }`}
-          >
-            <span>{reaction.emoji}</span>
-            <span className="font-semibold">{reaction.count}</span>
-          </button>
-        )
-      })}
-      {canReact && (
-        <button
-          type="button"
-          onClick={onOpenPicker}
-          title="Adicionar reação"
-          className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-subtle bg-fg/5 text-xs text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
-        >
-          +
-        </button>
-      )}
+    <div className="mt-1 flex flex-wrap items-center gap-1">
+      {reactions.map((reaction) => (
+        <ReactionChip
+          key={reaction.emoji}
+          reaction={reaction}
+          meId={meId}
+          canReact={canReact}
+          onToggle={() => {
+            onReact(reaction.emoji)
+            // A própria última reação: o chip some, então o popover também.
+            if (reaction.count <= 1 && meId && reaction.user_ids.includes(meId)) closeTooltip()
+          }}
+          onMouseEnter={(anchor) => openTooltip(reaction.emoji, anchor)}
+          onMouseLeave={scheduleClose}
+        />
+      ))}
+      {canReact && <AddReactionChip onClick={onOpenPicker} />}
       {hovered && hoveredReaction && hoveredReaction.user_ids.length > 0 && (
         <ReactionTooltip
           emoji={hoveredReaction.emoji}

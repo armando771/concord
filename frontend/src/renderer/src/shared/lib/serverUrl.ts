@@ -32,18 +32,42 @@ export function deriveServerUrls(serverUrl: string | undefined): ServerUrls {
   }
 }
 
-/** Valor do `connect-src` da CSP para o servidor configurado. */
-export function buildConnectSrc(serverUrl: string | undefined): string {
-  const url = normalize(serverUrl)
-  return `'self' ${url.origin} ${toWsOrigin(url)}`
+function originOf(raw: string): string | null {
+  try {
+    const url = new URL(raw)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.origin : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Endereços do desktop em ordem de preferência: o do build (VITE_SERVER_URL)
+ * e os alternativos (VITE_SERVER_FALLBACK_URLS, separados por vírgula ou
+ * espaço). Ao abrir, o app usa o primeiro que responde: um domínio bloqueado
+ * na rede de alguém (DNS, antivírus) não deixa o app inteiro sem conexão.
+ * Sem o do build (dev): vazio, e fica o localhost.
+ */
+export function serverCandidates(primary: string | undefined, fallbacks: string | undefined): string[] {
+  if (!primary?.trim()) return []
+  const raw = [primary.trim(), ...(fallbacks ?? '').split(/[\s,]+/)]
+  const origins = raw.map(originOf).filter((o): o is string => o !== null)
+  return [...new Set(origins)]
+}
+
+/** Valor do `connect-src` da CSP para o servidor configurado (e os alternativos). */
+export function buildConnectSrc(serverUrl: string | undefined, fallbacks: string[] = []): string {
+  const urls = [normalize(serverUrl), ...fallbacks.map((f) => new URL(f))]
+  return `'self' ${urls.map((url) => `${url.origin} ${toWsOrigin(url)}`).join(' ')}`
 }
 
 /**
  * Valor do `media-src` (e parte do `img-src`) da CSP: arquivos do chat vêm do
  * servidor e as prévias locais do campo de envio são URLs `blob:`.
  */
-export function buildMediaSrc(serverUrl: string | undefined): string {
-  return `'self' blob: ${normalize(serverUrl).origin}`
+export function buildMediaSrc(serverUrl: string | undefined, fallbacks: string[] = []): string {
+  const origins = [normalize(serverUrl).origin, ...fallbacks.map((f) => new URL(f).origin)]
+  return `'self' blob: ${origins.join(' ')}`
 }
 
 export interface ResolveOptions {

@@ -3,7 +3,7 @@
 // puxada para o texto do cartão até dar contraste. Cor que já lê fica como está.
 
 import { composite, contrastRatio, parseColor } from '../../../shared/lib/contrast'
-import { DARK_INK, LIGHT_INK, type Ink } from './profileTheme'
+import { DARK_INK, LIGHT_INK, type Ink } from './profileInk'
 
 /** Mínimo de contraste (WCAG AA para texto pequeno). */
 const MIN_RATIO = 4.5

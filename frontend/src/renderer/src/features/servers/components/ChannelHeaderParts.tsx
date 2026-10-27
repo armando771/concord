@@ -1,0 +1,117 @@
+import { useServerStore } from '../store/serverStore'
+import Button from '../../../shared/ui/Button'
+import { UserPlusIcon, VolumeIcon, PinIcon } from '../../../shared/ui/icons'
+import PinnedMessagesPopover from '../../chat/components/PinnedMessagesPopover'
+import MessageSearchBar from '../../chat/components/MessageSearchBar'
+import type { Channel } from '../api/channels'
+import type { Server } from '../api/servers'
+
+/** Ícone (# ou alto-falante) e nome do canal aberto; sem canal, o do servidor. */
+export function ChannelTitle({
+  channel,
+  fallback
+}: {
+  channel: Channel | undefined
+  fallback: string
+}): React.JSX.Element {
+  const name = channel?.name ?? fallback
+  return (
+    <div className="flex min-w-0 items-center gap-2 text-gray-300">
+      {channel?.type === 'voice' ? (
+        <VolumeIcon className="h-5 w-5 text-gray-400" />
+      ) : (
+        <span className="text-gray-400 text-xl font-bold">#</span>
+      )}
+      <span title={name} className="truncate text-ds-md font-semibold text-strong">
+        {name}
+      </span>
+    </div>
+  )
+}
+
+interface ChannelActionsProps {
+  channelId: string | undefined
+  isVoice: boolean
+  pinsOpen: boolean
+  onTogglePins: () => void
+  onClosePins: () => void
+  /** Quem tem CREATE_INVITE convida (por padrão, todo membro). */
+  canInvite: boolean
+  onInvite: () => void
+  canModerate: boolean
+}
+
+/** Ações do canal na barra de cima: mensagens fixadas e "Convidar". */
+export function ChannelActions({
+  channelId,
+  isVoice,
+  pinsOpen,
+  onTogglePins,
+  onClosePins,
+  canInvite,
+  onInvite,
+  canModerate
+}: ChannelActionsProps): React.JSX.Element {
+  const showPins = !isVoice && Boolean(channelId)
+  return (
+    <>
+      <div className="flex shrink-0 items-center gap-2">
+        {showPins && (
+          <button
+            type="button"
+            onClick={onTogglePins}
+            title="Mensagens Fixadas"
+            className={`flex h-8 w-8 items-center justify-center rounded-lg border transition ${
+              pinsOpen
+                ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
+                : 'border-subtle bg-fg/5 text-gray-400 hover:border-normal hover:text-strong'
+            }`}
+          >
+            <PinIcon className="h-4 w-4" />
+          </button>
+        )}
+        {canInvite && (
+          <Button
+            variant="secondary"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-ds-sm font-medium"
+            onClick={onInvite}
+          >
+            <UserPlusIcon className="h-4 w-4" />
+            <span>Convidar</span>
+          </Button>
+        )}
+      </div>
+      {pinsOpen && channelId && (
+        <PinnedMessagesPopover
+          channelId={channelId}
+          canModerate={canModerate}
+          onClose={onClosePins}
+        />
+      )}
+    </>
+  )
+}
+
+/** "Buscar em {servidor}": pessoas e canais de texto do servidor como filtros. */
+export function ServerSearch({ server }: { server: Server }): React.JSX.Element {
+  const members = useServerStore((s) => s.currentMembers)
+  const channels = useServerStore((s) => s.channels)
+  return (
+    <MessageSearchBar
+      scope={{ kind: 'server', id: server.id }}
+      name={server.name}
+      users={members
+        .filter((m) => m.username)
+        .map((m) => ({
+          id: m.user_id,
+          username: m.username as string,
+          displayName: m.display_name || (m.username as string),
+          nickname: m.nickname,
+          avatarUrl: m.avatar_url
+        }))}
+      channels={channels
+        .filter((c) => c.server_id === server.id && (c.type ?? 'text') === 'text')
+        .map((c) => ({ id: c.id, name: c.name }))}
+    />
+  )
+}

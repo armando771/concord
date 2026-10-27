@@ -8,12 +8,12 @@ import { useServerMentionable } from '../../servers/hooks/useServerMentionable'
 import { useMediaQuery } from '../../../shared/hooks/useMediaQuery'
 import { ChatBubbleIcon, XIcon } from '../../../shared/ui/icons'
 
-/** Do md em diante o chat vira coluna ao lado da chamada; antes, tela cheia. */
+/** Do md em diante o chat vira a coluna da direita da tela; antes, tela cheia. */
 export const VOICE_CHAT_WIDE_QUERY = '(min-width: 768px)'
 
 /**
- * Chat do canal de voz, à direita da chamada (como o "Text in Voice" do
- * Discord). As mensagens são as do próprio canal: o mesmo ChatPane do canal
+ * Chat do canal de voz, na coluna da direita de cima a baixo, no lugar dos
+ * membros (como o "Text in Voice" do Discord; ServerViewLayout). As mensagens são as do próprio canal: o mesmo ChatPane do canal
  * de texto, com as permissões do canal de voz.
  */
 function VoiceChatPanel({ channelId }: { channelId: string }): React.JSX.Element {
@@ -34,7 +34,8 @@ function VoiceChatPanel({ channelId }: { channelId: string }): React.JSX.Element
           : 'fixed inset-0 z-50 flex flex-col bg-primary'
       }
     >
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-subtle pl-4 pr-2">
+      {/* h-14: alinha com a barra do canal ao lado. */}
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-subtle pl-4 pr-2">
         <ChatBubbleIcon className="h-4 w-4 shrink-0 text-gray-400" />
         <h2 title={name} className="min-w-0 flex-1 truncate text-ds-md font-semibold text-strong">
           {name}

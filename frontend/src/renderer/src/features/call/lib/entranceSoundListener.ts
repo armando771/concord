@@ -15,10 +15,16 @@ export interface EntranceDeps {
   playDefault: () => void
 }
 
+/** O mínimo para tocar um som de entrada (a prévia e a minha entrada não leem a call). */
+export type JoinSoundDeps = Pick<
+  EntranceDeps,
+  'isMuted' | 'volume' | 'apiBase' | 'playClip' | 'playDefault'
+>
+
 /** O som de entrada da pessoa ou, sem ele (ou se falhar), o padrão. */
 export async function playJoinSound(
   user: JoinedUser,
-  deps: EntranceDeps,
+  deps: JoinSoundDeps,
   deafened: boolean
 ): Promise<void> {
   const sound = chooseJoinSound(user, {

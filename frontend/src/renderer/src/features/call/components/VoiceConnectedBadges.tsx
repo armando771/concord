@@ -1,12 +1,11 @@
 import { useCallStore } from '../store/callStore'
 import { boostRank } from '../../levels/lib/boost'
-import StyleRank from '../../levels/components/StyleRank'
 import { useMyBoostPercent } from '../../levels/hooks/useMyBoost'
 import { formatDuration, useElapsed } from '../lib/callUtils'
 
 /**
- * Por cima da chamada em que estou: a aura do boost (falando), o selo "Voz
- * conectada" com o tempo e o rank de estilo.
+ * Por cima da chamada em que estou: a aura do boost (falando) e o selo "Voz
+ * conectada" com o tempo. O rank de estilo fica só na barra de XP do painel de voz.
  */
 function VoiceConnectedBadges(): React.JSX.Element {
   const startedAt = useCallStore((s) => s.startedAt)
@@ -28,11 +27,6 @@ function VoiceConnectedBadges(): React.JSX.Element {
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
         Voz conectada · {formatDuration(elapsed)}
       </div>
-      {rank && (
-        <div className="absolute left-4 top-3 z-10 rounded-xl border border-subtle bg-floating px-3 py-1.5 backdrop-blur">
-          <StyleRank percent={boostPercent} paused={paused} size="md" />
-        </div>
-      )}
     </>
   )
 }

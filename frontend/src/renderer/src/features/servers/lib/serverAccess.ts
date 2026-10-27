@@ -1,6 +1,9 @@
 import {
   Perm,
   canActOn,
+  canDisconnectMember,
+  canMoveMember,
+  canManageNicknameOf,
   canManageRole,
   computeBase,
   computeChannel,
@@ -52,6 +55,10 @@ export interface ServerAccess {
   highestOf: (userId: string) => number
   /** Pode expulsar, banir, silenciar, mover ou trocar cargos dessa pessoa. */
   canActOnMember: (userId: string) => boolean
+  /** Pode desconectar da chamada de voz (mesmo cargo ou menor). */
+  canDisconnectMember: (userId: string) => boolean
+  /** Pode mover membros entre canais de voz (mesmo cargo ou menor). */
+  canMoveMember: (userId: string) => boolean
   /**
    * Pode mudar o apelido dessa pessoa neste servidor: o próprio com "Alterar
    * apelido"; o dos outros com "Gerenciar apelidos" e só abaixo do seu cargo.
@@ -108,7 +115,11 @@ export function serverAccess(input: ServerAccessInput): ServerAccess {
       userId === meId
         ? has(perms, Perm.CHANGE_NICKNAME)
         : has(perms, Perm.MANAGE_NICKNAMES) &&
-          canActOn(ownerId, meId, userId, highest, highestOf(userId)),
+          canManageNicknameOf(ownerId, meId, userId, highest, highestOf(userId)),
+    canDisconnectMember: (userId) =>
+      canDisconnectMember(ownerId, meId, userId, highest, highestOf(userId)),
+    canMoveMember: (userId) =>
+      canMoveMember(ownerId, meId, userId, highest, highestOf(userId)),
     canManage: (role) => canManageRole(isOwner, highest, role.position),
     isPrivate: (channelId) => {
       const ch = channelById.get(channelId)

@@ -3,6 +3,7 @@ import {
   conversationRoute,
   conversationTitle,
   otherMembers,
+  removeMemberTitle,
   sanitizeConversations
 } from './conversations'
 
@@ -86,5 +87,18 @@ describe('sanitizeConversations', () => {
     expect(dm.other_user).toEqual(bia)
     expect(dm.unread_count).toBe(3)
     expect(conversationRoute(dm, 'a')).toBe('/dm/b')
+  })
+})
+
+describe('removeMemberTitle', () => {
+  it('usa o nome de exibição, ou o @ se não houver', () => {
+    expect(removeMemberTitle({ display_name: 'Ana Souza', username: 'ana' })).toBe(
+      'Remover Ana Souza do grupo'
+    )
+    expect(removeMemberTitle({ display_name: '', username: 'ana' })).toBe('Remover ana do grupo')
+  })
+
+  it('sem ninguém escolhido, o título é vazio (o aviso está fechado, não mostra "undefined")', () => {
+    expect(removeMemberTitle(null)).toBe('')
   })
 })

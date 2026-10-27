@@ -113,7 +113,7 @@ vi.mock('../api/calls', () => api)
 const snapshot = vi.hoisted(() => ({ captureScreenPreview: vi.fn(async () => 'FOTO') }))
 vi.mock('../lib/screenSnapshot', () => snapshot)
 vi.mock('../../../shared/api/client', () => ({ ApiError: class extends Error {} }))
-vi.mock('../../../shared/lib/config', () => ({ LIVEKIT_URL: 'ws://servidor' }))
+vi.mock('../../../shared/lib/config', () => ({ LIVEKIT_URL: 'ws://servidor', API_BASE_URL: '/api' }))
 
 const chat = vi.hoisted(() => ({
   sendEvent: vi.fn(),
@@ -122,9 +122,12 @@ const chat = vi.hoisted(() => ({
   isWsConnected: () => true
 }))
 vi.mock('../../chat/store/chatStore', () => ({ useChatStore: { getState: () => chat } }))
+const me = vi.hoisted(() => ({ user: { id: 'eu', entrance_sound_url: null as string | null } }))
 vi.mock('../../auth/store/authStore', () => ({
-  useAuthStore: { getState: () => ({ user: { id: 'eu' } }) }
+  useAuthStore: { getState: () => ({ user: me.user }) }
 }))
+const entrance = vi.hoisted(() => ({ playEntranceClip: vi.fn(async () => true) }))
+vi.mock('../lib/entranceSoundPlayer', () => entrance)
 vi.mock('../../../shared/store/toastStore', () => ({ showToast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
 const sounds = vi.hoisted(() => ({ playSound: vi.fn(), setSoundOutput: vi.fn() }))
 vi.mock('../lib/sounds', () => sounds)
@@ -147,7 +150,7 @@ vi.mock('../lib/localSpeaking', () => ({
 const bgPipeline = vi.hoisted(() => ({ create: vi.fn() }))
 vi.mock('../lib/backgroundPipeline', () => ({ createBackgroundPipeline: bgPipeline.create }))
 
-import { useCallStore } from './callStore'
+import { CallLockedError, useCallStore } from './callStore'
 import { useVideoSettingsStore } from './videoSettingsStore'
 import { useVideoModalStore } from './videoModalStore'
 import { ApiError } from '../../../shared/api/client'
@@ -347,6 +350,65 @@ describe('callStore — mídia via LiveKit', () => {
     await work
     expect(api.startCall).not.toHaveBeenCalled()
     expect(allStopped(mic.stream)).toBe(true)
+  })
+
+  describe('startChannelCall — falhas ao entrar', () => {
+    const resume = {
+      userId: 'eu',
+      backendUrl: 'api',
+      serverId: 's',
+      channelId: 'canal-1',
+      muted: false,
+      deafened: false,
+      mutedBeforeDeafen: false
+    }
+
+    it('sem acesso ao microfone: avisa e não entra', async () => {
+      rtc.getAudioStream.mockRejectedValue(new Error('negado'))
+      await useCallStore.getState().startChannelCall('canal-1')
+      expect(showToast.error).toHaveBeenCalledWith('Não foi possível acessar o microfone.')
+      expect(useCallStore.getState().status).toBe('idle')
+    })
+
+    it('retomada sem microfone: rejeita para quem retoma tentar de novo', async () => {
+      rtc.getAudioStream.mockRejectedValue(new Error('negado'))
+      await expect(useCallStore.getState().startChannelCall('canal-1', resume)).rejects.toThrow(
+        'microfone'
+      )
+    })
+
+    it('o servidor recusou a entrada: avisa e volta ao ocioso', async () => {
+      api.startCall.mockRejectedValue(new Error('fora do ar'))
+      await useCallStore.getState().startChannelCall('canal-1')
+      expect(showToast.error).toHaveBeenCalledWith('fora do ar')
+      expect(useCallStore.getState().status).toBe('idle')
+    })
+
+    it('retomada recusada pelo servidor: rejeita em vez de avisar', async () => {
+      api.startCall.mockRejectedValue(new Error('fora do ar'))
+      await expect(useCallStore.getState().startChannelCall('canal-1', resume)).rejects.toThrow(
+        'fora do ar'
+      )
+    })
+
+    it('sala trancada (423): lança CallLockedError com a call', async () => {
+      const locked = Object.assign(new ApiError(423, 'trancada'), { status: 423, body: { call_id: 'call-9' } })
+      api.startCall.mockRejectedValue(locked)
+      await expect(useCallStore.getState().startChannelCall('canal-1')).rejects.toBeInstanceOf(
+        CallLockedError
+      )
+    })
+
+    it('retomada cancelada enquanto o servidor respondia: sai da call recém-criada', async () => {
+      const abort = new AbortController()
+      api.startCall.mockImplementation(async () => {
+        abort.abort()
+        return { id: 'call-1' }
+      })
+      await useCallStore.getState().startChannelCall('canal-1', resume, abort.signal)
+      expect(chat.sendEvent).toHaveBeenCalledWith('call:leave', { call_id: 'call-1' })
+      expect(useCallStore.getState().status).toBe('idle')
+    })
   })
 
   it('descarta a tela escolhida quando a chamada acabou com o seletor aberto', async () => {
@@ -983,6 +1045,17 @@ describe('callStore — mídia via LiveKit', () => {
 
     useCallStore.getState().endCall()
     expect(sounds.playSound).toHaveBeenLastCalledWith('leave')
+  })
+
+  it('ao entrar, toca o meu som de entrada no lugar do "join" padrão', async () => {
+    me.user = { id: 'eu', entrance_sound_url: '/api/entrance-sounds/0b6e7a52-3c1f-4c47-9d0e-2f6a8b1c4d5e' }
+    try {
+      await joinChannel()
+      expect(entrance.playEntranceClip).toHaveBeenCalledTimes(1)
+      expect(sounds.playSound).not.toHaveBeenCalledWith('join')
+    } finally {
+      me.user = { id: 'eu', entrance_sound_url: null }
+    }
   })
 
   it('toca som quando alguém sai da minha chamada; o de entrada é do entranceSound', async () => {

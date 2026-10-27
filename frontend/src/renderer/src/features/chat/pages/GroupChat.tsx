@@ -1,23 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuthStore } from '../../auth/store/authStore'
-import { useChatStore, usePresenceStatus } from '../store/chatStore'
+import { useChatStore } from '../store/chatStore'
 import { useFriendStore } from '../../friends/store/friendStore'
-import { useUserLook } from '../../profile/store/profileStore'
-import { profileCardHandler } from '../../profile/store/profileCardStore'
-import { userMenuHandler } from '../../profile/store/userMenuStore'
 import { showToast } from '../../../shared/store/toastStore'
 import ChatPane from '../components/ChatPane'
+import GroupChatPlaceholder from '../components/GroupChatPlaceholder'
+import GroupMembersAside from '../components/GroupMembersAside'
+import MembersToggleButton from '../components/MembersToggleButton'
 import MessageSearchBar from '../components/MessageSearchBar'
 import SearchResultsPanel from '../components/SearchResultsPanel'
 import { useSearchStore } from '../store/searchStore'
-import Avatar from '../../../shared/ui/Avatar'
-import StyledName from '../../profile/components/StyledName'
 import GroupIcon from '../../friends/components/GroupIcon'
 import CreateGroupModal from '../../friends/components/CreateGroupModal'
 import ConfirmModal from '../../friends/components/ConfirmModal'
 import ImageCropModal from '../../settings/components/ImageCropModal'
-import { FriendsIcon, UserPlusIcon, XIcon } from '../../../shared/ui/icons'
+import { UserPlusIcon } from '../../../shared/ui/icons'
 import {
   leaveGroup,
   removeGroupMember,
@@ -26,78 +24,10 @@ import {
   MAX_GROUP_MEMBERS,
   type ConversationOtherUser
 } from '../api/conversations'
-import { conversationTitle, otherMembers } from '../lib/conversations'
+import { conversationTitle, otherMembers, removeMemberTitle } from '../lib/conversations'
 import { imageFileError } from '../../profile/lib/profileValidation'
-import {
-  ChannelHeaderSkeleton,
-  ComposerSkeleton,
-  MessageListSkeleton
-} from '../../../shared/ui/skeleton/layouts'
 
 const MAIN_BG = 'var(--bg-primary)'
-
-function MemberRow({
-  member,
-  isOwner,
-  canRemove,
-  onRemove
-}: {
-  member: ConversationOtherUser
-  isOwner: boolean
-  canRemove: boolean
-  onRemove: () => void
-}): React.JSX.Element {
-  const meId = useAuthStore((s) => s.user?.id)
-  const status = usePresenceStatus(member.id)
-  const look = useUserLook(member.id, {
-    name: member.display_name || member.username,
-    avatarUrl: member.avatar_url
-  })
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={profileCardHandler(member.id, look.name, member.username, 'left')}
-      onContextMenu={userMenuHandler(member.id, look.name, meId, member.username)}
-      className="group flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-fg/6"
-    >
-      <Avatar
-        userId={member.id}
-        name={look.name}
-        avatarUrl={look.avatarUrl}
-        size={32}
-        status={status}
-        cutoutColor="var(--bg-secondary)"
-      />
-      <span
-        className={`min-w-0 flex-1 truncate text-ds-md font-medium ${
-          status === 'offline' ? 'text-gray-500' : 'text-gray-200'
-        }`}
-      >
-        <StyledName name={look.name} userId={member.id} style={member.name_style} />
-      </span>
-      {isOwner && (
-        <span title="Dono do grupo" className="text-warning">
-          👑
-        </span>
-      )}
-      {canRemove && (
-        <button
-          type="button"
-          title="Remover do grupo"
-          aria-label="Remover do grupo"
-          onClick={(e) => {
-            e.stopPropagation()
-            onRemove()
-          }}
-          className="hidden cursor-pointer text-gray-400 hover:text-danger group-hover:block"
-        >
-          <XIcon className="h-4 w-4" />
-        </button>
-      )}
-    </div>
-  )
-}
 
 /** DM em grupo: nome e ícone editáveis, participantes ao lado e o chat. */
 function GroupChat(): React.JSX.Element {
@@ -127,31 +57,9 @@ function GroupChat(): React.JSX.Element {
     fetchConversations()
   }, [loadFriends, fetchConversations])
 
-  if (!conv || conv.type !== 'group') {
-    // Antes da primeira resposta da lista ainda não dá para saber se existe.
-    if (!conversationsLoaded) {
-      return (
-        <div className="flex h-full flex-1 flex-col" style={{ background: MAIN_BG }}>
-          <ChannelHeaderSkeleton />
-          <div className="min-h-0 flex-1">
-            <MessageListSkeleton label="Abrindo conversa…" />
-          </div>
-          <ComposerSkeleton />
-        </div>
-      )
-    }
-    return (
-      <div
-        className="flex h-full flex-1 items-center justify-center text-ds-md text-gray-400"
-        style={{ background: MAIN_BG }}
-      >
-        Conversa não encontrada.
-      </div>
-    )
-  }
+  if (!conv || conv.type !== 'group') return <GroupChatPlaceholder loaded={conversationsLoaded} />
 
   const title = conversationTitle(conv, meId)
-  const isOwner = conv.owner_id === meId
   const others = otherMembers(conv, meId)
 
   const saveName = async (): Promise<void> => {
@@ -229,15 +137,7 @@ function GroupChat(): React.JSX.Element {
           >
             <UserPlusIcon className="h-5 w-5" />
           </button>
-          <button
-            type="button"
-            title={showMembers ? 'Ocultar lista de membros' : 'Mostrar lista de membros'}
-            aria-label="Lista de membros"
-            onClick={() => setShowMembers((v) => !v)}
-            className={`cursor-pointer hover:text-strong ${showMembers ? 'text-strong' : ''}`}
-          >
-            <FriendsIcon className="h-5 w-5" />
-          </button>
+          <MembersToggleButton shown={showMembers} onToggle={() => setShowMembers((v) => !v)} />
           <button
             type="button"
             onClick={() => setLeaving(true)}
@@ -271,20 +171,7 @@ function GroupChat(): React.JSX.Element {
         </div>
         {searchOpen && <SearchResultsPanel scope={{ kind: 'conversation', id: conv.id }} />}
         {showMembers && !searchOpen && (
-          <aside className="w-60 shrink-0 overflow-y-auto border-l border-subtle bg-secondary px-2 py-4">
-            <p className="px-2 pb-1 text-ds-sm font-medium text-gray-400">
-              Membros — {conv.members.length}
-            </p>
-            {conv.members.map((m) => (
-              <MemberRow
-                key={m.id}
-                member={m}
-                isOwner={m.id === conv.owner_id}
-                canRemove={isOwner && m.id !== meId}
-                onRemove={() => setRemoving(m)}
-              />
-            ))}
-          </aside>
+          <GroupMembersAside conv={conv} meId={meId} onRemove={setRemoving} />
         )}
       </div>
 
@@ -317,7 +204,7 @@ function GroupChat(): React.JSX.Element {
       </ConfirmModal>
       <ConfirmModal
         open={removing !== null}
-        title={`Remover ${removing?.display_name || removing?.username} do grupo`}
+        title={removeMemberTitle(removing)}
         confirmLabel="Remover"
         onClose={() => setRemoving(null)}
         onConfirm={async () => {

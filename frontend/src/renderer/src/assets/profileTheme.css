@@ -1,6 +1,8 @@
 /* Tema do cartão de perfil (lib/profileTheme.ts, components/profile/ProfileCardFrame.tsx).
    O fundo vem em --pt-bg (sempre uma imagem: em camadas a cor só vale na
-   última), as cores da borda em --pt-b1/--pt-b2. Só CSS anima, e para tudo com
+   última), as cores da borda em --pt-b1/--pt-b2, a espessura em --pt-bw e a
+   cor escolhida do efeito em --pt-fxc. A borda e os efeitos simples são CSS;
+   os efeitos grandes são canvas (EffectCanvas). Tudo para com
    prefers-reduced-motion. */
 
 @property --pt-angle {
@@ -9,33 +11,37 @@
   initial-value: 0deg;
 }
 
+/* --pt-tex: textura por cima do fundo do corpo (uma camada só, para caber no
+   padding-box das bordas em degradê). Usa a cor do texto do cartão, então
+   segue o texto claro/escuro (pt-ink-*) e o tema do app. */
 .profile-frame {
   position: relative;
   isolation: isolate;
   border-radius: 0.75rem;
   border: 1px solid rgb(255 255 255 / 0.1);
-  background: var(--pt-bg);
+  background: var(--pt-tex, none), var(--pt-bg);
 }
 
 .pt-border-solid {
-  border: 2px solid var(--pt-b1);
+  border: var(--pt-bw, 2px) solid var(--pt-b1);
 }
 
 /* Neon: a borda acesa e um halo por trás que pulsa (só opacity anima). */
 .pt-border-neon {
-  border: 2px solid var(--pt-b1);
+  border: var(--pt-bw, 2px) solid var(--pt-b1);
   box-shadow: 0 0 6px var(--pt-b1);
 }
-.pt-border-neon::after {
+.pt-border-neon::after,
+.pt-anim-pulse::after {
   content: '';
   position: absolute;
-  inset: -2px;
+  inset: calc(-1 * var(--pt-bw, 2px));
   z-index: -1;
   border-radius: inherit;
   pointer-events: none;
   box-shadow:
-    0 0 12px 1px var(--pt-b1),
-    0 0 26px 3px var(--pt-b1);
+    0 0 12px 1px var(--pt-b1, #c084fc),
+    0 0 26px 3px var(--pt-b1, #c084fc);
   opacity: 0.35;
   animation: pt-neon 2.4s ease-in-out infinite;
 }
@@ -43,15 +49,17 @@
 /* Degradê e arco-íris: o fundo do corpo no padding-box e o da borda no
    border-box (borda transparente por cima). */
 .pt-border-gradient {
-  border: 2px solid transparent;
+  border: var(--pt-bw, 2px) solid transparent;
   background:
+    var(--pt-tex, none) padding-box,
     var(--pt-bg) padding-box,
     linear-gradient(135deg, var(--pt-b1), var(--pt-b2)) border-box;
 }
 
 .pt-border-rainbow {
-  border: 2px solid transparent;
+  border: var(--pt-bw, 2px) solid transparent;
   background:
+    var(--pt-tex, none) padding-box,
     var(--pt-bg) padding-box,
     conic-gradient(
         from var(--pt-angle),
@@ -67,6 +75,50 @@
   animation: pt-spin 4s linear infinite;
 }
 
+/* --- Animação da borda (pt-anim-*; "default" não tem classe) --- */
+
+/* Parada: tira o giro do arco-íris e o pulso do neon. */
+.pt-anim-static,
+.pt-anim-static::after {
+  animation: none;
+}
+
+/* Pulsar: o halo do neon em qualquer borda, mais rápido e forte. */
+.pt-anim-pulse::after {
+  animation-duration: 1.3s;
+}
+.pt-border-neon.pt-anim-pulse::after {
+  opacity: 0.5;
+}
+
+/* Girar: um brilho que corre a borda (no degradê, as duas cores giram). */
+.pt-anim-spin.pt-border-solid,
+.pt-anim-spin.pt-border-neon {
+  border-color: transparent;
+  background:
+    var(--pt-tex, none) padding-box,
+    var(--pt-bg) padding-box,
+    conic-gradient(
+        from var(--pt-angle),
+        var(--pt-b1),
+        var(--pt-b1) 60%,
+        #ffffff 80%,
+        var(--pt-b1)
+      )
+      border-box;
+  animation: pt-spin 3s linear infinite;
+}
+.pt-anim-spin.pt-border-gradient {
+  background:
+    var(--pt-tex, none) padding-box,
+    var(--pt-bg) padding-box,
+    conic-gradient(from var(--pt-angle), var(--pt-b1), var(--pt-b2), var(--pt-b1)) border-box;
+  animation: pt-spin 3s linear infinite;
+}
+.pt-anim-spin.pt-border-rainbow {
+  animation-duration: 1.6s;
+}
+
 @keyframes pt-neon {
   50% {
     opacity: 0.9;
@@ -79,6 +131,32 @@
   }
 }
 
+/* --- Textura do fundo (pt-tex-*) --- */
+
+.pt-tex-grain {
+  --pt-tex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .32 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")
+    0 0 / 160px 160px;
+}
+.pt-tex-dots {
+  --pt-tex: radial-gradient(color-mix(in srgb, currentColor 18%, transparent) 1px, transparent 1.6px)
+    0 0 / 12px 12px;
+}
+.pt-tex-lines {
+  --pt-tex: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, currentColor 8%, transparent) 0 2px,
+    transparent 2px 9px
+  );
+}
+.pt-tex-grid {
+  --pt-tex: conic-gradient(
+      from 90deg at 1px 1px,
+      transparent 90deg,
+      color-mix(in srgb, currentColor 10%, transparent) 0
+    )
+    0 0 / 16px 16px;
+}
+
 /* --- Efeitos por cima do cartão (sem clique, recortados no cartão) --- */
 
 .pt-fx {
@@ -89,6 +167,12 @@
   border-radius: inherit;
   pointer-events: none;
 }
+/* Efeitos em <canvas> (components/EffectCanvas.tsx): ocupa o cartão todo. */
+canvas.pt-fx {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 .pt-fx > span {
   position: absolute;
   display: block;
@@ -97,23 +181,23 @@
 
 .pt-fx-particles > span {
   border-radius: 9999px;
-  background: var(--pt-fx);
-  box-shadow: 0 0 6px var(--pt-fx);
+  background: var(--pt-fxc, var(--pt-fx));
+  box-shadow: 0 0 6px var(--pt-fxc, var(--pt-fx));
   opacity: 0;
   animation: pt-float linear infinite;
 }
 
 .pt-fx-sparkles > span {
-  color: #fff6c2;
+  color: var(--pt-fxc, #fff6c2);
   line-height: 1;
-  text-shadow: 0 0 6px #ffd84d;
+  text-shadow: 0 0 6px var(--pt-fxc, #ffd84d);
   opacity: 0;
   animation: pt-twinkle ease-in-out infinite;
 }
 
 .pt-fx-snow > span {
   border-radius: 9999px;
-  background: rgb(255 255 255 / 0.85);
+  background: var(--pt-fxc, rgb(255 255 255 / 0.85));
   box-shadow: 0 0 2px rgb(0 0 0 / 0.25);
   animation: pt-snow linear infinite;
 }
@@ -173,7 +257,7 @@
   --interactive-active: #000000;
   --fg: #000000;
   --bg-input: rgb(255 255 255 / 0.45);
-  /* Bal�o da nota ao lado do avatar: sem isso ficava o escuro do app. */
+  /* Balão da nota ao lado do avatar: sem isso ficava o escuro do app. */
   --bg-primary: rgb(255 255 255 / 0.6);
   --border-subtle: rgb(0 0 0 / 0.12);
   --border-normal: rgb(0 0 0 / 0.16);
@@ -199,6 +283,8 @@
 @media (prefers-reduced-motion: reduce) {
   .pt-border-rainbow,
   .pt-border-neon::after,
+  .pt-anim-pulse::after,
+  .pt-anim-spin,
   .pt-fx > span {
     animation: none;
   }

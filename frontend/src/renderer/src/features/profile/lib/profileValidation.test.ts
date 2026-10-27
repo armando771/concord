@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_NAME_STYLE } from './nameStyle'
 import { DEFAULT_PROFILE_THEME } from './profileTheme'
+import { DEFAULT_EXTRAS } from './profileThemeExtras'
 import {
   draftFromProfile,
   hasErrors,
@@ -150,8 +151,15 @@ describe('tema do perfil no rascunho', () => {
     border_colors: ['#00ffaa'],
     background: 'gradient',
     background_colors: ['#1e1b4b', '#0f172a'],
-    effect: 'snow'
+    effect: 'snow',
+    ...DEFAULT_EXTRAS
   }
+
+  it('mudar só uma opção fina (ex.: textura) também deixa o perfil sujo', () => {
+    const edited = { ...saved(), profile_theme: { ...DEFAULT_PROFILE_THEME, texture: 'grain' } }
+    expect(isDirty(edited, saved())).toBe(true)
+    expect(profilePayload(edited).profile_theme.texture).toBe('grain')
+  })
 
   it('rascunho vem com o tema salvo, ou o padrão', () => {
     expect(draftFromProfile({ display_name: 'a' }).profile_theme).toEqual(DEFAULT_PROFILE_THEME)

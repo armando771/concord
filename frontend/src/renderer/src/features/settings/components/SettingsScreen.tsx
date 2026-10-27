@@ -7,13 +7,14 @@ import {
   accountName,
   currentSettingsSection,
   filterSections,
+  settingsContentWidth,
   type SettingsSectionId
 } from '../lib/settingsNav'
 import { IS_WEB } from '../../../shared/lib/config'
 import SettingsShell from '../../../shared/ui/SettingsShell'
 import SettingsNav from './SettingsNav'
 import MyAccountSection from './sections/MyAccountSection'
-import ProfilesPage from './sections/ProfilesPage'
+import ProfilesSection from './sections/ProfilesSection'
 import { PrivacySection } from './sections/PrivacySection'
 import { KeybindsSection } from './sections/KeybindsSection'
 import { AppearanceSection } from './sections/AppearanceSection'
@@ -28,7 +29,7 @@ const SECTIONS = SETTINGS_SECTIONS.filter((s) => s.id !== 'app' || showAppSectio
 
 const SECTION_VIEW: Record<SettingsSectionId, () => React.JSX.Element | null> = {
   account: MyAccountSection,
-  profiles: ProfilesPage,
+  profiles: ProfilesSection,
   privacy: PrivacySection,
   appearance: AppearanceSection,
   voice: VoiceSection,
@@ -83,7 +84,7 @@ function SettingsContent(): React.JSX.Element {
       ariaLabel="Configurações"
       title={current.label}
       titleClassName="text-ds-lg font-semibold text-strong"
-      contentClassName="max-w-[740px]"
+      contentClassName={settingsContentWidth(current.id)}
       closeLabel="Fechar configurações"
       onClose={close}
       nav={
