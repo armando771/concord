@@ -83,11 +83,49 @@ describe('ProfileCardBody', () => {
     expect(html).toContain('Adicionar uma nota')
   })
 
-  it('prévia do editor: lápis no avatar e no banner, sem (você)', () => {
-    const html = render({ isMe: true, preview: true, onEditAvatar: () => {}, onEditBanner: () => {} })
-    expect(html).toContain('aria-label="Alterar avatar"')
-    expect(html).toContain('aria-label="Alterar banner"')
+  it('prévia do editor: cada parte vira um botão, sem (você)', () => {
+    const html = render({
+      isMe: true,
+      preview: true,
+      onEdit: () => {},
+      profile: { ...base, status_text: 'oi', bio: 'b', links: ['https://github.com/ana'] }
+    })
+    for (const label of [
+      'Alterar avatar',
+      'Alterar banner',
+      'Editar nome de exibição',
+      'Editar pronomes',
+      'Editar nota',
+      'Editar Sobre mim',
+      'Editar links'
+    ]) {
+      expect(html).toContain(`aria-label="${label}"`)
+    }
     expect(html).not.toContain('(você)')
+  })
+
+  it('prévia do editor: as partes vazias convidam a adicionar', () => {
+    const html = render({ isMe: true, preview: true, onEdit: () => {} })
+    expect(html).toContain('Adicionar pronomes')
+    expect(html).toContain('Adicionar um Sobre mim')
+    expect(html).toContain('Adicionar links')
+    expect(html).toContain('Adicionar uma nota')
+  })
+
+  it('prévia do editor: links do texto e do perfil não navegam (o clique edita)', () => {
+    const html = render({
+      preview: true,
+      onEdit: () => {},
+      profile: { ...base, bio: 'veja https://ana.dev', links: ['https://github.com/ana'] }
+    })
+    expect(html).not.toContain('href=')
+    expect(html).toContain('class="text-link">https://ana.dev')
+  })
+
+  it('fora do editor, nenhuma parte é botão de editar', () => {
+    const html = render({ profile: { ...base, status_text: 'oi' } })
+    expect(html).not.toContain('Editar nome de exibição')
+    expect(html).not.toContain('Adicionar pronomes')
   })
 
   it('selo e badges ao lado', () => {

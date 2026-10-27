@@ -1,4 +1,6 @@
 import { PlusIcon } from '../../../../shared/ui/icons'
+import type { CardSpot } from '../../lib/cardSpots'
+import EditableSpot from './EditableSpot'
 
 /**
  * Nota: o balão ao lado da foto, como no Discord. No próprio perfil sem nota,
@@ -6,10 +8,13 @@ import { PlusIcon } from '../../../../shared/ui/icons'
  */
 export default function CardNote({
   note,
-  onAdd
+  onAdd,
+  onEdit
 }: {
   note?: string
   onAdd?: () => void
+  /** Prévia do editor: a nota abre o modal dela. */
+  onEdit?: (spot: CardSpot) => void
 }): React.JSX.Element | null {
   if (!note && !onAdd) return null
   return (
@@ -23,9 +28,11 @@ export default function CardNote({
         className="absolute -left-4 -top-0.5 h-1.5 w-1.5 rounded-full border border-subtle bg-primary"
       />
       {note ? (
-        <p className="relative max-w-[170px] break-words rounded-2xl border border-subtle bg-primary px-3 py-2 text-xs leading-snug text-gray-200 shadow-lg">
-          {note}
-        </p>
+        <EditableSpot spot="note" onEdit={onEdit} className="rounded-2xl">
+          <p className="relative max-w-[170px] break-words rounded-2xl border border-subtle bg-primary px-3 py-2 text-xs leading-snug text-gray-200 shadow-lg">
+            {note}
+          </p>
+        </EditableSpot>
       ) : (
         <button
           type="button"

@@ -12,6 +12,8 @@ import CardNames from './card/CardNames'
 import CardNote from './card/CardNote'
 import { CardBio, CardGame, CardLinks, MaestroHowto } from './card/CardSections'
 import type { NameStyle } from '../lib/nameStyle'
+import { SPOT_PLACEHOLDER, type CardSpot } from '../lib/cardSpots'
+import EditableSpot from './card/EditableSpot'
 import { CARD_BG, type ProfileTheme } from '../lib/profileTheme'
 
 /** Fundo do cartão sem tema: recorta o avatar e a bolinha de status. */
@@ -59,10 +61,24 @@ interface ProfileCardBodyProps {
   loading?: boolean
   /** Cor do fundo logo abaixo do banner (tema): anel do avatar e recorte do status. */
   surface?: string
-  /** Prévia do editor: passar o mouse mostra o lápis e o clique já abre o arquivo. */
-  onEditAvatar?: () => void
-  onEditBanner?: () => void
+  /**
+   * Prévia do editor: cada parte (avatar, banner, nome, pronomes, nota, Sobre
+   * mim, links) vira um botão que abre o editor dela; as vazias mostram o
+   * convite para adicionar.
+   */
+  onEdit?: (spot: CardSpot) => void
   children?: ReactNode
+}
+
+type EditSpot = (spot: CardSpot) => void
+
+const spotHandler = (onEdit: EditSpot | undefined, spot: CardSpot): (() => void) | undefined =>
+  onEdit && (() => onEdit(spot))
+
+/** "Adicionar uma nota": no editor abre o modal; no próprio cartão, o editor de perfil. */
+function addNote(isMe: boolean, onEditProfile?: () => void, onEdit?: EditSpot): (() => void) | undefined {
+  if (onEdit) return () => onEdit('note')
+  return isMe ? onEditProfile : undefined
 }
 
 /** Banner sem imagem do perfil: o do Maestro é animado; o Salinha Bot fica com o gradiente. */
@@ -88,13 +104,13 @@ function ProfileCardBody({
   preview = false,
   loading = false,
   surface = CARD_BG,
-  onEditAvatar,
-  onEditBanner,
+  onEdit,
   children
 }: ProfileCardBodyProps): React.JSX.Element {
   const bannerSrc = bannerFor(profile)
   const bio = profile.bio?.trim()
   const game = useActivity(preview ? undefined : profile.id)
+  const placeholders = onEdit ? SPOT_PLACEHOLDER : undefined
 
   return (
     <div>
@@ -104,7 +120,7 @@ function ProfileCardBody({
         fallback={fallbackBanner}
         loading={loading}
         surface={surface}
-        onEdit={onEditBanner}
+        onEdit={spotHandler(onEdit, 'banner')}
       />
 
       <div className="px-4 pb-4">
@@ -120,19 +136,33 @@ function ProfileCardBody({
               surface={surface}
               fallbackClassName={avatarFallbackClassName}
               onEditProfile={onEditProfile}
-              onEdit={onEditAvatar}
+              onEdit={spotHandler(onEdit, 'avatar')}
             />
-            <CardNote note={profile.status_text?.trim()} onAdd={isMe ? onEditProfile : undefined} />
+            <CardNote
+              note={profile.status_text?.trim()}
+              onAdd={addNote(isMe, onEditProfile, onEdit)}
+              onEdit={onEdit}
+            />
           </div>
           {badge && <div className="pointer-events-auto mt-[52px] shrink-0">{badge}</div>}
         </div>
 
-        <CardNames profile={profile} you={isMe && !preview} badges={badges} />
+        <CardNames
+          profile={profile}
+          you={isMe && !preview}
+          badges={badges}
+          onEdit={onEdit}
+          pronounsPlaceholder={placeholders?.pronouns}
+        />
         <CardGame game={game} />
         {loading && !bio && <ProfileBioSkeleton />}
-        <CardBio bio={bio} />
+        <EditableSpot spot="bio" onEdit={onEdit}>
+          <CardBio bio={bio} placeholder={placeholders?.bio} />
+        </EditableSpot>
         {profile.is_bot && profile.id === MAESTRO_USER_ID && <MaestroHowto />}
-        <CardLinks links={profile.links ?? []} />
+        <EditableSpot spot="links" onEdit={onEdit}>
+          <CardLinks links={profile.links ?? []} placeholder={placeholders?.links} />
+        </EditableSpot>
 
         {children}
       </div>

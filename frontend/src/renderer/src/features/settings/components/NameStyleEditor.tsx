@@ -7,22 +7,17 @@ const optionClass = (active: boolean): string =>
     active ? 'border-brand bg-brand/15' : 'border-subtle bg-fg/5 hover:bg-fg/10'
   }`
 
+/** Fonte, efeito e cores do nome (a prévia fica com quem usa, ex.: o modal do nome). */
 export default function NameStyleEditor({
   value,
-  previewName,
   onChange
 }: {
   value: NameStyle
-  previewName: string
   onChange: (next: NameStyle) => void
 }): React.JSX.Element {
   const effect = NAME_EFFECTS.find((e) => e.id === value.effect) ?? NAME_EFFECTS[0]
   return (
     <div className="space-y-3">
-      <div className="truncate rounded-lg bg-input px-3 py-2 text-lg text-strong">
-        <StyledName name={previewName || 'Seu nome'} style={value} />
-      </div>
-
       <div>
         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
           Fonte
