@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { API_BASE_URL } from '../lib/config'
 import { MAESTRO_USER_ID } from '../../features/music/lib/music'
 import { SALINHA_BOT_USER_ID } from '../../features/music/lib/bots'
-import maestroGif from '../../assets/maestro.gif'
+import MaestroImage from '../../features/music/components/MaestroImage'
 import { SalinhaMarkIcon } from './icons'
 import { isAnimatedMedia, profileMediaSrc } from '../../features/profile/lib/profileMedia'
 import { STATUS_META, type PresenceStatus } from '../../features/friends/lib/presenceStatus'
@@ -64,13 +64,7 @@ function Avatar({
   return (
     <div className={`group relative shrink-0 ${className}`} style={{ width: size, height: size }}>
       {maestro ? (
-        <img
-          src={maestroGif}
-          alt=""
-          draggable={false}
-          style={{ imageRendering: 'pixelated' }}
-          className="h-full w-full rounded-full bg-accent object-cover"
-        />
+        <MaestroImage className="h-full w-full rounded-full bg-accent object-cover" />
       ) : salinhaBot ? (
         <div className="flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-brand to-[#8b5cf6] text-white">
           <SalinhaMarkIcon className="h-[72%] w-[72%]" />

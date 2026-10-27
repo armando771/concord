@@ -1,15 +1,11 @@
-import maestroGif from '../../../assets/maestro.gif'
+import MaestroImage from './MaestroImage'
 
 /** Avatar fixo do Maestro (GIF embutido no app, sem imagem no banco). */
 function MaestroAvatar({ size = 36 }: { size?: number }): React.JSX.Element {
   return (
-    <img
-      src={maestroGif}
-      alt=""
-      draggable={false}
-      style={{ width: size, height: size, imageRendering: 'pixelated' }}
+    <MaestroImage
+      style={{ width: size, height: size }}
       className="shrink-0 rounded-full bg-accent object-cover shadow-md"
-      aria-hidden="true"
     />
   )
 }
