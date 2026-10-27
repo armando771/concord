@@ -56,6 +56,17 @@ function tsCoverage(files, tmp) {
   return existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : {}
 }
 
+// Jest do mobile/: coverage-final.json (istanbul) só dos arquivos pedidos.
+function mobileCoverage(files, tmp) {
+  const rel = files.map((f) => f.slice('mobile/'.length))
+  const coverage = ['--coverage', '--coverageReporters=json', `--coverageDirectory=${tmp}`, ...rel.map((f) => `--collectCoverageFrom=${f}`)]
+  if (run('npx', ['jest', '--findRelatedTests', '--passWithNoTests', ...coverage, ...rel], path.join(ROOT, 'mobile')) !== 0) {
+    fail('jest falhou: corrija os testes antes de medir o CRAP')
+  }
+  const report = path.join(tmp, 'coverage-final.json')
+  return existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : {}
+}
+
 function fail(message) {
   console.error(`\n❌ ${message}`)
   process.exit(2)
@@ -63,9 +74,13 @@ function fail(message) {
 
 function measure(files) {
   const tmp = mkdtempSync(path.join(tmpdir(), 'crap-'))
-  const { go, ts } = classify(files)
+  const { go, ts, mobile } = classify(files)
   process.chdir(ROOT)
-  return [...goFunctions(go, tmp), ...(ts.length ? tsFunctions(ts, tsCoverage(ts, tmp)) : [])]
+  return [
+    ...goFunctions(go, tmp),
+    ...(ts.length ? tsFunctions(ts, tsCoverage(ts, tmp)) : []),
+    ...(mobile.length ? tsFunctions(mobile, mobileCoverage(mobile, tmp)) : [])
+  ]
 }
 
 function main() {
