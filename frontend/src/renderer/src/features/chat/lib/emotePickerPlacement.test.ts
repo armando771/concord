@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { emotePickerPlacement, emotePickerStyle, scrollParentOf } from './emotePickerPlacement'
+import {
+  emotePickerPlacement,
+  emotePickerStyle,
+  measureEmotePicker,
+  scrollParentOf
+} from './emotePickerPlacement'
 
 // Lista que rola de 0 a 600 px; o seletor tem 300 px de altura.
 const box = { containerTop: 0, containerBottom: 600, height: 300 }
@@ -64,5 +69,37 @@ describe('scrollParentOf', () => {
 
   it('sem ancestral que role, null (vale a janela)', () => {
     expect(scrollParentOf(chain('picker', 'row'), () => 'visible')).toBeNull()
+  })
+})
+
+describe('measureEmotePicker', () => {
+  const rect = (top: number, bottom: number) => () => ({ top, bottom })
+  // Lista que rola de 100 a 700 numa janela de 800; linha da mensagem em `rowTop`.
+  function picker(rowTop: number) {
+    const list = { getBoundingClientRect: rect(100, 700), parentElement: null, name: 'list' }
+    const row = { getBoundingClientRect: rect(rowTop, rowTop + 40), parentElement: list }
+    return { offsetHeight: 300, offsetParent: row, parentElement: row, getBoundingClientRect: rect(0, 0) }
+  }
+  const view = (mobile = false) => ({
+    mobile,
+    height: 800,
+    overflowY: (n: object) => ('name' in n && n.name === 'list' ? 'auto' : 'visible')
+  })
+
+  it('regressão: na última mensagem da lista o seletor abre para cima', () => {
+    expect(measureEmotePicker(picker(640), view())).toEqual({
+      top: 'auto',
+      bottom: 'calc(100% + 20px)'
+    })
+  })
+
+  it('no meio da lista, abre para baixo', () => {
+    expect(measureEmotePicker(picker(150), view())).toEqual({ top: 32, bottom: 'auto' })
+  })
+
+  it('no celular (folha de baixo) ou sem linha de referência, não mexe', () => {
+    expect(measureEmotePicker(picker(640), view(true))).toBeUndefined()
+    expect(measureEmotePicker(null, view())).toBeUndefined()
+    expect(measureEmotePicker({ ...picker(640), offsetParent: null }, view())).toBeUndefined()
   })
 })

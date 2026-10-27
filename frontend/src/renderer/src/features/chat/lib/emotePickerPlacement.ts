@@ -59,3 +59,40 @@ export function scrollParentOf<T extends { parentElement: T | null }>(
   }
   return null
 }
+
+interface Boxed {
+  getBoundingClientRect: () => { top: number; bottom: number }
+}
+
+/** O que a medida precisa do seletor (um HTMLElement serve). */
+export interface PickerNode extends Boxed {
+  offsetHeight: number
+  offsetParent: Boxed | null
+  parentElement: ScrollNode | null
+}
+
+interface ScrollNode extends Boxed {
+  parentElement: ScrollNode | null
+}
+
+/**
+ * Mede o seletor já na tela e devolve o estilo dele; undefined = deixa as
+ * classes (sem linha de referência, ou no celular, onde é folha de baixo).
+ */
+export function measureEmotePicker(
+  el: PickerNode | null,
+  view: { mobile: boolean; height: number; overflowY: (node: ScrollNode) => string }
+): ReturnType<typeof emotePickerStyle> | undefined {
+  const row = el?.offsetParent
+  if (view.mobile || !el || !row) return undefined
+  const list = scrollParentOf<ScrollNode>(el, view.overflowY)
+  const rect = list?.getBoundingClientRect() ?? { top: 0, bottom: view.height }
+  return emotePickerStyle(
+    emotePickerPlacement({
+      rowTop: row.getBoundingClientRect().top,
+      containerTop: Math.max(rect.top, 0),
+      containerBottom: Math.min(rect.bottom, view.height),
+      height: el.offsetHeight
+    })
+  )
+}

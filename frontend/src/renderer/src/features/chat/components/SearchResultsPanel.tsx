@@ -73,8 +73,7 @@ export default function SearchResultsPanel({
   return (
     <aside
       aria-label="Resultados da busca"
-      // Celular: cobre o chat (o pai é relative); fechar a busca volta a ele.
-      className="flex w-80 shrink-0 flex-col border-l border-subtle bg-members max-md:absolute max-md:inset-0 max-md:z-20 max-md:w-full max-md:border-l-0 xl:w-[26rem]"
+      className="flex w-80 shrink-0 flex-col border-l border-subtle bg-members xl:w-[26rem]"
     >
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-subtle px-4 py-3">
         <p className="text-ds-sm font-semibold text-strong" aria-live="polite">

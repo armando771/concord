@@ -167,7 +167,7 @@ function VoiceRecordButton({
         }}
         onPointerLeave={() => dispatch({ type: 'leave' })}
         onPointerEnter={() => dispatch({ type: 'enter' })}
-        className={`relative z-10 shrink-0 cursor-pointer touch-none rounded-md p-1 transition-colors disabled:cursor-not-allowed max-md:p-2 disabled:opacity-40 ${
+        className={`relative z-10 shrink-0 cursor-pointer rounded-md p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
           recording ? 'bg-red-500 text-white' : 'text-gray-400 hover:bg-fg/10 hover:text-strong'
         }`}
       >
