@@ -14,7 +14,7 @@ function MembersToggleButton({
       title={shown ? 'Ocultar lista de membros' : 'Mostrar lista de membros'}
       aria-label="Lista de membros"
       onClick={onToggle}
-      className={`cursor-pointer hover:text-strong ${shown ? 'text-strong' : ''}`}
+      className={`flex cursor-pointer items-center justify-center hover:text-strong max-md:size-10 ${shown ? 'text-strong' : ''}`}
     >
       <FriendsIcon className="h-5 w-5" />
     </button>

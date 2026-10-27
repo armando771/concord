@@ -11,6 +11,8 @@ import MessageSearchBar from '../components/MessageSearchBar'
 import { useDmConversation } from '../hooks/useDmConversation'
 import { useDmPeer } from '../hooks/useDmPeer'
 import { dmMenuTarget } from '../lib/dmPeer'
+import CollapsibleSearch from '../components/CollapsibleSearch'
+import MobileNavButton from '../../navigation/components/MobileNavButton'
 
 function DmChat(): React.JSX.Element {
   const { userId } = useParams<{ userId: string }>()
@@ -36,8 +38,9 @@ function DmChat(): React.JSX.Element {
     <div className="flex h-full w-full flex-col overflow-hidden bg-primary backdrop-blur-2xl text-gray-100">
       <header
         onContextMenu={openMenu}
-        className="flex h-14 shrink-0 items-center gap-3 border-b border-subtle px-4"
+        className="relative flex h-14 shrink-0 items-center gap-2 border-b border-subtle px-4 sm:gap-3"
       >
+        <MobileNavButton />
         <DmPeerHeader
           userId={userId}
           other={peer.other}
@@ -46,7 +49,7 @@ function DmChat(): React.JSX.Element {
           handle={peer.handle}
           status={status}
         />
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
           {withBot ? null : (
             <DmCallButton
               userId={userId}
@@ -58,11 +61,13 @@ function DmChat(): React.JSX.Element {
             />
           )}
           {conversationId && (
-            <MessageSearchBar
-              scope={{ kind: 'conversation', id: conversationId }}
-              name={look.name}
-              users={searchUsers}
-            />
+            <CollapsibleSearch>
+              <MessageSearchBar
+                scope={{ kind: 'conversation', id: conversationId }}
+                name={look.name}
+                users={searchUsers}
+              />
+            </CollapsibleSearch>
           )}
         </div>
       </header>

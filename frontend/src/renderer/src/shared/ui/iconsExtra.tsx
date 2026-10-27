@@ -37,3 +37,23 @@ export function EnvelopeIcon({ className }: IconProps): React.JSX.Element {
     </Stroke>
   )
 }
+
+export function ArrowLeftIcon({ className }: IconProps): React.JSX.Element {
+  return (
+    <Stroke className={className}>
+      <path d="M19 12H5" />
+      <path d="m12 19-7-7 7-7" />
+    </Stroke>
+  )
+}
+
+export function MembersIcon({ className }: IconProps): React.JSX.Element {
+  return (
+    <Stroke className={className}>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M16 4.5a3.5 3.5 0 0 1 0 7" />
+      <path d="M18.5 14.5A6.5 6.5 0 0 1 21.5 20" />
+    </Stroke>
+  )
+}

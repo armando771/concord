@@ -3,6 +3,8 @@
 @import './typography.css';
 /* Tokens de cor dos temas (lista e documentação no topo do arquivo). */
 @import './theme.css';
+/* Celular: altura visível, safe areas e animações de gaveta. */
+@import './mobile.css';
 
 @theme {
   /* Vidro dos painéis: seguem o tema (no AMOLED ficam translúcidos sobre o brilho). */
