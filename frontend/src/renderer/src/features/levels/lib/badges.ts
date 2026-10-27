@@ -119,6 +119,7 @@ const STAT_TEXT: Partial<Record<BadgeUnit, (b: Badge, value: number) => string>>
   people: (_, value) => `Call com até ${plural(value, 'pessoa', 'pessoas')}`,
   servers: (_, value) => `Dono de ${plural(value, 'servidor', 'servidores')}`,
   proposals: (_, value) => (value === 1 ? '1 proposta criada' : `${num(value)} propostas criadas`),
+  friends: (_, value) => plural(value, 'amigo', 'amigos'),
   founder: (_, value) =>
     value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas',
   dev: () => DEV_TEXT,
@@ -159,6 +160,7 @@ const THRESHOLD_TEXT: Partial<Record<BadgeUnit, (threshold: number) => string>> 
   people: (t) => plural(t, 'pessoa', 'pessoas'),
   servers: (t) => plural(t, 'servidor', 'servidores'),
   proposals: (t) => plural(t, 'proposta', 'propostas'),
+  friends: (t) => plural(t, 'amigo', 'amigos'),
   // Corte do backend: contas criadas antes de 01/11/2026.
   founder: () => 'Até 31/10/26',
   dev: () => DEV_ONLY,
@@ -201,6 +203,7 @@ const REMAINING_TEXT: Partial<Record<BadgeUnit, RemainingFn>> = {
   people: (b) => `Uma call com ${plural(b.next_threshold ?? 0, 'pessoa', 'pessoas')}`,
   servers: (_, left) => falta(left, 'servidor', 'servidores'),
   proposals: (_, left) => falta(left, 'proposta', 'propostas'),
+  friends: (_, left) => falta(left, 'amigo', 'amigos'),
   founder: () => 'Só para quem chegou nas primeiras semanas',
   dev: () => DEV_ONLY
 }

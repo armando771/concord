@@ -17,7 +17,8 @@ const TIERS: Record<string, number> = {
   festeiro: 3,
   maratona: 3,
   reacoes: 3,
-  contribuinte: 5
+  contribuinte: 5,
+  amigos: 5
 }
 
 describe('badgeArt', () => {

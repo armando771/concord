@@ -25,6 +25,8 @@ type Stats struct {
 	// Maior tempo seguido numa call com mais alguém.
 	LongestSessionSeconds int64
 	OwnedServers          int64
+	// Amizades aceitas.
+	Friends int64
 	// Cards do quadro de propostas criados pela pessoa que ainda existem.
 	Proposals int64
 	// Está em dev_badge_users (Fundador).
@@ -130,6 +132,7 @@ var valueFns = map[string]valueFn{
 	"festeiro":     func(s Stats, _ time.Time) int64 { return s.PeakCallSize },
 	"maratona":     func(s Stats, _ time.Time) int64 { return s.LongestSessionSeconds },
 	"reacoes":      func(s Stats, _ time.Time) int64 { return s.Reactions },
+	"amigos":       func(s Stats, _ time.Time) int64 { return s.Friends },
 	"contribuinte": func(s Stats, _ time.Time) int64 { return s.Proposals },
 	"criador":      func(s Stats, _ time.Time) int64 { return flag(s.IsDev) },
 	"l":            func(s Stats, _ time.Time) int64 { return flag(s.FezOL) },

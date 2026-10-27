@@ -25,7 +25,8 @@ const (
 	UnitDev       = "dev"
 	UnitProposals = "proposals"
 	// UnitVote: badge de uma resposta única (o L do segundo turno).
-	UnitVote = "vote"
+	UnitVote    = "vote"
+	UnitFriends = "friends"
 )
 
 // FounderCutoff: quem criou a conta antes desta data (horário de Brasília)
@@ -234,6 +235,21 @@ var Catalog = []Category{
 			{"Fôlego", 2 * hour, RarityCommon},
 			{"Maratonista", 5 * hour, RarityRare},
 			{"Ultramaratona", 12 * hour, RarityEpic},
+		},
+	},
+	{
+		// Amizades aceitas agora. Aceitar reavalia na hora (AcceptHook da
+		// amizade); desfazer não tira o tier já conquistado.
+		Key:         "amigos",
+		Name:        "Amigos",
+		Description: "Faça amizades no Salinha. Contam os pedidos de amizade aceitos.",
+		Unit:        UnitFriends,
+		Tiers: []Tier{
+			{"Enturmado", 5, RarityCommon},
+			{"Popular", 15, RarityCommon},
+			{"Galera Toda", 30, RarityRare},
+			{"Celebridade", 50, RarityEpic},
+			{"Prefeito da Salinha", 100, RarityLegendary},
 		},
 	},
 	{

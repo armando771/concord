@@ -398,3 +398,17 @@ func TestEvaluateAccountAgeGoesUpToTenYears(t *testing.T) {
 		}
 	}
 }
+
+func TestEvaluateFriendsFromAcceptedFriendships(t *testing.T) {
+	badges, _ := Evaluate(Stats{CreatedAt: now, Friends: 16}, nil, now)
+	b := find(t, badges, "amigos")
+	if b.Unit != UnitFriends || b.Value != 16 || b.Tier != 2 || b.NextThreshold == nil || *b.NextThreshold != 30 {
+		t.Fatalf("amigos = %+v, want 16 amigos, tier 2 e próximo em 30", b)
+	}
+	// Desfazer amizade não tira o tier já gravado (como todo badge).
+	stored := Unlocks{"amigos": {1: now, 2: now}}
+	badges, _ = Evaluate(Stats{CreatedAt: now, Friends: 3}, stored, now)
+	if b := find(t, badges, "amigos"); b.Tier != 2 {
+		t.Fatalf("amigos depois de desfazer = tier %d, want 2", b.Tier)
+	}
+}
