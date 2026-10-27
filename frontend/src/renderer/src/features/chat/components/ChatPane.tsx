@@ -67,6 +67,7 @@ import {
 import { useRoomMessages } from '../hooks/useRoomMessages'
 import { useChannelPins } from '../hooks/useChannelPins'
 import { useJumpRequests } from '../hooks/useJumpRequests'
+import { useReactToMessage } from '../hooks/useReactToMessage'
 import {
   composerDisabledReason,
   composerPlaceholder,
@@ -122,7 +123,7 @@ function ChatPane({
   const openRoom = useChatStore((s) => s.openRoom)
   const sendToRoom = useChatStore((s) => s.sendToRoom)
   const deleteFromRoom = useChatStore((s) => s.deleteFromRoom)
-  const toggleReaction = useChatStore((s) => s.toggleReaction)
+  const reactToMessage = useReactToMessage(room)
   const createPollInRoom = useChatStore((s) => s.createPollInRoom)
   const votePollInRoom = useChatStore((s) => s.votePollInRoom)
   const endPollInRoom = useChatStore((s) => s.endPollInRoom)
@@ -498,14 +499,6 @@ function ChatPane({
     addFiles(Array.from(e.clipboardData.files))
   }
 
-  const handleReact = async (messageId: string, emoji: string): Promise<void> => {
-    try {
-      await toggleReaction(room, messageId, emoji)
-    } catch (err) {
-      showToast.error(actionErrorMessage(err, 'Falha ao reagir à mensagem.'))
-    }
-  }
-
   const handleStartReply = (message: Message): void => {
     setReplyState({ room, message })
     requestAnimationFrame(() => inputRef.current?.focus())
@@ -614,7 +607,7 @@ function ChatPane({
                 isHighlighted={highlightedId === m.id}
                 mentionLabels={labels}
                 onReply={() => handleStartReply(m)}
-                onReact={(emoji) => void handleReact(m.id, emoji)}
+                onReact={(emoji) => reactToMessage(m, emoji)}
                 onJumpToMessage={handleJumpToMessage}
                 onDelete={() => handleDelete(m.id)}
                 onVote={(answerIds) => votePollInRoom(room, m.id, answerIds)}

@@ -21,19 +21,17 @@ import {
   listChannelMessages,
   sendChannelMessage,
   deleteChannelMessage,
-  addChannelReaction,
-  removeChannelReaction,
   listConversationMessages,
   sendConversationMessage,
   deleteConversationMessage,
   editMessage,
-  addConversationReaction,
-  removeConversationReaction,
   createPoll,
   votePoll,
   endPoll
 } from '../api/messages'
-import { applyReactionAdd, applyReactionRemove } from '../lib/emotes'
+import { applyReactionAdd, applyReactionRemove, hasUserReacted } from '../lib/emotes'
+import { withReaction } from '../lib/reactionToggle'
+import { sendReaction } from '../api/reactions'
 import { applyPollUpdate, messagePreview, type PollUpdate } from '../lib/polls'
 import { mergeMissedMessages, newestMessage } from '../lib/missedMessages'
 import { mergeMessages } from '../lib/messageOrder'
@@ -576,60 +574,18 @@ loadOlderUntil: async (room, messageId, maxPages = JUMP_MAX_PAGES) => {
   toggleReaction: async (room, messageId, emoji) => {
     const meId = useAuthStore.getState().user?.id
     if (!meId) return
-
-    const messages = get().messagesByRoom[room] ?? []
-    const target = messages.find((m) => m.id === messageId)
-    const alreadyReacted =
-      target?.reactions?.some((r) => r.emoji === emoji && r.user_ids.includes(meId)) ?? false
-
-    set((state) => ({
-      messagesByRoom: {
-        ...state.messagesByRoom,
-        [room]: (state.messagesByRoom[room] ?? []).map((m) =>
-          m.id === messageId
-            ? {
-                ...m,
-                reactions: alreadyReacted
-                  ? applyReactionRemove(m.reactions, emoji, meId)
-                  : applyReactionAdd(m.reactions, emoji, meId)
-              }
-            : m
-        )
-      }
-    }))
-
-    try {
-      if (room.startsWith('channel:')) {
-        const channelId = room.slice('channel:'.length)
-        if (alreadyReacted) {
-          await removeChannelReaction(channelId, messageId, emoji)
-        } else {
-          await addChannelReaction(channelId, messageId, emoji)
-        }
-      } else {
-        const convId = room.slice('conversation:'.length)
-        if (alreadyReacted) {
-          await removeConversationReaction(convId, messageId, emoji)
-        } else {
-          await addConversationReaction(convId, messageId, emoji)
-        }
-      }
-    } catch (err) {
+    const target = (get().messagesByRoom[room] ?? []).find((m) => m.id === messageId)
+    const add = !hasUserReacted(target?.reactions, emoji, meId)
+    const apply = (adding: boolean): void =>
       set((state) => ({
-        messagesByRoom: {
-          ...state.messagesByRoom,
-          [room]: (state.messagesByRoom[room] ?? []).map((m) =>
-            m.id === messageId
-              ? {
-                  ...m,
-                  reactions: alreadyReacted
-                    ? applyReactionAdd(m.reactions, emoji, meId)
-                    : applyReactionRemove(m.reactions, emoji, meId)
-                }
-              : m
-          )
-        }
+        messagesByRoom: withReaction(state.messagesByRoom, room, messageId, emoji, meId, adding)
       }))
+
+    apply(add)
+    try {
+      await sendReaction(room, messageId, emoji, add)
+    } catch (err) {
+      apply(!add)
       throw err
     }
   },
