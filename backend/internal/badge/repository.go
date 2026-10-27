@@ -35,6 +35,7 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			COALESCE(b.messages_sent, 0),
 			COALESCE(b.reactions_given, 0),
 			COALESCE(b.stream_seconds, 0),
+			COALESCE(b.watch_seconds, 0),
 			COALESCE(b.night_seconds, 0),
 			COALESCE(b.morning_seconds, 0),
 			COALESCE(b.peak_call_size, 0),
@@ -56,6 +57,7 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 		&s.MessagesSent,
 		&s.Reactions,
 		&s.StreamSeconds,
+		&s.WatchSeconds,
 		&s.NightSeconds,
 		&s.MorningSeconds,
 		&s.PeakCallSize,
@@ -135,17 +137,18 @@ func (r *Repository) AddCallStats(ctx context.Context, userID string, d Delta) e
 	_, err := r.db.Exec(
 		ctx,
 		`
-		INSERT INTO user_badge_stats (user_id, stream_seconds, night_seconds, morning_seconds, peak_call_size, longest_session_seconds)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO user_badge_stats (user_id, stream_seconds, watch_seconds, night_seconds, morning_seconds, peak_call_size, longest_session_seconds)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (user_id) DO UPDATE SET
 			stream_seconds = user_badge_stats.stream_seconds + EXCLUDED.stream_seconds,
+			watch_seconds = user_badge_stats.watch_seconds + EXCLUDED.watch_seconds,
 			night_seconds = user_badge_stats.night_seconds + EXCLUDED.night_seconds,
 			morning_seconds = user_badge_stats.morning_seconds + EXCLUDED.morning_seconds,
 			peak_call_size = GREATEST(user_badge_stats.peak_call_size, EXCLUDED.peak_call_size),
 			longest_session_seconds = GREATEST(user_badge_stats.longest_session_seconds, EXCLUDED.longest_session_seconds),
 			updated_at = NOW()
 		`,
-		userID, d.Stream, d.Night, d.Morning, d.PeakCallSize, d.LongestSession,
+		userID, d.Stream, d.Watch, d.Night, d.Morning, d.PeakCallSize, d.LongestSession,
 	)
 	return err
 }

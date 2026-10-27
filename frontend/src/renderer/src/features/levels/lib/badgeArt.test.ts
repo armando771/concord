@@ -7,6 +7,7 @@ const TIERS: Record<string, number> = {
   conta: 5,
   mensagens: 5,
   streamer: 5,
+  espectador: 5,
   nivel: 5,
   coruja: 4,
   madrugador: 4,

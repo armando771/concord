@@ -111,6 +111,21 @@ var Catalog = []Category{
 		},
 	},
 	{
+		// Conta quem assiste à live de outra pessoa na call, sem estar surdo.
+		// Ver duas lives ao mesmo tempo conta uma vez; a própria não conta.
+		Key:         "espectador",
+		Name:        "Espectador",
+		Description: "Assista à transmissão de tela de outra pessoa numa call para subir este badge.",
+		Unit:        UnitSeconds,
+		Tiers: []Tier{
+			{"Curioso", 1 * hour, RarityCommon},
+			{"Pipoqueiro", 10 * hour, RarityCommon},
+			{"Cinéfilo", 50 * hour, RarityRare},
+			{"Crítico", 150 * hour, RarityEpic},
+			{"Camarote", 500 * hour, RarityLegendary},
+		},
+	},
+	{
 		Key:         "nivel",
 		Name:        "Nível",
 		Description: "Ganhe XP ficando em call para subir de nível e de badge.",

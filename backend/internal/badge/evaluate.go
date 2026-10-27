@@ -15,6 +15,8 @@ type Stats struct {
 	Reactions    int64
 	// Tempo compartilhando a tela numa call com mais gente.
 	StreamSeconds int64
+	// Tempo assistindo à transmissão de outra pessoa (sem estar surdo).
+	WatchSeconds int64
 	// Tempo em call (como no XP) entre 0h e 5h e entre 5h e 8h.
 	NightSeconds   int64
 	MorningSeconds int64
@@ -112,10 +114,11 @@ func flag(on bool) int64 {
 
 // valueFns é o valor de cada categoria; categoria sem entrada vale 0.
 var valueFns = map[string]valueFn{
-	"voz":       func(s Stats, _ time.Time) int64 { return s.VoiceSeconds },
-	"conta":     func(s Stats, now time.Time) int64 { return monthsBetween(s.CreatedAt, now) },
-	"mensagens": func(s Stats, _ time.Time) int64 { return s.MessagesSent },
-	"streamer":  func(s Stats, _ time.Time) int64 { return s.StreamSeconds },
+	"voz":        func(s Stats, _ time.Time) int64 { return s.VoiceSeconds },
+	"conta":      func(s Stats, now time.Time) int64 { return monthsBetween(s.CreatedAt, now) },
+	"mensagens":  func(s Stats, _ time.Time) int64 { return s.MessagesSent },
+	"streamer":   func(s Stats, _ time.Time) int64 { return s.StreamSeconds },
+	"espectador": func(s Stats, _ time.Time) int64 { return s.WatchSeconds },
 	"nivel": func(s Stats, _ time.Time) int64 {
 		lvl, _, _ := level.FromXP(s.XP)
 		return int64(lvl)

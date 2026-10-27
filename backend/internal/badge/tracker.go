@@ -14,6 +14,7 @@ const tickInterval = 10 * time.Second
 // PeakCallSize e LongestSession são máximos (o banco guarda o maior).
 type Delta struct {
 	Stream         int64
+	Watch          int64
 	Night          int64
 	Morning        int64
 	PeakCallSize   int64
@@ -21,9 +22,9 @@ type Delta struct {
 }
 
 type pending struct {
-	stream, night, morning time.Duration
-	peak                   int64
-	longest                time.Duration
+	stream, watch, night, morning time.Duration
+	peak                          int64
+	longest                       time.Duration
 }
 
 // Brasilia é o fuso das horas de Coruja e Madrugador, fixo no código (o
@@ -82,6 +83,7 @@ func (t *tracker) accrue(snaps []call.CallSnapshot, now time.Time) {
 		t.accruePeak(s)
 		t.accrueVoice(s, elapsed, hour, inSession)
 		t.accrueStream(s, elapsed)
+		t.accrueWatch(s, elapsed)
 	}
 	for userID := range t.sessions {
 		if !inSession[userID] {
@@ -134,6 +136,25 @@ func (t *tracker) accrueStream(s call.CallSnapshot, elapsed time.Duration) {
 	}
 }
 
+// accrueWatch (Espectador): quem assiste à live de outra pessoa e não está
+// surdo. O call já manda cada um uma vez, sem a própria live.
+func (t *tracker) accrueWatch(s call.CallSnapshot, elapsed time.Duration) {
+	for _, userID := range s.ScreenWatchers {
+		if contains(s.Listeners, userID) {
+			t.get(userID).watch += elapsed
+		}
+	}
+}
+
+func contains(ids []string, userID string) bool {
+	for _, id := range ids {
+		if id == userID {
+			return true
+		}
+	}
+	return false
+}
+
 func hasOtherListener(listeners []string, userID string) bool {
 	for _, id := range listeners {
 		if id != userID {
@@ -167,6 +188,7 @@ func (t *tracker) activeSessions() map[string]time.Duration {
 func (t *tracker) restore(userID string, d Delta) {
 	p := t.get(userID)
 	p.stream += time.Duration(d.Stream) * time.Second
+	p.watch += time.Duration(d.Watch) * time.Second
 	p.night += time.Duration(d.Night) * time.Second
 	p.morning += time.Duration(d.Morning) * time.Second
 	if d.PeakCallSize > p.peak {
@@ -190,6 +212,7 @@ func (t *tracker) drain() map[string]Delta {
 	for userID, p := range t.pending {
 		d := Delta{
 			Stream:         wholeSeconds(&p.stream),
+			Watch:          wholeSeconds(&p.watch),
 			Night:          wholeSeconds(&p.night),
 			Morning:        wholeSeconds(&p.morning),
 			PeakCallSize:   p.peak,
@@ -197,7 +220,7 @@ func (t *tracker) drain() map[string]Delta {
 		}
 		p.peak = 0
 		p.longest = 0
-		if p.stream == 0 && p.night == 0 && p.morning == 0 {
+		if p.stream == 0 && p.watch == 0 && p.night == 0 && p.morning == 0 {
 			delete(t.pending, userID)
 		}
 		if d != (Delta{}) {

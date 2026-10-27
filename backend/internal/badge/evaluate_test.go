@@ -355,3 +355,17 @@ func nonExclusiveCount() int {
 	}
 	return n
 }
+
+func TestEvaluateSpectatorFromWatchTime(t *testing.T) {
+	badges, _ := Evaluate(Stats{CreatedAt: now, WatchSeconds: 12 * hour}, nil, now)
+	b := find(t, badges, "espectador")
+	if b.Unit != UnitSeconds || b.Value != 12*hour || b.Tier != 2 || b.TierName != "Pipoqueiro" {
+		t.Fatalf("espectador = %+v, want 12h, tier 2 Pipoqueiro", b)
+	}
+	if b.NextThreshold == nil || *b.NextThreshold != 50*hour {
+		t.Fatalf("espectador next = %v, want 50h", b.NextThreshold)
+	}
+	if last := b.Tiers[len(b.Tiers)-1]; last.Rarity != RarityLegendary {
+		t.Fatalf("espectador top tier = %+v, want lendário", last)
+	}
+}

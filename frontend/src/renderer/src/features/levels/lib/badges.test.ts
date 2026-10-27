@@ -43,6 +43,9 @@ describe('statText', () => {
     expect(statText(badge({ category: 'streamer', value: 12 * HOUR }))).toBe(
       '12 horas transmitindo'
     )
+    expect(statText(badge({ category: 'espectador', value: 3 * HOUR }))).toBe(
+      '3 horas assistindo lives'
+    )
     expect(statText(badge({ category: 'coruja', value: 3 * HOUR }))).toBe(
       '3 horas em call de madrugada'
     )
@@ -247,6 +250,17 @@ describe('visão pública (perfil de outra pessoa)', () => {
       tiers: [{ tier: 1, name: 'Ouvinte', threshold: 3600, rarity: 'comum' }]
     })
     expect(publicStatText(voz)).toBe('1+ hora em call')
+    const espectador = badge({
+      category: 'espectador',
+      name: 'Espectador',
+      tier: 2,
+      value: undefined,
+      tiers: [
+        { tier: 1, name: 'Curioso', threshold: HOUR, rarity: 'comum' },
+        { tier: 2, name: 'Pipoqueiro', threshold: 10 * HOUR, rarity: 'comum' }
+      ]
+    })
+    expect(publicStatText(espectador)).toBe('10+ horas assistindo lives')
   })
 
   it('fundador não tem número', () => {

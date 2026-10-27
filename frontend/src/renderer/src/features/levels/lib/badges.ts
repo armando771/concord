@@ -103,6 +103,7 @@ function monthsText(months: number): string {
 const TIME_SUFFIX: Record<string, string> = {
   voz: 'em call',
   streamer: 'transmitindo',
+  espectador: 'assistindo lives',
   coruja: 'em call de madrugada',
   madrugador: 'em call de manhãzinha',
   maratona: 'seguidas numa call'

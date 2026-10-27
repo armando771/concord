@@ -59,10 +59,10 @@ func TestRepositoryDB(t *testing.T) {
 	exec(`DELETE FROM message_reactions WHERE message_id = $1 AND emoji = '🔥'`, msgs[0])
 
 	repo := BadgeRepository(db)
-	if err := repo.AddCallStats(ctx, userID, Delta{Stream: 30, Night: 10, PeakCallSize: 6, LongestSession: 100}); err != nil {
+	if err := repo.AddCallStats(ctx, userID, Delta{Stream: 30, Watch: 20, Night: 10, PeakCallSize: 6, LongestSession: 100}); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.AddCallStats(ctx, userID, Delta{Stream: 30, Morning: 5, PeakCallSize: 4, LongestSession: 50}); err != nil {
+	if err := repo.AddCallStats(ctx, userID, Delta{Stream: 30, Watch: 20, Morning: 5, PeakCallSize: 4, LongestSession: 50}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,7 +73,7 @@ func TestRepositoryDB(t *testing.T) {
 	if s.MessagesSent != 3 || s.Reactions != 2 || s.OwnedServers != 1 {
 		t.Fatalf("counters = msgs %d reactions %d servers %d, want 3/2/1", s.MessagesSent, s.Reactions, s.OwnedServers)
 	}
-	if s.StreamSeconds != 60 || s.NightSeconds != 10 || s.MorningSeconds != 5 || s.PeakCallSize != 6 || s.LongestSessionSeconds != 100 {
+	if s.StreamSeconds != 60 || s.WatchSeconds != 40 || s.NightSeconds != 10 || s.MorningSeconds != 5 || s.PeakCallSize != 6 || s.LongestSessionSeconds != 100 {
 		t.Fatalf("call stats = %+v", s)
 	}
 	if s.IsDev {
