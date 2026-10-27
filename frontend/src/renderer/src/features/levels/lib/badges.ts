@@ -75,6 +75,12 @@ const HOUR = 3600
 const DEV_TEXT = 'Dev do Salinha'
 const DEV_ONLY = 'Só para os devs'
 const VOTE_TEXT = 'Fez o L no segundo turno'
+const BIRTHDAY_TEXT = 'Comemorou o aniversário no Salinha'
+
+function birthdayText(b: Badge, value: number): string {
+  if (value > 0) return 'Hoje é o seu aniversário!'
+  return b.tier > 0 ? BIRTHDAY_TEXT : 'Ganho no dia do seu aniversário'
+}
 
 function num(n: number): string {
   return Math.floor(n).toLocaleString('pt-BR')
@@ -123,6 +129,7 @@ const STAT_TEXT: Partial<Record<BadgeUnit, (b: Badge, value: number) => string>>
   sounds: (_, value) => plural(value, 'som tocado', 'sons tocados'),
   stickers: (_, value) => plural(value, 'figurinha ou GIF enviado', 'figurinhas e GIFs enviados'),
   votes: (_, value) => plural(value, 'voto dado', 'votos dados'),
+  birthday: birthdayText,
   days: (_, value) => `Recorde de ${plural(value, 'dia seguido', 'dias seguidos')}`,
   founder: (_, value) =>
     value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas',
@@ -136,14 +143,21 @@ export function statText(b: Badge): string {
   return STAT_TEXT[b.unit]?.(b, value) ?? num(value)
 }
 
+/** Badges de um tier só: no perfil dos outros, uma frase, sem número. */
+const PUBLIC_FIXED_TEXT: Partial<Record<BadgeUnit, string>> = {
+  founder: 'Chegou nas primeiras semanas',
+  dev: DEV_TEXT,
+  vote: VOTE_TEXT,
+  birthday: BIRTHDAY_TEXT
+}
+
 /**
  * Estatística no perfil de outra pessoa: o limite do tier conquistado
  * ("2.000+ mensagens"), nunca o número exato.
  */
 export function publicStatText(b: Badge): string {
-  if (b.unit === 'founder') return 'Chegou nas primeiras semanas'
-  if (b.unit === 'dev') return DEV_TEXT
-  if (b.unit === 'vote') return VOTE_TEXT
+  const fixed = PUBLIC_FIXED_TEXT[b.unit]
+  if (fixed) return fixed
   const reached = b.tiers[b.tier - 1]
   if (!reached) return ''
   const label = `${formatThreshold(b.unit, reached.threshold)}`
@@ -175,7 +189,8 @@ const THRESHOLD_TEXT: Partial<Record<BadgeUnit, (threshold: number) => string>> 
   // Corte do backend: contas criadas antes de 01/11/2026.
   founder: () => 'Até 31/10/26',
   dev: () => DEV_ONLY,
-  vote: () => 'Fez o L'
+  vote: () => 'Fez o L',
+  birthday: () => 'No dia do aniversário'
 }
 
 /** Rótulo de um degrau da escada: "1 hora", "3 meses", "2.000 mensagens". */
@@ -211,7 +226,8 @@ const REMAINING_TEXT: Partial<Record<BadgeUnit, (b: Badge, left: number, now: Da
   people: (b) => `Uma call com ${plural(b.next_threshold ?? 0, 'pessoa', 'pessoas')}`,
   days: (b) => `Uma sequência de ${plural(b.next_threshold ?? 0, 'dia', 'dias')}`,
   founder: () => 'Só para quem chegou nas primeiras semanas',
-  dev: () => DEV_ONLY
+  dev: () => DEV_ONLY,
+  birthday: () => 'Chega no dia do seu aniversário'
 }
 
 /** "Faltam 20 horas", "Faltam 4 meses", "Tier máximo!". */

@@ -36,6 +36,8 @@ const (
 	UnitDays = "days"
 	// UnitVotes: votos no quadro de propostas (Votante).
 	UnitVotes = "votes"
+	// UnitBirthday: badge ganho no dia do aniversário (Aniversariante).
+	UnitBirthday = "birthday"
 )
 
 // FounderCutoff: quem criou a conta antes desta data (horário de Brasília)
@@ -340,6 +342,18 @@ var Catalog = []Category{
 			{"Fiscal de Urna", 30, RarityRare},
 			{"Mesário", 75, RarityEpic},
 			{"Voto de Minerva", 150, RarityLegendary},
+		},
+	},
+	{
+		// Ganho no dia do aniversário (Brasília), com as regras do recado de
+		// aniversário (internal/birthday): só quem deixa anunciar, e 29/02
+		// comemora em 28/02 no ano não bissexto. Depois do dia, fica.
+		Key:         "aniversariante",
+		Name:        "Aniversariante",
+		Description: "Ganhe no dia do seu aniversário. Cadastre a data em Configurações e deixe ligado anunciar o aniversário nos servidores.",
+		Unit:        UnitBirthday,
+		Tiers: []Tier{
+			{"Aniversariante", 1, RarityCommon},
 		},
 	},
 }

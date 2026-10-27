@@ -132,3 +132,26 @@ describe('Votante (votos no quadro de propostas)', () => {
     expect(publicStatText(b({ tier: 1 }))).toBe('1+ voto')
   })
 })
+
+describe('Aniversariante (ganho no dia do aniversário)', () => {
+  const b = (over: Partial<Badge>): Badge =>
+    badge({
+      category: 'aniversariante',
+      name: 'Aniversariante',
+      unit: 'birthday',
+      tiers: [{ tier: 1, name: 'Aniversariante', threshold: 1, rarity: 'comum' }],
+      ...over
+    })
+
+  it('no dia, depois do dia e antes de ganhar', () => {
+    expect(statText(b({ value: 1, tier: 1 }))).toBe('Hoje é o seu aniversário!')
+    expect(statText(b({ value: 0, tier: 1 }))).toBe('Comemorou o aniversário no Salinha')
+    expect(statText(b({ value: 0, tier: 0 }))).toBe('Ganho no dia do seu aniversário')
+    expect(formatThreshold('birthday', 1)).toBe('No dia do aniversário')
+    expect(remainingText(b({ next_threshold: 1 }))).toBe('Chega no dia do seu aniversário')
+  })
+
+  it('no perfil dos outros não mostra a data nem número', () => {
+    expect(publicStatText(b({ tier: 1 }))).toBe('Comemorou o aniversário no Salinha')
+  })
+})

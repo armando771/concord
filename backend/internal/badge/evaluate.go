@@ -3,6 +3,7 @@ package badge
 import (
 	"time"
 
+	"gin-quickstart/backend/internal/birthday"
 	"gin-quickstart/backend/internal/level"
 )
 
@@ -42,6 +43,9 @@ type Stats struct {
 	CameraSeconds int64
 	// Votos nos cards do quadro de propostas (Votante).
 	Votes int64
+	// Dia e mês do aniversário de quem deixa anunciar; 0 sem data.
+	BirthdayDay   int64
+	BirthdayMonth int64
 }
 
 // Unlocks: categoria -> tier -> quando foi desbloqueado (o que está gravado).
@@ -109,6 +113,14 @@ func monthsBetween(from, to time.Time) int64 {
 	return int64(n)
 }
 
+// isBirthday: hoje (Brasília) é o aniversário da pessoa.
+func isBirthday(s Stats, now time.Time) bool {
+	if s.BirthdayDay == 0 || s.BirthdayMonth == 0 {
+		return false
+	}
+	return birthday.IsBirthday(int(s.BirthdayDay), int(s.BirthdayMonth), now.In(Brasilia()))
+}
+
 func isFounder(createdAt time.Time) bool {
 	return createdAt.Before(FounderCutoff)
 }
@@ -149,6 +161,9 @@ var valueFns = map[string]valueFn{
 	"sequencia":    func(s Stats, _ time.Time) int64 { return s.LongestStreakDays },
 	"camera":       func(s Stats, _ time.Time) int64 { return s.CameraSeconds },
 	"votante":      func(s Stats, _ time.Time) int64 { return s.Votes },
+	"aniversariante": func(s Stats, now time.Time) int64 {
+		return flag(isBirthday(s, now))
+	},
 }
 
 func valueOf(c Category, s Stats, now time.Time) int64 {
