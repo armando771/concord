@@ -4,13 +4,13 @@ import { MAESTRO_USER_ID } from '../../music/lib/music'
 import { profileMediaSrc } from '../lib/profileMedia'
 import type { PresenceStatus } from '../../friends/lib/presenceStatus'
 import maestroBanner from '../../../assets/maestro-banner.gif'
-import { useActivity } from '../../activity/store/presenceActivityStore'
+import { ProfileActivities } from '../../activity/components/ProfileActivities'
 import { ProfileBioSkeleton } from '../../../shared/ui/skeleton/layouts'
 import CardAvatar from './card/CardAvatar'
 import CardBanner from './card/CardBanner'
 import CardNames from './card/CardNames'
 import CardNote from './card/CardNote'
-import { CardBio, CardGame, CardLinks, MaestroHowto } from './card/CardSections'
+import { CardBio, CardLinks, MaestroHowto } from './card/CardSections'
 import type { NameStyle } from '../lib/nameStyle'
 import { SPOT_PLACEHOLDER, type CardSpot } from '../lib/cardSpots'
 import EditableSpot from './card/EditableSpot'
@@ -109,7 +109,6 @@ function ProfileCardBody({
 }: ProfileCardBodyProps): React.JSX.Element {
   const bannerSrc = bannerFor(profile)
   const bio = profile.bio?.trim()
-  const game = useActivity(preview ? undefined : profile.id)
   const placeholders = onEdit ? SPOT_PLACEHOLDER : undefined
 
   return (
@@ -154,7 +153,7 @@ function ProfileCardBody({
           onEdit={onEdit}
           pronounsPlaceholder={placeholders?.pronouns}
         />
-        <CardGame game={game} />
+        <ProfileActivities userId={preview ? undefined : profile.id} />
         {loading && !bio && <ProfileBioSkeleton />}
         <EditableSpot spot="bio" onEdit={onEdit}>
           <CardBio bio={bio} placeholder={placeholders?.bio} />

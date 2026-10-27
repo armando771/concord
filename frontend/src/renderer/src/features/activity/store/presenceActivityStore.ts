@@ -4,6 +4,7 @@ import { sanitizeActivity, type PresenceActivity } from '../lib/presenceActivity
 import { useAuthStore } from '../../auth/store/authStore'
 import { useCallStore } from '../../call/store/callStore'
 import { useChatStore } from '../../chat/store/chatStore'
+import { useListeningStore } from './listeningStore'
 
 interface PresenceActivityState {
   /** Atividade de cada usuário (só quem o servidor deixa eu ver). */
@@ -37,7 +38,9 @@ export const usePresenceActivityStore = create<PresenceActivityState>()(
           else delete next[userId]
           return { byUser: next }
         }),
-      applyFetched: (requestedIds, fetched) =>
+      applyFetched: (requestedIds, fetched) => {
+        // A mesma resposta traz a música (campo listening).
+        useListeningStore.getState().applyFetched(requestedIds, fetched)
         set((state) => {
           const next = { ...state.byUser }
           for (const id of requestedIds) {
@@ -46,7 +49,8 @@ export const usePresenceActivityStore = create<PresenceActivityState>()(
             else delete next[id]
           }
           return { byUser: next }
-        }),
+        })
+      },
       setDetected: (detected) => {
         set({ detected })
         get().publishMine()
@@ -71,7 +75,10 @@ export const usePresenceActivityStore = create<PresenceActivityState>()(
           sendEvent('activity:clear', {})
         }
       },
-      reset: () => set({ byUser: {}, detected: null })
+      reset: () => {
+        useListeningStore.getState().reset()
+        set({ byUser: {}, detected: null })
+      }
     }),
     {
       name: 'concord-presence-activity-prefs',

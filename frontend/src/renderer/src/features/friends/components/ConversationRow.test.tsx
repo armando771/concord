@@ -9,7 +9,7 @@ vi.mock('../../profile/store/userMenuStore', () => ({ useUserMenuStore: { getSta
 vi.mock('../../profile/components/StyledName', () => ({
   default: ({ name }: { name: string }) => <b>{name}</b>
 }))
-vi.mock('../../activity/components/ActivityLine', () => ({ GameLine: () => <i>jogo</i> }))
+vi.mock('../../activity/components/ActivityLine', () => ({ CompactActivityLine: () => <i>jogo</i> }))
 vi.mock('../../../shared/ui/Avatar', () => ({ default: () => <u data-avatar /> }))
 vi.mock('./GroupIcon', () => ({ default: () => <u data-group-icon /> }))
 

@@ -2,8 +2,14 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
 // Atividade (presença), avatar e nome ao vivo vêm de stores: aqui ficam fixos.
-const activity = vi.hoisted(() => ({ game: null as Record<string, unknown> | null }))
+const activity = vi.hoisted(() => ({
+  game: null as Record<string, unknown> | null,
+  listening: null as Record<string, unknown> | null
+}))
 vi.mock('../../activity/store/presenceActivityStore', () => ({ useActivity: () => activity.game }))
+vi.mock('../../activity/store/listeningStore', () => ({
+  useListening: (id?: string) => (id ? activity.listening : null)
+}))
 vi.mock('../../activity/components/GameIcon', () => ({ default: () => <i data-game-icon /> }))
 vi.mock('../../activity/components/ActivityCard', () => ({ Elapsed: () => <i>há 5 min</i> }))
 vi.mock('../../../shared/ui/Avatar', () => ({
@@ -74,6 +80,16 @@ describe('ProfileCardBody', () => {
     activity.game = null
     expect(html).toContain('Jogando agora')
     expect(html).toContain('Celeste')
+  })
+
+  it('a música aparece junto do jogo, fora da prévia', () => {
+    activity.listening = { app: 'Spotify', title: 'Águas de Março', started_at: 1 }
+    const html = render()
+    const preview = render({ preview: true })
+    activity.listening = null
+    expect(html).toContain('Ouvindo Spotify')
+    expect(html).toContain('Águas de Março')
+    expect(preview).not.toContain('Ouvindo')
   })
 
   it('o próprio perfil: (você), editar e adicionar nota', () => {
