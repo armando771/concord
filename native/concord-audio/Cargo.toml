@@ -8,7 +8,26 @@ publish = false
 [target.'cfg(windows)'.dependencies]
 # wasapi: captura por processo (application loopback) já pronta e testada.
 wasapi = "0.26"
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_UI_HiDpi", "Win32_UI_Shell"] }
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Shell",
+    # Overlay nativo (docs/adr/0004-overlay-nativo.md).
+    "Win32_Graphics_Direct2D",
+    "Win32_Graphics_Direct2D_Common",
+    "Win32_Graphics_DirectWrite",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Imaging",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_Input_KeyboardAndMouse",
+] }
+# Matrix3x2/Vector2 das APIs do Direct2D; já vinha junto com o `windows` (mesmo projeto windows-rs).
+windows-numerics = "0.3"
 
 [profile.release]
 opt-level = "z"

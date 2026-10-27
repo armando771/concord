@@ -19,7 +19,14 @@ const h = vi.hoisted(() => ({
     shortcuts: {} as Record<string, () => void>,
     shortcutsTaken: [] as string[],
     watching: false,
-    onChange: null as ((fg: unknown) => void) | null
+    onChange: null as ((fg: unknown) => void) | null,
+    helperExists: false,
+    helpers: [] as {
+      written: string[]
+      killed: boolean
+      handlers: Record<string, ((...a: unknown[]) => void)[]>
+      stdout: import('node:stream').PassThrough
+    }[]
   }
 }))
 
@@ -106,6 +113,33 @@ vi.mock('electron', () => {
 })
 vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('../app/appLog', () => ({ appendLog: () => {} }))
+vi.mock('./nativeHelper', async () => {
+  const { PassThrough } = await import('node:stream')
+  return {
+    nativeHelperExists: () => h.state.helperExists,
+    overlayAvatarStore: () => ({ path: () => undefined, onChange: () => {} }),
+    startNativeHelper: () => {
+      const helper = {
+        written: [] as string[],
+        killed: false,
+        handlers: {} as Record<string, ((...a: unknown[]) => void)[]>,
+        stdout: new PassThrough(),
+        stderr: null,
+        stdin: {
+          write: (line: string) => helper.written.push(line.trim()),
+          end: () => {},
+          on: () => {}
+        },
+        on: (ev: string, fn: (...a: unknown[]) => void) => (helper.handlers[ev] ??= []).push(fn),
+        kill: () => {
+          helper.killed = true
+        }
+      }
+      h.state.helpers.push(helper)
+      return helper
+    }
+  }
+})
 vi.mock('../activity/foregroundWatch', () => ({
   startForegroundWatch: (fn: (fg: unknown) => void) => {
     h.state.watching = true
@@ -168,6 +202,9 @@ beforeEach(() => {
   mainWindow.sent = []
   h.state.watching = false
   h.state.onChange = null
+  h.state.helperExists = false
+  h.state.helpers = []
+  delete process.env.SALINHA_OVERLAY
 })
 
 afterEach(() => {
@@ -565,5 +602,76 @@ describe('overlay', () => {
     showGame()
     expect(check('Shift+Tab')).toEqual({ accelerator: 'Shift+Tab', taken: false })
     expect(shortcuts()).toEqual(['Shift+Tab'])
+  })
+})
+
+describe('overlay nativo (Windows)', () => {
+  const helperSays = (line: string, i = 0): Promise<void> =>
+    new Promise((resolve) => {
+      h.state.helpers[i].stdout.write(line + '\n')
+      setImmediate(resolve)
+    })
+  const lastState = (i = 0): Record<string, unknown> =>
+    JSON.parse(h.state.helpers[i].written.at(-1) ?? 'null')
+
+  it('com o helper no lugar: sobe a janela nativa na call e não abre o Chromium', async () => {
+    h.state.helperExists = true
+    await setup()
+    sendState(inCall)
+    expect(h.state.helpers).toHaveLength(1)
+    h.state.onChange?.(game)
+    expect(h.state.windows).toHaveLength(0)
+    expect(lastState()).toMatchObject({ type: 'state', visible: true, game: 4242 })
+    h.state.onChange?.(null)
+    expect(lastState()).toEqual({ type: 'state', visible: false })
+  })
+
+  it('edição pelo atalho só depois do "ready" do helper; a posição volta para salvar', async () => {
+    h.state.helperExists = true
+    await setup()
+    sendState(inCall)
+    h.state.onChange?.(game)
+    press('Shift+Tab')
+    expect(shortcuts()).toEqual(['Shift+Tab'])
+    await helperSays('{"type":"ready"}')
+    press('Shift+Tab')
+    expect(shortcuts()).toEqual(['Escape', 'Shift+Tab'])
+    expect(lastState()).toMatchObject({ editing: true })
+    await helperSays('{"type":"layout","layout":{"position":{"x":0.5,"y":0.5},"scale":1}}')
+    expect(mainWindow.sent).toContainEqual(['overlay:layout', { position: { x: 0.5, y: 0.5 }, scale: 1 }])
+    press('Escape')
+    expect(lastState()).toMatchObject({ editing: false })
+  })
+
+  it('helper que sai: cai na janela do Electron e não tenta o nativo de novo', async () => {
+    h.state.helperExists = true
+    await setup()
+    sendState(inCall)
+    h.state.onChange?.(game)
+    h.state.helpers[0].handlers['exit'].forEach((fn) => fn(1))
+    expect(h.state.windows).toHaveLength(1)
+    expect(h.state.windows[0].visible).toBe(true)
+    // Nova call: continua no Electron.
+    sendState({ ...inCall, inCall: false })
+    sendState(inCall)
+    expect(h.state.helpers).toHaveLength(1)
+  })
+
+  it('fim da call fecha o helper', async () => {
+    h.state.helperExists = true
+    await setup()
+    sendState(inCall)
+    sendState({ ...inCall, inCall: false })
+    expect(h.state.helpers[0].killed).toBe(true)
+  })
+
+  it('SALINHA_OVERLAY=electron força a janela antiga (comparação)', async () => {
+    h.state.helperExists = true
+    process.env.SALINHA_OVERLAY = 'electron'
+    await setup()
+    sendState(inCall)
+    showGame()
+    expect(h.state.helpers).toHaveLength(0)
+    expect(h.state.windows).toHaveLength(1)
   })
 })

@@ -15,12 +15,12 @@ import {
   type OverlayLayout,
   type OverlaySize
 } from '../features/overlay/lib/overlayLayout'
-import { normalizeOverlayShortcut } from '../features/overlay/lib/overlayShortcut'
+import {
+  normalizeOverlayShortcut,
+  overlayEditHint as editHint
+} from '../features/overlay/lib/overlayShortcut'
 import VoiceStateIcons from '../features/call/components/VoiceStateIcons'
 import OverlayAvatar from './OverlayAvatar'
-
-const editHint = (shortcut: string): string =>
-  `Arraste para mover · canto para redimensionar · ${shortcut} ou Esc para sair`
 
 /** Opacidade na pílula (não na janela nem na lista): quem fala se destaca dos outros. */
 function rowStyle(resting: number, speaking: boolean): React.CSSProperties {

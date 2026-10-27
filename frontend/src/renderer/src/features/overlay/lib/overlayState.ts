@@ -5,6 +5,7 @@
 import { normalizeOverlayLayout, type OverlayLayout } from './overlayLayout'
 import { isAnimatedMedia, profileMediaSrc } from '../../profile/lib/profileMedia'
 import { normalizeOverlayShortcut, OVERLAY_SHORTCUT_DEFAULT } from './overlayShortcut'
+import type { OverlayTheme } from './overlayTheme'
 
 export interface OverlayMember {
   id: string
@@ -35,6 +36,8 @@ export interface OverlaySnapshot {
   layout: OverlayLayout
   /** Atalho global do modo de edição (accelerator do Electron). */
   shortcut: string
+  /** Cores do tema em vigor (só o overlay nativo do Windows usa). */
+  theme?: Partial<OverlayTheme> | null
 }
 
 export interface OverlayPerson {
@@ -60,6 +63,7 @@ export interface OverlayInput {
   shortcut: string
   /** API_BASE_URL: dá a origem aos avatares (a janela do overlay não é a da API). */
   mediaBase: string
+  theme?: Partial<OverlayTheme> | null
 }
 
 /** Pílulas no máximo (contando a do "+N"). */
@@ -156,6 +160,7 @@ export function buildOverlaySnapshot(
   const opacity = clampOverlayOpacity(input.opacity)
   const layout = normalizeOverlayLayout(input.layout)
   const shortcut = normalizeOverlayShortcut(input.shortcut)
+  const theme = input.theme ?? null
   if (input.status !== 'active' || me === null) {
     return {
       enabled: input.enabled,
@@ -164,7 +169,8 @@ export function buildOverlaySnapshot(
       more: 0,
       opacity,
       layout,
-      shortcut
+      shortcut,
+      theme
     }
   }
 
@@ -208,7 +214,8 @@ export function buildOverlaySnapshot(
       more: 0,
       opacity,
       layout,
-      shortcut
+      shortcut,
+      theme
     }
   }
   const shown = all.slice(0, maxRows - 1)
@@ -219,6 +226,7 @@ export function buildOverlaySnapshot(
     more: all.length - shown.length,
     opacity,
     layout,
-    shortcut
+    shortcut,
+    theme
   }
 }
