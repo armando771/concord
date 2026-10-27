@@ -3,7 +3,7 @@ import { useInviteValidityStore } from '../store/inviteValidityStore'
 import { handleCallInviteEvent, type CallInviteEventDeps } from './callInviteEvents'
 
 const liveDeps: CallInviteEventDeps = {
-  invalid: (callId) => useInviteValidityStore.getState().markInvalid(callId)
+  invalid: (callId, role) => useInviteValidityStore.getState().markInvalid(callId, role)
 }
 
 /**

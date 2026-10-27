@@ -18,7 +18,7 @@ const liveDeps: OpenInviteDeps = {
     return s.status !== 'idle' && s.type !== 'channel'
   },
   open: openCallInvite,
-  invalid: (callId) => useInviteValidityStore.getState().markInvalid(callId),
+  invalid: (callId) => useInviteValidityStore.getState().markInvalid(callId, 'invitee'),
   // Não usa joinVoiceChannel: numa sala trancada ele bateria na porta em vez de
   // usar o passe que o convite deu.
   join: async (channelId) => {

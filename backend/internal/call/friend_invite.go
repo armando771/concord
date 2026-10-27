@@ -21,6 +21,8 @@ var (
 	ErrNoInvitees       = errors.New("escolha pelo menos um amigo para convidar")
 	ErrTooManyInvitees  = errors.New("convide no máximo 20 amigos por vez")
 	ErrInviteNotAllowed = errors.New("só quem está na chamada pode convidar")
+	// O convite não vale (nunca existiu para a pessoa, já foi usado ou ela já está na chamada).
+	ErrInviteInvalid = errors.New("convite inválido")
 )
 
 const (
@@ -82,43 +84,6 @@ func (s *Service) SetInvitePoster(p InviteDMPoster) { s.invite.poster = p }
 type InviteResult struct {
 	UserID string `json:"user_id"`
 	Status string `json:"status"`
-}
-
-// InviteEndedEvent: a chamada do convite acabou (call:invite_ended, para quem
-// convidou e para os convidados). O cartão na DM vira "Convite inválido".
-type InviteEndedEvent struct {
-	CallID string `json:"call_id"`
-}
-
-// invitation: um convite já enviado (em memória, vale enquanto a chamada durar).
-type invitation struct {
-	inviterID string
-	at        time.Time
-}
-
-// inviteBook guarda os convites de uma chamada (criado sob demanda).
-type inviteBook struct {
-	sent map[string]invitation // convidado -> último convite
-}
-
-func (ac *activeCall) invitesLocked() *inviteBook {
-	if ac.invites == nil {
-		ac.invites = &inviteBook{sent: make(map[string]invitation)}
-	}
-	return ac.invites
-}
-
-// cancelInvitesLocked esvazia os convites (chamada acabando): convidado -> quem convidou.
-func cancelInvitesLocked(ac *activeCall) map[string]string {
-	out := map[string]string{}
-	if ac.invites == nil {
-		return out
-	}
-	for uid, inv := range ac.invites.sent {
-		out[uid] = inv.inviterID
-	}
-	ac.invites = nil
-	return out
 }
 
 // inviteContext: a chamada e quem convida, já validados.
@@ -249,7 +214,7 @@ func (s *Service) inviteStateStatusLocked(callID, inviteeID string, now time.Tim
 		return InviteAlreadyInCall
 	}
 	if ac.invites != nil {
-		if last, ok := ac.invites.sent[inviteeID]; ok && now.Sub(last.at) < inviteResendAfter {
+		if last, ok := ac.invites.sent[inviteeID]; ok && !last.used && now.Sub(last.at) < inviteResendAfter {
 			return InviteAlreadyInvited
 		}
 	}
@@ -331,48 +296,3 @@ func (s *Service) releaseInvite(callID, inviteeID string, prev *invitation) {
 	delete(ac.invites.sent, inviteeID)
 }
 
-// InviteValid: o convite ainda vale se a chamada existe e não acabou.
-func (s *Service) InviteValid(callID string) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	ac, ok := s.calls[callID]
-	return ok && ac.info.Status != StatusEnded && ac.info.Type == TypeChannel
-}
-
-// OpenFriendInvite: o convidado clicou em "Abrir". Quem foi convidado ganha o
-// passe de entrada (vale para sala trancada, já que quem convidou está dentro);
-// o cliente entra pelo fluxo normal. Sem registro do convite (o servidor
-// reiniciou) não há passe, mas a entrada normal segue valendo. Chamada que
-// acabou é ErrNotFound.
-func (s *Service) OpenFriendInvite(callID, userID string) (admitted bool, err error) {
-	now := time.Now()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	ac, ok := s.calls[callID]
-	if !ok || ac.info.Status == StatusEnded || ac.info.Type != TypeChannel {
-		return false, ErrNotFound
-	}
-	if ac.invites == nil {
-		return false, nil
-	}
-	if _, invited := ac.invites.sent[userID]; !invited {
-		return false, nil
-	}
-	admitLocked(ac, userID, now.Add(admitTTL))
-	return true, nil
-}
-
-// notifyCancelledInvites avisa que a chamada acabou: cada convidado e cada
-// convidador recebe um call:invite_ended (uma vez).
-func (s *Service) notifyCancelledInvites(callID string, cancelled map[string]string) {
-	ev := marshalEvent("call:invite_ended", InviteEndedEvent{CallID: callID})
-	notified := map[string]bool{}
-	for inviteeID, inviterID := range cancelled {
-		for _, uid := range []string{inviteeID, inviterID} {
-			if !notified[uid] {
-				notified[uid] = true
-				s.publisher.SendToUser(uid, ev)
-			}
-		}
-	}
-}

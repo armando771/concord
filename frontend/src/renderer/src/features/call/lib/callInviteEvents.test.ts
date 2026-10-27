@@ -5,7 +5,16 @@ describe('handleCallInviteEvent', () => {
   it('call:invite_ended invalida os cartões da call', () => {
     const invalid = vi.fn()
     handleCallInviteEvent({ type: 'call:invite_ended', payload: { call_id: 'c1' } }, { invalid })
-    expect(invalid).toHaveBeenCalledWith('c1')
+    expect(invalid).toHaveBeenCalledWith('c1', undefined)
+  })
+
+  it('convite usado chega com o papel e só vale para o cartão de quem recebeu', () => {
+    const invalid = vi.fn()
+    handleCallInviteEvent(
+      { type: 'call:invite_ended', payload: { call_id: 'c1', role: 'invitee' } },
+      { invalid }
+    )
+    expect(invalid).toHaveBeenCalledWith('c1', 'invitee')
   })
 
   it('ignora outros eventos e payload sem call_id', () => {

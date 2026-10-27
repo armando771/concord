@@ -24,9 +24,16 @@ export async function sendCallInvites(callId: string, userIds: string[]): Promis
   return res.results
 }
 
-/** A call do convite ainda existe? (mensagem antiga na DM = não). */
-export async function fetchInviteValid(callId: string): Promise<boolean> {
-  const res = await request<{ valid: boolean }>(`/calls/${callId}/invite`)
+/**
+ * O cartão ainda vale para mim? Convidado: tem convite não usado e não está na
+ * call. Convidador: a call existe. (Mensagem antiga na DM = não.)
+ */
+export async function fetchInviteValid(
+  callId: string,
+  role: 'inviter' | 'invitee'
+): Promise<boolean> {
+  const query = role === 'inviter' ? '?as=inviter' : ''
+  const res = await request<{ valid: boolean }>(`/calls/${callId}/invite${query}`)
   return res.valid
 }
 

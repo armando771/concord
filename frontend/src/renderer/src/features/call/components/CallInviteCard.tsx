@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import Avatar from '../../../shared/ui/Avatar'
 import { VolumeIcon } from '../../../shared/ui/icons'
 import { ChevronRightIcon, EnvelopeIcon } from '../../../shared/ui/iconsExtra'
@@ -36,13 +36,22 @@ function InvalidInvite(): React.JSX.Element {
 function CallInviteCard({ message }: { message: Message }): React.JSX.Element | null {
   const invite = message.call_invite
   const meId = useAuthStore((s) => s.user?.id)
-  const validity = useInviteValidity(invite?.call_id ?? '')
+  const isMine = message.author_id === meId
+  const card = useMemo(
+    () => ({
+      callId: invite?.call_id ?? '',
+      messageId: message.id,
+      role: isMine ? ('inviter' as const) : ('invitee' as const)
+    }),
+    [invite?.call_id, message.id, isMine]
+  )
+  const validity = useInviteValidity(card)
   const { busy, open } = useOpenCallInvite(
     invite ?? { call_id: '', channel_id: '', server_id: null }
   )
   useEffect(() => {
-    if (invite) void useInviteValidityStore.getState().ensure(invite.call_id)
-  }, [invite])
+    if (card.callId) void useInviteValidityStore.getState().ensure(card)
+  }, [card])
   if (!invite) return null
 
   const author = message.author
@@ -50,7 +59,7 @@ function CallInviteCard({ message }: { message: Message }): React.JSX.Element | 
   const view = cardView({
     invite,
     authorName,
-    isMine: message.author_id === meId,
+    isMine,
     validity
   })
   if (view.kind === 'invalid') return <InvalidInvite />

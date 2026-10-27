@@ -266,9 +266,9 @@ func TestOpenInviteAdmitsInvitedPersonInLockedRoom(t *testing.T) {
 	if !ok {
 		t.Fatal("abrir o convite deveria dar o passe de entrada")
 	}
-	// Quem não foi convidado não ganha passe (mas também não dá erro).
+	// Quem não foi convidado não ganha passe: o convite não vale para ele.
 	admitted, err = s.OpenFriendInvite("call-1", "caio")
-	if err != nil || admitted {
+	if !errors.Is(err, ErrInviteInvalid) || admitted {
 		t.Fatalf("sem convite: admitted=%v err=%v", admitted, err)
 	}
 }
@@ -282,16 +282,17 @@ func TestOpenInviteOfEndedCallIsNotFound(t *testing.T) {
 
 func TestInviteValidFollowsCallState(t *testing.T) {
 	s, _ := inviteService(&fakePublisher{})
-	if !s.InviteValid("call-1") {
-		t.Fatal("call ativa deveria ser válida")
+	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
+	if !s.InviteValid("call-1", "bia", false) {
+		t.Fatal("call ativa com convite deveria ser válida para o convidado")
 	}
-	if s.InviteValid("nao-existe") {
+	if s.InviteValid("nao-existe", "bia", false) {
 		t.Fatal("call que não existe é inválida")
 	}
 	if err := s.closeCall("call-1"); err != nil {
 		t.Fatal(err)
 	}
-	if s.InviteValid("call-1") {
+	if s.InviteValid("call-1", "bia", false) {
 		t.Fatal("call encerrada é inválida")
 	}
 }
@@ -344,6 +345,7 @@ func TestInviteHandlerStatusCodes(t *testing.T) {
 		{"sem ninguém", "POST", "ana", "/api/calls/call-1/invites", `{"user_ids":[]}`, http.StatusBadRequest},
 		{"não participante", "POST", "bia", "/api/calls/call-1/invites", `{"user_ids":["caio"]}`, http.StatusForbidden},
 		{"call inexistente", "POST", "ana", "/api/calls/x/invites", `{"user_ids":["bia"]}`, http.StatusNotFound},
+		{"abrir sem convite", "POST", "caio", "/api/calls/call-1/invites/open", ``, http.StatusNotFound},
 		{"abrir", "POST", "bia", "/api/calls/call-1/invites/open", ``, http.StatusOK},
 		{"abrir call acabada", "POST", "bia", "/api/calls/x/invites/open", ``, http.StatusNotFound},
 		{"validade", "GET", "bia", "/api/calls/call-1/invite", ``, http.StatusOK},
@@ -360,6 +362,7 @@ func TestInviteHandlerStatusCodes(t *testing.T) {
 
 func TestInviteStatusHandlerBody(t *testing.T) {
 	s, _ := inviteService(&fakePublisher{})
+	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
 	for path, want := range map[string]string{
 		"/api/calls/call-1/invite": `{"valid":true}`,
 		"/api/calls/x/invite":      `{"valid":false}`,
@@ -397,5 +400,137 @@ func TestPlaceNamesFallsBackToEmpty(t *testing.T) {
 	bare, _ := inviteService(&fakePublisher{})
 	if ch, sv := bare.placeNames(context.Background(), "geral", nil); ch != "" || sv != "" {
 		t.Fatalf("sem fontes: ch=%q sv=%q", ch, sv)
+	}
+}
+
+// Convite de uso único: entrar na call gasta o convite do convidado.
+
+func TestJoiningConsumesInviteAndTellsInvitee(t *testing.T) {
+	pub := &fakePublisher{}
+	s, _ := inviteService(pub)
+	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
+	if _, err := s.OpenFriendInvite("call-1", "bia"); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if !s.InviteValid("call-1", "bia", false) {
+		t.Fatal("antes de entrar o convite vale")
+	}
+	if err := s.joinForTest("call-1", "bia"); err != nil {
+		t.Fatalf("Join: %v", err)
+	}
+	if s.InviteValid("call-1", "bia", false) {
+		t.Fatal("depois de entrar o convite não vale mais")
+	}
+	evs := pub.eventsOf("call:invite_ended")
+	if len(evs) != 1 || evs[0].target != "user:bia" {
+		t.Fatalf("avisos = %+v, want só para bia", evs)
+	}
+	var p InviteEndedEvent
+	_ = json.Unmarshal(evs[0].event["payload"], &p)
+	if p.CallID != "call-1" || p.Role != InviteRoleInvitee {
+		t.Fatalf("payload = %+v", p)
+	}
+}
+
+func TestUsedInviteCannotBeOpenedAgainEvenAfterLeaving(t *testing.T) {
+	pub := &fakePublisher{}
+	s, _ := inviteService(pub)
+	s.calls["call-1"].info.Locked = true
+	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
+	_, _ = s.OpenFriendInvite("call-1", "bia")
+	if err := s.joinForTest("call-1", "bia"); err != nil {
+		t.Fatalf("Join: %v", err)
+	}
+	if _, err := s.detachForTest("call-1", "bia"); err != nil {
+		t.Fatal(err)
+	}
+	admitted, err := s.OpenFriendInvite("call-1", "bia")
+	if !errors.Is(err, ErrInviteInvalid) || admitted {
+		t.Fatalf("cartão antigo reabriu: admitted=%v err=%v", admitted, err)
+	}
+	s.mu.Lock()
+	ok := canEnterLockedLocked(s.calls["call-1"], "bia", time.Now())
+	s.mu.Unlock()
+	if ok {
+		t.Fatal("o passe não pode sobrar do convite usado")
+	}
+}
+
+func TestInviteIsInvalidForInviteeAlreadyInCall(t *testing.T) {
+	s, _ := inviteService(&fakePublisher{})
+	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
+	s.mu.Lock()
+	s.calls["call-1"].participants["bia"] = &participantState{userID: "bia"}
+	s.mu.Unlock()
+	if s.InviteValid("call-1", "bia", false) {
+		t.Fatal("quem já está na call não tem convite válido")
+	}
+	if _, err := s.OpenFriendInvite("call-1", "bia"); !errors.Is(err, ErrInviteInvalid) {
+		t.Fatalf("Open: err = %v", err)
+	}
+}
+
+func TestInviteValidityIsPerPerson(t *testing.T) {
+	s, _ := inviteService(&fakePublisher{})
+	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
+	if s.InviteValid("call-1", "caio", false) {
+		t.Fatal("quem não foi convidado não tem convite válido")
+	}
+	// O cartão de quem convidou só depende de a call existir.
+	if !s.InviteValid("call-1", "ana", true) {
+		t.Fatal("cartão do convidador vale enquanto a call durar")
+	}
+}
+
+func TestReinviteAfterUseWorksEvenInsideResendWindow(t *testing.T) {
+	pub := &fakePublisher{}
+	s, poster := inviteService(pub)
+	_, _ = s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
+	_ = s.joinForTest("call-1", "bia")
+	_, _ = s.detachForTest("call-1", "bia")
+	res, _ := s.InviteFriends(context.Background(), "call-1", "ana", []string{"bia"})
+	if got := statusOf(res, "bia"); got != InviteSent || poster.postedTo("bia") != 2 {
+		t.Fatalf("reconvite = %q (posts %d)", got, poster.postedTo("bia"))
+	}
+	if !s.InviteValid("call-1", "bia", false) {
+		t.Fatal("o convite novo vale")
+	}
+}
+
+// detachForTest tira o usuário da call sem encerrar nada.
+func (s *Service) detachForTest(callID, userID string) (int, error) {
+	n, _, err := s.detachParticipant(callID, userID)
+	return n, err
+}
+
+// joinForTest entra pelo joinLocked de verdade (passe da sala trancada
+// gasto como no Join) e devolve o erro.
+func (s *Service) joinForTest(callID, userID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ac := s.calls[callID]
+	canEnterLockedLocked(ac, userID, time.Now())
+	s.addParticipant = func(context.Context, *CallParticipant) error { return nil }
+	_, err := s.joinLocked(context.Background(), ac, userID, RoleMember)
+	return err
+}
+
+func TestJoinLockedErrorsAndIdempotence(t *testing.T) {
+	s, _ := inviteService(&fakePublisher{})
+	if err := s.joinForTest("call-1", "ana"); err != nil {
+		t.Fatalf("quem já está dentro: %v", err)
+	}
+	s.busy["bia"] = "outra-call"
+	if err := s.joinForTest("call-1", "bia"); !errors.Is(err, ErrBusy) {
+		t.Fatalf("ocupado em outra call: err = %v", err)
+	}
+	delete(s.busy, "bia")
+	s.lookupUser = func(context.Context, string) (UserInfo, error) { return UserInfo{}, errors.New("sem usuário") }
+	if err := s.joinForTest("call-1", "bia"); err == nil {
+		t.Fatal("falha ao buscar o usuário deveria barrar a entrada")
+	}
+	s.calls["call-1"].info.Status = StatusEnded
+	if err := s.joinForTest("call-1", "caio"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("call acabada: err = %v", err)
 	}
 }
