@@ -5,13 +5,13 @@ import { ENTRANCE_SOUND_ACCEPT, entranceSoundStatus } from '../lib/entranceSound
 import { useEntranceSoundStore } from '../store/entranceSoundStore'
 
 const primary =
-  'cursor-pointer rounded-md bg-brand px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50'
+  'min-h-10 cursor-pointer rounded-md bg-brand px-4 py-2 text-ds-sm font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50'
 const secondary =
-  'cursor-pointer rounded-md bg-fg/10 px-4 py-2 text-ds-sm font-medium text-strong transition-colors hover:bg-fg/15 disabled:cursor-not-allowed disabled:opacity-50'
+  'min-h-10 cursor-pointer rounded-md bg-fg/10 px-4 py-2 text-ds-sm font-medium text-strong transition-colors hover:bg-fg/15 disabled:cursor-not-allowed disabled:opacity-50'
 
 /**
- * Configurações → Perfis: o som que toca para quem já está na call quando
- * você entra. Salva na hora, fora do "Salvar alterações" (como o aniversário).
+ * Configurações → Perfis → Som de entrada (no modal dele): o som que toca
+ * para quem já está na call quando você entra. Cada botão já salva.
  */
 function EntranceSoundSettings(): React.JSX.Element {
   const url = useAuthStore((s) => s.user?.entrance_sound_url ?? null)
@@ -23,13 +23,12 @@ function EntranceSoundSettings(): React.JSX.Element {
   const status = entranceSoundStatus(busy, url)
 
   return (
-    <div className="rounded-xl border border-subtle bg-fg/5 p-4">
-      <h3 className="text-ds-sm font-medium text-gray-400">Som de entrada</h3>
-      <p className="mt-1 text-ds-xs text-gray-500">
+    <div>
+      <p className="text-ds-sm text-gray-400">
         Toca para quem já está na call quando você entra. Um áudio de até 5 segundos (MP3, WAV, OGG,
         M4A ou WebM, até 2 MB).
       </p>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <button
           type="button"
           className={primary}

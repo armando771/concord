@@ -141,6 +141,7 @@ function ProfileCardBody({
               note={profile.status_text?.trim()}
               onAdd={addNote(isMe, onEditProfile, onEdit)}
               onEdit={onEdit}
+              placeholder={placeholders?.note}
             />
           </div>
           {badge && <div className="pointer-events-auto mt-[52px] shrink-0">{badge}</div>}

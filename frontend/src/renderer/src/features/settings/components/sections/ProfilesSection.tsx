@@ -1,18 +1,43 @@
 import { useRef, useState } from 'react'
 import { PROFILE_IMAGE_TYPES } from '../../../profile/lib/profileValidation'
 import ImageCropModal, { type ImageKind } from '../ImageCropModal'
-import { useProfileEditor, type ProfileEditor } from '../../hooks/useProfileEditor'
-import { cardNotice, panelId, tabAlert, tabId, type ProfileTab } from '../../lib/profileTabs'
+import { useProfileApply, type ProfileApply } from '../../hooks/useProfileApply'
 import { spotOpensFile, type CardSpot } from '../../../profile/lib/cardSpots'
-import { previewMedia } from '../../lib/saveProfile'
-import AppearanceTab from '../profile/AppearanceTab'
-import IdentityTab from '../profile/IdentityTab'
-import ProfileEditorTabs from '../profile/ProfileEditorTabs'
-import ProfilePreviewPanel from '../profile/ProfilePreviewPanel'
-import ProfileSpotModal from '../profile/modals/ProfileSpotModal'
-import UnsavedChangesBar from '../profile/UnsavedChangesBar'
+import { savingLabel } from '../../lib/profileTiles'
+import ProfileStage from '../profile/ProfileStage'
+import ProfileEditModal, { type ProfileModalId } from '../profile/modals/ProfileEditModal'
+import ProfileTiles from '../profile/tiles/ProfileTiles'
+import ConfirmModal from '../../../friends/components/ConfirmModal'
 
 const MEDIA_KINDS: ImageKind[] = ['avatar', 'banner']
+
+/** Remover já salva: confirma antes (o Discord pede o mesmo). */
+function RemoveMediaConfirm({
+  kind,
+  onConfirm,
+  onClose
+}: {
+  kind: ImageKind | null
+  onConfirm: (kind: ImageKind) => Promise<unknown>
+  onClose: () => void
+}): React.JSX.Element | null {
+  if (!kind) return null
+  return (
+    <ConfirmModal
+      open
+      title={`Remover ${kind}?`}
+      confirmLabel={`Remover ${kind}`}
+      onConfirm={async () => {
+        await onConfirm(kind)
+      }}
+      onClose={onClose}
+    >
+      {kind === 'avatar'
+        ? 'Seu perfil volta a mostrar a inicial do seu nome.'
+        : 'O banner volta a mostrar a cor escolhida (ou o degradê padrão).'}
+    </ConfirmModal>
+  )
+}
 
 type FileInputs = Record<ImageKind, React.RefObject<HTMLInputElement | null>>
 
@@ -21,7 +46,7 @@ function FileInputs({
   onPick
 }: {
   inputs: FileInputs
-  onPick: ProfileEditor['pickFile']
+  onPick: ProfileApply['pickFile']
 }): React.JSX.Element {
   return (
     <>
@@ -43,94 +68,72 @@ function FileInputs({
   )
 }
 
-function CropModal({ editor }: { editor: ProfileEditor }): React.JSX.Element | null {
-  const { cropping } = editor
+function CropModal({ profile }: { profile: ProfileApply }): React.JSX.Element | null {
+  const { cropping } = profile
   if (!cropping) return null
   return (
     <ImageCropModal
       file={cropping.file}
       src={cropping.src}
       kind={cropping.kind}
-      onCancel={() => editor.closeCrop()}
-      onApply={(change) => editor.closeCrop(change)}
+      onCancel={() => profile.closeCrop()}
+      onApply={(change) => profile.closeCrop(change)}
     />
   )
 }
 
 /**
- * Configurações → Perfis, como no Discord: o editor em duas abas (Identidade
- * e Aparência) à esquerda e, à direita, o cartão como os outros veem, ao vivo
- * e fixo na rolagem; no celular ele vai para cima. Clicar numa parte do
- * cartão abre o editor dela (avatar e banner: o arquivo; nome, pronomes,
- * nota, Sobre mim e links: um modal com prévia). Nada vai para o servidor até
- * "Salvar alterações"; com algo pendente, a barra de aviso aparece embaixo (e
- * treme se tentar sair).
+ * Configurações → Perfis, como a tela "Perfis" do Discord: à esquerda, a
+ * coluna estreita de personalização em blocos; à direita, o cartão inteiro e
+ * grande como os outros veem. Bloco ou parte do cartão abrem o editor
+ * (avatar e banner: o arquivo e o recorte; o resto: um modal com prévia).
+ * Cada "Aplicar" já salva: não há rascunho nem "Salvar alterações".
  */
 function ProfilesSection(): React.JSX.Element | null {
-  const editor = useProfileEditor()
+  const profile = useProfileApply()
   const inputs: FileInputs = { avatar: useRef(null), banner: useRef(null) }
-  const [tab, setTab] = useState<ProfileTab>('identity')
-  const [spot, setSpot] = useState<CardSpot | null>(null)
-  const { user, draft } = editor
+  const [modal, setModal] = useState<ProfileModalId | null>(null)
+  const [removing, setRemoving] = useState<ImageKind | null>(null)
+  const { user, avatarUrl, bannerUrl } = profile
   if (!user) return null
 
-  const avatarUrl = previewMedia(draft.avatar, user.avatar_url)
-  const bannerUrl = previewMedia(draft.banner, user.banner_url)
-  const open = (kind: ImageKind): void => inputs[kind].current?.click()
-  const edit = (target: CardSpot): void => (spotOpensFile(target) ? open(target) : setSpot(target))
+  const base = { user, avatarUrl, bannerUrl }
+  const pick = (kind: ImageKind): void => inputs[kind].current?.click()
+  const edit = (spot: CardSpot): void => (spotOpensFile(spot) ? pick(spot) : setModal(spot))
 
   return (
     <>
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
-        <ProfilePreviewPanel
+      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[250px_minmax(0,1fr)] lg:items-start xl:grid-cols-[280px_minmax(0,1fr)] xl:gap-8">
+        <ProfileStage
+          base={base}
+          status={savingLabel(profile.saving, profile.progress)}
+          onEdit={edit}
+        />
+        <ProfileTiles
           user={user}
-          draft={draft}
           avatarUrl={avatarUrl}
           bannerUrl={bannerUrl}
-          onEdit={edit}
-          notice={cardNotice(editor.errors)}
+          busy={profile.saving}
+          onPick={pick}
+          onRemove={setRemoving}
+          onOpen={setModal}
         />
-        <div className="flex min-w-0 flex-col gap-4 lg:order-1">
-          <ProfileEditorTabs value={tab} alert={tabAlert(editor.errors)} onChange={setTab} />
-          <div
-            role="tabpanel"
-            id={panelId(tab)}
-            aria-labelledby={tabId(tab)}
-            className="flex flex-col gap-4"
-          >
-            {tab === 'identity' ? (
-              <IdentityTab
-                editor={editor}
-                avatarUrl={avatarUrl}
-                bannerUrl={bannerUrl}
-                onPick={open}
-              />
-            ) : (
-              <AppearanceTab editor={editor} onEditName={() => setSpot('name')} />
-            )}
-          </div>
-        </div>
       </div>
 
-      <FileInputs inputs={inputs} onPick={editor.pickFile} />
-      <CropModal editor={editor} />
-      <ProfileSpotModal
-        spot={spot}
-        base={{ user, avatarUrl, bannerUrl }}
-        editor={editor}
-        onClose={() => setSpot(null)}
+      <FileInputs inputs={inputs} onPick={profile.pickFile} />
+      <CropModal profile={profile} />
+      <ProfileEditModal
+        modal={modal}
+        base={base}
+        busy={profile.saving}
+        onClose={() => setModal(null)}
+        onApply={(fields) => profile.apply({ fields })}
       />
-
-      {editor.dirty && (
-        <UnsavedChangesBar
-          shaking={editor.shaking}
-          saving={editor.saving}
-          invalid={editor.invalid}
-          progress={editor.progress}
-          onReset={editor.reset}
-          onSave={() => void editor.save()}
-        />
-      )}
+      <RemoveMediaConfirm
+        kind={removing}
+        onConfirm={(kind) => profile.apply({ [kind]: { kind: 'remove' } })}
+        onClose={() => setRemoving(null)}
+      />
     </>
   )
 }

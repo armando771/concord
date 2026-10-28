@@ -43,8 +43,7 @@ const SECTION_VIEW: Record<SettingsSectionId, () => React.JSX.Element | null> = 
 
 /**
  * Configurações em tela cheia, como no Discord: navegação com busca à esquerda
- * e a seção à direita. ESC ou o ✕ fecham (com alterações não salvas no perfil,
- * a barra de aviso treme em vez de fechar).
+ * e a seção à direita. ESC ou o ✕ fecham.
  */
 function SettingsScreen(): React.JSX.Element | null {
   const open = useSettingsStore((s) => s.open)
