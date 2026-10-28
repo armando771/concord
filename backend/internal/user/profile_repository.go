@@ -4,12 +4,23 @@ import (
 	"context"
 
 	"gin-quickstart/backend/internal/profiletheme"
+
+	"github.com/jackc/pgx/v5"
 )
+
+// rowQuerier: o pool ou uma transação.
+type rowQuerier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
 
 // UpdateProfile grava os campos do perfil; estilo do nome e tema nil mantêm o
 // que já estava salvo (COALESCE).
 func (r *Repository) UpdateProfile(ctx context.Context, id string, in ProfileInput) (*User, error) {
-	return scanUser(r.db.QueryRow(
+	return updateProfile(ctx, r.db, id, in)
+}
+
+func updateProfile(ctx context.Context, q rowQuerier, id string, in ProfileInput) (*User, error) {
+	return scanUser(q.QueryRow(
 		ctx,
 		`
 		UPDATE users
