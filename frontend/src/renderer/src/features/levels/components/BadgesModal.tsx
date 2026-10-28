@@ -16,6 +16,7 @@ import {
 import { trapTab } from '../../../shared/lib/focusTrap'
 import BadgeIcon from './BadgeIcon'
 import BadgesAside from './BadgesAside'
+import BadgeProgress from './BadgeProgress'
 import BadgeTierLadder from './BadgeTierLadder'
 import { BadgeDetailSkeleton } from '../../../shared/ui/skeleton/layouts'
 
@@ -44,7 +45,15 @@ function RarityChip({ badge }: { badge: Badge }): React.JSX.Element {
   )
 }
 
-function Detail({ badge, isMe }: { badge: Badge; isMe: boolean }): React.JSX.Element {
+function Detail({
+  badge,
+  isMe,
+  ownerName
+}: {
+  badge: Badge
+  isMe: boolean
+  ownerName: string
+}): React.JSX.Element {
   const meta = rarityMeta(badge.rarity)
   const title = badge.tier_name
   const unlocked = formatUnlockDate(badge.unlocked_at)
@@ -95,10 +104,14 @@ function Detail({ badge, isMe }: { badge: Badge; isMe: boolean }): React.JSX.Ele
       </p>
 
       <div className="mt-5 w-full rounded-xl bg-input p-4">
+        {isMe && <BadgeProgress badge={badge} mythic={mythic} />}
+
         <p className="text-sm leading-snug text-gray-200">{badge.description}</p>
 
         <div className="my-4 h-px bg-fg/10" />
-        <p className="text-sm font-semibold text-strong">Tiers conquistados</p>
+        <p className="text-sm font-semibold text-strong">
+          {isMe ? 'Tiers' : `Progresso de ${ownerName}`}
+        </p>
         <BadgeTierLadder badge={badge} />
       </div>
     </div>
@@ -107,9 +120,10 @@ function Detail({ badge, isMe }: { badge: Badge; isMe: boolean }): React.JSX.Ele
 
 /**
  * "Badges de Fulano" (como no Discord): grade à esquerda, o badge escolhido
- * à direita com arte grande, tier, estatística, raridade e os tiers já
- * conquistados. Só aparece o que a pessoa já tem: nada de bloqueado, barra de
- * progresso ou "faltam N".
+ * à direita com arte grande, tier, estatística, raridade e a escada. Só
+ * aparecem os badges já conquistados (o primeiro tier faz a categoria
+ * surgir); no seu próprio perfil, também a barra de progresso até o próximo
+ * tier.
  */
 function BadgesModal(): React.JSX.Element | null {
   const target = useBadgeStore((s) => s.modal)
@@ -204,7 +218,7 @@ function BadgesModal(): React.JSX.Element | null {
             ✕
           </button>
           {selected ? (
-            <Detail badge={selected} isMe={isMe} />
+            <Detail badge={selected} isMe={isMe} ownerName={target.name} />
           ) : !badges ? (
             <BadgeDetailSkeleton />
           ) : (

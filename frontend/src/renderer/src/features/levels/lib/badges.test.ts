@@ -7,8 +7,10 @@ import {
   holoPointer,
   isMythic,
   profileBadgeRow,
+  progressPercent,
   publicStatText,
   RARITY,
+  remainingText,
   statText,
   unlockCount,
   selectedBadge,
@@ -26,6 +28,7 @@ function badge(over: Partial<Badge> = {}): Badge {
     unit: 'seconds',
     value: 0,
     tier: 0,
+    progress: 0,
     tiers: [],
     ...over
   }
@@ -96,6 +99,49 @@ describe('formatThreshold', () => {
   })
 })
 
+describe('remainingText', () => {
+  const now = new Date('2026-10-25T12:00:00Z')
+
+  it('quanto falta para o próximo tier', () => {
+    expect(remainingText(badge({ value: 30 * HOUR, next_threshold: 50 * HOUR }), now)).toBe(
+      'Faltam 20 horas'
+    )
+    expect(remainingText(badge({ value: 50 * 60, next_threshold: HOUR }), now)).toBe(
+      'Faltam 10 min'
+    )
+    expect(
+      remainingText(
+        badge({ category: 'mensagens', unit: 'messages', value: 499, next_threshold: 500 }),
+        now
+      )
+    ).toBe('Falta 1 mensagem')
+    expect(
+      remainingText(badge({ category: 'nivel', unit: 'level', value: 22, next_threshold: 25 }), now)
+    ).toBe('Faltam 3 níveis')
+    expect(
+      remainingText(
+        badge({ category: 'festeiro', unit: 'people', value: 6, next_threshold: 10 }),
+        now
+      )
+    ).toBe('Uma call com 10 pessoas')
+  })
+
+  it('idade da conta conta pelo dia em que chega', () => {
+    const conta = (nextAt: string): string =>
+      remainingText(
+        badge({ category: 'conta', unit: 'months', value: 2, next_threshold: 3, next_at: nextAt }),
+        now
+      )
+    expect(conta('2027-02-25T12:00:00Z')).toBe('Faltam 4 meses')
+    expect(conta('2026-11-06T12:00:00Z')).toBe('Faltam 12 dias')
+    expect(conta('2026-10-26T11:00:00Z')).toBe('Falta 1 dia')
+  })
+
+  it('no último tier não falta nada', () => {
+    expect(remainingText(badge({ tier: 6, value: 2000 * HOUR }), now)).toBe('Tier máximo!')
+  })
+})
+
 describe('profileBadgeRow', () => {
   const list = [
     badge({ category: 'voz', tier: 2, rarity: 'comum' }),
@@ -128,6 +174,12 @@ describe('profileBadgeRow', () => {
 })
 
 describe('misc', () => {
+  it('percentual da barra', () => {
+    expect(progressPercent(badge({ progress: 0.666 }))).toBe(67)
+    expect(progressPercent(badge({ progress: 3 }))).toBe(100)
+    expect(progressPercent(badge({ progress: -1 }))).toBe(0)
+  })
+
   it('data curta dd/mm/aa', () => {
     expect(formatUnlockDate('2026-07-29T15:00:00Z')).toBe('29/07/26')
     expect(formatUnlockDate(undefined)).toBe('')
@@ -183,8 +235,8 @@ describe('visão pública (perfil de outra pessoa)', () => {
     expect(formatUnlockDate('2026-07-29')).toBe('29/07/26')
   })
 
-  it('sem value (visão pública) não quebra as contas', () => {
-    expect(publicStatText(badge({ value: undefined, tier: 0 }))).toBe('')
+  it('sem value/progress (visão pública) não quebra as contas', () => {
+    expect(progressPercent(badge({ progress: undefined }))).toBe(0)
   })
 })
 
@@ -209,6 +261,7 @@ describe('raridade mítica (Fundador dos devs)', () => {
     tier: 1,
     tier_name: 'Fundador',
     rarity: 'mitico',
+    progress: 1,
     tiers: [{ tier: 1, name: 'Fundador', threshold: 1, rarity: 'mitico' }]
   })
 
@@ -246,8 +299,10 @@ describe('raridade mítica (Fundador dos devs)', () => {
 
   it('não tem número, nem no próprio perfil nem no de outra pessoa', () => {
     expect(statText(dev)).toBe('Dev do Salinha')
-    expect(publicStatText({ ...dev, value: undefined })).toBe('Dev do Salinha')
+    expect(publicStatText({ ...dev, value: undefined, progress: undefined })).toBe('Dev do Salinha')
     expect(formatThreshold('dev', 1)).toBe('Só para os devs')
+    expect(remainingText(dev)).toBe('Tier máximo!')
+    expect(remainingText({ ...dev, tier: 0, next_threshold: 1, value: 0 })).toBe('Só para os devs')
   })
 })
 
@@ -279,7 +334,7 @@ describe('visibleBadges e selectedBadge (modal de badges)', () => {
     ({ category, name: category, tier, tiers: [] }) as unknown as Badge
   const ganho = mk('voz', 2)
   const raro = mk('chat', 1)
-  // Uma categoria de tier 0 nunca chega da API; se chegasse, o app não mostra.
+  // Tier 0 nunca chega da API; se chegasse, o app não mostra.
   const bloqueado = mk('conta', 0)
 
   it('só os conquistados aparecem, sem bloqueados nem "disponíveis"', () => {
@@ -327,7 +382,7 @@ describe('Fez o L (resposta única do segundo turno)', () => {
   })
 
   it('no perfil dos outros não vira "Fez+ o L"', () => {
-    expect(publicStatText({ ...l, value: undefined })).toBe(
+    expect(publicStatText({ ...l, value: undefined, progress: undefined })).toBe(
       'Fez o L no segundo turno'
     )
   })
@@ -354,7 +409,7 @@ describe('Fez o L (resposta única do segundo turno)', () => {
     })
 
     it('publicStatText diz o 22, não o L', () => {
-      expect(publicStatText({ ...v22, value: undefined })).toBe(
+      expect(publicStatText({ ...v22, value: undefined, progress: undefined })).toBe(
         'Fez o 22 no segundo turno'
       )
     })
@@ -378,7 +433,7 @@ describe('Fez o L (resposta única do segundo turno)', () => {
     })
 
     it('publicStatText diz Votou Nulo, não o L', () => {
-      expect(publicStatText({ ...nulo, value: undefined })).toBe(
+      expect(publicStatText({ ...nulo, value: undefined, progress: undefined })).toBe(
         'Votou Nulo no segundo turno'
       )
     })

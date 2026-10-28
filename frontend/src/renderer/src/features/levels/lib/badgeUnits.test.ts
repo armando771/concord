@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Badge } from '../api/badges'
-import { formatThreshold, publicStatText, statText } from './badges'
+import { formatThreshold, publicStatText, remainingText, statText } from './badges'
 
 /** Textos das unidades de badge contadas em itens (propostas, amigos...). */
 function badge(over: Partial<Badge>): Badge {
@@ -11,10 +11,13 @@ function badge(over: Partial<Badge>): Badge {
     unit: 'friends',
     value: 0,
     tier: 0,
+    progress: 0,
     tiers: [],
     ...over
   }
 }
+
+const now = new Date('2026-10-25T12:00:00Z')
 
 describe('Contribuinte (cards de propostas)', () => {
   const contribuinte = (over: Partial<Badge> = {}): Badge =>
@@ -29,6 +32,12 @@ describe('Contribuinte (cards de propostas)', () => {
   it('escada, quanto falta e visão pública', () => {
     expect(formatThreshold('proposals', 1)).toBe('1 proposta')
     expect(formatThreshold('proposals', 15)).toBe('15 propostas')
+    expect(remainingText(contribuinte({ value: 4, next_threshold: 5 }), now)).toBe(
+      'Falta 1 proposta'
+    )
+    expect(remainingText(contribuinte({ value: 5, next_threshold: 15 }), now)).toBe(
+      'Faltam 10 propostas'
+    )
     const pub = contribuinte({
       value: undefined,
       tier: 2,
@@ -49,6 +58,8 @@ describe('Amigos', () => {
     expect(statText(amigos({ value: 1 }))).toBe('1 amigo')
     expect(statText(amigos({ value: 16 }))).toBe('16 amigos')
     expect(formatThreshold('friends', 100)).toBe('100 amigos')
+    expect(remainingText(amigos({ value: 4, next_threshold: 5 }), now)).toBe('Falta 1 amigo')
+    expect(remainingText(amigos({ value: 5, next_threshold: 15 }), now)).toBe('Faltam 10 amigos')
     const pub = amigos({
       value: undefined,
       tier: 1,
@@ -66,6 +77,8 @@ describe('Caçador de bugs', () => {
     expect(statText(bugs({ value: 1 }))).toBe('1 bug reportado')
     expect(statText(bugs({ value: 12 }))).toBe('12 bugs reportados')
     expect(formatThreshold('bugs', 25)).toBe('25 bugs')
+    expect(remainingText(bugs({ value: 2, next_threshold: 3 }), now)).toBe('Falta 1 bug')
+    expect(remainingText(bugs({ value: 3, next_threshold: 10 }), now)).toBe('Faltam 7 bugs')
     const pub = bugs({
       value: undefined,
       tier: 1,
@@ -92,5 +105,6 @@ describe('Top 10 do Nível 100', () => {
     expect(publicStatText(top10({ value: 1 }))).toBe('#1 de 10 a chegar no nível 100')
     expect(publicStatText(top10({ value: undefined }))).toBe('Um dos 10 primeiros no nível 100')
     expect(formatThreshold('rank', 1)).toBe('Top 10')
+    expect(remainingText(top10({ value: 3 }), now)).toBe('Tier máximo!')
   })
 })

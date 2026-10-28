@@ -312,7 +312,7 @@ func TestOwnerSeesWhatTheyEarned(t *testing.T) {
 	}
 	full := res.Badges.([]Badge)
 	msgs := find(t, full, "mensagens")
-	if msgs.Value != 2345 || msgs.UnlockedAt == nil {
+	if msgs.Value != 2345 || msgs.NextThreshold == nil || msgs.Progress == 0 || msgs.UnlockedAt == nil {
 		t.Fatalf("owner view = %+v", msgs)
 	}
 	if hasBadge(full, "festeiro") {

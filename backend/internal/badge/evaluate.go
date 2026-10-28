@@ -1,6 +1,7 @@
 package badge
 
 import (
+	"math"
 	"time"
 
 	"gin-quickstart/backend/internal/birthday"
@@ -73,8 +74,7 @@ type Unlock struct {
 	At       time.Time
 }
 
-// TierInfo é um degrau já conquistado. Os que faltam nunca saem da API:
-// ver o próximo limite viraria meta para farmar.
+// TierInfo é um degrau da escada que o app mostra (conquistado ou próximo).
 type TierInfo struct {
 	Tier       int        `json:"tier"`
 	Name       string     `json:"name"`
@@ -84,8 +84,9 @@ type TierInfo struct {
 }
 
 // Badge é uma categoria que a pessoa já conquistou (tier 1 ou mais) do jeito
-// que o app mostra. Quem ainda não chegou ao tier 1 não recebe a categoria, e
-// ninguém recebe o próximo limite nem o progresso até ele.
+// que o app mostra. Quem ainda não chegou ao tier 1 não recebe a categoria:
+// ela fica escondida até a primeira conquista. Depois dela, o app mostra o
+// que falta para o próximo tier.
 type Badge struct {
 	Category    string `json:"category"`
 	Name        string `json:"name"`
@@ -96,8 +97,14 @@ type Badge struct {
 	TierName    string `json:"tier_name"`
 	Rarity      string `json:"rarity"`
 	// Quando o tier atual foi alcançado.
-	UnlockedAt *time.Time `json:"unlocked_at,omitempty"`
-	// Só os tiers conquistados, do primeiro ao atual.
+	UnlockedAt    *time.Time `json:"unlocked_at,omitempty"`
+	NextThreshold *int64     `json:"next_threshold,omitempty"`
+	NextTierName  string     `json:"next_tier_name,omitempty"`
+	// Só na idade da conta: o dia em que o próximo tier chega.
+	NextAt *time.Time `json:"next_at,omitempty"`
+	// Do tier atual até o próximo, de 0 a 1 (1 no último tier).
+	Progress float64 `json:"progress"`
+	// A escada inteira: os conquistados com o dia e os próximos sem.
 	Tiers []TierInfo `json:"tiers"`
 }
 
@@ -208,12 +215,12 @@ func unlockTime(c Category, tier int, s Stats, now time.Time) time.Time {
 	return now
 }
 
-// ladder são os tiers já conquistados de c (gravados ou alcançados agora) e,
-// separados, os que ainda precisam ser gravados.
-func ladder(c Category, value int64, saved map[int]time.Time, s Stats, now time.Time) ([]TierInfo, []Unlock) {
+// ladder é a escada inteira de c: cada tier com o dia em que foi conquistado
+// (gravado ou alcançado agora) e, separados, os que ainda precisam ser gravados.
+// earned é o maior tier conquistado (0 se nenhum).
+func ladder(c Category, value int64, saved map[int]time.Time, s Stats, now time.Time) (tiers []TierInfo, fresh []Unlock, earned int) {
 	reached := tierFor(c, value)
-	var tiers []TierInfo
-	var fresh []Unlock
+	tiers = make([]TierInfo, len(c.Tiers))
 	for i, t := range c.Tiers {
 		n := i + 1
 		info := TierInfo{Tier: n, Name: t.Name, Threshold: t.Threshold, Rarity: t.Rarity}
@@ -225,10 +232,30 @@ func ladder(c Category, value int64, saved map[int]time.Time, s Stats, now time.
 			fresh = append(fresh, Unlock{Category: c.Key, Tier: n, At: at})
 		}
 		if info.UnlockedAt != nil {
-			tiers = append(tiers, info)
+			earned = n
 		}
+		tiers[i] = info
 	}
-	return tiers, fresh
+	return tiers, fresh, earned
+}
+
+// progressTo preenche o que falta para o próximo tier (earned já é >= 1).
+func progressTo(b *Badge, c Category, earned int, value int64, createdAt time.Time) {
+	if earned >= len(c.Tiers) {
+		b.Progress = 1
+		return
+	}
+	floor := c.Tiers[earned-1].Threshold
+	next := c.Tiers[earned]
+	b.NextThreshold = &next.Threshold
+	b.NextTierName = next.Name
+	if span := next.Threshold - floor; span > 0 && value > floor {
+		b.Progress = math.Min(1, float64(value-floor)/float64(span))
+	}
+	if c.Key == "conta" {
+		at := createdAt.AddDate(0, int(next.Threshold), 0)
+		b.NextAt = &at
+	}
 }
 
 // evaluateCategory monta o badge de c para a pessoa; false quando ela ainda
@@ -239,23 +266,25 @@ func evaluateCategory(c Category, s Stats, saved map[int]time.Time, now time.Tim
 	if c.Exclusive && value == 0 {
 		return Badge{}, nil, false
 	}
-	tiers, fresh := ladder(c, value, saved, s, now)
-	if len(tiers) == 0 {
+	tiers, fresh, earned := ladder(c, value, saved, s, now)
+	if earned == 0 {
 		return Badge{}, nil, false
 	}
-	current := tiers[len(tiers)-1]
-	return Badge{
+	current := tiers[earned-1]
+	b := Badge{
 		Category:    c.Key,
 		Name:        c.Name,
 		Description: c.Description,
 		Unit:        c.Unit,
 		Value:       value,
-		Tier:        current.Tier,
+		Tier:        earned,
 		TierName:    current.Name,
 		Rarity:      current.Rarity,
 		UnlockedAt:  current.UnlockedAt,
 		Tiers:       tiers,
-	}, fresh, true
+	}
+	progressTo(&b, c, earned, value, s.CreatedAt)
+	return b, fresh, true
 }
 
 // Evaluate decide os badges de alguém: só as categorias em que ela já tem o
