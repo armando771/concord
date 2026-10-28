@@ -16,15 +16,15 @@ describe('seções das configurações do servidor', () => {
   })
 
   it('o dono e o administrador veem todas', () => {
-    expect(ids(ALL_PERMISSIONS)).toEqual(['overview', 'roles', 'members', 'bans'])
+    expect(ids(ALL_PERMISSIONS)).toEqual(['overview', 'roles', 'members', 'bans', 'level'])
   })
 
   it('cada permissão abre só o que usa', () => {
-    expect(ids(Perm.MANAGE_SERVER)).toEqual(['overview'])
-    expect(ids(Perm.MANAGE_ROLES)).toEqual(['roles', 'members'])
-    expect(ids(Perm.KICK_MEMBERS)).toEqual(['members'])
-    expect(ids(Perm.BAN_MEMBERS)).toEqual(['members', 'bans'])
-    expect(ids(Perm.MANAGE_NICKNAMES)).toEqual(['members'])
+    expect(ids(Perm.MANAGE_SERVER)).toEqual(['overview', 'level'])
+    expect(ids(Perm.MANAGE_ROLES)).toEqual(['roles', 'members', 'level'])
+    expect(ids(Perm.KICK_MEMBERS)).toEqual(['members', 'level'])
+    expect(ids(Perm.BAN_MEMBERS)).toEqual(['members', 'bans', 'level'])
+    expect(ids(Perm.MANAGE_NICKNAMES)).toEqual(['members', 'level'])
   })
 
   it('"Alterar apelido" (o próprio) não abre as configurações', () => {
@@ -33,7 +33,7 @@ describe('seções das configurações do servidor', () => {
 
   it('o moderador padrão (editar servidor + expulsar) vê visão geral e membros', () => {
     const mod = DEFAULT_EVERYONE | Perm.MANAGE_SERVER | Perm.MANAGE_CHANNELS | Perm.KICK_MEMBERS
-    expect(ids(mod)).toEqual(['overview', 'members'])
+    expect(ids(mod)).toEqual(['overview', 'members', 'level'])
     expect(canOpenServerSettings(mod)).toBe(true)
   })
 
