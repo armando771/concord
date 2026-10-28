@@ -43,8 +43,9 @@ import {
   type LivePayload,
   type LiveRecord
 } from '../lib/liveBadge'
-import { callNotification, knockNotification, notifyDesktop } from '../../notifications/lib/notifications'
+import { callNotification, notifyDesktop } from '../../notifications/lib/notifications'
 import { playSound, setSoundOutput } from '../lib/sounds'
+import { createKnockEventHandlers } from './knockWsEvents'
 import { playOwnJoinSound } from '../lib/entranceSoundOwn'
 import { channelJoinState } from '../lib/channelJoinState'
 import {
@@ -161,35 +162,6 @@ function callName(
   return serverDisplayName({ nickname }, user, fallback)
 }
 
-interface LockPayload {
-  call_id: string
-  channel_id?: string | null
-  locked: boolean
-  by: CallUserInfo
-}
-
-interface KnockPayload {
-  call_id: string
-  channel_id?: string | null
-  user: CallUserInfo
-}
-
-interface KnockResolvedPayload {
-  call_id: string
-  user_id: string
-  accepted: boolean
-  reason: string
-  by?: CallUserInfo | null
-}
-
-interface KnockAnswerPayload {
-  call_id: string
-  channel_id?: string | null
-  server_id?: string | null
-  reason: 'accepted' | 'declined' | 'expired' | 'unlocked' | 'ended'
-  by?: CallUserInfo | null
-}
-
 /** Meu pedido para entrar numa sala trancada. */
 export interface KnockState {
   channelId: string
@@ -207,8 +179,6 @@ export class CallLockedError extends Error {
   }
 }
 
-/** Quanto tempo o aviso "pedido recusado" fica no canal. */
-const KNOCK_DECLINED_MS = 4000
 // Aviso com instruções de instalação (portal de tela no Linux): dá tempo de ler.
 const SETUP_TOAST_MS = 20000
 
@@ -216,7 +186,15 @@ function upsertParticipant(list: CallUserInfo[], user: CallUserInfo): CallUserIn
   return list.some((p) => p.id === user.id) ? list : [...list, user]
 }
 
-interface CallState {
+/** Contexto que o handleWsEvent entrega ao handler do tipo do evento. */
+interface WsContext {
+  payload: Record<string, unknown>
+  event: WsEvent
+  meId: string | undefined
+}
+type WsHandler = (ctx: WsContext) => void
+
+export interface CallState {
   status: CallStatus
   callId: string | null
   type: CallKind | null
@@ -447,8 +425,6 @@ let cameraPublish: Promise<void> = Promise.resolve()
 
 /** call:live recentes, reaplicados sobre o polling da lista do servidor. */
 let recentLive: LiveRecord[] = []
-/** Limpa o aviso de pedido recusado. */
-let knockDeclinedTimer: ReturnType<typeof setTimeout> | null = null
 
 /** Ao reconectar, um 404 só fecha/troca a chamada se repetir (ver confirmGone). */
 const GONE_CHECKS = 3
@@ -1157,6 +1133,272 @@ export const useCallStore = create<CallState>()((set, get) => {
     useChatStore.getState().sendEvent('call:voice', { call_id: callId, muted, deafened })
   }
 
+  const onScreenDraw: WsHandler = ({ event }) => {
+    useAnnotationStore.getState().handleWsEvent(event)
+    return
+  }
+
+  const knockHandlers = createKnockEventHandlers({ get, set })
+
+  const wsHandlers: Record<string, WsHandler> = {
+    'call:invite': ({ payload }) => {
+      const p = payload as unknown as InvitePayload
+      if (p.type !== 'dm' || get().status !== 'idle') return
+      notifyDesktop(callNotification(p.initiator))
+      set({
+        status: 'ringing',
+        callId: p.call_id,
+        type: 'dm',
+        conversationId: p.conversation_id ?? null,
+        channelId: null,
+        participants: [p.initiator],
+        isInitiator: false,
+        streams: {},
+        muted: false,
+        deafened: false,
+        startedAt: null
+      })
+      return
+    },
+
+    'call:ring': ({ payload }) => {
+      const p = payload as unknown as RingPayload
+      if (get().callId !== p.call_id) return
+      set({ participants: upsertParticipant(get().participants, p.callee) })
+      return
+    },
+
+    'call:accept': ({ payload }) => {
+      const p = payload as unknown as ResponsePayload
+      if (get().callId !== p.call_id) return
+      const current = get()
+      const participants = upsertParticipant(current.participants, p.user)
+      if (current.status !== 'active') {
+        set({ status: 'active', startedAt: Date.now(), participants })
+        playSound('join')
+      } else {
+        set({ participants })
+      }
+      if (current.isInitiator && current.type === 'dm' && current.callId) {
+        void connectMedia(current.callId)
+      }
+      return
+    },
+
+    'call:decline': ({ payload }) => {
+      const p = payload as unknown as ResponsePayload
+      if (get().callId !== p.call_id) return
+      showToast.info(`${p.user.display_name} recusou a chamada.`)
+      cleanup()
+      return
+    },
+
+    'call:voice': ({ payload }) => {
+      const p = payload as unknown as VoicePayload
+      const state = {
+        muted: p.muted,
+        deafened: p.deafened,
+        serverMuted: Boolean(p.server_muted),
+        serverDeafened: Boolean(p.server_deafened)
+      }
+      // Mesmo estado no formato da API (lista dos canais de voz do servidor).
+      const apiState = {
+        muted: p.muted,
+        deafened: p.deafened,
+        server_muted: Boolean(p.server_muted),
+        server_deafened: Boolean(p.server_deafened)
+      }
+      set((s) => {
+        // Lista dos canais de voz do servidor (inclusive de chamadas em que não estou).
+        const serverCalls = { ...s.serverCalls }
+        for (const [channelId, entry] of Object.entries(serverCalls)) {
+          if (entry.call?.id !== p.call_id) continue
+          serverCalls[channelId] = {
+            ...entry,
+            participants: entry.participants.map((q) =>
+              q.user_id === p.user_id ? { ...q, ...apiState } : q
+            )
+          }
+        }
+        return {
+          serverCalls,
+          voiceStates:
+            s.callId === p.call_id ? { ...s.voiceStates, [p.user_id]: state } : s.voiceStates
+        }
+      })
+      return
+    },
+
+    'call:screen': ({ payload, meId }) => {
+      const p = payload as unknown as ScreenSharePayload
+      if (get().callId !== p.call_id || p.user.id === meId) return
+      set((s) => {
+        const nextWatchers = { ...s.screenWatchers }
+        if (!p.active) {
+          delete nextWatchers[p.user.id]
+        }
+        return {
+          screenSharers: p.active
+            ? Array.from(new Set([...s.screenSharers, p.user.id]))
+            : s.screenSharers.filter((id) => id !== p.user.id),
+          screenWatchers: nextWatchers,
+          // Transmissão nova começa pausada: só a que acabou perde o foco.
+          focusedScreenUserId:
+            !p.active && s.focusedScreenUserId === p.user.id ? null : s.focusedScreenUserId,
+          participants: upsertParticipant(s.participants, p.user)
+        }
+      })
+      return
+    },
+
+    'call:screen_watchers': ({ payload }) => {
+      const p = payload as unknown as {
+        call_id: string
+        sharer_id: string
+        watchers: CallUserInfo[]
+      }
+      if (get().callId !== p.call_id) return
+      set((s) => ({
+        screenWatchers: {
+          ...s.screenWatchers,
+          [p.sharer_id]: p.watchers
+        }
+      }))
+      return
+    },
+
+    'call:screen_preview_request': ({ payload }) => {
+      // Alguém abriu meu cartão de perfil: manda uma foto pequena da tela.
+      const p = payload as unknown as { call_id: string }
+      const stream = localScreenStream
+      if (!stream || get().callId !== p.call_id || !get().isScreenSharing) return
+      void sendScreenPreview(p.call_id, stream)
+      return
+    },
+
+    'call:screen_draw': onScreenDraw,
+    'call:screen_draw_clear': onScreenDraw,
+    'call:screen_draw_undo': onScreenDraw,
+    'call:live': ({ payload }) => {
+      // Selo LIVE na lista do servidor (inclusive de chamadas em que não estou).
+      const p = payload as unknown as LivePayload
+      const now = Date.now()
+      recentLive = [
+        ...recentLive.filter((r) => now - r.at < LIVE_GRACE_MS),
+        { payload: p, at: now }
+      ]
+      const known = Object.values(get().serverCalls).some((e) => e.call?.id === p.call_id)
+      set((s) => ({ serverCalls: applyLiveEvent(s.serverCalls, p) }))
+      // Chamada que começou depois do último polling: busca a lista agora.
+      if (!known) bumpList()
+      return
+    },
+
+    'call:joined': ({ payload, meId }) => {
+      const p = payload as unknown as StatePayload
+      if (get().callId !== p.call_id) return
+      const current = get()
+      if (current.type === 'channel') {
+        if (current.status !== 'active' || !meId || p.user.id === meId) return
+        set({ participants: upsertParticipant(current.participants, p.user) })
+        bumpList()
+        return
+      }
+      if (current.status === 'outgoing') {
+        set({ status: 'active', startedAt: Date.now() })
+        playSound('join')
+      }
+      return
+    },
+
+    'call:left': ({ payload, meId }) => {
+      const p = payload as unknown as StatePayload
+      if (get().callId !== p.call_id) return
+      if (p.user.id === meId) {
+        // Ainda estou na chamada (quem sai de propósito já limpou o callId):
+        // o backend me tirou por queda do WS — volta a entrar.
+        void resyncChannelCall()
+        return
+      }
+      if (get().type === 'channel') {
+        // Sem pop-up: o som e a lista de participantes já avisam.
+        playSound('userLeave')
+        // A mídia do participante some sozinha quando ele sai da sala do LiveKit.
+        set((s) => {
+          const nextWatchers = { ...s.screenWatchers }
+          delete nextWatchers[p.user.id]
+          for (const [sid, list] of Object.entries(nextWatchers)) {
+            nextWatchers[sid] = list.filter((w) => w.id !== p.user.id)
+          }
+          return {
+            participants: s.participants.filter((q) => q.id !== p.user.id),
+            screenSharers: s.screenSharers.filter((id) => id !== p.user.id),
+            screenWatchers: nextWatchers
+          }
+        })
+        bumpList()
+        return
+      }
+      // Na DM a saída do outro encerra a chamada: aqui o aviso faz falta.
+      showToast.info(`${callName(get(), p.user)} saiu da chamada.`)
+      get().endCall()
+      return
+    },
+
+    'call:ended': ({ payload }) => {
+      const p = payload as unknown as EndedPayload
+      if (get().callId !== p.call_id) return
+      cleanup()
+      bumpList()
+      return
+    },
+
+    'call:busy': () => {
+      showToast.error('O usuário está ocupado em outra chamada.')
+      cleanup()
+      return
+    },
+
+    'call:moved': ({ payload, meId }) => {
+      // Um moderador moveu alguém de canal de voz: as listas mudam.
+      bumpList()
+      const p = payload as unknown as {
+        from_call_id: string
+        channel_id: string
+        channel_name: string
+        user: CallUserInfo
+        moved_by: CallUserInfo
+      }
+      if (p.user.id !== meId || get().callId !== p.from_call_id) return
+      // Fui eu: o servidor já me colocou no canal novo; troca a mídia de
+      // sala mantendo o mute/ensurdecer de antes.
+      const { muted, deafened } = get()
+      cleanup()
+      void get()
+        .startChannelCall(p.channel_id)
+        .then(() => {
+          if (get().channelId !== p.channel_id) return
+          set({ muted: muted || deafened, deafened })
+          applyMute(muted || deafened)
+          publishSpeaking()
+          sendVoiceState()
+          showToast.info(
+            `${callName(get(), p.moved_by, 'Um moderador')} moveu você para ${p.channel_name || 'outro canal'}.`
+          )
+        })
+      return
+    },
+
+    'call:error': ({ payload }) => {
+      const message = (payload.message as string) ?? 'Erro na chamada.'
+      showToast.error(message)
+      if (get().callId === (payload.call_id as string | undefined) || !payload.call_id) {
+        cleanup()
+      }
+      return
+    }
+  }
+
   return {
     status: 'idle',
     callId: null,
@@ -1833,366 +2075,9 @@ export const useCallStore = create<CallState>()((set, get) => {
 
     handleWsEvent: (event) => {
       const payload = event.payload as Record<string, unknown>
-      const meId = useAuthStore.getState().user?.id
-
-      switch (event.type) {
-        case 'call:invite': {
-          const p = payload as unknown as InvitePayload
-          if (p.type !== 'dm' || get().status !== 'idle') return
-          notifyDesktop(callNotification(p.initiator))
-          set({
-            status: 'ringing',
-            callId: p.call_id,
-            type: 'dm',
-            conversationId: p.conversation_id ?? null,
-            channelId: null,
-            participants: [p.initiator],
-            isInitiator: false,
-            streams: {},
-            muted: false,
-            deafened: false,
-            startedAt: null
-          })
-          return
-        }
-
-        case 'call:ring': {
-          const p = payload as unknown as RingPayload
-          if (get().callId !== p.call_id) return
-          set({ participants: upsertParticipant(get().participants, p.callee) })
-          return
-        }
-
-        case 'call:accept': {
-          const p = payload as unknown as ResponsePayload
-          if (get().callId !== p.call_id) return
-          const current = get()
-          const participants = upsertParticipant(current.participants, p.user)
-          if (current.status !== 'active') {
-            set({ status: 'active', startedAt: Date.now(), participants })
-            playSound('join')
-          } else {
-            set({ participants })
-          }
-          if (current.isInitiator && current.type === 'dm' && current.callId) {
-            void connectMedia(current.callId)
-          }
-          return
-        }
-
-        case 'call:decline': {
-          const p = payload as unknown as ResponsePayload
-          if (get().callId !== p.call_id) return
-          showToast.info(`${p.user.display_name} recusou a chamada.`)
-          cleanup()
-          return
-        }
-
-        case 'call:voice': {
-          const p = payload as unknown as VoicePayload
-          const state = {
-            muted: p.muted,
-            deafened: p.deafened,
-            serverMuted: Boolean(p.server_muted),
-            serverDeafened: Boolean(p.server_deafened)
-          }
-          // Mesmo estado no formato da API (lista dos canais de voz do servidor).
-          const apiState = {
-            muted: p.muted,
-            deafened: p.deafened,
-            server_muted: Boolean(p.server_muted),
-            server_deafened: Boolean(p.server_deafened)
-          }
-          set((s) => {
-            // Lista dos canais de voz do servidor (inclusive de chamadas em que não estou).
-            const serverCalls = { ...s.serverCalls }
-            for (const [channelId, entry] of Object.entries(serverCalls)) {
-              if (entry.call?.id !== p.call_id) continue
-              serverCalls[channelId] = {
-                ...entry,
-                participants: entry.participants.map((q) =>
-                  q.user_id === p.user_id ? { ...q, ...apiState } : q
-                )
-              }
-            }
-            return {
-              serverCalls,
-              voiceStates:
-                s.callId === p.call_id ? { ...s.voiceStates, [p.user_id]: state } : s.voiceStates
-            }
-          })
-          return
-        }
-
-        case 'call:screen': {
-          const p = payload as unknown as ScreenSharePayload
-          if (get().callId !== p.call_id || p.user.id === meId) return
-          set((s) => {
-            const nextWatchers = { ...s.screenWatchers }
-            if (!p.active) {
-              delete nextWatchers[p.user.id]
-            }
-            return {
-              screenSharers: p.active
-                ? Array.from(new Set([...s.screenSharers, p.user.id]))
-                : s.screenSharers.filter((id) => id !== p.user.id),
-              screenWatchers: nextWatchers,
-              // Transmissão nova começa pausada: só a que acabou perde o foco.
-              focusedScreenUserId:
-                !p.active && s.focusedScreenUserId === p.user.id ? null : s.focusedScreenUserId,
-              participants: upsertParticipant(s.participants, p.user)
-            }
-          })
-          return
-        }
-
-        case 'call:screen_watchers': {
-          const p = payload as unknown as {
-            call_id: string
-            sharer_id: string
-            watchers: CallUserInfo[]
-          }
-          if (get().callId !== p.call_id) return
-          set((s) => ({
-            screenWatchers: {
-              ...s.screenWatchers,
-              [p.sharer_id]: p.watchers
-            }
-          }))
-          return
-        }
-
-        case 'call:screen_preview_request': {
-          // Alguém abriu meu cartão de perfil: manda uma foto pequena da tela.
-          const p = payload as unknown as { call_id: string }
-          const stream = localScreenStream
-          if (!stream || get().callId !== p.call_id || !get().isScreenSharing) return
-          void sendScreenPreview(p.call_id, stream)
-          return
-        }
-
-        case 'call:screen_draw':
-        case 'call:screen_draw_clear':
-        case 'call:screen_draw_undo': {
-          useAnnotationStore.getState().handleWsEvent(event)
-          return
-        }
-
-        case 'call:live': {
-          // Selo LIVE na lista do servidor (inclusive de chamadas em que não estou).
-          const p = payload as unknown as LivePayload
-          const now = Date.now()
-          recentLive = [
-            ...recentLive.filter((r) => now - r.at < LIVE_GRACE_MS),
-            { payload: p, at: now }
-          ]
-          const known = Object.values(get().serverCalls).some((e) => e.call?.id === p.call_id)
-          set((s) => ({ serverCalls: applyLiveEvent(s.serverCalls, p) }))
-          // Chamada que começou depois do último polling: busca a lista agora.
-          if (!known) bumpList()
-          return
-        }
-
-        case 'call:joined': {
-          const p = payload as unknown as StatePayload
-          if (get().callId !== p.call_id) return
-          const current = get()
-          if (current.type === 'channel') {
-            if (current.status !== 'active' || !meId || p.user.id === meId) return
-            set({ participants: upsertParticipant(current.participants, p.user) })
-            bumpList()
-            return
-          }
-          if (current.status === 'outgoing') {
-            set({ status: 'active', startedAt: Date.now() })
-            playSound('join')
-          }
-          return
-        }
-
-        case 'call:left': {
-          const p = payload as unknown as StatePayload
-          if (get().callId !== p.call_id) return
-          if (p.user.id === meId) {
-            // Ainda estou na chamada (quem sai de propósito já limpou o callId):
-            // o backend me tirou por queda do WS — volta a entrar.
-            void resyncChannelCall()
-            return
-          }
-          if (get().type === 'channel') {
-            // Sem pop-up: o som e a lista de participantes já avisam.
-            playSound('userLeave')
-            // A mídia do participante some sozinha quando ele sai da sala do LiveKit.
-            set((s) => {
-              const nextWatchers = { ...s.screenWatchers }
-              delete nextWatchers[p.user.id]
-              for (const [sid, list] of Object.entries(nextWatchers)) {
-                nextWatchers[sid] = list.filter((w) => w.id !== p.user.id)
-              }
-              return {
-                participants: s.participants.filter((q) => q.id !== p.user.id),
-                screenSharers: s.screenSharers.filter((id) => id !== p.user.id),
-                screenWatchers: nextWatchers
-              }
-            })
-            bumpList()
-            return
-          }
-          // Na DM a saída do outro encerra a chamada: aqui o aviso faz falta.
-          showToast.info(`${callName(get(), p.user)} saiu da chamada.`)
-          get().endCall()
-          return
-        }
-
-        case 'call:ended': {
-          const p = payload as unknown as EndedPayload
-          if (get().callId !== p.call_id) return
-          cleanup()
-          bumpList()
-          return
-        }
-
-        case 'call:busy': {
-          showToast.error('O usuário está ocupado em outra chamada.')
-          cleanup()
-          return
-        }
-
-        case 'call:moved': {
-          // Um moderador moveu alguém de canal de voz: as listas mudam.
-          bumpList()
-          const p = payload as unknown as {
-            from_call_id: string
-            channel_id: string
-            channel_name: string
-            user: CallUserInfo
-            moved_by: CallUserInfo
-          }
-          if (p.user.id !== meId || get().callId !== p.from_call_id) return
-          // Fui eu: o servidor já me colocou no canal novo; troca a mídia de
-          // sala mantendo o mute/ensurdecer de antes.
-          const { muted, deafened } = get()
-          cleanup()
-          void get()
-            .startChannelCall(p.channel_id)
-            .then(() => {
-              if (get().channelId !== p.channel_id) return
-              set({ muted: muted || deafened, deafened })
-              applyMute(muted || deafened)
-              publishSpeaking()
-              sendVoiceState()
-              showToast.info(
-                `${callName(get(), p.moved_by, 'Um moderador')} moveu você para ${p.channel_name || 'outro canal'}.`
-              )
-            })
-          return
-        }
-
-        case 'call:error': {
-          const message = (payload.message as string) ?? 'Erro na chamada.'
-          showToast.error(message)
-          if (get().callId === (payload.call_id as string | undefined) || !payload.call_id) {
-            cleanup()
-          }
-          return
-        }
-
-        case 'call:lock': {
-          const p = payload as unknown as LockPayload
-          set((s) => {
-            const serverCalls = { ...s.serverCalls }
-            for (const [chId, entry] of Object.entries(serverCalls)) {
-              if (entry.call?.id === p.call_id) {
-                serverCalls[chId] = {
-                  ...entry,
-                  call: entry.call ? { ...entry.call, locked: p.locked } : null
-                }
-              }
-            }
-            const isMyCall = s.callId === p.call_id
-            return {
-              serverCalls,
-              locked: isMyCall ? p.locked : s.locked
-            }
-          })
-          if (get().callId === p.call_id) {
-            playSound(p.locked ? 'lock' : 'unlock')
-          }
-          return
-        }
-
-        case 'call:knock': {
-          const p = payload as unknown as KnockPayload
-          if (get().callId !== p.call_id) return
-          playSound('knock')
-          notifyDesktop(knockNotification(p.user, get().serverId, get().channelId))
-          set((s) => ({
-            joinRequests: upsertParticipant(s.joinRequests, p.user)
-          }))
-          return
-        }
-
-        case 'call:knock_resolved': {
-          const p = payload as unknown as KnockResolvedPayload
-          if (get().callId !== p.call_id) return
-          set((s) => ({
-            joinRequests: s.joinRequests.filter((r) => r.id !== p.user_id)
-          }))
-          return
-        }
-
-        case 'call:knock_accepted': {
-          const p = payload as unknown as KnockAnswerPayload
-          const { knock } = get()
-          if (!knock || knock.callId !== p.call_id) return
-          if (knockDeclinedTimer) {
-            clearTimeout(knockDeclinedTimer)
-            knockDeclinedTimer = null
-          }
-          const chId = p.channel_id ?? knock.channelId
-          set({ knock: null, admittedChannelId: chId })
-          const byName = p.by?.display_name || p.by?.username
-          showToast.success(
-            byName
-              ? `${byName} permitiu sua entrada na sala!`
-              : 'Sua entrada na sala foi permitida!'
-          )
-          void get().joinVoiceChannel(chId)
-          return
-        }
-
-        case 'call:knock_declined': {
-          const p = payload as unknown as KnockAnswerPayload
-          const { knock } = get()
-          if (!knock || knock.callId !== p.call_id) return
-          if (p.reason === 'ended' || p.reason === 'unlocked') {
-            // A sala acabou ou destrancou: pode entrar livremente
-            if (knockDeclinedTimer) clearTimeout(knockDeclinedTimer)
-            set({ knock: null })
-            showToast.info(
-              p.reason === 'ended'
-                ? 'A chamada terminou. A sala agora está livre.'
-                : 'A sala foi destrancada!'
-            )
-            return
-          }
-          set({ knock: { ...knock, status: 'declined' } })
-          if (knockDeclinedTimer) clearTimeout(knockDeclinedTimer)
-          knockDeclinedTimer = setTimeout(() => {
-            set((s) => (s.knock?.callId === p.call_id ? { knock: null } : {}))
-          }, KNOCK_DECLINED_MS)
-          return
-        }
-
-        case 'call:knock_error': {
-          const message = (payload.message as string) ?? 'Não foi possível solicitar entrada.'
-          showToast.error(message)
-          return
-        }
-
-        default:
-          return
-      }
+      const knock = knockHandlers[event.type]
+      if (knock) return knock(payload)
+      wsHandlers[event.type]?.({ payload, event, meId: useAuthStore.getState().user?.id })
     }
   }
 })
