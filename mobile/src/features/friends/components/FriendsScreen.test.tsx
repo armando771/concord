@@ -147,7 +147,7 @@ describe('FriendsScreen', () => {
 
   it('Adicionar amigo: pedido enviado, amizade na hora e erros', async () => {
     await setup()
-    await tab('Adicionar amigo')
+    await press('Adicionar amigo')
     const field = screen.getByLabelText('Nome de usuário')
     m.sendFriendRequest.mockResolvedValueOnce({ message: '', result: 'sent' })
     await fireEvent.changeText(field, ' zeca ')
@@ -166,7 +166,7 @@ describe('FriendsScreen', () => {
 
   it('Adicionar amigo: campo vazio não envia', async () => {
     await setup()
-    await tab('Adicionar amigo')
+    await press('Adicionar amigo')
     expect(screen.getByRole('button', { name: 'Enviar pedido' })).toBeDisabled()
   })
 
@@ -183,6 +183,23 @@ describe('FriendsScreen', () => {
     await setup()
     expect(await screen.findByText('Não foi possível carregar os amigos.')).toBeOnTheScreen()
     expect(screen.getByText('Ana')).toBeOnTheScreen()
+  })
+
+  // Regressão: a aba "Adicionar amigo" ficava cortada na borda da barra de abas (parecia bug de layout).
+  it('Adicionar amigo é um botão do cabeçalho, não uma aba (as 4 listas cabem na largura)', async () => {
+    await setup()
+    expect(screen.queryByRole('tab', { name: 'Adicionar amigo' })).toBeNull()
+    expect(screen.getAllByRole('tab')).toHaveLength(4)
+    expect(screen.getByRole('button', { name: 'Adicionar amigo' })).toBeOnTheScreen()
+  })
+
+  it('depois de Adicionar, tocar numa aba volta para a lista', async () => {
+    await setup()
+    await press('Adicionar amigo')
+    expect(screen.getByLabelText('Nome de usuário')).toBeOnTheScreen()
+    await tab('Todos')
+    expect(await screen.findByText('Beto')).toBeOnTheScreen()
+    expect(screen.queryByLabelText('Nome de usuário')).toBeNull()
   })
 
   it('voltar chama onBack', async () => {

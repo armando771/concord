@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { colors, fontSize, spacing } from '../../../shared/theme/tokens'
+import { colors, fontSize, MIN_TOUCH, radius, spacing } from '../../../shared/theme/tokens'
 import { Banner } from '../../../shared/ui/Banner'
 import { Button } from '../../../shared/ui/Button'
 import { IconButton } from '../../../shared/ui/IconButton'
@@ -136,6 +136,15 @@ export function FriendsScreen({ onBack, onOpenConversation }: FriendsScreenProps
       <View style={styles.header}>
         <IconButton icon="arrow-back" label="Voltar" onPress={onBack} />
         <Text style={styles.title}>Amigos</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Adicionar amigo"
+          accessibilityState={{ selected: tab === 'add' }}
+          onPress={() => setTab('add')}
+          style={[styles.addButton, tab === 'add' && styles.addButtonOn]}
+        >
+          <Text style={styles.addText}>Adicionar amigo</Text>
+        </Pressable>
       </View>
       <FriendsTabs selected={tab} onSelect={setTab} />
       {notice ? <Banner message={notice} /> : null}
@@ -158,7 +167,10 @@ export function FriendsScreen({ onBack, onOpenConversation }: FriendsScreenProps
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bgPrimary },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
-  title: { color: colors.textStrong, fontSize: fontSize.lg, fontWeight: '700' },
+  title: { flex: 1, color: colors.textStrong, fontSize: fontSize.lg, fontWeight: '700' },
+  addButton: { minHeight: MIN_TOUCH - 8, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: colors.greenStrong, justifyContent: 'center' },
+  addButtonOn: { backgroundColor: colors.green },
+  addText: { color: colors.white, fontSize: fontSize.sm, fontWeight: '700' },
   centered: { alignItems: 'center', gap: spacing.md, padding: spacing.xl },
   empty: { color: colors.textMuted, fontSize: fontSize.md, textAlign: 'center', padding: spacing.xl },
   confirm: { margin: spacing.sm, padding: spacing.md, gap: spacing.md, borderRadius: 8, backgroundColor: colors.bgSurface },

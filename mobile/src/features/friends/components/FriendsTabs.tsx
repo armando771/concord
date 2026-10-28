@@ -3,12 +3,12 @@ import { colors, fontSize, MIN_TOUCH, radius, spacing } from '../../../shared/th
 
 export type FriendsTab = 'online' | 'all' | 'pending' | 'blocked' | 'add'
 
-const TABS: { id: FriendsTab; label: string }[] = [
+// "Adicionar amigo" não é aba: é o botão do cabeçalho (nas 4 abas a largura de 360 dp basta, sem corte).
+const TABS: { id: Exclude<FriendsTab, 'add'>; label: string }[] = [
   { id: 'online', label: 'Online' },
   { id: 'all', label: 'Todos' },
   { id: 'pending', label: 'Pendentes' },
-  { id: 'blocked', label: 'Bloqueados' },
-  { id: 'add', label: 'Adicionar amigo' }
+  { id: 'blocked', label: 'Bloqueados' }
 ]
 
 interface FriendsTabsProps {
@@ -27,7 +27,7 @@ export function FriendsTabs({ selected, onSelect }: FriendsTabsProps) {
           accessibilityLabel={tab.label}
           accessibilityState={{ selected: selected === tab.id }}
           onPress={() => onSelect(tab.id)}
-          style={[styles.tab, selected === tab.id && styles.selected, tab.id === 'add' && styles.add]}
+          style={[styles.tab, selected === tab.id && styles.selected]}
         >
           <Text style={[styles.text, selected === tab.id && styles.selectedText]}>{tab.label}</Text>
         </Pressable>
@@ -41,7 +41,6 @@ const styles = StyleSheet.create({
   tabs: { gap: spacing.sm, padding: spacing.sm },
   tab: { minHeight: MIN_TOUCH - 4, paddingHorizontal: spacing.md, borderRadius: radius.md, justifyContent: 'center' },
   selected: { backgroundColor: colors.bgAccent },
-  add: { backgroundColor: colors.greenStrong },
   text: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: '600' },
   selectedText: { color: colors.textStrong }
 })

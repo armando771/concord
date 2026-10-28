@@ -77,7 +77,7 @@ describe('rotas do app', () => {
     jest.mocked(loadTokens).mockResolvedValueOnce({ accessToken: 'a', refreshToken: 'r' })
     await renderRouter('./app', { initialUrl: '/amigos' })
     expect(await screen.findByRole('tab', { name: 'Pendentes' })).toBeOnTheScreen()
-    expect(screen.getByRole('tab', { name: 'Adicionar amigo' })).toBeOnTheScreen()
+    expect(screen.getByRole('button', { name: 'Adicionar amigo' })).toBeOnTheScreen()
     expect(screen.getByRole('button', { name: 'Voltar' })).toBeOnTheScreen()
   })
 
