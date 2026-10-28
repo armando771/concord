@@ -4,16 +4,13 @@ import BadgeIcon from './BadgeIcon'
 
 /** "Seu progresso": quanto falta e a barra até o próximo tier (só no próprio perfil). */
 function BadgeProgress({ badge, mythic }: { badge: Badge; mythic: boolean }): React.JSX.Element {
-  const earned = badge.tier > 0
   const maxed = badge.tier >= badge.tiers.length
 
   return (
     <>
       <p className="text-sm font-semibold text-strong">Seu progresso</p>
       <div className="mt-3 flex items-center gap-3">
-        {earned && (
-          <BadgeIcon category={badge.category} tier={badge.tier} rarity={badge.rarity} size={32} />
-        )}
+        <BadgeIcon category={badge.category} tier={badge.tier} rarity={badge.rarity} size={32} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-gray-100">{remainingText(badge)}</p>
           <div

@@ -27,8 +27,14 @@
 - Badges: novo badge Votante para quem vota nos cards do quadro de propostas (Eleitor, Cidadão, Fiscal de Urna, Mesário e Voto de Minerva, de 1 a 150 votos). Sobe na hora do voto, e quem já votou ganha os tiers com a data certa.
 - Badges: novo badge Aniversariante, ganho no dia do seu aniversário e seu para sempre. Vale para quem tem a data cadastrada e deixa ligado "Anunciar meu aniversário nos servidores".
 - Badges: novo badge exclusivo Primeira mensagem, de quem mandou a primeira mensagem de um servidor (Quebra-gelo, Desbravador e Big Bang, em 1, 3 e 10 servidores). Nos servidores que já existem, vale a mensagem mais antiga que ainda está lá.
+- A atualização agora baixa sozinha em segundo plano; o botão Atualizar instala na hora.
 
 ## Correções
+- Badges: o Figurinha não conta mais a mesma figurinha ou o mesmo GIF mandado logo em seguida, e o que for apagado em até 2 minutos sai da conta. Quem subiu o badge assim volta para o tier que as figurinhas que ainda estão no chat dão.
+- Badges: o Mensagens enviadas não conta mais mensagem repetida em seguida (a mesma que você acabou de mandar na sala), e mensagem apagada em até 2 minutos sai da conta. Quem subiu o badge assim volta para o tier que as mensagens que ainda estão no chat dão.
+- Badges: o Amigos agora conta só amizades com contas de e-mail confirmado e criadas há pelo menos 7 dias. Amigo com conta nova passa a contar quando completar os 7 dias, e quem subiu o badge com contas novas volta para o tier que os amigos de verdade dão.
+- Badges: o Dono de servidor agora conta só servidores com pelo menos 3 membros além de você (bots não contam). Quem subiu o badge com servidores vazios volta para o tier que os servidores com gente dão.
+- Badges: o DJ agora conta só a música que toca por pelo menos 30 segundos com mais alguém ouvindo na call, e não cada música posta na fila. Quem subiu o badge com playlists volta para o tier que os pedidos antigos dão.
 - Badges: o badge Reações agora conta uma vez por mensagem. Vários emojis seus na mesma mensagem valem 1, e quem já tinha subido o badge assim volta para o tier que as mensagens dão.
 - Janela estreita: Configurações, Configurações do servidor, badges e cargos agora cabem em telas pequenas, com a navegação em cima do conteúdo, e as setas para ordenar cargos aparecem em telas de toque.
 - Perfil e servidor: agora dá para arrastar e dar zoom (recortar) o avatar, o banner e o ícone também quando a imagem é um GIF. A animação continua.

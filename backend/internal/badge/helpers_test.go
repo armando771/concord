@@ -24,6 +24,16 @@ func category(t *testing.T, key string) Category {
 	return Category{}
 }
 
+// tierOf é o tier da categoria (0 quando ela não aparece: escondida até o tier 1).
+func tierOf(badges []Badge, key string) int {
+	for _, b := range badges {
+		if b.Category == key {
+			return b.Tier
+		}
+	}
+	return 0
+}
+
 // assertTiers confere nome, limite e raridade de cada tier.
 func assertTiers(t *testing.T, key string, want []Tier) {
 	t.Helper()

@@ -1,6 +1,7 @@
 package badge
 
 import (
+	"math"
 	"time"
 
 	"gin-quickstart/backend/internal/birthday"
@@ -27,8 +28,9 @@ type Stats struct {
 	PeakCallSize int64
 	// Maior tempo seguido numa call com mais alguém.
 	LongestSessionSeconds int64
-	OwnedServers          int64
-	// Amizades aceitas.
+	// Servidores da pessoa com donoMinMembers membros além dela (Dono).
+	OwnedServers int64
+	// Amizades aceitas com conta real (amigoContaRealDias).
 	Friends int64
 	// Cards do quadro de propostas criados pela pessoa que ainda existem.
 	Proposals int64
@@ -36,8 +38,8 @@ type Stats struct {
 	IsDev bool
 	// Escolhas da enquete ("enquete:opcao"), de internal/enquete.
 	Escolhas map[string]bool
-	// Músicas postas na fila do Maestro (DJ).
-	SongsQueued int64
+	// Músicas do Maestro que tocaram 30 s com mais alguém ouvindo (DJ).
+	SongsPlayed int64
 	// Sons da mesa de áudio tocados com alguém ouvindo (Barulhento).
 	SoundsPlayed int64
 	// Mensagens com figurinha ou GIF (Figurinha).
@@ -73,7 +75,7 @@ type Unlock struct {
 	At       time.Time
 }
 
-// TierInfo é um degrau da escada que o app mostra.
+// TierInfo é um degrau da escada que o app mostra (conquistado ou próximo).
 type TierInfo struct {
 	Tier       int        `json:"tier"`
 	Name       string     `json:"name"`
@@ -82,7 +84,10 @@ type TierInfo struct {
 	UnlockedAt *time.Time `json:"unlocked_at,omitempty"`
 }
 
-// Badge é uma categoria do jeito que o app mostra. Tier 0 = nada ainda.
+// Badge é uma categoria que a pessoa já conquistou (tier 1 ou mais) do jeito
+// que o app mostra. Quem ainda não chegou ao tier 1 não recebe a categoria:
+// ela fica escondida até a primeira conquista. Depois dela, o app mostra o
+// que falta para o próximo tier.
 type Badge struct {
 	Category    string `json:"category"`
 	Name        string `json:"name"`
@@ -90,8 +95,8 @@ type Badge struct {
 	Unit        string `json:"unit"`
 	Value       int64  `json:"value"`
 	Tier        int    `json:"tier"`
-	TierName    string `json:"tier_name,omitempty"`
-	Rarity      string `json:"rarity,omitempty"`
+	TierName    string `json:"tier_name"`
+	Rarity      string `json:"rarity"`
 	// Quando o tier atual foi alcançado.
 	UnlockedAt    *time.Time `json:"unlocked_at,omitempty"`
 	NextThreshold *int64     `json:"next_threshold,omitempty"`
@@ -100,9 +105,8 @@ type Badge struct {
 	NextAt *time.Time `json:"next_at,omitempty"`
 	// Do tier atual até o próximo, de 0 a 1 (1 no último tier).
 	Progress float64 `json:"progress"`
-	// false quando não dá mais para conseguir (Pioneiro depois do corte).
-	Obtainable bool       `json:"obtainable"`
-	Tiers      []TierInfo `json:"tiers"`
+	// A escada inteira: os conquistados com o dia e os próximos sem.
+	Tiers []TierInfo `json:"tiers"`
 }
 
 // tierFor é o maior tier cujo limite o valor alcança (0 se nenhum).
@@ -181,7 +185,7 @@ var valueFns = map[string]valueFn{
 	"l":            func(s Stats, _ time.Time) int64 { return flag(s.Escolhas["segundo-turno:l"]) },
 	"v22":          func(s Stats, _ time.Time) int64 { return flag(s.Escolhas["segundo-turno:22"]) },
 	"nulo":         func(s Stats, _ time.Time) int64 { return flag(s.Escolhas["segundo-turno:nulo"]) },
-	"dj":           func(s Stats, _ time.Time) int64 { return s.SongsQueued },
+	"dj":           func(s Stats, _ time.Time) int64 { return s.SongsPlayed },
 	"barulhento":   func(s Stats, _ time.Time) int64 { return s.SoundsPlayed },
 	"figurinha":    func(s Stats, _ time.Time) int64 { return s.StickersSent },
 	"sequencia":    func(s Stats, _ time.Time) int64 { return s.LongestStreakDays },
@@ -212,85 +216,92 @@ func unlockTime(c Category, tier int, s Stats, now time.Time) time.Time {
 	return now
 }
 
-// Evaluate decide os badges de alguém. Um tier já gravado nunca se perde (o
-// valor pode cair: servidor apagado, reação removida). Devolve também os
-// tiers alcançados agora que ainda não estavam gravados.
+// ladder é a escada inteira de c: cada tier com o dia em que foi conquistado
+// (gravado ou alcançado agora) e, separados, os que ainda precisam ser gravados.
+// earned é o maior tier conquistado (0 se nenhum).
+func ladder(c Category, value int64, saved map[int]time.Time, s Stats, now time.Time) (tiers []TierInfo, fresh []Unlock, earned int) {
+	reached := tierFor(c, value)
+	tiers = make([]TierInfo, len(c.Tiers))
+	for i, t := range c.Tiers {
+		n := i + 1
+		info := TierInfo{Tier: n, Name: t.Name, Threshold: t.Threshold, Rarity: t.Rarity}
+		if at, ok := saved[n]; ok {
+			info.UnlockedAt = &at
+		} else if n <= reached {
+			at := unlockTime(c, n, s, now)
+			info.UnlockedAt = &at
+			fresh = append(fresh, Unlock{Category: c.Key, Tier: n, At: at})
+		}
+		if info.UnlockedAt != nil {
+			earned = n
+		}
+		tiers[i] = info
+	}
+	return tiers, fresh, earned
+}
+
+// progressTo preenche o que falta para o próximo tier (earned já é >= 1).
+func progressTo(b *Badge, c Category, earned int, value int64, createdAt time.Time) {
+	if earned >= len(c.Tiers) {
+		b.Progress = 1
+		return
+	}
+	floor := c.Tiers[earned-1].Threshold
+	next := c.Tiers[earned]
+	b.NextThreshold = &next.Threshold
+	b.NextTierName = next.Name
+	if span := next.Threshold - floor; span > 0 && value > floor {
+		b.Progress = math.Min(1, float64(value-floor)/float64(span))
+	}
+	if c.Key == "conta" {
+		at := createdAt.AddDate(0, int(next.Threshold), 0)
+		b.NextAt = &at
+	}
+}
+
+// evaluateCategory monta o badge de c para a pessoa; false quando ela ainda
+// não tem nem o tier 1 (a categoria fica escondida até ser conquistada).
+func evaluateCategory(c Category, s Stats, saved map[int]time.Time, now time.Time) (Badge, []Unlock, bool) {
+	value := valueOf(c, s, now)
+	// Concedido à mão: quem não tem nem vê; tirar da tabela tira o badge.
+	if c.Exclusive && value == 0 {
+		return Badge{}, nil, false
+	}
+	tiers, fresh, earned := ladder(c, value, saved, s, now)
+	if earned == 0 {
+		return Badge{}, nil, false
+	}
+	current := tiers[earned-1]
+	b := Badge{
+		Category:    c.Key,
+		Name:        c.Name,
+		Description: c.Description,
+		Unit:        c.Unit,
+		Value:       value,
+		Tier:        earned,
+		TierName:    current.Name,
+		Rarity:      current.Rarity,
+		UnlockedAt:  current.UnlockedAt,
+		Tiers:       tiers,
+	}
+	progressTo(&b, c, earned, value, s.CreatedAt)
+	return b, fresh, true
+}
+
+// Evaluate decide os badges de alguém: só as categorias em que ela já tem o
+// tier 1. Um tier já gravado nunca se perde (o valor pode cair: servidor
+// apagado, reação removida). Devolve também os tiers alcançados agora que
+// ainda não estavam gravados.
 func Evaluate(s Stats, stored Unlocks, now time.Time) ([]Badge, []Unlock) {
 	badges := make([]Badge, 0, len(Catalog))
 	var fresh []Unlock
-
 	for _, c := range Catalog {
-		value := valueOf(c, s, now)
-		// Concedido à mão: quem não tem nem vê; tirar da tabela tira o badge.
-		if c.Exclusive && value == 0 {
+		b, unlocks, ok := evaluateCategory(c, s, stored[c.Key], now)
+		if !ok {
 			continue
 		}
-		reached := tierFor(c, value)
-		saved := stored[c.Key]
-
-		tiers := make([]TierInfo, len(c.Tiers))
-		earned := 0
-		for i, t := range c.Tiers {
-			n := i + 1
-			info := TierInfo{Tier: n, Name: t.Name, Threshold: t.Threshold, Rarity: t.Rarity}
-			if at, ok := saved[n]; ok {
-				at := at
-				info.UnlockedAt = &at
-			} else if n <= reached {
-				at := unlockTime(c, n, s, now)
-				info.UnlockedAt = &at
-				fresh = append(fresh, Unlock{Category: c.Key, Tier: n, At: at})
-			}
-			if info.UnlockedAt != nil {
-				earned = n
-			}
-			tiers[i] = info
-		}
-
-		b := Badge{
-			Category:    c.Key,
-			Name:        c.Name,
-			Description: c.Description,
-			Unit:        c.Unit,
-			Value:       value,
-			Tier:        earned,
-			Obtainable:  true,
-			Tiers:       tiers,
-		}
-		if c.Key == "fundador" && earned == 0 && !isFounder(s.CreatedAt) {
-			b.Obtainable = false
-		}
-
-		var floor int64
-		if c.Unit == UnitLevel {
-			floor = 1 // ninguém tem nível 0
-		}
-		if earned > 0 {
-			current := tiers[earned-1]
-			b.TierName = current.Name
-			b.Rarity = current.Rarity
-			b.UnlockedAt = current.UnlockedAt
-			floor = current.Threshold
-		}
-		if earned < len(c.Tiers) {
-			next := c.Tiers[earned]
-			threshold := next.Threshold
-			b.NextThreshold = &threshold
-			b.NextTierName = next.Name
-			if span := threshold - floor; span > 0 && value > floor {
-				b.Progress = float64(value-floor) / float64(span)
-				if b.Progress > 1 {
-					b.Progress = 1
-				}
-			}
-			if c.Key == "conta" {
-				at := s.CreatedAt.AddDate(0, int(threshold), 0)
-				b.NextAt = &at
-			}
-		} else {
-			b.Progress = 1
-		}
 		badges = append(badges, b)
+		fresh = append(fresh, unlocks...)
 	}
 	return badges, fresh
 }

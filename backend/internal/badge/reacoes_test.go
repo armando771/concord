@@ -141,8 +141,9 @@ func TestReacoesBackfillDemotesFarmersDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if b := find(t, res.Badges.([]Badge), "reacoes"); b.Value != 3 || b.Tier != 0 {
-		t.Fatalf("farmer reacoes depois do backfill = %+v, want valor 3 e tier 0", b)
+	// Sem tier, o badge fica escondido (só aparece depois de conquistado).
+	if hasBadge(res.Badges.([]Badge), "reacoes") {
+		t.Fatalf("farmer reacoes depois do backfill aparece: %+v", res.Badges)
 	}
 	for _, ev := range pub.events {
 		for _, u := range ev.Unlocks {

@@ -2,6 +2,7 @@ package badge
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -47,12 +48,12 @@ func TestRepositoryDB(t *testing.T) {
 	exec(`INSERT INTO channels (id, server_id, name, created_by) VALUES ($1, $2, 'geral', $3)`, channelID, serverID, userID)
 
 	msgs := []string{uuid.NewString(), uuid.NewString(), uuid.NewString()}
-	for _, id := range msgs {
-		exec(`INSERT INTO messages (id, author_id, channel_id, content) VALUES ($1, $2, $3, 'oi')`, id, userID, channelID)
+	for i, id := range msgs {
+		exec(`INSERT INTO messages (id, author_id, channel_id, content, created_at) VALUES ($1, $2, $3, $4, NOW() - INTERVAL '10 minutes')`, id, userID, channelID, fmt.Sprintf("oi %d", i))
 	}
 	// Mensagem de sistema não conta.
 	exec(`INSERT INTO messages (id, author_id, channel_id, content, system_kind) VALUES ($1, $2, $3, 'parabéns', 'birthday')`, uuid.NewString(), userID, channelID)
-	// Apagar não desconta.
+	// Apagar depois de 2 minutos não desconta (mensagens_test.go).
 	exec(`DELETE FROM messages WHERE id = $1`, msgs[2])
 
 	exec(`INSERT INTO message_reactions (message_id, user_id, emoji) VALUES ($1, $2, '👍'), ($1, $2, '🔥'), ($3, $2, '👍')`, msgs[0], userID, msgs[1])
@@ -70,8 +71,9 @@ func TestRepositoryDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.MessagesSent != 3 || s.Reactions != 2 || s.OwnedServers != 1 {
-		t.Fatalf("counters = msgs %d reactions %d servers %d, want 3/2/1", s.MessagesSent, s.Reactions, s.OwnedServers)
+	// Servidor sem membros além do dono não conta (dono_test.go).
+	if s.MessagesSent != 3 || s.Reactions != 2 || s.OwnedServers != 0 {
+		t.Fatalf("counters = msgs %d reactions %d servers %d, want 3/2/0", s.MessagesSent, s.Reactions, s.OwnedServers)
 	}
 	if s.StreamSeconds != 60 || s.WatchSeconds != 40 || s.NightSeconds != 10 || s.MorningSeconds != 5 || s.PeakCallSize != 6 || s.LongestSessionSeconds != 100 {
 		t.Fatalf("call stats = %+v", s)

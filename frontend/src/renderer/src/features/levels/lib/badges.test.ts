@@ -11,7 +11,6 @@ import {
   publicStatText,
   RARITY,
   remainingText,
-  splitBadges,
   statText,
   unlockCount,
   selectedBadge,
@@ -30,7 +29,6 @@ function badge(over: Partial<Badge> = {}): Badge {
     value: 0,
     tier: 0,
     progress: 0,
-    obtainable: true,
     tiers: [],
     ...over
   }
@@ -175,18 +173,6 @@ describe('profileBadgeRow', () => {
   })
 })
 
-describe('splitBadges', () => {
-  it('separa conquistados dos que dá para desbloquear', () => {
-    const { earned, available } = splitBadges([
-      badge({ category: 'voz', tier: 1, rarity: 'comum' }),
-      badge({ category: 'conta' }),
-      badge({ category: 'fundador', unit: 'founder', obtainable: false })
-    ])
-    expect(earned.map((b) => b.category)).toEqual(['voz'])
-    expect(available.map((b) => b.category)).toEqual(['conta'])
-  })
-})
-
 describe('misc', () => {
   it('percentual da barra', () => {
     expect(progressPercent(badge({ progress: 0.666 }))).toBe(67)
@@ -251,7 +237,6 @@ describe('visão pública (perfil de outra pessoa)', () => {
 
   it('sem value/progress (visão pública) não quebra as contas', () => {
     expect(progressPercent(badge({ progress: undefined }))).toBe(0)
-    expect(splitBadges([badge({ obtainable: undefined })]).available).toEqual([])
   })
 })
 
@@ -345,25 +330,19 @@ describe('holoPointer', () => {
 })
 
 describe('visibleBadges e selectedBadge (modal de badges)', () => {
-  const mk = (category: string, tier: number, obtainable = true): Badge =>
-    ({ category, name: category, tier, obtainable, tiers: [] }) as unknown as Badge
+  const mk = (category: string, tier: number): Badge =>
+    ({ category, name: category, tier, tiers: [] }) as unknown as Badge
   const ganho = mk('voz', 2)
-  const livre = mk('chat', 0)
-  const todos = [ganho, livre]
+  const raro = mk('chat', 1)
+  // Tier 0 nunca chega da API; se chegasse, o app não mostra.
+  const bloqueado = mk('conta', 0)
 
-  it('no próprio perfil aparecem os ganhos e os que dá para desbloquear', () => {
-    const v = visibleBadges(todos, true)
-    expect(v.earned).toEqual([ganho])
-    expect(v.available).toEqual([livre])
-    expect(v.visible).toEqual([ganho, livre])
-  })
-
-  it('no perfil dos outros, só os ganhos', () => {
-    expect(visibleBadges(todos, false).visible).toEqual([ganho])
+  it('só os conquistados aparecem, sem bloqueados nem "disponíveis"', () => {
+    expect(visibleBadges([ganho, bloqueado])).toEqual([ganho])
   })
 
   it('sem badges carregados, tudo vazio', () => {
-    expect(visibleBadges(undefined, true).visible).toEqual([])
+    expect(visibleBadges(undefined)).toEqual([])
   })
 
   type Alvo = { userId: string; name: string; category?: string }
@@ -371,15 +350,15 @@ describe('visibleBadges e selectedBadge (modal de badges)', () => {
   it('o escolhido vale só para a abertura em que foi escolhido', () => {
     const target: Alvo = { userId: 'u1', name: 'Ana', category: 'voz' }
     const outro: Alvo = { userId: 'u2', name: 'Bia' }
-    const v = [ganho, livre]
-    expect(selectedBadge(v, target, { target, category: 'chat' })).toBe(livre)
+    const v = [ganho, raro]
+    expect(selectedBadge(v, target, { target, category: 'chat' })).toBe(raro)
     expect(selectedBadge(v, target, { target: outro, category: 'chat' })).toBe(ganho)
   })
 
   it('sem escolha usa o do alvo, e se ele não existe, o primeiro', () => {
-    const v = [ganho, livre]
+    const v = [ganho, raro]
     const alvo = (category?: string): Alvo => ({ userId: 'u1', name: 'A', category })
-    expect(selectedBadge(v, alvo('chat'), null)).toBe(livre)
+    expect(selectedBadge(v, alvo('chat'), null)).toBe(raro)
     expect(selectedBadge(v, alvo('nada'), null)).toBe(ganho)
     expect(selectedBadge([], alvo(), null)).toBeUndefined()
   })

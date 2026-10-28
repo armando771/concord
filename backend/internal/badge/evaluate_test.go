@@ -107,21 +107,41 @@ func TestEvaluateComputesTierProgressAndNext(t *testing.T) {
 	if voz.Progress != 0.5 {
 		t.Fatalf("voz progress = %v, want 0.5", voz.Progress)
 	}
-	if len(voz.Tiers) != 6 || voz.Tiers[0].UnlockedAt == nil || voz.Tiers[2].UnlockedAt != nil {
-		t.Fatalf("voz ladder unlocks wrong: %+v", voz.Tiers)
+	// A escada inteira: os 2 conquistados com dia, os de cima sem.
+	if len(voz.Tiers) != 6 || voz.Tiers[1].UnlockedAt == nil || voz.Tiers[2].UnlockedAt != nil {
+		t.Fatalf("voz ladder = %+v", voz.Tiers)
 	}
 
 	conta := find(t, badges, "conta")
 	if conta.Value != 2 || conta.Tier != 1 {
-		t.Fatalf("conta = value %d tier %d, want 2 months tier 1", conta.Value, conta.Tier)
+		t.Fatalf("conta = value %d tier %d, want 2 meses, tier 1", conta.Value, conta.Tier)
 	}
 	if conta.NextAt == nil || !conta.NextAt.Equal(stats.CreatedAt.AddDate(0, 3, 0)) {
 		t.Fatalf("conta next_at = %v", conta.NextAt)
 	}
+}
 
-	msgs := find(t, badges, "mensagens")
-	if msgs.Tier != 0 || msgs.UnlockedAt != nil || msgs.Progress != 0 || !msgs.Obtainable {
-		t.Fatalf("mensagens with 0 = %+v", msgs)
+func TestEvaluateHidesCategoriesWithoutTier1(t *testing.T) {
+	badges, fresh := Evaluate(Stats{CreatedAt: FounderCutoff}, nil, now)
+	// Conta nova (depois do corte do Pioneiro), sem uso: nenhuma categoria
+	// atingiu o tier 1.
+	if len(badges) != 0 || len(fresh) != 0 {
+		t.Fatalf("badges = %+v fresh = %+v, want nada", badges, fresh)
+	}
+}
+
+func TestEvaluateHidesCategoryJustBelowTier1(t *testing.T) {
+	first := category(t, "mensagens").Tiers[0].Threshold
+	below, _ := Evaluate(Stats{CreatedAt: FounderCutoff, MessagesSent: first - 1}, nil, now)
+	if hasBadge(below, "mensagens") {
+		t.Fatalf("mensagens apareceu faltando 1 para o tier 1: %+v", below)
+	}
+	at, fresh := Evaluate(Stats{CreatedAt: FounderCutoff, MessagesSent: first}, nil, now)
+	if m := find(t, at, "mensagens"); m.Tier != 1 || m.Tiers[1].UnlockedAt != nil {
+		t.Fatalf("mensagens = %+v, want tier 1", m)
+	}
+	if len(fresh) != 1 || fresh[0].Category != "mensagens" || fresh[0].Tier != 1 {
+		t.Fatalf("fresh = %+v, want o desbloqueio do tier 1 (o aviso continua)", fresh)
 	}
 }
 
@@ -145,22 +165,14 @@ func TestEvaluateLevelFromXP(t *testing.T) {
 	}
 }
 
-func TestEvaluateLevelProgressStartsAtLevelOne(t *testing.T) {
-	// Todo mundo começa no nível 1: a barra até o 10 começa vazia.
-	badges, _ := Evaluate(Stats{CreatedAt: now}, nil, now)
-	if nivel := find(t, badges, "nivel"); nivel.Value != 1 || nivel.Progress != 0 {
-		t.Fatalf("nivel at start = value %d progress %v, want 1/0", nivel.Value, nivel.Progress)
-	}
-}
-
 func TestEvaluateFounderCutoff(t *testing.T) {
 	early, _ := Evaluate(Stats{CreatedAt: FounderCutoff.Add(-time.Minute)}, nil, now)
 	if f := find(t, early, "fundador"); f.Tier != 1 || f.Rarity != RarityLegendary {
 		t.Fatalf("early account fundador = %+v", f)
 	}
 	late, _ := Evaluate(Stats{CreatedAt: FounderCutoff}, nil, FounderCutoff.AddDate(0, 1, 0))
-	if f := find(t, late, "fundador"); f.Tier != 0 || f.Obtainable {
-		t.Fatalf("late account fundador = %+v, want locked forever", f)
+	if hasBadge(late, "fundador") {
+		t.Fatalf("conta depois do corte não vê o Pioneiro: %+v", late)
 	}
 }
 
@@ -210,9 +222,6 @@ func TestEvaluateKeepsEarnedTierWhenValueDrops(t *testing.T) {
 	if dono.Tier != 2 || dono.TierName != "Síndico" {
 		t.Fatalf("dono = %+v, want tier 2 kept", dono)
 	}
-	if dono.Progress != 0 {
-		t.Fatalf("dono progress = %v, want 0 (value below the kept tier)", dono.Progress)
-	}
 	for _, u := range fresh {
 		if u.Category == "dono" {
 			t.Fatalf("dono must not be unlocked again: %+v", u)
@@ -224,8 +233,8 @@ func TestEvaluateIgnoresUnknownStoredTiers(t *testing.T) {
 	// Um tier removido do catálogo não pode quebrar a resposta.
 	stored := Unlocks{"festeiro": {9: now}, "sumiu": {1: now}}
 	badges, _ := Evaluate(Stats{CreatedAt: FounderCutoff}, stored, now)
-	if party := find(t, badges, "festeiro"); party.Tier != 0 {
-		t.Fatalf("festeiro = %+v, want 0", party)
+	if hasBadge(badges, "festeiro") {
+		t.Fatalf("tier que não existe mais não conta: %+v", badges)
 	}
 }
 
@@ -263,7 +272,7 @@ func TestEvaluateCreatorIsOnlyForDevs(t *testing.T) {
 
 	badges, fresh = Evaluate(Stats{CreatedAt: FounderCutoff, IsDev: true}, nil, now)
 	c := find(t, badges, "criador")
-	if c.Tier != 1 || c.Rarity != RarityMythic || c.TierName != "Fundador" || !c.Obtainable || c.Progress != 1 || c.NextThreshold != nil {
+	if c.Tier != 1 || c.Rarity != RarityMythic || c.TierName != "Fundador" || c.Progress != 1 || c.NextThreshold != nil {
 		t.Fatalf("dev criador = %+v", c)
 	}
 	if c.UnlockedAt == nil || !c.UnlockedAt.Equal(now) {
@@ -350,17 +359,6 @@ func TestEvaluateLKeepsDateOnceStored(t *testing.T) {
 	}
 }
 
-// nonExclusiveCount é quantas categorias quem não tem nenhum exclusivo vê.
-func nonExclusiveCount() int {
-	n := 0
-	for _, c := range Catalog {
-		if !c.Exclusive {
-			n++
-		}
-	}
-	return n
-}
-
 func TestEvaluateV22OnlyForWhoChoseIt(t *testing.T) {
 	badges, fresh := Evaluate(Stats{CreatedAt: FounderCutoff, Escolhas: map[string]bool{"segundo-turno:l": true}}, nil, now)
 	if hasBadge(badges, "v22") {
@@ -407,9 +405,8 @@ func TestEvaluateAccountAgeGoesUpToTenYears(t *testing.T) {
 	// Os 5 primeiros tiers (1 a 24 meses) ficam como eram: ninguém perde nada.
 	want := []string{"Semente", "Broto", "Muda", "Árvore", "Sequoia",
 		"Bosque", "Floresta", "Jequitibá", "Baobá", "Árvore Ancestral", "Árvore Celestial", "Árvore da Vida", "Yggdrasil"}
-	created := now.AddDate(-3, 0, -1)
-	badges, fresh := Evaluate(Stats{CreatedAt: created}, nil, now)
-	conta := find(t, badges, "conta")
+	old, _ := Evaluate(Stats{CreatedAt: now.AddDate(-11, 0, 0)}, nil, now)
+	conta := find(t, old, "conta")
 	if len(conta.Tiers) != len(want) {
 		t.Fatalf("conta tem %d tiers, want %d", len(conta.Tiers), len(want))
 	}
@@ -421,6 +418,9 @@ func TestEvaluateAccountAgeGoesUpToTenYears(t *testing.T) {
 	if conta.Tiers[5].Threshold != 36 || conta.Tiers[12].Threshold != 120 || conta.Tiers[12].Rarity != RarityLegendary {
 		t.Fatalf("3 anos/10 anos = %+v / %+v", conta.Tiers[5], conta.Tiers[12])
 	}
+	created := now.AddDate(-3, 0, -1)
+	badges, fresh := Evaluate(Stats{CreatedAt: created}, nil, now)
+	conta = find(t, badges, "conta")
 	if conta.Tier != 6 || conta.NextAt == nil || !conta.NextAt.Equal(created.AddDate(0, 48, 0)) {
 		t.Fatalf("3 anos = tier %d next_at %v, want 6 e o dia dos 4 anos", conta.Tier, conta.NextAt)
 	}

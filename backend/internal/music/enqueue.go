@@ -71,21 +71,4 @@ func (m *Manager) enqueueTracks(ctx context.Context, loc Location, textChannelID
 	if err := m.deps.PostPublic(ctx, textChannelID, text); err != nil {
 		log.Printf("[music] aviso público: %v", err)
 	}
-	m.reportQueued(userID, res.Added)
-}
-
-// OnQueued registra quem quer saber das músicas postas na fila (badge DJ).
-func (m *Manager) OnQueued(fn func(userID string, n int)) {
-	m.mu.Lock()
-	m.onQueued = fn
-	m.mu.Unlock()
-}
-
-func (m *Manager) reportQueued(userID string, n int) {
-	m.mu.Lock()
-	fn := m.onQueued
-	m.mu.Unlock()
-	if fn != nil && n > 0 {
-		fn(userID, n)
-	}
 }

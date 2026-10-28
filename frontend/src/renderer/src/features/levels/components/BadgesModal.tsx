@@ -14,7 +14,6 @@ import {
   visibleBadges
 } from '../lib/badges'
 import { trapTab } from '../../../shared/lib/focusTrap'
-import { LockIcon } from '../../../shared/ui/icons'
 import BadgeIcon from './BadgeIcon'
 import BadgesAside from './BadgesAside'
 import BadgeProgress from './BadgeProgress'
@@ -22,14 +21,6 @@ import BadgeTierLadder from './BadgeTierLadder'
 import { BadgeDetailSkeleton } from '../../../shared/ui/skeleton/layouts'
 
 function RarityChip({ badge }: { badge: Badge }): React.JSX.Element {
-  if (badge.tier === 0) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-fg/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-gray-300">
-        <LockIcon className="h-3 w-3" />
-        Bloqueado
-      </span>
-    )
-  }
   const meta = rarityMeta(badge.rarity)
   if (isMythic(badge.rarity)) {
     return (
@@ -63,12 +54,11 @@ function Detail({
   isMe: boolean
   ownerName: string
 }): React.JSX.Element {
-  const earned = badge.tier > 0
   const meta = rarityMeta(badge.rarity)
-  const title = earned ? badge.tier_name : badge.next_tier_name
+  const title = badge.tier_name
   const unlocked = formatUnlockDate(badge.unlocked_at)
   // O mítico tem a própria aura (MythicIcon); os outros, um brilho na cor.
-  const mythic = earned && isMythic(badge.rarity)
+  const mythic = isMythic(badge.rarity)
 
   return (
     <div className="flex flex-col items-center">
@@ -77,7 +67,7 @@ function Detail({
           <span
             aria-hidden="true"
             className="absolute inset-4 rounded-full blur-2xl"
-            style={{ background: earned ? `${meta.color}33` : 'var(--bg-hover)' }}
+            style={{ background: `${meta.color}33` }}
           />
         )}
         <BadgeIcon
@@ -85,7 +75,6 @@ function Detail({
           tier={badge.tier}
           rarity={badge.rarity}
           size={168}
-          locked={!earned}
           hero
           className="relative drop-shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
         />
@@ -131,9 +120,10 @@ function Detail({
 
 /**
  * "Badges de Fulano" (como no Discord): grade à esquerda, o badge escolhido
- * à direita com arte grande, tier, estatística, raridade e a escada. No seu
- * próprio perfil aparecem também os que dá para desbloquear e a barra de
- * progresso até o próximo tier.
+ * à direita com arte grande, tier, estatística, raridade e a escada. Só
+ * aparecem os badges já conquistados (o primeiro tier faz a categoria
+ * surgir); no seu próprio perfil, também a barra de progresso até o próximo
+ * tier.
  */
 function BadgesModal(): React.JSX.Element | null {
   const target = useBadgeStore((s) => s.modal)
@@ -178,8 +168,8 @@ function BadgesModal(): React.JSX.Element | null {
   if (!target) return null
 
   const isMe = target.userId === me?.id
-  const { earned, available, visible } = visibleBadges(badges, isMe)
-  const selected = selectedBadge(visible, target, picked)
+  const earned = visibleBadges(badges)
+  const selected = selectedBadge(earned, target, picked)
   const select = (category: string): void => setPicked({ target, category })
 
   const viewMine = (): void => {
@@ -211,7 +201,6 @@ function BadgesModal(): React.JSX.Element | null {
           titleId={titleId}
           badges={badges}
           earned={earned}
-          available={available}
           selected={selected}
           onSelect={select}
           canViewMine={Boolean(me)}
@@ -234,7 +223,7 @@ function BadgesModal(): React.JSX.Element | null {
             <BadgeDetailSkeleton />
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-gray-500">
-              {isMe ? 'Fique em call e converse para ganhar o primeiro.' : 'Nada por aqui ainda.'}
+              Nada por aqui ainda.
             </div>
           )}
         </section>

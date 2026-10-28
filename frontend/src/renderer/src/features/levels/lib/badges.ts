@@ -72,6 +72,7 @@ export function holoPointer(
 
 const HOUR = 3600
 
+const FOUNDER_TEXT = 'Chegou nas primeiras semanas'
 const DEV_TEXT = 'Dev do Salinha'
 const DEV_ONLY = 'Só para os devs'
 /** O nome da escolha de cada badge do segundo turno (categoria -> "Fez o L"). */
@@ -90,9 +91,8 @@ function voteText(category: string | undefined): string {
 }
 const BIRTHDAY_TEXT = 'Comemorou o aniversário no Salinha'
 
-function birthdayText(b: Badge, value: number): string {
-  if (value > 0) return 'Hoje é o seu aniversário!'
-  return b.tier > 0 ? BIRTHDAY_TEXT : 'Ganho no dia do seu aniversário'
+function birthdayText(value: number): string {
+  return value > 0 ? 'Hoje é o seu aniversário!' : BIRTHDAY_TEXT
 }
 
 /** "#3 de 10 a chegar no nível 100" (a posição vem também para os outros). */
@@ -152,10 +152,9 @@ const STAT_TEXT: Partial<Record<BadgeUnit, (b: Badge, value: number) => string>>
   stickers: (_, value) => plural(value, 'figurinha ou GIF enviado', 'figurinhas e GIFs enviados'),
   days: (_, value) => `Recorde de ${plural(value, 'dia seguido', 'dias seguidos')}`,
   votes: (_, value) => plural(value, 'voto dado', 'votos dados'),
-  birthday: birthdayText,
+  birthday: (_, value) => birthdayText(value),
   firsts: (_, value) => `Primeira mensagem de ${plural(value, 'servidor', 'servidores')}`,
-  founder: (_, value) =>
-    value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas',
+  founder: () => FOUNDER_TEXT,
   dev: () => DEV_TEXT,
   vote: (b) => voteText(b.category)
 }
@@ -168,7 +167,7 @@ export function statText(b: Badge): string {
 
 /** Badges sem escada de números: no perfil dos outros, uma frase. */
 const PUBLIC_FIXED_TEXT: Partial<Record<BadgeUnit, (b: Badge) => string>> = {
-  founder: () => 'Chegou nas primeiras semanas',
+  founder: () => FOUNDER_TEXT,
   dev: () => DEV_TEXT,
   vote: (b) => voteText(b.category),
   rank: (b) => rankText(b.value),
@@ -314,24 +313,12 @@ export function profileBadgeRow(badges: Badge[], max = 6): { shown: Badge[]; ove
   return { shown: earned.slice(0, max), overflow: Math.max(0, earned.length - max) }
 }
 
-/** "Seus badges" e "Disponíveis para desbloquear". */
-export function splitBadges(badges: Badge[]): { earned: Badge[]; available: Badge[] } {
-  return {
-    earned: earnedBadges(badges),
-    available: badges.filter((b) => b.tier === 0 && b.obtainable === true)
-  }
-}
-
 /**
- * O que o modal de badges mostra: no próprio perfil, os ganhos e os que dá
- * para desbloquear; no dos outros, só os ganhos.
+ * O que o modal de badges mostra, no próprio perfil e no dos outros: só os
+ * conquistados. Categorias sem o tier 1 nem chegam da API.
  */
-export function visibleBadges(
-  badges: Badge[] | undefined,
-  isMe: boolean
-): { earned: Badge[]; available: Badge[]; visible: Badge[] } {
-  const { earned, available } = splitBadges(badges ?? [])
-  return { earned, available, visible: isMe ? [...earned, ...available] : earned }
+export function visibleBadges(badges: Badge[] | undefined): Badge[] {
+  return earnedBadges(badges ?? [])
 }
 
 /**

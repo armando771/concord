@@ -49,6 +49,25 @@ describe('UpdateBarView', () => {
     expect(html).not.toContain('<button')
   })
 
+  it('baixando sozinho em segundo plano: mostra o progresso e mantém o botão', () => {
+    const html = render({ progress: 40 })
+    expect(html).toContain('Baixando a versão 1.2.0… 40%')
+    expect(html).toContain('<button')
+    expect(html).toContain('Atualizar')
+  })
+
+  it('baixada e verificada: volta para "disponível" e o botão instala', () => {
+    const html = render({ ready: true, progress: 100 })
+    expect(html).toContain('Versão 1.2.0 disponível')
+    expect(html).toContain('Atualizar')
+  })
+
+  it('confirmação em chamada aparece no lugar do progresso', () => {
+    const html = render({ progress: 40, inCall: true, confirming: true, callType: 'dm' })
+    expect(html).toContain('vai te tirar da chamada')
+    expect(html).not.toContain('40%')
+  })
+
   it('baixada: mostra que está reiniciando', () => {
     const html = render({ requested: true, ready: true, progress: 100 })
     expect(html).toContain('Reiniciando para instalar a versão 1.2.0')

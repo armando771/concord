@@ -31,7 +31,7 @@ const (
 	UnitBugs    = "bugs"
 	// UnitRank: posição de chegada (Top 10 do nível 100).
 	UnitRank = "rank"
-	// UnitSongs: músicas postas na fila do Maestro (DJ).
+	// UnitSongs: músicas do Maestro que tocaram de verdade (DJ).
 	UnitSongs = "songs"
 	// UnitSounds: sons tocados na mesa de áudio (Barulhento).
 	UnitSounds = "sounds"
