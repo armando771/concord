@@ -1,6 +1,15 @@
 import { session } from './session'
 import { WsClient } from './ws'
 
+const reconnectListeners = new Set<() => void>()
+
+/** Avisa quando a conexão volta depois de uma queda (não na primeira abertura): quem
+ *  mostra dados em tempo real refaz a busca para cobrir o que se perdeu. */
+export function onRealtimeReconnect(listener: () => void): () => void {
+  reconnectListeners.add(listener)
+  return () => reconnectListeners.delete(listener)
+}
+
 /**
  * Conexão única do app com o servidor em tempo real. As features não tratam
  * eventos aqui: se inscrevem com `onWsEvent` (ws.ts).
@@ -8,5 +17,8 @@ import { WsClient } from './ws'
 export const realtime = new WsClient({
   getToken: () => session().tokens().accessToken,
   getUserId: () => session().userId(),
-  onEvent: () => {}
+  onEvent: () => {},
+  onOpen: (reconnected) => {
+    if (reconnected) reconnectListeners.forEach((listener) => listener())
+  }
 })
