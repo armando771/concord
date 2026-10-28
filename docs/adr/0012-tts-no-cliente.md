@@ -61,7 +61,7 @@ leva `retry_after`) e, em canal, a permissão nova **Enviar mensagens TTS**
 vale quem pode escrever nela.
 
 A permissão vem **ligada no @everyone** (servidores novos e, pela migration
-000120, os existentes). O Discord a deixa desligada, mas aqui os servidores são
+000127, os existentes). O Discord a deixa desligada, mas aqui os servidores são
 de amigos, o pedido é que qualquer um use, e o abuso já é contido pelo limite
 de tamanho, pelo intervalo de 10 s, pela fila e pelo interruptor de quem ouve.
 Quem quiser restringir desliga no cargo ou no canal.

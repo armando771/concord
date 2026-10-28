@@ -38,7 +38,7 @@ func TestMigrationDefaultsMatchConstants(t *testing.T) {
 	sql := readMigration(t, "000029_add_roles_permissions.up.sql")
 	added := nicknameMigrationBits(t)
 	disconnectBits := disconnectMigrationBits(t)
-	ttsBits := roleUpdateBits(t, "000120_tts_messages.up.sql")
+	ttsBits := roleUpdateBits(t, "000127_tts_messages.up.sql")
 	for name, want := range map[string]int64{"@everyone": DefaultEveryone, "Moderador": legacyModerator} {
 		needle := "'" + name + "', "
 		i := strings.Index(sql, "SELECT id, "+needle)
@@ -162,14 +162,14 @@ func expressionMigrationBits(t *testing.T, perms int64) int64 {
 	return added
 }
 
-// A 000120 liga só o SEND_TTS_MESSAGES, nos dois cargos padrão, e o down o
+// A 000127 liga só o SEND_TTS_MESSAGES, nos dois cargos padrão, e o down o
 // tira de todos os cargos e sobrescritas.
 func TestTTSMigrationBits(t *testing.T) {
-	added := roleUpdateBits(t, "000120_tts_messages.up.sql")
+	added := roleUpdateBits(t, "000127_tts_messages.up.sql")
 	if added["@everyone"] != SendTTSMessages || added["Moderador"] != SendTTSMessages {
-		t.Errorf("000120 liga %v, want só SEND_TTS_MESSAGES (%d)", added, SendTTSMessages)
+		t.Errorf("000127 liga %v, want só SEND_TTS_MESSAGES (%d)", added, SendTTSMessages)
 	}
-	down := readMigration(t, "000120_tts_messages.down.sql")
+	down := readMigration(t, "000127_tts_messages.down.sql")
 	want := "& ~" + strconv.FormatInt(SendTTSMessages, 10)
 	if strings.Count(down, want) != 3 {
 		t.Errorf("down devia tirar o bit dos cargos e das sobrescritas (%q)", want)

@@ -48,7 +48,7 @@ export const ALL_PERMISSIONS: number = Object.values(Perm).reduce((sum, bit) => 
  * O que todo membro faz num servidor novo (igual ao backend). "Alterar apelido"
  * vem ligado, como no Discord; nos servidores antigos a migration 000039 ligou.
  * "Adicionar sons", "Adicionar figurinhas" (migration 000125) e "Enviar
- * mensagens TTS" (a 000120 ligou nos antigos; ver docs/adr/0012-tts-no-cliente.md).
+ * mensagens TTS" (a 000127 ligou nos antigos; ver docs/adr/0012-tts-no-cliente.md).
  */
 export const DEFAULT_EVERYONE: number =
   Perm.VIEW_CHANNEL |
