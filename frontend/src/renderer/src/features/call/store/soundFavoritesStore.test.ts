@@ -6,7 +6,7 @@ const api = vi.hoisted(() => ({
   calls: [] as string[]
 }))
 
-vi.mock('../api/soundboard', () => {
+vi.mock('../api/soundFavorites', () => {
   const item = (id: string): Record<string, unknown> => ({
     id,
     server_id: id.startsWith('b') ? 'srv-b' : 'srv-a',

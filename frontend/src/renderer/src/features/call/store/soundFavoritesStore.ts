@@ -4,7 +4,7 @@ import {
   listFavoriteSounds,
   removeFavoriteSound,
   type FavoriteSoundItem
-} from '../api/soundboard'
+} from '../api/soundFavorites'
 import { clearLegacyFavorites, legacyFavoriteIds } from '../lib/legacySoundFavorites'
 
 /**

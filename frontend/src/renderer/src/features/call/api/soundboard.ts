@@ -20,11 +20,6 @@ export interface SoundboardItem {
   created_at: string
 }
 
-/** Som favorito: pode ser de outro servidor (server_name diz de qual). */
-export interface FavoriteSoundItem extends SoundboardItem {
-  server_name: string
-}
-
 export interface UploadSoundboardInput {
   name: string
   emoji?: string
@@ -38,26 +33,6 @@ export function listServerSounds(serverId: string): Promise<SoundboardItem[]> {
 
 export function deleteServerSound(serverId: string, soundId: string): Promise<void> {
   return request<void>(`/servers/${serverId}/soundboard/${soundId}`, {
-    method: 'DELETE'
-  })
-}
-
-const FAVORITES = '/users/me/soundboard-favorites'
-
-export function listFavoriteSounds(): Promise<FavoriteSoundItem[]> {
-  return request<FavoriteSoundItem[]>(FAVORITES)
-}
-
-/** Favorita e devolve a lista nova. */
-export function addFavoriteSound(soundId: string): Promise<FavoriteSoundItem[]> {
-  return request<FavoriteSoundItem[]>(`${FAVORITES}/${encodeURIComponent(soundId)}`, {
-    method: 'PUT'
-  })
-}
-
-/** Tira dos favoritos e devolve a lista nova. */
-export function removeFavoriteSound(soundId: string): Promise<FavoriteSoundItem[]> {
-  return request<FavoriteSoundItem[]>(`${FAVORITES}/${encodeURIComponent(soundId)}`, {
     method: 'DELETE'
   })
 }
@@ -111,9 +86,7 @@ function sendSoundUpload(
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(body as SoundboardItem)
       } else {
-        reject(
-          new ApiError(xhr.status, (body as { error?: string }).error ?? 'Falha ao enviar áudio')
-        )
+        reject(new ApiError(xhr.status, (body as { error?: string }).error ?? 'Falha ao enviar áudio'))
       }
     }
     xhr.onerror = () => reject(new ApiError(0, 'Erro de rede ao enviar áudio'))

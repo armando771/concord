@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { SoundboardItem } from '../api/soundboard'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useServerStore } from '../../servers/store/serverStore'
@@ -8,10 +8,12 @@ import { useSoundboardStore } from '../store/soundboardStore'
 import { useSoundFavoritesStore } from '../store/soundFavoritesStore'
 import { soundboardSections } from '../lib/soundboardSections'
 import { showToast } from '../../../shared/store/toastStore'
-import { PlusIcon, SearchIcon, VolumeIcon, VolumeOffIcon } from '../../../shared/ui/icons'
+import { PlusIcon, SearchIcon } from '../../../shared/ui/icons'
 import SoundboardUploadModal from './SoundboardUploadModal'
 import SoundPad from './SoundPad'
 import SoundSection from './SoundSection'
+import SoundboardVolumeBar from './SoundboardVolumeBar'
+import SoundboardEmpty from './SoundboardEmpty'
 import { formatKeyboardShortcut } from '../hooks/useSoundboardHotkeys'
 import { SoundboardSkeleton } from '../../../shared/ui/skeleton/layouts'
 
@@ -34,13 +36,11 @@ function SoundboardSoundsPanel({
   const loading = useSoundboardStore((s) => Boolean(s.loadingByServer[serverId]))
   // Já buscou este servidor alguma vez: reabrir mostra os sons na hora.
   const soundsLoaded = useSoundboardStore((s) => s.soundsByServer[serverId] !== undefined)
-  const volume = useSoundboardStore((s) => s.volume)
   const favorites = useSoundFavoritesStore((s) => s.favorites)
   const loadFavorites = useSoundFavoritesStore((s) => s.load)
   const toggleFavorite = useSoundFavoritesStore((s) => s.toggle)
   const keybinds = useSoundboardStore((s) => s.keybinds)
   const activePlays = useSoundboardStore((s) => s.activePlays)
-  const setVolume = useSoundboardStore((s) => s.setVolume)
   const setKeybind = useSoundboardStore((s) => s.setKeybind)
   const loadServerSounds = useSoundboardStore((s) => s.loadServerSounds)
   const deleteSound = useSoundboardStore((s) => s.deleteSound)
@@ -49,7 +49,6 @@ function SoundboardSoundsPanel({
   const [query, setQuery] = useState('')
   const [uploadOpen, setUploadOpen] = useState(false)
   const [recordingSoundId, setRecordingSoundId] = useState<string | null>(null)
-  const lastNonZeroVolume = useRef(volume > 0 ? volume : 0.8)
 
   useEffect(() => {
     void loadServerSounds(serverId)
@@ -137,15 +136,6 @@ function SoundboardSoundsPanel({
     }
   }
 
-  const toggleVolumeMute = (): void => {
-    if (volume > 0) {
-      lastNonZeroVolume.current = volume
-      setVolume(0)
-    } else {
-      setVolume(lastNonZeroVolume.current || 0.8)
-    }
-  }
-
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col">
@@ -162,38 +152,7 @@ function SoundboardSoundsPanel({
           </div>
         )}
 
-        {/* Controle de volume dedicado da mesa de áudio */}
-        <div className="mb-3 flex items-center gap-2.5 rounded-xl bg-fg/[0.04] px-3 py-2">
-          <button
-            type="button"
-            onClick={toggleVolumeMute}
-            aria-label={volume === 0 ? 'Ativar som da mesa' : 'Silenciar mesa de áudio'}
-            title={volume === 0 ? 'Ativar som da mesa' : 'Silenciar mesa de áudio'}
-            className="cursor-pointer text-gray-300 transition-colors hover:text-strong"
-          >
-            {volume === 0 ? (
-              <VolumeOffIcon className="h-4 w-4 text-danger" />
-            ) : (
-              <VolumeIcon className="h-4 w-4" />
-            )}
-          </button>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={Math.round(volume * 100)}
-            onChange={(e) => {
-              const next = Number(e.target.value) / 100
-              if (next > 0) lastNonZeroVolume.current = next
-              setVolume(next)
-            }}
-            aria-label="Volume da mesa de áudio"
-            className="h-1.5 flex-1 cursor-pointer accent-brand"
-          />
-          <span className="w-9 text-right text-[11px] font-semibold text-gray-300">
-            {Math.round(volume * 100)}%
-          </span>
-        </div>
+        <SoundboardVolumeBar />
 
         {/* Busca */}
         <div className="relative mb-3">
@@ -212,18 +171,10 @@ function SoundboardSoundsPanel({
           {loading && !soundsLoaded ? (
             <SoundboardSkeleton />
           ) : nothingShown ? (
-            <div className="rounded-xl border border-dashed border-subtle py-8 text-center">
-              <p className="text-xs font-medium text-gray-300">
-                {sounds.length === 0 && favorites.length === 0
-                  ? 'Nenhum som neste servidor ainda.'
-                  : 'Nenhum som encontrado para essa busca.'}
-              </p>
-              {sounds.length === 0 && favorites.length === 0 && canAddSounds && (
-                <p className="mt-1 text-[11px] text-gray-500">
-                  Clique em &ldquo;Adicionar som&rdquo; para enviar um áudio de até 15s (5 MB).
-                </p>
-              )}
-            </div>
+            <SoundboardEmpty
+              searching={sounds.length > 0 || favorites.length > 0}
+              canAdd={canAddSounds}
+            />
           ) : (
             <>
               <SoundSection title="★ Favoritos">{sections.favorites.map(renderPad)}</SoundSection>

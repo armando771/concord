@@ -135,6 +135,90 @@ export const useSoundboardStore = create<SoundboardState>()((set, get) => {
     })
   }
 
+  const onSoundCreated = (payload: unknown): void => {
+    const p = payload as SoundboardCreatedPayload
+    if (!p?.server_id || !p?.sound) return
+    set((s) => {
+      const current = s.soundsByServer[p.server_id] ?? []
+      if (current.some((x) => x.id === p.sound.id)) return s
+      return {
+        soundsByServer: {
+          ...s.soundsByServer,
+          [p.server_id]: [p.sound, ...current]
+        }
+      }
+    })
+  }
+
+  const onSoundDeleted = (payload: unknown): void => {
+    const p = payload as SoundboardDeletedPayload
+    if (!p?.server_id || !p?.sound_id) return
+    useSoundFavoritesStore.getState().forget(p.sound_id)
+    set((s) => {
+      const current = s.soundsByServer[p.server_id] ?? []
+      return {
+        soundsByServer: {
+          ...s.soundsByServer,
+          [p.server_id]: current.filter((x) => x.id !== p.sound_id)
+        }
+      }
+    })
+  }
+
+  /** Alguém tocou um som na chamada ativa: marca quem tocou e reproduz. */
+  const onCallSoundboard = (payload: unknown): void => {
+    const p = payload as CallSoundboardPayload
+    const callState = useCallStore.getState()
+    if (
+      !p?.call_id ||
+      callState.status !== 'active' ||
+      callState.callId !== p.call_id ||
+      !p.sound ||
+      !p.user
+    ) {
+      return
+    }
+
+    const userId = p.user.id
+    const playToken = nextPlayToken++
+    const prevTimer = playTimers.get(userId)
+    if (prevTimer) clearTimeout(prevTimer)
+
+    const durationMs = Math.min(Math.max(p.sound.duration_ms || 3000, 500), 16_000)
+    const timer = setTimeout(() => {
+      clearUserPlay(userId, playToken)
+    }, durationMs + 350)
+    playTimers.set(userId, timer)
+
+    set((s) => ({
+      activePlays: {
+        ...s.activePlays,
+        [userId]: {
+          soundId: p.sound.id,
+          soundName: p.sound.name,
+          emoji: p.sound.emoji ?? null,
+          playToken
+        }
+      }
+    }))
+
+    const locallyMuted = useUserAudioStore.getState().get(userId).muted
+    const volume = get().volume
+    if (!callState.deafened && !locallyMuted && volume > 0) {
+      void playSoundboardClip({
+        soundId: p.sound.id,
+        volume,
+        onEnded: () => clearUserPlay(userId, playToken)
+      })
+    }
+  }
+
+  const wsHandlers: Record<string, (payload: unknown) => void> = {
+    'soundboard:created': onSoundCreated,
+    'soundboard:deleted': onSoundDeleted,
+    'call:soundboard': onCallSoundboard
+  }
+
   return {
     volume: initialPrefs.volume,
     keybinds: initialPrefs.keybinds,
@@ -239,84 +323,7 @@ export const useSoundboardStore = create<SoundboardState>()((set, get) => {
     },
 
     handleWsEvent: (event) => {
-      if (event.type === 'soundboard:created') {
-        const p = event.payload as SoundboardCreatedPayload
-        if (!p?.server_id || !p?.sound) return
-        set((s) => {
-          const current = s.soundsByServer[p.server_id] ?? []
-          if (current.some((x) => x.id === p.sound.id)) return s
-          return {
-            soundsByServer: {
-              ...s.soundsByServer,
-              [p.server_id]: [p.sound, ...current]
-            }
-          }
-        })
-        return
-      }
-
-      if (event.type === 'soundboard:deleted') {
-        const p = event.payload as SoundboardDeletedPayload
-        if (!p?.server_id || !p?.sound_id) return
-        useSoundFavoritesStore.getState().forget(p.sound_id)
-        set((s) => {
-          const current = s.soundsByServer[p.server_id] ?? []
-          return {
-            soundsByServer: {
-              ...s.soundsByServer,
-              [p.server_id]: current.filter((x) => x.id !== p.sound_id)
-            }
-          }
-        })
-        return
-      }
-
-      if (event.type === 'call:soundboard') {
-        const p = event.payload as CallSoundboardPayload
-        const callState = useCallStore.getState()
-        if (
-          !p?.call_id ||
-          callState.status !== 'active' ||
-          callState.callId !== p.call_id ||
-          !p.sound ||
-          !p.user
-        ) {
-          return
-        }
-
-        const userId = p.user.id
-        const playToken = nextPlayToken++
-        const prevTimer = playTimers.get(userId)
-        if (prevTimer) clearTimeout(prevTimer)
-
-        const durationMs = Math.min(Math.max(p.sound.duration_ms || 3000, 500), 16_000)
-        const timer = setTimeout(() => {
-          clearUserPlay(userId, playToken)
-        }, durationMs + 350)
-        playTimers.set(userId, timer)
-
-        set((s) => ({
-          activePlays: {
-            ...s.activePlays,
-            [userId]: {
-              soundId: p.sound.id,
-              soundName: p.sound.name,
-              emoji: p.sound.emoji ?? null,
-              playToken
-            }
-          }
-        }))
-
-        const locallyMuted = useUserAudioStore.getState().get(userId).muted
-        const volume = get().volume
-        if (!callState.deafened && !locallyMuted && volume > 0) {
-          void playSoundboardClip({
-            soundId: p.sound.id,
-            volume,
-            onEnded: () => clearUserPlay(userId, playToken)
-          })
-        }
-      }
+      wsHandlers[event.type]?.(event.payload)
     }
   }
 })
