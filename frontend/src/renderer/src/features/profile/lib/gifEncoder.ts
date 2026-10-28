@@ -1,6 +1,7 @@
 // Codificador de GIF animado (sem dependência). O recorte do avatar/banner/ícone
 // precisa manter a animação, e o canvas só devolve imagem parada; então os
 // quadros recortados são escritos aqui. Índice 0 da paleta é a transparência.
+import { framePatches, type GifPatch } from './gifDelta'
 
 export interface GifFrame {
   /** Índice na paleta de cada pixel (0 = transparente), linha a linha. */
@@ -98,17 +99,21 @@ function header(width: number, height: number, palette: GifInput['palette']): nu
   return [...ascii('GIF89a'), ...sizes, ...table, ...loop]
 }
 
-function frameBytes(frame: GifFrame, width: number, height: number): number[] {
-  const delay = Math.round(Math.max(MIN_DELAY_MS, frame.delayMs) / 10)
-  // disposal 2 (limpa o quadro) + transparência no índice 0
-  const control = [0x21, 0xf9, 4, 0x09, ...word(delay), 0, 0]
-  const descriptor = [0x2c, 0, 0, 0, 0, ...word(width), ...word(height), 0]
-  return [...control, ...descriptor, MIN_CODE_SIZE, ...subBlocks(lzwCompress(frame.indices))]
+/** Disposal 1 (fica na tela) ou 2 (limpa), sempre com transparência no índice 0. */
+const KEEP = 0x05
+const CLEAR_AFTER = 0x09
+
+function frameBytes(patch: GifPatch): number[] {
+  const delay = Math.round(Math.max(MIN_DELAY_MS, patch.delayMs) / 10)
+  const control = [0x21, 0xf9, 4, patch.keep ? KEEP : CLEAR_AFTER, ...word(delay), 0, 0]
+  const place = [...word(patch.left), ...word(patch.top), ...word(patch.width), ...word(patch.height)]
+  const descriptor = [0x2c, ...place, 0]
+  return [...control, ...descriptor, MIN_CODE_SIZE, ...subBlocks(lzwCompress(patch.indices))]
 }
 
 export function encodeGif({ width, height, palette, frames }: GifInput): Uint8Array {
   const parts = [header(width, height, palette)]
-  for (const frame of frames) parts.push(frameBytes(frame, width, height))
+  for (const patch of framePatches(frames, width, height)) parts.push(frameBytes(patch))
   parts.push([0x3b])
   return Uint8Array.from(parts.flat())
 }

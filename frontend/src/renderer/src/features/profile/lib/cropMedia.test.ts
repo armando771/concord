@@ -80,6 +80,23 @@ describe('cropMedia', () => {
     expect(closed.decoder).toBe(1)
   })
 
+  it('GIF recortado não é ampliado além do pedaço do original (regressão: GIF inflava)', async () => {
+    vi.stubGlobal('ImageDecoder', FakeDecoder)
+    const piece = { sx: 10, sy: 0, sw: 40, sh: 40 }
+    const change = await cropMedia(gif, img, piece, { width: 512, height: 512 })
+    const bytes = new Uint8Array(await change.file.arrayBuffer())
+    expect([bytes[6], bytes[8]]).toEqual([40, 40])
+  })
+
+  it('recorte que pega o GIF inteiro envia o original, sem reescrever', async () => {
+    vi.stubGlobal('ImageDecoder', FakeDecoder)
+    const whole = { naturalWidth: 100, naturalHeight: 100 } as HTMLImageElement
+    const change = await cropMedia(gif, whole, rect, { width: 512, height: 512 })
+    expect(change).toMatchObject({ file: gif, animated: true })
+    expect(change.staticFrame).toBeInstanceOf(Blob)
+    expect(closed.decoder).toBe(0)
+  })
+
   it('sem WebCodecs o GIF entra inteiro, como antes', async () => {
     vi.stubGlobal('ImageDecoder', undefined)
     const change = await cropMedia(gif, img, rect, out)
