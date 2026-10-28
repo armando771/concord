@@ -36,10 +36,12 @@ var usoCategories = []Category{
 	},
 	{
 		// Mensagens com figurinha ou GIF, contadas por trigger como as
-		// mensagens (mensagem apagada não desconta).
+		// mensagens (migration 000114): a mesma figurinha ou GIF da mensagem
+		// anterior da pessoa na sala, há menos de 1 hora, não conta, e a
+		// apagada em até 2 minutos desconta.
 		Key:         "figurinha",
 		Name:        "Figurinha",
-		Description: "Mande figurinhas e GIFs nos canais e nas DMs.",
+		Description: "Mande figurinhas e GIFs nos canais e nas DMs. A mesma figurinha ou GIF repetido em seguida não conta, e a apagada em até 2 minutos sai da conta.",
 		Unit:        UnitStickers,
 		Tiers: []Tier{
 			{"Figurinha Repetida", 10, RarityCommon},
