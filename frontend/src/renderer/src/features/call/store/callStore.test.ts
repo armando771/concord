@@ -1993,16 +1993,44 @@ describe('callStore — permissões de voz', () => {
     expect(showToast.error).toHaveBeenCalledWith(expect.stringMatching(/moderador/))
   })
 
-  it('ganhar a permissão publica o microfone, mas não desmuta sozinho', async () => {
+  it('perdeu a fala sem querer (moderador silenciou) e foi liberado: volta a falar sozinho', async () => {
     await joinChannel()
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+    expect(useCallStore.getState().muted).toBe(true)
+    chat.sendEvent.mockClear()
+
+    mediaHandlers().onPublishPermissions({ microphone: true, stream: true })
+
+    expect(useCallStore.getState()).toMatchObject({ canSpeak: true, muted: false })
+    expect(media.instances[0].ensureMic).toHaveBeenLastCalledWith(false)
+    expect(chat.sendEvent).toHaveBeenLastCalledWith('call:voice', {
+      call_id: 'call-1',
+      muted: false,
+      deafened: false
+    })
+  })
+
+  it('já estava mudo por escolha quando foi silenciado: liberar não abre o microfone', async () => {
+    await joinChannel()
+    useCallStore.getState().toggleMute()
     mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
 
     mediaHandlers().onPublishPermissions({ microphone: true, stream: true })
 
-    expect(useCallStore.getState()).toMatchObject({ canSpeak: true, muted: true })
-    expect(media.instances[0].ensureMic).toHaveBeenCalledWith(true)
+    expect(useCallStore.getState().muted).toBe(true)
+  })
+
+  it('mutou por conta própria depois de liberado: um novo silêncio e liberação respeitam o mute', async () => {
+    await joinChannel()
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+    mediaHandlers().onPublishPermissions({ microphone: true, stream: true })
     useCallStore.getState().toggleMute()
-    expect(useCallStore.getState().muted).toBe(false)
+    expect(useCallStore.getState().muted).toBe(true)
+
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+    mediaHandlers().onPublishPermissions({ microphone: true, stream: true })
+
+    expect(useCallStore.getState().muted).toBe(true)
   })
 
   it('sem permissão de transmitir, tela e câmera nem abrem', async () => {

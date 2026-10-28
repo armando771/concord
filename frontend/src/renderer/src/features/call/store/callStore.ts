@@ -26,7 +26,7 @@ import {
   type ScreenShareQuality
 } from '../lib/screenShareQuality'
 import type { MicHandle } from '../lib/noiseSuppression'
-import { CallMedia, type RemoteMedia } from '../lib/livekit'
+import { CallMedia, type CallMediaHandlers, type RemoteMedia } from '../lib/livekit'
 import { watchLocalSpeaking } from '../lib/localSpeaking'
 import { mergeLocalSpeaking, sameIds } from '../lib/voiceActivity'
 import { voiceServerId } from '../lib/voiceServer'
@@ -72,12 +72,9 @@ import {
   type CallConnection,
   type CallConnectionEvent
 } from '../lib/callConnection'
-import {
-  isPoorQuality,
-  QUALITY_STATS_INTERVAL_MS,
-  type CallQuality,
-  type QualityDetails
-} from '../lib/connectionQuality'
+import { type CallQuality, type QualityDetails } from '../lib/connectionQuality'
+import { createMicPermission } from '../lib/micPermission'
+import { createQualityPoller } from '../lib/qualityPoller'
 
 import type { CallResume } from '../../../../../shared/callResume'
 
@@ -330,7 +327,6 @@ let media: CallMedia | null = null
 /** Falhou e ninguém decidiu: sai sozinho depois de um tempo (ver CALL_FAILED_AUTO_LEAVE_MS). */
 let failedLeaveTimer: ReturnType<typeof setTimeout> | null = null
 /** Medição de perda/latência enquanto alguém está com conexão ruim. */
-let qualityStatsTimer: ReturnType<typeof setInterval> | null = null
 
 const browserOnline = (): boolean => useConnectionStore.getState().online
 
@@ -657,44 +653,15 @@ export const useCallStore = create<CallState>()((set, get) => {
     failedLeaveTimer = null
   }
 
-  const stopQualityStats = (): void => {
-    if (qualityStatsTimer) clearInterval(qualityStatsTimer)
-    qualityStatsTimer = null
-  }
-
-  /**
-   * Mede perda/latência de quem está com conexão ruim (para o tooltip). Só lê
-   * as estatísticas quando há alguém ruim: nada a fazer na chamada boa.
-   */
-  const startQualityStats = (connection: CallMedia): void => {
-    stopQualityStats()
-    let busy = false
-    qualityStatsTimer = setInterval(() => {
-      if (media !== connection) {
-        stopQualityStats()
-        return
-      }
-      const poor = Object.entries(get().connectionQuality)
-        .filter(([, quality]) => isPoorQuality(quality))
-        .map(([userId]) => userId)
-      if (poor.length === 0) {
-        if (Object.keys(get().qualityDetails).length > 0) set({ qualityDetails: {} })
-        return
-      }
-      if (busy) return
-      busy = true
-      const meId = useAuthStore.getState().user?.id ?? null
-      void connection
-        .getQualityDetails(poor, meId)
-        .then((details) => {
-          if (media === connection) set({ qualityDetails: details })
-        })
-        .catch(() => {})
-        .finally(() => {
-          busy = false
-        })
-    }, QUALITY_STATS_INTERVAL_MS)
-  }
+  const qualityPoller = createQualityPoller<CallMedia>({
+    isCurrent: (connection) => media === connection,
+    quality: () => get().connectionQuality,
+    details: () => get().qualityDetails,
+    selfId: () => useAuthStore.getState().user?.id ?? null,
+    setDetails: (qualityDetails) => set({ qualityDetails })
+  })
+  const stopQualityStats = qualityPoller.stop
+  const startQualityStats = qualityPoller.start
 
   /**
    * A conexão de voz falhou (ao entrar ou numa queda sem volta): em vez de
@@ -722,105 +689,69 @@ export const useCallStore = create<CallState>()((set, get) => {
     }, CALL_FAILED_AUTO_LEAVE_MS)
   }
 
-  /**
-   * Entra na sala de mídia da chamada. O callee de DM pode pedir o token antes
-   * do backend processar o call:accept (403) — por isso o retry curto.
-   */
-  const connectMedia = async (callId: string): Promise<void> => {
-    if (media || !localMic) return
-    const mic = localMic.stream.getAudioTracks()[0]
-    if (!mic) return
-
-    const connection = new CallMedia({
+  /** Reações da sala de mídia; só valem enquanto `self` ainda é a conexão da chamada. */
+  const mediaHandlers = (self: () => CallMedia): CallMediaHandlers => {
+    const live = (): boolean => media === self()
+    return {
       onRemoteMedia: (remote) => {
-        if (media === connection) applyRemoteMedia(remote)
+        if (live()) applyRemoteMedia(remote)
       },
       onConnectionLost: (reason) => {
-        if (media !== connection) return
-        failMedia(connection, describeDisconnect(reason, browserOnline()))
+        if (!live()) return
+        failMedia(self(), describeDisconnect(reason, browserOnline()))
       },
       onReconnecting: () => {
-        if (media === connection) setConnection({ type: 'reconnecting' })
+        if (live()) setConnection({ type: 'reconnecting' })
       },
       onReconnected: () => {
-        if (media === connection) setConnection({ type: 'reconnected' })
+        if (live()) setConnection({ type: 'reconnected' })
       },
       onSignalConnected: () => {
-        if (media === connection) setConnection({ type: 'step', step: 'media' })
+        if (live()) setConnection({ type: 'step', step: 'media' })
       },
       onConnectionQuality: (userId, quality) => {
-        if (media !== connection || get().connectionQuality[userId] === quality) return
+        if (!live() || get().connectionQuality[userId] === quality) return
         set((s) => ({ connectionQuality: { ...s.connectionQuality, [userId]: quality } }))
       },
       onActiveSpeakers: (userIds) => {
-        if (media !== connection) return
+        if (!live()) return
         serverSpeakers = userIds
         publishSpeaking()
       },
       onRemovedByModerator: () => {
-        if (media !== connection) return
+        if (!live()) return
         showToast.info('Um moderador desconectou você da chamada.')
         get().endCall()
       },
       onPublishPermissions: (allowed) => {
-        if (media !== connection) return
-        set({ canSpeak: allowed.microphone, canStream: allowed.stream })
-        if (allowed.microphone) {
-          // Ganhou a fala (cargo novo, moderador liberou): publica o microfone.
-          void connection.ensureMic(get().muted).catch(() => {})
-        } else if (!get().muted) {
-          // Perdeu a fala: o microfone fecha no servidor, então mostra como mudo.
-          set({ muted: true })
-          applyMute(true)
-          publishSpeaking()
-          sendVoiceState()
-        }
+        if (!live()) return
+        micPermission.sync(allowed)
       }
-    })
-    media = connection
-    // Mesma track que vai ser publicada; sobrevive à troca de sala (resync).
-    // Só reinicia se a detecção ficou presa a uma track antiga.
-    if (speakingWatch?.track !== mic) startLocalSpeaking()
+    }
+  }
 
-    setConnection({ type: 'start' })
-    let token: string
+  /** Pede o token da sala; falha a conexão e devolve null se não der. */
+  const fetchMediaToken = async (connection: CallMedia, callId: string): Promise<string | null> => {
     try {
-      ;({ token } = await retry(() => getCallToken(callId), {
+      const { token } = await retry(() => getCallToken(callId), {
         attempts: TOKEN_ATTEMPTS,
         delayMs: TOKEN_RETRY_DELAY_MS,
         shouldRetry: (err) => err instanceof ApiError && err.status === 403
-      }))
+      })
+      return token
     } catch (err) {
-      if (media !== connection) return
+      if (media !== connection) return null
       const status = err instanceof ApiError ? err.status : null
       failMedia(connection, describeTokenError(status, browserOnline()))
-      return
+      return null
     }
-    if (media !== connection || get().callId !== callId) return
-    setConnection({ type: 'step', step: 'signal' })
-    try {
-      await connection.connect(LIVEKIT_URL, token, mic, get().muted)
-    } catch (err) {
-      if (media !== connection) return
-      const message = describeJoinError(err, browserOnline())
-      // Cancelado por nós (saiu, tentou de novo): quem cancelou já cuida.
-      if (message !== null) failMedia(connection, message)
-      return
-    }
-    if (media !== connection) return
-    setConnection({ type: 'connected' })
-    startQualityStats(connection)
+  }
 
-    // O microfone pode ter sido trocado enquanto a sala conectava.
-    const currentMic = localMic?.stream.getAudioTracks()[0]
-    if (currentMic && currentMic !== mic) await connection.replaceMic(currentMic).catch(() => {})
-
-    // O mute pode ter mudado durante a conexão (antes disso não há o que mutar).
-    void connection.setMicMuted(get().muted).catch(() => {})
-    sendVoiceState()
-
-    // Tela/câmera ligadas antes da sala conectar (ex.: logo após aceitar). Uma
-    // falha aqui desliga só aquela mídia, não a chamada.
+  /**
+   * Tela/câmera ligadas antes da sala conectar (ex.: logo após aceitar). Uma
+   * falha aqui desliga só aquela mídia, não a chamada.
+   */
+  const publishPendingMedia = async (connection: CallMedia): Promise<void> => {
     const screen = localScreenStream
     if (screen) {
       try {
@@ -839,6 +770,58 @@ export const useCallStore = create<CallState>()((set, get) => {
         if (localCameraStream === camera) void get().toggleCamera()
       }
     }
+  }
+
+  /** Conecta à sala; false se falhou (já tratado) ou se a conexão deixou de valer. */
+  const joinMediaRoom = async (
+    connection: CallMedia,
+    token: string,
+    mic: MediaStreamTrack
+  ): Promise<boolean> => {
+    try {
+      await connection.connect(LIVEKIT_URL, token, mic, get().muted)
+    } catch (err) {
+      if (media !== connection) return false
+      const message = describeJoinError(err, browserOnline())
+      // Cancelado por nós (saiu, tentou de novo): quem cancelou já cuida.
+      if (message !== null) failMedia(connection, message)
+      return false
+    }
+    return media === connection
+  }
+
+  /**
+   * Entra na sala de mídia da chamada. O callee de DM pode pedir o token antes
+   * do backend processar o call:accept (403) — por isso o retry curto.
+   */
+  const connectMedia = async (callId: string): Promise<void> => {
+    if (media || !localMic) return
+    const mic = localMic.stream.getAudioTracks()[0]
+    if (!mic) return
+
+    const connection: CallMedia = new CallMedia(mediaHandlers(() => connection))
+    media = connection
+    // Mesma track que vai ser publicada; sobrevive à troca de sala (resync).
+    // Só reinicia se a detecção ficou presa a uma track antiga.
+    if (speakingWatch?.track !== mic) startLocalSpeaking()
+
+    setConnection({ type: 'start' })
+    const token = await fetchMediaToken(connection, callId)
+    if (token === null) return
+    if (media !== connection || get().callId !== callId) return
+    setConnection({ type: 'step', step: 'signal' })
+    if (!(await joinMediaRoom(connection, token, mic))) return
+    setConnection({ type: 'connected' })
+    startQualityStats(connection)
+
+    // O microfone pode ter sido trocado enquanto a sala conectava.
+    const currentMic = localMic?.stream.getAudioTracks()[0]
+    if (currentMic && currentMic !== mic) await connection.replaceMic(currentMic).catch(() => {})
+
+    // O mute pode ter mudado durante a conexão (antes disso não há o que mutar).
+    void connection.setMicMuted(get().muted).catch(() => {})
+    sendVoiceState()
+    await publishPendingMedia(connection)
   }
 
   /**
@@ -998,6 +981,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     stopQualityStats()
     stopLocalSpeaking()
     serverSpeakers = []
+    micPermission.reset()
     stopLocalStream()
     localScreenStream?.getTracks().forEach((t) => t.stop())
     localScreenStream = null
@@ -1084,6 +1068,20 @@ export const useCallStore = create<CallState>()((set, get) => {
     if (!callId || status !== 'active') return
     useChatStore.getState().sendEvent('call:voice', { call_id: callId, muted, deafened })
   }
+
+  const micPermission = createMicPermission({
+    muted: () => get().muted,
+    deafened: () => get().deafened,
+    patch: (partial) => set(partial),
+    commitMute: (muted) => {
+      applyMute(muted)
+      publishSpeaking()
+      sendVoiceState()
+    },
+    ensureMic: (muted) => {
+      void media?.ensureMic(muted).catch(() => {})
+    }
+  })
 
   const onScreenDraw: WsHandler = ({ event }) => {
     useAnnotationStore.getState().handleWsEvent(event)
