@@ -12,6 +12,6 @@ describe('partes editáveis do cartão', () => {
     for (const label of Object.values(SPOT_LABEL)) expect(label).toMatch(/^(Editar|Alterar) /)
   })
   it('as partes que podem ficar vazias têm convite', () => {
-    expect(Object.keys(SPOT_PLACEHOLDER).sort()).toEqual(['bio', 'links', 'pronouns'])
+    expect(Object.keys(SPOT_PLACEHOLDER).sort()).toEqual(['bio', 'links', 'note', 'pronouns'])
   })
 })

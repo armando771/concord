@@ -9,10 +9,13 @@ import EditableSpot from './EditableSpot'
 export default function CardNote({
   note,
   onAdd,
-  onEdit
+  onEdit,
+  placeholder = 'Adicionar uma nota'
 }: {
   note?: string
   onAdd?: () => void
+  /** O convite do balão vazio (no editor: "No que você está pensando?"). */
+  placeholder?: string
   /** Prévia do editor: a nota abre o modal dela. */
   onEdit?: (spot: CardSpot) => void
 }): React.JSX.Element | null {
@@ -40,7 +43,7 @@ export default function CardNote({
           className="relative flex max-w-[170px] cursor-pointer items-center gap-1.5 rounded-2xl border border-subtle bg-primary px-3 py-2 text-left text-xs italic text-gray-400 shadow-lg transition-colors hover:text-gray-200"
         >
           <PlusIcon className="h-3.5 w-3.5 shrink-0 rounded-full bg-gray-400 p-0.5 text-[var(--bg-floating)]" />
-          Adicionar uma nota
+          {placeholder}
         </button>
       )}
     </div>

@@ -4,7 +4,8 @@ import Modal from '../../../../../shared/ui/Modal'
 
 /**
  * Esqueleto dos modais de edição do cartão, como no Discord: os controles à
- * esquerda e a prévia ao vivo à direita (no celular a prévia vai para cima).
+ * esquerda e a prévia ao vivo à direita (no celular, a prévia vem depois dos
+ * controles: o campo que a pessoa abriu para editar fica à vista).
  * Enter ou "Aplicar" confirmam; "Cancelar", Esc e o fundo descartam.
  */
 export default function EditModalShell({
@@ -42,10 +43,10 @@ export default function EditModalShell({
         }}
       >
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
-          <div className="order-2 flex min-w-0 flex-col gap-4 lg:order-1">{children}</div>
+          <div className="flex min-w-0 flex-col gap-4">{children}</div>
           <aside
             aria-label="Prévia"
-            className="order-1 mx-auto flex w-full min-w-0 max-w-[300px] flex-col gap-3 lg:sticky lg:top-0 lg:order-2"
+            className="mx-auto flex w-full min-w-0 max-w-[300px] flex-col gap-3 lg:sticky lg:top-0"
           >
             {preview}
           </aside>

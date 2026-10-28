@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { Field } from './ProfileField'
 import ProfileLinksField from './ProfileLinksField'
-import UnsavedChangesBar from './UnsavedChangesBar'
-import { saveLabel } from '../../lib/saveProfile'
+import BannerColorField from './BannerColorField'
 
 const noop = (): void => {}
 
@@ -41,35 +40,19 @@ describe('ProfileLinksField', () => {
   })
 })
 
-describe('UnsavedChangesBar', () => {
-  it('texto do botão', () => {
-    expect(saveLabel(false, null)).toBe('Salvar alterações')
-    expect(saveLabel(true, null)).toBe('Salvando...')
-    expect(saveLabel(true, 0.42)).toBe('Enviando 42%')
+describe('BannerColorField', () => {
+  it('cores prontas com nome; a escolhida fica marcada e dá para voltar ao padrão', () => {
+    const html = renderToStaticMarkup(<BannerColorField value="#7c3aed" onChange={noop} />)
+    expect(html).toContain('aria-label="Roxo"')
+    expect(html).toMatch(/aria-label="Roxo" aria-pressed="true"/)
+    expect(html).toContain('Usar a cor padrão')
   })
-  it('tremendo e com erro', () => {
+  it('sem cor: nada marcado, sem "padrão"; o erro aparece', () => {
     const html = renderToStaticMarkup(
-      <UnsavedChangesBar
-        shaking
-        saving={false}
-        invalid
-        progress={null}
-        onReset={noop}
-        onSave={noop}
-      />
+      <BannerColorField value={null} error="Cor inválida." onChange={noop} />
     )
-    expect(html).toContain('unsaved-shake')
-    expect(html).toContain('Corrija os campos em vermelho')
-    const calm = renderToStaticMarkup(
-      <UnsavedChangesBar
-        shaking={false}
-        saving={false}
-        invalid={false}
-        progress={null}
-        onReset={noop}
-        onSave={noop}
-      />
-    )
-    expect(calm).not.toContain('unsaved-shake')
+    expect(html).not.toContain('aria-pressed="true"')
+    expect(html).not.toContain('Usar a cor padrão')
+    expect(html).toContain('Cor inválida.')
   })
 })

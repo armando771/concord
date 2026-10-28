@@ -34,7 +34,7 @@ beforeEach(() => {
 describe('EntranceSoundSettings', () => {
   it('sem som: escolher e ouvir o padrão, sem "usar o padrão"', () => {
     const html = render()
-    expect(html).toContain('Som de entrada')
+    expect(html).toContain('Toca para quem já está na call')
     expect(html).toContain('Escolher som')
     expect(html).toContain('Ouvir')
     expect(html).toContain('Usando o som padrão.')

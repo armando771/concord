@@ -5,17 +5,23 @@ import ProfilePreview, { type PreviewBase } from '../ProfilePreview'
 import EditModalShell from './EditModalShell'
 import type { SpotField } from './spotFields'
 
-/** Pronomes, nota, Sobre mim ou links: o campo à esquerda e o cartão ao vivo à direita. */
+/**
+ * Pronomes, nota, Sobre mim, links, cor do banner ou tema: o campo à
+ * esquerda e o cartão ao vivo à direita. "Aplicar" já salva (`busy` enquanto
+ * vai para o servidor).
+ */
 export default function FieldModal({
   field,
   base,
   draft,
+  busy,
   onClose,
   onApply
 }: {
   field: SpotField
   base: PreviewBase
   draft: ProfileDraft
+  busy?: boolean
   onClose: () => void
   onApply: (patch: DraftPatch) => void
 }): React.JSX.Element {
@@ -27,6 +33,8 @@ export default function FieldModal({
   return (
     <EditModalShell
       title={field.title}
+      size={field.size}
+      busy={busy}
       canApply={!hasErrors(errors)}
       onClose={onClose}
       onApply={() => onApply(patch)}

@@ -58,9 +58,15 @@ export default function CardAvatar({
           onClick={onEdit}
           aria-label="Alterar avatar"
           title="Alterar avatar"
-          className="absolute inset-1.5 flex cursor-pointer items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+          className="group/avatar absolute inset-1.5 cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
-          <PencilIcon className="h-5 w-5 drop-shadow" />
+          {/* Com mouse: o véu com o lápis no hover/foco. No toque: o lápis no canto, sempre. */}
+          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity [@media(hover:hover)]:group-hover/avatar:opacity-100 [@media(hover:hover)]:group-focus-visible/avatar:opacity-100">
+            <PencilIcon className="h-5 w-5 drop-shadow" />
+          </span>
+          <span className="absolute -right-0.5 top-0 flex size-7 items-center justify-center rounded-full bg-black/70 text-white shadow ring-2 ring-white/20 [@media(hover:hover)]:hidden">
+            <PencilIcon className="size-3.5" />
+          </span>
         </button>
       )}
     </div>

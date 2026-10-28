@@ -101,8 +101,3 @@ export function saveErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : 'Não foi possível salvar o perfil.'
 }
 
-/** Texto do botão de salvar: o progresso do envio, "Salvando..." ou o normal. */
-export function saveLabel(saving: boolean, progress: number | null): string {
-  if (!saving) return 'Salvar alterações'
-  return progress !== null ? `Enviando ${Math.round(progress * 100)}%` : 'Salvando...'
-}
