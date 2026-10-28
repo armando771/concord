@@ -12,7 +12,6 @@ function badge(over: Partial<Badge>): Badge {
     value: 0,
     tier: 0,
     progress: 0,
-    obtainable: true,
     tiers: [],
     ...over
   }

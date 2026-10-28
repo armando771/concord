@@ -48,12 +48,35 @@ func TestHandlerOwnerGetsTheFullView(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
 		t.Fatal(err)
 	}
-	// Os exclusivos (Fundador, Fez o L) só aparecem para quem tem.
-	if !res.Self || len(res.Badges) != nonExclusiveCount() {
+	// Só o que já tem o tier 1 aparece (nada de categoria bloqueada).
+	if !res.Self || len(res.Badges) == 0 || hasBadge(res.Badges, "festeiro") {
 		t.Fatalf("owner body = %s", w.Body.String())
 	}
 	if msgs := find(t, res.Badges, "mensagens"); msgs.Value != 2345 || msgs.NextThreshold == nil {
 		t.Fatalf("owner mensagens = %+v", msgs)
+	}
+}
+
+// Dono do perfil vê o que falta (próximo tier e progresso) nas categorias que
+// já conquistou; as que não têm o tier 1 nem aparecem.
+func TestHandlerOwnerSeesProgressOnlyOfEarnedCategories(t *testing.T) {
+	w := serve(t, serviceWithOwner(), "/api/users/"+ownerID+"/badges", ownerID)
+	var res struct {
+		Badges []map[string]any `json:"badges"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Badges) == 0 {
+		t.Fatalf("sem badges: %s", w.Body.String())
+	}
+	for _, b := range res.Badges {
+		if tier, _ := b["tier"].(float64); tier < 1 {
+			t.Fatalf("categoria sem tier 1 saiu: %v", b)
+		}
+		if _, ok := b["progress"]; !ok {
+			t.Fatalf("progresso faltando: %v", b)
+		}
 	}
 }
 

@@ -163,7 +163,8 @@ func TestBadgesAnnouncesNewTiersOnlyOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if full, ok := res.Badges.([]Badge); !ok || len(full) != nonExclusiveCount() || res.UserID != "ana" || !res.Self {
+	// Só mensagens chegou ao tier 1: as outras categorias nem aparecem.
+	if full, ok := res.Badges.([]Badge); !ok || len(full) != 1 || full[0].Category != "mensagens" || res.UserID != "ana" || !res.Self {
 		t.Fatalf("response = %+v", res)
 	}
 	if len(pub.events) != 1 || len(pub.events[0].Unlocks) != 1 {
@@ -302,7 +303,7 @@ func TestOthersSeeOnlyEarnedTiersAndDays(t *testing.T) {
 	}
 }
 
-func TestOwnerSeesEverything(t *testing.T) {
+func TestOwnerSeesWhatTheyEarned(t *testing.T) {
 	s, st, _, _, _ := newTestService()
 	st.stats["ana"] = Stats{CreatedAt: now.AddDate(0, -2, 0), MessagesSent: 2345, OwnedServers: 2}
 	res, err := s.Badges(context.Background(), "ana", "ana")
@@ -314,8 +315,8 @@ func TestOwnerSeesEverything(t *testing.T) {
 	if msgs.Value != 2345 || msgs.NextThreshold == nil || msgs.Progress == 0 || msgs.UnlockedAt == nil {
 		t.Fatalf("owner view = %+v", msgs)
 	}
-	if find(t, full, "festeiro").Tier != 0 {
-		t.Fatal("owner view must keep the unearned categories")
+	if hasBadge(full, "festeiro") {
+		t.Fatal("owner view must hide the categories without tier 1")
 	}
 }
 

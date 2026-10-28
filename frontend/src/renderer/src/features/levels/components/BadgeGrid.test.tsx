@@ -15,14 +15,10 @@ describe('BadgeGrid', () => {
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(1)
   })
 
-  it('o título mostra o tier e o nome; bloqueado mostra só o nome', () => {
-    const aberto = renderToStaticMarkup(
+  it('o título mostra o tier e o nome', () => {
+    const html = renderToStaticMarkup(
       <BadgeGrid badges={[badge('voz', 1)]} selected={undefined} onSelect={() => {}} />
     )
-    expect(aberto).toContain('title="Ouro · Nome voz"')
-    const bloqueado = renderToStaticMarkup(
-      <BadgeGrid badges={[badge('voz', 0)]} selected={undefined} locked onSelect={() => {}} />
-    )
-    expect(bloqueado).toContain('title="Nome voz"')
+    expect(html).toContain('title="Ouro · Nome voz"')
   })
 })

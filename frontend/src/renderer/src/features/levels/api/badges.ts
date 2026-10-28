@@ -35,9 +35,9 @@ export interface BadgeTier {
 }
 
 /**
- * Uma categoria de badge (backend: internal/badge). Tier 0 = nada ainda.
- * No perfil de outra pessoa só vêm os conquistados, sem value/progress/
- * próximos tiers, e unlocked_at é só o dia ("2026-07-29").
+ * Uma categoria de badge já conquistada (backend: internal/badge): a API não
+ * devolve categorias sem o tier 1. No perfil de outra pessoa não vêm
+ * value/progress/próximo tier, e unlocked_at é só o dia ("2026-07-29").
  */
 export interface Badge {
   category: string
@@ -46,6 +46,7 @@ export interface Badge {
   unit: BadgeUnit
   /** Só no próprio perfil (no Top 10, a posição vem para todos). */
   value?: number
+  /** Tier atual (1 ou mais). */
   tier: number
   tier_name?: string
   rarity?: BadgeRarity
@@ -56,8 +57,6 @@ export interface Badge {
   next_at?: string
   /** Do tier atual até o próximo, de 0 a 1. */
   progress?: number
-  /** false: não dá mais para conseguir (Pioneiro depois do corte). */
-  obtainable?: boolean
   tiers: BadgeTier[]
 }
 
