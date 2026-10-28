@@ -26,7 +26,11 @@ jest.mock('../src/features/chat/api/conversations', () => ({
   markConversationRead: jest.fn().mockResolvedValue(undefined),
   getOrCreateConversationWith: jest.fn()
 }))
-jest.mock('../src/features/friends/api/friends', () => ({ listFriends: jest.fn().mockResolvedValue([]) }))
+jest.mock('../src/features/friends/api/friends', () => ({
+  listFriends: jest.fn().mockResolvedValue([]),
+  listPending: jest.fn().mockResolvedValue([]),
+  listBlocked: jest.fn().mockResolvedValue([])
+}))
 jest.mock('../src/features/friends/api/presence', () => ({ fetchPresence: jest.fn().mockResolvedValue({}) }))
 jest.mock('../src/features/auth/api/auth', () => ({
   ...jest.requireActual('../src/features/auth/api/auth'),
@@ -67,6 +71,14 @@ describe('rotas do app', () => {
     expect(await screen.findByLabelText('Mensagem para #geral')).toBeOnTheScreen()
     expect(screen.getByRole('button', { name: 'Voltar' })).toBeOnTheScreen()
     expect(await screen.findByText('Ainda não há mensagens aqui.')).toBeOnTheScreen()
+  })
+
+  it('sessão salva: /amigos abre a tela de Amigos com as abas', async () => {
+    jest.mocked(loadTokens).mockResolvedValueOnce({ accessToken: 'a', refreshToken: 'r' })
+    await renderRouter('./app', { initialUrl: '/amigos' })
+    expect(await screen.findByRole('tab', { name: 'Pendentes' })).toBeOnTheScreen()
+    expect(screen.getByRole('tab', { name: 'Adicionar amigo' })).toBeOnTheScreen()
+    expect(screen.getByRole('button', { name: 'Voltar' })).toBeOnTheScreen()
   })
 
   it('sessão salva: /dm/<id> abre a conversa 1 a 1 em tela cheia', async () => {
