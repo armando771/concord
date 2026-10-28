@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   autoUpdateUnavailable,
   backgroundDownloadDelayMs,
-  canDownloadUpdate,
   DOWNLOAD_JITTER_MAX_MS,
   installOnStartup,
   isRefusedRelease,
@@ -10,11 +9,6 @@ import {
 } from './updatePolicy'
 
 describe('updatePolicy', () => {
-  it('não baixa durante chamada (o upload do servidor é o mesmo da mídia)', () => {
-    expect(canDownloadUpdate(true)).toBe(false)
-    expect(canDownloadUpdate(false)).toBe(true)
-  })
-
   it('instala ao abrir quando a versão já estava baixada da sessão anterior', () => {
     expect(
       installOnStartup({

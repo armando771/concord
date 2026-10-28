@@ -1,13 +1,10 @@
-// Quando baixar a versão oferecida pelo manifesto. Espalha os downloads em
-// segundo plano (backgroundDownloadDelayMs), espera cada vez mais depois de
-// falhas (retryDelayMs) e busca o .sig antes do pacote. Não sabe nada do
-// Electron nem do backend: quem cria passa o download e a busca do .sig.
-import {
-  backgroundDownloadDelayMs,
-  canDownloadUpdate,
-  retryDelayMs,
-  type ReleaseId
-} from './updatePolicy'
+// Quando baixar a versão oferecida pelo manifesto: sozinho, em segundo plano,
+// assim que ela aparece — também em chamada, porque baixar não interrompe nada
+// (só a instalação reinicia o app). Espalha os downloads (backgroundDownloadDelayMs),
+// espera cada vez mais depois de falhas (retryDelayMs) e busca o .sig antes do
+// pacote. Não sabe nada do Electron nem do backend: quem cria passa o download
+// e a busca do .sig.
+import { backgroundDownloadDelayMs, retryDelayMs, type ReleaseId } from './updatePolicy'
 
 export interface DownloadSchedulerDeps {
   /** backend.downloadUpdate(): baixa a versão do último manifesto */
@@ -16,7 +13,6 @@ export interface DownloadSchedulerDeps {
   fetchSignature: (file: string) => Promise<string>
   /** ainda falta baixar algo (versão nova, não recusada e ainda não pronta) */
   wanted: () => boolean
-  inCall: () => boolean
   /** falhou: só tenta de novo em `retryInMs` (a não ser que a pessoa peça) */
   onFailure: (message: string, error: unknown, retryInMs: number) => void
   /** o .sig não veio, então o pacote nem foi baixado */
@@ -33,8 +29,6 @@ export interface DownloadScheduler {
   release(): ReleaseId | null
   /** Baixa a versão oferecida. `force`: a pessoa clicou em Atualizar. */
   request(force: boolean): void
-  /** Ficou esperando o fim da chamada para baixar. */
-  waitingForCall(): boolean
   /** O backend parou de baixar (terminou ou deu erro). */
   settled(): void
   /** Falha depois do download (verificação): entra na espera. */
@@ -56,8 +50,6 @@ export function createDownloadScheduler(deps: DownloadSchedulerDeps): DownloadSc
   /** .sig já baixado (antes do pacote) para o arquivo oferecido. */
   let signature: { file: string; value: string } | null = null
   let downloading = false
-  /** Ficou esperando o fim da chamada para baixar em segundo plano. */
-  let pendingAfterCall = false
   /** Download em segundo plano esperando o sorteio. */
   let timer: ReturnType<typeof setTimeout> | null = null
 
@@ -91,13 +83,8 @@ export function createDownloadScheduler(deps: DownloadSchedulerDeps): DownloadSc
     }
   }
 
-  function startNow(force: boolean): void {
+  function startNow(): void {
     if (downloading || !deps.wanted()) return
-    if (!force && !canDownloadUpdate(deps.inCall())) {
-      pendingAfterCall = true
-      return
-    }
-    pendingAfterCall = false
     downloading = true
     void run()
   }
@@ -106,10 +93,6 @@ export function createDownloadScheduler(deps: DownloadSchedulerDeps): DownloadSc
     if (downloading || !deps.wanted()) return
     // Depois de falhas, só o clique em Atualizar fura a espera.
     if (!force && Date.now() < retryAt) return
-    if (!force && !canDownloadUpdate(deps.inCall())) {
-      pendingAfterCall = true
-      return
-    }
     if (timer) {
       // Já esperando o sorteio: só o clique em Atualizar fura a fila.
       if (!force) return
@@ -124,12 +107,11 @@ export function createDownloadScheduler(deps: DownloadSchedulerDeps): DownloadSc
     if (delay > 0) {
       timer = setTimeout(() => {
         timer = null
-        // Entrou em chamada durante a espera: fica para o fim dela.
-        startNow(false)
+        startNow()
       }, delay)
       return
     }
-    startNow(force)
+    startNow()
   }
 
   function offer(next: ReleaseId, nextFile: string | null): void {
@@ -145,7 +127,6 @@ export function createDownloadScheduler(deps: DownloadSchedulerDeps): DownloadSc
     offer,
     release: () => release,
     request,
-    waitingForCall: () => pendingAfterCall,
     settled: () => {
       downloading = false
     },

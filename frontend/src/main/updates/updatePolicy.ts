@@ -3,13 +3,9 @@
 /** Atualização já baixada aparece em poucos segundos após abrir o app. */
 const STARTUP_WINDOW_MS = 30_000
 
-/** Não baixa em chamada: o upload do servidor é o mesmo que leva a mídia. */
-export function canDownloadUpdate(inCall: boolean): boolean {
-  return !inCall
-}
-
 /**
- * Instala sozinho só logo ao abrir e só se essa versão já tinha sido baixada e
+ * O download é sempre em segundo plano, assim que a versão aparece (também em
+ * chamada): o clique em Atualizar só instala. Instala sozinho só logo ao abrir e só se essa versão já tinha sido baixada e
  * verificada numa sessão anterior. Download que acabou agora — mesmo que
  * rápido — só gera o aviso "Nova atualização disponível".
  */

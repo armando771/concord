@@ -4,7 +4,7 @@ import { homedir } from 'os'
 import { readFile, rename, rm, stat, writeFile } from 'fs/promises'
 import { readFileSync, realpathSync } from 'fs'
 import { basename, join } from 'path'
-import { isInCall, markQuitting, onCallStateChange } from '../window/background'
+import { isInCall, markQuitting } from '../window/background'
 import {
   autoUpdateUnavailable,
   installOnStartup,
@@ -28,6 +28,10 @@ import { LinuxUpdater } from './linuxUpdater'
 // extraído, sem libfuse2, ou a instalação por usuário em ~/.local/share/salinha):
 // linuxUpdater.ts, que baixa o .tar.gz assinado e não depende de nada do
 // sistema. Os dois passam pelas mesmas regras (chamada, Atualizar, assinatura).
+//
+// Versão nova é baixada e verificada sozinha, em segundo plano (também em
+// chamada; ver downloadScheduler.ts): quando a barra mostra "Atualizar" pronto,
+// o clique só instala e reinicia.
 
 // latest.yml tem poucas centenas de bytes: checar seguido não pesa. O caminho
 // principal é o aviso do servidor (WS app:update → update:check-now); a
@@ -206,10 +210,12 @@ const downloads = createDownloadScheduler({
   download: () => backend.downloadUpdate(),
   fetchSignature: (file) => fetchSignature(feedUrl, file),
   wanted: () => !!availableVersion && !readyVersion && !refusedOffer(),
-  inCall: isInCall,
-  // Falhou (rede, assinatura indisponível): espera cada vez mais antes de tentar.
-  onFailure: (message, error, retryInMs) =>
-    logUpdate(`${message} (nova tentativa em ${Math.round(retryInMs / 60_000)} min)`, error),
+  // Falhou (rede, assinatura indisponível): espera cada vez mais antes de tentar,
+  // e a barra deixa de mostrar o progresso do download que parou.
+  onFailure: (message, error, retryInMs) => {
+    logUpdate(`${message} (nova tentativa em ${Math.round(retryInMs / 60_000)} min)`, error)
+    sendToWindow('update:progress', 0)
+  },
   onSignatureUnavailable: () => {
     if (!installRequested) return
     installRequested = false
@@ -224,7 +230,7 @@ function refusedOffer(): boolean {
   return !!release && isRefusedRelease(refused, release)
 }
 
-/** Baixa a versão disponível. Em chamada, só se a pessoa pediu (force). */
+/** Baixa a versão disponível. `force`: a pessoa clicou em Atualizar (sem sorteio nem espera). */
 function startDownload(force = false): void {
   if (readyVersion || !availableVersion) return
   if (refusedOffer()) {
@@ -332,8 +338,8 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
       selfUpdating: linuxSelfUpdating
     })
   )
-  // Botão Atualizar: instala na hora se já baixou; senão baixa agora (mesmo
-  // em chamada — a pessoa pediu) e instala quando terminar.
+  // Botão Atualizar: instala na hora se já baixou e verificou; senão baixa
+  // agora (fura o sorteio e a espera) e instala quando terminar.
   ipcMain.on('update:install', () => {
     if (readyVersion) {
       installUpdate()
@@ -417,14 +423,14 @@ export function setupUpdater(getWindow: () => BrowserWindow | null, config: Upda
   })
   backend.on('update-downloaded', async (event: DownloadedUpdate) => {
     downloads.settled()
+    // Saiu versão mais nova durante o download: baixa ela, não prepara a velha.
+    if (availableVersion && event.version !== availableVersion) {
+      startDownload(installRequested)
+      return
+    }
     if (!(await verifyDownloaded(event, config.publicKeyPem))) return
     downloads.succeeded()
     markReady(event.version)
-  })
-
-  // Chamada acabou: baixa o que ficou esperando.
-  onCallStateChange((state) => {
-    if (!state.inCall && downloads.waitingForCall()) startDownload()
   })
 
   const gate = createUpdateCheckGate(() =>

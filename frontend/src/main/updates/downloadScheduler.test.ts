@@ -16,16 +16,15 @@ interface Setup {
     onFailure: ReturnType<typeof vi.fn>
     onSignatureUnavailable: ReturnType<typeof vi.fn>
   }
-  state: { inCall: boolean; wanted: boolean }
+  state: { wanted: boolean }
 }
 
 function setup(over: Partial<DownloadSchedulerDeps> = {}): Setup {
-  const state = { inCall: false, wanted: true }
+  const state = { wanted: true }
   const deps = {
     download: vi.fn(async () => {}),
     fetchSignature: vi.fn(async () => 'assinatura'),
     wanted: () => state.wanted,
-    inCall: () => state.inCall,
     onFailure: vi.fn(),
     onSignatureUnavailable: vi.fn(),
     // aberto há muito tempo: fora da janela de início
@@ -195,26 +194,12 @@ describe('createDownloadScheduler', () => {
     expect(deps.download).toHaveBeenCalledTimes(1)
   })
 
-  it('em chamada espera o fim dela; o clique baixa na hora', async () => {
-    const { scheduler, deps, state } = setup()
-    state.inCall = true
-    scheduler.request(false)
-    await settle()
-    expect(deps.download).not.toHaveBeenCalled()
-    expect(scheduler.waitingForCall()).toBe(true)
-    scheduler.request(true)
-    await settle()
-    expect(deps.download).toHaveBeenCalledTimes(1)
-    expect(scheduler.waitingForCall()).toBe(false)
-  })
-
-  it('entrou em chamada durante o sorteio: fica para o fim dela', async () => {
+  it('o fim do sorteio confere de novo se ainda falta baixar', async () => {
     const { scheduler, deps, state } = setup({ random: () => 0.5 })
     scheduler.request(false)
-    state.inCall = true
+    state.wanted = false
     vi.advanceTimersByTime(60_000)
     await settle()
     expect(deps.download).not.toHaveBeenCalled()
-    expect(scheduler.waitingForCall()).toBe(true)
   })
 })
