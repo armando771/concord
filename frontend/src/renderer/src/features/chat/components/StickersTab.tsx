@@ -88,6 +88,8 @@ export default function StickersTab({
   const viewingServer = useServerStore((s) => Boolean(serverId && s.currentServer?.id === serverId))
   const access = useServerAccess()
   const isModeratorOrOwner = viewingServer && access.can(Perm.MANAGE_EXPRESSIONS)
+  // Só dá para conferir cargos do servidor aberto; em outro, o servidor decide.
+  const canAdd = !viewingServer || access.can(Perm.ADD_STICKERS)
 
   if (!serverId) {
     return (
@@ -107,26 +109,30 @@ export default function StickersTab({
     <div>
       <div className="mb-2 flex items-center justify-between">
         <span className="text-[11px] text-gray-400">{stickers.length} / 60 figurinhas</span>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="flex items-center gap-1 rounded-md bg-violet-600/30 px-2 py-1 text-[11px] font-medium text-violet-300 transition-colors hover:bg-violet-600/50 cursor-pointer"
-        >
-          <PlusIcon className="h-3 w-3" />
-          <span>Nova Figurinha</span>
-        </button>
+        {canAdd && (
+          <button
+            type="button"
+            onClick={onAdd}
+            className="flex items-center gap-1 rounded-md bg-violet-600/30 px-2 py-1 text-[11px] font-medium text-violet-300 transition-colors hover:bg-violet-600/50 cursor-pointer"
+          >
+            <PlusIcon className="h-3 w-3" />
+            <span>Nova Figurinha</span>
+          </button>
+        )}
       </div>
 
       {stickers.length === 0 ? (
         <div className="flex h-40 flex-col items-center justify-center text-center p-4 text-xs text-gray-500">
           <span className="mb-2">Nenhuma figurinha no servidor ainda.</span>
-          <button
-            type="button"
-            onClick={onAdd}
-            className="rounded-lg bg-white/10 px-3 py-1.5 text-xs text-white transition-colors hover:bg-white/20 cursor-pointer"
-          >
-            Adicionar a primeira
-          </button>
+          {canAdd && (
+            <button
+              type="button"
+              onClick={onAdd}
+              className="rounded-lg bg-white/10 px-3 py-1.5 text-xs text-white transition-colors hover:bg-white/20 cursor-pointer"
+            >
+              Adicionar a primeira
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-2">
