@@ -89,21 +89,6 @@ describe('DirectMessages', () => {
     expect(onOpenConversation).toHaveBeenCalledWith({ id: 'g1', title: 'DEVS do SALINHA', type: 'group' })
   })
 
-  it('mensagem nova do WebSocket sobe a conversa para o topo', async () => {
-    await setup()
-    await screen.findByRole('button', { name: 'Paulo Kogos' })
-    const before = screen.getAllByRole('button').map((b) => b.props.accessibilityLabel)
-    expect(before.indexOf('DEVS do SALINHA')).toBeLessThan(before.indexOf('Paulo Kogos'))
-    await act(async () =>
-      wsHandler({
-        type: 'message:create',
-        payload: { message: { id: 'm', author_id: 'u1', conversation_id: 'd1', content: 'oi', created_at: '2026-10-28T12:00:00Z' } }
-      })
-    )
-    const after = screen.getAllByRole('button').map((b) => b.props.accessibilityLabel)
-    expect(after.indexOf('Paulo Kogos')).toBeLessThan(after.indexOf('DEVS do SALINHA'))
-  })
-
   it('a busca filtra as conversas sem acento nem maiúsculas', async () => {
     await setup()
     await screen.findByRole('button', { name: 'Paulo Kogos' })

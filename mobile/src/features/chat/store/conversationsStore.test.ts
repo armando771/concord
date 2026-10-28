@@ -67,6 +67,24 @@ describe('conversationsStore', () => {
     expect(state().conversations.map((c) => c.id)).toEqual(['novo', 'a'])
   })
 
+  it('applyMessage com contexto conta não lida de outra pessoa; a minha e a do chat aberto não', async () => {
+    list.mockResolvedValueOnce([dm('a', '2026-10-28T10:00:00Z')])
+    await state().load()
+    const other = { ...msg('a', '2026-10-28T11:00:00Z'), author_id: 'outra' }
+    await state().applyMessage(other, { myId: 'eu', active: null })
+    expect(state().conversations[0].unread_count).toBe(1)
+    await state().applyMessage({ ...other, id: 'm2', author_id: 'eu' }, { myId: 'eu', active: null })
+    await state().applyMessage({ ...other, id: 'm3' }, { myId: 'eu', active: { kind: 'conversation', id: 'a' } })
+    expect(state().conversations[0].unread_count).toBe(1)
+  })
+
+  it('markRead zera a não lida da conversa', async () => {
+    list.mockResolvedValueOnce([{ ...dm('a', '2026-10-28T10:00:00Z'), unread_count: 3 }])
+    await state().load()
+    state().markRead('a')
+    expect(state().conversations[0].unread_count).toBe(0)
+  })
+
   it('loadFriends guarda uma vez e não busca de novo', async () => {
     friends.mockResolvedValue([person('f1', 'Ana')])
     await state().loadFriends()

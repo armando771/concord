@@ -8,7 +8,6 @@ import { Button } from '../../../shared/ui/Button'
 import { useAuthStore } from '../../auth/store/authStore'
 import { usePresenceStore } from '../../friends/store/presenceStore'
 import { getOrCreateConversationWith, type ConversationPerson } from '../api/conversations'
-import type { Message } from '../api/messages'
 import {
   conversationSubtitle,
   conversationTitle,
@@ -38,7 +37,6 @@ export function DirectMessages({ onOpenConversation }: DirectMessagesProps) {
   const friends = useConversationsStore((s) => s.friends)
   const load = useConversationsStore((s) => s.load)
   const loadFriends = useConversationsStore((s) => s.loadFriends)
-  const applyMessage = useConversationsStore((s) => s.applyMessage)
   const statuses = usePresenceStore((s) => s.statuses)
   const loadPresence = usePresenceStore((s) => s.load)
   const applyPresence = usePresenceStore((s) => s.apply)
@@ -58,11 +56,10 @@ export function DirectMessages({ onOpenConversation }: DirectMessagesProps) {
   useEffect(
     () =>
       onWsEvent((event) => {
-        const payload = event.payload as { message?: Message; user_id?: string; status?: unknown; online?: unknown } | null
-        if (event.type === 'message:create' && payload?.message?.conversation_id) void applyMessage(payload.message)
+        const payload = event.payload as { user_id?: string; status?: unknown; online?: unknown } | null
         if (event.type === 'presence:update' && payload) applyPresence(payload)
       }),
-    [applyMessage, applyPresence]
+    [applyPresence]
   )
 
   useEffect(() => {

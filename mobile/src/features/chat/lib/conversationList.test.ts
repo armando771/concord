@@ -2,6 +2,8 @@ import type { ConversationPerson, ConversationSummary } from '../api/conversatio
 import type { Message } from '../api/messages'
 import {
   applyMessage,
+  bumpUnread,
+  clearUnread,
   conversationSubtitle,
   conversationTitle,
   filterConversations,
@@ -126,6 +128,16 @@ describe('friendsWithoutConversation', () => {
 
   it('sem texto não oferece ninguém (a busca só mostra amigos ao digitar)', () => {
     expect(friendsWithoutConversation(friends, list, '')).toEqual([])
+  })
+})
+
+describe('bumpUnread / clearUnread', () => {
+  it('+1 só na conversa pedida; clear zera e devolve a mesma lista se já era zero', () => {
+    const list = [dm('a', person('1', 'A'), T1), dm('b', person('2', 'B'), T1)]
+    const bumped = bumpUnread(list, 'b')
+    expect(bumped.map((c) => c.unread_count)).toEqual([0, 1])
+    expect(clearUnread(bumped, 'b').map((c) => c.unread_count)).toEqual([0, 0])
+    expect(clearUnread(list, 'a')).toBe(list)
   })
 })
 
