@@ -55,7 +55,7 @@ import { useBadgeStore } from '../../levels/store/badgeStore'
 import { useProposalStore } from '../../proposals/store/proposalStore'
 import { useNotifySettingsStore } from '../../notifications/store/notifySettingsStore'
 import { mentionKindOf, muteDecision } from '../../notifications/lib/notificationMute'
-import { MAESTRO_USER_ID } from '../../music/lib/music'
+import { isMaestroQuiet } from '../../music/lib/music'
 import { isBotUser } from '../../music/lib/bots'
 import { useSoundboardStore } from '../../call/store/soundboardStore'
 import { useMusicStore } from '../../music/store/musicStore'
@@ -881,12 +881,8 @@ loadOlderUntil: async (room, messageId, maxPages = JUMP_MAX_PAGES) => {
         // Mensagem de canal: silenciar/nível do servidor e do canal decidem o
         // aviso, a contagem de não lidas e o selo de menção. DM não passa por aqui.
         const meUser = useAuthStore.getState().user
-        // O canal "bot" e o que o Maestro escreve nunca avisam nem contam como não lido.
-        const quiet =
-          msg.author_id === MAESTRO_USER_ID ||
-          useServerStore
-            .getState()
-            .channels.some((c) => c.id === msg.channel_id && c.is_system && c.name === 'bot')
+        // O canal #musica e o que o Maestro escreve nunca avisam nem contam como não lido.
+        const quiet = isMaestroQuiet(msg, useServerStore.getState().channels)
         const decision = quiet
           ? { notify: false, unread: false, mention: false }
           : meUser && serverId && msg.channel_id
