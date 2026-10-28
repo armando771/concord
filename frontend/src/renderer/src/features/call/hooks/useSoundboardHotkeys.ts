@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { useCallStore } from '../store/callStore'
 import { useSoundboardStore } from '../store/soundboardStore'
+import { useSoundFavoritesStore } from '../store/soundFavoritesStore'
+import { findSoundForShortcut } from '../lib/soundboardSections'
 
 const MODIFIER_ONLY_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta'])
 
@@ -32,40 +34,50 @@ export function isEditableElement(target: EventTarget | null): boolean {
   return target.isContentEditable
 }
 
+/** Chamada ativa num canal de servidor (a única com mesa de áudio). */
+export function channelCallServer(
+  status: string,
+  type: string | null,
+  serverId: string | null
+): string | null {
+  return status === 'active' && type === 'channel' ? serverId : null
+}
+
+/**
+ * O som do atalho apertado: entre os do servidor da chamada e os favoritos
+ * (que podem ser de outro servidor). Nada se a tecla repete ou cai num campo.
+ */
+export function soundForKeyEvent(e: KeyboardEvent, serverId: string): { id: string } | undefined {
+  if (e.repeat || isEditableElement(e.target)) return undefined
+  const shortcut = formatKeyboardShortcut(e)
+  if (!shortcut) return undefined
+  const { keybinds, soundsByServer } = useSoundboardStore.getState()
+  const sounds = [...(soundsByServer[serverId] ?? []), ...useSoundFavoritesStore.getState().favorites]
+  return findSoundForShortcut(shortcut, keybinds, sounds)
+}
+
 export function useSoundboardHotkeys(): void {
-  const status = useCallStore((s) => s.status)
-  const type = useCallStore((s) => s.type)
-  const serverId = useCallStore((s) => s.serverId)
+  const serverId = useCallStore((s) => channelCallServer(s.status, s.type, s.serverId))
   const loadServerSounds = useSoundboardStore((s) => s.loadServerSounds)
+  const loadFavorites = useSoundFavoritesStore((s) => s.load)
 
   useEffect(() => {
-    if (status === 'active' && type === 'channel' && serverId) {
-      void loadServerSounds(serverId)
-    }
-  }, [status, type, serverId, loadServerSounds])
+    if (!serverId) return
+    void loadServerSounds(serverId)
+    void loadFavorites()
+  }, [serverId, loadServerSounds, loadFavorites])
 
   useEffect(() => {
-    if (status !== 'active' || type !== 'channel' || !serverId) return
+    if (!serverId) return
 
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.repeat || isEditableElement(e.target)) return
-      const shortcut = formatKeyboardShortcut(e)
-      if (!shortcut) return
-
-      const { keybinds, soundsByServer, triggerSound } = useSoundboardStore.getState()
-      const serverSounds = soundsByServer[serverId] ?? []
-      if (serverSounds.length === 0) return
-
-      const match = serverSounds.find(
-        (snd) => keybinds[snd.id]?.toLowerCase() === shortcut.toLowerCase()
-      )
-      if (match) {
-        e.preventDefault()
-        triggerSound(match.id)
-      }
+      const match = soundForKeyEvent(e, serverId)
+      if (!match) return
+      e.preventDefault()
+      useSoundboardStore.getState().triggerSound(match.id)
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [status, type, serverId])
+  }, [serverId])
 }

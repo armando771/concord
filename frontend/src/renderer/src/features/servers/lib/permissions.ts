@@ -33,7 +33,9 @@ export const Perm = {
   MANAGE_EXPRESSIONS: 1 << 23,
   DISCONNECT_MEMBERS: 1 << 24,
   CHANGE_NICKNAME: 1 << 26,
-  MANAGE_NICKNAMES: 1 << 27
+  MANAGE_NICKNAMES: 1 << 27,
+  ADD_SOUNDS: 1 << 28,
+  ADD_STICKERS: 1 << 29
 } as const
 
 export type PermName = keyof typeof Perm
@@ -44,6 +46,7 @@ export const ALL_PERMISSIONS: number = Object.values(Perm).reduce((sum, bit) => 
 /**
  * O que todo membro faz num servidor novo (igual ao backend). "Alterar apelido"
  * vem ligado, como no Discord; nos servidores antigos a migration 000039 ligou.
+ * "Adicionar sons" e "Adicionar figurinhas" também (migration 000125).
  */
 export const DEFAULT_EVERYONE: number =
   Perm.VIEW_CHANNEL |
@@ -56,7 +59,9 @@ export const DEFAULT_EVERYONE: number =
   Perm.SPEAK |
   Perm.STREAM |
   Perm.USE_SOUNDBOARD |
-  Perm.CHANGE_NICKNAME
+  Perm.CHANGE_NICKNAME |
+  Perm.ADD_SOUNDS |
+  Perm.ADD_STICKERS
 
 export interface Role {
   id: string

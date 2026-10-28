@@ -77,6 +77,7 @@ func (a *app) wireChat() {
 		message.AttachmentRoutes(api, attachmentHandler, a.authMiddleware)
 		message.SearchRoutes(api, searchHandler, a.authMiddleware)
 		soundboard.Routes(api, soundboardHandler, a.authMiddleware)
+		soundboard.FavoriteRoutes(api, soundboard.NewFavoritesHandler(a.soundboardRepository, a.soundboardRepository, a.serverService), a.authMiddleware)
 		sticker.Routes(api, stickerHandler, a.authMiddleware)
 		giphy.Routes(api, giphyHandler, a.authMiddleware)
 	})

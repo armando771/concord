@@ -44,13 +44,12 @@ beforeEach(() => {
 })
 
 describe('soundboardStore', () => {
-  it('persiste volume, favoritos e atalhos no localStorage', async () => {
+  it('persiste volume e atalhos no localStorage', async () => {
     const first = await import('./soundboardStore')
     const store = first.useSoundboardStore.getState()
     expect(store.volume).toBe(0.8)
 
     store.setVolume(0.45)
-    store.toggleFavorite('snd-1')
     store.setKeybind('snd-1', 'Alt+1')
     store.setKeybind('snd-2', 'Alt+1') // substitui o conflito em snd-1
 
@@ -58,9 +57,32 @@ describe('soundboardStore', () => {
     const second = await import('./soundboardStore')
     const state = second.useSoundboardStore.getState()
     expect(state.volume).toBe(0.45)
-    expect(state.favorites).toEqual(['snd-1'])
     expect(state.keybinds['snd-1']).toBeUndefined()
     expect(state.keybinds['snd-2']).toBe('Alt+1')
+  })
+
+  it('salvar as preferências não apaga os favoritos antigos ainda não levados ao servidor', async () => {
+    localStorage.setItem('concord:soundboard-prefs', JSON.stringify({ favorites: ['snd-1'] }))
+    const { useSoundboardStore } = await import('./soundboardStore')
+    useSoundboardStore.getState().setVolume(0.3)
+    const saved = JSON.parse(localStorage.getItem('concord:soundboard-prefs') ?? '{}')
+    expect(saved).toEqual({ favorites: ['snd-1'], volume: 0.3, keybinds: {} })
+  })
+
+  it('som apagado sai também dos favoritos', async () => {
+    const { useSoundboardStore } = await import('./soundboardStore')
+    const { useSoundFavoritesStore } = await import('./soundFavoritesStore')
+    useSoundFavoritesStore.setState({
+      favorites: [
+        { id: 'snd-9', server_name: 'B' } as never,
+        { id: 'snd-8', server_name: 'B' } as never
+      ]
+    })
+    useSoundboardStore.getState().handleWsEvent({
+      type: 'soundboard:deleted',
+      payload: { server_id: 'srv-b', sound_id: 'snd-9' }
+    })
+    expect(useSoundFavoritesStore.getState().favorites.map((f) => f.id)).toEqual(['snd-8'])
   })
 
   it('atualiza lista ao receber soundboard:created e soundboard:deleted', async () => {

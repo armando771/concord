@@ -1,21 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
-import { filterEmoteCategories } from '../lib/emotes'
-import { fetchTrendingGifs, searchGifs, type GiphyItem } from '../api/giphy'
-import {
-  type ServerSticker,
-  stickerFileUrl
-} from '../api/stickers'
-import { useStickerStore, selectStickers } from '../store/stickerStore'
-import { useAuthStore } from '../../auth/store/authStore'
-import { useServerStore } from '../../servers/store/serverStore'
-import { useServerAccess } from '../../servers/hooks/useServerAccess'
-import { Perm } from '../../servers/lib/permissions'
-import { showToast } from '../../../shared/store/toastStore'
-import { ensureMediaToken } from '../store/mediaToken'
-import { PlusIcon, TrashIcon } from '../../../shared/ui/icons'
+import type { GiphyItem } from '../api/giphy'
+import { useGifSearch } from '../hooks/useGifSearch'
+import type { ServerSticker } from '../api/stickers'
+import { useStickerStore } from '../store/stickerStore'
 import StickerUploadModal from './StickerUploadModal'
+import StickersTab from './StickersTab'
+import EmojisTab from './EmojisTab'
+import GifsTab from './GifsTab'
 
 type TabType = 'emojis' | 'gifs' | 'stickers'
+
+const TABS: { id: TabType; icon: string; label: string; placeholder: string }[] = [
+  { id: 'emojis', icon: '😊', label: 'Emojis', placeholder: 'Buscar emoji...' },
+  { id: 'gifs', icon: '👾', label: 'GIFs', placeholder: 'Buscar GIFs no GIPHY...' },
+  { id: 'stickers', icon: '💟', label: 'Figurinhas', placeholder: 'Filtrar figurinhas...' }
+]
 
 interface UnifiedMediaPickerPopoverProps {
   serverId?: string | null
@@ -23,67 +22,6 @@ interface UnifiedMediaPickerPopoverProps {
   onSelectGif: (gif: GiphyItem) => void
   onSelectSticker: (sticker: ServerSticker) => void
   onClose: () => void
-}
-
-function StickerItem({
-  sticker,
-  canDelete,
-  onSelect,
-  onDelete
-}: {
-  sticker: ServerSticker
-  canDelete: boolean
-  onSelect: (stk: ServerSticker) => void
-  onDelete: (stk: ServerSticker) => void
-}): React.JSX.Element {
-  const [src, setSrc] = useState<string | null>(null)
-
-  useEffect(() => {
-    let active = true
-    ensureMediaToken()
-      .then((token) => {
-        if (active) setSrc(stickerFileUrl(sticker.id, token))
-      })
-      .catch(() => {})
-    return () => {
-      active = false
-    }
-  }, [sticker.id])
-
-  return (
-    <div className="group relative flex h-20 w-20 items-center justify-center rounded-xl bg-white/5 p-1 transition-all hover:bg-white/10 hover:scale-105 cursor-pointer">
-      <button
-        type="button"
-        title={sticker.name}
-        onClick={() => onSelect(sticker)}
-        className="flex h-full w-full items-center justify-center cursor-pointer"
-      >
-        {src ? (
-          <img
-            src={src}
-            alt={sticker.name}
-            className="h-full w-full object-contain"
-            draggable={false}
-          />
-        ) : (
-          <div className="h-10 w-10 animate-pulse rounded bg-white/10" />
-        )}
-      </button>
-      {canDelete && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onDelete(sticker)
-          }}
-          title="Excluir figurinha"
-          className="absolute right-1 top-1 rounded-md bg-black/80 p-1 text-red-400 opacity-80 hover:opacity-100 focus-visible:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-80"
-        >
-          <TrashIcon className="h-3 w-3" />
-        </button>
-      )}
-    </div>
-  )
 }
 
 export default function UnifiedMediaPickerPopover({
@@ -97,18 +35,10 @@ export default function UnifiedMediaPickerPopover({
   const [search, setSearch] = useState('')
   const [uploadOpen, setUploadOpen] = useState(false)
 
-  // GIFs
-  const [gifs, setGifs] = useState<GiphyItem[]>([])
-  const [loadingGifs, setLoadingGifs] = useState(false)
+  const { gifs, loading: loadingGifs } = useGifSearch(tab === 'gifs', search)
 
   // Stickers
-  const stickers = useStickerStore(selectStickers(serverId))
   const loadStickers = useStickerStore((s) => s.loadStickers)
-  const deleteSticker = useStickerStore((s) => s.deleteSticker)
-  const currentUserId = useAuthStore((s) => s.user?.id)
-  const viewingServer = useServerStore((s) => Boolean(serverId && s.currentServer?.id === serverId))
-  const access = useServerAccess()
-  const isModeratorOrOwner = viewingServer && access.can(Perm.MANAGE_EXPRESSIONS)
 
   const ref = useRef<HTMLDivElement>(null)
 
@@ -137,39 +67,6 @@ export default function UnifiedMediaPickerPopover({
     }
   }, [serverId, loadStickers])
 
-  // Load GIFs on tab switch or search change (debounced)
-  useEffect(() => {
-    if (tab !== 'gifs') return
-
-    let cancelled = false
-    setLoadingGifs(true)
-
-    const timer = setTimeout(() => {
-      const trimmed = search.trim()
-      const req = trimmed ? searchGifs(trimmed) : fetchTrendingGifs()
-      req
-        .then((items) => {
-          if (!cancelled) {
-            setGifs(items)
-            setLoadingGifs(false)
-          }
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setGifs([])
-            setLoadingGifs(false)
-          }
-        })
-    }, 250)
-
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-  }, [tab, search])
-
-  const emojiCategories = filterEmoteCategories(search)
-
   return (
     <>
       <div
@@ -179,51 +76,24 @@ export default function UnifiedMediaPickerPopover({
       >
         {/* Abas Superiores estilo WhatsApp */}
         <div className="mb-2 flex items-center justify-around border-b border-white/10 pb-2 text-xs font-medium text-gray-400">
-          <button
-            type="button"
-            onClick={() => {
-              setTab('emojis')
-              setSearch('')
-            }}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors cursor-pointer ${
-              tab === 'emojis'
-                ? 'bg-white/10 text-white font-semibold'
-                : 'hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <span>😊</span>
-            <span>Emojis</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setTab('gifs')
-              setSearch('')
-            }}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors cursor-pointer ${
-              tab === 'gifs'
-                ? 'bg-white/10 text-white font-semibold'
-                : 'hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <span>👾</span>
-            <span>GIFs</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setTab('stickers')
-              setSearch('')
-            }}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors cursor-pointer ${
-              tab === 'stickers'
-                ? 'bg-white/10 text-white font-semibold'
-                : 'hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <span>💟</span>
-            <span>Figurinhas</span>
-          </button>
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => {
+                setTab(t.id)
+                setSearch('')
+              }}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors cursor-pointer ${
+                tab === t.id
+                  ? 'bg-white/10 text-white font-semibold'
+                  : 'hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <span>{t.icon}</span>
+              <span>{t.label}</span>
+            </button>
+          ))}
         </div>
 
         {/* Input de Busca */}
@@ -232,13 +102,7 @@ export default function UnifiedMediaPickerPopover({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={
-              tab === 'emojis'
-                ? 'Buscar emoji...'
-                : tab === 'gifs'
-                  ? 'Buscar GIFs no GIPHY...'
-                  : 'Filtrar figurinhas...'
-            }
+            placeholder={TABS.find((t) => t.id === tab)?.placeholder}
             className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white placeholder:text-gray-500 outline-none focus:border-violet-500/50"
           />
         </div>
@@ -246,132 +110,37 @@ export default function UnifiedMediaPickerPopover({
         {/* Conteúdo da Aba */}
         <div className="flex-1 overflow-y-auto pr-1">
           {tab === 'emojis' && (
-            <div>
-              {emojiCategories.map((category) => (
-                <div key={category.id} className="mb-3 last:mb-0">
-                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                    {category.name}
-                  </div>
-                  <div className="grid grid-cols-6 gap-1">
-                    {category.items.map((item) => (
-                      <button
-                        key={item.emoji}
-                        type="button"
-                        title={item.label}
-                        onClick={() => {
-                          onSelectEmoji(item.emoji)
-                          onClose()
-                        }}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-lg transition-colors hover:bg-white/10 cursor-pointer"
-                      >
-                        {item.emoji}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <EmojisTab
+              search={search}
+              onSelect={(emoji) => {
+                onSelectEmoji(emoji)
+                onClose()
+              }}
+            />
           )}
 
           {tab === 'gifs' && (
-            <div>
-              {loadingGifs ? (
-                <div className="flex h-48 items-center justify-center text-xs text-gray-500">
-                  Carregando GIFs...
-                </div>
-              ) : gifs.length === 0 ? (
-                <div className="flex h-48 items-center justify-center text-xs text-gray-500">
-                  Nenhum GIF encontrado.
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {gifs.map((gif) => (
-                    <button
-                      key={gif.id}
-                      type="button"
-                      title={gif.title}
-                      onClick={() => {
-                        onSelectGif(gif)
-                        onClose()
-                      }}
-                      className="group relative h-28 overflow-hidden rounded-xl bg-white/5 transition-transform hover:scale-102 cursor-pointer"
-                    >
-                      <img
-                        src={gif.preview_url || gif.url}
-                        alt={gif.title}
-                        loading="lazy"
-                        className="h-full w-full object-cover"
-                      />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <GifsTab
+              gifs={gifs}
+              loading={loadingGifs}
+              onSelect={(gif) => {
+                onSelectGif(gif)
+                onClose()
+              }}
+            />
           )}
 
           {tab === 'stickers' && (
             <div>
-              {!serverId ? (
-                <div className="flex h-48 flex-col items-center justify-center text-center p-4 text-xs text-gray-500">
-                  <span>Figurinhas ficam disponíveis em canais de servidores.</span>
-                </div>
-              ) : (
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-[11px] text-gray-400">
-                      {stickers.length} / 60 figurinhas
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setUploadOpen(true)}
-                      className="flex items-center gap-1 rounded-md bg-violet-600/30 px-2 py-1 text-[11px] font-medium text-violet-300 transition-colors hover:bg-violet-600/50 cursor-pointer"
-                    >
-                      <PlusIcon className="h-3 w-3" />
-                      <span>Nova Figurinha</span>
-                    </button>
-                  </div>
-
-                  {stickers.length === 0 ? (
-                    <div className="flex h-40 flex-col items-center justify-center text-center p-4 text-xs text-gray-500">
-                      <span className="mb-2">Nenhuma figurinha no servidor ainda.</span>
-                      <button
-                        type="button"
-                        onClick={() => setUploadOpen(true)}
-                        className="rounded-lg bg-white/10 px-3 py-1.5 text-xs text-white transition-colors hover:bg-white/20 cursor-pointer"
-                      >
-                        Adicionar a primeira
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-3 gap-2">
-                      {stickers
-                        .filter((s) => !search || s.name.toLowerCase().includes(search.toLowerCase()))
-                        .map((stk) => (
-                          <StickerItem
-                            key={stk.id}
-                            sticker={stk}
-                            canDelete={stk.uploader_id === currentUserId || isModeratorOrOwner}
-                            onSelect={(selected) => {
-                              onSelectSticker(selected)
-                              onClose()
-                            }}
-                            onDelete={(toDelete) => {
-                              if (serverId) {
-                                deleteSticker(serverId, toDelete.id).catch((err) => {
-                                  showToast.error(
-                                    err instanceof Error
-                                      ? err.message
-                                      : 'Não foi possível excluir a figurinha.'
-                                  )
-                                })
-                              }
-                            }}
-                          />
-                        ))}
-                    </div>
-                  )}
-                </div>
-              )}
+              <StickersTab
+                serverId={serverId}
+                search={search}
+                onAdd={() => setUploadOpen(true)}
+                onSelectSticker={(selected) => {
+                  onSelectSticker(selected)
+                  onClose()
+                }}
+              />
             </div>
           )}
         </div>

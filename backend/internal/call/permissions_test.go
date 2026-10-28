@@ -389,6 +389,15 @@ func TestSoundboardNeedsPermissionAndNoServerMute(t *testing.T) {
 	if err := svc.TriggerSoundboard(ctx, "c-sem", "ana", "s"); !errors.Is(err, ErrSoundboardNoPermission) {
 		t.Fatalf("err = %v, want ErrSoundboardNoPermission", err)
 	}
+	// Favorito de outro servidor também respeita o "Usar mesa de áudio" daqui.
+	svc.SetSoundLookup(fakeSoundLookup{
+		sounds:    map[string]SoundInfo{"s": {ID: "s", ServerID: "srv-1"}, "fav": {ID: "fav", ServerID: "srv-9"}},
+		favorites: map[string]bool{"ana:fav": true},
+	})
+	svc.calls["c-sem"].participants["ana"].lastSoundAt = time.Time{}
+	if err := svc.TriggerSoundboard(ctx, "c-sem", "ana", "fav"); !errors.Is(err, ErrSoundboardNoPermission) {
+		t.Fatalf("favorito sem permissão: err = %v, want ErrSoundboardNoPermission", err)
+	}
 	if err := svc.TriggerSoundboard(ctx, "c-ok", "ana2", "s"); err != nil {
 		t.Fatalf("devia tocar: %v", err)
 	}
