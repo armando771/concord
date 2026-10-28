@@ -1,6 +1,6 @@
 # 0012. Falar as mensagens /tts no app de cada um (Web Speech), decidindo no cliente quem ouve
 
-- Status: aceito
+- Status: aceito; no app desktop do Linux, emendado pelo [0014](0014-voz-piper-no-linux.md)
 - Data: 2026-10-28
 
 ## Contexto
