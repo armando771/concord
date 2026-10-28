@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Sala falsa do LiveKit: só o que o CallMedia usa (eventos, estado, participantes).
 
@@ -121,6 +121,7 @@ beforeEach(() => {
   lk.rooms.length = 0
   emitted = []
 })
+afterEach(() => vi.unstubAllGlobals())
 
 describe('CallMedia — latência sob demanda', () => {
   it('não consulta tracks fora de uma conexão ativa', async () => {
@@ -380,7 +381,12 @@ describe('CallMedia — qualidade de tela', () => {
         parameters = next
       })
     }
-    const track = { mediaStreamTrack: video, sender, publishOptions: { simulcast: false } }
+    const track = {
+      mediaStreamTrack: video,
+      sender,
+      publishOptions: { simulcast: false },
+      setDegradationPreference: vi.fn(async () => {})
+    }
     const pub = { videoTrack: track }
     room().localParticipant.getTrackPublication.mockReturnValue(pub)
     room().localParticipant.publishTrack.mockClear()
@@ -409,8 +415,13 @@ describe('CallMedia — qualidade de tela', () => {
     })
     expect(room().localParticipant.publishTrack).not.toHaveBeenCalled()
     expect(video.stop).not.toHaveBeenCalled()
+    // 60 fps = jogo: fluidez antes de resolução.
+    expect((video as { contentHint?: string }).contentHint).toBe('motion')
+    expect(track.setDegradationPreference).toHaveBeenLastCalledWith('maintain-framerate')
     await media.updateScreenQuality(stream, { resolution: 'source', frameRate: 30 })
     expect(video.applyConstraints).toHaveBeenLastCalledWith({ frameRate: { ideal: 30, max: 30 } })
+    expect((video as { contentHint?: string }).contentHint).toBe('detail')
+    expect(track.setDegradationPreference).toHaveBeenLastCalledWith('maintain-resolution')
   })
 
   it('restaura a captura se o envio recusar a atualização, sem parar o vídeo', async () => {
@@ -421,6 +432,7 @@ describe('CallMedia — qualidade de tela', () => {
     ).rejects.toThrow('encoder')
     expect(video.applyConstraints).toHaveBeenLastCalledWith(video.getConstraints())
     expect(track.publishOptions).toEqual({ simulcast: false })
+    expect(track.setDegradationPreference).not.toHaveBeenCalled()
     expect(video.stop).not.toHaveBeenCalled()
   })
 
@@ -447,6 +459,9 @@ describe('CallMedia — qualidade de tela', () => {
   })
 
   it('publica e republica com o encoding escolhido, sem alterar o áudio', async () => {
+    vi.stubGlobal('RTCRtpSender', {
+      getCapabilities: () => ({ codecs: [{ mimeType: 'video/VP8' }, { mimeType: 'video/H264' }] })
+    })
     const media = createMedia()
     await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
     room().localParticipant.publishTrack.mockClear()
@@ -463,7 +478,10 @@ describe('CallMedia — qualidade de tela', () => {
       source: 'screen_share',
       name: 'screen',
       simulcast: false,
-      screenShareEncoding: { maxBitrate: 8_000_000, maxFramerate: 60 }
+      screenShareEncoding: { maxBitrate: 8_000_000, maxFramerate: 60 },
+      videoCodec: 'h264',
+      backupCodec: { codec: 'vp8' },
+      degradationPreference: 'maintain-framerate'
     })
     expect(room().localParticipant.publishTrack).toHaveBeenCalledWith(
       audio,
@@ -471,6 +489,28 @@ describe('CallMedia — qualidade de tela', () => {
         source: 'screen_share_audio',
         forceStereo: true
       })
+    )
+  })
+})
+
+describe('CallMedia — codec da tela', () => {
+  it('VP8 escolhido em Avançado: publica VP8, sem reserva', async () => {
+    vi.stubGlobal('RTCRtpSender', {
+      getCapabilities: () => ({ codecs: [{ mimeType: 'video/H264' }] })
+    })
+    vi.stubGlobal('localStorage', { getItem: () => 'vp8', setItem: vi.fn() })
+    const media = createMedia()
+    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    room().localParticipant.publishTrack.mockClear()
+    const video = { getSettings: () => ({ width: 1920, height: 1080 }) }
+    const stream = {
+      getVideoTracks: () => [video],
+      getAudioTracks: () => []
+    } as unknown as MediaStream
+    await media.publishScreen(stream)
+    expect(room().localParticipant.publishTrack).toHaveBeenCalledWith(
+      video,
+      expect.objectContaining({ videoCodec: 'vp8', backupCodec: false })
     )
   })
 })

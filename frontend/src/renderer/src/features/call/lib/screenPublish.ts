@@ -1,6 +1,8 @@
-import { AudioPresets, Track, type LocalParticipant } from 'livekit-client'
+import { AudioPresets, Track, type LocalParticipant, type LocalVideoTrack } from 'livekit-client'
+import { canEncodeH264, loadScreenCodec, screenCodecOptions } from './screenCodec'
 import {
   screenEncoding,
+  screenMotion,
   screenSource,
   screenVideoConstraints,
   streamQuality,
@@ -18,11 +20,15 @@ export async function publishScreenTracks(
 ): Promise<void> {
   const [video] = stream.getVideoTracks()
   if (video) {
+    const quality = streamQuality(stream)
     await participant.publishTrack(video, {
       source: Track.Source.ScreenShare,
       name: 'screen',
       simulcast: false,
-      screenShareEncoding: screenEncoding(streamQuality(stream), video.getSettings())
+      screenShareEncoding: screenEncoding(quality, video.getSettings()),
+      // Codec por publicação: só a tela; a câmera segue o padrão da sala (VP8).
+      ...screenCodecOptions(loadScreenCodec(), canEncodeH264()),
+      degradationPreference: screenMotion(quality.frameRate).degradationPreference
     })
   }
   const [audio] = stream.getAudioTracks()
@@ -98,4 +104,18 @@ export async function updatePublishedScreenQuality(
     }
     throw error
   }
+  await applyScreenMotion(video, track, quality)
+}
+
+/** Dica de conteúdo e degradação seguem o fps: jogo (60) fluido, texto (30) nítido. */
+async function applyScreenMotion(
+  video: MediaStreamTrack,
+  track: LocalVideoTrack,
+  quality: ScreenShareQuality
+): Promise<void> {
+  const { contentHint, degradationPreference } = screenMotion(quality.frameRate)
+  video.contentHint = contentHint
+  track.publishOptions = { ...track.publishOptions, degradationPreference }
+  // Recusar a preferência não derruba a troca já aplicada.
+  await track.setDegradationPreference(degradationPreference).catch(() => {})
 }
