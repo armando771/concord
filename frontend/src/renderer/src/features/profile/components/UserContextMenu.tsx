@@ -33,6 +33,7 @@ import { useUserAudioStore } from '../../call/store/userAudioStore'
 import { useUserMenuStore, type UserMenuTarget } from '../store/userMenuStore'
 import { isMaestroUser } from '../../music/lib/music'
 import { UserMemberSubmenus } from './UserContextMenuSubmenus'
+import SelfRolesSubmenu from './SelfRolesSubmenu'
 import { useStandardUserMenuActions } from '../hooks/useStandardUserMenuActions'
 import { useStandardUserMenuModel } from '../hooks/useStandardUserMenuModel'
 
@@ -323,6 +324,7 @@ function UserContextMenu(): React.JSX.Element | null {
           openUserProfile({ ...target, username: member?.username })
         }}
         itemClass={itemClass}
+        rolesItem={<SelfRolesSubmenu target={target} itemClass={itemClass} close={close} />}
       />
     )
   }

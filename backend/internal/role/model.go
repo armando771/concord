@@ -16,17 +16,17 @@ const MaxRoles = 50
 const maxNameLength = 32
 
 var (
-	ErrRoleNotFound    = errors.New("cargo não encontrado")
-	ErrEveryoneRole    = errors.New("o @everyone não pode ser apagado, renomeado nem movido")
-	ErrBotRole         = errors.New("o cargo Bots é fixo do servidor e não pode ser apagado, movido nem atribuído a outros usuários")
-	ErrRoleHierarchy   = errors.New("você só mexe em cargos abaixo do seu cargo mais alto")
-	ErrCannotGrant     = errors.New("você não pode dar uma permissão que não tem")
-	ErrTooManyRoles    = errors.New("limite de cargos do servidor atingido")
-	ErrInvalidName     = errors.New("o nome do cargo precisa ter de 1 a 32 caracteres")
-	ErrInvalidColor    = errors.New("cor inválida")
-	ErrInvalidOrder    = errors.New("a ordem precisa ter exatamente os cargos do servidor")
-	ErrMemberNotFound  = errors.New("membro não encontrado")
-	ErrNoModeratorRole = errors.New("o servidor não tem mais o cargo Moderador")
+	ErrRoleNotFound   = errors.New("cargo não encontrado")
+	ErrEveryoneRole   = errors.New("o @everyone não pode ser apagado, renomeado nem movido")
+	ErrBotRole        = errors.New("o cargo Bots é fixo do servidor e não pode ser apagado, movido nem atribuído a outros usuários")
+	ErrRoleHierarchy  = errors.New("você só mexe em cargos abaixo do seu cargo mais alto")
+	ErrCannotGrant    = errors.New("você não pode dar uma permissão que não tem")
+	ErrTooManyRoles   = errors.New("limite de cargos do servidor atingido")
+	ErrInvalidName    = errors.New("o nome do cargo precisa ter de 1 a 32 caracteres")
+	ErrInvalidColor   = errors.New("cor inválida")
+	ErrInvalidOrder   = errors.New("a ordem precisa ter exatamente os cargos do servidor")
+	ErrMemberNotFound = errors.New("membro não encontrado")
+	ErrOwnerRoles     = errors.New("só o dono do servidor mexe nos cargos dele")
 )
 
 // Input são os campos editáveis; nil = não mexe. ClearColor tira a cor.

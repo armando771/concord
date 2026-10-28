@@ -8,6 +8,20 @@ import (
 	"gin-quickstart/backend/internal/permission"
 )
 
+// modPerms: as permissões de um cargo de moderação típico (as do antigo cargo
+// Moderador, que servidor novo não cria mais).
+const modPerms = permission.DefaultEveryone | permission.ManageChannels |
+	permission.ManageServer |
+	permission.MentionEveryone |
+	permission.ManageMessages |
+	permission.MoveMembers |
+	permission.MuteMembers |
+	permission.DeafenMembers |
+	permission.KickMembers |
+	permission.ManageExpressions |
+	permission.ManageNicknames |
+	permission.DisconnectMembers
+
 // snapPerms responde ChannelPerms a partir de um snapshot em memória.
 type snapPerms struct{ svc *permission.Service }
 
@@ -21,7 +35,7 @@ func (p snapPerms) ChannelPerms(ctx context.Context, channelID, userID string) (
 
 func accessSnapshot() *permission.Snapshot {
 	return permission.NewSnapshot("s1", "dono", permission.DefaultEveryone).
-		WithRole("mod", 2, permission.DefaultModerator).
+		WithRole("mod", 2, modPerms).
 		WithRole("vip", 1, 0).
 		WithRole("mudo", 1, 0).
 		WithMember("dono").

@@ -39,7 +39,9 @@ const mockState = vi.hoisted(() => ({
   },
   server: { id: 's1', owner_id: 'dono' },
   member: { user_id: 'u1', username: 'alvo', role_ids: [] as string[] },
-  canChangeNick: false
+  canChangeNick: false,
+  isOwner: false,
+  roles: [] as unknown[]
 }))
 
 vi.mock('../../call/store/userAudioStore', () => ({
@@ -84,7 +86,7 @@ vi.mock('../../servers/store/serverStore', () => ({
     selector({
       currentServer: mockState.server,
       currentMembers: [mockState.member],
-      roles: [],
+      roles: mockState.roles,
       channels: [],
       addMemberRole: vi.fn(),
       removeMemberRole: vi.fn()
@@ -93,15 +95,16 @@ vi.mock('../../servers/store/serverStore', () => ({
 
 vi.mock('../../servers/hooks/useServerAccess', () => ({
   useServerAccess: () => ({
-    isOwner: false,
+    isOwner: mockState.isOwner,
     perms: 0,
     highest: 0,
     myRoles: [],
-    can: () => false,
+    can: () => mockState.isOwner,
     channelPerms: () => 0,
     canInChannel: () => false,
     highestOf: () => 0,
     canActOnMember: () => false,
+    canEditRolesOf: () => true,
     canChangeNickname: () => mockState.canChangeNick ?? false,
     canDisconnectMember: () => false,
     canMoveMember: () => false,
@@ -175,5 +178,25 @@ describe('UserContextMenu', () => {
     const html = renderToStaticMarkup(<UserContextMenu />)
     expect(html).toContain('Alterar apelido')
     expect(html).toContain('Perfil')
+  })
+
+  // Regressão da issue #331: o dono não tinha como dar cargos a si mesmo.
+  it('o dono vê "Cargos" no menu de si mesmo', () => {
+    mockState.target = { userId: 'me-id', name: 'Eu Mesmo', x: 10, y: 10 }
+    mockState.member = { user_id: 'me-id', username: 'eu', role_ids: [] }
+    mockState.isOwner = true
+    mockState.roles = [
+      { id: 'vip', name: 'VIP', color: null, position: 1, permissions: 0, is_default: false }
+    ]
+    const html = renderToStaticMarkup(<UserContextMenu />)
+    expect(html).toContain('Cargos')
+  })
+
+  it('quem não é dono não vê "Cargos" no menu de si mesmo', () => {
+    mockState.target = { userId: 'me-id', name: 'Eu Mesmo', x: 10, y: 10 }
+    mockState.isOwner = false
+    const html = renderToStaticMarkup(<UserContextMenu />)
+    expect(html).not.toContain('Cargos')
+    mockState.roles = []
   })
 })

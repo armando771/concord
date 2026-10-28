@@ -6,7 +6,7 @@ export interface GroupableMember {
 }
 
 export interface MemberGroup<T extends GroupableMember> {
-  /** Chave estável para o React: "owner", "role:<id>", "members" ou "offline". */
+  /** Chave estável para o React: "role:<id>", "members" ou "offline". */
   key: string
   title: string
   /** Cor do cargo (CSS) quando o grupo é de um cargo colorido. */
@@ -42,18 +42,18 @@ export function serverMemberColorCss(opts: {
 }
 
 /**
- * Agrupa a lista de membros como o Discord: o dono em cima; quem está online
- * separado por cargo "exibido separadamente" (do mais alto para o mais baixo,
- * cada pessoa só no grupo do seu cargo mais alto desses); os demais online em
- * "Membros"; e todos os offline no fim.
+ * Agrupa a lista de membros como o Discord: quem está online separado por cargo
+ * "exibido separadamente" (do mais alto para o mais baixo, cada pessoa só no
+ * grupo do seu cargo mais alto desses); os demais online em "Membros"; e todos
+ * os offline no fim. O dono não é cargo nem grupo: fica onde o cargo dele manda
+ * (a coroa ao lado do nome é que o marca).
  */
 export function groupMembers<T extends GroupableMember>(opts: {
   members: T[]
   roles: Role[]
-  ownerId: string | undefined
   isOnline: (userId: string) => boolean
 }): MemberGroup<T>[] {
-  const { members, roles, ownerId, isOnline } = opts
+  const { members, roles, isOnline } = opts
   const hoisted = roles
     .filter((r) => r.hoist && !r.is_default)
     .sort((a, b) => {
@@ -65,21 +65,15 @@ export function groupMembers<T extends GroupableMember>(opts: {
   const offline = members.filter((m) => !isOnline(m.user_id))
 
   const groups: MemberGroup<T>[] = []
-  const owner = online.filter((m) => m.user_id === ownerId)
-  if (owner.length > 0) {
-    groups.push({ key: 'owner', title: 'Dono do Servidor', members: owner })
-  }
-
-  const rest = online.filter((m) => m.user_id !== ownerId)
   const placed = new Set<string>()
   for (const role of hoisted) {
-    const inRole = rest.filter((m) => !placed.has(m.user_id) && m.role_ids?.includes(role.id))
+    const inRole = online.filter((m) => !placed.has(m.user_id) && m.role_ids?.includes(role.id))
     if (inRole.length === 0) continue
     for (const m of inRole) placed.add(m.user_id)
     groups.push({ key: `role:${role.id}`, title: role.name, roleId: role.id, members: inRole })
   }
 
-  const regular = rest.filter((m) => !placed.has(m.user_id))
+  const regular = online.filter((m) => !placed.has(m.user_id))
   if (regular.length > 0) {
     groups.push({ key: 'members', title: 'Membros', members: regular })
   }

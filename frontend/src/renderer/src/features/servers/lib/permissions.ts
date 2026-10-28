@@ -209,6 +209,19 @@ export function canManageRole(
 }
 
 /**
+ * O ator pode dar ou tirar cargos do alvo? Os cargos do dono só ele mesmo mexe
+ * (em si, qualquer cargo); nos demais, o próprio ator incluso, vale só a
+ * hierarquia de cada cargo (canManageRole).
+ */
+export function canEditRolesOf(
+  ownerId: string | undefined,
+  actorId: string | undefined,
+  targetId: string
+): boolean {
+  return targetId !== ownerId || actorId === ownerId
+}
+
+/**
  * O ator pode expulsar, banir, silenciar, mover ou trocar cargos do alvo? O
  * dono nunca é alvo; ninguém age sobre si mesmo; fora o dono, só quem tem cargo
  * mais alto que o do alvo.
@@ -287,6 +300,7 @@ const PERMISSION_ERROR_MESSAGES: Record<string, string> = {
   missing_permission: 'Você não tem permissão para isso.',
   not_member: 'Você não faz parte deste servidor.',
   role_hierarchy: 'Você só pode fazer isso com cargos e pessoas abaixo do seu cargo mais alto.',
+  owner_roles: 'Só o dono do servidor mexe nos cargos dele.',
   cannot_grant: 'Você não pode dar ou tirar uma permissão que você mesmo não tem.',
   banned: 'Você foi banido deste servidor.',
   everyone_role: 'O cargo @everyone não pode ser renomeado, movido nem apagado.',

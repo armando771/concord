@@ -184,6 +184,18 @@ export function computeGivableRoles(
   })
 }
 
+/**
+ * "Cargos ›" no menu de si mesmo: só o dono dá e tira cargos de si (qualquer
+ * cargo, acima de tudo na hierarquia).
+ */
+export function computeSelfGivableRoles(
+  inServer: boolean,
+  roles: Role[],
+  access: { isOwner: boolean; highest: number; can: (perm: number) => boolean }
+): Role[] {
+  return computeGivableRoles(inServer && access.isOwner, roles, access)
+}
+
 export function computeServerModerationPerms(
   canAct: boolean,
   canDisconnect: boolean,

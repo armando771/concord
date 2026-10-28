@@ -51,7 +51,12 @@ export function useStandardUserMenuModel(
   const username = resolveTargetUsername(target.username, member?.username, callUsername)
   const inServer = Boolean(server && member)
   const canAct = inServer && access.canActOnMember(target.userId)
-  const givable: Role[] = computeGivableRoles(inServer, roles, access)
+  // Os cargos do dono só o próprio dono mexe.
+  const givable: Role[] = computeGivableRoles(
+    inServer && access.canEditRolesOf(target.userId),
+    roles,
+    access
+  )
 
   const fromChannel = voiceChannelOf(serverCalls, target.userId)
   const voiceCall = fromChannel ? serverCalls[fromChannel] : undefined

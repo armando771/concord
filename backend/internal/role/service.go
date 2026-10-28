@@ -292,28 +292,16 @@ func NewPositions(snap *permission.Snapshot, roleIDs []string) (map[string]int, 
 	return positions, nil
 }
 
-// SetMemberRole dá (add) ou tira um cargo de um membro. Basta o cargo estar
-// abaixo do cargo mais alto do ator (como no Discord).
+// SetMemberRole dá (add) ou tira um cargo de um membro (ou do próprio ator).
+// Basta o cargo estar abaixo do cargo mais alto do ator (como no Discord); os
+// cargos do dono só ele mesmo mexe.
 func (s *Service) SetMemberRole(ctx context.Context, serverID, actorID, targetID, roleID string, add bool) ([]string, error) {
 	snap, _, err := s.actor(ctx, serverID, actorID)
 	if err != nil {
 		return nil, err
 	}
-	if !snap.IsMember(targetID) {
-		return nil, ErrMemberNotFound
-	}
-	current, ok := snap.Roles[roleID]
-	if !ok {
-		return nil, ErrRoleNotFound
-	}
-	if current.IsDefault {
-		return nil, ErrEveryoneRole
-	}
-	if current.IsSystem {
-		return nil, ErrBotRole
-	}
-	if !snap.CanManageRole(actorID, current) {
-		return nil, ErrRoleHierarchy
+	if err := checkMemberRole(snap, actorID, targetID, roleID); err != nil {
+		return nil, err
 	}
 
 	if add {
@@ -335,19 +323,30 @@ func (s *Service) SetMemberRole(ctx context.Context, serverID, actorID, targetID
 	return ids, nil
 }
 
-// SetModerator é o atalho do app antigo ("Tornar moderador"): põe ou tira o
-// cargo Moderador.
-func (s *Service) SetModerator(ctx context.Context, serverID, actorID, targetID string, moderator bool) ([]string, error) {
-	snap, err := s.perms.Snapshot(ctx, serverID)
-	if err != nil {
-		return nil, err
+// checkMemberRole: o alvo é membro (e, se é o dono, só ele mesmo mexe nos
+// cargos dele) e o cargo existe, não é fixo (@everyone ou Bots) e está abaixo
+// do cargo mais alto do ator — o dono dá a si mesmo qualquer cargo.
+func checkMemberRole(snap *permission.Snapshot, actorID, targetID, roleID string) error {
+	if !snap.IsMember(targetID) {
+		return ErrMemberNotFound
 	}
-	for _, r := range snap.Roles {
-		if !r.IsDefault && r.Name == permission.ModeratorName {
-			return s.SetMemberRole(ctx, serverID, actorID, targetID, r.ID, moderator)
-		}
+	if !snap.CanEditRolesOf(actorID, targetID) {
+		return ErrOwnerRoles
 	}
-	return nil, ErrNoModeratorRole
+	current, ok := snap.Roles[roleID]
+	if !ok {
+		return ErrRoleNotFound
+	}
+	if current.IsDefault {
+		return ErrEveryoneRole
+	}
+	if current.IsSystem {
+		return ErrBotRole
+	}
+	if !snap.CanManageRole(actorID, current) {
+		return ErrRoleHierarchy
+	}
+	return nil
 }
 
 func (s *Service) publishOrder(ctx context.Context, serverID string) {

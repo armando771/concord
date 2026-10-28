@@ -81,15 +81,6 @@ const All = ViewChannel | ManageChannels | ManageRoles | ManageServer | CreateIn
 const DefaultEveryone = ViewChannel | SendMessages | AttachFiles | AddReactions | ReadHistory |
 	CreateInvite | Connect | Speak | Stream | UseSoundboard | ChangeNickname
 
-// DefaultModerator equivale ao antigo cargo "admin": cuida de canais, do
-// servidor e da moderação, mas não mexe em cargos nem bane (só o dono fazia).
-const DefaultModerator = DefaultEveryone | ManageChannels | ManageServer | MentionEveryone |
-	ManageMessages | MoveMembers | MuteMembers | DeafenMembers | KickMembers | ManageExpressions |
-	ManageNicknames | DisconnectMembers
-
-// ModeratorName é o nome do cargo criado junto com o servidor.
-const ModeratorName = "Moderador"
-
 // BotsRoleName é o nome fixo do cargo de sistema exclusivo para bots do servidor.
 const BotsRoleName = "Bots"
 

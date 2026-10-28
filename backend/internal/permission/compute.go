@@ -127,6 +127,13 @@ func CanManageRole(isOwner bool, actorHighest int, role Role) bool {
 	return isOwner || actorHighest > role.Position
 }
 
+// CanEditRolesOf: o ator pode dar ou tirar cargos do alvo? Os cargos do dono
+// só ele mesmo mexe (em si, qualquer cargo); nos demais membros, o próprio ator
+// incluso, vale só a hierarquia de cada cargo (CanManageRole).
+func CanEditRolesOf(ownerID, actorID, targetID string) bool {
+	return targetID != ownerID || actorID == ownerID
+}
+
 // CanActOn: o ator pode expulsar, banir, silenciar, mover ou trocar os cargos
 // do alvo? O dono nunca é alvo; ninguém age sobre si mesmo; fora o dono, só
 // quem tem cargo mais alto que o do alvo.
