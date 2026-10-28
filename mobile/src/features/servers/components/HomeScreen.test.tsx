@@ -8,6 +8,9 @@ import { HomeScreen } from './HomeScreen'
 jest.mock('expo-secure-store')
 jest.mock('../api/servers')
 jest.mock('../api/channels')
+jest.mock('../../chat/api/conversations', () => ({ listConversations: jest.fn().mockResolvedValue([]) }))
+jest.mock('../../friends/api/friends', () => ({ listFriends: jest.fn().mockResolvedValue([]) }))
+jest.mock('../../friends/api/presence', () => ({ fetchPresence: jest.fn().mockResolvedValue({}) }))
 
 const servers = jest.mocked(listServers)
 const channels = jest.mocked(listChannels)
@@ -25,7 +28,9 @@ const ch = (id: string, name: string, serverId: string): Channel => ({
 describe('HomeScreen', () => {
   const onOpenChannel = jest.fn()
   const onOpenSettings = jest.fn()
-  const setup = () => render(<HomeScreen onOpenChannel={onOpenChannel} onOpenSettings={onOpenSettings} />)
+  const onOpenConversation = jest.fn()
+  const setup = () =>
+    render(<HomeScreen onOpenChannel={onOpenChannel} onOpenConversation={onOpenConversation} onOpenSettings={onOpenSettings} />)
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -55,11 +60,12 @@ describe('HomeScreen', () => {
     expect(onOpenChannel).toHaveBeenCalledWith(expect.objectContaining({ id: 'c1', name: 'geral' }))
   })
 
-  it('DMs: painel "em breve" até a fatia 2b', async () => {
+  it('DMs: o ícone do topo abre o painel com a busca e a lista de conversas', async () => {
     await setup()
     await screen.findByRole('button', { name: 'geral' })
     await fireEvent.press(screen.getByRole('button', { name: 'Mensagens diretas' }))
-    expect(screen.getByText('Mensagens diretas: em breve')).toBeOnTheScreen()
+    expect(screen.getByLabelText('Encontre ou comece uma conversa')).toBeOnTheScreen()
+    expect(await screen.findByText('Você ainda não tem conversas.')).toBeOnTheScreen()
   })
 
   it('a engrenagem do painel abre as configurações', async () => {

@@ -17,8 +17,17 @@ jest.mock('../src/features/servers/api/channels', () => ({ listChannels: jest.fn
 jest.mock('../src/features/chat/api/messages', () => ({
   ...jest.requireActual('../src/features/chat/api/messages'),
   listChannelMessages: jest.fn().mockResolvedValue([]),
-  sendChannelMessage: jest.fn()
+  sendChannelMessage: jest.fn(),
+  listConversationMessages: jest.fn().mockResolvedValue([]),
+  sendConversationMessage: jest.fn()
 }))
+jest.mock('../src/features/chat/api/conversations', () => ({
+  listConversations: jest.fn().mockResolvedValue([]),
+  markConversationRead: jest.fn().mockResolvedValue(undefined),
+  getOrCreateConversationWith: jest.fn()
+}))
+jest.mock('../src/features/friends/api/friends', () => ({ listFriends: jest.fn().mockResolvedValue([]) }))
+jest.mock('../src/features/friends/api/presence', () => ({ fetchPresence: jest.fn().mockResolvedValue({}) }))
 jest.mock('../src/features/auth/api/auth', () => ({
   ...jest.requireActual('../src/features/auth/api/auth'),
   getMe: jest.fn().mockResolvedValue({ id: 'u1', username: 'ana', display_name: 'Ana', email: 'a@b.co' })
@@ -46,7 +55,7 @@ describe('rotas do app', () => {
     await renderRouter('./app', { initialUrl: '/' })
     signIn()
     expect(await screen.findByRole('button', { name: 'Mensagens diretas' })).toBeOnTheScreen()
-    expect(screen.getByText('Mensagens diretas: em breve')).toBeOnTheScreen()
+    expect(screen.getByLabelText('Encontre ou comece uma conversa')).toBeOnTheScreen()
     expect(screen.getByRole('button', { name: 'Silenciar microfone' })).toBeOnTheScreen()
     expect(screen.getByRole('button', { name: 'Configurações' })).toBeOnTheScreen()
     expect(screen.queryByText('Notificações')).toBeNull()
@@ -58,5 +67,12 @@ describe('rotas do app', () => {
     expect(await screen.findByLabelText('Mensagem para #geral')).toBeOnTheScreen()
     expect(screen.getByRole('button', { name: 'Voltar' })).toBeOnTheScreen()
     expect(await screen.findByText('Ainda não há mensagens aqui.')).toBeOnTheScreen()
+  })
+
+  it('sessão salva: /dm/<id> abre a conversa 1 a 1 em tela cheia', async () => {
+    jest.mocked(loadTokens).mockResolvedValueOnce({ accessToken: 'a', refreshToken: 'r' })
+    await renderRouter('./app', { initialUrl: '/dm/d1?name=Paulo&type=dm' })
+    expect(await screen.findByLabelText('Mensagem para @Paulo')).toBeOnTheScreen()
+    expect(screen.getByRole('button', { name: 'Voltar' })).toBeOnTheScreen()
   })
 })

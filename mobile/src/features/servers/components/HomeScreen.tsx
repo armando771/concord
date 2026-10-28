@@ -1,8 +1,9 @@
 import { useEffect } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
-import { colors, fontSize, spacing } from '../../../shared/theme/tokens'
+import { StyleSheet, View } from 'react-native'
+import { colors, spacing } from '../../../shared/theme/tokens'
 import { Banner } from '../../../shared/ui/Banner'
 import { Button } from '../../../shared/ui/Button'
+import { DirectMessages, type OpenConversationArgs } from '../../chat/components/DirectMessages'
 import { UserPanel } from '../../profile/components/UserPanel'
 import type { Channel } from '../api/channels'
 import { useSelectedServerStore } from '../store/selectedServerStore'
@@ -12,11 +13,12 @@ import { ServerRail } from './ServerRail'
 
 interface HomeScreenProps {
   onOpenChannel: (channel: Channel) => void
+  onOpenConversation: (conversation: OpenConversationArgs) => void
   onOpenSettings: () => void
 }
 
 /** Tela principal: trilho de servidores, lista de canais (ou DMs) e o painel do usuário. */
-export function HomeScreen({ onOpenChannel, onOpenSettings }: HomeScreenProps) {
+export function HomeScreen({ onOpenChannel, onOpenConversation, onOpenSettings }: HomeScreenProps) {
   const servers = useServersStore((s) => s.servers)
   const status = useServersStore((s) => s.status)
   const channelsByServer = useServersStore((s) => s.channelsByServer)
@@ -61,9 +63,7 @@ export function HomeScreen({ onOpenChannel, onOpenSettings }: HomeScreenProps) {
               onRetry={() => void loadChannels(server.id)}
             />
           ) : (
-            <View style={styles.centered}>
-              <Text style={styles.soon}>Mensagens diretas: em breve</Text>
-            </View>
+            <DirectMessages onOpenConversation={onOpenConversation} />
           )}
         </View>
       </View>
@@ -76,6 +76,5 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bgTertiary },
   columns: { flex: 1, flexDirection: 'row' },
   main: { flex: 1 },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl, backgroundColor: colors.bgPrimary },
-  soon: { color: colors.textMuted, fontSize: fontSize.md, textAlign: 'center' }
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl, backgroundColor: colors.bgPrimary }
 })

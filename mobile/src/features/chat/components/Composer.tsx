@@ -5,22 +5,21 @@ import { colors, fontSize, MIN_TOUCH, radius, spacing } from '../../../shared/th
 import type { SendOutcome } from '../hooks/useRoomMessages'
 
 interface ComposerProps {
-  channelName: string
+  /** Texto do campo (e rótulo para leitor de tela), ex.: "Mensagem para #geral". */
+  label: string
   onSend: (text: string) => Promise<SendOutcome>
+  /** Aviso do 403 (sem permissão); sem ele, vale o aviso genérico de falha. */
+  forbiddenNotice?: string
 }
 
-const NOTICES: Partial<Record<SendOutcome, string>> = {
-  forbidden: 'Você não tem permissão para enviar mensagens neste canal.',
-  error: 'Não foi possível enviar. Tente de novo.'
-}
+const SEND_FAILED = 'Não foi possível enviar. Tente de novo.'
 
 /** Campo de envio do chat: texto, botão Enviar e aviso de falha (o texto volta ao campo). */
-export function Composer({ channelName, onSend }: ComposerProps) {
+export function Composer({ label, onSend, forbiddenNotice }: ComposerProps) {
   const online = useNetworkStore((s) => s.online)
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
-  const label = `Mensagem para #${channelName}`
   const canSend = online && !sending && text.trim().length > 0
 
   async function submit(): Promise<void> {
@@ -30,7 +29,7 @@ export function Composer({ channelName, onSend }: ComposerProps) {
     const outcome = await onSend(text)
     setSending(false)
     if (outcome === 'ok') setText('')
-    else setNotice(NOTICES[outcome] ?? null)
+    else setNotice(outcome === 'forbidden' ? (forbiddenNotice ?? SEND_FAILED) : SEND_FAILED)
   }
 
   return (
