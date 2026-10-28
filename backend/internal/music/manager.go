@@ -41,8 +41,10 @@ type Location struct {
 
 // ManagerDeps liga o manager ao resto do backend (main.go) ou a dublês.
 type ManagerDeps struct {
-	Locate          func(userID string) (Location, bool)
-	Humans          func(callID string) []string
+	Locate func(userID string) (Location, bool)
+	Humans func(callID string) []string
+	// Listeners: quem está ouvindo (não surdo) na call; nil = DJ não conta.
+	Listeners       func(callID string) []string
 	BotEnabled      func(ctx context.Context, serverID string) bool
 	IsMember        func(ctx context.Context, serverID, userID string) bool
 	ChannelName     func(ctx context.Context, channelID string) string
@@ -84,8 +86,8 @@ type Manager struct {
 	searches map[string]searchSession
 	// Um comando por vez por usuário: não deixa ninguém disparar yt-dlp sem limite.
 	busy map[string]struct{}
-	// onQueued: quem pediu e quantas músicas entraram (badge DJ).
-	onQueued func(userID string, n int)
+	// onPlayed: quem pediu a música que tocou o bastante (badge DJ, played.go).
+	onPlayed func(userID string)
 }
 
 func NewManager(cfg Config, deps ManagerDeps) *Manager {

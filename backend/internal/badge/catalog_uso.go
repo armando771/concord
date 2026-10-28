@@ -5,12 +5,12 @@ package badge
 // mensagem), depois dos outros na ordem do app.
 var usoCategories = []Category{
 	{
-		// Músicas que a pessoa pôs na fila do Maestro (internal/music); a
-		// playlist conta cada música que entrou. Somadas pelo backend a cada
-		// pedido (Service.Count).
+		// Músicas que a pessoa pediu ao Maestro (internal/music) e que tocaram
+		// por 30 s, sem ser puladas, com mais alguém ouvindo na call: pôr na
+		// fila não conta (music/played.go). Somadas a cada uma (Service.Count).
 		Key:         "dj",
 		Name:        "DJ",
-		Description: "Ponha músicas na fila do Maestro, o bot de música das calls.",
+		Description: "Peça músicas ao Maestro, o bot de música das calls. Conta a música que toca por pelo menos 30 segundos com mais alguém ouvindo.",
 		Unit:        UnitSongs,
 		Tiers: []Tier{
 			{"Pede Música", 10, RarityCommon},

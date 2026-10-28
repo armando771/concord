@@ -20,6 +20,8 @@ type Notifier interface {
 	Public(textChannelID, content string)
 	Humans(callID string) []string
 	Closed(p *Player)
+	// Played: a música de userID tocou o bastante (badge DJ, played.go).
+	Played(callID, userID string)
 }
 
 type PlayerDeps struct {
@@ -33,6 +35,8 @@ type PlayerDeps struct {
 	IdleTimeout time.Duration
 	Crossfade   time.Duration
 	SkipFade    time.Duration
+	// PlayedAfter: quanto a música toca até contar no DJ (0 = playedAfter).
+	PlayedAfter time.Duration
 }
 
 type EnqueueResult struct {
@@ -173,6 +177,7 @@ func (p *Player) handleEvent(e MixEvent) {
 		p.nextTag = ""
 		p.skipped = ""
 		p.votes.Reset()
+		p.armPlayedLocked(it)
 		p.stopIdleLocked()
 		p.ensurePreparingLocked()
 		p.ensureVideosLocked()

@@ -36,8 +36,8 @@ type Stats struct {
 	IsDev bool
 	// Escolhas da enquete ("enquete:opcao"), de internal/enquete.
 	Escolhas map[string]bool
-	// Músicas postas na fila do Maestro (DJ).
-	SongsQueued int64
+	// Músicas do Maestro que tocaram 30 s com mais alguém ouvindo (DJ).
+	SongsPlayed int64
 	// Sons da mesa de áudio tocados com alguém ouvindo (Barulhento).
 	SoundsPlayed int64
 	// Mensagens com figurinha ou GIF (Figurinha).
@@ -181,7 +181,7 @@ var valueFns = map[string]valueFn{
 	"l":            func(s Stats, _ time.Time) int64 { return flag(s.Escolhas["segundo-turno:l"]) },
 	"v22":          func(s Stats, _ time.Time) int64 { return flag(s.Escolhas["segundo-turno:22"]) },
 	"nulo":         func(s Stats, _ time.Time) int64 { return flag(s.Escolhas["segundo-turno:nulo"]) },
-	"dj":           func(s Stats, _ time.Time) int64 { return s.SongsQueued },
+	"dj":           func(s Stats, _ time.Time) int64 { return s.SongsPlayed },
 	"barulhento":   func(s Stats, _ time.Time) int64 { return s.SoundsPlayed },
 	"figurinha":    func(s Stats, _ time.Time) int64 { return s.StickersSent },
 	"sequencia":    func(s Stats, _ time.Time) int64 { return s.LongestStreakDays },

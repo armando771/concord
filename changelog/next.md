@@ -27,6 +27,7 @@
 - Badges: novo badge exclusivo Primeira mensagem, de quem mandou a primeira mensagem de um servidor (Quebra-gelo, Desbravador e Big Bang, em 1, 3 e 10 servidores). Nos servidores que já existem, vale a mensagem mais antiga que ainda está lá.
 
 ## Correções
+- Badges: o DJ agora conta só a música que toca por pelo menos 30 segundos com mais alguém ouvindo na call, e não cada música posta na fila. Quem subiu o badge com playlists volta para o tier que os pedidos antigos dão.
 - Badges: o badge Reações agora conta uma vez por mensagem. Vários emojis seus na mesma mensagem valem 1, e quem já tinha subido o badge assim volta para o tier que as mensagens dão.
 - Janela estreita: Configurações, Configurações do servidor, badges e cargos agora cabem em telas pequenas, com a navegação em cima do conteúdo, e as setas para ordenar cargos aparecem em telas de toque.
 - Perfil e servidor: agora dá para arrastar e dar zoom (recortar) o avatar, o banner e o ícone também quando a imagem é um GIF. A animação continua.
