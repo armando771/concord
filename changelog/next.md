@@ -1,5 +1,6 @@
 ## Novidades
 
+- Melhorias: o diamante da barra lateral agora abre uma tela com três cards: Propostas de melhorias, Novidades e o novo Rank global, com os 100 maiores níveis do Salinha, o pódio dos 3 primeiros e a sua posição, mesmo fora do top 100.
 - Linux: o /tts agora fala no app desktop do Linux. A voz (cerca de 90 MB) é baixada na primeira mensagem /tts; o andamento aparece em Configurações → Voz.
 - Chat: novo comando /tts. Digite `/tts <mensagem>` e quem está em call no servidor (ou na call da DM) ouve a mensagem lida em voz; no chat ela aparece com um alto-falante. Até 200 caracteres, uma a cada 10 segundos por pessoa, e uma fala de cada vez. Quem estiver ensurdecido não ouve, e dá para desligar em Configurações → Voz → "Ouvir mensagens de TTS". Os cargos ganharam a permissão "Enviar mensagens TTS", ligada para todos.
 - Mesa de áudio: cada som é do servidor onde foi enviado. Os favoritos (a estrela) agora ficam na sua conta e aparecem nas calls de qualquer servidor, com o nome do servidor de origem. Em Cargos há duas permissões novas, "Adicionar sons" e "Adicionar figurinhas", ligadas para todo mundo por padrão.

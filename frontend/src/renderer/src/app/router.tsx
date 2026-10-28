@@ -6,6 +6,8 @@ import DmChat from '../features/chat/pages/DmChat'
 import GroupChat from '../features/chat/pages/GroupChat'
 import Proposals from '../features/proposals/pages/Proposals'
 import Changelog from '../features/updates/pages/Changelog'
+import ImprovementsHub from '../features/improvements/pages/ImprovementsHub'
+import Ranking from '../features/ranking/pages/Ranking'
 import Login from '../features/auth/pages/Login'
 import Register from '../features/auth/pages/Register'
 import ForgotPassword from '../features/auth/pages/ForgotPassword'
@@ -39,22 +41,19 @@ export const router = createRouter([
       { path: 'friends', element: <Friends /> },
       // Antiga página de convites: agora é a aba "Convites" do Início.
       { path: 'invites', element: <Navigate to="/friends?tab=invites" replace /> },
+      // Aba do diamante: o hub com 3 cards e as telas que ele abre. As telas
+      // têm o próprio "voltar" para o hub; só o hub leva à lista no celular.
       {
-        path: 'proposals',
+        path: 'melhorias',
         element: (
           <MobileBackFrame>
-            <Proposals />
+            <ImprovementsHub />
           </MobileBackFrame>
         )
       },
-      {
-        path: 'changelog',
-        element: (
-          <MobileBackFrame>
-            <Changelog />
-          </MobileBackFrame>
-        )
-      },
+      { path: 'proposals', element: <Proposals /> },
+      { path: 'changelog', element: <Changelog /> },
+      { path: 'ranking', element: <Ranking /> },
       { path: 'dm/:userId', element: <DmChat /> },
       { path: 'dm/c/:conversationId', element: <GroupChat /> },
       { path: 'servers/:id', element: <ServerView /> },

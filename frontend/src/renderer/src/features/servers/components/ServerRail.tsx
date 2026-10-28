@@ -5,6 +5,7 @@ import { useServerStore } from '../store/serverStore'
 import { useServerRailSync } from '../hooks/useServerRailSync'
 import { useRailBadges } from '../hooks/useRailBadges'
 import { isHomePath } from '../lib/railHome'
+import { HUB_PATH, isHubPath } from '../../improvements/lib/hub'
 import { RailHomeButton, RailNavButton } from './ServerRailButtons'
 import ServerRailList from './ServerRailList'
 import CreateServerModal from './CreateServerModal'
@@ -16,8 +17,9 @@ function ServerRail(): React.JSX.Element {
   const [createModalOpen, setCreateModalOpen] = useState(false)
 
   useServerRailSync()
-  const onProposals = location.pathname === '/proposals'
-  const { dmUnread, proposalsBadge } = useRailBadges(onProposals)
+  const onHub = isHubPath(location.pathname)
+  // A bolinha de propostas só some quando o quadro está aberto.
+  const { dmUnread, proposalsBadge } = useRailBadges(location.pathname === '/proposals')
 
   const goTo = (path: string): void => {
     clearCurrentServer()
@@ -36,13 +38,13 @@ function ServerRail(): React.JSX.Element {
 
         <div className="my-1 h-0.5 w-8 rounded-full bg-fg/10" />
 
-        {/* Quadro de propostas (kanban com votação) */}
+        {/* Aba do diamante: Propostas, Novidades e Rank global */}
         <RailNavButton
-          label="Propostas de melhoria"
-          active={onProposals}
+          label="Melhorias"
+          active={onHub}
           badge={proposalsBadge}
           icon={(cls) => <DiamondIcon className={cls} />}
-          onClick={() => goTo('/proposals')}
+          onClick={() => goTo(HUB_PATH)}
         />
 
         <ServerRailList />

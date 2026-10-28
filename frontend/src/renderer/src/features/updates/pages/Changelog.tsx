@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchChangelog, type ChangelogRelease } from '../api/changelog'
 import { ChangelogIcon } from '../../../shared/ui/icons'
+import HubBackButton from '../../improvements/components/HubBackButton'
 import { ChangelogSkeleton } from '../../../shared/ui/skeleton/layouts'
 import { formatReleaseDate, groupEntries } from '../lib/changelog'
 
@@ -39,6 +40,7 @@ export function ChangelogView({ releases, current, loading, error }: ViewProps):
     <div className="flex h-full w-full overflow-hidden bg-primary backdrop-blur-2xl text-gray-100">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-subtle px-4">
+          <HubBackButton />
           <ChangelogIcon className="h-5 w-5 text-violet-400" />
           <h1 className="text-base font-semibold">Novidades</h1>
         </header>
