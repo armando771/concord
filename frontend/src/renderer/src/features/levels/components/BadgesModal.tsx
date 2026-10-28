@@ -123,7 +123,7 @@ function Detail({
  * à direita com arte grande, tier, estatística, raridade e a escada. Só
  * aparecem os badges já conquistados (o primeiro tier faz a categoria
  * surgir); no seu próprio perfil, também a barra de progresso até o próximo
- * tier.
+ * tier. Os que faltam entram só como "N badges ocultos restantes".
  */
 function BadgesModal(): React.JSX.Element | null {
   const target = useBadgeStore((s) => s.modal)
@@ -131,6 +131,9 @@ function BadgesModal(): React.JSX.Element | null {
   const openModal = useBadgeStore((s) => s.openModal)
   const me = useAuthStore((s) => s.user)
   const badges = useBadgeStore((s) => (target ? s.byUser[target.userId]?.badges : undefined))
+  const hiddenRemaining = useBadgeStore((s) =>
+    target ? s.byUser[target.userId]?.hiddenRemaining : undefined
+  )
   // Escolha vale só para esta abertura do modal (target novo = escolha nova).
   const [picked, setPicked] = useState<{ target: BadgesModalTarget; category: string } | null>(null)
 
@@ -201,6 +204,7 @@ function BadgesModal(): React.JSX.Element | null {
           titleId={titleId}
           badges={badges}
           earned={earned}
+          hiddenRemaining={hiddenRemaining}
           selected={selected}
           onSelect={select}
           canViewMine={Boolean(me)}
