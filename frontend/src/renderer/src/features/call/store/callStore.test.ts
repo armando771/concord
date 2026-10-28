@@ -1145,6 +1145,42 @@ describe('callStore — reentrada após queda do WS', () => {
     expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'call-1', active: true })
   })
 
+  it('voltar à call depois de atualizar o app transmitindo não deixa a live fantasma (#367)', async () => {
+    // O processo antigo fechou transmitindo e o novo reconectou dentro da
+    // tolerância: o servidor ainda me lista como transmitindo.
+    api.getCallState.mockResolvedValueOnce({
+      call: null,
+      participants: [],
+      screen_sharing: ['eu', 'ana']
+    } as never)
+    await useCallStore.getState().startChannelCall('canal-1', {
+      userId: 'eu',
+      backendUrl: 'api',
+      serverId: 's',
+      channelId: 'canal-1',
+      muted: false,
+      deafened: false,
+      mutedBeforeDeafen: false
+    })
+    await flush()
+
+    expect(useCallStore.getState().isScreenSharing).toBe(false)
+    expect(useCallStore.getState().screenSharers).toEqual(['ana'])
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'call-1', active: false })
+  })
+
+  it('entrar na call sem live no servidor não anuncia nada sobre a tela', async () => {
+    api.getCallState.mockResolvedValueOnce({
+      call: null,
+      participants: [],
+      screen_sharing: ['ana']
+    } as never)
+    await joinChannel()
+
+    expect(useCallStore.getState().screenSharers).toEqual(['ana'])
+    expect(chat.sendEvent).not.toHaveBeenCalledWith('call:screen', expect.anything())
+  })
+
   it('reconectar o WS (deploy) não toca som nem reconecta a mídia', async () => {
     await joinChannel()
     sounds.playSound.mockClear()
@@ -1957,16 +1993,44 @@ describe('callStore — permissões de voz', () => {
     expect(showToast.error).toHaveBeenCalledWith(expect.stringMatching(/moderador/))
   })
 
-  it('ganhar a permissão publica o microfone, mas não desmuta sozinho', async () => {
+  it('perdeu a fala sem querer (moderador silenciou) e foi liberado: volta a falar sozinho', async () => {
     await joinChannel()
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+    expect(useCallStore.getState().muted).toBe(true)
+    chat.sendEvent.mockClear()
+
+    mediaHandlers().onPublishPermissions({ microphone: true, stream: true })
+
+    expect(useCallStore.getState()).toMatchObject({ canSpeak: true, muted: false })
+    expect(media.instances[0].ensureMic).toHaveBeenLastCalledWith(false)
+    expect(chat.sendEvent).toHaveBeenLastCalledWith('call:voice', {
+      call_id: 'call-1',
+      muted: false,
+      deafened: false
+    })
+  })
+
+  it('já estava mudo por escolha quando foi silenciado: liberar não abre o microfone', async () => {
+    await joinChannel()
+    useCallStore.getState().toggleMute()
     mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
 
     mediaHandlers().onPublishPermissions({ microphone: true, stream: true })
 
-    expect(useCallStore.getState()).toMatchObject({ canSpeak: true, muted: true })
-    expect(media.instances[0].ensureMic).toHaveBeenCalledWith(true)
+    expect(useCallStore.getState().muted).toBe(true)
+  })
+
+  it('mutou por conta própria depois de liberado: um novo silêncio e liberação respeitam o mute', async () => {
+    await joinChannel()
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+    mediaHandlers().onPublishPermissions({ microphone: true, stream: true })
     useCallStore.getState().toggleMute()
-    expect(useCallStore.getState().muted).toBe(false)
+    expect(useCallStore.getState().muted).toBe(true)
+
+    mediaHandlers().onPublishPermissions({ microphone: false, stream: true })
+    mediaHandlers().onPublishPermissions({ microphone: true, stream: true })
+
+    expect(useCallStore.getState().muted).toBe(true)
   })
 
   it('sem permissão de transmitir, tela e câmera nem abrem', async () => {
@@ -2070,6 +2134,27 @@ describe('callStore — salas trancadas e pedidos de entrada', () => {
     })
 
     expect(useCallStore.getState().joinRequests).toEqual([])
+  })
+
+  describe('som do pedido para entrar na sala trancada', () => {
+    const knock = {
+      call_id: 'call-1',
+      user: { id: 'joao', username: 'joao', display_name: 'João' }
+    }
+
+    it('toca a batida quando estou ouvindo', async () => {
+      await joinChannel()
+      useCallStore.getState().handleWsEvent({ type: 'call:knock', payload: knock })
+      expect(sounds.playSound).toHaveBeenCalledWith('knock')
+    })
+
+    it('ensurdecido: não toca a batida, mas o pedido continua na tela', async () => {
+      await joinChannel()
+      useCallStore.setState({ deafened: true })
+      useCallStore.getState().handleWsEvent({ type: 'call:knock', payload: knock })
+      expect(sounds.playSound).not.toHaveBeenCalledWith('knock')
+      expect(useCallStore.getState().joinRequests).toHaveLength(1)
+    })
   })
 
   it('call:knock_accepted conecta automaticamente ao canal', async () => {

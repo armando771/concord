@@ -2,6 +2,7 @@
 
 - Lives: a transmissão de tela agora sai em H.264, com texto bem mais nítido e menos banda (em Avançado, no seletor de qualidade, dá para voltar ao VP8). Em 60 FPS a live prioriza a fluidez, para jogos.
 - Lives: o ícone de gráfico no canto da live mostra as estatísticas (FPS, resolução, Mbps, codec, perda). O vídeo de uma live fora de vista (app minimizado ou live fora da tela do app) pausa, mas o som continua.
+- Melhorias: o diamante da barra lateral agora abre uma tela com três cards: Propostas de melhorias, Novidades e o novo Rank global, com os 100 maiores níveis do Salinha, o pódio dos 3 primeiros e a sua posição, mesmo fora do top 100.
 - Linux: o /tts agora fala no app desktop do Linux. A voz (cerca de 90 MB) é baixada na primeira mensagem /tts; o andamento aparece em Configurações → Voz.
 - Chat: novo comando /tts. Digite `/tts <mensagem>` e quem está em call no servidor (ou na call da DM) ouve a mensagem lida em voz; no chat ela aparece com um alto-falante. Até 200 caracteres, uma a cada 10 segundos por pessoa, e uma fala de cada vez. Quem estiver ensurdecido não ouve, e dá para desligar em Configurações → Voz → "Ouvir mensagens de TTS". Os cargos ganharam a permissão "Enviar mensagens TTS", ligada para todos.
 - Mesa de áudio: cada som é do servidor onde foi enviado. Os favoritos (a estrela) agora ficam na sua conta e aparecem nas calls de qualquer servidor, com o nome do servidor de origem. Em Cargos há duas permissões novas, "Adicionar sons" e "Adicionar figurinhas", ligadas para todo mundo por padrão.
@@ -35,6 +36,7 @@
 - A atualização agora baixa sozinha em segundo plano; o botão Atualizar instala na hora.
 
 ## Correções
+- Chamadas: quem é movido de canal de voz por um moderador agora entra de fato no canal novo, com áudio funcionando, mesmo quando estava sozinho na sala antiga. Antes a pessoa aparecia na lista do canal novo, mas precisava clicar no canal para entrar.
 - Badges: o Figurinha não conta mais a mesma figurinha ou o mesmo GIF mandado logo em seguida, e o que for apagado em até 2 minutos sai da conta. Quem subiu o badge assim volta para o tier que as figurinhas que ainda estão no chat dão.
 - Badges: o Mensagens enviadas não conta mais mensagem repetida em seguida (a mesma que você acabou de mandar na sala), e mensagem apagada em até 2 minutos sai da conta. Quem subiu o badge assim volta para o tier que as mensagens que ainda estão no chat dão.
 - Badges: o Amigos agora conta só amizades com contas de e-mail confirmado e criadas há pelo menos 7 dias. Amigo com conta nova passa a contar quando completar os 7 dias, e quem subiu o badge com contas novas volta para o tier que os amigos de verdade dão.
