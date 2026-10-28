@@ -13,7 +13,7 @@ import {
 } from '../../../lib/profileTiles'
 import type { ImageKind } from '../../ImageCropModal'
 import type { ProfileModalId } from '../modals/ProfileEditModal'
-import { DEFAULT_BANNER } from '../ProfilePreview'
+import { DEFAULT_BANNER } from '../../../../profile/lib/profileMedia'
 import MediaTiles from './MediaTiles'
 import { Tile, TileRow, TileSection } from './Tile'
 

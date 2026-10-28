@@ -28,3 +28,6 @@ export function profileMediaSrc(
   const origin = /^https?:\/\//.test(apiBase) ? new URL(apiBase).origin : ''
   return `${origin}${path}`
 }
+
+/** Banner sem imagem nem cor escolhida (o cartão do próprio perfil, fora de servidor). */
+export const DEFAULT_BANNER = 'linear-gradient(135deg, #5865f2, #8b5cf6)'

@@ -28,6 +28,8 @@ type ProfileHandler struct {
 	static   *media.Store
 	space    spaceChecker
 	maxBytes int64 // MaxProfileImageBytes; testes diminuem
+	// keeper: quem mais usa a mídia (perfis salvos). Nil = ninguém.
+	keeper MediaKeeper
 }
 
 func NewProfileHandler(service *ProfileService, store, static *media.Store, space spaceChecker) *ProfileHandler {
@@ -294,7 +296,7 @@ func (h *ProfileHandler) remove(c *gin.Context, set mediaSetter) {
 // removeMedia apaga o arquivo (e o quadro parado) de uma URL antiga.
 func (h *ProfileHandler) removeMedia(url *string) {
 	id, ok := mediaIDFromURL(url)
-	if !ok {
+	if !ok || h.inUse(*url) {
 		return
 	}
 	h.removeFile(h.store, id)

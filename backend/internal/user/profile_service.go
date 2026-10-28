@@ -17,6 +17,7 @@ type profileRepo interface {
 	SetBanner(ctx context.Context, id string, url *string) (*User, *string, error)
 	SetEntranceSound(ctx context.Context, id string, url *string) (*User, *string, error)
 	SetStatus(ctx context.Context, id string, status string) (*User, error)
+	ApplySnapshot(ctx context.Context, id string, s ProfileSnapshot) (*User, []*string, error)
 }
 
 // ProfileEvents avisa os outros clientes (o hub do websocket implementa).

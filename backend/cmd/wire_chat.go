@@ -61,6 +61,7 @@ func (a *app) wireChat() {
 	profileStatic := mustStore(filepath.Join(profileMediaDir, "static"), "profile media dir")
 	profileService := user.NewProfileService(a.userRepository, a.hub)
 	a.profileHandler = user.NewProfileHandler(profileService, profileMedia, profileStatic, a.uploadSpace)
+	a.wireSavedProfiles(profileService)
 	entranceSounds := mustStore(filepath.Join(profileMediaDir, user.EntranceSoundDir), "entrance sounds dir")
 	entranceSoundHandler := user.NewEntranceSoundHandler(profileService, entranceSounds, a.uploadSpace)
 	conversationHandler := conversation.ConversationHandler(a.conversationService, a.userService, a.profileHandler)

@@ -8,6 +8,7 @@ import ProfileStage from '../profile/ProfileStage'
 import ProfileEditModal, { type ProfileModalId } from '../profile/modals/ProfileEditModal'
 import ProfileTiles from '../profile/tiles/ProfileTiles'
 import ConfirmModal from '../../../friends/components/ConfirmModal'
+import SavedProfilesPanel from '../../../savedProfiles/components/SavedProfilesPanel'
 
 const MEDIA_KINDS: ImageKind[] = ['avatar', 'banner']
 
@@ -87,7 +88,8 @@ function CropModal({ profile }: { profile: ProfileApply }): React.JSX.Element | 
  * coluna estreita de personalização em blocos; à direita, o cartão inteiro e
  * grande como os outros veem. Bloco ou parte do cartão abrem o editor
  * (avatar e banner: o arquivo e o recorte; o resto: um modal com prévia).
- * Cada "Aplicar" já salva: não há rascunho nem "Salvar alterações".
+ * Cada "Aplicar" já salva: não há rascunho nem "Salvar alterações". No
+ * topo, os perfis salvos para trocar o perfil inteiro de uma vez.
  */
 function ProfilesSection(): React.JSX.Element | null {
   const profile = useProfileApply()
@@ -102,7 +104,8 @@ function ProfilesSection(): React.JSX.Element | null {
   const edit = (spot: CardSpot): void => (spotOpensFile(spot) ? pick(spot) : setModal(spot))
 
   return (
-    <>
+    <div className="flex min-w-0 flex-col gap-8">
+      <SavedProfilesPanel />
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[250px_minmax(0,1fr)] lg:items-start xl:grid-cols-[280px_minmax(0,1fr)] xl:gap-8">
         <ProfileStage
           base={base}
@@ -134,7 +137,7 @@ function ProfilesSection(): React.JSX.Element | null {
         onConfirm={(kind) => profile.apply({ [kind]: { kind: 'remove' } })}
         onClose={() => setRemoving(null)}
       />
-    </>
+    </div>
   )
 }
 

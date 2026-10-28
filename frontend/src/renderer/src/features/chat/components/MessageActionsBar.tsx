@@ -75,7 +75,8 @@ function ReactionButtons({
       <div role="separator" aria-orientation="vertical" className="mx-0.5 h-5 w-px bg-fg/15" />
       <button
         type="button"
-        onClick={onTogglePicker}
+        // Sem repassar o evento: a barra abre o seletor no canto da linha, sem âncora.
+        onClick={() => onTogglePicker()}
         title="Adicionar reação"
         aria-label="Adicionar reação"
         className={iconButton}
