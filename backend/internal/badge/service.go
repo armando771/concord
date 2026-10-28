@@ -90,6 +90,8 @@ type Service struct {
 	// Quem está de câmera ligada (LiveKit); nil = Câmera ligada não conta.
 	cameras     CameraSource
 	cameraErrAt time.Time
+	// Contas reais para o Festeiro (real_accounts.go); nil = todas contam.
+	real *realAccounts
 	// As 10 vagas do Top 10 do nível 100 acabaram (ver top10.go).
 	top10Full atomic.Bool
 }
@@ -283,8 +285,10 @@ func (s *Service) flush(ctx context.Context, deltas map[string]Delta) map[string
 func (s *Service) tick(ctx context.Context, now time.Time) {
 	snaps := s.calls.CallSnapshots()
 	cams := s.camerasOn(ctx, snaps)
+	real := s.realAccountsIn(ctx, snaps, now)
 	s.mu.Lock()
 	s.tracker.setCameras(cams)
+	s.tracker.setRealAccounts(real)
 	s.tracker.accrue(snaps, now)
 	s.ticks++
 	flush := s.ticks%flushEvery == 0

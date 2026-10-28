@@ -40,6 +40,24 @@ type Client struct {
 	cancel context.CancelFunc
 }
 
+// inboundEvent é uma mensagem que o app manda pelo WebSocket.
+type inboundEvent struct {
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+// callEvents são as mensagens repassadas ao serviço de chamadas.
+var callEvents = map[string]bool{
+	"call:invite": true, "call:accept": true, "call:decline": true, "call:leave": true,
+	"call:screen": true, "call:voice": true, "call:soundboard": true,
+	"call:activity": true, "call:activity:stop": true, "call:activity:join": true, "call:activity:leave": true,
+	"call:lock": true, "call:knock": true, "call:knock_cancel": true, "call:knock_respond": true,
+	"call:screen_watch": true,
+	// Fala detectada no app (AFK em call, ver call/afk.go).
+	"call:speaking":    true,
+	"call:screen_draw": true, "call:screen_draw_clear": true, "call:screen_draw_undo": true,
+}
+
 func (c *Client) readPump(ctx context.Context) {
 	defer func() {
 		c.hub.Unregister(c)
@@ -53,59 +71,60 @@ func (c *Client) readPump(ctx context.Context) {
 		if err != nil {
 			return
 		}
-
-		var ev struct {
-			Type    string          `json:"type"`
-			Payload json.RawMessage `json:"payload"`
-		}
+		var ev inboundEvent
 		if err := json.Unmarshal(data, &ev); err != nil {
 			continue
 		}
+		c.dispatch(ctx, ev)
+	}
+}
 
-		switch ev.Type {
-		case "subscribe":
-			var p struct {
-				Room string `json:"room"`
-			}
-			if err := json.Unmarshal(ev.Payload, &p); err != nil {
-				continue
-			}
-
-			channelID, conversationID, serverID, userRoomID, callID := parseRoom(p.Room)
-			if channelID == "" && conversationID == "" && serverID == "" && userRoomID == "" && callID == "" {
-				continue
-			}
-
-			if c.validator != nil && !c.validator(ctx, c.userID, channelID, conversationID, serverID, userRoomID, callID) {
-				continue
-			}
-
-			c.hub.Subscribe(c, p.Room)
-		case "unsubscribe":
-			var p struct {
-				Room string `json:"room"`
-			}
-			if err := json.Unmarshal(ev.Payload, &p); err != nil {
-				continue
-			}
-
-			c.hub.Unsubscribe(c, p.Room)
-		case "typing", "typing:stop":
-			if c.typing != nil {
-				c.typing.Handle(ctx, c.userID, ev.Type, ev.Payload)
-			}
-		case "activity:set", "activity:clear":
-			c.hub.HandleActivity(c.userID, ev.Type, ev.Payload)
-		case "call:invite", "call:accept", "call:decline", "call:leave", "call:screen", "call:voice", "call:soundboard",
-			"call:activity", "call:activity:stop", "call:activity:join", "call:activity:leave",
-			"call:lock", "call:knock", "call:knock_cancel", "call:knock_respond",
-			"call:screen_watch",
-			"call:screen_draw", "call:screen_draw_clear", "call:screen_draw_undo":
-			if c.callRouter != nil {
-				c.callRouter.HandleCallMessage(c.userID, ev.Type, ev.Payload)
-			}
+// dispatch entrega a mensagem a quem cuida dela; tipo desconhecido é ignorado.
+func (c *Client) dispatch(ctx context.Context, ev inboundEvent) {
+	switch ev.Type {
+	case "subscribe":
+		c.subscribe(ctx, ev.Payload)
+	case "unsubscribe":
+		c.unsubscribe(ev.Payload)
+	case "typing", "typing:stop":
+		if c.typing != nil {
+			c.typing.Handle(ctx, c.userID, ev.Type, ev.Payload)
+		}
+	case "activity:set", "activity:clear":
+		c.hub.HandleActivity(c.userID, ev.Type, ev.Payload)
+	default:
+		if callEvents[ev.Type] && c.callRouter != nil {
+			c.callRouter.HandleCallMessage(c.userID, ev.Type, ev.Payload)
 		}
 	}
+}
+
+type roomPayload struct {
+	Room string `json:"room"`
+}
+
+// subscribe entra numa sala se ela existe e a pessoa pode vê-la.
+func (c *Client) subscribe(ctx context.Context, payload json.RawMessage) {
+	var p roomPayload
+	if err := json.Unmarshal(payload, &p); err != nil {
+		return
+	}
+	channelID, conversationID, serverID, userRoomID, callID := parseRoom(p.Room)
+	if channelID+conversationID+serverID+userRoomID+callID == "" {
+		return
+	}
+	if c.validator != nil && !c.validator(ctx, c.userID, channelID, conversationID, serverID, userRoomID, callID) {
+		return
+	}
+	c.hub.Subscribe(c, p.Room)
+}
+
+func (c *Client) unsubscribe(payload json.RawMessage) {
+	var p roomPayload
+	if err := json.Unmarshal(payload, &p); err != nil {
+		return
+	}
+	c.hub.Unsubscribe(c, p.Room)
 }
 
 func (c *Client) writePump(ctx context.Context) {

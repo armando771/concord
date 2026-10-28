@@ -1,5 +1,7 @@
 ## Novidades
 
+- Tempo em call e XP de voz param de contar depois de 10 minutos sem falar.
+- Badges: o Festeiro agora conta só contas com e-mail confirmado e pelo menos 7 dias de criadas.
 - Chat: botão direito numa imagem (canais, mensagens diretas e fixadas) abre o menu com "Copiar imagem". Vale para PNG, JPEG e WebP; GIF não copia.
 - Perfil: 14 fontes novas e efeitos de nome animados (degradê animado, neon pulsante, glitch, fogo, onda, cintilante, brilhos, digitando, cromado e sombra 3D). O cartão de perfil ganhou tema: borda neon, arco-íris ou degradê, fundo em degradê com cor principal e de destaque, e efeitos de partículas, brilhos ou neve. Na prévia do editor, passe o mouse no avatar ou no banner para trocar a imagem.
 - Changelog: agora você vê, por versão, o que mudou no app. Clique no ícone de novidades na barra lateral.

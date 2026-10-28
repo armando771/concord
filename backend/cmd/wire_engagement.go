@@ -27,8 +27,8 @@ func (a *app) wireEngagement() {
 	birthdayHandler := birthday.BirthdayHandler(birthdayService)
 	go birthdayService.Run(context.Background())
 
-	// Level (XP por tempo em call, sem mute)
-	levelService := level.LevelService(level.LevelRepository(a.db), a.hub, a.callService)
+	// Level (XP por tempo em call, sem mute e sem estar AFK)
+	levelService := level.LevelService(level.LevelRepository(a.db), a.hub, a.callAFK)
 	levelHandler := level.LevelHandler(levelService)
 	go levelService.Run(a.ctx)
 
@@ -41,7 +41,8 @@ func (a *app) wireEngagement() {
 	// olhando as chamadas; o resto vem dos contadores do banco)
 	// Horas de Coruja/Madrugador em Brasília (nil), não no relógio da VPS. No
 	// desligamento grava o que estava na memória antes de fechar o banco.
-	badgeService := badge.BadgeService(badge.BadgeRepository(a.db), a.hub, a.callService, a.hub, nil)
+	// Tempo em call de quem está AFK não conta (a.callAFK filtra).
+	badgeService := badge.BadgeService(badge.BadgeRepository(a.db), a.hub, a.callAFK, a.hub, nil)
 	badgeHandler := badge.BadgeHandler(badgeService)
 	a.wireBadgeEvents(badgeService)
 	// Amizade aceita já reavalia o badge Amigos das duas pessoas.

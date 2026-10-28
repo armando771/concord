@@ -1,6 +1,9 @@
 package call
 
-import "sort"
+import (
+	"sort"
+	"time"
+)
 
 // CallSnapshot é uma foto de uma chamada ativa agora (usada pelos badges:
 // tempo transmitindo, tempo assistindo, call de madrugada, maior call,
@@ -18,6 +21,12 @@ type CallSnapshot struct {
 	// Quem está assistindo à transmissão de outra pessoa (a própria não
 	// conta), uma vez só mesmo vendo duas lives.
 	ScreenWatchers []string
+	// JoinedAt: quando cada participante entrou nesta call.
+	JoinedAt map[string]time.Time
+	// Away: quem está AFK (10 min sem falar). O call.Service não sabe de
+	// fala e deixa vazio; o AFK (afk_view.go) preenche e tira essas pessoas
+	// de Voice, ScreenSharers e ScreenWatchers.
+	Away []string
 }
 
 // CallSnapshots lista as chamadas ativas (tocando não conta), com os ids em
@@ -31,9 +40,10 @@ func (s *Service) CallSnapshots() []CallSnapshot {
 		if ac.info.Status != StatusActive {
 			continue
 		}
-		snap := CallSnapshot{CallID: callID, Voice: eligibleVoiceUsers(ac)}
+		snap := CallSnapshot{CallID: callID, Voice: eligibleVoiceUsers(ac), JoinedAt: make(map[string]time.Time, len(ac.participants))}
 		for userID, p := range ac.participants {
 			snap.Participants = append(snap.Participants, userID)
+			snap.JoinedAt[userID] = p.joinedAt
 			if !p.deafened {
 				snap.Listeners = append(snap.Listeners, userID)
 			}
