@@ -18,6 +18,7 @@ export interface Message {
   author_id: string
   author?: MessageAuthor
   channel_id?: string | null
+  conversation_id?: string | null
   content: string
   attachments?: Attachment[] | null
   sticker_id?: string | null
@@ -37,6 +38,19 @@ export function listChannelMessages(channelId: string, before?: string): Promise
 
 export function sendChannelMessage(channelId: string, content: string): Promise<Message> {
   return request<Message>(`/channels/${channelId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ content, attachment_ids: [] })
+  })
+}
+
+export function listConversationMessages(conversationId: string, before?: string): Promise<Message[]> {
+  const query = new URLSearchParams({ limit: String(MESSAGE_LIMIT) })
+  if (before) query.set('before', before)
+  return request<Message[]>(`/conversations/${conversationId}/messages?${query.toString()}`)
+}
+
+export function sendConversationMessage(conversationId: string, content: string): Promise<Message> {
+  return request<Message>(`/conversations/${conversationId}/messages`, {
     method: 'POST',
     body: JSON.stringify({ content, attachment_ids: [] })
   })
