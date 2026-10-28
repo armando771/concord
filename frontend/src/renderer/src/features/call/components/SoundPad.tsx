@@ -1,9 +1,16 @@
 import type { SoundboardItem } from '../api/soundboard'
 import { FavoriteStarIcon, TrashIcon } from '../../../shared/ui/icons'
 
+/** Depois da duração: o servidor de origem (favorito de fora) ou quem enviou. */
+function subtitleSuffix(sound: SoundboardItem, origin?: string): string {
+  const who = origin || sound.uploader_name
+  return who ? ` • ${who}` : ''
+}
+
 /** Um som da mesa de áudio: tocar, atalho, estrela e excluir. */
 export default function SoundPad({
   sound,
+  origin,
   isFavorite,
   keybind,
   recordingKey,
@@ -15,6 +22,8 @@ export default function SoundPad({
   onDelete
 }: {
   sound: SoundboardItem
+  /** Nome do servidor de origem, para favorito de outro servidor. */
+  origin?: string
   isFavorite: boolean
   keybind?: string
   recordingKey: boolean
@@ -45,8 +54,7 @@ export default function SoundPad({
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs font-bold text-strong">{sound.name}</p>
           <p className="truncate text-[10px] text-gray-400">
-            {(sound.duration_ms / 1000).toFixed(1)}s
-            {sound.uploader_name ? ` • ${sound.uploader_name}` : ''}
+            {(sound.duration_ms / 1000).toFixed(1)}s{subtitleSuffix(sound, origin)}
           </p>
         </div>
       </button>

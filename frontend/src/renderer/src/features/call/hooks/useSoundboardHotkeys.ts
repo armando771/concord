@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { useCallStore } from '../store/callStore'
 import { useSoundboardStore } from '../store/soundboardStore'
+import { useSoundFavoritesStore } from '../store/soundFavoritesStore'
+import { findSoundForShortcut } from '../lib/soundboardSections'
 
 const MODIFIER_ONLY_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta'])
 
@@ -37,12 +39,14 @@ export function useSoundboardHotkeys(): void {
   const type = useCallStore((s) => s.type)
   const serverId = useCallStore((s) => s.serverId)
   const loadServerSounds = useSoundboardStore((s) => s.loadServerSounds)
+  const loadFavorites = useSoundFavoritesStore((s) => s.load)
 
   useEffect(() => {
     if (status === 'active' && type === 'channel' && serverId) {
       void loadServerSounds(serverId)
+      void loadFavorites()
     }
-  }, [status, type, serverId, loadServerSounds])
+  }, [status, type, serverId, loadServerSounds, loadFavorites])
 
   useEffect(() => {
     if (status !== 'active' || type !== 'channel' || !serverId) return
@@ -53,12 +57,12 @@ export function useSoundboardHotkeys(): void {
       if (!shortcut) return
 
       const { keybinds, soundsByServer, triggerSound } = useSoundboardStore.getState()
-      const serverSounds = soundsByServer[serverId] ?? []
-      if (serverSounds.length === 0) return
-
-      const match = serverSounds.find(
-        (snd) => keybinds[snd.id]?.toLowerCase() === shortcut.toLowerCase()
-      )
+      // Os do servidor da chamada e os favoritos (que podem ser de outro servidor).
+      const sounds = [
+        ...(soundsByServer[serverId] ?? []),
+        ...useSoundFavoritesStore.getState().favorites
+      ]
+      const match = findSoundForShortcut(shortcut, keybinds, sounds)
       if (match) {
         e.preventDefault()
         triggerSound(match.id)

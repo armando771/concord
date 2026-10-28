@@ -16,13 +16,13 @@ import { useCallStore, type CallUserInfo } from './callStore'
 import { useChatStore } from '../../chat/store/chatStore'
 import { showToast } from '../../../shared/store/toastStore'
 import { useUserAudioStore } from './userAudioStore'
-
-const STORAGE_KEY = 'concord:soundboard-prefs'
+import { useSoundFavoritesStore } from './soundFavoritesStore'
+import { legacyFavoriteIds, SOUNDBOARD_PREFS_KEY } from '../lib/legacySoundFavorites'
 const DEFAULT_VOLUME = 0.8
 
+/** Preferências locais da mesa (os favoritos ficam no servidor: soundFavoritesStore). */
 export interface SoundboardPrefs {
   volume: number
-  favorites: string[]
   keybinds: Record<string, string>
 }
 
@@ -57,16 +57,13 @@ interface SoundboardDeletedPayload {
 
 function loadPrefs(): SoundboardPrefs {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { volume: DEFAULT_VOLUME, favorites: [], keybinds: {} }
+    const raw = localStorage.getItem(SOUNDBOARD_PREFS_KEY)
+    if (!raw) return { volume: DEFAULT_VOLUME, keybinds: {} }
     const parsed = JSON.parse(raw) as Partial<SoundboardPrefs>
     const volume =
       typeof parsed.volume === 'number' && Number.isFinite(parsed.volume)
         ? Math.max(0, Math.min(1, parsed.volume))
         : DEFAULT_VOLUME
-    const favorites = Array.isArray(parsed.favorites)
-      ? parsed.favorites.filter((x): x is string => typeof x === 'string')
-      : []
     const keybinds =
       parsed.keybinds && typeof parsed.keybinds === 'object'
         ? Object.fromEntries(
@@ -75,15 +72,20 @@ function loadPrefs(): SoundboardPrefs {
             )
           )
         : {}
-    return { volume, favorites, keybinds }
+    return { volume, keybinds }
   } catch {
-    return { volume: DEFAULT_VOLUME, favorites: [], keybinds: {} }
+    return { volume: DEFAULT_VOLUME, keybinds: {} }
   }
 }
 
 function savePrefs(prefs: SoundboardPrefs): void {
+  // Favoritos antigos ainda não levados ao servidor ficam até a migração.
+  const legacy = legacyFavoriteIds()
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs))
+    localStorage.setItem(
+      SOUNDBOARD_PREFS_KEY,
+      JSON.stringify(legacy.length > 0 ? { favorites: legacy, ...prefs } : prefs)
+    )
   } catch {
     // localStorage indisponível
   }
@@ -94,7 +96,6 @@ const playTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 interface SoundboardState {
   volume: number
-  favorites: string[]
   keybinds: Record<string, string>
   soundsByServer: Record<string, SoundboardItem[]>
   loadingByServer: Record<string, boolean>
@@ -102,7 +103,6 @@ interface SoundboardState {
   activePlays: Record<string, ActiveSoundPlay>
 
   setVolume: (volume: number) => void
-  toggleFavorite: (soundId: string) => void
   setKeybind: (soundId: string, keybind: string | null) => void
   loadServerSounds: (serverId: string) => Promise<void>
   uploadSound: (
@@ -137,7 +137,6 @@ export const useSoundboardStore = create<SoundboardState>()((set, get) => {
 
   return {
     volume: initialPrefs.volume,
-    favorites: initialPrefs.favorites,
     keybinds: initialPrefs.keybinds,
     soundsByServer: {},
     loadingByServer: {},
@@ -147,19 +146,7 @@ export const useSoundboardStore = create<SoundboardState>()((set, get) => {
       const clamped = Math.max(0, Math.min(1, volume))
       set({ volume: clamped })
       setActiveSoundboardVolume(clamped)
-      const { favorites, keybinds } = get()
-      savePrefs({ volume: clamped, favorites, keybinds })
-    },
-
-    toggleFavorite: (soundId) => {
-      set((s) => {
-        const exists = s.favorites.includes(soundId)
-        const favorites = exists
-          ? s.favorites.filter((id) => id !== soundId)
-          : [...s.favorites, soundId]
-        savePrefs({ volume: s.volume, favorites, keybinds: s.keybinds })
-        return { favorites }
-      })
+      savePrefs({ volume: clamped, keybinds: get().keybinds })
     },
 
     setKeybind: (soundId, keybind) => {
@@ -177,7 +164,7 @@ export const useSoundboardStore = create<SoundboardState>()((set, get) => {
           }
           nextKeybinds[soundId] = normalized
         }
-        savePrefs({ volume: s.volume, favorites: s.favorites, keybinds: nextKeybinds })
+        savePrefs({ volume: s.volume, keybinds: nextKeybinds })
         return { keybinds: nextKeybinds }
       })
     },
@@ -271,6 +258,7 @@ export const useSoundboardStore = create<SoundboardState>()((set, get) => {
       if (event.type === 'soundboard:deleted') {
         const p = event.payload as SoundboardDeletedPayload
         if (!p?.server_id || !p?.sound_id) return
+        useSoundFavoritesStore.getState().forget(p.sound_id)
         set((s) => {
           const current = s.soundsByServer[p.server_id] ?? []
           return {

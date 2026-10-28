@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SoundboardItem } from '../api/soundboard'
 import { useAuthStore } from '../../auth/store/authStore'
-import { useCallStore } from '../store/callStore'
 import { useServerStore } from '../../servers/store/serverStore'
 import { useServerAccess } from '../../servers/hooks/useServerAccess'
 import { Perm } from '../../servers/lib/permissions'
 import { useSoundboardStore } from '../store/soundboardStore'
+import { useSoundFavoritesStore } from '../store/soundFavoritesStore'
+import { soundboardSections } from '../lib/soundboardSections'
 import { showToast } from '../../../shared/store/toastStore'
 import { PlusIcon, SearchIcon, VolumeIcon, VolumeOffIcon } from '../../../shared/ui/icons'
 import SoundboardUploadModal from './SoundboardUploadModal'
 import SoundPad from './SoundPad'
+import SoundSection from './SoundSection'
 import { formatKeyboardShortcut } from '../hooks/useSoundboardHotkeys'
 import { SoundboardSkeleton } from '../../../shared/ui/skeleton/layouts'
 
@@ -24,7 +26,6 @@ function SoundboardSoundsPanel({
   onBusyChange: (busy: boolean) => void
 }): React.JSX.Element {
   const meId = useAuthStore((s) => s.user?.id ?? '')
-  const callChannelId = useCallStore((s) => s.channelId)
   // Só dá para conferir cargos do servidor aberto; em outro, o servidor decide.
   const viewingCallServer = useServerStore((s) => s.currentServer?.id === serverId)
   const access = useServerAccess()
@@ -34,11 +35,12 @@ function SoundboardSoundsPanel({
   // Já buscou este servidor alguma vez: reabrir mostra os sons na hora.
   const soundsLoaded = useSoundboardStore((s) => s.soundsByServer[serverId] !== undefined)
   const volume = useSoundboardStore((s) => s.volume)
-  const favorites = useSoundboardStore((s) => s.favorites)
+  const favorites = useSoundFavoritesStore((s) => s.favorites)
+  const loadFavorites = useSoundFavoritesStore((s) => s.load)
+  const toggleFavorite = useSoundFavoritesStore((s) => s.toggle)
   const keybinds = useSoundboardStore((s) => s.keybinds)
   const activePlays = useSoundboardStore((s) => s.activePlays)
   const setVolume = useSoundboardStore((s) => s.setVolume)
-  const toggleFavorite = useSoundboardStore((s) => s.toggleFavorite)
   const setKeybind = useSoundboardStore((s) => s.setKeybind)
   const loadServerSounds = useSoundboardStore((s) => s.loadServerSounds)
   const deleteSound = useSoundboardStore((s) => s.deleteSound)
@@ -51,7 +53,8 @@ function SoundboardSoundsPanel({
 
   useEffect(() => {
     void loadServerSounds(serverId)
-  }, [serverId, loadServerSounds])
+    void loadFavorites()
+  }, [serverId, loadServerSounds, loadFavorites])
 
   useEffect(() => {
     onBusyChange(uploadOpen || recordingSoundId !== null)
@@ -86,28 +89,43 @@ function SoundboardSoundsPanel({
 
   // Apagar áudio de outras pessoas: MANAGE_EXPRESSIONS (dono e administrador incluídos).
   const isModeratorOrOwner = viewingCallServer && access.can(Perm.MANAGE_EXPRESSIONS)
-  // Tocar e enviar áudios: USE_SOUNDBOARD no canal de voz da chamada.
-  const canUseSoundboard =
-    !viewingCallServer || !callChannelId || access.canInChannel(callChannelId, Perm.USE_SOUNDBOARD)
+  // Enviar som: ADD_SOUNDS no servidor da chamada.
+  const canAddSounds = !viewingCallServer || access.can(Perm.ADD_SOUNDS)
 
   const playingSoundIds = useMemo(
     () => new Set(Object.values(activePlays).map((p) => p.soundId)),
     [activePlays]
   )
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return sounds
-    return sounds.filter((s) => s.name.toLowerCase().includes(q))
-  }, [sounds, query])
-
-  const favoriteSounds = useMemo(
-    () => filtered.filter((s) => favorites.includes(s.id)),
-    [filtered, favorites]
+  const sections = useMemo(
+    () => soundboardSections(sounds, favorites, query),
+    [sounds, favorites, query]
   )
-  const otherSounds = useMemo(
-    () => filtered.filter((s) => !favorites.includes(s.id)),
-    [filtered, favorites]
+  const favoriteIds = useMemo(() => new Set(favorites.map((f) => f.id)), [favorites])
+  const nothingShown = sections.favorites.length === 0 && sections.server.length === 0
+
+  const handleToggleFavorite = (sound: SoundboardItem): void => {
+    toggleFavorite(sound.id).catch((err) => {
+      showToast.error(err instanceof Error ? err.message : 'Não foi possível favoritar o som.')
+    })
+  }
+
+  const renderPad = (snd: SoundboardItem & { server_name?: string }): React.JSX.Element => (
+    <SoundPad
+      key={snd.id}
+      sound={snd}
+      origin={snd.server_id !== serverId ? snd.server_name : undefined}
+      isFavorite={favoriteIds.has(snd.id)}
+      keybind={keybinds[snd.id]}
+      recordingKey={recordingSoundId === snd.id}
+      // Só se apaga aqui o que é deste servidor.
+      canDelete={snd.server_id === serverId && (snd.uploader_id === meId || isModeratorOrOwner)}
+      isPlaying={playingSoundIds.has(snd.id)}
+      onTrigger={() => triggerSound(snd.id)}
+      onToggleFavorite={() => handleToggleFavorite(snd)}
+      onStartRecordKey={() => setRecordingSoundId((cur) => (cur === snd.id ? null : snd.id))}
+      onDelete={() => void handleDelete(snd)}
+    />
   )
 
   const handleDelete = async (sound: SoundboardItem): Promise<void> => {
@@ -131,7 +149,7 @@ function SoundboardSoundsPanel({
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col">
-        {canUseSoundboard && (
+        {canAddSounds && (
           <div className="mb-3 flex justify-end">
             <button
               type="button"
@@ -193,14 +211,14 @@ function SoundboardSoundsPanel({
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
           {loading && !soundsLoaded ? (
             <SoundboardSkeleton />
-          ) : filtered.length === 0 ? (
+          ) : nothingShown ? (
             <div className="rounded-xl border border-dashed border-subtle py-8 text-center">
               <p className="text-xs font-medium text-gray-300">
-                {sounds.length === 0
+                {sounds.length === 0 && favorites.length === 0
                   ? 'Nenhum som neste servidor ainda.'
                   : 'Nenhum som encontrado para essa busca.'}
               </p>
-              {sounds.length === 0 && (
+              {sounds.length === 0 && favorites.length === 0 && canAddSounds && (
                 <p className="mt-1 text-[11px] text-gray-500">
                   Clique em &ldquo;Adicionar som&rdquo; para enviar um áudio de até 15s (5 MB).
                 </p>
@@ -208,61 +226,10 @@ function SoundboardSoundsPanel({
             </div>
           ) : (
             <>
-              {favoriteSounds.length > 0 && (
-                <div>
-                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                    ★ Favoritos
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {favoriteSounds.map((snd) => (
-                      <SoundPad
-                        key={snd.id}
-                        sound={snd}
-                        isFavorite
-                        keybind={keybinds[snd.id]}
-                        recordingKey={recordingSoundId === snd.id}
-                        canDelete={snd.uploader_id === meId || isModeratorOrOwner}
-                        isPlaying={playingSoundIds.has(snd.id)}
-                        onTrigger={() => triggerSound(snd.id)}
-                        onToggleFavorite={() => toggleFavorite(snd.id)}
-                        onStartRecordKey={() =>
-                          setRecordingSoundId((cur) => (cur === snd.id ? null : snd.id))
-                        }
-                        onDelete={() => void handleDelete(snd)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {otherSounds.length > 0 && (
-                <div>
-                  {favoriteSounds.length > 0 && (
-                    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                      Sons do Servidor
-                    </p>
-                  )}
-                  <div className="grid grid-cols-2 gap-2">
-                    {otherSounds.map((snd) => (
-                      <SoundPad
-                        key={snd.id}
-                        sound={snd}
-                        isFavorite={false}
-                        keybind={keybinds[snd.id]}
-                        recordingKey={recordingSoundId === snd.id}
-                        canDelete={snd.uploader_id === meId || isModeratorOrOwner}
-                        isPlaying={playingSoundIds.has(snd.id)}
-                        onTrigger={() => triggerSound(snd.id)}
-                        onToggleFavorite={() => toggleFavorite(snd.id)}
-                        onStartRecordKey={() =>
-                          setRecordingSoundId((cur) => (cur === snd.id ? null : snd.id))
-                        }
-                        onDelete={() => void handleDelete(snd)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
+              <SoundSection title="★ Favoritos">{sections.favorites.map(renderPad)}</SoundSection>
+              <SoundSection title={sections.favorites.length > 0 ? 'Sons do servidor' : undefined}>
+                {sections.server.map(renderPad)}
+              </SoundSection>
             </>
           )}
         </div>
