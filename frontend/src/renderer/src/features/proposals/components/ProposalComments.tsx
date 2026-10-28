@@ -10,6 +10,7 @@ import CommentActions from './CommentActions'
 import CommentEditForm from './CommentEditForm'
 import { CommentBody, CommentMeta, CommentReply } from './CommentParts'
 import EmotePickerPopover from '../../chat/components/EmotePickerPopover'
+import { useReactionPicker } from '../../chat/hooks/useReactionPicker'
 import ReactionChips from '../../chat/components/ReactionChips'
 import CommentComposer from './CommentComposer'
 import { CommentListSkeleton } from '../../../shared/ui/skeleton/layouts'
@@ -51,7 +52,7 @@ function CommentRow({
   const [draft, setDraft] = useState(comment.body)
   const [busy, setBusy] = useState(false)
   const [hover, setHover] = useState(false)
-  const [pickerOpen, setPickerOpen] = useState(false)
+  const picker = useReactionPicker()
 
   const hasAttachments = comment.attachments.length > 0
 
@@ -131,18 +132,18 @@ function CommentRow({
             meId={meId ?? undefined}
             canReact
             onReact={(emoji) => void react(emoji)}
-            onOpenPicker={() => setPickerOpen((v) => !v)}
+            onOpenPicker={picker.toggle}
           />
         </div>
       </div>
 
-      {(hover || pickerOpen) && !editing && (
+      {(hover || picker.open) && !editing && (
         <CommentActions
           comment={comment}
           meId={meId}
           isTech={isTech}
           onReact={(emoji) => void react(emoji)}
-          onTogglePicker={() => setPickerOpen((v) => !v)}
+          onTogglePicker={() => picker.toggle()}
           onReply={onReply}
           onEdit={() => {
             setDraft(comment.body)
@@ -151,10 +152,11 @@ function CommentRow({
           onDelete={() => void remove()}
         />
       )}
-      {pickerOpen && (
+      {picker.open && (
         <EmotePickerPopover
+          anchor={picker.anchor}
           onSelect={(emoji) => void react(emoji)}
-          onClose={() => setPickerOpen(false)}
+          onClose={picker.close}
         />
       )}
     </li>

@@ -80,11 +80,16 @@ function ReactionChip({
  * "Adicionar reação" no fim das pílulas: aparece ao passar o mouse na
  * mensagem (como no Discord), no foco do teclado e sempre no toque.
  */
-function AddReactionChip({ onClick }: { onClick: () => void }): React.JSX.Element {
+function AddReactionChip({
+  onClick
+}: {
+  /** Recebe o próprio botão: é nele que o seletor de emoji se ancora. */
+  onClick: (button: HTMLElement) => void
+}): React.JSX.Element {
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={(e) => onClick(e.currentTarget)}
       title="Adicionar reação"
       aria-label="Adicionar reação"
       className="inline-flex h-7 w-9 cursor-pointer items-center justify-center rounded-lg border border-transparent bg-fg/5 text-gray-400 transition-colors hover:border-strong hover:bg-fg/10 hover:text-strong focus-visible:outline-2 focus-visible:outline-brand [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
@@ -110,7 +115,8 @@ function ReactionChips({
   /** Canal de servidor: o "quem reagiu" usa o apelido de lá. */
   serverId?: string
   onReact: (emoji: string) => void
-  onOpenPicker: () => void
+  /** Abre o seletor de emoji ancorado no botão "+" (`anchor`). */
+  onOpenPicker: (anchor: HTMLElement) => void
 }): React.JSX.Element | null {
   const [hovered, setHovered] = useState<HoveredReaction | null>(null)
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
