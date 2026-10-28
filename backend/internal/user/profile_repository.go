@@ -56,3 +56,29 @@ func updateProfile(ctx context.Context, q rowQuerier, id string, in ProfileInput
 		themeExtras(in.ProfileTheme),
 	))
 }
+
+// ApplySnapshot troca o perfil inteiro (campos, avatar e banner) numa
+// transação e devolve as URLs de avatar e banner que estavam antes.
+func (r *Repository) ApplySnapshot(ctx context.Context, id string, s ProfileSnapshot) (*User, []*string, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	var oldAvatar, oldBanner *string
+	if err := tx.QueryRow(ctx, `SELECT avatar_url, banner_url FROM users WHERE id = $1 FOR UPDATE`, id).Scan(&oldAvatar, &oldBanner); err != nil {
+		return nil, nil, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE users SET avatar_url = $2, banner_url = $3 WHERE id = $1`, id, s.AvatarURL, s.BannerURL); err != nil {
+		return nil, nil, err
+	}
+	u, err := updateProfile(ctx, tx, id, s.Fields)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, nil, err
+	}
+	return u, []*string{oldAvatar, oldBanner}, nil
+}
