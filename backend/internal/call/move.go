@@ -118,7 +118,15 @@ func (s *Service) MoveToChannel(ctx context.Context, actorID, targetID, channelI
 	if err != nil {
 		return nil, ErrNotFound
 	}
+	// Mover é ação de moderador: passa mesmo por sala trancada.
+	return s.moveTo(ctx, actorID, targetID, dest, func() (*Call, error) {
+		return s.startChannel(ctx, targetID, dest.ID, true)
+	})
+}
 
+// moveTo autoriza e faz a troca de canal; join põe a pessoa no destino
+// (trocável nos testes, que não têm banco).
+func (s *Service) moveTo(ctx context.Context, actorID, targetID string, dest *channel.Channel, join func() (*Call, error)) (*Call, error) {
 	from, inVoice := s.voiceLocationOf(targetID)
 
 	if s.perms == nil {
@@ -132,21 +140,26 @@ func (s *Service) MoveToChannel(ctx context.Context, actorID, targetID, channelI
 		return nil, err
 	}
 
-	if err := s.Leave(ctx, from.callID, targetID); err != nil {
+	if err := s.leaveCall(ctx, from.callID, targetID); err != nil {
 		return nil, err
 	}
-	// Mover é ação de moderador: passa mesmo por sala trancada.
-	call, err := s.startChannel(ctx, targetID, dest.ID, true)
+	call, err := join()
 	if err != nil {
 		log.Printf("[call] move %s to %s failed after leaving: %v", targetID, dest.ID, err)
 		return nil, err
 	}
+	s.announceMove(ctx, actorID, targetID, call, from, dest)
+	return call, nil
+}
 
-	targetInfo, err := s.userInfo(ctx, targetID)
+// announceMove avisa quem foi movido (o cliente dele troca de sala sozinho)
+// e o servidor (listas dos canais de voz).
+func (s *Service) announceMove(ctx context.Context, actorID, targetID string, call *Call, from voiceLocation, dest *channel.Channel) {
+	targetInfo, err := s.lookupUser(ctx, targetID)
 	if err != nil {
-		return call, nil
+		return
 	}
-	actorInfo, _ := s.userInfo(ctx, actorID)
+	actorInfo, _ := s.lookupUser(ctx, actorID)
 	event := marshalEvent("call:moved", MovedEvent{
 		CallID:        call.ID,
 		FromCallID:    from.callID,
@@ -159,6 +172,4 @@ func (s *Service) MoveToChannel(ctx context.Context, actorID, targetID, channelI
 	})
 	s.publisher.SendToUser(targetID, event)
 	s.broadcastServer(dest.ServerID, &dest.ID, event)
-
-	return call, nil
 }
