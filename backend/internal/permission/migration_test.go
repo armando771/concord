@@ -38,6 +38,7 @@ func TestMigrationDefaultsMatchConstants(t *testing.T) {
 	sql := readMigration(t, "000029_add_roles_permissions.up.sql")
 	added := nicknameMigrationBits(t)
 	disconnectBits := disconnectMigrationBits(t)
+	ttsBits := roleUpdateBits(t, "000120_tts_messages.up.sql")
 	for name, want := range map[string]int64{"@everyone": DefaultEveryone, "Moderador": legacyModerator} {
 		needle := "'" + name + "', "
 		i := strings.Index(sql, "SELECT id, "+needle)
@@ -49,7 +50,7 @@ func TestMigrationDefaultsMatchConstants(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v (%q)", name, err, fields)
 		}
-		total := got | added[name] | disconnectBits[name]
+		total := got | added[name] | disconnectBits[name] | ttsBits[name]
 		if total != want {
 			t.Errorf("%s: migrations = %d, Go = %d", name, total, want)
 		}
@@ -110,6 +111,44 @@ func disconnectMigrationBits(t *testing.T) map[string]int64 {
 		t.Errorf("Moderador ganha %d na 000063, want DisconnectMembers (%d)", added["Moderador"], DisconnectMembers)
 	}
 	return added
+}
+
+// roleUpdateBits: o que uma migration liga no @everyone e no Moderador antigo
+// (só UPDATEs de "permissions | N").
+func roleUpdateBits(t *testing.T, file string) map[string]int64 {
+	t.Helper()
+	re := regexp.MustCompile(`UPDATE roles SET permissions = permissions \| (\d+) WHERE (.+);`)
+	targets := map[string]string{
+		"is_default":                            "@everyone",
+		"name = 'Moderador' AND NOT is_default": "Moderador",
+	}
+	added := map[string]int64{}
+	for _, m := range re.FindAllStringSubmatch(readMigration(t, file), -1) {
+		name, ok := targets[m[2]]
+		if !ok {
+			t.Fatalf("UPDATE inesperado na %s: %q", file, m[0])
+		}
+		bits, err := strconv.ParseInt(m[1], 10, 64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		added[name] |= bits
+	}
+	return added
+}
+
+// A 000120 liga só o SEND_TTS_MESSAGES, nos dois cargos padrão, e o down o
+// tira de todos os cargos e sobrescritas.
+func TestTTSMigrationBits(t *testing.T) {
+	added := roleUpdateBits(t, "000120_tts_messages.up.sql")
+	if added["@everyone"] != SendTTSMessages || added["Moderador"] != SendTTSMessages {
+		t.Errorf("000120 liga %v, want só SEND_TTS_MESSAGES (%d)", added, SendTTSMessages)
+	}
+	down := readMigration(t, "000120_tts_messages.down.sql")
+	want := "& ~" + strconv.FormatInt(SendTTSMessages, 10)
+	if strings.Count(down, want) != 3 {
+		t.Errorf("down devia tirar o bit dos cargos e das sobrescritas (%q)", want)
+	}
 }
 
 // O down da 000039 desliga exatamente os bits que o up ligou.

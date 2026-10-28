@@ -87,13 +87,18 @@ func TestPostCallInviteStoreFailure(t *testing.T) {
 	}
 }
 
-type fakeRow struct{ invite []byte }
+type fakeRow struct {
+	invite []byte
+	tts    bool
+}
 
 func (r fakeRow) Scan(dest ...any) error {
 	for i, d := range dest {
 		switch p := d.(type) {
 		case *string:
 			*p = "x"
+		case *bool:
+			*p = r.tts
 		case *[]byte:
 			if i == len(dest)-1 {
 				*p = r.invite

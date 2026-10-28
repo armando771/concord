@@ -93,7 +93,7 @@ func implicit(perms int64, channelType string) int64 {
 		return 0
 	}
 	if perms&SendMessages == 0 {
-		perms &^= AttachFiles | MentionEveryone
+		perms &^= AttachFiles | MentionEveryone | SendTTSMessages
 	}
 	if channelType == ChannelVoice && perms&Connect == 0 {
 		perms &^= Speak | Stream | MuteMembers | DeafenMembers | MoveMembers | DisconnectMembers | UseSoundboard

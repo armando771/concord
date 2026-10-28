@@ -38,6 +38,9 @@ const (
 	// outros (moderação, respeitando a hierarquia). Mesmos bits do Discord.
 	ChangeNickname  int64 = 1 << 26
 	ManageNicknames int64 = 1 << 27
+	// Mensagens /tts (lidas em voz para quem está em call). Bit alto para não
+	// disputar os vizinhos livres com outras permissões.
+	SendTTSMessages int64 = 1 << 30
 )
 
 // Names: nome de cada bit (o mesmo do app e de testdata/vectors.json).
@@ -67,6 +70,7 @@ var Names = map[string]int64{
 	"DISCONNECT_MEMBERS":   DisconnectMembers,
 	"CHANGE_NICKNAME":      ChangeNickname,
 	"MANAGE_NICKNAMES":     ManageNicknames,
+	"SEND_TTS_MESSAGES":    SendTTSMessages,
 }
 
 // All é a soma de todos os bits conhecidos (dono e ADMINISTRATOR).
@@ -74,12 +78,13 @@ const All = ViewChannel | ManageChannels | ManageRoles | ManageServer | CreateIn
 	KickMembers | BanMembers | Administrator | SendMessages | AttachFiles | AddReactions |
 	MentionEveryone | ManageMessages | ReadHistory | Connect | Speak | Stream |
 	MuteMembers | DeafenMembers | MoveMembers | DisconnectMembers | UseSoundboard | ManageExpressions |
-	ChangeNickname | ManageNicknames
+	ChangeNickname | ManageNicknames | SendTTSMessages
 
 // DefaultEveryone: o que qualquer membro faz num servidor novo. Nos servidores
-// que já existiam, a migration 000039 ligou o CHANGE_NICKNAME no @everyone.
+// que já existiam, a migration 000039 ligou o CHANGE_NICKNAME no @everyone e a
+// 000120 o SEND_TTS_MESSAGES (ver docs/adr/0012-tts-no-cliente.md).
 const DefaultEveryone = ViewChannel | SendMessages | AttachFiles | AddReactions | ReadHistory |
-	CreateInvite | Connect | Speak | Stream | UseSoundboard | ChangeNickname
+	CreateInvite | Connect | Speak | Stream | UseSoundboard | ChangeNickname | SendTTSMessages
 
 // BotsRoleName é o nome fixo do cargo de sistema exclusivo para bots do servidor.
 const BotsRoleName = "Bots"
