@@ -65,6 +65,11 @@ export interface BadgesResponse {
   /** true: a própria pessoa (visão completa). */
   self: boolean
   badges: Badge[]
+  /**
+   * Quantos badges a pessoa ainda não tem e ainda pode conseguir (sem dizer
+   * quais). Servidor antigo não manda.
+   */
+  hidden_remaining?: number
 }
 
 /** Evento badge:unlock (só para a própria pessoa). */

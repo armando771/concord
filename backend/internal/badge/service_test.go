@@ -66,6 +66,7 @@ func (f *fakeStore) Stats(_ context.Context, userID string) (Stats, error) {
 		return Stats{}, ErrUserNotFound
 	}
 	s.Top10Rank = f.top10RankLocked(userID)
+	s.Top10Full = s.Top10Full || len(f.top10) >= Top10Slots
 	return s, nil
 }
 

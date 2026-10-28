@@ -23,7 +23,7 @@ export interface UnlockToast {
 }
 
 interface BadgeState {
-  byUser: Record<string, { badges: Badge[]; loadedAt: number }>
+  byUser: Record<string, { badges: Badge[]; hiddenRemaining: number; loadedAt: number }>
   modal: BadgesModalTarget | null
   toast: UnlockToast | null
   /** Busca se ainda não tem (ou se está velho). */
@@ -54,7 +54,14 @@ export const useBadgeStore = create<BadgeState>()((set, get) => ({
       .then((res) => {
         if (useAuthStore.getState().accessToken !== token) return
         set((state) => ({
-          byUser: { ...state.byUser, [userId]: { badges: res.badges, loadedAt: Date.now() } }
+          byUser: {
+            ...state.byUser,
+            [userId]: {
+              badges: res.badges,
+              hiddenRemaining: res.hidden_remaining ?? 0,
+              loadedAt: Date.now()
+            }
+          }
         }))
       })
       .catch((err) => console.error('[badgeStore] fetchBadges failed:', err))
