@@ -6,6 +6,7 @@ import type { PerfEvent } from '../shared/perfLog'
 import { screenShareFlow, type PortalStatus } from '../shared/screenShareFlow'
 import { serverFromArgv, type ServerDiagnostics } from '../shared/serverConnection'
 import { overlayApi } from './overlayApi'
+import { ttsApi } from './ttsApi'
 
 interface ScreenSourceInfo {
   id: string
@@ -308,7 +309,9 @@ const api = {
       return () => ipcRenderer.removeListener('keybinds:status', listener)
     }
   },
-  overlay: overlayApi
+  overlay: overlayApi,
+  /** Voz do /tts baixada no primeiro uso: só no Linux (os outros usam a Web Speech). */
+  tts: process.platform === 'linux' ? ttsApi : undefined
 }
 
 // Som da janela compartilhada: o MessagePort não passa pelo contextBridge,
