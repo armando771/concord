@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
-import { filterEmoteCategories } from '../lib/emotes'
-import { fetchTrendingGifs, searchGifs, type GiphyItem } from '../api/giphy'
+import type { GiphyItem } from '../api/giphy'
+import { useGifSearch } from '../hooks/useGifSearch'
 import type { ServerSticker } from '../api/stickers'
 import { useStickerStore } from '../store/stickerStore'
 import StickerUploadModal from './StickerUploadModal'
 import StickersTab from './StickersTab'
+import EmojisTab from './EmojisTab'
+import GifsTab from './GifsTab'
 
 type TabType = 'emojis' | 'gifs' | 'stickers'
+
+const TABS: { id: TabType; icon: string; label: string; placeholder: string }[] = [
+  { id: 'emojis', icon: '😊', label: 'Emojis', placeholder: 'Buscar emoji...' },
+  { id: 'gifs', icon: '👾', label: 'GIFs', placeholder: 'Buscar GIFs no GIPHY...' },
+  { id: 'stickers', icon: '💟', label: 'Figurinhas', placeholder: 'Filtrar figurinhas...' }
+]
 
 interface UnifiedMediaPickerPopoverProps {
   serverId?: string | null
@@ -27,9 +35,7 @@ export default function UnifiedMediaPickerPopover({
   const [search, setSearch] = useState('')
   const [uploadOpen, setUploadOpen] = useState(false)
 
-  // GIFs
-  const [gifs, setGifs] = useState<GiphyItem[]>([])
-  const [loadingGifs, setLoadingGifs] = useState(false)
+  const { gifs, loading: loadingGifs } = useGifSearch(tab === 'gifs', search)
 
   // Stickers
   const loadStickers = useStickerStore((s) => s.loadStickers)
@@ -61,39 +67,6 @@ export default function UnifiedMediaPickerPopover({
     }
   }, [serverId, loadStickers])
 
-  // Load GIFs on tab switch or search change (debounced)
-  useEffect(() => {
-    if (tab !== 'gifs') return
-
-    let cancelled = false
-    setLoadingGifs(true)
-
-    const timer = setTimeout(() => {
-      const trimmed = search.trim()
-      const req = trimmed ? searchGifs(trimmed) : fetchTrendingGifs()
-      req
-        .then((items) => {
-          if (!cancelled) {
-            setGifs(items)
-            setLoadingGifs(false)
-          }
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setGifs([])
-            setLoadingGifs(false)
-          }
-        })
-    }, 250)
-
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-  }, [tab, search])
-
-  const emojiCategories = filterEmoteCategories(search)
-
   return (
     <>
       <div
@@ -103,51 +76,24 @@ export default function UnifiedMediaPickerPopover({
       >
         {/* Abas Superiores estilo WhatsApp */}
         <div className="mb-2 flex items-center justify-around border-b border-white/10 pb-2 text-xs font-medium text-gray-400">
-          <button
-            type="button"
-            onClick={() => {
-              setTab('emojis')
-              setSearch('')
-            }}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors cursor-pointer ${
-              tab === 'emojis'
-                ? 'bg-white/10 text-white font-semibold'
-                : 'hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <span>😊</span>
-            <span>Emojis</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setTab('gifs')
-              setSearch('')
-            }}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors cursor-pointer ${
-              tab === 'gifs'
-                ? 'bg-white/10 text-white font-semibold'
-                : 'hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <span>👾</span>
-            <span>GIFs</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setTab('stickers')
-              setSearch('')
-            }}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors cursor-pointer ${
-              tab === 'stickers'
-                ? 'bg-white/10 text-white font-semibold'
-                : 'hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <span>💟</span>
-            <span>Figurinhas</span>
-          </button>
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => {
+                setTab(t.id)
+                setSearch('')
+              }}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors cursor-pointer ${
+                tab === t.id
+                  ? 'bg-white/10 text-white font-semibold'
+                  : 'hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <span>{t.icon}</span>
+              <span>{t.label}</span>
+            </button>
+          ))}
         </div>
 
         {/* Input de Busca */}
@@ -156,13 +102,7 @@ export default function UnifiedMediaPickerPopover({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={
-              tab === 'emojis'
-                ? 'Buscar emoji...'
-                : tab === 'gifs'
-                  ? 'Buscar GIFs no GIPHY...'
-                  : 'Filtrar figurinhas...'
-            }
+            placeholder={TABS.find((t) => t.id === tab)?.placeholder}
             className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white placeholder:text-gray-500 outline-none focus:border-violet-500/50"
           />
         </div>
@@ -170,67 +110,24 @@ export default function UnifiedMediaPickerPopover({
         {/* Conteúdo da Aba */}
         <div className="flex-1 overflow-y-auto pr-1">
           {tab === 'emojis' && (
-            <div>
-              {emojiCategories.map((category) => (
-                <div key={category.id} className="mb-3 last:mb-0">
-                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                    {category.name}
-                  </div>
-                  <div className="grid grid-cols-6 gap-1">
-                    {category.items.map((item) => (
-                      <button
-                        key={item.emoji}
-                        type="button"
-                        title={item.label}
-                        onClick={() => {
-                          onSelectEmoji(item.emoji)
-                          onClose()
-                        }}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-lg transition-colors hover:bg-white/10 cursor-pointer"
-                      >
-                        {item.emoji}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <EmojisTab
+              search={search}
+              onSelect={(emoji) => {
+                onSelectEmoji(emoji)
+                onClose()
+              }}
+            />
           )}
 
           {tab === 'gifs' && (
-            <div>
-              {loadingGifs ? (
-                <div className="flex h-48 items-center justify-center text-xs text-gray-500">
-                  Carregando GIFs...
-                </div>
-              ) : gifs.length === 0 ? (
-                <div className="flex h-48 items-center justify-center text-xs text-gray-500">
-                  Nenhum GIF encontrado.
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {gifs.map((gif) => (
-                    <button
-                      key={gif.id}
-                      type="button"
-                      title={gif.title}
-                      onClick={() => {
-                        onSelectGif(gif)
-                        onClose()
-                      }}
-                      className="group relative h-28 overflow-hidden rounded-xl bg-white/5 transition-transform hover:scale-102 cursor-pointer"
-                    >
-                      <img
-                        src={gif.preview_url || gif.url}
-                        alt={gif.title}
-                        loading="lazy"
-                        className="h-full w-full object-cover"
-                      />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <GifsTab
+              gifs={gifs}
+              loading={loadingGifs}
+              onSelect={(gif) => {
+                onSelectGif(gif)
+                onClose()
+              }}
+            />
           )}
 
           {tab === 'stickers' && (
