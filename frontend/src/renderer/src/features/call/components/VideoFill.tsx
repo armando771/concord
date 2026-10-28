@@ -52,7 +52,7 @@ export default function VideoFill({
           fit === 'contain' ? 'bg-black object-contain' : 'object-cover'
         } ${mirror ? '-scale-x-100' : ''}`}
       />
-      <LiveVideoExtras stream={stream} />
+      <LiveVideoExtras stream={stream} videoRef={ref} />
     </>
   )
 }

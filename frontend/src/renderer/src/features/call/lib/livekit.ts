@@ -6,7 +6,8 @@ import {
   Track,
   type RemoteParticipant
 } from 'livekit-client'
-import { RemoteSubscriptions, watchHiddenWindow } from './remoteSubscriptions'
+import { RemoteSubscriptions } from './remoteSubscriptions'
+import { watchVideoPause } from './screenVideoPause'
 import {
   groupTracks,
   listScreenPublishers,
@@ -88,7 +89,7 @@ export class CallMedia {
   private closing = false
   /** Tela/câmera pedidas antes disso são publicadas por quem chamou connect(). */
   private connected = false
-  /** O que baixar de cada pessoa (tela só de quem assisto; vídeo pausado fora da tela). */
+  /** O que baixar de cada pessoa (tela só de quem assisto; vídeo pausado fora de vista). */
   private subscriptions = new RemoteSubscriptions()
   private stopWindowWatch: () => void
   private refreshQueued = false
@@ -112,8 +113,8 @@ export class CallMedia {
       }
     })
     setActiveScreenStats(this)
-    this.stopWindowWatch = watchHiddenWindow((hidden) => {
-      if (this.subscriptions.setVideoPaused(hidden)) this.applySubscriptions()
+    this.stopWindowWatch = watchVideoPause((pause) => {
+      if (this.subscriptions.setPause(pause)) this.applySubscriptions()
     })
 
     // Rajadas de eventos viram uma emissão só, depois do handler do SDK. Numa
