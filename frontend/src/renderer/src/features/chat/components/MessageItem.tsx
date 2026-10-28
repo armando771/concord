@@ -159,7 +159,7 @@ function MessageActions({
         <MessageActionsBar
           canReact={item.canReact}
           onReact={item.onReact}
-          onTogglePicker={actions.togglePicker}
+          onTogglePicker={() => actions.togglePicker()}
           onReply={item.onReply}
           onCopy={bar.onCopy}
           onEdit={bar.onEdit}
@@ -173,7 +173,11 @@ function MessageActions({
         />
       )}
       {actions.pickerOpen && item.canReact && (
-        <EmotePickerPopover onSelect={item.onReact} onClose={actions.closePicker} />
+        <EmotePickerPopover
+          anchor={actions.pickerAnchor}
+          onSelect={item.onReact}
+          onClose={actions.closePicker}
+        />
       )}
     </>
   )
