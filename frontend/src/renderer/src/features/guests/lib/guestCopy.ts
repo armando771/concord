@@ -52,6 +52,7 @@ export const GUEST_COPY = {
   volumeOf: (name: string): string => `Volume de ${name}`,
   nobodyElse: 'Ninguém mais na call ainda.',
   leave: 'Sair da call',
+  locked: 'A sala está trancada. Peça para alguém de dentro destrancar e tente de novo.',
   leftTitle: 'Você saiu da call',
   leftBody: 'Dá para voltar enquanto o seu acesso não terminar.',
   rejoin: 'Voltar para a call',

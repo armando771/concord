@@ -3,6 +3,18 @@ import { useCallStore } from '../../call/store/callStore'
 import { getGuestPasses, type GuestPass } from '../api/guestInvites'
 import { guestCallPhase, passOfServer, type GuestCallPhase } from '../lib/guestCallPhase'
 import { useGuestSessionStore } from '../store/guestSessionStore'
+import { showToast } from '../../../shared/store/toastStore'
+import { GUEST_COPY } from '../lib/guestCopy'
+
+/** Entra na call do canal; sala trancada vira aviso (a tela oferece voltar). */
+function enter(channelId: string): Promise<void> {
+  return useCallStore
+    .getState()
+    .startChannelCall(channelId)
+    .catch(() => {
+      showToast.error(GUEST_COPY.locked)
+    })
+}
 
 /** Encerra o acesso no fim do prazo (o servidor também tira; isto só adianta a tela). */
 function useExpiry(expiresAt: string): void {
@@ -38,19 +50,13 @@ export function useGuestCall(pass: GuestPass): { phase: GuestCallPhase; rejoin: 
   const rejoin = useCallback(() => {
     const target = useGuestSessionStore.getState().pass?.channel_id ?? pass.channel_id
     setTried(false)
-    void useCallStore
-      .getState()
-      .startChannelCall(target)
-      .finally(() => setTried(true))
+    void enter(target).finally(() => setTried(true))
   }, [pass.channel_id])
 
   // Ao abrir a tela entra na call; voltar depois é pelo botão.
   useEffect(() => {
     if (useCallStore.getState().status !== 'idle') return
-    void useCallStore
-      .getState()
-      .startChannelCall(pass.channel_id)
-      .finally(() => setTried(true))
+    void enter(pass.channel_id).finally(() => setTried(true))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
