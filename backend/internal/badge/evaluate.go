@@ -63,6 +63,9 @@ type Stats struct {
 	BugsReported int64
 	// Posição (1 a 10) no Top 10 do nível 100; 0 se não está.
 	Top10Rank int64
+	// As 10 vagas do Top 10 já foram dadas (Badges ocultos não conta o que
+	// ninguém mais consegue).
+	Top10Full bool
 }
 
 // Unlocks: categoria -> tier -> quando foi desbloqueado (o que está gravado).

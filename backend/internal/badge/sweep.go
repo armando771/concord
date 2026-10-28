@@ -36,7 +36,7 @@ func (s *Service) syncAll(ctx context.Context, touched map[string]bool) {
 	}
 	sort.Strings(ids)
 	for _, userID := range ids {
-		if _, err := s.sync(ctx, userID); err != nil {
+		if _, _, err := s.sync(ctx, userID); err != nil {
 			log.Printf("[badge] sync %s: %v", userID, err)
 		}
 	}

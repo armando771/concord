@@ -150,4 +150,8 @@ func TestRepositoryClaimTop10IsRaceSafe(t *testing.T) {
 	if err != nil || s.Top10Rank != ranks[0] {
 		t.Fatalf("Stats.Top10Rank = %d (%v), want %d", s.Top10Rank, err, ranks[0])
 	}
+	// Vagas dadas: Stats avisa (Badges ocultos deixa de contar o Top 10).
+	if !s.Top10Full {
+		t.Fatal("Stats.Top10Full = false com as 10 vagas dadas")
+	}
 }
