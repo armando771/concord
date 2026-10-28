@@ -70,7 +70,7 @@ func (c *captureCreates) PublishMessageCreate(e CreateEvent) { c.events = append
 func TestPostCallInvitePublishesToBothParticipants(t *testing.T) {
 	store, pub := &fakeInviteStore{}, &captureCreates{}
 	msg := newCallInviteMessage("dm1", "ana", CallInvite{CallID: "c1", ChannelID: "ch"})
-	full, err := postCallInvite(context.Background(), store, fakeRooms{}, pub, msg)
+	full, err := postToConversation(context.Background(), store, fakeRooms{}, pub, msg)
 	if err != nil || full.CallInvite == nil {
 		t.Fatalf("full=%+v err=%v", full, err)
 	}
@@ -82,7 +82,7 @@ func TestPostCallInvitePublishesToBothParticipants(t *testing.T) {
 func TestPostCallInviteStoreFailure(t *testing.T) {
 	store, pub := &fakeInviteStore{err: errors.New("db")}, &captureCreates{}
 	msg := newCallInviteMessage("dm1", "ana", CallInvite{CallID: "c1", ChannelID: "ch"})
-	if _, err := postCallInvite(context.Background(), store, nil, pub, msg); err == nil || len(pub.events) != 0 {
+	if _, err := postToConversation(context.Background(), store, nil, pub, msg); err == nil || len(pub.events) != 0 {
 		t.Fatalf("err=%v events=%d", err, len(pub.events))
 	}
 }
