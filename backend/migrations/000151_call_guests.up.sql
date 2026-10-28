@@ -1,4 +1,4 @@
--- Convite de visitante para uma call (docs/adr/0015-visitante-na-call.md).
+-- Convite de visitante para uma call (docs/adr/0017-visitante-na-call.md).
 
 -- Visitante sem conta: usuário efêmero, sem senha que funcione, fora da busca
 -- e dos pedidos de amizade. Apagado depois que o acesso acaba.

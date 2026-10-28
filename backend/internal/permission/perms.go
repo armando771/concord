@@ -35,7 +35,7 @@ const (
 	ManageExpressions int64 = 1 << 23
 	DisconnectMembers int64 = 1 << 24
 	// Convidar visitantes: gerar o link que põe alguém de fora do servidor só
-	// na call em que você está (docs/adr/0015-visitante-na-call.md). Fora do
+	// na call em que você está (docs/adr/0017-visitante-na-call.md). Fora do
 	// @everyone: só o dono, o Administrador e cargos que ganharem.
 	InviteGuests int64 = 1 << 25
 	// Apelido no servidor: o próprio (todo mundo, como no Discord) e o dos

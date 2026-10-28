@@ -7,7 +7,7 @@ import (
 	"gin-quickstart/backend/internal/permission"
 )
 
-// Visitantes na call (docs/adr/0015-visitante-na-call.md): quem não é membro
+// Visitantes na call (docs/adr/0017-visitante-na-call.md): quem não é membro
 // do servidor entra só no canal de voz do convite, com as permissões que o
 // convite deu. Os acessos ficam no internal/guest; aqui a chamada só consulta.
 

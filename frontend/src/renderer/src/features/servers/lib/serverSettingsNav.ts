@@ -3,7 +3,7 @@ import { Perm } from './permissions'
 // Seções das configurações do servidor (tela cheia, como as de usuário). Cada
 // uma aparece para quem tem ao menos uma das permissões que ela usa.
 
-export type ServerSettingsSectionId = 'overview' | 'roles' | 'members' | 'bans'
+export type ServerSettingsSectionId = 'overview' | 'roles' | 'members' | 'bans' | 'level'
 
 export interface ServerSettingsSection {
   id: ServerSettingsSectionId
@@ -12,15 +12,16 @@ export interface ServerSettingsSection {
   anyOf: number
 }
 
+const MEMBER_PERMS = Perm.MANAGE_ROLES | Perm.KICK_MEMBERS | Perm.BAN_MEMBERS | Perm.MANAGE_NICKNAMES
+
 export const SERVER_SETTINGS_SECTIONS: ServerSettingsSection[] = [
   { id: 'overview', label: 'Visão geral', anyOf: Perm.MANAGE_SERVER },
   { id: 'roles', label: 'Cargos', anyOf: Perm.MANAGE_ROLES },
-  {
-    id: 'members',
-    label: 'Membros',
-    anyOf: Perm.MANAGE_ROLES | Perm.KICK_MEMBERS | Perm.BAN_MEMBERS | Perm.MANAGE_NICKNAMES
-  },
-  { id: 'bans', label: 'Banimentos', anyOf: Perm.BAN_MEMBERS }
+  { id: 'members', label: 'Membros', anyOf: MEMBER_PERMS },
+  { id: 'bans', label: 'Banimentos', anyOf: Perm.BAN_MEMBERS },
+  // Só leitura, por último (não vira a seção padrão): aparece para quem abre
+  // qualquer outra; os membros veem o mesmo detalhamento pelo menu do servidor.
+  { id: 'level', label: 'Nível', anyOf: Perm.MANAGE_SERVER | MEMBER_PERMS }
 ]
 
 /** As seções que essas permissões deixam abrir. */

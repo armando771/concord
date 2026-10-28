@@ -9,7 +9,7 @@ import (
 )
 
 // TokenGuest é o tipo do token do visitante sem conta (convite de visitante
-// para uma call, docs/adr/0015-visitante-na-call.md). Ele só abre as rotas da
+// para uma call, docs/adr/0017-visitante-na-call.md). Ele só abre as rotas da
 // call (MemberOrGuestMiddleware) e o WebSocket; o AuthMiddleware recusa.
 const TokenGuest = "guest"
 

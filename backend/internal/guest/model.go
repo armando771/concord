@@ -1,6 +1,6 @@
 // Package guest cuida do convite de visitante para uma call: o link que põe
 // alguém de fora do servidor só no canal de voz em que o convidador está, por
-// tempo limitado (docs/adr/0015-visitante-na-call.md).
+// tempo limitado (docs/adr/0017-visitante-na-call.md).
 package guest
 
 import (

@@ -10,6 +10,8 @@ import (
 // maratona).
 type CallSnapshot struct {
 	CallID string
+	// ServerID: o servidor do canal de voz (nil em chamada de DM).
+	ServerID *string
 	// Todo mundo que está na chamada, mutado ou não.
 	Participants []string
 	// Quem conta como "em call de verdade" (as mesmas regras do XP de voz).
@@ -40,7 +42,7 @@ func (s *Service) CallSnapshots() []CallSnapshot {
 		if ac.info.Status != StatusActive {
 			continue
 		}
-		snap := CallSnapshot{CallID: callID, Voice: eligibleVoiceUsers(ac), JoinedAt: make(map[string]time.Time, len(ac.participants))}
+		snap := CallSnapshot{CallID: callID, ServerID: ac.info.ServerID, Voice: eligibleVoiceUsers(ac), JoinedAt: make(map[string]time.Time, len(ac.participants))}
 		for userID, p := range ac.participants {
 			snap.Participants = append(snap.Participants, userID)
 			snap.JoinedAt[userID] = p.joinedAt

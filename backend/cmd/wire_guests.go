@@ -17,7 +17,7 @@ import (
 // guestSweepEvery: de quanto em quanto tempo os acessos vencidos são encerrados.
 const guestSweepEvery = 30 * time.Second
 
-// wireGuests: convite de visitante para uma call (docs/adr/0015-visitante-na-call.md).
+// wireGuests: convite de visitante para uma call (docs/adr/0017-visitante-na-call.md).
 // Vem depois das chamadas (consulta e tira gente delas) e antes do WebSocket
 // (o filtro de visitante fica na frente do roteador de call).
 func (a *app) wireGuests() {

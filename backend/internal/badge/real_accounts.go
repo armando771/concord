@@ -26,9 +26,10 @@ const (
 	realAccountErrLog  = 10 * time.Minute
 )
 
-// realAccounts guarda, só de quem está em call, se é conta real e quando
-// foi conferido. Só o tick usa (sem mutex).
-type realAccounts struct {
+// RealAccountCache guarda, só de quem está em call, se é conta real e quando
+// foi conferido. Só um tick usa (sem mutex). Também serve ao nível do
+// servidor (internal/serverlevel), que conta as mesmas contas reais.
+type RealAccountCache struct {
 	src     RealAccountSource
 	checked map[string]realEntry
 	errAt   time.Time
@@ -42,8 +43,13 @@ type realEntry struct {
 // WithRealAccounts liga o filtro de contas reais do Festeiro. Sem ele, todo
 // mundo conta.
 func (s *Service) WithRealAccounts(src RealAccountSource) *Service {
-	s.real = &realAccounts{src: src, checked: make(map[string]realEntry)}
+	s.real = NewRealAccountCache(src)
 	return s
+}
+
+// NewRealAccountCache monta o cache sobre a fonte (o Repository).
+func NewRealAccountCache(src RealAccountSource) *RealAccountCache {
+	return &RealAccountCache{src: src, checked: make(map[string]realEntry)}
 }
 
 // realAccountsIn: as contas reais entre quem pode fazer pico (calls com duas
@@ -58,12 +64,13 @@ func (s *Service) realAccountsIn(ctx context.Context, snaps []call.CallSnapshot,
 			ids = append(ids, snap.Listeners...)
 		}
 	}
-	return s.real.lookup(ctx, ids, now)
+	return s.real.Lookup(ctx, ids, now)
 }
 
-// lookup consulta o banco só para quem não foi conferido nos últimos 10 min.
-// Banco fora do ar: quem nunca foi conferido não conta neste tick.
-func (r *realAccounts) lookup(ctx context.Context, ids []string, now time.Time) map[string]bool {
+// Lookup consulta o banco só para quem não foi conferido nos últimos 10 min.
+// Banco fora do ar: quem nunca foi conferido não conta neste tick. Quem não
+// está em ids sai do cache.
+func (r *RealAccountCache) Lookup(ctx context.Context, ids []string, now time.Time) map[string]bool {
 	var stale []string
 	for _, id := range ids {
 		if e, ok := r.checked[id]; !ok || now.Sub(e.at) >= realAccountTTL {
@@ -85,14 +92,14 @@ func (r *realAccounts) lookup(ctx context.Context, ids []string, now time.Time) 
 	return out
 }
 
-func (r *realAccounts) refresh(ctx context.Context, ids []string, now time.Time) {
+func (r *RealAccountCache) refresh(ctx context.Context, ids []string, now time.Time) {
 	cctx, cancel := context.WithTimeout(ctx, realAccountTimeout)
 	defer cancel()
 	real, err := r.src.RealAccounts(cctx, ids)
 	if err != nil {
 		if now.Sub(r.errAt) >= realAccountErrLog {
 			r.errAt = now
-			log.Printf("[badge] contas reais: %v", err)
+			log.Printf("[contas reais] %v", err)
 		}
 		return
 	}

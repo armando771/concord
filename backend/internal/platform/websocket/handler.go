@@ -79,7 +79,7 @@ func (h *Handler) validator(ctx context.Context, userID string, channelID string
 }
 
 // wsUser: quem o token deixa conectar — a conta (token de acesso) ou o
-// visitante sem conta (token de visitante, docs/adr/0015-visitante-na-call.md).
+// visitante sem conta (token de visitante, docs/adr/0017-visitante-na-call.md).
 // O visitante não é membro de nada: o validador das salas só o deixa entrar na
 // sala do próprio usuário e na da call em que está.
 func (h *Handler) wsUser(token string) (string, bool) {

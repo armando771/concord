@@ -228,7 +228,7 @@ var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 // SearchByUsername busca por trecho do username. Não traz o e-mail: o
 // resultado é de outras pessoas. Visitantes de call (usuários efêmeros, ver
-// docs/adr/0015-visitante-na-call.md) não aparecem.
+// docs/adr/0017-visitante-na-call.md) não aparecem.
 func (r *Repository) SearchByUsername(ctx context.Context, query string, excludeUserID string) ([]User, error) {
 	rows, err := r.db.Query(
 		ctx,

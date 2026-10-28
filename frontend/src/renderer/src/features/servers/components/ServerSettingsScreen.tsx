@@ -18,9 +18,11 @@ import RolesSection from './RolesSection'
 import ServerSettingsNav from './ServerSettingsNav'
 import MembersSection from './MembersSection'
 import BansSection from './BansSection'
+import ServerLevelSection from '../../serverlevel/components/ServerLevelSection'
 
 const SECTION_VIEW = {
   overview: OverviewSection,
+  level: ServerLevelSection,
   roles: RolesSection,
   members: MembersSection,
   bans: BansSection
@@ -28,7 +30,7 @@ const SECTION_VIEW = {
 
 /**
  * Configurações do servidor em tela cheia, como as de usuário: visão geral,
- * cargos, membros e banimentos. Cada seção só aparece para quem tem a
+ * nível, cargos, membros e banimentos. Cada seção só aparece para quem tem a
  * permissão (o servidor confere de novo a cada ação).
  */
 function ServerSettingsScreen(): React.JSX.Element | null {

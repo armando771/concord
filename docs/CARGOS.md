@@ -68,12 +68,12 @@ A posição do cargo define quem manda em quem (maior = mais alto).
 
 - Cada canal de voz tem um **chat próprio** (como o "Text in Voice" do Discord): valem as permissões de texto do canal (*Ver canais* + *Ver histórico* para ler, *Enviar mensagens* para escrever, etc.), sem precisar de *Conectar*. O editor de permissões do canal de voz mostra esse grupo como "Chat do canal de voz".
 - Entrar exige **Conectar**; o token do LiveKit só deixa publicar o microfone com **Falar** e tela/câmera com **Transmitir**.
-- *Silenciar* e *Ensurdecer no servidor* tiram do LiveKit a permissão de publicar / de ouvir e valem até um moderador liberar ou a chamada acabar.
+- *Silenciar* e *Ensurdecer no servidor* tiram do LiveKit a permissão de publicar / de ouvir e valem até um moderador liberar ou a chamada acabar. Ao liberar, o LiveKit devolve a escuta sozinho e o app republica o microfone e desmuta quem só estava mudo por causa do silêncio (quem já estava mudo por escolha continua mudo).
 - Mudou um cargo ou canal no meio da chamada? Quem perdeu o acesso sai da chamada e quem perdeu falar/transmitir tem a mídia ajustada na hora.
 
 ## Visitantes
 
-Convite de visitante para uma call ([ADR 0015](adr/0015-visitante-na-call.md)).
+Convite de visitante para uma call ([ADR 0017](adr/0017-visitante-na-call.md)).
 
 - Quem tem **Convidar visitantes** no canal de voz e está na call dele gera o link (2 h, 6 h, 12 h ou 1 dia) e escolhe se o visitante pode **Falar** e usar **Câmera e tela** (o mesmo *Transmitir* dos cargos). Ouvir e assistir às transmissões valem sempre.
 - O visitante não vira membro: o servidor só o deixa entrar no canal de voz do convite (ver e conectar ali, com as permissões do convite). Não vê canais, chats (nem o do canal de voz), membros nem outros servidores. Sem conta, ele entra com um nome e um token de visitante que só abre as rotas da call e o WebSocket; com conta, entra com a própria conta (banido do servidor não entra; membro abre o canal normalmente).

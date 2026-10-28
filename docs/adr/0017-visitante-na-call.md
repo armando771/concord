@@ -1,4 +1,4 @@
-# 0015. Convidar visitante para uma call com acesso escopado ao canal de voz, sem virar membro
+# 0017. Convidar visitante para uma call com acesso escopado ao canal de voz, sem virar membro
 
 - Status: aceito
 - Data: 2026-10-28

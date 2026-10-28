@@ -11,7 +11,7 @@ import (
 )
 
 // Visitantes de call (usuários efêmeros) não aparecem na busca nem recebem
-// pedido de amizade pelo @ (docs/adr/0015-visitante-na-call.md).
+// pedido de amizade pelo @ (docs/adr/0017-visitante-na-call.md).
 func TestGuestUsersAreHiddenFromSearchAndFriendLookup(t *testing.T) {
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
