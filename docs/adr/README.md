@@ -52,3 +52,4 @@ O que fica mais fácil, o que fica mais difícil, o que precisa ser feito depois
 - [0012. Falar as mensagens /tts no app de cada um (Web Speech), decidindo no cliente quem ouve](0012-tts-no-cliente.md)
 - [0013. Mesa de áudio por servidor, com favoritos da pessoa valendo em qualquer servidor](0013-mesa-de-audio-por-servidor.md)
 - [0014. No app desktop do Linux, falar o /tts com o Piper baixado no primeiro uso](0014-voz-piper-no-linux.md)
+- [0015. Convidar visitante para uma call com acesso escopado ao canal de voz, sem virar membro](0015-visitante-na-call.md)

@@ -46,6 +46,7 @@ O cálculo é o mesmo no backend (`backend/internal/permission`) e no app (`fron
 | Voz | Conectar, Falar, Transmitir | Entrar, usar o microfone, compartilhar tela/câmera. |
 | | Usar mesa de áudio | Tocar os sons na chamada (os do servidor e os favoritos de outros servidores). Enviar som é *Adicionar sons*. |
 | | Silenciar / Ensurdecer / Mover membros | Moderação na chamada (mover inclui desconectar). |
+| | Convidar visitantes | Gerar, na call em que está, um link para alguém de fora do servidor entrar só nela, por tempo limitado (ver "Visitantes" abaixo). **Fora do @everyone**: só o dono, o Administrador e os cargos que ganharem. Vale por canal (sobrescrita do canal de voz). |
 
 Padrões de um servidor novo: só o **@everyone** (ver, escrever, anexar, reagir, histórico, convidar, conectar, falar, transmitir, mesa de áudio, alterar o próprio apelido, adicionar sons e figurinhas, mensagens TTS) e o cargo fixo **Bots** (dos bots do servidor). Não há mais cargo **Moderador** padrão: quem quiser cria os seus. Nos servidores antigos o Moderador que já existia continua, como um cargo comum (dá para editar, mover e apagar).
 
@@ -70,6 +71,17 @@ A posição do cargo define quem manda em quem (maior = mais alto).
 - *Silenciar* e *Ensurdecer no servidor* tiram do LiveKit a permissão de publicar / de ouvir e valem até um moderador liberar ou a chamada acabar.
 - Mudou um cargo ou canal no meio da chamada? Quem perdeu o acesso sai da chamada e quem perdeu falar/transmitir tem a mídia ajustada na hora.
 
+## Visitantes
+
+Convite de visitante para uma call ([ADR 0015](adr/0015-visitante-na-call.md)).
+
+- Quem tem **Convidar visitantes** no canal de voz e está na call dele gera o link (2 h, 6 h, 12 h ou 1 dia) e escolhe se o visitante pode **Falar** e usar **Câmera e tela** (o mesmo *Transmitir* dos cargos). Ouvir e assistir às transmissões valem sempre.
+- O visitante não vira membro: o servidor só o deixa entrar no canal de voz do convite (ver e conectar ali, com as permissões do convite). Não vê canais, chats (nem o do canal de voz), membros nem outros servidores. Sem conta, ele entra com um nome e um token de visitante que só abre as rotas da call e o WebSocket; com conta, entra com a própria conta (banido do servidor não entra; membro abre o canal normalmente).
+- Visitante não tranca a sala, não aceita pedidos para entrar, não abre atividade nem toca a mesa de áudio.
+- Moderador pode silenciar, ensurdecer, desconectar e **mover** o visitante (mover troca o canal permitido). Mudar cargos do servidor não tira o visitante da call.
+- O acesso acaba no fim do prazo (o servidor tira da call e encerra a sessão), ao revogar o link (todos que entraram por ele saem) ou ao **expulsar** o visitante. Antes disso, quem sai pode voltar pelo mesmo link.
+- Ver, revogar links e expulsar visitantes: **Convidar visitantes** ou **Desconectar membros** no canal.
+
 ## API (resumo)
 
 | Rota | Permissão |
@@ -81,6 +93,9 @@ A posição do cargo define quem manda em quem (maior = mais alto).
 | `DELETE /servers/:id/members/:userId`, `POST /servers/:id/leave` | Expulsar / o próprio membro |
 | `GET/POST /servers/:id/bans`, `DELETE …/bans/:userId` | Banir |
 | `POST /calls/:id/participants/:userId/server-mute`, `…/server-deafen`, `DELETE …/participants/:userId` | Silenciar / Ensurdecer / Mover |
+| `POST /guest-invites` (estar na call do canal) | Convidar visitantes |
+| `GET /guest-invites?channel_id=`, `DELETE /guest-invites/:id`, `POST /guests/:userId/end` | Convidar visitantes ou Desconectar membros |
+| `GET /guest-invites/:token`, `POST /guest-invites/:token/join` | público (limite por IP) |
 
 Erros de permissão vêm com `code` (`missing_permission`, `role_hierarchy`, `owner_roles`, `cannot_grant`, `banned`, `not_member`…) e o app os traduz.
 
