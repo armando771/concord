@@ -1,6 +1,6 @@
 import { levelPercent } from '../../levels/lib/levels'
 
-// Nível do servidor (backend internal/serverlevel, ADR 0015): sobe só com o
+// Nível do servidor (backend internal/serverlevel, ADR 0016): sobe só com o
 // que as pessoas fazem nele.
 
 export interface ServerLevelProgress {

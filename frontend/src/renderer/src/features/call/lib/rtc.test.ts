@@ -62,6 +62,8 @@ describe('captura de tela', () => {
       frameRate: { ideal: 60, max: 60 }
     })
     expect(streamQuality(stream)).toEqual({ resolution: '720p', frameRate: 60 })
+    // 60 fps = jogo: dica de movimento (com 'detail' um jogo pesado caía para 4–8 fps).
+    expect((video as { contentHint?: string }).contentHint).toBe('motion')
   })
 
   it('web: só abre a captura nativa depois de confirmar a qualidade', async () => {

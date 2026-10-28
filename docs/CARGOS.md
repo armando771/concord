@@ -67,7 +67,7 @@ A posição do cargo define quem manda em quem (maior = mais alto).
 
 - Cada canal de voz tem um **chat próprio** (como o "Text in Voice" do Discord): valem as permissões de texto do canal (*Ver canais* + *Ver histórico* para ler, *Enviar mensagens* para escrever, etc.), sem precisar de *Conectar*. O editor de permissões do canal de voz mostra esse grupo como "Chat do canal de voz".
 - Entrar exige **Conectar**; o token do LiveKit só deixa publicar o microfone com **Falar** e tela/câmera com **Transmitir**.
-- *Silenciar* e *Ensurdecer no servidor* tiram do LiveKit a permissão de publicar / de ouvir e valem até um moderador liberar ou a chamada acabar.
+- *Silenciar* e *Ensurdecer no servidor* tiram do LiveKit a permissão de publicar / de ouvir e valem até um moderador liberar ou a chamada acabar. Ao liberar, o LiveKit devolve a escuta sozinho e o app republica o microfone e desmuta quem só estava mudo por causa do silêncio (quem já estava mudo por escolha continua mudo).
 - Mudou um cargo ou canal no meio da chamada? Quem perdeu o acesso sai da chamada e quem perdeu falar/transmitir tem a mídia ajustada na hora.
 
 ## API (resumo)

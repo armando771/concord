@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// wireServerLevel: nível do servidor (docs/adr/0015-nivel-do-servidor.md). O
+// wireServerLevel: nível do servidor (docs/adr/0016-nivel-do-servidor.md). O
 // tempo de call vem das mesmas fotos sem AFK do XP e dos badges, só de contas
 // reais; mensagens, figurinhas e sons são contados por trigger no banco.
 func (a *app) wireServerLevel() {

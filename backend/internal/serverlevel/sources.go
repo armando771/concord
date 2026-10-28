@@ -1,6 +1,6 @@
 package serverlevel
 
-// Fontes de XP do servidor (docs/adr/0015-nivel-do-servidor.md). Membro novo,
+// Fontes de XP do servidor (docs/adr/0016-nivel-do-servidor.md). Membro novo,
 // mensagens, figurinhas e sons são contados por trigger no banco (migration
 // 000150); as de tempo, por este pacote olhando as calls.
 const (
