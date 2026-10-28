@@ -9,6 +9,8 @@ export interface ChatPermissions {
   canModerate: boolean
   canMentionEveryone: boolean
   canReadHistory: boolean
+  /** Mandar /tts (SEND_TTS_MESSAGES); na DM vale quem pode escrever. */
+  canSendTTS: boolean
 }
 
 /** DM e grupos: sem cargos, mas com tudo que o chat já fazia. */
@@ -18,7 +20,8 @@ export const DIRECT_CHAT_PERMISSIONS: ChatPermissions = {
   canReact: true,
   canModerate: false,
   canMentionEveryone: false,
-  canReadHistory: true
+  canReadHistory: true,
+  canSendTTS: true
 }
 
 /** A partir das permissões da pessoa no canal (ServerAccess.channelPerms). */
@@ -29,7 +32,8 @@ export function chatPermissionsFor(channelPerms: number): ChatPermissions {
     canReact: has(channelPerms, Perm.ADD_REACTIONS),
     canModerate: has(channelPerms, Perm.MANAGE_MESSAGES),
     canMentionEveryone: has(channelPerms, Perm.MENTION_EVERYONE),
-    canReadHistory: has(channelPerms, Perm.READ_MESSAGE_HISTORY)
+    canReadHistory: has(channelPerms, Perm.READ_MESSAGE_HISTORY),
+    canSendTTS: has(channelPerms, Perm.SEND_MESSAGES | Perm.SEND_TTS_MESSAGES)
   }
 }
 

@@ -68,10 +68,12 @@ type inviteStore interface {
 // CreateCallInviteMessage posta, na DM, o cartão de convite do convidador.
 // Quem chama já validou amizade e bloqueio; a DM reabre para quem a fechou.
 func (s *Service) CreateCallInviteMessage(ctx context.Context, conversationID, authorID string, invite CallInvite) (*Message, error) {
-	return postCallInvite(ctx, s.repository, s.convResolver, s.publisher, newCallInviteMessage(conversationID, authorID, invite))
+	return postToConversation(ctx, s.repository, s.convResolver, s.publisher, newCallInviteMessage(conversationID, authorID, invite))
 }
 
-func postCallInvite(ctx context.Context, store inviteStore, convs ConversationResolver, pub EventPublisher, msg *Message) (*Message, error) {
+// postToConversation grava a mensagem já montada numa DM, reabre a DM para
+// quem a fechou e avisa os participantes.
+func postToConversation(ctx context.Context, store inviteStore, convs ConversationResolver, pub EventPublisher, msg *Message) (*Message, error) {
 	if err := store.Create(ctx, msg); err != nil {
 		return nil, err
 	}

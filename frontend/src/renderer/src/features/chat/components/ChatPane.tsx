@@ -29,6 +29,7 @@ import { useAttachmentDraft } from '../hooks/useAttachmentDraft'
 import { useRoomDraft } from '../hooks/useRoomDraft'
 import { useRoomState } from '../hooks/useRoomState'
 import { useTypingSender } from '../hooks/useTypingSender'
+import { useFileDropZone } from '../hooks/useFileDropZone'
 import TypingIndicator from './TypingIndicator'
 import { reportSendFailure, type ReplyState } from '../lib/sendFailure'
 import {
@@ -56,7 +57,7 @@ import {
 } from './MessageListStates'
 import {
   AttachButton,
-  ChannelSlashSuggestions,
+  SlashCommandSuggestions,
   ComposerGate,
   MediaPicker,
   MediaPickerButton,
@@ -168,9 +169,7 @@ function ChatPane({
   const typing = useTypingSender(room)
   const attachmentState = draftStatus(drafts)
   const submittable = canSubmit(draft, drafts)
-  // dragenter/dragleave disparam a cada filho; o contador evita piscar.
-  const dragDepth = useRef(0)
-  const [dragging, setDragging] = useState(false)
+  const drop = useFileDropZone(addFiles)
   const [sendingVoice, setSendingVoice] = useState(false)
   // Sala atual, para um envio que termina depois da troca de sala não limpar
   // o campo da sala nova.
@@ -470,36 +469,6 @@ function ChatPane({
     }
   }
 
-  const hasFiles = (e: React.DragEvent): boolean => e.dataTransfer.types.includes('Files')
-
-  const handleDragEnter = (e: React.DragEvent): void => {
-    if (!hasFiles(e)) return
-    e.preventDefault()
-    dragDepth.current += 1
-    setDragging(true)
-  }
-
-  const handleDragLeave = (e: React.DragEvent): void => {
-    if (!hasFiles(e)) return
-    dragDepth.current = Math.max(0, dragDepth.current - 1)
-    if (dragDepth.current === 0) setDragging(false)
-  }
-
-  const handleDrop = (e: React.DragEvent): void => {
-    if (!hasFiles(e)) return
-    e.preventDefault()
-    dragDepth.current = 0
-    setDragging(false)
-    addFiles(Array.from(e.dataTransfer.files))
-  }
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>): void => {
-    // Colar texto continua normal; só arquivo (ex.: print) vira anexo.
-    if (e.clipboardData.files.length === 0) return
-    e.preventDefault()
-    addFiles(Array.from(e.clipboardData.files))
-  }
-
   const handleStartReply = (message: Message): void => {
     setReplyState({ room, message })
     requestAnimationFrame(() => inputRef.current?.focus())
@@ -572,16 +541,8 @@ function ChatPane({
   const replyTargetAuthor = messageAuthorName(replyingTo, nicknames)
 
   return (
-    <div
-      className="relative flex min-h-0 flex-1 flex-col"
-      onDragEnter={handleDragEnter}
-      onDragOver={(e) => {
-        if (hasFiles(e)) e.preventDefault()
-      }}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
-      <DropOverlay visible={dragging} />
+    <div className="relative flex min-h-0 flex-1 flex-col" {...drop.zoneProps}>
+      <DropOverlay visible={drop.dragging} />
 
       <PinnedMessageBar
         pins={pins}
@@ -663,8 +624,9 @@ function ChatPane({
             onSubmit={handleSubmit}
             className="relative flex items-center gap-2 rounded-xl border border-subtle bg-input px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40 max-md:gap-0.5 max-md:px-1 max-md:py-1"
           >
-            <ChannelSlashSuggestions
+            <SlashCommandSuggestions
               isChannel={isChannel}
+              canSendTTS={permissions.canSendTTS}
               mentionOpen={mention !== null}
               input={draft}
               onPick={(text) => {
@@ -698,7 +660,7 @@ function ChatPane({
                 setHighlight(null)
               }}
               onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
+              onPaste={drop.onPaste}
               onBlur={() => setMention(null)}
               placeholder={composerPlaceholder(replyingTo !== null, replyTargetAuthor, placeholder)}
               maxLength={2000}

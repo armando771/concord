@@ -70,7 +70,7 @@ func (c *captureCreates) PublishMessageCreate(e CreateEvent) { c.events = append
 func TestPostCallInvitePublishesToBothParticipants(t *testing.T) {
 	store, pub := &fakeInviteStore{}, &captureCreates{}
 	msg := newCallInviteMessage("dm1", "ana", CallInvite{CallID: "c1", ChannelID: "ch"})
-	full, err := postCallInvite(context.Background(), store, fakeRooms{}, pub, msg)
+	full, err := postToConversation(context.Background(), store, fakeRooms{}, pub, msg)
 	if err != nil || full.CallInvite == nil {
 		t.Fatalf("full=%+v err=%v", full, err)
 	}
@@ -82,18 +82,23 @@ func TestPostCallInvitePublishesToBothParticipants(t *testing.T) {
 func TestPostCallInviteStoreFailure(t *testing.T) {
 	store, pub := &fakeInviteStore{err: errors.New("db")}, &captureCreates{}
 	msg := newCallInviteMessage("dm1", "ana", CallInvite{CallID: "c1", ChannelID: "ch"})
-	if _, err := postCallInvite(context.Background(), store, nil, pub, msg); err == nil || len(pub.events) != 0 {
+	if _, err := postToConversation(context.Background(), store, nil, pub, msg); err == nil || len(pub.events) != 0 {
 		t.Fatalf("err=%v events=%d", err, len(pub.events))
 	}
 }
 
-type fakeRow struct{ invite []byte }
+type fakeRow struct {
+	invite []byte
+	tts    bool
+}
 
 func (r fakeRow) Scan(dest ...any) error {
 	for i, d := range dest {
 		switch p := d.(type) {
 		case *string:
 			*p = "x"
+		case *bool:
+			*p = r.tts
 		case *[]byte:
 			if i == len(dest)-1 {
 				*p = r.invite

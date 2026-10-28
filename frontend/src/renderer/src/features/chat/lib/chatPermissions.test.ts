@@ -10,8 +10,15 @@ describe('chatPermissionsFor', () => {
       canReact: true,
       canModerate: false,
       canMentionEveryone: false,
-      canReadHistory: true
+      canReadHistory: true,
+      canSendTTS: true
     })
+  })
+
+  it('/tts pede SEND_TTS_MESSAGES e SEND_MESSAGES', () => {
+    expect(chatPermissionsFor(DEFAULT_EVERYONE & ~Perm.SEND_TTS_MESSAGES).canSendTTS).toBe(false)
+    expect(chatPermissionsFor(DEFAULT_EVERYONE & ~Perm.SEND_MESSAGES).canSendTTS).toBe(false)
+    expect(DIRECT_CHAT_PERMISSIONS.canSendTTS).toBe(true)
   })
 
   it('quem tem tudo pode tudo', () => {

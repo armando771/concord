@@ -3,6 +3,7 @@ import type { Message, PinnedMessage } from '../api/messages'
 import { DIRECT_CHAT_PERMISSIONS } from './chatPermissions'
 import {
   channelIdOf,
+  composerCommands,
   composerDisabledReason,
   composerPlaceholder,
   inRoom,
@@ -180,5 +181,22 @@ describe('jumpEventTarget', () => {
   it('evento sem mensagem: nada', () => {
     expect(jumpEventTarget(new CustomEvent('x'))).toBeNull()
     expect(jumpEventTarget(new CustomEvent('x', { detail: {} }))).toBeNull()
+  })
+})
+
+describe('composerCommands', () => {
+  it('canal: comandos do Maestro e, com a permissão, o /tts', () => {
+    expect(composerCommands(true, true).map((c) => c.command)).toEqual([
+      '/play',
+      '/skip',
+      '/fila',
+      '/help',
+      '/tts'
+    ])
+    expect(composerCommands(true, false).map((c) => c.command)).not.toContain('/tts')
+  })
+  it('DM: só o /tts', () => {
+    expect(composerCommands(false, true).map((c) => c.command)).toEqual(['/tts'])
+    expect(composerCommands(false, false)).toEqual([])
   })
 })

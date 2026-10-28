@@ -6,6 +6,8 @@ import type { Message, PinnedMessage } from '../api/messages'
 import { serverDisplayName } from '../../servers/lib/serverNames'
 import { sendDeniedReason, type ChatPermissions } from './chatPermissions'
 import { mentionSuggestions, type MentionSuggestion, type UserSuggestionInput } from './mentions'
+import { MUSIC_COMMANDS, type SlashSuggestion } from '../../music/lib/music'
+import { TTS_SUGGESTION } from '../../tts/lib/ttsCommand'
 
 /** Id do canal de uma sala `channel:<id>`; DM e grupo não têm (null). */
 export function channelIdOf(room: string): string | null {
@@ -122,4 +124,9 @@ export function jumpEventTarget(e: Event): string | null {
 export function submitLabel(uploading: boolean, sending: boolean): string {
   if (uploading) return 'Enviando arquivos...'
   return sending ? 'Enviando...' : 'Enviar'
+}
+
+/** Comandos do "/" no campo: Maestro só em canal de servidor; /tts com a permissão. */
+export function composerCommands(isChannel: boolean, canSendTTS: boolean): SlashSuggestion[] {
+  return [...(isChannel ? MUSIC_COMMANDS : []), ...(canSendTTS ? [TTS_SUGGESTION] : [])]
 }

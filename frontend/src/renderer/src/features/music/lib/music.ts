@@ -72,9 +72,12 @@ export interface SlashSuggestion {
   command: string
   aliases: string[]
   usage: string
+  /** Descrição curta no menu (ex.: /tts). */
+  description?: string
 }
 
-const COMMANDS: SlashSuggestion[] = [
+/** Comandos do Maestro (só em canal de servidor). */
+export const MUSIC_COMMANDS: SlashSuggestion[] = [
   { command: '/play', aliases: ['/p', '/tocar'], usage: '/play <link ou nome>' },
   { command: '/skip', aliases: ['/s', '/pular'], usage: '/skip' },
   { command: '/fila', aliases: ['/q'], usage: '/fila' },
@@ -82,10 +85,13 @@ const COMMANDS: SlashSuggestion[] = [
 ]
 
 /** Sugestões ao digitar "/" (some depois do primeiro espaço). */
-export function slashSuggestions(input: string): SlashSuggestion[] {
+export function slashSuggestions(
+  input: string,
+  commands: SlashSuggestion[] = MUSIC_COMMANDS
+): SlashSuggestion[] {
   if (!input.startsWith('/') || /\s/.test(input)) return []
   const typed = input.toLowerCase()
-  return COMMANDS.filter((c) => [c.command, ...c.aliases].some((name) => name.startsWith(typed)))
+  return commands.filter((c) => [c.command, ...c.aliases].some((name) => name.startsWith(typed)))
 }
 
 export function formatDuration(ms: number): string {
