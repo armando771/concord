@@ -53,3 +53,4 @@ O que fica mais fácil, o que fica mais difícil, o que precisa ser feito depois
 - [0013. Mesa de áudio por servidor, com favoritos da pessoa valendo em qualquer servidor](0013-mesa-de-audio-por-servidor.md)
 - [0014. No app desktop do Linux, falar o /tts com o Piper baixado no primeiro uso](0014-voz-piper-no-linux.md)
 - [0015. Publicar a tela (lives) em H.264, com VP8 de reserva](0015-lives-em-h264.md)
+- [0016. Dar nível ao servidor pelo que acontece nele, com teto diário por pessoa e só contas reais](0016-nivel-do-servidor.md)

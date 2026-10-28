@@ -1,5 +1,6 @@
 ## Novidades
 
+- Servidores agora têm nível: ele sobe com o uso do servidor (membros novos, mensagens, figurinhas, sons, tempo em call e lives) e aparece no menu do nome do servidor, com o detalhamento dos últimos 7 dias.
 - Lives: a transmissão de tela agora sai em H.264, com texto bem mais nítido e menos banda (em Avançado, no seletor de qualidade, dá para voltar ao VP8). Em 60 FPS a live prioriza a fluidez, para jogos.
 - Lives: o ícone de gráfico no canto da live mostra as estatísticas (FPS, resolução, Mbps, codec, perda). O vídeo de uma live fora de vista (app minimizado ou live fora da tela do app) pausa, mas o som continua.
 - Melhorias: o diamante da barra lateral agora abre uma tela com três cards: Propostas de melhorias, Novidades e o novo Rank global, com os 100 maiores níveis do Salinha, o pódio dos 3 primeiros e a sua posição, mesmo fora do top 100.
