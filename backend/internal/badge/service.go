@@ -53,12 +53,16 @@ type OnlineSource interface {
 }
 
 // Response é o GET /users/:id/badges. Só vêm categorias com o tier 1
-// conquistado. A própria pessoa recebe []Badge (números, progresso, próximos
-// tiers); os outros, []PublicBadge (só o que ela conquistou e o dia).
+// conquistado; as demais entram só no número hidden_remaining. A própria
+// pessoa recebe []Badge (números, progresso, próximos tiers); os outros,
+// []PublicBadge (só o que ela conquistou e o dia).
 type Response struct {
 	UserID string `json:"user_id"`
 	Self   bool   `json:"self"`
 	Badges any    `json:"badges"`
+	// Quantos badges a pessoa ainda não tem e ainda pode conseguir, sem dizer
+	// quais (hidden.go). Igual para quem vê o próprio perfil e o dos outros.
+	HiddenRemaining int `json:"hidden_remaining"`
 }
 
 // UnlockEvent vai só para a própria pessoa quando ela alcança tiers novos.
@@ -112,47 +116,48 @@ func BadgeService(repository *Repository, publisher EventPublisher, calls CallSo
 // Badges calcula os badges de userID vistos por viewerID e grava os tiers
 // alcançados agora. Quem não é a pessoa vê só os tiers conquistados e o dia.
 func (s *Service) Badges(ctx context.Context, viewerID, userID string) (Response, error) {
-	badges, err := s.sync(ctx, userID)
+	badges, stats, err := s.sync(ctx, userID)
 	if err != nil {
 		return Response{}, err
 	}
+	hidden := HiddenRemaining(stats, badges)
 	if viewerID == userID {
-		return Response{UserID: userID, Self: true, Badges: badges}, nil
+		return Response{UserID: userID, Self: true, Badges: badges, HiddenRemaining: hidden}, nil
 	}
-	return Response{UserID: userID, Badges: publicView(badges)}, nil
+	return Response{UserID: userID, Badges: publicView(badges), HiddenRemaining: hidden}, nil
 }
 
 // Refresh reavalia os badges de userID agora e avisa (badge:unlock) o que
 // entrou, sem esperar a varredura dos online. Quem muda um número na hora
 // (card novo no quadro de propostas) chama; falha só é registrada.
 func (s *Service) Refresh(ctx context.Context, userID string) {
-	if _, err := s.sync(ctx, userID); err != nil {
+	if _, _, err := s.sync(ctx, userID); err != nil {
 		log.Printf("[badge] refresh %s: %v", userID, err)
 	}
 }
 
-func (s *Service) sync(ctx context.Context, userID string) ([]Badge, error) {
+func (s *Service) sync(ctx context.Context, userID string) ([]Badge, Stats, error) {
 	stats, err := s.store.Stats(ctx, userID)
 	if err != nil {
-		return nil, err
+		return nil, Stats{}, err
 	}
 	s.claimTop10(ctx, userID, &stats)
 	stored, err := s.store.Unlocks(ctx, userID)
 	if err != nil {
-		return nil, err
+		return nil, Stats{}, err
 	}
 	badges, fresh := Evaluate(stats, stored, s.now())
 	if len(fresh) == 0 {
-		return badges, nil
+		return badges, stats, nil
 	}
 	saved, err := s.store.SaveUnlocks(ctx, userID, fresh)
 	if err != nil {
 		// A resposta já está certa; grava na próxima vez.
 		log.Printf("[badge] save unlocks for %s: %v", userID, err)
-		return badges, nil
+		return badges, stats, nil
 	}
 	s.announce(userID, saved)
-	return badges, nil
+	return badges, stats, nil
 }
 
 // announce avisa um badge por categoria (o tier mais alto que entrou agora):

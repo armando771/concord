@@ -32,6 +32,7 @@ func (s *Service) claimTop10(ctx context.Context, userID string, st *Stats) {
 	}
 	if rank == 0 {
 		s.top10Full.Store(true)
+		st.Top10Full = true
 		return
 	}
 	st.Top10Rank = rank

@@ -64,4 +64,33 @@ describe('BadgesAside', () => {
       'Nenhum badge ainda. Eles aparecem conforme você usa o Salinha.'
     )
   })
+
+  it('depois das conquistadas mostra quantos badges ocultos faltam', () => {
+    const html = render({ hiddenRemaining: 12 })
+    expect(html).toContain('12 badges ocultos restantes')
+    expect(html.indexOf('aria-pressed')).toBeLessThan(html.indexOf('12 badges ocultos'))
+  })
+
+  it('singular com 1', () => {
+    expect(render({ hiddenRemaining: 1 })).toContain('1 badge oculto restante')
+  })
+
+  it('com 0 o bloco some', () => {
+    const html = render({ hiddenRemaining: 0 })
+    expect(html).not.toContain('ocultos')
+    expect(html).not.toContain('oculto restante')
+  })
+
+  it('o estado vazio convive com o bloco, em cada perfil', () => {
+    const mine = render({ earned: [], badges: [], isMe: true, hiddenRemaining: 28 })
+    expect(mine).toContain('Nenhum badge ainda. Eles aparecem')
+    expect(mine).toContain('28 badges ocultos restantes')
+    const other = render({ earned: [], badges: [], hiddenRemaining: 28 })
+    expect(other).toContain('Nenhum badge ainda.')
+    expect(other).toContain('28 badges ocultos restantes')
+  })
+
+  it('enquanto carrega não mostra o bloco', () => {
+    expect(render({ badges: undefined, earned: [], hiddenRemaining: 5 })).not.toContain('ocultos')
+  })
 })

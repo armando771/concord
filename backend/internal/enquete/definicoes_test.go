@@ -62,3 +62,19 @@ func TestSegundoTurnoTemTresOpcoesComBadge(t *testing.T) {
 		}
 	}
 }
+
+// O badge espelha o ID, o corte e os badges da enquete para contar os
+// "badges ocultos" (badge/hidden.go): se um mudar aqui, o número erra.
+func TestSegundoTurnoEspelhadoNoBadge(t *testing.T) {
+	if SegundoTurno.ID != badge.SegundoTurnoID || !SegundoTurno.Corte.Equal(badge.SegundoTurnoCorte) {
+		t.Fatalf("enquete %q/%v x badge %q/%v", SegundoTurno.ID, SegundoTurno.Corte, badge.SegundoTurnoID, badge.SegundoTurnoCorte)
+	}
+	if len(SegundoTurno.Opcoes) != len(badge.SegundoTurnoBadges) {
+		t.Fatalf("opções = %+v, badges = %v", SegundoTurno.Opcoes, badge.SegundoTurnoBadges)
+	}
+	for i, o := range SegundoTurno.Opcoes {
+		if o.Badge != badge.SegundoTurnoBadges[i] {
+			t.Errorf("opção %q dá %q, o badge espera %q", o.ID, o.Badge, badge.SegundoTurnoBadges[i])
+		}
+	}
+}

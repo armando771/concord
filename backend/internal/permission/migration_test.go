@@ -50,7 +50,7 @@ func TestMigrationDefaultsMatchConstants(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v (%q)", name, err, fields)
 		}
-		total := got | added[name] | disconnectBits[name] | ttsBits[name]
+		total := got | added[name] | disconnectBits[name] | ttsBits[name] | expressionMigrationBits(t, got)
 		if total != want {
 			t.Errorf("%s: migrations = %d, Go = %d", name, total, want)
 		}
@@ -137,6 +137,31 @@ func roleUpdateBits(t *testing.T, file string) map[string]int64 {
 	return added
 }
 
+// expressionMigrationBits: o que a 000125 liga num cargo que tinha perms.
+// Quem tinha USE_SOUNDBOARD (que bastava para enviar som) ganha ADD_SOUNDS; o
+// @everyone (enviar figurinha só pedia ser membro) e o Moderador antigo
+// ganham ADD_STICKERS.
+func expressionMigrationBits(t *testing.T, perms int64) int64 {
+	t.Helper()
+	sql := readMigration(t, "000125_add_sounds_stickers_permissions.up.sql")
+	sounds := strconv.FormatInt(AddSounds, 10)
+	stickers := strconv.FormatInt(AddStickers, 10)
+	for _, stmt := range []string{
+		"UPDATE roles SET permissions = permissions | " + sounds + " WHERE permissions & " + strconv.FormatInt(UseSoundboard, 10) + " <> 0;",
+		"UPDATE roles SET permissions = permissions | " + stickers + " WHERE is_default;",
+		"UPDATE roles SET permissions = permissions | " + stickers + " WHERE name = 'Moderador' AND NOT is_default;",
+	} {
+		if !strings.Contains(sql, stmt) {
+			t.Fatalf("000125 devia ter %q", stmt)
+		}
+	}
+	added := AddStickers
+	if perms&UseSoundboard != 0 {
+		added |= AddSounds
+	}
+	return added
+}
+
 // A 000120 liga só o SEND_TTS_MESSAGES, nos dois cargos padrão, e o down o
 // tira de todos os cargos e sobrescritas.
 func TestTTSMigrationBits(t *testing.T) {
@@ -148,6 +173,15 @@ func TestTTSMigrationBits(t *testing.T) {
 	want := "& ~" + strconv.FormatInt(SendTTSMessages, 10)
 	if strings.Count(down, want) != 3 {
 		t.Errorf("down devia tirar o bit dos cargos e das sobrescritas (%q)", want)
+	}
+}
+
+// O down da 000125 tira os dois bits dos cargos e das sobrescritas.
+func TestExpressionMigrationDownClearsBits(t *testing.T) {
+	sql := readMigration(t, "000125_add_sounds_stickers_permissions.down.sql")
+	want := "& ~" + strconv.FormatInt(AddSounds|AddStickers, 10)
+	if strings.Count(sql, want) != 3 {
+		t.Errorf("down devia tirar os bits dos cargos e das sobrescritas (%q)", want)
 	}
 }
 

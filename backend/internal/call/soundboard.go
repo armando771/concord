@@ -27,8 +27,11 @@ type SoundInfo struct {
 	DurationMs int     `json:"duration_ms"`
 }
 
+// SoundLookup: de onde vêm os sons. Toca na chamada o som do servidor dela ou
+// um favorito de quem toca (de qualquer servidor).
 type SoundLookup interface {
 	FindSound(ctx context.Context, soundID string) (SoundInfo, error)
+	IsFavorite(ctx context.Context, userID, soundID string) (bool, error)
 }
 
 type SoundboardPayload struct {
@@ -130,6 +133,21 @@ func (t soundboardTarget) allowed(ctx context.Context, userID string) bool {
 	return err == nil && permission.Has(got, permission.UseSoundboard)
 }
 
+// playable: o som existe e é do servidor da chamada ou favorito de quem toca.
+func (t soundboardTarget) playable(ctx context.Context, userID, soundID string) (SoundInfo, error) {
+	sound, err := t.lookup.FindSound(ctx, soundID)
+	if err != nil {
+		return SoundInfo{}, ErrSoundNotFound
+	}
+	if sound.ServerID == t.serverID {
+		return sound, nil
+	}
+	if fav, err := t.lookup.IsFavorite(ctx, userID, soundID); err != nil || !fav {
+		return SoundInfo{}, ErrSoundNotFound
+	}
+	return sound, nil
+}
+
 func (s *Service) TriggerSoundboard(ctx context.Context, callID, userID, soundID string) error {
 	s.mu.Lock()
 	t, err := s.soundboardCheckLocked(callID, userID, time.Now())
@@ -141,9 +159,9 @@ func (s *Service) TriggerSoundboard(ctx context.Context, callID, userID, soundID
 		return ErrSoundboardNoPermission
 	}
 
-	sound, err := t.lookup.FindSound(ctx, soundID)
-	if err != nil || sound.ServerID != t.serverID {
-		return ErrSoundNotFound
+	sound, err := t.playable(ctx, userID, soundID)
+	if err != nil {
+		return err
 	}
 
 	userInfo, err := s.lookupUser(ctx, userID)

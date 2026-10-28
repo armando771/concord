@@ -50,3 +50,4 @@ O que fica mais fácil, o que fica mais difícil, o que precisa ser feito depois
 - [0010. Detectar AFK em call pelo aviso de fala do app, com o AFK filtrando as fotos das calls](0010-afk-em-call.md)
 - [0011. Guardar perfis salvos com a mídia por referência, apagando o arquivo só quando ninguém mais usa](0011-perfis-salvos-midia-por-referencia.md)
 - [0012. Falar as mensagens /tts no app de cada um (Web Speech), decidindo no cliente quem ouve](0012-tts-no-cliente.md)
+- [0013. Mesa de áudio por servidor, com favoritos da pessoa valendo em qualquer servidor](0013-mesa-de-audio-por-servidor.md)

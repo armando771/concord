@@ -3,6 +3,7 @@ import type { BadgesModalTarget } from '../store/badgeStore'
 import Avatar from '../../../shared/ui/Avatar'
 import { BadgeGridSkeleton } from '../../../shared/ui/skeleton/layouts'
 import BadgeGrid from './BadgeGrid'
+import HiddenBadgesNotice from './HiddenBadgesNotice'
 
 interface BadgesAsideProps {
   target: BadgesModalTarget
@@ -11,6 +12,8 @@ interface BadgesAsideProps {
   /** undefined enquanto carrega. */
   badges: Badge[] | undefined
   earned: Badge[]
+  /** Quantos ainda faltam (sem dizer quais); 0 ou undefined não mostra. */
+  hiddenRemaining?: number
   selected: Badge | undefined
   onSelect: (category: string) => void
   /** Há uma conta logada: mostra "Ver seus badges" no perfil dos outros. */
@@ -18,13 +21,14 @@ interface BadgesAsideProps {
   onViewMine: () => void
 }
 
-/** Coluna da grade: quem é e o que já ganhou. O que falta ganhar não aparece. */
+/** Coluna da grade: quem é e o que já ganhou; o que falta é só um número. */
 function BadgesAside({
   target,
   isMe,
   titleId,
   badges,
   earned,
+  hiddenRemaining,
   selected,
   onSelect,
   canViewMine,
@@ -65,6 +69,7 @@ function BadgesAside({
               : 'Nenhum badge ainda.'}
           </p>
         )}
+        {badges && <HiddenBadgesNotice count={hiddenRemaining} className="mt-4" />}
       </div>
       {!isMe && canViewMine && (
         <div className="border-t border-subtle p-4">

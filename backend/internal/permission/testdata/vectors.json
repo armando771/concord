@@ -26,12 +26,22 @@
     "DISCONNECT_MEMBERS": 16777216,
     "CHANGE_NICKNAME": 67108864,
     "MANAGE_NICKNAMES": 134217728,
+    "ADD_SOUNDS": 268435456,
+    "ADD_STICKERS": 536870912,
     "SEND_TTS_MESSAGES": 1073741824
   },
   "defaults": {
-    "everyone": ["VIEW_CHANNEL", "SEND_MESSAGES", "ATTACH_FILES", "ADD_REACTIONS", "READ_MESSAGE_HISTORY", "CREATE_INVITE", "CONNECT", "SPEAK", "STREAM", "USE_SOUNDBOARD", "CHANGE_NICKNAME", "SEND_TTS_MESSAGES"]
+    "everyone": ["VIEW_CHANNEL", "SEND_MESSAGES", "ATTACH_FILES", "ADD_REACTIONS", "READ_MESSAGE_HISTORY", "CREATE_INVITE", "CONNECT", "SPEAK", "STREAM", "USE_SOUNDBOARD", "CHANGE_NICKNAME", "ADD_SOUNDS", "ADD_STICKERS", "SEND_TTS_MESSAGES"]
   },
   "compute": [
+    {
+      "name": "adicionar sons e figurinhas são do servidor: o canal não tira",
+      "owner_id": "dono", "user_id": "ana",
+      "everyone": ["VIEW_CHANNEL", "CONNECT", "USE_SOUNDBOARD", "ADD_SOUNDS", "ADD_STICKERS"], "roles": [], "member_roles": [],
+      "channel": {"type": "voice", "overwrites": [{"target_type": "role", "target_id": "everyone", "allow": [], "deny": ["USE_SOUNDBOARD"]}]},
+      "expect_base": ["VIEW_CHANNEL", "CONNECT", "USE_SOUNDBOARD", "ADD_SOUNDS", "ADD_STICKERS"],
+      "expect_channel": ["VIEW_CHANNEL", "CONNECT", "ADD_SOUNDS", "ADD_STICKERS"]
+    },
     {
       "name": "dono tem tudo, mesmo negado no canal",
       "owner_id": "dono", "user_id": "dono",

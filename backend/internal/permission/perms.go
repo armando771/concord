@@ -38,6 +38,10 @@ const (
 	// outros (moderação, respeitando a hierarquia). Mesmos bits do Discord.
 	ChangeNickname  int64 = 1 << 26
 	ManageNicknames int64 = 1 << 27
+	// Enviar sons para a mesa de áudio e figurinhas novas ao servidor (valem
+	// no servidor todo, não por canal). Ver docs/adr/0013-mesa-de-audio-por-servidor.md.
+	AddSounds   int64 = 1 << 28
+	AddStickers int64 = 1 << 29
 	// Mensagens /tts (lidas em voz para quem está em call). Bit alto para não
 	// disputar os vizinhos livres com outras permissões.
 	SendTTSMessages int64 = 1 << 30
@@ -70,6 +74,8 @@ var Names = map[string]int64{
 	"DISCONNECT_MEMBERS":   DisconnectMembers,
 	"CHANGE_NICKNAME":      ChangeNickname,
 	"MANAGE_NICKNAMES":     ManageNicknames,
+	"ADD_SOUNDS":           AddSounds,
+	"ADD_STICKERS":         AddStickers,
 	"SEND_TTS_MESSAGES":    SendTTSMessages,
 }
 
@@ -78,13 +84,15 @@ const All = ViewChannel | ManageChannels | ManageRoles | ManageServer | CreateIn
 	KickMembers | BanMembers | Administrator | SendMessages | AttachFiles | AddReactions |
 	MentionEveryone | ManageMessages | ReadHistory | Connect | Speak | Stream |
 	MuteMembers | DeafenMembers | MoveMembers | DisconnectMembers | UseSoundboard | ManageExpressions |
-	ChangeNickname | ManageNicknames | SendTTSMessages
+	ChangeNickname | ManageNicknames | AddSounds | AddStickers | SendTTSMessages
 
 // DefaultEveryone: o que qualquer membro faz num servidor novo. Nos servidores
-// que já existiam, a migration 000039 ligou o CHANGE_NICKNAME no @everyone e a
-// 000120 o SEND_TTS_MESSAGES (ver docs/adr/0012-tts-no-cliente.md).
+// que já existiam, a migration 000039 ligou o CHANGE_NICKNAME no @everyone, a
+// 000120 o SEND_TTS_MESSAGES (ver docs/adr/0012-tts-no-cliente.md) e a 000125
+// o ADD_SOUNDS e o ADD_STICKERS.
 const DefaultEveryone = ViewChannel | SendMessages | AttachFiles | AddReactions | ReadHistory |
-	CreateInvite | Connect | Speak | Stream | UseSoundboard | ChangeNickname | SendTTSMessages
+	CreateInvite | Connect | Speak | Stream | UseSoundboard | ChangeNickname |
+	AddSounds | AddStickers | SendTTSMessages
 
 // BotsRoleName é o nome fixo do cargo de sistema exclusivo para bots do servidor.
 const BotsRoleName = "Bots"

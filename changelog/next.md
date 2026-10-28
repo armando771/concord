@@ -1,6 +1,7 @@
 ## Novidades
 
 - Chat: novo comando /tts. Digite `/tts <mensagem>` e quem está em call no servidor (ou na call da DM) ouve a mensagem lida em voz; no chat ela aparece com um alto-falante. Até 200 caracteres, uma a cada 10 segundos por pessoa, e uma fala de cada vez. Quem estiver ensurdecido não ouve, e dá para desligar em Configurações → Voz → "Ouvir mensagens de TTS". Os cargos ganharam a permissão "Enviar mensagens TTS", ligada para todos.
+- Mesa de áudio: cada som é do servidor onde foi enviado. Os favoritos (a estrela) agora ficam na sua conta e aparecem nas calls de qualquer servidor, com o nome do servidor de origem. Em Cargos há duas permissões novas, "Adicionar sons" e "Adicionar figurinhas", ligadas para todo mundo por padrão.
 - Tempo em call e XP de voz param de contar depois de 10 minutos sem falar.
 - Badges: o Festeiro agora conta só contas com e-mail confirmado e pelo menos 7 dias de criadas.
 - Chat: botão direito numa imagem (canais, mensagens diretas e fixadas) abre o menu com "Copiar imagem". Vale para PNG, JPEG e WebP; GIF não copia.

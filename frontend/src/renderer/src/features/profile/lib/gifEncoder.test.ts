@@ -1,79 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { encodeGif } from './gifEncoder'
-
-/** Decodificador LZW mínimo, só para conferir o que o encoder escreveu. */
-function lzwDecode(minCode: number, data: number[], total: number): number[] {
-  const clear = 1 << minCode
-  const end = clear + 1
-  let table: number[][] = []
-  const reset = (): void => {
-    table = []
-    for (let i = 0; i < clear; i++) table.push([i])
-    table.push([], [])
-  }
-  reset()
-  let size = minCode + 1
-  let bits = 0
-  let acc = 0
-  let pos = 0
-  let prev: number[] | null = null
-  const out: number[] = []
-  while (out.length < total) {
-    while (bits < size) {
-      acc |= data[pos++] << bits
-      bits += 8
-    }
-    const code = acc & ((1 << size) - 1)
-    acc >>= size
-    bits -= size
-    if (code === clear) {
-      reset()
-      size = minCode + 1
-      prev = null
-      continue
-    }
-    if (code === end) break
-    const entry: number[] = code < table.length ? table[code] : [...prev!, prev![0]]
-    out.push(...entry)
-    if (prev) table.push([...prev, entry[0]])
-    if (table.length === 1 << size && size < 12) size++
-    prev = entry
-  }
-  return out
-}
-
-/** Lê os quadros do GIF: atraso e índices decodificados. */
-function readFrames(bytes: Uint8Array): { delay: number; indices: number[] }[] {
-  let pos = 13 + 3 * 256
-  const frames: { delay: number; indices: number[] }[] = []
-  let delay = 0
-  let width = bytes[6] | (bytes[7] << 8)
-  let height = bytes[8] | (bytes[9] << 8)
-  while (bytes[pos] !== 0x3b) {
-    if (bytes[pos] === 0x21) {
-      if (bytes[pos + 1] === 0xf9) delay = (bytes[pos + 4] | (bytes[pos + 5] << 8)) * 10
-      pos += 2
-      while (bytes[pos] !== 0) pos += bytes[pos] + 1
-      pos++
-    } else {
-      pos += 10
-      const minCode = bytes[pos++]
-      const data: number[] = []
-      while (bytes[pos] !== 0) {
-        data.push(...bytes.slice(pos + 1, pos + 1 + bytes[pos]))
-        pos += bytes[pos] + 1
-      }
-      pos++
-      frames.push({ delay, indices: lzwDecode(minCode, data, width * height) })
-    }
-  }
-  return frames
-}
+import { decodeGif } from './gifTestDecoder'
 
 const palette: [number, number, number][] = [
   [255, 0, 0],
   [0, 255, 0]
 ]
+
+/** Como os índices aparecem na tela (0 = transparente). */
+function rgbaOf(indices: Uint8Array): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(indices.length * 4)
+  indices.forEach((index, i) => {
+    if (index !== 0) out.set([...(palette[index - 1] ?? [0, 0, 0]), 255], i * 4)
+  })
+  return out
+}
+
+/** Quantos bytes o GIF gasta só com os quadros (sem cabeçalho e paleta). */
+const headerBytes = encodeGif({ width: 1, height: 1, palette, frames: [] }).length
 
 describe('encodeGif', () => {
   it('escreve cabeçalho, tamanho, laço infinito e trailer', () => {
@@ -101,10 +45,10 @@ describe('encodeGif', () => {
         { indices: b, delayMs: 120 }
       ]
     })
-    const frames = readFrames(bytes)
+    const { frames } = decodeGif(bytes)
     expect(frames).toHaveLength(2)
-    expect(frames[0]).toEqual({ delay: 40, indices: [...a] })
-    expect(frames[1]).toEqual({ delay: 120, indices: [...b] })
+    expect(frames[0]).toEqual({ delay: 40, rgba: rgbaOf(a) })
+    expect(frames[1]).toEqual({ delay: 120, rgba: rgbaOf(b) })
   })
 
   it('sobrevive a uma imagem grande que enche a tabela do LZW', () => {
@@ -112,7 +56,7 @@ describe('encodeGif', () => {
     const h = 64
     const indices = new Uint8Array(w * h).map((_, i) => (i * 7 + (i >> 3)) % 200)
     const bytes = encodeGif({ width: w, height: h, palette, frames: [{ indices, delayMs: 50 }] })
-    expect(readFrames(bytes)[0].indices).toEqual([...indices])
+    expect(decodeGif(bytes).frames[0].rgba).toEqual(rgbaOf(indices))
   })
 
   it('atraso mínimo de 20 ms (navegadores aceleram abaixo disso)', () => {
@@ -122,6 +66,46 @@ describe('encodeGif', () => {
       palette,
       frames: [{ indices: Uint8Array.from([1]), delayMs: 0 }]
     })
-    expect(readFrames(bytes)[0].delay).toBe(20)
+    expect(decodeGif(bytes).frames[0].delay).toBe(20)
+  })
+
+  it('quadro que muda pouco grava só o retângulo alterado (regressão: GIF inflava)', () => {
+    const w = 64
+    const h = 64
+    const background = new Uint8Array(w * h).map((_, i) => 1 + ((i * 7 + (i >> 3)) % 200))
+    const frames = Array.from({ length: 30 }, (_, n) => {
+      const indices = background.slice()
+      for (let y = 0; y < 4; y++) indices.fill(201, (n + y) * w + n, (n + y) * w + n + 4)
+      return { indices, delayMs: 50 }
+    })
+    const bytes = encodeGif({ width: w, height: h, palette, frames })
+    const one = encodeGif({ width: w, height: h, palette, frames: [frames[0]] }).length
+    expect(bytes.length - headerBytes).toBeLessThan(2 * (one - headerBytes))
+    expect(decodeGif(bytes).frames.map((f) => f.rgba)).toEqual(
+      frames.map((f) => rgbaOf(f.indices))
+    )
+  })
+
+  it('quadro repetido não grava nada além do atraso', () => {
+    const indices = Uint8Array.from([1, 2, 1, 2])
+    const frame = { indices, delayMs: 50 }
+    const bytes = encodeGif({ width: 2, height: 2, palette, frames: [frame, frame, frame] })
+    const { frames } = decodeGif(bytes)
+    expect(frames.map((f) => f.rgba)).toEqual([rgbaOf(indices), rgbaOf(indices), rgbaOf(indices)])
+  })
+
+  it('com transparência, pixel que some volta a ser transparente', () => {
+    const a = Uint8Array.from([1, 1, 2, 2])
+    const b = Uint8Array.from([0, 1, 2, 0])
+    const bytes = encodeGif({
+      width: 2,
+      height: 2,
+      palette,
+      frames: [
+        { indices: a, delayMs: 50 },
+        { indices: b, delayMs: 50 }
+      ]
+    })
+    expect(decodeGif(bytes).frames.map((f) => f.rgba)).toEqual([rgbaOf(a), rgbaOf(b)])
   })
 })

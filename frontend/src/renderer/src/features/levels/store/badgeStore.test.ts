@@ -29,6 +29,15 @@ describe('badgeStore', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  it('guarda o número de badges ocultos restantes (0 quando o servidor não manda)', async () => {
+    fetchMock.mockResolvedValueOnce({ user_id: 'ana', self: false, badges: [], hidden_remaining: 7 })
+    await useBadgeStore.getState().ensureBadges('ana')
+    expect(useBadgeStore.getState().byUser.ana.hiddenRemaining).toBe(7)
+
+    await useBadgeStore.getState().ensureBadges('bia')
+    expect(useBadgeStore.getState().byUser.bia.hiddenRemaining).toBe(0)
+  })
+
   it('badge:unlock mostra o aviso, some sozinho e recarrega os seus badges', async () => {
     await useBadgeStore.getState().ensureBadges('eu')
     useBadgeStore.getState().handleWsEvent({
