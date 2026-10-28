@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampOffset, clampZoom, coverScale, sourceRect } from './imageCrop'
+import { clampOffset, clampZoom, coversWhole, coverScale, gifOutput, sourceRect } from './imageCrop'
 
 const square = { width: 300, height: 300 }
 
@@ -82,5 +82,36 @@ describe('sourceRect', () => {
     expect(rect.sw).toBeCloseTo(680)
     expect(rect.sh).toBeCloseTo(240)
     expect(rect.sy).toBeCloseTo(380)
+  })
+})
+
+describe('gifOutput', () => {
+  const avatar = { width: 512, height: 512 }
+
+  it('pedaço maior que a saída encolhe até a saída', () => {
+    expect(gifOutput({ sw: 1000, sh: 1000 }, avatar)).toEqual(avatar)
+    expect(gifOutput({ sw: 706, sh: 249.2 }, { width: 680, height: 240 })).toEqual({
+      width: 680,
+      height: 240
+    })
+  })
+
+  it('pedaço menor que a saída fica no tamanho dele (não amplia)', () => {
+    expect(gifOutput({ sw: 368, sh: 368 }, avatar)).toEqual({ width: 368, height: 368 })
+    expect(gifOutput({ sw: 0.2, sh: 0.2 }, avatar)).toEqual({ width: 1, height: 1 })
+  })
+})
+
+describe('coversWhole', () => {
+  const gif = { width: 400, height: 400 }
+
+  it('zoom mínimo numa imagem da proporção do quadro pega a imagem toda', () => {
+    expect(coversWhole(sourceRect(gif, square, 1, { x: 0, y: 0 }), gif)).toBe(true)
+  })
+
+  it('zoom ou corte de um lado não pega a imagem toda', () => {
+    expect(coversWhole(sourceRect(gif, square, 1.5, { x: 0, y: 0 }), gif)).toBe(false)
+    const wide = { width: 706, height: 368 }
+    expect(coversWhole(sourceRect(wide, square, 1, { x: 0, y: 0 }), wide)).toBe(false)
   })
 })

@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { cropGif, MAX_GIF_FRAMES, type SourceFrame } from './gifCrop'
+import { decodeGif } from './gifTestDecoder'
 
 const rect = { sx: 1, sy: 2, sw: 3, sh: 4 }
 const out = { width: 2, height: 2 }
@@ -43,5 +46,23 @@ describe('cropGif', () => {
 
   it('recusa GIF sem quadros', async () => {
     await expect(cropGif(source(), rect, out, draw)).rejects.toThrow()
+  })
+
+  it('GIF real gravado por retângulos não infla ao ser reescrito (regressão)', async () => {
+    // 64×64, 48 quadros: fundo parado e um quadrado andando (ffmpeg, diff_mode=rectangle)
+    const original = readFileSync(join(__dirname, 'fixtures', 'quadrado-andando.gif'))
+    const gif = decodeGif(new Uint8Array(original))
+    async function* frames(): AsyncGenerator<SourceFrame> {
+      for (const [i, f] of gif.frames.entries()) {
+        yield { image: i as unknown as CanvasImageSource, durationMs: f.delay }
+      }
+    }
+    const size = { width: gif.width, height: gif.height }
+    const whole = { sx: 0, sy: 0, sw: gif.width, sh: gif.height }
+    const bytes = await cropGif(frames(), whole, size, (i) => gif.frames[i as unknown as number].rgba)
+    // antes: cada quadro inteiro, 12× o original
+    expect(bytes.length).toBeLessThan(original.length * 1.25)
+    const again = decodeGif(bytes)
+    expect(again.frames.map((f) => f.delay)).toEqual(gif.frames.map((f) => f.delay))
   })
 })

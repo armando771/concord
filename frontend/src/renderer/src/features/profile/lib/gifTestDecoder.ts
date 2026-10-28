@@ -1,6 +1,8 @@
-// Leitor de GIF só para os testes: confere o que o encoder escreveu.
+// Leitor de GIF só para os testes: confere o que o encoder escreveu e lê as
+// fixtures. Compõe os quadros como o navegador (retângulo, transparência e
+// disposal 0/1/2), para comparar o que aparece na tela.
 
-/** Decodificador LZW mínimo, só para conferir o que o encoder escreveu. */
+/** Decodificador LZW mínimo. */
 export function lzwDecode(minCode: number, data: number[], total: number): number[] {
   const clear = 1 << minCode
   const end = clear + 1
@@ -34,37 +36,133 @@ export function lzwDecode(minCode: number, data: number[], total: number): numbe
     if (code === end) break
     const entry: number[] = code < table.length ? table[code] : [...prev!, prev![0]]
     out.push(...entry)
-    if (prev) table.push([...prev, entry[0]])
+    if (prev && table.length < 4096) table.push([...prev, entry[0]])
     if (table.length === 1 << size && size < 12) size++
     prev = entry
   }
   return out
 }
 
-/** Lê os quadros do GIF: atraso e índices decodificados. */
-export function readFrames(bytes: Uint8Array): { delay: number; indices: number[] }[] {
-  let pos = 13 + 3 * 256
-  const frames: { delay: number; indices: number[] }[] = []
-  let delay = 0
-  let width = bytes[6] | (bytes[7] << 8)
-  let height = bytes[8] | (bytes[9] << 8)
-  while (bytes[pos] !== 0x3b) {
-    if (bytes[pos] === 0x21) {
-      if (bytes[pos + 1] === 0xf9) delay = (bytes[pos + 4] | (bytes[pos + 5] << 8)) * 10
-      pos += 2
-      while (bytes[pos] !== 0) pos += bytes[pos] + 1
-      pos++
-    } else {
-      pos += 10
-      const minCode = bytes[pos++]
-      const data: number[] = []
-      while (bytes[pos] !== 0) {
-        data.push(...bytes.slice(pos + 1, pos + 1 + bytes[pos]))
-        pos += bytes[pos] + 1
-      }
-      pos++
-      frames.push({ delay, indices: lzwDecode(minCode, data, width * height) })
-    }
+export interface DecodedFrame {
+  delay: number
+  /** Como o quadro aparece na tela, RGBA da imagem inteira. */
+  rgba: Uint8ClampedArray
+}
+
+export interface DecodedGif {
+  width: number
+  height: number
+  frames: DecodedFrame[]
+}
+
+class Reader {
+  pos = 0
+  constructor(private readonly bytes: Uint8Array) {}
+
+  byte(): number {
+    return this.bytes[this.pos++]
   }
-  return frames
+
+  word(): number {
+    return this.byte() | (this.byte() << 8)
+  }
+
+  /** Sub-blocos até o terminador 0, emendados. */
+  blocks(): number[] {
+    const data: number[] = []
+    for (let n = this.byte(); n !== 0; n = this.byte()) {
+      data.push(...this.bytes.slice(this.pos, this.pos + n))
+      this.pos += n
+    }
+    return data
+  }
+
+  colors(flags: number): number[][] | null {
+    if (!(flags & 0x80)) return null
+    const table: number[][] = []
+    for (let i = 0; i < 2 << (flags & 7); i++) table.push([this.byte(), this.byte(), this.byte()])
+    return table
+  }
+}
+
+interface Control {
+  delay: number
+  disposal: number
+  transparent: number
+}
+
+interface Patch {
+  left: number
+  top: number
+  width: number
+  height: number
+  indices: number[]
+  colors: number[][]
+}
+
+function paint(canvas: Uint8ClampedArray, width: number, patch: Patch, transparent: number): void {
+  patch.indices.forEach((index, i) => {
+    if (index === transparent) return
+    const at =
+      ((patch.top + Math.floor(i / patch.width)) * width + patch.left + (i % patch.width)) * 4
+    canvas.set([...patch.colors[index], 255], at)
+  })
+}
+
+function clearRect(canvas: Uint8ClampedArray, width: number, patch: Patch): void {
+  for (let y = patch.top; y < patch.top + patch.height; y++) {
+    canvas.fill(0, (y * width + patch.left) * 4, (y * width + patch.left + patch.width) * 4)
+  }
+}
+
+function readPatch(r: Reader, global: number[][] | null): Patch {
+  const [left, top, width, height] = [r.word(), r.word(), r.word(), r.word()]
+  const flags = r.byte()
+  if (flags & 0x40) throw new Error('GIF entrelaçado não é suportado no leitor de teste')
+  const colors = r.colors(flags) ?? global ?? []
+  const minCode = r.byte()
+  return {
+    left,
+    top,
+    width,
+    height,
+    colors,
+    indices: lzwDecode(minCode, r.blocks(), width * height)
+  }
+}
+
+function readControl(r: Reader): Control {
+  const [packed, lo, hi, index] = r.blocks()
+  return {
+    delay: (lo | (hi << 8)) * 10,
+    disposal: (packed >> 2) & 7,
+    transparent: packed & 1 ? index : -1
+  }
+}
+
+/** Lê o GIF e devolve cada quadro já composto. */
+export function decodeGif(bytes: Uint8Array): DecodedGif {
+  const r = new Reader(bytes)
+  r.pos = 6
+  const width = r.word()
+  const height = r.word()
+  const flags = r.byte()
+  r.pos += 2
+  const global = r.colors(flags)
+  const canvas = new Uint8ClampedArray(width * height * 4)
+  const frames: DecodedFrame[] = []
+  let control: Control = { delay: 0, disposal: 0, transparent: -1 }
+  for (let tag = r.byte(); tag !== 0x3b; tag = r.byte()) {
+    if (tag === 0x21) {
+      const label = r.byte()
+      if (label === 0xf9) control = readControl(r)
+      else r.blocks()
+      continue
+    }
+    const patch = readPatch(r, global)
+    paint(canvas, width, patch, control.transparent)
+    frames.push({ delay: control.delay, rgba: canvas.slice() })
+    if (control.disposal === 2) clearRect(canvas, width, patch)
+  }
+  return { width, height, frames }
 }
