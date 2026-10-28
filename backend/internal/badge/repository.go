@@ -77,13 +77,14 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			COALESCE(u.birthday_set_at, u.created_at),
 			(SELECT COUNT(*) FROM server_first_messages f WHERE f.user_id = u.id),
 			COALESCE((SELECT h.bugs FROM bug_hunters h WHERE h.user_id = u.id), 0),
-			COALESCE((SELECT t.posicao FROM badge_top10 t WHERE t.user_id = u.id), 0)
+			COALESCE((SELECT t.posicao FROM badge_top10 t WHERE t.user_id = u.id), 0),
+			(SELECT COUNT(*) FROM badge_top10) >= $4
 		FROM users u
 		LEFT JOIN user_levels l ON l.user_id = u.id
 		LEFT JOIN user_badge_stats b ON b.user_id = u.id
 		WHERE u.id = $1
 		`,
-		userID, donoMinMembers, amigoContaRealDias,
+		userID, donoMinMembers, amigoContaRealDias, Top10Slots,
 	).Scan(
 		&s.CreatedAt,
 		&s.XP,
@@ -114,6 +115,7 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 		&s.FirstMessages,
 		&s.BugsReported,
 		&s.Top10Rank,
+		&s.Top10Full,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Stats{}, ErrUserNotFound
