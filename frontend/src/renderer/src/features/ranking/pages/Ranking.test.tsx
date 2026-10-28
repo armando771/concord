@@ -70,9 +70,8 @@ describe('RankingView', () => {
     expect(html).toContain('Tentar de novo')
   })
 
-  it('tem o botão de voltar para o hub e cabe em 360 px (coluna única, sem largura fixa)', () => {
+  it('cabe em 360 px: coluna única, sem largura fixa', () => {
     const html = render({ ranking: { entries: list(5), me: null } })
-    expect(html).toContain('href="/melhorias"')
     expect(html).toContain('min-w-0')
     expect(html).not.toMatch(/w-\[\d+px\]/)
   })

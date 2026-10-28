@@ -9,12 +9,11 @@ import {
   type DragStartEvent
 } from '@dnd-kit/core'
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { ProposalStatus } from '../api/proposals'
 import { ApiError } from '../../../shared/api/client'
 import Button from '../../../shared/ui/Button'
-import { DiamondIcon } from '../../../shared/ui/icons'
-import HubBackButton from '../../improvements/components/HubBackButton'
+import { ChangelogIcon, DiamondIcon } from '../../../shared/ui/icons'
 import BoardColumn from '../components/BoardColumn'
 import ConfirmCloseModal from '../components/ConfirmCloseModal'
 import ConfirmTakeoverModal from '../components/ConfirmTakeoverModal'
@@ -69,6 +68,7 @@ function Proposals(): React.JSX.Element {
   const [now, setNow] = useState(() => Date.now())
   const [creating, setCreating] = useState(false)
   const [showRejected, setShowRejected] = useState(false)
+  const navigate = useNavigate()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   // Mover um card em votação espera a confirmação do time tech.
@@ -207,14 +207,21 @@ function Proposals(): React.JSX.Element {
   return (
     <div className="flex h-full w-full overflow-hidden bg-primary backdrop-blur-2xl text-gray-100">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center gap-3 overflow-x-auto border-b border-subtle px-4 [&>*]:shrink-0">
-          <HubBackButton />
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-subtle px-4">
           <DiamondIcon className="h-6 w-6 text-violet-400" />
           <span className="text-base font-bold tracking-wide text-strong">Propostas</span>
           <div className="flex items-center gap-2">
             {isTech && <GithubUsernameButton />}
             <Button variant="ghost" onClick={() => setShowRejected((v) => !v)}>
               {showRejected ? 'Ocultar recusadas' : `Ver recusadas (${rejectedCount})`}
+            </Button>
+            <Button
+              variant="ghost"
+              className="inline-flex items-center"
+              onClick={() => navigate('/changelog')}
+            >
+              <ChangelogIcon className="mr-1.5 h-4 w-4" />
+              Novidades
             </Button>
             <Button onClick={() => setCreating(true)}>Nova proposta</Button>
           </div>

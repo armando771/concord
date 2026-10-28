@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { MemoryRouter } from 'react-router-dom'
 import { ChangelogView } from './Changelog'
 
 const releases = [
@@ -18,9 +17,7 @@ const releases = [
 
 const render = (over: Partial<Parameters<typeof ChangelogView>[0]> = {}): string =>
   renderToStaticMarkup(
-    <MemoryRouter>
-      <ChangelogView releases={releases} current={null} loading={false} error={null} {...over} />
-    </MemoryRouter>
+    <ChangelogView releases={releases} current={null} loading={false} error={null} {...over} />
   )
 
 describe('ChangelogView', () => {
@@ -31,10 +28,6 @@ describe('ChangelogView', () => {
     expect(html).toContain('Mensagens fixadas')
     expect(html).toContain('Correções')
     expect(html).toContain('Som da chamada')
-  })
-
-  it('tem o botão de voltar para o hub de melhorias', () => {
-    expect(render()).toContain('href="/melhorias"')
   })
 
   it('marca a versão em uso', () => {

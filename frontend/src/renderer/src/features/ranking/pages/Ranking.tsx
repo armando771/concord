@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { CrownIcon } from '../../../shared/ui/iconsExtra'
 import Button from '../../../shared/ui/Button'
-import HubBackButton from '../../improvements/components/HubBackButton'
 import type { Ranking as RankingData } from '../api/ranking'
 import MyRankBar from '../components/MyRankBar'
 import PodiumCard from '../components/PodiumCard'
@@ -66,7 +65,6 @@ export function RankingView(props: ViewProps): React.JSX.Element {
     <div className="flex h-full w-full overflow-hidden bg-primary backdrop-blur-2xl text-gray-100">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-subtle px-4">
-          <HubBackButton />
           <CrownIcon className="h-5 w-5 text-amber-300" />
           <h1 className="text-base font-semibold">Rank global</h1>
         </header>

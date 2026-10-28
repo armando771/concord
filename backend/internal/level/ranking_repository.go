@@ -32,19 +32,19 @@ func (r *Repository) TopRanking(ctx context.Context, limit int) ([]RankingEntry,
 	if err != nil {
 		return nil, fmt.Errorf("top do ranking: %w", err)
 	}
-	defer rows.Close()
-
-	var out []RankingEntry
-	for rows.Next() {
-		var e RankingEntry
-		var style namestyle.Style
-		if err := rows.Scan(&e.UserID, &e.Username, &e.DisplayName, &e.AvatarURL, &style, &e.XP); err != nil {
-			return nil, fmt.Errorf("top do ranking: %w", err)
-		}
-		e.NameStyle = style
-		out = append(out, e)
+	out, err := pgx.CollectRows(rows, scanRankingEntry)
+	if err != nil {
+		return nil, fmt.Errorf("top do ranking: %w", err)
 	}
-	return out, rows.Err()
+	return out, nil
+}
+
+func scanRankingEntry(row pgx.CollectableRow) (RankingEntry, error) {
+	var e RankingEntry
+	var style namestyle.Style
+	err := row.Scan(&e.UserID, &e.Username, &e.DisplayName, &e.AvatarURL, &style, &e.XP)
+	e.NameStyle = style
+	return e, err
 }
 
 // RankOf devolve a posição de userID pela mesma ordem de TopRanking.
