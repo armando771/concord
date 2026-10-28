@@ -9,7 +9,6 @@ const h = vi.hoisted(() => {
     validSignature: true,
     handlers: {} as Record<string, (...a: unknown[]) => unknown>,
     sent: [] as Array<[string, unknown]>,
-    callListeners: [] as Array<(s: { inCall: boolean }) => void>,
     files: {} as Record<string, string>
   }
   const autoUpdater = {
@@ -107,8 +106,7 @@ vi.mock('fs', () => ({
 }))
 vi.mock('../window/background', () => ({
   isInCall: () => h.state.inCall,
-  markQuitting: vi.fn(),
-  onCallStateChange: (fn: (s: { inCall: boolean }) => void) => h.state.callListeners.push(fn)
+  markQuitting: vi.fn()
 }))
 vi.mock('../app/appLog', () => ({ appendLog: vi.fn(), logPath: (n: string) => `/logs/${n}` }))
 vi.mock('./updateSignature', () => ({ verifyInstaller: () => h.state.validSignature }))
@@ -138,7 +136,6 @@ beforeEach(() => {
   h.state.handlers = {}
   h.state.sent = []
   h.state.files = {}
-  h.state.callListeners = []
 })
 
 afterEach(() => {
@@ -268,30 +265,87 @@ describe('updater', () => {
     expect(h.state.sent.some(([channel]) => channel === 'update:error')).toBe(true)
   })
 
-  it('avisa assim que existe versão nova, mesmo em chamada (sem baixar ainda)', async () => {
+  it('em chamada avisa e já baixa em segundo plano, sem clique', async () => {
     h.state.inCall = true
     await startUpdater()
 
     await h.autoUpdater.emit('update-available', { version: '0.6.0' })
 
     expect(h.state.sent).toContainEqual(['update:available', '0.6.0'])
-    expect(h.autoUpdater.downloadUpdate).not.toHaveBeenCalled()
+    expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
+    expect(h.autoUpdater.quitAndInstall).not.toHaveBeenCalled()
   })
 
-  it('clicar Atualizar em chamada baixa agora e instala depois de verificar', async () => {
+  it('clicar Atualizar antes do fim do download instala assim que terminar, sem baixar de novo', async () => {
     h.state.inCall = true
     await startUpdater()
     await h.autoUpdater.emit('update-available', { version: '0.6.0' })
 
     h.state.handlers['update:install']()
-    expect(h.autoUpdater.downloadUpdate).toHaveBeenCalled()
+    expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
+    expect(h.autoUpdater.quitAndInstall).not.toHaveBeenCalled()
 
     await h.autoUpdater.emit('update-downloaded', {
       version: '0.6.0',
       downloadedFile: 'C:/x/setup.exe'
     })
     await flush()
-    expect(h.autoUpdater.quitAndInstall).toHaveBeenCalled()
+    expect(h.autoUpdater.quitAndInstall).toHaveBeenCalledWith(true, true)
+    expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
+  })
+
+  it('pronta em chamada: o clique instala na hora, sem novo download', async () => {
+    h.state.inCall = true
+    await startUpdater()
+    await h.autoUpdater.emit('update-available', { version: '0.6.0' })
+    await h.autoUpdater.emit('update-downloaded', {
+      version: '0.6.0',
+      downloadedFile: 'C:/x/setup.exe'
+    })
+    await flush()
+    expect(h.state.sent).toContainEqual(['update:ready', '0.6.0'])
+    expect(h.autoUpdater.quitAndInstall).not.toHaveBeenCalled()
+
+    h.state.handlers['update:install']()
+    expect(h.autoUpdater.quitAndInstall).toHaveBeenCalledWith(true, true)
+    expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
+  })
+
+  it('download de uma versão já substituída não fica pronto: baixa a mais nova', async () => {
+    await startUpdater()
+    await h.autoUpdater.emit('update-available', { version: '0.6.1' })
+    // Versão mais nova publicada no meio do download.
+    await h.autoUpdater.emit('update-available', { version: '0.6.2' })
+    expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
+
+    await h.autoUpdater.emit('update-downloaded', { version: '0.6.1', downloadedFile: 'a.exe' })
+    await flush()
+    expect(h.state.sent).not.toContainEqual(['update:ready', '0.6.1'])
+    expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(2)
+
+    await h.autoUpdater.emit('update-downloaded', { version: '0.6.2', downloadedFile: 'b.exe' })
+    await flush()
+    expect(h.state.sent).toContainEqual(['update:ready', '0.6.2'])
+  })
+
+  it('download que falha em segundo plano: a barra volta para "disponível" e espera para tentar de novo', async () => {
+    vi.useRealTimers()
+    vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout', 'Date'] })
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    h.autoUpdater.downloadUpdate.mockRejectedValueOnce(new Error('rede caiu'))
+    await startUpdater()
+    await h.autoUpdater.emit('update-available', { version: '0.7.0' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(h.state.sent).toContainEqual(['update:progress', 0])
+
+    // Checagem seguinte dentro da espera de 1 min: não baixa.
+    await h.autoUpdater.emit('update-available', { version: '0.7.0' })
+    expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
+
+    vi.setSystemTime(Date.now() + 61_000)
+    await h.autoUpdater.emit('update-available', { version: '0.7.0' })
+    expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(2)
+    vi.mocked(Math.random).mockRestore()
   })
 
   it('fora de chamada já baixa em segundo plano; clicar instala na hora', async () => {
@@ -385,7 +439,7 @@ describe('updater', () => {
     expect(h.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1)
   })
 
-  it('aviso de versão nova em chamada continua sem baixar', async () => {
+  it('aviso do servidor em chamada já baixa em segundo plano', async () => {
     vi.useRealTimers()
     vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout'] })
     h.state.inCall = true
@@ -395,7 +449,7 @@ describe('updater', () => {
     vi.advanceTimersByTime(1000)
     await h.autoUpdater.emit('update-available', { version: '0.7.0' })
     expect(h.state.sent).toContainEqual(['update:available', '0.7.0'])
-    expect(h.autoUpdater.downloadUpdate).not.toHaveBeenCalled()
+    expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
   })
 
   describe('download em segundo plano espalhado (aviso do servidor / checagem periódica)', () => {
@@ -447,16 +501,10 @@ describe('updater', () => {
       expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
     })
 
-    it('entrou em chamada durante a espera: só baixa quando a chamada acabar', async () => {
+    it('entrar em chamada durante a espera não segura o download', async () => {
       await startAndWait()
       await h.autoUpdater.emit('update-available', { version: '0.7.0' })
       h.state.inCall = true
-      vi.advanceTimersByTime(60_000)
-      expect(h.autoUpdater.downloadUpdate).not.toHaveBeenCalled()
-
-      h.state.inCall = false
-      h.state.callListeners.forEach((fn) => fn({ inCall: false }))
-      expect(h.autoUpdater.downloadUpdate).not.toHaveBeenCalled()
       vi.advanceTimersByTime(60_000)
       expect(h.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
     })
@@ -492,6 +540,44 @@ describe('updater', () => {
       h.state.handlers['update:install']()
       expect(h.linux.quitAndInstall).toHaveBeenCalledWith(true, true)
       expect(h.autoUpdater.quitAndInstall).not.toHaveBeenCalled()
+    })
+
+    it('em chamada baixa e verifica sozinho; o clique instala na hora, sem novo download', async () => {
+      h.state.inCall = true
+      await startUpdater()
+      await h.linux.emit('update-available', { version: '0.7.0' })
+      expect(h.linux.downloadUpdate).toHaveBeenCalledTimes(1)
+      await h.linux.emit('update-downloaded', { version: '0.7.0', downloadedFile: '/d/x.tar.gz' })
+      expect(h.linux.stage).toHaveBeenCalled()
+      expect(h.state.sent).toContainEqual(['update:ready', '0.7.0'])
+      expect(h.linux.quitAndInstall).not.toHaveBeenCalled()
+
+      h.state.handlers['update:install']()
+      expect(h.linux.quitAndInstall).toHaveBeenCalledWith(true, true)
+      expect(h.linux.downloadUpdate).toHaveBeenCalledTimes(1)
+    })
+
+    it('clicar antes do fim do download instala assim que terminar e verificar', async () => {
+      h.state.inCall = true
+      await startUpdater()
+      await h.linux.emit('update-available', { version: '0.7.0' })
+      h.state.handlers['update:install']()
+      expect(h.linux.downloadUpdate).toHaveBeenCalledTimes(1)
+      expect(h.linux.quitAndInstall).not.toHaveBeenCalled()
+
+      await h.linux.emit('update-downloaded', { version: '0.7.0', downloadedFile: '/d/x.tar.gz' })
+      expect(h.linux.stage).toHaveBeenCalled()
+      expect(h.linux.quitAndInstall).toHaveBeenCalledWith(true, true)
+    })
+
+    it('download de uma versão já substituída não é extraído: baixa a mais nova', async () => {
+      await startUpdater()
+      await h.linux.emit('update-available', { version: '0.7.0' })
+      await h.linux.emit('update-available', { version: '0.7.1' })
+      await h.linux.emit('update-downloaded', { version: '0.7.0', downloadedFile: '/d/a.tar.gz' })
+      expect(h.linux.stage).not.toHaveBeenCalled()
+      expect(h.state.sent.some(([channel]) => channel === 'update:error')).toBe(false)
+      expect(h.linux.downloadUpdate).toHaveBeenCalledTimes(2)
     })
 
     it('assinatura inválida: nem extrai, e fica registrado em update.log', async () => {
