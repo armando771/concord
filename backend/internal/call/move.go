@@ -140,6 +140,7 @@ func (s *Service) moveTo(ctx context.Context, actorID, targetID string, dest *ch
 		return nil, err
 	}
 
+	s.leaveCallRoom(targetID, from.callID)
 	if err := s.leaveCall(ctx, from.callID, targetID); err != nil {
 		return nil, err
 	}
@@ -150,6 +151,23 @@ func (s *Service) moveTo(ctx context.Context, actorID, targetID string, dest *ch
 	}
 	s.announceMove(ctx, actorID, targetID, call, from, dest)
 	return call, nil
+}
+
+// callRoomLeaver tira as conexões de alguém de uma sala do WS (o Hub).
+type callRoomLeaver interface {
+	UnsubscribeUser(userID, room string)
+}
+
+// leaveCallRoom tira quem vai ser movido da sala WS da chamada antiga antes
+// de ele sair dela. Senão o call:left dele (e o call:ended, se estava
+// sozinho) chegava antes do call:moved: o cliente largava a chamada (ou
+// tentava voltar para ela) e ignorava o call:moved, ficando na lista do canal
+// novo sem estar nele de fato (issue #368). Quem fica na sala antiga continua
+// vendo a saída.
+func (s *Service) leaveCallRoom(userID, callID string) {
+	if r, ok := s.publisher.(callRoomLeaver); ok {
+		r.UnsubscribeUser(userID, "call:"+callID)
+	}
 }
 
 // announceMove avisa quem foi movido (o cliente dele troca de sala sozinho)
