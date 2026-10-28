@@ -2108,6 +2108,27 @@ describe('callStore — salas trancadas e pedidos de entrada', () => {
     expect(useCallStore.getState().joinRequests).toEqual([])
   })
 
+  describe('som do pedido para entrar na sala trancada', () => {
+    const knock = {
+      call_id: 'call-1',
+      user: { id: 'joao', username: 'joao', display_name: 'João' }
+    }
+
+    it('toca a batida quando estou ouvindo', async () => {
+      await joinChannel()
+      useCallStore.getState().handleWsEvent({ type: 'call:knock', payload: knock })
+      expect(sounds.playSound).toHaveBeenCalledWith('knock')
+    })
+
+    it('ensurdecido: não toca a batida, mas o pedido continua na tela', async () => {
+      await joinChannel()
+      useCallStore.setState({ deafened: true })
+      useCallStore.getState().handleWsEvent({ type: 'call:knock', payload: knock })
+      expect(sounds.playSound).not.toHaveBeenCalledWith('knock')
+      expect(useCallStore.getState().joinRequests).toHaveLength(1)
+    })
+  })
+
   it('call:knock_accepted conecta automaticamente ao canal', async () => {
     useCallStore.setState({
       knock: { channelId: 'canal-trancado', callId: 'call-x', status: 'pending' }
