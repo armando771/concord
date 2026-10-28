@@ -14,6 +14,7 @@ import CallInviteCard from '../../call/components/CallInviteCard'
 import MessageAttachments from './MessageAttachments'
 import MessageSticker from './MessageSticker'
 import MessageGif from './MessageGif'
+import TTSBadge from '../../tts/components/TTSBadge'
 
 // Pedaços da linha de mensagem do chat (ver MessageItem).
 
@@ -32,10 +33,11 @@ function formatEditedAt(iso: string): string {
   return `Editada em ${when}`
 }
 
-/** "(editada)" e "fixada" ao lado do nome (ou sozinhos, na linha agrupada). */
+/** TTS, "(editada)" e "fixada" ao lado do nome (ou sozinhos, na linha agrupada). */
 export function MessageBadges({ message }: { message: Message }): React.JSX.Element {
   return (
     <>
+      <TTSBadge show={message.tts} />
       {message.edited_at && (
         <span className="text-ds-xs text-gray-500" title={formatEditedAt(message.edited_at)}>
           (editada)
@@ -149,7 +151,7 @@ export function MessageHeader({
   onOpenProfile: (e: React.MouseEvent<HTMLElement>) => void
 }): React.JSX.Element | null {
   if (compact) {
-    return message.edited_at || message.pinned_at ? (
+    return message.tts || message.edited_at || message.pinned_at ? (
       <div className="flex items-baseline gap-2">
         <MessageBadges message={message} />
       </div>

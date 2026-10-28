@@ -21,7 +21,7 @@ O **dono** (quem criou o servidor, `owner_id`) **não é um cargo**: é um níve
    1. a do @everyone;
    2. as dos cargos do membro (somadas: se um cargo permite, vale);
    3. a do próprio membro (vence tudo).
-5. Sem **Ver canais** o resultado é zero: o canal nem aparece. Sem *Enviar mensagens* caem *Enviar arquivos* e *Mencionar @all* (no canal de texto e no chat do canal de voz). Em voz, sem *Conectar* caem falar, transmitir, mesa de áudio e moderação.
+5. Sem **Ver canais** o resultado é zero: o canal nem aparece. Sem *Enviar mensagens* caem *Enviar arquivos*, *Mencionar @all* e *Enviar mensagens TTS* (no canal de texto e no chat do canal de voz). Em voz, sem *Conectar* caem falar, transmitir, mesa de áudio e moderação.
 
 O cálculo é o mesmo no backend (`backend/internal/permission`) e no app (`frontend/src/renderer/src/features/servers/lib/permissions.ts`). Os dois rodam os mesmos casos de `backend/internal/permission/testdata/vectors.json`: mudou uma regra, mude os casos e os dois lados.
 
@@ -39,12 +39,13 @@ O cálculo é o mesmo no backend (`backend/internal/permission`) e no app (`fron
 | | Administrador | Tudo, ignorando os canais. |
 | Texto | Enviar mensagens, Enviar arquivos, Adicionar reações, Ver histórico | Uso normal do chat. |
 | | Mencionar @all e @here | Avisar o canal inteiro. |
+| | Enviar mensagens TTS | Usar `/tts`: a mensagem é lida em voz para quem está em call no servidor (até 200 caracteres, uma a cada 10 s). Vem ligada no @everyone (no Discord vem desligada); quem quiser restringir desliga no cargo ou no canal. Ver [ADR 0012](adr/0012-tts-no-cliente.md). |
 | | Gerenciar mensagens | Apagar mensagem de outros e encerrar enquetes. |
 | Voz | Conectar, Falar, Transmitir | Entrar, usar o microfone, compartilhar tela/câmera. |
 | | Usar mesa de áudio | Tocar e enviar áudios. |
 | | Silenciar / Ensurdecer / Mover membros | Moderação na chamada (mover inclui desconectar). |
 
-Padrões de um servidor novo: só o **@everyone** (ver, escrever, anexar, reagir, histórico, convidar, conectar, falar, transmitir, mesa de áudio, alterar o próprio apelido) e o cargo fixo **Bots** (dos bots do servidor). Não há mais cargo **Moderador** padrão: quem quiser cria os seus. Nos servidores antigos o Moderador que já existia continua, como um cargo comum (dá para editar, mover e apagar).
+Padrões de um servidor novo: só o **@everyone** (ver, escrever, anexar, reagir, histórico, convidar, conectar, falar, transmitir, mesa de áudio, alterar o próprio apelido, mensagens TTS) e o cargo fixo **Bots** (dos bots do servidor). Não há mais cargo **Moderador** padrão: quem quiser cria os seus. Nos servidores antigos o Moderador que já existia continua, como um cargo comum (dá para editar, mover e apagar).
 
 ## Hierarquia
 

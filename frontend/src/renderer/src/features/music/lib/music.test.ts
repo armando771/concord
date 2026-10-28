@@ -13,6 +13,7 @@ import {
   MAESTRO_HOWTO,
   maestroIdentity,
   slashSuggestions,
+  MUSIC_COMMANDS,
   splitBold,
   stepGain,
   videoSyncAction,
@@ -45,6 +46,12 @@ describe('slashSuggestions', () => {
   it('filtra pelo começo, incluindo aliases', () => {
     expect(slashSuggestions('/pu').map((s) => s.command)).toEqual(['/skip'])
     expect(slashSuggestions('/fi').map((s) => s.command)).toEqual(['/fila'])
+  })
+  it('lista os comandos que receber (ex.: /tts junto, ou só ele na DM)', () => {
+    const tts = { command: '/tts', aliases: [], usage: '/tts <mensagem>', description: 'Lê' }
+    expect(slashSuggestions('/t', [tts]).map((s) => s.command)).toEqual(['/tts'])
+    expect(slashSuggestions('/', [...MUSIC_COMMANDS, tts])).toHaveLength(5)
+    expect(slashSuggestions('/', [])).toEqual([])
   })
   it('some depois do espaço ou sem barra', () => {
     expect(slashSuggestions('/play queen')).toEqual([])

@@ -85,6 +85,12 @@ describe('MessageItem', () => {
     expect(html).toContain('py-0.5')
   })
 
+  it('mensagem /tts leva o selo de alto-falante', () => {
+    expect(render(msg({ tts: true }))).toContain('Mensagem TTS')
+    expect(render(msg())).not.toContain('Mensagem TTS')
+    expect(render(msg({ tts: true }), { grouped: true })).toContain('Mensagem TTS')
+  })
+
   it('resposta a uma mensagem apagada mostra o aviso da original', () => {
     expect(render(msg({ reply_to_id: 'x' }))).toContain('Mensagem original foi excluída')
   })

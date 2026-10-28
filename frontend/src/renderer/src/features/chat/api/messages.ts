@@ -1,4 +1,5 @@
 import { request } from '../../../shared/api/client'
+import { sendTTSMessage, ttsTextOf } from '../../tts/api/tts'
 import type { NameStyle } from '../../profile/lib/nameStyle'
 
 export interface MessageAuthor {
@@ -91,6 +92,8 @@ export interface Message {
   poll?: Poll | null
   /** Cartão de convite para a call (mensagem do convidador na DM). */
   call_invite?: CallInvite | null
+  /** Mensagem /tts: lida em voz para quem está em call (features/tts). */
+  tts?: boolean
   attachments?: Attachment[] | null
   sticker_id?: string | null
   sticker?: { id: string; server_id: string; name: string; content_type: string } | null
@@ -143,6 +146,9 @@ export function sendChannelMessage(
   replyToId?: string | null,
   extra?: ExtraMessageData
 ): Promise<Message> {
+  // "/tts texto" vai pela rota própria (features/tts).
+  const tts = ttsTextOf(content, attachmentIds, extra)
+  if (tts !== null) return sendTTSMessage(`/channels/${channelId}`, tts)
   return request<Message>(`/channels/${channelId}/messages`, {
     method: 'POST',
     body: JSON.stringify({
@@ -219,6 +225,8 @@ export function sendConversationMessage(
   replyToId?: string | null,
   extra?: ExtraMessageData
 ): Promise<Message> {
+  const tts = ttsTextOf(content, attachmentIds, extra)
+  if (tts !== null) return sendTTSMessage(`/conversations/${conversationId}`, tts)
   return request<Message>(`/conversations/${conversationId}/messages`, {
     method: 'POST',
     body: JSON.stringify({

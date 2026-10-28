@@ -57,7 +57,7 @@ import {
 } from './MessageListStates'
 import {
   AttachButton,
-  ChannelSlashSuggestions,
+  SlashCommandSuggestions,
   ComposerGate,
   MediaPicker,
   MediaPickerButton,
@@ -624,8 +624,9 @@ function ChatPane({
             onSubmit={handleSubmit}
             className="relative flex items-center gap-2 rounded-xl border border-subtle bg-input px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40 max-md:gap-0.5 max-md:px-1 max-md:py-1"
           >
-            <ChannelSlashSuggestions
+            <SlashCommandSuggestions
               isChannel={isChannel}
+              canSendTTS={permissions.canSendTTS}
               mentionOpen={mention !== null}
               input={draft}
               onPick={(text) => {

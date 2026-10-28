@@ -15,6 +15,7 @@ import { startArrivalBadges } from './features/call/lib/arrivalEventsStart'
 import { startCallInvites } from './features/call/lib/callInviteStart'
 import { startSpeechReport } from './features/call/lib/speechReportStart'
 import { startPresenceActivity } from './features/activity/lib/presenceActivityStart'
+import { startTTS } from './features/tts/lib/ttsStart'
 
 // Tema salvo antes do primeiro render: o app já abre com as cores certas.
 startThemeSync()
@@ -36,6 +37,9 @@ startCallInvites()
 
 // O jogo e a música dos outros agora (presence:activity).
 startPresenceActivity()
+
+// Mensagens /tts lidas em voz para quem está em call.
+startTTS()
 
 // Soltar um arquivo fora do chat não pode fazer o Electron abrir o arquivo no
 // lugar do app (o chat trata o próprio drop).
