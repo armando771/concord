@@ -1211,33 +1211,6 @@ body.boost-quake #root {
   }
 }
 
-/* Barra "alterações não salvas" do editor de perfil: treme ao tentar sair
-   sem salvar, como no Discord. */
-@keyframes unsaved-shake {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  20%,
-  60% {
-    transform: translateX(-8px);
-  }
-  40%,
-  80% {
-    transform: translateX(8px);
-  }
-}
-
-.unsaved-shake {
-  animation: unsaved-shake 0.45s ease-in-out;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .unsaved-shake {
-    animation: none;
-  }
-}
-
 /* ===== "Fulano está digitando…" ===== */
 
 @keyframes typing-dot {

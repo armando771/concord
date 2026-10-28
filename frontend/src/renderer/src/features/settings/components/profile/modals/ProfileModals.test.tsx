@@ -14,16 +14,19 @@ vi.mock('../../../../profile/components/ProfileCardBody', () => ({
   )
 }))
 vi.mock('../../../../../shared/ui/Avatar', () => ({ default: () => <span data-avatar /> }))
+vi.mock('../../../../profile/components/EntranceSoundSettings', () => ({
+  default: () => <i>som</i>
+}))
 
 import { renderToStaticMarkup } from 'react-dom/server'
 import { draftFromProfile } from '../../../../profile/lib/profileValidation'
 import EditModalShell from './EditModalShell'
 import FieldModal from './FieldModal'
 import NameStyleModal from './NameStyleModal'
-import ProfileSpotModal, { applyPatch } from './ProfileSpotModal'
+import ProfileEditModal from './ProfileEditModal'
 import { SPOT_FIELDS } from './spotFields'
 
-const user = { id: 'u1', username: 'ana', email: 'a@x', display_name: 'Ana' } as never
+const user = { id: 'u1', username: 'ana', email: 'a@x', display_name: 'Ana', pronouns: 'ela/dela' } as never
 const base = { user, avatarUrl: null, bannerUrl: null }
 const draft = draftFromProfile({ display_name: 'Ana', pronouns: 'ela/dela' })
 const noop = (): void => {}
@@ -127,24 +130,33 @@ describe('FieldModal', () => {
   })
 })
 
-describe('ProfileSpotModal', () => {
-  const editor = { draft, set: noop }
-  const render = (spot: Parameters<typeof ProfileSpotModal>[0]['spot']): string =>
-    renderToStaticMarkup(<ProfileSpotModal spot={spot} base={base} editor={editor} onClose={noop} />)
+describe('ProfileEditModal', () => {
+  const render = (modal: Parameters<typeof ProfileEditModal>[0]['modal'], busy = false): string =>
+    renderToStaticMarkup(
+      <ProfileEditModal modal={modal} base={base} busy={busy} onClose={noop} onApply={async () => true} />
+    )
 
-  it('nada aberto, avatar ou banner: sem modal', () => {
+  it('nada aberto: sem modal', () => {
     expect(render(null)).toBe('')
-    expect(render('avatar')).toBe('')
-    expect(render('banner')).toBe('')
   })
-  it('o nome abre o modal do nome; o resto, o do campo', () => {
+  it('o nome abre o modal do nome; cada bloco, o campo dele', () => {
     expect(render('name')).toContain('Surpreenda-me')
     expect(render('bio')).toContain('data-title="Sobre mim"')
+    expect(render('banner_color')).toContain('data-title="Cor do banner"')
+    expect(render('sound')).toContain('data-title="Som de entrada"')
   })
-  it('Aplicar passa cada campo para o rascunho', () => {
-    const set = vi.fn()
-    applyPatch(set, { display_name: 'Aninha', pronouns: 'ela' })
-    expect(set).toHaveBeenCalledWith('display_name', 'Aninha')
-    expect(set).toHaveBeenCalledWith('pronouns', 'ela')
+  it('o tema abre largo, com as predefinições', () => {
+    const html = render('theme')
+    expect(html).toContain('data-title="Tema do perfil"')
+    expect(html).toContain('data-xl="true"')
+    expect(html).toContain('Predefinições')
+  })
+  it('salvando: o Aplicar mostra "Salvando…" e trava', () => {
+    const html = render('pronouns', true)
+    expect(html).toContain('Salvando…')
+    expect(html).toMatch(/type="submit" disabled=""/)
+  })
+  it('o campo começa com o que está salvo', () => {
+    expect(render('pronouns')).toContain('value="ela/dela"')
   })
 })

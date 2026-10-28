@@ -1,4 +1,4 @@
-# 0008. Tratar o dono como nível interno, sem cargos padrão além do @everyone
+# 0009. Tratar o dono como nível interno, sem cargos padrão além do @everyone
 
 - Status: aceito
 - Data: 2026-10-27

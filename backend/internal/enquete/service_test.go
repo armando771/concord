@@ -181,7 +181,7 @@ func TestDefinicaoDoSegundoTurno(t *testing.T) {
 	if e.ID != "segundo-turno" || len(Todas) != 1 || Todas[0].ID != e.ID {
 		t.Fatalf("definição = %+v, Todas = %v", e, Todas)
 	}
-	quer := map[string]string{"l": "l", "22": "v22", "nenhum": ""}
+	quer := map[string]string{"l": "l", "22": "v22", "nulo": "nulo"}
 	if len(e.Opcoes) != len(quer) {
 		t.Fatalf("opções = %+v", e.Opcoes)
 	}

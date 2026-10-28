@@ -125,7 +125,7 @@ describe('ProfileCardBody', () => {
     expect(html).toContain('Adicionar pronomes')
     expect(html).toContain('Adicionar um Sobre mim')
     expect(html).toContain('Adicionar links')
-    expect(html).toContain('Adicionar uma nota')
+    expect(html).toContain('No que você está pensando?')
   })
 
   it('prévia do editor: links do texto e do perfil não navegam (o clique edita)', () => {

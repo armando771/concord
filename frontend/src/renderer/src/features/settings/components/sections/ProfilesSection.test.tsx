@@ -6,19 +6,16 @@ const state = vi.hoisted(() => ({
   auth: {
     user: null as Record<string, unknown> | null,
     setUser: vi.fn()
-  },
-  settings: { setDirty: vi.fn(), blockedAt: 0 }
+  }
 }))
 vi.mock('../../../auth/store/authStore', () => ({
   useAuthStore: Object.assign((sel: (s: typeof state.auth) => unknown) => sel(state.auth), {
     getState: () => state.auth
   })
 }))
-vi.mock('../../store/settingsStore', () => ({
-  useSettingsStore: (sel: (s: typeof state.settings) => unknown) => sel(state.settings)
-}))
 
 vi.mock('../../../profile/components/EntranceSoundSettings', () => ({ default: () => null }))
+vi.mock('../../../../shared/ui/Avatar', () => ({ default: () => <span data-avatar /> }))
 // O corpo do cartão puxa a atividade (e a call); aqui basta o que a prévia recebe.
 vi.mock('../../../profile/components/ProfileCardBody', () => ({
   default: ({ profile }: { profile: { display_name: string; links: string[] } }) => (
@@ -52,48 +49,66 @@ describe('ProfilesSection', () => {
     expect(render()).toBe('')
   })
 
-  it('abre em Identidade, com as abas e a prévia', () => {
+  it('o cartão grande e a coluna de blocos, sem abas nem formulário', () => {
     const html = render()
-    expect(html).toContain('role="tablist"')
-    expect(html).toContain('Identidade')
-    expect(html).toContain('Aparência')
-    expect(html).toContain('Prévia do cartão')
+    expect(html).toContain('Como os outros veem')
     expect(html).toContain('data-preview="Ana"')
-    // Nome e pronomes se editam no cartão; o aniversário, em Minha conta.
-    expect(html).not.toContain('Estes dois salvam na hora')
-    expect(html).not.toContain('Aniversário')
+    expect(html).toContain('aria-label="Personalizar perfil"')
     expect(html).toContain('qualquer parte do cartão')
-    expect(html).toContain('Sobre mim')
+    // Nada do editor antigo: abas, campos soltos e a barra de alterações.
+    expect(html).not.toContain('role="tablist"')
+    expect(html).not.toContain('<textarea')
+    expect(html).not.toContain('alterações não salvas')
+    expect(html).not.toContain('Aniversário')
+  })
+
+  it('um bloco para cada coisa editável', () => {
+    const html = render()
+    for (const title of [
+      'Avatar e banner',
+      'Cor do banner',
+      'Tema do perfil',
+      'Nome de exibição',
+      'Pronomes',
+      'Nota',
+      'Sobre mim',
+      'Links',
+      'Som de entrada'
+    ]) {
+      expect(html).toContain(`>${title}</h3>`)
+    }
+    expect(html).toContain('aria-label="Alterar avatar"')
+    expect(html).toContain('aria-label="Alterar banner"')
+    expect(html).toContain('aria-label="Mudar a cor do banner"')
+    expect(html).toContain('aria-label="Mudar o tema do perfil"')
+    expect(html).toContain('aria-label="Editar nome de exibição e estilo"')
+  })
+
+  it('os blocos resumem o que está salvo e convidam no vazio', () => {
+    const html = render()
+    expect(html).toContain('#112233')
+    expect(html).toContain('Padrão · Sólido')
+    expect(html).toContain('1 link')
+    expect(html).toContain('Adicionar pronomes')
+    expect(html).toContain('No que você está pensando?')
+    expect(html).toContain('Som padrão')
+  })
+
+  it('com avatar e banner: os "Remover"', () => {
+    const html = render()
     expect(html).toContain('Remover avatar')
     expect(html).toContain('Remover banner')
-    expect(html).toContain('Usar a cor padrão')
-    expect(html).toContain('https://github.com/ana')
-    // Sem alterações, sem a barra de aviso.
-    expect(html).not.toContain('alterações não salvas')
-    expect(html).not.toContain('tem campo com erro')
-  })
-
-  it('campo com erro marca a aba Identidade', () => {
-    state.auth.user = { ...state.auth.user, bio: 'x'.repeat(300) }
-    expect(render()).toContain('tem campo com erro')
-  })
-
-  it('erro no nome avisa embaixo do cartão, não na aba', () => {
-    state.auth.user = { ...state.auth.user, display_name: '' }
-    const html = render()
-    expect(html).toContain('clique neles no cartão')
-    expect(html).not.toContain('tem campo com erro')
   })
 
   it('nenhum modal começa aberto', () => {
     expect(render()).not.toContain('role="dialog"')
   })
 
-  it('sem avatar, banner nem cor: sem os botões de remover', () => {
+  it('sem avatar, banner nem cor: sem os "Remover" e a cor fica "Padrão"', () => {
     state.auth.user = { ...state.auth.user, avatar_url: null, banner_url: null, banner_color: null }
     const html = render()
     expect(html).not.toContain('Remover avatar')
     expect(html).not.toContain('Remover banner')
-    expect(html).not.toContain('Usar a cor padrão')
+    expect(html).toContain('>Padrão</span>')
   })
 })

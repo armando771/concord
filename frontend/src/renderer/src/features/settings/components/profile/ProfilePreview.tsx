@@ -1,11 +1,16 @@
 import type { User } from '../../../auth/store/authStore'
+import BadgeRow from '../../../levels/components/BadgeRow'
+import LevelBadge from '../../../levels/components/LevelBadge'
 import ProfileCardBody from '../../../profile/components/ProfileCardBody'
 import ProfileCardFrame from '../../../profile/components/ProfileCardFrame'
+import { CardMemberSince, CardVisitorButtons } from '../../../profile/components/card/CardSampleExtras'
 import { linkError, normalizeLink } from '../../../profile/lib/profileLinks'
 import { profileThemeLook, resolveProfileTheme } from '../../../profile/lib/profileTheme'
 import type { ProfileDraft } from '../../../profile/lib/profileValidation'
 import type { CardSpot } from '../../../profile/lib/cardSpots'
-import { DEFAULT_BANNER } from './ProfileMediaFields'
+
+/** Banner sem imagem nem cor escolhida (o cartão do próprio perfil, fora de servidor). */
+export const DEFAULT_BANNER = 'linear-gradient(135deg, #5865f2, #8b5cf6)'
 
 /** O que a prévia precisa além do rascunho: a conta e as imagens já resolvidas. */
 export interface PreviewBase {
@@ -15,8 +20,10 @@ export interface PreviewBase {
 }
 
 /**
- * O cartão de perfil como os outros vão ver (o mesmo ProfileCardBody), com o
- * rascunho por cima do salvo. Com `onEdit`, cada parte abre o editor dela.
+ * O cartão de perfil como os outros vão ver (o mesmo ProfileCardBody e a
+ * mesma moldura do cartão que abre ao clicar), com o rascunho por cima do
+ * salvo: badges, nível, "Membro desde" e os botões de quem visita. Com
+ * `onEdit`, cada parte abre o editor dela.
  */
 export default function ProfilePreview({
   user,
@@ -33,6 +40,7 @@ export default function ProfilePreview({
 }): React.JSX.Element {
   const theme = resolveProfileTheme(draft.profile_theme)
   const look = profileThemeLook(theme)
+  const name = draft.display_name.trim() || user.username
   return (
     <ProfileCardFrame
       look={look}
@@ -44,8 +52,9 @@ export default function ProfilePreview({
         isMe
         surface={look.surface}
         onEdit={onEdit}
+        // Sem id: o nome usa o estilo do rascunho, não o salvo (profileStore).
         profile={{
-          display_name: draft.display_name.trim() || user.username,
+          display_name: name,
           name_style: draft.name_style,
           username: user.username,
           avatar_url: avatarUrl,
@@ -59,7 +68,12 @@ export default function ProfilePreview({
         }}
         status={user.status ?? 'online'}
         fallbackBanner={DEFAULT_BANNER}
-      />
+        badge={<LevelBadge userId={user.id} size="md" />}
+        badges={<BadgeRow userId={user.id} name={name} avatarUrl={avatarUrl} />}
+      >
+        <CardMemberSince createdAt={user.created_at} />
+        <CardVisitorButtons />
+      </ProfileCardBody>
     </ProfileCardFrame>
   )
 }

@@ -67,10 +67,10 @@ describe('BadgesModal', () => {
       value: 1,
       tier: 1,
       tier_name: 'Fez o 22',
-      rarity: 'lendario',
+      rarity: 'epico',
       unlocked_at: '2026-10-27T12:00:00Z',
       tiers: [
-        { tier: 1, name: 'Fez o 22', threshold: 1, rarity: 'lendario', unlocked_at: '2026-10-27' }
+        { tier: 1, name: 'Fez o 22', threshold: 1, rarity: 'epico', unlocked_at: '2026-10-27' }
       ]
     }
 

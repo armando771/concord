@@ -7,9 +7,9 @@ const enquete: Enquete = {
   titulo: 'T',
   descricao: 'D',
   opcoes: [
-    { id: 'l', rotulo: 'Fez o L', badge: 'l' },
-    { id: '22', rotulo: 'Fez o 22', badge: 'v22' },
-    { id: 'nenhum', rotulo: 'Prefiro não dizer' }
+    { id: 'l', rotulo: 'L', badge: 'l' },
+    { id: '22', rotulo: '22', badge: 'v22' },
+    { id: 'nulo', rotulo: 'Nulo', badge: 'nulo' }
   ]
 }
 
@@ -37,22 +37,40 @@ describe('faseAtual', () => {
 })
 
 describe('reacaoDe', () => {
-  it('opção com badge celebra com o badge e o rótulo', () => {
+  it('opção com badge celebra com o badge e o nome dele, não o rótulo curto da opção', () => {
+    expect(reacaoDe(enquete.opcoes[0])).toEqual({
+      tipo: 'celebracao',
+      badge: 'l',
+      rotulo: 'Fez o L'
+    })
     expect(reacaoDe(enquete.opcoes[1])).toEqual({
       tipo: 'celebracao',
       badge: 'v22',
       rotulo: 'Fez o 22'
     })
+    expect(reacaoDe(enquete.opcoes[2])).toEqual({
+      tipo: 'celebracao',
+      badge: 'nulo',
+      rotulo: 'Votou Nulo'
+    })
+  })
+
+  it('badge desconhecido celebra com o rótulo da opção', () => {
+    expect(reacaoDe({ id: 'x', rotulo: 'Xis', badge: 'novo' })).toEqual({
+      tipo: 'celebracao',
+      badge: 'novo',
+      rotulo: 'Xis'
+    })
   })
 
   it('opção sem badge dá o aviso neutro', () => {
-    expect(reacaoDe(enquete.opcoes[2])).toEqual({ tipo: 'neutra' })
+    expect(reacaoDe({ id: 'pular', rotulo: 'Pular' })).toEqual({ tipo: 'neutra' })
   })
 })
 
 describe('achaOpcao', () => {
   it('acha pelo id e devolve undefined se não existir', () => {
-    expect(achaOpcao(enquete, '22')?.rotulo).toBe('Fez o 22')
+    expect(achaOpcao(enquete, '22')?.rotulo).toBe('22')
     expect(achaOpcao(enquete, 'zzz')).toBeUndefined()
     expect(achaOpcao(undefined, 'l')).toBeUndefined()
   })

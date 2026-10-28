@@ -45,4 +45,5 @@ O que fica mais fácil, o que fica mais difícil, o que precisa ser feito depois
 - [0005. Rodar o DSP do voice mod em Rust/WASM, com o .wasm commitado](0005-dsp-de-audio-em-wasm.md)
 - [0006. Detectar a música tocando pelas sessões de mídia do sistema, sem dependência nova](0006-musica-em-atividade.md)
 - [0007. Navegar no celular uma coluna por vez, com o painel decidido pela rota](0007-navegacao-mobile-uma-coluna.md)
-- [0008. Tratar o dono como nível interno, sem cargos padrão além do @everyone](0008-dono-nao-e-cargo.md)
+- [0008. Salvar o perfil no "Aplicar" de cada editor, sem rascunho nem barra de alterações](0008-perfil-salva-no-aplicar.md)
+- [0009. Tratar o dono como nível interno, sem cargos padrão além do @everyone](0009-dono-nao-e-cargo.md)
