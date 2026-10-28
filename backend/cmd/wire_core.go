@@ -23,6 +23,7 @@ func (a *app) wireCore() {
 	a.authRepository = auth.AuthRepository(a.db)
 	a.authService = auth.AuthService(a.authRepository)
 	a.authMiddleware = auth.AuthMiddleware(a.authService)
+	a.memberOrGuest = auth.MemberOrGuestMiddleware(a.authService)
 
 	a.userRepository = user.UserRepository(a.db)
 	a.userService = user.UserService(a.userRepository)

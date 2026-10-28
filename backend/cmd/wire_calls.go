@@ -49,7 +49,7 @@ func (a *app) wireCalls() {
 	must(restoreCalls(a.ctx, a.callService, 30*time.Second), "não foi possível recarregar as chamadas")
 
 	a.route(func(router *gin.Engine, api *gin.RouterGroup) {
-		call.CallRoutes(api, callHandler, a.authMiddleware)
+		call.CallRoutes(api, callHandler, a.authMiddleware, a.memberOrGuest)
 		// Sinalização do LiveKit (auth pelo token do LiveKit em ?access_token=)
 		router.Any("/rtc", rtcProxy)
 		router.Any("/rtc/*path", rtcProxy)
