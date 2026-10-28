@@ -16,8 +16,8 @@ jest.mock('react-native/Libraries/Components/Keyboard/KeyboardAvoidingView', () 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 48, bottom: 24, left: 0, right: 0 })
 }))
-jest.mock('../hooks/useChannelMessages', () => ({
-  useChannelMessages: () => ({
+jest.mock('../hooks/useRoomMessages', () => ({
+  useRoomMessages: () => ({
     messages: [],
     status: 'ready',
     hasMore: false,

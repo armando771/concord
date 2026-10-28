@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native'
 import { useNetworkStore } from '../../../shared/store/networkStore'
-import type { SendOutcome } from '../hooks/useChannelMessages'
+import type { SendOutcome } from '../hooks/useRoomMessages'
 import { Composer } from './Composer'
 
 const type = (text: string) => fireEvent.changeText(screen.getByLabelText('Mensagem para #geral'), text)

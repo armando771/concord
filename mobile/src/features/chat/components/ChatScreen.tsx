@@ -1,7 +1,7 @@
 import { KeyboardAvoidingView, Platform, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../../../shared/theme/tokens'
-import { useChannelMessages } from '../hooks/useChannelMessages'
+import { useRoomMessages } from '../hooks/useRoomMessages'
 import { ChannelHeader } from './ChannelHeader'
 import { Composer } from './Composer'
 import { MessageList } from './MessageList'
@@ -14,7 +14,7 @@ interface ChatScreenProps {
 
 /** Chat de um canal de texto em tela cheia: cabeçalho, histórico e campo de envio. */
 export function ChatScreen({ channelId, channelName, onBack }: ChatScreenProps) {
-  const { messages, status, hasMore, loadMore, send, retry } = useChannelMessages(channelId)
+  const { messages, status, hasMore, loadMore, send, retry } = useRoomMessages({ kind: 'channel', id: channelId })
   // O layout do app tem paddingTop (área segura): o KeyboardAvoidingView mede a posição relativa ao pai
   // e não a conta, então sem este deslocamento o campo de envio ficava atrás do teclado.
   const { top } = useSafeAreaInsets()

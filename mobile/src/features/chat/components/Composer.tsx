@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useNetworkStore } from '../../../shared/store/networkStore'
 import { colors, fontSize, MIN_TOUCH, radius, spacing } from '../../../shared/theme/tokens'
-import type { SendOutcome } from '../hooks/useChannelMessages'
+import type { SendOutcome } from '../hooks/useRoomMessages'
 
 interface ComposerProps {
   channelName: string

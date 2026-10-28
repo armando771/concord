@@ -20,8 +20,15 @@ function applyEvent(current: Message[], event: WsEvent, channelId: string): Mess
   return null
 }
 
+/** O que o chat mostra: um canal de texto ou uma conversa (DM). */
+export interface ChatTarget {
+  kind: 'channel'
+  id: string
+}
+
 /** Histórico, tempo real e envio do chat de um canal de texto. */
-export function useChannelMessages(channelId: string) {
+export function useRoomMessages(target: ChatTarget) {
+  const channelId = target.id
   const [messages, setMessages] = useState<Message[]>([])
   const [status, setStatus] = useState<LoadStatus>('loading')
   const [hasMore, setHasMore] = useState(true)
