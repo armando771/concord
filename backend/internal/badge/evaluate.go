@@ -29,7 +29,7 @@ type Stats struct {
 	LongestSessionSeconds int64
 	// Servidores da pessoa com donoMinMembers membros além dela (Dono).
 	OwnedServers int64
-	// Amizades aceitas.
+	// Amizades aceitas com conta real (amigoContaRealDias).
 	Friends int64
 	// Cards do quadro de propostas criados pela pessoa que ainda existem.
 	Proposals int64

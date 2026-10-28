@@ -27,6 +27,7 @@
 - Badges: novo badge exclusivo Primeira mensagem, de quem mandou a primeira mensagem de um servidor (Quebra-gelo, Desbravador e Big Bang, em 1, 3 e 10 servidores). Nos servidores que já existem, vale a mensagem mais antiga que ainda está lá.
 
 ## Correções
+- Badges: o Amigos agora conta só amizades com contas de e-mail confirmado e criadas há pelo menos 7 dias. Amigo com conta nova passa a contar quando completar os 7 dias, e quem subiu o badge com contas novas volta para o tier que os amigos de verdade dão.
 - Badges: o Dono de servidor agora conta só servidores com pelo menos 3 membros além de você (bots não contam). Quem subiu o badge com servidores vazios volta para o tier que os servidores com gente dão.
 - Badges: o DJ agora conta só a música que toca por pelo menos 30 segundos com mais alguém ouvindo na call, e não cada música posta na fila. Quem subiu o badge com playlists volta para o tier que os pedidos antigos dão.
 - Badges: o badge Reações agora conta uma vez por mensagem. Vários emojis seus na mesma mensagem valem 1, e quem já tinha subido o badge assim volta para o tier que as mensagens dão.

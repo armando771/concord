@@ -49,6 +49,10 @@ func TestRepositoryCountsAcceptedFriends(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	me, ana, bia, caio := newTestUser(t, db), newTestUser(t, db), newTestUser(t, db), newTestUser(t, db)
+	// Os amigos são contas reais (amigos_test.go testa as que não são).
+	if _, err := db.Exec(ctx, `UPDATE users SET email_verified_at = NOW() - INTERVAL '30 days', created_at = NOW() - INTERVAL '30 days' WHERE id = ANY($1)`, []string{ana, bia, caio}); err != nil {
+		t.Fatal(err)
+	}
 	// Amizade conta dos dois lados do pedido; pedido pendente não conta.
 	for _, f := range [][3]string{{me, ana, "accepted"}, {bia, me, "accepted"}, {me, caio, "pending"}} {
 		if _, err := db.Exec(ctx, `INSERT INTO friendships (requester_id, addressee_id, status) VALUES ($1, $2, $3)`, f[0], f[1], f[2]); err != nil {
