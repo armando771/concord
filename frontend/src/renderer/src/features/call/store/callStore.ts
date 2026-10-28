@@ -71,6 +71,7 @@ import {
   type CallConnectionEvent
 } from '../lib/callConnection'
 import { type CallQuality, type QualityDetails } from '../lib/connectionQuality'
+import { createMicPermission } from '../lib/micPermission'
 import { createQualityPoller } from '../lib/qualityPoller'
 
 import type { CallResume } from '../../../../../shared/callResume'
@@ -747,17 +748,7 @@ export const useCallStore = create<CallState>()((set, get) => {
       },
       onPublishPermissions: (allowed) => {
         if (!live()) return
-        set({ canSpeak: allowed.microphone, canStream: allowed.stream })
-        if (allowed.microphone) {
-          // Ganhou a fala (cargo novo, moderador liberou): publica o microfone.
-          void media?.ensureMic(get().muted).catch(() => {})
-        } else if (!get().muted) {
-          // Perdeu a fala: o microfone fecha no servidor, então mostra como mudo.
-          set({ muted: true })
-          applyMute(true)
-          publishSpeaking()
-          sendVoiceState()
-        }
+        micPermission.sync(allowed)
       }
     }
   }
@@ -1062,6 +1053,7 @@ export const useCallStore = create<CallState>()((set, get) => {
     stopQualityStats()
     stopLocalSpeaking()
     serverSpeakers = []
+    micPermission.reset()
     stopLocalStream()
     localScreenStream?.getTracks().forEach((t) => t.stop())
     localScreenStream = null
@@ -1148,6 +1140,20 @@ export const useCallStore = create<CallState>()((set, get) => {
     if (!callId || status !== 'active') return
     useChatStore.getState().sendEvent('call:voice', { call_id: callId, muted, deafened })
   }
+
+  const micPermission = createMicPermission({
+    muted: () => get().muted,
+    deafened: () => get().deafened,
+    patch: (partial) => set(partial),
+    commitMute: (muted) => {
+      applyMute(muted)
+      publishSpeaking()
+      sendVoiceState()
+    },
+    ensureMic: (muted) => {
+      void media?.ensureMic(muted).catch(() => {})
+    }
+  })
 
   return {
     status: 'idle',
