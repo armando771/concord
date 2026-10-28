@@ -17,34 +17,42 @@ func RoleHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
+// errorCodes: status e código de cada erro do domínio, na ordem em que são
+// conferidos (errors.Is).
+var errorCodes = []struct {
+	err    error
+	status int
+	code   string
+}{
+	{ErrRoleNotFound, http.StatusNotFound, "role_not_found"},
+	{ErrMemberNotFound, http.StatusNotFound, "member_not_found"},
+	{ErrRoleHierarchy, http.StatusForbidden, "role_hierarchy"},
+	{ErrCannotGrant, http.StatusForbidden, "cannot_grant"},
+	{ErrEveryoneRole, http.StatusBadRequest, "everyone_role"},
+	{ErrBotRole, http.StatusForbidden, "bot_role"},
+	{ErrTooManyRoles, http.StatusBadRequest, "too_many_roles"},
+	{ErrInvalidName, http.StatusBadRequest, "invalid"},
+	{ErrInvalidColor, http.StatusBadRequest, "invalid"},
+	{ErrInvalidOrder, http.StatusBadRequest, "invalid"},
+	{ErrNoModeratorRole, http.StatusNotFound, "role_not_found"},
+}
+
+// errorStatus: status e código HTTP de um erro do domínio (500 se não é um deles).
+func errorStatus(err error) (int, string) {
+	for _, e := range errorCodes {
+		if errors.Is(err, e.err) {
+			return e.status, e.code
+		}
+	}
+	return http.StatusInternalServerError, "internal"
+}
+
 func respondError(c *gin.Context, err error) {
 	if status, code, ok := permission.HTTPError(err); ok {
 		c.JSON(status, gin.H{"error": err.Error(), "code": code})
 		return
 	}
-	status, code := http.StatusBadRequest, "invalid"
-	switch {
-	case errors.Is(err, ErrRoleNotFound):
-		status, code = http.StatusNotFound, "role_not_found"
-	case errors.Is(err, ErrMemberNotFound):
-		status, code = http.StatusNotFound, "member_not_found"
-	case errors.Is(err, ErrRoleHierarchy):
-		status, code = http.StatusForbidden, "role_hierarchy"
-	case errors.Is(err, ErrCannotGrant):
-		status, code = http.StatusForbidden, "cannot_grant"
-	case errors.Is(err, ErrEveryoneRole):
-		code = "everyone_role"
-	case errors.Is(err, ErrBotRole):
-		status, code = http.StatusForbidden, "bot_role"
-	case errors.Is(err, ErrTooManyRoles):
-		code = "too_many_roles"
-	case errors.Is(err, ErrInvalidName), errors.Is(err, ErrInvalidColor), errors.Is(err, ErrInvalidOrder):
-		code = "invalid"
-	case errors.Is(err, ErrNoModeratorRole):
-		status, code = http.StatusNotFound, "role_not_found"
-	default:
-		status, code = http.StatusInternalServerError, "internal"
-	}
+	status, code := errorStatus(err)
 	msg := err.Error()
 	if status == http.StatusInternalServerError {
 		msg = "internal error"

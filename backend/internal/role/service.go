@@ -299,21 +299,8 @@ func (s *Service) SetMemberRole(ctx context.Context, serverID, actorID, targetID
 	if err != nil {
 		return nil, err
 	}
-	if !snap.IsMember(targetID) {
-		return nil, ErrMemberNotFound
-	}
-	current, ok := snap.Roles[roleID]
-	if !ok {
-		return nil, ErrRoleNotFound
-	}
-	if current.IsDefault {
-		return nil, ErrEveryoneRole
-	}
-	if current.IsSystem {
-		return nil, ErrBotRole
-	}
-	if !snap.CanManageRole(actorID, current) {
-		return nil, ErrRoleHierarchy
+	if err := checkMemberRole(snap, actorID, targetID, roleID); err != nil {
+		return nil, err
 	}
 
 	if add {
@@ -333,6 +320,28 @@ func (s *Service) SetMemberRole(ctx context.Context, serverID, actorID, targetID
 		s.publisher.PublishPermissionsChanged(serverID)
 	}
 	return ids, nil
+}
+
+// checkMemberRole: o alvo é membro e o cargo existe, não é fixo (@everyone ou
+// Bots) e está abaixo do cargo mais alto do ator.
+func checkMemberRole(snap *permission.Snapshot, actorID, targetID, roleID string) error {
+	if !snap.IsMember(targetID) {
+		return ErrMemberNotFound
+	}
+	current, ok := snap.Roles[roleID]
+	if !ok {
+		return ErrRoleNotFound
+	}
+	if current.IsDefault {
+		return ErrEveryoneRole
+	}
+	if current.IsSystem {
+		return ErrBotRole
+	}
+	if !snap.CanManageRole(actorID, current) {
+		return ErrRoleHierarchy
+	}
+	return nil
 }
 
 // SetModerator é o atalho do app antigo ("Tornar moderador"): põe ou tira o
