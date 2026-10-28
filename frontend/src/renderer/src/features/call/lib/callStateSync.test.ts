@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CallStateResponse } from '../api/calls'
-import { syncCallState, type LocalCallState } from './callStateSync'
+import { staleOwnLive, syncCallState, type LocalCallState } from './callStateSync'
 
 const user = (
   id: string
@@ -18,6 +18,7 @@ const local = (over: Partial<LocalCallState> = {}): LocalCallState => ({
   joinRequests: [],
   voiceStates: {},
   screenWatchers: {},
+  isScreenSharing: false,
   ...over
 })
 
@@ -98,5 +99,23 @@ describe('syncCallState', () => {
       screenSharers: [],
       screenWatchers: watchers
     })
+  })
+
+  it('a live que o servidor guardou de outra sessão sai da lista (#367)', () => {
+    const ghost = server({ screen_sharing: ['eu', 'ana'] })
+    expect(syncCallState(ghost, 'eu', local(), false).screenSharers).toEqual(['ana'])
+    expect(staleOwnLive(ghost, 'eu', false)).toBe(true)
+  })
+
+  it('transmitindo, continuo na lista mesmo que o servidor ainda não saiba', () => {
+    const synced = syncCallState(
+      server({ screen_sharing: ['ana'] }),
+      'eu',
+      local({ isScreenSharing: true }),
+      true
+    )
+    expect(synced.screenSharers).toEqual(['ana', 'eu'])
+    expect(staleOwnLive(server({ screen_sharing: ['eu'] }), 'eu', true)).toBe(false)
+    expect(staleOwnLive(server(), 'eu', false)).toBe(false)
   })
 })

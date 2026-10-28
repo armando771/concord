@@ -1145,6 +1145,42 @@ describe('callStore — reentrada após queda do WS', () => {
     expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'call-1', active: true })
   })
 
+  it('voltar à call depois de atualizar o app transmitindo não deixa a live fantasma (#367)', async () => {
+    // O processo antigo fechou transmitindo e o novo reconectou dentro da
+    // tolerância: o servidor ainda me lista como transmitindo.
+    api.getCallState.mockResolvedValueOnce({
+      call: null,
+      participants: [],
+      screen_sharing: ['eu', 'ana']
+    } as never)
+    await useCallStore.getState().startChannelCall('canal-1', {
+      userId: 'eu',
+      backendUrl: 'api',
+      serverId: 's',
+      channelId: 'canal-1',
+      muted: false,
+      deafened: false,
+      mutedBeforeDeafen: false
+    })
+    await flush()
+
+    expect(useCallStore.getState().isScreenSharing).toBe(false)
+    expect(useCallStore.getState().screenSharers).toEqual(['ana'])
+    expect(chat.sendEvent).toHaveBeenCalledWith('call:screen', { call_id: 'call-1', active: false })
+  })
+
+  it('entrar na call sem live no servidor não anuncia nada sobre a tela', async () => {
+    api.getCallState.mockResolvedValueOnce({
+      call: null,
+      participants: [],
+      screen_sharing: ['ana']
+    } as never)
+    await joinChannel()
+
+    expect(useCallStore.getState().screenSharers).toEqual(['ana'])
+    expect(chat.sendEvent).not.toHaveBeenCalledWith('call:screen', expect.anything())
+  })
+
   it('reconectar o WS (deploy) não toca som nem reconecta a mídia', async () => {
     await joinChannel()
     sounds.playSound.mockClear()

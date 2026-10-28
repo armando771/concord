@@ -47,7 +47,7 @@ import { callNotification, knockNotification, notifyDesktop } from '../../notifi
 import { playSound, setSoundOutput } from '../lib/sounds'
 import { playOwnJoinSound } from '../lib/entranceSoundOwn'
 import { channelJoinState } from '../lib/channelJoinState'
-import { syncCallState } from '../lib/callStateSync'
+import { staleOwnLive, syncCallState } from '../lib/callStateSync'
 import {
   abortWindowAudio,
   resetWindowAudio,
@@ -882,6 +882,8 @@ export const useCallStore = create<CallState>()((set, get) => {
       if (get().callId !== callId) return 'error'
       useActivityStore.getState().hydrate(callId, state.activity ?? null)
       set((s) => syncCallState(state, meId, s, replace))
+      // Live que ficou no servidor sem tela local: tira do ar para todos.
+      if (staleOwnLive(state, meId, get().isScreenSharing)) sendScreenState(callId)
       return 'ok'
     } catch (err) {
       // estado indisponível: a lista se forma pelos eventos call:joined

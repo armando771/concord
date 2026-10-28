@@ -9,6 +9,8 @@ export interface LocalCallState {
   joinRequests: CallUserInfo[]
   voiceStates: Record<string, VoiceState>
   screenWatchers: Record<string, CallUserInfo[]>
+  /** Eu transmito agora (há tela local publicada). */
+  isScreenSharing: boolean
 }
 
 /** O pedaço do store que a leitura do estado da chamada atualiza. */
@@ -51,6 +53,21 @@ const serverVoiceStates = (state: CallStateResponse): Record<string, VoiceState>
   )
 
 /**
+ * O servidor me lista transmitindo, mas não tenho tela local: sobrou de uma
+ * sessão anterior (ex.: o app atualizou com a live aberta e voltou sozinho à
+ * call dentro da tolerância de queda). Quem decide se estou no ar sou eu.
+ */
+export function staleOwnLive(state: CallStateResponse, meId: string, sharing: boolean): boolean {
+  return !sharing && (state.screen_sharing ?? []).includes(meId)
+}
+
+/** Quem transmite segundo o servidor, comigo conforme a tela local. */
+function screenSharers(state: CallStateResponse, meId: string, sharing: boolean): string[] {
+  const others = (state.screen_sharing ?? []).filter((id) => id !== meId)
+  return sharing ? [...others, meId] : others
+}
+
+/**
  * Junta o estado da chamada no servidor ao local. `replace` (ao reentrar ou
  * reconectar) faz o servidor valer; senão só soma quem faltava. Na DM a lista
  * de participantes nunca encolhe: o outro lado é a própria chamada.
@@ -71,7 +88,7 @@ export function syncCallState(
   return {
     locked: state.call?.locked ?? local.locked,
     joinRequests: replace ? joinRequests : addMissing(local.joinRequests, joinRequests),
-    screenSharers: state.screen_sharing ?? [],
+    screenSharers: screenSharers(state, meId, local.isScreenSharing),
     screenWatchers: state.screen_watchers ?? local.screenWatchers,
     voiceStates: {
       ...serverVoiceStates(state),
