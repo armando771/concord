@@ -2,7 +2,7 @@ import type { TTSSpeaker } from './ttsQueue'
 
 // Motor das falas /tts: a Web Speech API (speechSynthesis) do próprio
 // Chromium/Electron, com as vozes do sistema (docs/adr/0012-tts-no-cliente.md).
-// Trocar de motor é trocar só este arquivo.
+// No app desktop do Linux fala o piperEngine.ts (docs/adr/0014-voz-piper-no-linux.md).
 
 interface VoiceLike {
   lang: string

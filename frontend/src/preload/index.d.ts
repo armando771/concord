@@ -6,6 +6,7 @@ import type { AppMetrics } from '../shared/appMetrics'
 import type { PerfEvent } from '../shared/perfLog'
 import type { PortalStatus, ScreenShareFlow } from '../shared/screenShareFlow'
 import type { ServerDiagnostics } from '../shared/serverConnection'
+import type { TTSVoiceState } from '../shared/ttsVoice'
 
 export interface ScreenSourceInfo {
   id: string
@@ -182,6 +183,16 @@ export interface OverlayApi {
   onLayout(cb: (layout: OverlayLayout) => void): () => void
 }
 
+/** Voz do /tts baixada no primeiro uso (Linux). */
+export interface TTSApi {
+  voiceState(): Promise<TTSVoiceState>
+  /** Baixa a voz se ainda não está pronta (ligou o interruptor, "Tentar de novo"). */
+  prepare(): void
+  /** WAV da fala, ou null (voz não pronta: a primeira chamada começa o download). */
+  speak(text: string): Promise<Uint8Array | null>
+  onVoiceState(cb: (state: TTSVoiceState) => void): () => void
+}
+
 declare global {
   interface Window {
     electron: ElectronAPI
@@ -203,6 +214,8 @@ declare global {
       keybinds?: KeybindsApi
       windowTheme?: WindowThemeApi
       server?: ServerApi
+      /** Só no app desktop do Linux (docs/adr/0014-voz-piper-no-linux.md). */
+      tts?: TTSApi
     }
   }
 }

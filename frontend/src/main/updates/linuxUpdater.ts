@@ -7,7 +7,7 @@
 // Fala a mesma "língua" do autoUpdater do electron-updater (eventos
 // update-available / download-progress / update-downloaded / error e
 // quitAndInstall) para o updater.ts tratar os dois do mesmo jeito.
-import { spawn, spawnSync } from 'child_process'
+import { spawnSync } from 'child_process'
 import { createHash } from 'crypto'
 import { EventEmitter } from 'events'
 import {
@@ -30,7 +30,6 @@ import { readFile, rename, rm } from 'fs/promises'
 import { basename, join } from 'path'
 import { Readable, Transform } from 'stream'
 import { pipeline } from 'stream/promises'
-import { createGunzip } from 'zlib'
 import {
   BAD_VERSIONS_FILE,
   LINUX_EXECUTABLE,
@@ -50,6 +49,7 @@ import {
   versionsToPrune,
   type LinuxRelease
 } from './linuxInstall'
+import { extractTarGz } from '../app/tarGz'
 
 export interface LinuxUpdaterOptions {
   /** ex.: http://abc.ply.gg:1234/updates/ */
@@ -102,26 +102,6 @@ function defaultIntegrate(launcher: string): void {
   if (result.status !== 0) {
     throw new Error(`integração falhou (${result.error?.message ?? `código ${result.status}`})`)
   }
-}
-
-/** Extrai o .tar.gz (gunzip aqui; o tar do sistema só desempacota). */
-async function extractTarGz(source: Readable, dest: string): Promise<void> {
-  const tar = spawn('tar', ['-x', '--no-same-owner', '-f', '-', '-C', dest], {
-    stdio: ['pipe', 'ignore', 'pipe']
-  })
-  let stderr = ''
-  tar.stderr.on('data', (chunk) => (stderr += chunk))
-  const exited = new Promise<void>((resolve, reject) => {
-    tar.on('error', reject)
-    tar.on('close', (code) =>
-      code === 0 ? resolve() : reject(new Error(`tar saiu com ${code}: ${stderr.trim()}`))
-    )
-  })
-  // Erro no gunzip derruba o pipe; espera o tar sair para não deixar processo.
-  const piped = pipeline(source, createGunzip(), tar.stdin)
-  const results = await Promise.allSettled([piped, exited])
-  const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
-  if (failed) throw failed.reason
 }
 
 export class LinuxUpdater extends EventEmitter {

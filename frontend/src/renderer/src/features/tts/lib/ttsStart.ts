@@ -8,7 +8,9 @@ import { useTTSSettingsStore } from '../store/ttsSettingsStore'
 import { createWebSpeechSpeaker } from './ttsEngine'
 import { createTTSListener, type TTSListenerContext } from './ttsListener'
 import { createTTSQueue } from './ttsQueue'
+import { chooseTTSSpeaker } from './ttsSpeaker'
 import { ttsNames } from './ttsNames'
+import { playWav } from './wavPlayer'
 import type { SpokenNames } from './ttsText'
 
 function liveContext(): TTSListenerContext {
@@ -43,10 +45,15 @@ function liveNames(msg: Message, serverId: string | null): SpokenNames {
  * Chamado uma vez na entrada do app; devolve o "desligar".
  */
 export function startTTS(): () => void {
-  const speaker = createWebSpeechSpeaker({
-    synth: globalThis.speechSynthesis,
-    Utterance: globalThis.SpeechSynthesisUtterance,
-    volume: () => useVoiceAudioStore.getState().outputVolume
+  const speaker = chooseTTSSpeaker({
+    local: window.api?.tts,
+    webSpeech: () =>
+      createWebSpeechSpeaker({
+        synth: globalThis.speechSynthesis,
+        Utterance: globalThis.SpeechSynthesisUtterance,
+        volume: () => useVoiceAudioStore.getState().outputVolume
+      }),
+    play: playWav
   })
   if (!speaker) return () => {}
   const listener = createTTSListener({
