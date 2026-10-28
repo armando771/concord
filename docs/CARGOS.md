@@ -40,7 +40,8 @@ Padrões de um servidor novo: **@everyone** (ver, escrever, anexar, reagir, hist
 
 A posição do cargo define quem manda em quem (maior = mais alto).
 
-- Só se edita, dá ou tira um cargo que esteja **abaixo do seu cargo mais alto** (o dono, qualquer um).
+- Só se edita, dá ou tira um cargo que esteja **abaixo do seu cargo mais alto** (o dono, qualquer um). Vale também para os próprios cargos: o dono dá e tira de si mesmo qualquer cargo (no menu *Cargos ›* do próprio nome e na aba Membros).
+- Os cargos **do dono** só ele mesmo mexe (nem quem tem Administrador).
 - Expulsar, banir, silenciar, ensurdecer, desconectar e mover só vale sobre quem tem o cargo mais alto **menor** que o seu. Mesma posição não vale.
 - Ninguém dá ou tira uma permissão que **não tem** (Administrador pode tudo).
 
@@ -60,7 +61,7 @@ A posição do cargo define quem manda em quem (maior = mais alto).
 | Rota | Permissão |
 |---|---|
 | `GET/POST /servers/:id/roles`, `PATCH/DELETE …/roles/:roleId`, `PUT …/roles/order` | membro / Gerenciar cargos |
-| `PUT/DELETE /servers/:id/members/:userId/roles/:roleId` | Gerenciar cargos (cargo abaixo do seu) |
+| `PUT/DELETE /servers/:id/members/:userId/roles/:roleId` | Gerenciar cargos (cargo abaixo do seu; nos cargos do dono, só o dono) |
 | `PUT /servers/:id/members/:userId/role` | compatibilidade com apps antigos: põe/tira o cargo Moderador |
 | `PUT/DELETE /servers/:id/channels/:channelId/overwrites/:role\|member/:targetId` | Gerenciar cargos no canal |
 | `POST /servers/:id/channels` com `private` e `role_ids` | Gerenciar canais |
@@ -68,7 +69,7 @@ A posição do cargo define quem manda em quem (maior = mais alto).
 | `GET/POST /servers/:id/bans`, `DELETE …/bans/:userId` | Banir |
 | `POST /calls/:id/participants/:userId/server-mute`, `…/server-deafen`, `DELETE …/participants/:userId` | Silenciar / Ensurdecer / Mover |
 
-Erros de permissão vêm com `code` (`missing_permission`, `role_hierarchy`, `cannot_grant`, `banned`, `not_member`…) e o app os traduz.
+Erros de permissão vêm com `code` (`missing_permission`, `role_hierarchy`, `owner_roles`, `cannot_grant`, `banned`, `not_member`…) e o app os traduz.
 
 ## Eventos em tempo real
 

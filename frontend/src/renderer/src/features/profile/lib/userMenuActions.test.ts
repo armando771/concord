@@ -55,6 +55,7 @@ import {
   canChangeServerNickname,
   resolveTargetUsername,
   computeGivableRoles,
+  computeSelfGivableRoles,
   computeServerModerationPerms
 } from './userMenuActions'
 import router from '../../../app/router'
@@ -204,6 +205,14 @@ describe('userMenuActions', () => {
     const roles: Role[] = [{ id: 'r1', server_id: 's1', name: 'Mod', position: 1, permissions: 0, color: null, hoist: false, is_default: false }]
     expect(computeGivableRoles(false, roles, { isOwner: true, highest: 10, can: () => true })).toEqual([])
     expect(computeGivableRoles(true, roles, { isOwner: true, highest: 10, can: () => true })).toHaveLength(1)
+  })
+
+  // Regressão da issue #331: o dono dá cargos a si mesmo pelo menu.
+  it('computeSelfGivableRoles: só o dono tem "Cargos" no menu de si mesmo', () => {
+    const roles: Role[] = [{ id: 'r1', server_id: 's1', name: 'Mod', position: 1, permissions: 0, color: null, hoist: false, is_default: false }]
+    expect(computeSelfGivableRoles(true, roles, { isOwner: true, highest: 0, can: () => true })).toHaveLength(1)
+    expect(computeSelfGivableRoles(true, roles, { isOwner: false, highest: 10, can: () => true })).toEqual([])
+    expect(computeSelfGivableRoles(false, roles, { isOwner: true, highest: 0, can: () => true })).toEqual([])
   })
 
   it('computeServerModerationPerms computes flags correctly', () => {

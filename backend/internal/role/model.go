@@ -26,6 +26,7 @@ var (
 	ErrInvalidColor    = errors.New("cor inválida")
 	ErrInvalidOrder    = errors.New("a ordem precisa ter exatamente os cargos do servidor")
 	ErrMemberNotFound  = errors.New("membro não encontrado")
+	ErrOwnerRoles      = errors.New("só o dono do servidor mexe nos cargos dele")
 	ErrNoModeratorRole = errors.New("o servidor não tem mais o cargo Moderador")
 )
 

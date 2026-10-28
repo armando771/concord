@@ -234,6 +234,12 @@
     {"name": "@everyone com qualquer cargo", "is_owner": false, "actor_highest": 1, "role_position": 0, "expect": true},
     {"name": "só @everyone não gerencia nem o @everyone", "is_owner": false, "actor_highest": 0, "role_position": 0, "expect": false}
   ],
+  "can_edit_roles_of": [
+    {"name": "o dono mexe nos próprios cargos", "owner_id": "dono", "actor": "dono", "target": "dono", "expect": true},
+    {"name": "o dono mexe nos cargos dos outros", "owner_id": "dono", "actor": "dono", "target": "ana", "expect": true},
+    {"name": "ninguém mais mexe nos cargos do dono", "owner_id": "dono", "actor": "admin", "target": "dono", "expect": false},
+    {"name": "fora o dono, vale para qualquer membro (até o próprio)", "owner_id": "dono", "actor": "mod", "target": "mod", "expect": true}
+  ],
   "can_grant": [
     {"name": "dá o que tem", "actor": ["VIEW_CHANNEL", "SEND_MESSAGES", "MANAGE_ROLES"], "changed": ["SEND_MESSAGES"], "expect": true},
     {"name": "não dá o que não tem", "actor": ["VIEW_CHANNEL", "MANAGE_ROLES"], "changed": ["SEND_MESSAGES", "VIEW_CHANNEL"], "expect": false},

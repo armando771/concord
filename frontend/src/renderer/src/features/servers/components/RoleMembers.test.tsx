@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({
-  members: [] as { user_id: string; display_name: string; role_ids?: string[] }[]
+  members: [] as { user_id: string; display_name: string; role_ids?: string[] }[],
+  meId: 'dono'
 }))
 vi.mock('../store/serverStore', () => ({
   useServerStore: (select: (s: unknown) => unknown) =>
@@ -10,6 +11,11 @@ vi.mock('../store/serverStore', () => ({
       addMemberRole: vi.fn(),
       removeMemberRole: vi.fn()
     })
+}))
+vi.mock('../hooks/useServerAccess', () => ({
+  useServerAccess: () => ({
+    canEditRolesOf: (id: string) => id !== 'dono' || state.meId === 'dono'
+  })
 }))
 vi.mock('../../../shared/ui/Avatar', () => ({ default: () => <i /> }))
 
@@ -65,5 +71,13 @@ describe('RoleMembers', () => {
     const html = render({ role: { ...role, is_system: true } as Role })
     expect(html).not.toContain('Adicionar membros')
     expect(html).not.toContain('Remover')
+  })
+
+  it('os cargos do dono só o dono mexe', () => {
+    state.members = [{ user_id: 'dono', display_name: 'Dona', role_ids: ['r1'] }]
+    state.meId = 'mod'
+    expect(render()).not.toContain('Remover')
+    state.meId = 'dono'
+    expect(render()).toContain('Remover')
   })
 })

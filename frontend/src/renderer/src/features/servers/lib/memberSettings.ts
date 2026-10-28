@@ -6,34 +6,32 @@ export interface MemberRowAccess {
   nickname: boolean
   kick: boolean
   ban: boolean
-  /** O "+" para dar cargo (cada cargo ainda precisa estar em `assignable`). */
-  giveRoles: boolean
-  /** O × nos cargos que a pessoa já tem (idem). */
-  removeRoles: boolean
+  /**
+   * O "+" e o × dos cargos (cada cargo ainda precisa estar em `assignable`).
+   * Os cargos do dono só ele mesmo mexe.
+   */
+  editRoles: boolean
 }
 
-type RowAccessSource = Pick<ServerAccess, 'can' | 'canActOnMember' | 'canChangeNickname'>
+type RowAccessSource = Pick<
+  ServerAccess,
+  'can' | 'canActOnMember' | 'canChangeNickname' | 'canEditRolesOf'
+>
 
 /** Expulsar e banir seguem a hierarquia; dar/tirar cargo pede Gerenciar cargos. */
-export function memberRowAccess(
-  access: RowAccessSource,
-  userId: string,
-  ctx: { ownerId: string }
-): MemberRowAccess {
+export function memberRowAccess(access: RowAccessSource, userId: string): MemberRowAccess {
   const canAct = access.canActOnMember(userId)
-  const manageRoles = access.can(Perm.MANAGE_ROLES)
   return {
     nickname: access.canChangeNickname(userId),
     kick: canAct && access.can(Perm.KICK_MEMBERS),
     ban: canAct && access.can(Perm.BAN_MEMBERS),
-    giveRoles: manageRoles && userId !== ctx.ownerId,
-    removeRoles: manageRoles
+    editRoles: access.can(Perm.MANAGE_ROLES) && access.canEditRolesOf(userId)
   }
 }
 
-/** O × só aparece se a pessoa pode tirar cargos e este cargo é atribuível por ela. */
-export function canRemoveRole(removeRoles: boolean, assignable: Role[], roleId: string): boolean {
-  return removeRoles && assignable.some((r) => r.id === roleId)
+/** O × só aparece se a pessoa pode mexer nos cargos e este cargo é atribuível por ela. */
+export function canRemoveRole(editRoles: boolean, assignable: Role[], roleId: string): boolean {
+  return editRoles && assignable.some((r) => r.id === roleId)
 }
 
 /** Apelido atual e o nome que aparece sem apelido, para o modal de apelido. */

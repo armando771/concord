@@ -27,6 +27,7 @@ var errorCodes = []struct {
 	{ErrRoleNotFound, http.StatusNotFound, "role_not_found"},
 	{ErrMemberNotFound, http.StatusNotFound, "member_not_found"},
 	{ErrRoleHierarchy, http.StatusForbidden, "role_hierarchy"},
+	{ErrOwnerRoles, http.StatusForbidden, "owner_roles"},
 	{ErrCannotGrant, http.StatusForbidden, "cannot_grant"},
 	{ErrEveryoneRole, http.StatusBadRequest, "everyone_role"},
 	{ErrBotRole, http.StatusForbidden, "bot_role"},

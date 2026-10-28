@@ -413,6 +413,40 @@ func TestSetMemberRole(t *testing.T) {
 	}
 }
 
+// Regressão da issue #331: o dono dá e tira de si mesmo qualquer cargo, até o
+// mais alto, mesmo sem cargo nenhum (a hierarquia não vale para ele).
+func TestOwnerSetsOwnRoles(t *testing.T) {
+	svc, f, _ := setup()
+	ids, err := svc.SetMemberRole(ctx, "s1", "dono", "dono", "admin", true)
+	if err != nil || !reflect.DeepEqual(ids, []string{"admin"}) {
+		t.Fatalf("dar a si mesmo: ids = %v, err = %v", ids, err)
+	}
+	if f.snap.Highest("dono") != 3 {
+		t.Fatal("o dono devia ter o cargo mais alto")
+	}
+	if ids, err := svc.SetMemberRole(ctx, "s1", "dono", "dono", "admin", false); err != nil || len(ids) != 0 {
+		t.Fatalf("tirar de si mesmo: ids = %v, err = %v", ids, err)
+	}
+}
+
+// Os cargos do dono só o próprio dono mexe (nem quem tem Administrador).
+func TestOnlyOwnerSetsOwnerRoles(t *testing.T) {
+	svc, f, _ := setup()
+	f.snap.MemberRoles["dono"] = []string{"vip"}
+	for _, actor := range []string{"chefe", "gerente"} {
+		if _, err := svc.SetMemberRole(ctx, "s1", actor, "dono", "vip", false); !errors.Is(err, ErrOwnerRoles) {
+			t.Fatalf("%s tirando cargo do dono: err = %v, want ErrOwnerRoles", actor, err)
+		}
+	}
+	if _, err := svc.SetMemberRole(ctx, "s1", "gerente", "dono", "vip", true); !errors.Is(err, ErrOwnerRoles) {
+		t.Fatalf("dando cargo ao dono: err = %v, want ErrOwnerRoles", err)
+	}
+	// Fora o dono, a pessoa mexe nos próprios cargos como nos dos outros.
+	if _, err := svc.SetMemberRole(ctx, "s1", "gerente", "gerente", "vip", true); err != nil {
+		t.Fatalf("gerente se dando vip: %v", err)
+	}
+}
+
 func TestSetModeratorLegacy(t *testing.T) {
 	svc, f, _ := setup()
 	f.snap.Roles["mod"] = Role{ID: "mod", ServerID: "s1", Name: permission.ModeratorName, Position: 1, Permissions: permission.DefaultModerator}

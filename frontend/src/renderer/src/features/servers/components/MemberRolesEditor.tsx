@@ -12,8 +12,8 @@ interface Props {
   memberRoleIds?: string[]
   /** Cargos que quem está vendo pode dar ou tirar. */
   assignable: Role[]
-  giveRoles: boolean
-  removeRoles: boolean
+  /** Pode dar e tirar cargos deste membro. */
+  editable: boolean
   onToggle: (roleId: string, has: boolean) => void
 }
 
@@ -110,8 +110,7 @@ function MemberRolesEditor({
   own,
   memberRoleIds,
   assignable,
-  giveRoles,
-  removeRoles,
+  editable,
   onToggle
 }: Props): React.JSX.Element {
   return (
@@ -121,11 +120,11 @@ function MemberRolesEditor({
           key={role.id}
           role={role}
           name={name}
-          removable={canRemoveRole(removeRoles, assignable, role.id)}
+          removable={canRemoveRole(editable, assignable, role.id)}
           onRemove={() => onToggle(role.id, true)}
         />
       ))}
-      {giveRoles && assignable.length > 0 && (
+      {editable && assignable.length > 0 && (
         <RolePicker
           name={name}
           memberRoleIds={memberRoleIds}

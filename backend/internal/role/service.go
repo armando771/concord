@@ -292,8 +292,9 @@ func NewPositions(snap *permission.Snapshot, roleIDs []string) (map[string]int, 
 	return positions, nil
 }
 
-// SetMemberRole dá (add) ou tira um cargo de um membro. Basta o cargo estar
-// abaixo do cargo mais alto do ator (como no Discord).
+// SetMemberRole dá (add) ou tira um cargo de um membro (ou do próprio ator).
+// Basta o cargo estar abaixo do cargo mais alto do ator (como no Discord); os
+// cargos do dono só ele mesmo mexe.
 func (s *Service) SetMemberRole(ctx context.Context, serverID, actorID, targetID, roleID string, add bool) ([]string, error) {
 	snap, _, err := s.actor(ctx, serverID, actorID)
 	if err != nil {
@@ -322,11 +323,15 @@ func (s *Service) SetMemberRole(ctx context.Context, serverID, actorID, targetID
 	return ids, nil
 }
 
-// checkMemberRole: o alvo é membro e o cargo existe, não é fixo (@everyone ou
-// Bots) e está abaixo do cargo mais alto do ator.
+// checkMemberRole: o alvo é membro (e, se é o dono, só ele mesmo mexe nos
+// cargos dele) e o cargo existe, não é fixo (@everyone ou Bots) e está abaixo
+// do cargo mais alto do ator — o dono dá a si mesmo qualquer cargo.
 func checkMemberRole(snap *permission.Snapshot, actorID, targetID, roleID string) error {
 	if !snap.IsMember(targetID) {
 		return ErrMemberNotFound
+	}
+	if !snap.CanEditRolesOf(actorID, targetID) {
+		return ErrOwnerRoles
 	}
 	current, ok := snap.Roles[roleID]
 	if !ok {

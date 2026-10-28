@@ -32,7 +32,8 @@ vi.mock('../hooks/useServerAccess', () => ({
     highest: state.highest,
     can: (want: number) => (state.perms & want) === want,
     canActOnMember: (id: string) => state.canAct(id),
-    canChangeNickname: () => false
+    canChangeNickname: () => false,
+    canEditRolesOf: (id: string) => id !== 'dono' || state.meId === 'dono'
   })
 }))
 vi.mock('../../auth/store/authStore', () => ({
@@ -111,5 +112,25 @@ describe('MembersSection', () => {
     asModerator()
     const html = renderToStaticMarkup(<MembersSection />)
     expect(html).toContain('Dar um cargo a Ana')
+  })
+
+  // Regressão da issue #331: o dono não conseguia dar cargos a si mesmo.
+  it('o dono dá e tira cargos de si mesmo', () => {
+    asOwner()
+    state.members[0].role_ids = ['vip']
+    const html = renderToStaticMarkup(<MembersSection />)
+    expect(html).toContain('Dar um cargo a Dona')
+    expect(html).toContain('Tirar o cargo vip de Dona')
+    state.members[0].role_ids = []
+  })
+
+  it('só o dono mexe nos cargos do dono', () => {
+    asModerator()
+    state.members[0].role_ids = ['vip']
+    const html = renderToStaticMarkup(<MembersSection />)
+    expect(html).not.toContain('Dar um cargo a Dona')
+    expect(html).not.toContain('Tirar o cargo vip de Dona')
+    expect(html).toContain('Tirar o cargo vip de Ana')
+    state.members[0].role_ids = []
   })
 })

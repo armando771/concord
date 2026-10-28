@@ -100,8 +100,7 @@ function MemberSettingsRow(props: Props): React.JSX.Element {
         own={own}
         memberRoleIds={member.role_ids}
         assignable={assignable}
-        giveRoles={access.giveRoles}
-        removeRoles={access.removeRoles}
+        editable={access.editRoles}
         onToggle={onToggleRole}
       />
     </li>

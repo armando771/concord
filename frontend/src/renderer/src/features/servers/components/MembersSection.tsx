@@ -67,7 +67,7 @@ function MembersSection(): React.JSX.Element {
             name={nameOf(m)}
             isOwner={m.user_id === server.owner_id}
             isMe={m.user_id === meId}
-            access={memberRowAccess(access, m.user_id, { ownerId: server.owner_id })}
+            access={memberRowAccess(access, m.user_id)}
             own={rolesOfMember(roles, m.role_ids)}
             assignable={assignable}
             onToggleRole={(roleId, has) => void toggleRole(m.user_id, roleId, has)}
