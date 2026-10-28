@@ -298,69 +298,6 @@ func (s *Service) StartDM(ctx context.Context, initiatorID string, conversationI
 	return call, nil
 }
 
-func (s *Service) StartChannel(ctx context.Context, initiatorID string, channelID string) (*Call, error) {
-	return s.startChannel(ctx, initiatorID, channelID, false)
-}
-
-// startChannel entra (ou cria) a chamada do canal. bypassLock deixa passar
-// por sala trancada (moderador movendo alguém).
-func (s *Service) startChannel(ctx context.Context, initiatorID string, channelID string, bypassLock bool) (*Call, error) {
-	ch, err := s.channelService.FindByID(ctx, channelID)
-	if err != nil {
-		return nil, ErrNotFound
-	}
-
-	if err := s.requireConnect(ctx, ch.ID, initiatorID); err != nil {
-		return nil, err
-	}
-
-	s.mu.Lock()
-	if callID, ok := s.busy[initiatorID]; ok {
-		existing := s.calls[callID]
-		if existing != nil && existing.info.ChannelID != nil && *existing.info.ChannelID == channelID {
-			s.mu.Unlock()
-			return existing.info, nil
-		}
-		s.mu.Unlock()
-		return nil, ErrBusy
-	}
-	if existing := s.findActiveByScopeLocked(TypeChannel, channelID); existing != nil {
-		ac := existing
-		if !bypassLock && !canEnterLockedLocked(ac, initiatorID, time.Now()) {
-			s.mu.Unlock()
-			return ac.info, ErrLocked
-		}
-		s.mu.Unlock()
-		return s.joinLocked(ctx, ac, initiatorID, RoleMember)
-	}
-
-	call := &Call{
-		ID:          uuid.New().String(),
-		Type:        TypeChannel,
-		ChannelID:   &ch.ID,
-		ServerID:    &ch.ServerID,
-		InitiatorID: initiatorID,
-		Status:      StatusActive,
-	}
-	ac := &activeCall{
-		info:         call,
-		participants: make(map[string]*participantState),
-	}
-	s.calls[call.ID] = ac
-	s.mu.Unlock()
-
-	if err := s.repository.Create(ctx, call); err != nil {
-		log.Printf("[call] persist call %s failed: %v", call.ID, err)
-	}
-
-	_, err = s.joinLocked(ctx, ac, initiatorID, RoleMember)
-	if err != nil {
-		return nil, err
-	}
-
-	return call, nil
-}
-
 func (s *Service) Accept(ctx context.Context, callID string, userID string) error {
 	s.mu.Lock()
 	ac, ok := s.calls[callID]
