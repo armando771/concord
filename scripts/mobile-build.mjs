@@ -1,6 +1,11 @@
 // Build local do APK do app mobile (sem EAS nem conta Expo).
 //
-//   EXPO_PUBLIC_SERVER_URL=https://servidor node scripts/mobile-build.mjs
+//   EXPO_PUBLIC_SERVER_URL=https://servidor node scripts/mobile-build.mjs   # APK de distribuição (release)
+//   node scripts/mobile-build.mjs --dev                                      # build de desenvolvimento
+//
+// --dev gera um APK de debug (mobile/dist/salinha-dev.apk) que carrega o JavaScript do Metro: instale uma
+// vez e, daí em diante, é só `yarn start` + `adb reverse tcp:8081 tcp:8081` (hot reload). Só precisa
+// refazer quando mudar módulo nativo (package.json, app.config.ts, plugins). Não pede URL nem keystore.
 //
 // Variáveis: ANDROID_HOME (Android SDK), EXPO_PUBLIC_SERVER_URL e, para um APK
 // distribuível, SALINHA_KEYSTORE_PATH / _PASSWORD e SALINHA_KEY_ALIAS / _PASSWORD
@@ -11,11 +16,13 @@
 import { spawnSync } from 'node:child_process'
 import { appendFileSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import path from 'node:path'
-import { buildDir, buildPlan, cmakeDirProperty, ninjaSupportsLongPaths } from './lib/mobileBuild.mjs'
+import { apkInfo, buildDir, buildPlan, cmakeDirProperty, ninjaSupportsLongPaths } from './lib/mobileBuild.mjs'
 import { ROOT, run } from './lib/run.mjs'
 
 const mobile = path.join(ROOT, 'mobile')
-const OUT = path.join(mobile, 'dist/salinha.apk')
+const MODE = process.argv.includes('--dev') ? 'dev' : 'release'
+const APK = apkInfo(MODE)
+const OUT = path.join(mobile, APK.out)
 
 // Copia as fontes (sem node_modules, android e .expo) para a pasta curta e instala lá.
 function syncToShortDir(dir) {
@@ -55,8 +62,9 @@ function gradle(android, gradleArgs) {
   // No cmd.exe o executável da pasta atual precisa do ".\".
   const gradlew = process.platform === 'win32' ? String.raw`.\gradlew.bat` : './gradlew'
   // Não use run(): ele imprime os argumentos, e eles levam as senhas do keystore.
-  console.log(`\n$ (${android}) ${gradlew} assembleRelease (${gradleArgs.length ? 'assinado com o keystore' : 'chave de debug'})`)
-  const result = spawnSync(gradlew, ['assembleRelease', ...gradleArgs], {
+  const signing = MODE === 'dev' ? 'debug' : gradleArgs.length ? 'assinado com o keystore' : 'chave de debug'
+  console.log(`\n$ (${android}) ${gradlew} ${APK.task} (${signing})`)
+  const result = spawnSync(gradlew, [APK.task, ...gradleArgs], {
     cwd: android,
     stdio: 'inherit',
     shell: process.platform === 'win32'
@@ -65,7 +73,7 @@ function gradle(android, gradleArgs) {
 }
 
 function main() {
-  const plan = buildPlan(process.env)
+  const plan = buildPlan(process.env, MODE)
   plan.warnings.forEach((w) => console.warn(`⚠️ ${w}`))
   if (plan.problems.length) {
     console.error(plan.problems.map((p) => `❌ ${p}`).join('\n'))
@@ -82,7 +90,7 @@ function main() {
   const status = gradle(android, plan.gradleArgs)
   if (status !== 0) process.exit(status)
 
-  const apk = path.join(android, 'app/build/outputs/apk/release/app-release.apk')
+  const apk = path.join(android, APK.built)
   if (!existsSync(apk)) {
     console.error(`❌ O Gradle terminou, mas o APK não está em ${apk}`)
     process.exit(1)
@@ -90,6 +98,10 @@ function main() {
   mkdirSync(path.dirname(OUT), { recursive: true })
   copyFileSync(apk, OUT)
   console.log(`\n✅ APK pronto: ${OUT}`)
+  if (MODE === 'dev') {
+    console.log('   Instale com: adb install -r mobile/dist/salinha-dev.apk')
+    console.log('   Depois, em mobile/: EXPO_PUBLIC_SERVER_URL=http://localhost:8080 yarn start (e adb reverse tcp:8081 tcp:8081)')
+  }
 }
 
 main()
