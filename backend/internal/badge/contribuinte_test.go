@@ -70,8 +70,12 @@ func TestEvaluateContribuinteUsesProposalCount(t *testing.T) {
 	if b.Value != 7 || b.Tier != 2 || b.TierName != "Colaborador" || b.Rarity != RarityRare {
 		t.Fatalf("contribuinte = %+v", b)
 	}
-	if len(b.Tiers) != 2 {
-		t.Fatalf("tiers = %+v, want só os 2 conquistados", b.Tiers)
+	if b.NextTierName != "Inovador" || b.NextThreshold == nil || *b.NextThreshold != 15 {
+		t.Fatalf("next = %q %v", b.NextTierName, b.NextThreshold)
+	}
+	// 7 de 5→15: 20%.
+	if b.Progress < 0.199 || b.Progress > 0.201 {
+		t.Fatalf("progress = %v, want 0.2", b.Progress)
 	}
 	var got []int
 	for _, u := range fresh {

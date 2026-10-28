@@ -24,7 +24,8 @@ func BadgeHandler(service *Service) *Handler {
 
 // Get devolve os badges de alguém: GET /users/:id/badges. Quem pode ver o
 // perfil (qualquer pessoa logada, como em /users/:id/profile) vê os badges
-// conquistados; o valor atual, só a própria pessoa. Badge sem o tier 1 não sai.
+// conquistados; números e progresso, só a própria pessoa. Badge sem o tier 1
+// não sai para ninguém.
 func (h *Handler) Get(c *gin.Context) {
 	viewer, ok := c.Get("userID")
 	if !ok {

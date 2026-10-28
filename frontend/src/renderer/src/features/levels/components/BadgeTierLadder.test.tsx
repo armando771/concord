@@ -9,29 +9,22 @@ const badge = {
   description: '',
   unit: 'seconds',
   value: 30 * 3600,
-  tier: 2,
-  tier_name: 'Tagarela',
+  tier: 1,
+  tier_name: 'Calado',
   rarity: 'comum',
   tiers: [
     { tier: 1, name: 'Calado', threshold: 3600, rarity: 'comum', unlocked_at: '2026-10-20' },
-    { tier: 2, name: 'Tagarela', threshold: 36000, rarity: 'comum', unlocked_at: '2026-10-24' }
+    { tier: 2, name: 'Tagarela', threshold: 36000, rarity: 'comum' }
   ]
 } as unknown as Badge
 
 describe('BadgeTierLadder', () => {
-  it('mostra só o nome e o dia dos tiers conquistados', () => {
+  it('mostra os tiers conquistados e, depois deles, os próximos com o limite', () => {
     const html = renderToStaticMarkup(<BadgeTierLadder badge={badge} />)
     expect(html).toContain('Calado')
+    expect(html).toContain('1 hora')
+    expect(html).toContain('Desbloqueado em 20/10/26')
     expect(html).toContain('Tagarela')
-    expect(html).toContain('20/10/26')
-    expect(html).toContain('24/10/26')
-  })
-
-  it('não mostra limites nem cadeado: nada para farmar', () => {
-    const html = renderToStaticMarkup(<BadgeTierLadder badge={badge} />)
-    expect(html).not.toMatch(/\d+ horas?/)
-    expect(html).not.toMatch(/falta/i)
-    expect(html).not.toContain('<svg')
-    expect((html.match(/<li[ >]/g) ?? []).length).toBe(2)
+    expect(html).toContain('10 horas')
   })
 })

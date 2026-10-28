@@ -53,9 +53,8 @@ type OnlineSource interface {
 }
 
 // Response é o GET /users/:id/badges. Só vêm categorias com o tier 1
-// conquistado, e nunca o próximo limite nem o progresso. A própria pessoa
-// recebe []Badge (com o valor atual); os outros, []PublicBadge (só o que ela
-// conquistou e o dia).
+// conquistado. A própria pessoa recebe []Badge (números, progresso, próximos
+// tiers); os outros, []PublicBadge (só o que ela conquistou e o dia).
 type Response struct {
 	UserID string `json:"user_id"`
 	Self   bool   `json:"self"`
