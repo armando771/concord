@@ -54,9 +54,12 @@ var baseCategories = []Category{
 		},
 	},
 	{
+		// Contadas por trigger (migration 000113): a mensagem igual à anterior
+		// da pessoa na sala, há menos de 1 hora, não conta, e a apagada em até
+		// 2 minutos desconta.
 		Key:         "mensagens",
 		Name:        "Mensagens enviadas",
-		Description: "Mande mensagens nos canais e nas DMs para subir este badge.",
+		Description: "Mande mensagens nos canais e nas DMs para subir este badge. Mensagem repetida em seguida não conta, e a apagada em até 2 minutos sai da conta.",
 		Unit:        UnitMessages,
 		Tiers: []Tier{
 			{"Puxa-assunto", 50, RarityCommon},
