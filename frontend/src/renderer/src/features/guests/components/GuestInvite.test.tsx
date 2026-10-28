@@ -112,7 +112,7 @@ describe('Convidar visitante', () => {
     expect(html).toContain('Termina em 2 h')
     expect(html).toContain('Visita')
     expect(html).toContain('Expulsar')
-    expect(html).toContain('Saiu')
+    expect(html).toContain('Acesso encerrado')
     expect(html).toContain('Revogar link')
     expect(html).toContain('Ninguém entrou ainda.')
   })

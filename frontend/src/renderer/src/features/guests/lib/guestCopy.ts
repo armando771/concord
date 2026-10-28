@@ -24,7 +24,7 @@ export const GUEST_COPY = {
   revoke: 'Revogar link',
   revokeHint: 'Revogar encerra o acesso de todos que entraram por ele.',
   remove: 'Expulsar',
-  removed: 'Saiu',
+  removed: 'Acesso encerrado',
   close: 'Fechar',
   // Quem recebe o link
   landingTitle: (inviter: string): string => `${inviter} convidou você para uma call`,
