@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"syscall"
 
+	"gin-quickstart/backend/internal/permission"
 	"gin-quickstart/backend/internal/platform/media"
 
 	"github.com/gin-gonic/gin"
@@ -81,6 +82,19 @@ func (h *Handler) checkUploader(ctx context.Context, serverID, userID string) *u
 	if !isMember {
 		return fail(http.StatusForbidden, ErrNotServerMember.Error())
 	}
+	perms, err := h.permissions.ServerPerms(ctx, serverID, userID)
+	if err != nil {
+		return fail(http.StatusInternalServerError, "failed to check permissions")
+	}
+	if !permission.Has(perms, permission.AddStickers) {
+		return &uploadErr{status: http.StatusForbidden, body: gin.H{
+			"error": ErrCannotAddSticker.Error(), "code": "missing_permission",
+		}}
+	}
+	return h.checkServerRoom(ctx, serverID)
+}
+
+func (h *Handler) checkServerRoom(ctx context.Context, serverID string) *uploadErr {
 	count, err := h.repo.CountByServer(ctx, serverID)
 	if err != nil {
 		return fail(http.StatusInternalServerError, "failed to check server sticker limit")

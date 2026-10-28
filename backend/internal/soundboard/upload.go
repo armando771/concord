@@ -88,9 +88,9 @@ func (h *Handler) checkUploader(ctx context.Context, serverID, userID string) *u
 	if err != nil {
 		return fail(http.StatusInternalServerError, "failed to check permissions")
 	}
-	if !permission.Has(perms, permission.UseSoundboard) {
+	if !permission.Has(perms, permission.AddSounds) {
 		return &uploadErr{status: http.StatusForbidden, body: gin.H{
-			"error": permission.ErrMissingPermission.Error(), "code": "missing_permission",
+			"error": ErrCannotAddSound.Error(), "code": "missing_permission",
 		}}
 	}
 	return h.checkServerRoom(ctx, serverID)

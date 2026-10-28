@@ -10,11 +10,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"strings"
 	"testing"
 	"time"
 
-	"gin-quickstart/backend/internal/platform/media"
 	"gin-quickstart/backend/internal/permission"
+	"gin-quickstart/backend/internal/platform/media"
 
 	"github.com/gin-gonic/gin"
 )
@@ -131,21 +132,25 @@ func buildStickerRouter(t *testing.T) (*gin.Engine, *Handler, *mockRepo, *mockPu
 	repo := newMockRepo()
 	servers := &mockServerChecker{
 		members: map[string]bool{
-			"srv-1:ana": true,
-			"srv-1:bia": true,
-			"srv-1:mod": true,
+			"srv-1:ana":  true,
+			"srv-1:bia":  true,
+			"srv-1:mod":  true,
+			"srv-1:cris": true,
 		},
 	}
 	perms := &mockPermChecker{
 		perms: map[string]int64{
-			"srv-1:mod": permission.ManageExpressions,
+			"srv-1:ana": permission.AddStickers,
+			"srv-1:bia": permission.AddStickers,
+			"srv-1:mod": permission.ManageExpressions | permission.AddStickers,
+			// cris é membro, mas sem ADD_STICKERS.
 		},
 	}
 	space := &mockSpace{hasRoom: true}
 	tokens := &mockTokens{
 		users: map[string]string{
-			"tok-ana":     "ana",
-			"tok-bia":     "bia",
+			"tok-ana":      "ana",
+			"tok-bia":      "bia",
 			"tok-outsider": "outsider",
 		},
 	}
@@ -359,5 +364,21 @@ func TestStickerHTTPFlowAndPermissions(t *testing.T) {
 	r.ServeHTTP(recFull, reqFull)
 	if recFull.Code != http.StatusConflict {
 		t.Fatalf("expected 409 Conflict when server is full, got %d", recFull.Code)
+	}
+}
+
+func TestStickerUploadRequiresAddStickers(t *testing.T) {
+	t.Parallel()
+	r, _, repo, _ := buildStickerRouter(t)
+	req := makeMultipartReq(t, "/api/servers/srv-1/stickers", "doge", "image/png", validPNG)
+	req.Header.Set("X-User", "cris")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "missing_permission") ||
+		!strings.Contains(rec.Body.String(), ErrCannotAddSticker.Error()) {
+		t.Fatalf("status = %d (%s), want 403 missing_permission com a mensagem clara", rec.Code, rec.Body.String())
+	}
+	if len(repo.stickers) != 0 {
+		t.Fatal("a figurinha não devia ser salva")
 	}
 }

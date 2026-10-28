@@ -30,6 +30,7 @@ var (
 	ErrInvalidDuration   = errors.New("sound duration must be between 0.1s and 15s")
 	ErrNotServerMember   = errors.New("you are not a member of this server")
 	ErrCannotDeleteSound = errors.New("only the uploader, moderators or server owner can delete this sound")
+	ErrCannotAddSound    = errors.New("você não tem permissão para adicionar sons neste servidor")
 )
 
 type Sound struct {

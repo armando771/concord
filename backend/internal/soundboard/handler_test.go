@@ -74,6 +74,7 @@ type fakeServers struct {
 	members      map[string]bool
 	mods         map[string]bool
 	noSoundboard map[string]bool
+	noAddSounds  map[string]bool
 }
 
 func (f *fakeServers) IsMember(_ context.Context, _, userID string) (bool, error) {
@@ -92,6 +93,9 @@ func (f *fakeServers) ServerPerms(_ context.Context, _, userID string) (int64, e
 	}
 	if f.noSoundboard[userID] {
 		perms &^= permission.UseSoundboard
+	}
+	if f.noAddSounds[userID] {
+		perms &^= permission.AddSounds
 	}
 	return perms, nil
 }
@@ -156,10 +160,11 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *Handler, *fakeRepo, *fakePubli
 	}
 	repo := newFakeRepo()
 	srv := &fakeServers{
-		members: map[string]bool{"user-1": true, "user-2": true, "mod-1": true},
+		members: map[string]bool{"user-1": true, "user-2": true, "user-3": true, "mod-1": true},
 		mods:    map[string]bool{"mod-1": true},
-		// user-2 perdeu USE_SOUNDBOARD (cargo ou @everyone sem a permissão).
-		noSoundboard: map[string]bool{"user-2": true},
+		// user-2 perdeu ADD_SOUNDS; user-3 perdeu USE_SOUNDBOARD (mas ainda envia).
+		noAddSounds:  map[string]bool{"user-2": true},
+		noSoundboard: map[string]bool{"user-3": true},
 	}
 	tokens := fakeTokens{users: map[string]string{"tok-1": "user-1", "tok-outsider": "outsider"}}
 	pub := &fakePublisher{}
@@ -304,18 +309,33 @@ func TestDeletePermissions(t *testing.T) {
 	}
 }
 
-func TestUploadRequiresUseSoundboard(t *testing.T) {
-	r, _, repo, _ := setupTestRouter(t)
+func postSound(t *testing.T, r *gin.Engine, userID string) *httptest.ResponseRecorder {
+	t.Helper()
 	body, contentType := buildMultipart(t, map[string]string{"name": "Corneta", "duration_ms": "1500"}, validWAV(), "audio/wav")
 	req := httptest.NewRequest(http.MethodPost, "/api/servers/srv-1/soundboard", body)
 	req.Header.Set("Content-Type", contentType)
-	req.Header.Set("X-User-ID", "user-2")
+	req.Header.Set("X-User-ID", userID)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "missing_permission") {
-		t.Fatalf("status = %d (%s), want 403 missing_permission", w.Code, w.Body.String())
+	return w
+}
+
+func TestUploadRequiresAddSounds(t *testing.T) {
+	r, _, repo, _ := setupTestRouter(t)
+	w := postSound(t, r, "user-2")
+	if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "missing_permission") ||
+		!strings.Contains(w.Body.String(), ErrCannotAddSound.Error()) {
+		t.Fatalf("status = %d (%s), want 403 missing_permission com a mensagem clara", w.Code, w.Body.String())
 	}
 	if len(repo.sounds) != 0 {
 		t.Fatal("o áudio não devia ser salvo")
+	}
+}
+
+// Adicionar sons não depende de usar a mesa (como no Discord).
+func TestUploadWithoutUseSoundboardButWithAddSounds(t *testing.T) {
+	r, _, _, _ := setupTestRouter(t)
+	if w := postSound(t, r, "user-3"); w.Code != http.StatusCreated {
+		t.Fatalf("status = %d (%s), want 201", w.Code, w.Body.String())
 	}
 }
