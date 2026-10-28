@@ -41,7 +41,7 @@ type ChannelResolver interface {
 	ChannelServerID(ctx context.Context, channelID string) (string, error)
 }
 
-// SystemChannelChecker diz se o canal é um canal fixo de sistema ("bot" ou "avisos").
+// SystemChannelChecker diz se o canal é um canal fixo de sistema ("musica" ou "avisos").
 type SystemChannelChecker interface {
 	IsSystemChannel(ctx context.Context, channelID string) (bool, error)
 }

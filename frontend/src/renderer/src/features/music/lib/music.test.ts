@@ -5,7 +5,11 @@ import {
   duckSettled,
   duckTarget,
   formatDuration,
+  isMaestroChannel,
   isMaestroIdentity,
+  isMaestroMessageKind,
+  isMaestroQuiet,
+  MAESTRO_USER_ID,
   MAESTRO_HOWTO,
   maestroIdentity,
   slashSuggestions,
@@ -137,5 +141,36 @@ describe('wantsVideo', () => {
     expect(wantsVideo(true, false, false)).toBe(false)
     expect(wantsVideo(true, true, false)).toBe(true)
     expect(wantsVideo(true, false, true)).toBe(true)
+  })
+})
+
+describe('canal do Maestro (#musica)', () => {
+  it('só o canal de sistema chamado musica (ou musica-maestro) é o do Maestro', () => {
+    expect(isMaestroChannel({ name: 'musica', is_system: true })).toBe(true)
+    expect(isMaestroChannel({ name: 'musica-maestro', is_system: true })).toBe(true)
+    // canal comum com o mesmo nome, o antigo nome "bot" e o canal de avisos não contam
+    expect(isMaestroChannel({ name: 'musica', is_system: false })).toBe(false)
+    expect(isMaestroChannel({ name: 'musica' })).toBe(false)
+    expect(isMaestroChannel({ name: 'bot', is_system: true })).toBe(false)
+    expect(isMaestroChannel({ name: 'avisos', is_system: true })).toBe(false)
+  })
+
+  it('mensagens do Maestro e do canal #musica nunca avisam; as outras avisam', () => {
+    const channels = [
+      { id: 'c-musica', name: 'musica', is_system: true },
+      { id: 'c-geral', name: 'geral', is_system: false }
+    ]
+    expect(isMaestroQuiet({ author_id: 'ana', channel_id: 'c-musica' }, channels)).toBe(true)
+    expect(isMaestroQuiet({ author_id: MAESTRO_USER_ID, channel_id: 'c-geral' }, channels)).toBe(true)
+    expect(isMaestroQuiet({ author_id: 'ana', channel_id: 'c-geral' }, channels)).toBe(false)
+    expect(isMaestroQuiet({ author_id: 'ana', channel_id: null }, channels)).toBe(false)
+  })
+
+  it('a lista de comandos fixada aparece como mensagem do Maestro', () => {
+    expect(isMaestroMessageKind('music')).toBe(true)
+    expect(isMaestroMessageKind('music_commands')).toBe(true)
+    expect(isMaestroMessageKind('welcome')).toBe(false)
+    expect(isMaestroMessageKind(null)).toBe(false)
+    expect(isMaestroMessageKind(undefined)).toBe(false)
   })
 })

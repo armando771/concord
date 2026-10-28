@@ -10,7 +10,7 @@ export interface Channel {
   type: ChannelType
   /** Ordem dentro da seção (texto ou voz); a lista já vem ordenada. */
   position?: number
-  /** Canal do Maestro ("bot"): não pode ser editado nem removido, só movido. */
+  /** Canal do Maestro ("musica"): não pode ser editado nem removido, só movido. */
   is_system?: boolean
   created_by: string
   created_at: string

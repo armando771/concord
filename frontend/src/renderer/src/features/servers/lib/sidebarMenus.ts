@@ -7,7 +7,7 @@ export type ChannelMenuItem =
 export interface ChannelMenuContext {
   hasServer: boolean
   isText: boolean
-  /** Canal fixo de sistema ("bot", "avisos"): não se edita nem apaga. */
+  /** Canal fixo de sistema ("musica", "avisos"): não se edita nem apaga. */
   isSystem: boolean
   isPrimary: boolean
   /** Posição do canal na seção (-1 = não achou) e tamanho da seção. */
