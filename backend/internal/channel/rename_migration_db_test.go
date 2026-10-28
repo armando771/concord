@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Migration 000115 num Postgres de verdade (TEST_DATABASE_URL, banco descartável):
+// Migration 000116 num Postgres de verdade (TEST_DATABASE_URL, banco descartável):
 // só o canal de sistema do Maestro muda de nome; canal comum "bot" não é tocado.
 func TestMigrationRenamesOnlyTheSystemBotChannel(t *testing.T) {
 	dbURL := os.Getenv("TEST_DATABASE_URL")
@@ -26,8 +26,8 @@ func TestMigrationRenamesOnlyTheSystemBotChannel(t *testing.T) {
 	if err := database.Migrate(db, "../../migrations"); err != nil {
 		t.Fatal(err)
 	}
-	up := readFile(t, "../../migrations/000115_rename_bot_channel_to_musica.up.sql")
-	down := readFile(t, "../../migrations/000115_rename_bot_channel_to_musica.down.sql")
+	up := readFile(t, "../../migrations/000116_rename_bot_channel_to_musica.up.sql")
+	down := readFile(t, "../../migrations/000116_rename_bot_channel_to_musica.down.sql")
 
 	owner := uuid.NewString()
 	exec := func(sql string, args ...any) {

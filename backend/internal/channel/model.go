@@ -13,7 +13,7 @@ const (
 	// SystemChannelName: nome do canal de sistema do Maestro.
 	SystemChannelName = "musica"
 	// SystemChannelAltName: nome do canal do Maestro quando o servidor já tinha
-	// outro canal chamado "musica" (migration 000115).
+	// outro canal chamado "musica" (migration 000116).
 	SystemChannelAltName = "musica-maestro"
 	// NoticesChannelName: nome do canal de sistema de avisos e boas-vindas.
 	NoticesChannelName = "avisos"
