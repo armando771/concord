@@ -31,8 +31,8 @@ func TestEvaluateAniversarianteOnTheDayInBrasilia(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s := Stats{CreatedAt: FounderCutoff, BirthdayDay: tc.day, BirthdayMonth: tc.month}
 			badges, _ := Evaluate(s, nil, tc.at)
-			if b := find(t, badges, "aniversariante"); b.Tier != tc.want {
-				t.Fatalf("tier = %d, want %d", b.Tier, tc.want)
+			if got := tierOf(badges, "aniversariante"); got != tc.want {
+				t.Fatalf("tier = %d, want %d", got, tc.want)
 			}
 		})
 	}

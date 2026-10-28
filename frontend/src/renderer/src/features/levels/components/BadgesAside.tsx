@@ -11,7 +11,6 @@ interface BadgesAsideProps {
   /** undefined enquanto carrega. */
   badges: Badge[] | undefined
   earned: Badge[]
-  available: Badge[]
   selected: Badge | undefined
   onSelect: (category: string) => void
   /** Há uma conta logada: mostra "Ver seus badges" no perfil dos outros. */
@@ -19,14 +18,13 @@ interface BadgesAsideProps {
   onViewMine: () => void
 }
 
-/** Coluna da grade: quem é, o que já ganhou e (no próprio perfil) o que dá para desbloquear. */
+/** Coluna da grade: quem é e o que já ganhou. O que falta ganhar não aparece. */
 function BadgesAside({
   target,
   isMe,
   titleId,
   badges,
   earned,
-  available,
   selected,
   onSelect,
   canViewMine,
@@ -50,37 +48,22 @@ function BadgesAside({
         </div>
         <p className="mt-1.5 text-sm leading-snug text-gray-400">
           {isMe
-            ? 'Veja seus badges e descubra quais você ainda pode desbloquear.'
-            : `Explore os badges de ${target.name} ou veja os seus para descobrir o que dá para desbloquear.`}
+            ? 'Os badges aparecem conforme você usa o Salinha.'
+            : `Explore os badges de ${target.name} ou veja os seus.`}
         </p>
 
         {!badges ? (
           <BadgeGridSkeleton />
+        ) : earned.length > 0 ? (
+          <div className="mt-5">
+            <BadgeGrid badges={earned} selected={selected?.category} onSelect={onSelect} />
+          </div>
         ) : (
-          <>
-            {earned.length > 0 ? (
-              <div className="mt-5">
-                <BadgeGrid badges={earned} selected={selected?.category} onSelect={onSelect} />
-              </div>
-            ) : (
-              <p className="mt-5 text-sm text-gray-500">
-                {isMe ? 'Você ainda não tem badges.' : 'Nenhum badge ainda.'}
-              </p>
-            )}
-            {isMe && available.length > 0 && (
-              <div className="mt-6">
-                <p className="mb-2.5 text-sm font-semibold text-strong">
-                  Disponíveis para desbloquear
-                </p>
-                <BadgeGrid
-                  badges={available}
-                  locked
-                  selected={selected?.category}
-                  onSelect={onSelect}
-                />
-              </div>
-            )}
-          </>
+          <p className="mt-5 text-sm text-gray-500">
+            {isMe
+              ? 'Nenhum badge ainda. Eles aparecem conforme você usa o Salinha.'
+              : 'Nenhum badge ainda.'}
+          </p>
         )}
       </div>
       {!isMe && canViewMine && (
