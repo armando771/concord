@@ -102,14 +102,14 @@ func (r *realAccounts) refresh(ctx context.Context, ids []string, now time.Time)
 }
 
 // RealAccounts: quais destes usuários têm e-mail confirmado e conta com 7
-// dias ou mais.
+// dias ou mais (a mesma regra do Amigos: amigoContaRealDias).
 func (r *Repository) RealAccounts(ctx context.Context, userIDs []string) (map[string]bool, error) {
 	// Erro do Query volta pelo CollectRows (idioma do pgx).
 	rows, _ := r.db.Query(ctx, `
 		SELECT id::text FROM users
 		WHERE id = ANY($1::uuid[])
 		  AND email_verified_at IS NOT NULL
-		  AND created_at <= now() - interval '7 days'`, userIDs)
+		  AND created_at <= now() - make_interval(days => $2)`, userIDs, amigoContaRealDias)
 	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
 	if err != nil {
 		return nil, fmt.Errorf("contas reais: %w", err)
