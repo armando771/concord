@@ -105,7 +105,11 @@ type Service struct {
 	isOnline            func(userID string) bool
 	perms               PermissionSource
 	invite              inviteDeps
-	media               MediaAdmin
+	// Visitantes (convite de visitante, ver guest.go).
+	guests GuestAccess
+	// Canal pelo id (trocável nos testes, que não têm banco).
+	findChannel func(ctx context.Context, id string) (*channel.Channel, error)
+	media       MediaAdmin
 
 	mu    sync.RWMutex
 	calls map[string]*activeCall
@@ -176,6 +180,9 @@ func CallService(
 		s.addParticipant = repository.AddParticipant
 	} else {
 		s.addParticipant = func(context.Context, *CallParticipant) error { return nil }
+	}
+	s.findChannel = func(ctx context.Context, id string) (*channel.Channel, error) {
+		return channelService.FindByID(ctx, id)
 	}
 	s.leaveAfterDisconnect = s.Leave
 	s.leaveCall = s.Leave

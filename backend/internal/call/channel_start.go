@@ -19,7 +19,7 @@ func (s *Service) StartChannel(ctx context.Context, initiatorID string, channelI
 // startChannel entra (ou cria) a chamada do canal. bypassLock deixa passar
 // por sala trancada (moderador movendo alguém).
 func (s *Service) startChannel(ctx context.Context, initiatorID string, channelID string, bypassLock bool) (*Call, error) {
-	ch, err := s.channelService.FindByID(ctx, channelID)
+	ch, err := s.findChannel(ctx, channelID)
 	if err != nil {
 		return nil, ErrNotFound
 	}

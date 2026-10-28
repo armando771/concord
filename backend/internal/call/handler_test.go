@@ -24,7 +24,7 @@ func tokenRouter(service *Service, userID string) *gin.Engine {
 		c.Set("userID", userID)
 		c.Next()
 	}
-	CallRoutes(router.Group("/api"), handler, fakeAuth)
+	CallRoutes(router.Group("/api"), handler, fakeAuth, fakeAuth)
 	return router
 }
 

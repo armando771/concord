@@ -103,7 +103,9 @@ func authorizeMove(snap *permission.Snapshot, actorID, targetID string, from voi
 	if targetID != actorID && !snap.CanMoveMember(actorID, targetID) {
 		return ErrCannotActOnMember
 	}
-	if !permission.Has(snap.Channel(dest.ID, targetID), permission.ViewChannel|permission.Connect) {
+	// Visitante (não é membro): o acesso dele passa para o destino
+	// (admitMovedGuest) e a entrada é conferida ao entrar na chamada.
+	if snap.IsMember(targetID) && !permission.Has(snap.Channel(dest.ID, targetID), permission.ViewChannel|permission.Connect) {
 		return ErrTargetCannotJoin
 	}
 	return nil
@@ -114,7 +116,7 @@ func authorizeMove(snap *permission.Snapshot, actorID, targetID string, from voi
 // destino e estar no mesmo nível de hierarquia ou acima da pessoa; o destino precisa deixar a
 // pessoa entrar (CONNECT).
 func (s *Service) MoveToChannel(ctx context.Context, actorID, targetID, channelID string) (*Call, error) {
-	dest, err := s.channelService.FindByID(ctx, channelID)
+	dest, err := s.findChannel(ctx, channelID)
 	if err != nil {
 		return nil, ErrNotFound
 	}
@@ -131,8 +133,11 @@ func (s *Service) MoveToChannel(ctx context.Context, actorID, targetID, channelI
 	if err := authorizeMove(snap, actorID, targetID, from, inVoice, dest); err != nil {
 		return nil, err
 	}
+	if err := s.admitMovedGuest(ctx, snap, targetID, dest); err != nil {
+		return nil, err
+	}
 
-	if err := s.Leave(ctx, from.callID, targetID); err != nil {
+	if err := s.leaveCall(ctx, from.callID, targetID); err != nil {
 		return nil, err
 	}
 	// Mover é ação de moderador: passa mesmo por sala trancada.
@@ -142,11 +147,11 @@ func (s *Service) MoveToChannel(ctx context.Context, actorID, targetID, channelI
 		return nil, err
 	}
 
-	targetInfo, err := s.userInfo(ctx, targetID)
+	targetInfo, err := s.lookupUser(ctx, targetID)
 	if err != nil {
 		return call, nil
 	}
-	actorInfo, _ := s.userInfo(ctx, actorID)
+	actorInfo, _ := s.lookupUser(ctx, actorID)
 	event := marshalEvent("call:moved", MovedEvent{
 		CallID:        call.ID,
 		FromCallID:    from.callID,
