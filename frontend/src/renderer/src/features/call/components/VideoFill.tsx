@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import LiveVideoExtras from './LiveVideoExtras'
 
 /** O <video> de uma câmera ou live, preenchendo o tile (o pai é `relative`). */
 export default function VideoFill({
@@ -41,14 +42,17 @@ export default function VideoFill({
   }, [onAspect])
 
   return (
-    <video
-      ref={ref}
-      autoPlay
-      playsInline
-      muted
-      className={`absolute inset-0 h-full w-full ${square ? '' : 'rounded-2xl'} ${
-        fit === 'contain' ? 'bg-black object-contain' : 'object-cover'
-      } ${mirror ? '-scale-x-100' : ''}`}
-    />
+    <>
+      <video
+        ref={ref}
+        autoPlay
+        playsInline
+        muted
+        className={`absolute inset-0 h-full w-full ${square ? '' : 'rounded-2xl'} ${
+          fit === 'contain' ? 'bg-black object-contain' : 'object-cover'
+        } ${mirror ? '-scale-x-100' : ''}`}
+      />
+      <LiveVideoExtras stream={stream} />
+    </>
   )
 }

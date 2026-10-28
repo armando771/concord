@@ -28,6 +28,12 @@ import {
 } from './connectionQuality'
 import type { ScreenShareQuality } from './screenShareQuality'
 import { publishScreenTracks, updatePublishedScreenQuality } from './screenPublish'
+import type { ScreenStatsInput } from './screenStats'
+import {
+  clearActiveScreenStats,
+  readScreenStatsInput,
+  setActiveScreenStats
+} from './screenStatsSource'
 
 // Mídia das chamadas via SFU (LiveKit): cada pessoa envia uma cópia de cada
 // track para o servidor, que distribui para os demais. Substitui o mesh P2P.
@@ -105,6 +111,7 @@ export class CallMedia {
         videoCodec: 'vp8'
       }
     })
+    setActiveScreenStats(this)
     this.stopWindowWatch = watchHiddenWindow((hidden) => {
       if (this.subscriptions.setVideoPaused(hidden)) this.applySubscriptions()
     })
@@ -250,6 +257,12 @@ export class CallMedia {
     return out
   }
 
+  /** getStats() do vídeo da live, para o painel de estatísticas (só com ele aberto). */
+  async readScreenStats(userId: string, local: boolean): Promise<ScreenStatsInput | null> {
+    if (this.closing) return null
+    return readScreenStatsInput(this.room, userId, local)
+  }
+
   /** Pode publicar essa fonte, segundo as permissões que o servidor deu. */
   canPublish(source: PublishSource): boolean {
     return canPublishSource(this.room.localParticipant.permissions, source)
@@ -351,6 +364,7 @@ export class CallMedia {
 
   disconnect(): void {
     this.closing = true
+    clearActiveScreenStats(this)
     this.stopWindowWatch()
     this.cache.clear()
     void this.room.disconnect()

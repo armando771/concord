@@ -1,0 +1,281 @@
+import { describe, expect, it } from 'vitest'
+import {
+  codecImplementation,
+  limitationLabel,
+  livePauseReason,
+  screenStatsView,
+  type ScreenStatsInput
+} from './screenStats'
+
+type Stat = Record<string, unknown> & { id: string; type: string }
+
+function report(...stats: Stat[]): RTCStatsReport {
+  return new Map(stats.map((s) => [s.id, s])) as unknown as RTCStatsReport
+}
+
+const h264: Stat = { id: 'c1', type: 'codec', mimeType: 'video/H264' }
+const vp8: Stat = { id: 'c2', type: 'codec', mimeType: 'video/VP8' }
+
+function outbound(extra: Record<string, unknown>): Stat {
+  return {
+    id: 'o1',
+    type: 'outbound-rtp',
+    kind: 'video',
+    codecId: 'c1',
+    timestamp: 1000,
+    bytesSent: 0,
+    framesEncoded: 0,
+    qpSum: 0,
+    ...extra
+  }
+}
+
+function inbound(extra: Record<string, unknown>): Stat {
+  return {
+    id: 'i1',
+    type: 'inbound-rtp',
+    kind: 'video',
+    codecId: 'c1',
+    timestamp: 1000,
+    bytesReceived: 0,
+    packetsReceived: 0,
+    packetsLost: 0,
+    ...extra
+  }
+}
+
+function sender(stats: Stat[], requestedFps: number | null = 30): ScreenStatsInput {
+  return {
+    local: true,
+    report: report(...stats),
+    enabled: true,
+    streamState: 'active',
+    requestedFps
+  }
+}
+
+function receiver(stats: Stat[], extra: Partial<ScreenStatsInput> = {}): ScreenStatsInput {
+  return {
+    local: false,
+    report: report(...stats),
+    enabled: true,
+    streamState: 'active',
+    requestedFps: null,
+    ...extra
+  }
+}
+
+const value = (view: ReturnType<typeof screenStatsView>['view'], label: string) =>
+  view.rows.find((row) => row.label === label)?.value
+
+describe('codecImplementation', () => {
+  it.each([
+    ['MediaFoundationVideoEncodeAccelerator', undefined, 'Hardware'],
+    ['VaapiVideoEncodeAccelerator', undefined, 'Hardware'],
+    ['ExternalEncoder', undefined, 'Hardware'],
+    ['D3D11VideoDecoder', undefined, 'Hardware'],
+    ['libvpx', undefined, 'Software'],
+    ['OpenH264', undefined, 'Software'],
+    ['FFmpeg', undefined, 'Software'],
+    ['SimulcastEncoderAdapter (libvpx, libvpx)', undefined, 'Software'],
+    ['libvpx (fallback from: ExternalEncoder)', undefined, 'Software'],
+    ['qualquer', true, 'Hardware'],
+    ['ExternalEncoder', false, 'Software']
+  ])('%s (eficiente: %s) → %s', (name, powerEfficient, kind) => {
+    expect(codecImplementation(name, powerEfficient)).toBe(`${kind} · ${name}`)
+  })
+
+  it('sem nome nem pista: nada a mostrar', () => {
+    expect(codecImplementation(undefined, undefined)).toBe('—')
+    expect(codecImplementation('desconhecido', undefined)).toBe('desconhecido')
+  })
+})
+
+describe('limitationLabel', () => {
+  it.each([
+    ['none', 'Nenhuma'],
+    ['cpu', 'CPU'],
+    ['bandwidth', 'Banda'],
+    ['other', 'Outra'],
+    [undefined, '—']
+  ])('%s → %s', (reason, label) => {
+    expect(limitationLabel(reason)).toBe(label)
+  })
+})
+
+describe('livePauseReason', () => {
+  it('desligado por mim vem antes da pausa do servidor', () => {
+    expect(livePauseReason(false, 'paused')).toBe('offscreen')
+    expect(livePauseReason(true, 'paused')).toBe('connection')
+    expect(livePauseReason(true, 'active')).toBeNull()
+  })
+})
+
+describe('screenStatsView — quem transmite', () => {
+  it('H.264 por hardware: fps enviado vs pedido, resolução, Mbps e QP médio', () => {
+    const first = screenStatsView(
+      sender([h264, outbound({ bytesSent: 0, framesEncoded: 0, qpSum: 0 })], 60),
+      null
+    )
+    expect(value(first.view, 'Taxa')).toBe('—')
+    const { view } = screenStatsView(
+      sender(
+        [
+          h264,
+          outbound({
+            timestamp: 2000,
+            bytesSent: 1_000_000,
+            framesEncoded: 60,
+            qpSum: 1560,
+            framesPerSecond: 58.6,
+            frameWidth: 1920,
+            frameHeight: 1080,
+            encoderImplementation: 'MediaFoundationVideoEncodeAccelerator',
+            powerEfficientEncoder: true,
+            qualityLimitationReason: 'none'
+          })
+        ],
+        60
+      ),
+      first.sample
+    )
+    expect(view.status).toBeNull()
+    expect(view.rows).toEqual([
+      { label: 'Quadros', value: '59 de 60 fps' },
+      { label: 'Resolução', value: '1920×1080' },
+      { label: 'Taxa', value: '8 Mbps' },
+      { label: 'Codec', value: 'H264' },
+      { label: 'Codificador', value: 'Hardware · MediaFoundationVideoEncodeAccelerator' },
+      { label: 'Limitação', value: 'Nenhuma' },
+      { label: 'QP médio', value: '26' }
+    ])
+  })
+
+  it('VP8 por software limitado por CPU; sem QP não mostra a linha', () => {
+    const first = screenStatsView(
+      sender([vp8, outbound({ codecId: 'c2', qpSum: undefined })]),
+      null
+    )
+    const { view } = screenStatsView(
+      sender([
+        vp8,
+        outbound({
+          codecId: 'c2',
+          timestamp: 3000,
+          bytesSent: 500_000,
+          framesEncoded: 40,
+          qpSum: undefined,
+          framesPerSecond: 20,
+          frameWidth: 1280,
+          frameHeight: 720,
+          encoderImplementation: 'libvpx',
+          qualityLimitationReason: 'cpu'
+        })
+      ]),
+      first.sample
+    )
+    expect(value(view, 'Quadros')).toBe('20 de 30 fps')
+    expect(value(view, 'Taxa')).toBe('2 Mbps')
+    expect(value(view, 'Codec')).toBe('VP8')
+    expect(value(view, 'Codificador')).toBe('Software · libvpx')
+    expect(value(view, 'Limitação')).toBe('CPU')
+    expect(value(view, 'QP médio')).toBeUndefined()
+  })
+
+  it('limitado por banda, com taxa abaixo de 1 Mbps', () => {
+    const first = screenStatsView(sender([h264, outbound({})]), null)
+    const { view } = screenStatsView(
+      sender([
+        h264,
+        outbound({ timestamp: 2000, bytesSent: 26_000, qualityLimitationReason: 'bandwidth' })
+      ]),
+      first.sample
+    )
+    expect(value(view, 'Limitação')).toBe('Banda')
+    expect(value(view, 'Taxa')).toBe('0,2 Mbps')
+  })
+
+  it('codec de reserva publicando: lê o envio que está ativo', () => {
+    const { view } = screenStatsView(
+      sender([
+        h264,
+        vp8,
+        outbound({ id: 'o1', active: false, bytesSent: 9_000_000 }),
+        outbound({ id: 'o2', codecId: 'c2', bytesSent: 10 })
+      ]),
+      null
+    )
+    expect(value(view, 'Codec')).toBe('VP8')
+  })
+
+  it('sem vídeo saindo ainda', () => {
+    const { view, sample } = screenStatsView(sender([]), null)
+    expect(view.rows).toEqual([])
+    expect(view.status).toBe('Ainda sem dados')
+    expect(sample).toBeNull()
+  })
+})
+
+describe('screenStatsView — quem assiste', () => {
+  it('fps, resolução, Mbps, decodificador, perda e jitter, descartes e congelamentos', () => {
+    const first = screenStatsView(receiver([h264, inbound({})]), null)
+    const { view } = screenStatsView(
+      receiver([
+        h264,
+        inbound({
+          timestamp: 2000,
+          bytesReceived: 500_000,
+          packetsReceived: 995,
+          packetsLost: 5,
+          jitter: 0.012,
+          framesPerSecond: 30,
+          frameWidth: 1920,
+          frameHeight: 1080,
+          decoderImplementation: 'D3D11VideoDecoder',
+          powerEfficientDecoder: true,
+          framesDropped: 3,
+          freezeCount: 2,
+          totalFreezesDuration: 1.25
+        })
+      ]),
+      first.sample
+    )
+    expect(view.status).toBeNull()
+    expect(view.rows).toEqual([
+      { label: 'Quadros', value: '30 fps' },
+      { label: 'Resolução', value: '1920×1080' },
+      { label: 'Taxa', value: '4 Mbps' },
+      { label: 'Codec', value: 'H264' },
+      { label: 'Decodificador', value: 'Hardware · D3D11VideoDecoder' },
+      { label: 'Perda', value: '0,5%' },
+      { label: 'Jitter', value: '12 ms' },
+      { label: 'Descartados', value: '3' },
+      { label: 'Congelamentos', value: '2 (1,3 s)' }
+    ])
+  })
+
+  it('perda só do intervalo (não acumulada desde o início)', () => {
+    const first = screenStatsView(
+      receiver([h264, inbound({ packetsReceived: 900, packetsLost: 100 })]),
+      null
+    )
+    const { view } = screenStatsView(
+      receiver([h264, inbound({ timestamp: 2000, packetsReceived: 1900, packetsLost: 100 })]),
+      first.sample
+    )
+    expect(value(view, 'Perda')).toBe('0%')
+  })
+
+  it('vídeo desligado por estar fora de vista', () => {
+    const { view } = screenStatsView(
+      receiver([h264, inbound({})], { enabled: false, streamState: 'paused' }),
+      null
+    )
+    expect(view.status).toBe('Vídeo pausado (fora de vista)')
+  })
+
+  it('pausada pelo servidor por causa da conexão', () => {
+    const { view } = screenStatsView(receiver([], { streamState: 'paused' }), null)
+    expect(view.status).toBe('Pausada pela sua conexão')
+  })
+})
