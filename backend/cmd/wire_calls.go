@@ -39,6 +39,8 @@ func (a *app) wireCalls() {
 	a.callService.SetFriendChecker(a.friendshipService)
 	a.callService.SetPlaceSources(a.channelService, a.serverService)
 	a.callService.SetInvitePoster(callInviteDM{conversations: a.conversationService, messages: a.messageService})
+	// AFK: XP de voz e badges de call param depois de 10 min sem falar.
+	a.callAFK = call.NewAFK(a.callService, time.Now)
 	callHandler := call.CallHandler(a.callService, a.liveKitTokens)
 	// Reinício do servidor não derruba quem está em chamada. Sem conseguir
 	// recarregar as chamadas o servidor não fica pronto (a porta nem abre):

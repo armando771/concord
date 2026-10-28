@@ -48,6 +48,8 @@ type tracker struct {
 	sessions map[string]time.Duration
 	// cameras: quem estava de câmera ligada no tick (vem do LiveKit).
 	cameras map[string]bool
+	// real: contas reais entre quem está em call (Festeiro); nil = todas.
+	real map[string]bool
 }
 
 func newTracker(start time.Time, loc *time.Location) *tracker {
@@ -72,7 +74,9 @@ func (t *tracker) get(userID string) *pending {
 }
 
 // accrue soma o tempo desde o último tick. O intervalo conta pela hora em
-// que começou (de 4:59:50 a 5:00:00 ainda é madrugada).
+// que começou (de 4:59:50 a 5:00:00 ainda é madrugada). As fotos vêm do
+// call.AFK: quem está há 10 min sem falar já chega fora de Voice,
+// ScreenSharers e ScreenWatchers, e em Away (câmera e Festeiro olham lá).
 func (t *tracker) accrue(snaps []call.CallSnapshot, now time.Time) {
 	elapsed := now.Sub(t.lastTick)
 	t.lastTick = now
@@ -97,19 +101,41 @@ func (t *tracker) accrue(snaps []call.CallSnapshot, now time.Time) {
 	}
 }
 
-// accruePeak (Festeiro): quantas pessoas estão ouvindo (surdo não conta), e
-// só quem está ouvindo leva o crédito.
+// accruePeak (Festeiro): quantas pessoas estão na festa, e só elas levam o
+// crédito.
 func (t *tracker) accruePeak(s call.CallSnapshot) {
-	size := int64(len(s.Listeners))
+	partygoers := t.partygoers(s)
+	size := int64(len(partygoers))
 	if size < 2 {
 		return
 	}
-	for _, userID := range s.Listeners {
+	for _, userID := range partygoers {
 		p := t.get(userID)
 		if size > p.peak {
 			p.peak = size
 		}
 	}
+}
+
+// partygoers: quem conta para o Festeiro — ouvindo (surdo não conta), sem
+// estar AFK e conta real (e-mail confirmado e conta com 7 dias ou mais).
+func (t *tracker) partygoers(s call.CallSnapshot) []string {
+	var out []string
+	for _, userID := range s.Listeners {
+		if !contains(s.Away, userID) && t.isReal(userID) {
+			out = append(out, userID)
+		}
+	}
+	return out
+}
+
+// setRealAccounts troca o conjunto de contas reais (vale para o próximo accrue).
+func (t *tracker) setRealAccounts(real map[string]bool) {
+	t.real = real
+}
+
+func (t *tracker) isReal(userID string) bool {
+	return t.real == nil || t.real[userID]
 }
 
 // accrueVoice: Coruja, Madrugador e Maratona seguem o XP de voz (sem mute,
@@ -156,10 +182,11 @@ func (t *tracker) setCameras(on map[string]bool) {
 	t.cameras = on
 }
 
-// accrueCamera (Câmera ligada): segue o Streamer (mais alguém ouvindo).
+// accrueCamera (Câmera ligada): segue o Streamer (mais alguém ouvindo e sem
+// estar AFK).
 func (t *tracker) accrueCamera(s call.CallSnapshot, elapsed time.Duration) {
 	for _, userID := range s.Participants {
-		if t.cameras[userID] && hasOtherListener(s.Listeners, userID) {
+		if t.cameras[userID] && !contains(s.Away, userID) && hasOtherListener(s.Listeners, userID) {
 			t.get(userID).camera += elapsed
 		}
 	}

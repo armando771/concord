@@ -64,12 +64,13 @@ func TestDispatchRoutesTypingAndIgnoresUnknown(t *testing.T) {
 	c.dispatch(ctx, event("typing:stop", `{}`))
 	c.dispatch(ctx, event("call:qualquer", `{}`)) // não é mensagem de chamada
 	c.dispatch(ctx, event("call:leave", `{}`))
+	c.dispatch(ctx, event("call:speaking", `{"call_id":"c1"}`))
 
 	if len(typing.got) != 2 || typing.got[0] != "ana typing" {
 		t.Fatalf("digitação = %v", typing.got)
 	}
-	if len(router.events) != 1 {
-		t.Fatalf("repassadas ao call = %d, want 1 (call:leave)", len(router.events))
+	if len(router.events) != 2 {
+		t.Fatalf("repassadas ao call = %d, want 2 (call:leave e call:speaking)", len(router.events))
 	}
 
 	// Sem roteadores ligados, nada quebra.

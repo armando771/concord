@@ -1,6 +1,9 @@
 package call
 
-import "sort"
+import (
+	"sort"
+	"time"
+)
 
 // VoiceActivity é alguém que está, neste momento, participando de verdade de
 // uma chamada (é o que conta para o XP de voz).
@@ -8,6 +11,8 @@ type VoiceActivity struct {
 	UserID   string
 	CallID   string
 	ServerID *string
+	// JoinedAt: quando entrou nesta call (o AFK conta os 10 min a partir daí).
+	JoinedAt time.Time
 }
 
 // ActiveVoiceUsers lista quem está falando-e-ouvindo nas chamadas ativas.
@@ -18,7 +23,10 @@ func (s *Service) ActiveVoiceUsers() []VoiceActivity {
 	var active []VoiceActivity
 	for callID, ac := range s.calls {
 		for _, userID := range eligibleVoiceUsers(ac) {
-			active = append(active, VoiceActivity{UserID: userID, CallID: callID, ServerID: ac.info.ServerID})
+			active = append(active, VoiceActivity{
+				UserID: userID, CallID: callID, ServerID: ac.info.ServerID,
+				JoinedAt: ac.participants[userID].joinedAt,
+			})
 		}
 	}
 	return active

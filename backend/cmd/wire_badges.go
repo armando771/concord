@@ -11,6 +11,8 @@ import (
 func (a *app) wireBadgeEvents(badges *badge.Service) {
 	// Câmera ligada: quem está de câmera vem do LiveKit, a cada tick.
 	badges.WithCameras(a.liveKitAdmin)
+	// Festeiro: só contas reais (e-mail confirmado e 7 dias de conta) fazem pico.
+	badges.WithRealAccounts(badge.BadgeRepository(a.db))
 	// DJ: músicas postas na fila do Maestro.
 	a.musicManager.OnQueued(func(userID string, n int) {
 		badges.Count(context.Background(), userID, "dj", int64(n))

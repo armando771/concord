@@ -67,7 +67,9 @@ type app struct {
 	liveKitAdmin  *livekit.Admin
 	liveKitPort   string
 	callService   *call.Service
-	musicManager  *music.Manager
+	// callAFK: o tempo de call (XP e badges) visto sem quem está 10 min sem falar.
+	callAFK      *call.AFK
+	musicManager *music.Manager
 
 	// badgeDone fecha quando os badges terminam de gravar no desligamento.
 	badgeDone chan struct{}

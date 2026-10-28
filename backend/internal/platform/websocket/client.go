@@ -53,7 +53,9 @@ var callEvents = map[string]bool{
 	"call:activity": true, "call:activity:stop": true, "call:activity:join": true, "call:activity:leave": true,
 	"call:lock": true, "call:knock": true, "call:knock_cancel": true, "call:knock_respond": true,
 	"call:screen_watch": true,
-	"call:screen_draw":  true, "call:screen_draw_clear": true, "call:screen_draw_undo": true,
+	// Fala detectada no app (AFK em call, ver call/afk.go).
+	"call:speaking":    true,
+	"call:screen_draw": true, "call:screen_draw_clear": true, "call:screen_draw_undo": true,
 }
 
 func (c *Client) readPump(ctx context.Context) {
