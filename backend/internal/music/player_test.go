@@ -48,6 +48,8 @@ type fakeNotifier struct {
 	humans  []string
 	closed  int
 	states  int
+	// Músicas que tocaram o bastante ("call:quem pediu"), badge DJ.
+	played []string
 }
 
 func (n *fakeNotifier) PublishState(*Player) { n.mu.Lock(); n.states++; n.mu.Unlock() }
@@ -62,6 +64,16 @@ func (n *fakeNotifier) Humans(string) []string {
 	return append([]string(nil), n.humans...)
 }
 func (n *fakeNotifier) Closed(*Player) { n.mu.Lock(); n.closed++; n.mu.Unlock() }
+func (n *fakeNotifier) Played(callID, userID string) {
+	n.mu.Lock()
+	n.played = append(n.played, callID+":"+userID)
+	n.mu.Unlock()
+}
+func (n *fakeNotifier) allPlayed() []string {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return append([]string(nil), n.played...)
+}
 func (n *fakeNotifier) setHumans(h []string) {
 	n.mu.Lock()
 	n.humans = h
@@ -91,6 +103,12 @@ type harness struct {
 // Cada faixa dura `secs` segundos de PCM constante.
 func newHarness(t *testing.T, secs float64, idle time.Duration) *harness {
 	t.Helper()
+	return newHarnessPlayed(t, secs, idle, time.Hour)
+}
+
+// newHarnessPlayed: played é quanto a música toca até contar no DJ.
+func newHarnessPlayed(t *testing.T, secs float64, idle, played time.Duration) *harness {
+	t.Helper()
 	h := &harness{n: &fakeNotifier{humans: []string{"ana"}}, src: &fakeSource{fail: map[string]bool{}}}
 	deps := PlayerDeps{
 		Source: h.src,
@@ -108,6 +126,7 @@ func newHarness(t *testing.T, secs float64, idle time.Duration) *harness {
 		IdleTimeout: idle,
 		Crossfade:   200 * time.Millisecond,
 		SkipFade:    40 * time.Millisecond,
+		PlayedAfter: played,
 	}
 	h.p = NewPlayer("call1", "ch1", "srv1", "Sala 1", deps)
 	if err := h.p.Start(context.Background()); err != nil {

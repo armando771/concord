@@ -11,9 +11,10 @@ import (
 func (a *app) wireBadgeEvents(badges *badge.Service) {
 	// Câmera ligada: quem está de câmera vem do LiveKit, a cada tick.
 	badges.WithCameras(a.liveKitAdmin)
-	// DJ: músicas postas na fila do Maestro.
-	a.musicManager.OnQueued(func(userID string, n int) {
-		badges.Count(context.Background(), userID, "dj", int64(n))
+	// DJ: músicas do Maestro que tocaram 30 s com mais alguém ouvindo (o
+	// timer do player chama fora de qualquer lock).
+	a.musicManager.OnPlayed(func(userID string) {
+		badges.Count(context.Background(), userID, "dj", 1)
 	})
 	// Barulhento: sons da mesa de áudio tocados com alguém ouvindo. Fora do
 	// WebSocket de quem tocou: gravar não atrasa o próximo som.

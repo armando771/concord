@@ -5,12 +5,12 @@ package badge
 // mensagem), depois dos outros na ordem do app.
 var usoCategories = []Category{
 	{
-		// Músicas que a pessoa pôs na fila do Maestro (internal/music); a
-		// playlist conta cada música que entrou. Somadas pelo backend a cada
-		// pedido (Service.Count).
+		// Músicas que a pessoa pediu ao Maestro (internal/music) e que tocaram
+		// por 30 s, sem ser puladas, com mais alguém ouvindo na call: pôr na
+		// fila não conta (music/played.go). Somadas a cada uma (Service.Count).
 		Key:         "dj",
 		Name:        "DJ",
-		Description: "Ponha músicas na fila do Maestro, o bot de música das calls.",
+		Description: "Peça músicas ao Maestro, o bot de música das calls. Conta a música que toca por pelo menos 30 segundos com mais alguém ouvindo.",
 		Unit:        UnitSongs,
 		Tiers: []Tier{
 			{"Pede Música", 10, RarityCommon},
@@ -36,10 +36,12 @@ var usoCategories = []Category{
 	},
 	{
 		// Mensagens com figurinha ou GIF, contadas por trigger como as
-		// mensagens (mensagem apagada não desconta).
+		// mensagens (migration 000114): a mesma figurinha ou GIF da mensagem
+		// anterior da pessoa na sala, há menos de 1 hora, não conta, e a
+		// apagada em até 2 minutos desconta.
 		Key:         "figurinha",
 		Name:        "Figurinha",
-		Description: "Mande figurinhas e GIFs nos canais e nas DMs.",
+		Description: "Mande figurinhas e GIFs nos canais e nas DMs. A mesma figurinha ou GIF repetido em seguida não conta, e a apagada em até 2 minutos sai da conta.",
 		Unit:        UnitStickers,
 		Tiers: []Tier{
 			{"Figurinha Repetida", 10, RarityCommon},
