@@ -48,6 +48,7 @@ import { playSound, setSoundOutput } from '../lib/sounds'
 import { createKnockEventHandlers } from './knockWsEvents'
 import { playOwnJoinSound } from '../lib/entranceSoundOwn'
 import { channelJoinState } from '../lib/channelJoinState'
+import { staleOwnLive, syncCallState } from '../lib/callStateSync'
 import {
   abortWindowAudio,
   resetWindowAudio,
@@ -841,11 +842,9 @@ export const useCallStore = create<CallState>()((set, get) => {
   }
 
   /**
-   * Lê o estado da chamada no backend. `replace` (ao reentrar ou reconectar,
-   * quando o local pode ter ficado velho) faz o servidor valer: troca a lista
-   * de quem está no canal e o mudo/ensurdecido de todos; senão só soma quem
-   * faltava (eventos call:joined/call:voice podem ter chegado antes). Na DM a
-   * lista nunca encolhe: o outro lado é a própria chamada.
+   * Lê o estado da chamada no backend (ver syncCallState). `replace` ao
+   * reentrar ou reconectar, quando o local pode ter ficado velho; sem ele,
+   * eventos call:joined/call:voice podem ter chegado antes e são mantidos.
    * 'gone': a chamada não existe mais no servidor.
    */
   const loadCallState = async (
@@ -857,57 +856,10 @@ export const useCallStore = create<CallState>()((set, get) => {
     try {
       const state = await getCallState(callId)
       if (get().callId !== callId) return 'error'
-      const others = state.participants
-        .filter((p) => p.user_id && p.user_id !== meId)
-        .map((p) => ({
-          id: p.user_id,
-          username: p.username ?? '',
-          display_name: p.display_name ?? p.username ?? 'Usuário',
-          avatar_url: p.avatar_url ?? null,
-          name_style: p.name_style
-        }))
-      const sharing = state.screen_sharing ?? []
       useActivityStore.getState().hydrate(callId, state.activity ?? null)
-      const joinReqs = (state.join_requests ?? []).map((p) => ({
-        id: p.id,
-        username: p.username,
-        display_name: p.display_name,
-        avatar_url: p.avatar_url ?? null
-      }))
-      set((s) => ({
-        locked: state.call?.locked ?? s.locked,
-        joinRequests: replace
-          ? joinReqs
-          : [
-              ...s.joinRequests,
-              ...joinReqs.filter((r) => !s.joinRequests.some((q) => q.id === r.id))
-            ],
-        screenSharers: sharing,
-        screenWatchers:
-          (state.screen_watchers as Record<string, CallUserInfo[]>) ?? s.screenWatchers,
-        voiceStates: {
-          ...Object.fromEntries(
-            state.participants.map((p) => [
-              p.user_id,
-              {
-                muted: p.muted ?? false,
-                deafened: p.deafened ?? false,
-                serverMuted: p.server_muted ?? false,
-                serverDeafened: p.server_deafened ?? false
-              }
-            ])
-          ),
-          ...(replace ? {} : s.voiceStates)
-        },
-        focusedScreenUserId: s.focusedScreenUserId,
-        participants:
-          replace && s.type === 'channel'
-            ? others
-            : [
-                ...s.participants,
-                ...others.filter((p) => !s.participants.some((q) => q.id === p.id))
-              ]
-      }))
+      set((s) => syncCallState(state, meId, s, replace))
+      // Live que ficou no servidor sem tela local: tira do ar para todos.
+      if (staleOwnLive(state, meId, get().isScreenSharing)) sendScreenState(callId)
       return 'ok'
     } catch (err) {
       // estado indisponível: a lista se forma pelos eventos call:joined
