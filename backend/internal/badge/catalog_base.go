@@ -54,9 +54,12 @@ var baseCategories = []Category{
 		},
 	},
 	{
+		// Contadas por trigger (migration 000113): a mensagem igual à anterior
+		// da pessoa na sala, há menos de 1 hora, não conta, e a apagada em até
+		// 2 minutos desconta.
 		Key:         "mensagens",
 		Name:        "Mensagens enviadas",
-		Description: "Mande mensagens nos canais e nas DMs para subir este badge.",
+		Description: "Mande mensagens nos canais e nas DMs para subir este badge. Mensagem repetida em seguida não conta, e a apagada em até 2 minutos sai da conta.",
 		Unit:        UnitMessages,
 		Tiers: []Tier{
 			{"Puxa-assunto", 50, RarityCommon},
@@ -201,9 +204,12 @@ var baseCategories = []Category{
 		Exclusive: true,
 	},
 	{
+		// Servidores criados com pelo menos 3 membros além do dono (bots não
+		// contam; donoMinMembers em repository.go). Criar servidores vazios
+		// em série não sobe o badge.
 		Key:         "dono",
 		Name:        "Dono de servidor",
-		Description: "Crie servidores e mantenha a turma reunida.",
+		Description: "Crie servidores e reúna a turma. Conta o servidor com pelo menos 3 membros além de você.",
 		Unit:        UnitServers,
 		Tiers: []Tier{
 			{"Anfitrião", 1, RarityCommon},
@@ -234,11 +240,14 @@ var baseCategories = []Category{
 		},
 	},
 	{
-		// Amizades aceitas agora. Aceitar reavalia na hora (AcceptHook da
-		// amizade); desfazer não tira o tier já conquistado.
+		// Amizades aceitas agora com conta real: e-mail confirmado e criada há
+		// 7 dias (amigoContaRealDias). Aceitar reavalia na hora (AcceptHook da
+		// amizade); o amigo que vira conta real depois entra na próxima
+		// avaliação (varredura dos online ou perfil aberto), sem custo extra.
+		// Desfazer não tira o tier já conquistado.
 		Key:         "amigos",
 		Name:        "Amigos",
-		Description: "Faça amizades no Salinha. Contam os pedidos de amizade aceitos.",
+		Description: "Faça amizades no Salinha. Contam os pedidos de amizade aceitos com contas de e-mail confirmado e criadas há pelo menos 7 dias.",
 		Unit:        UnitFriends,
 		Tiers: []Tier{
 			{"Enturmado", 5, RarityCommon},

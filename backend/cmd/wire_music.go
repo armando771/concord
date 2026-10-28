@@ -17,6 +17,7 @@ func (a *app) wireMusic() {
 			return music.Location{CallID: l.CallID, ChannelID: l.ChannelID, ServerID: l.ServerID}, ok
 		},
 		Humans:          a.callService.ParticipantIDs,
+		Listeners:       a.callListeners,
 		IsMember:        a.isServerMember,
 		BotEnabled:      func(ctx context.Context, serverID string) bool { return a.isServerMember(ctx, serverID, bot.UserID) },
 		ChannelName:     a.channelName,
@@ -35,6 +36,17 @@ func (a *app) wireMusic() {
 	a.route(func(_ *gin.Engine, api *gin.RouterGroup) {
 		music.Routes(api, music.NewHandler(a.musicManager, a.authService), a.authMiddleware)
 	})
+}
+
+// callListeners: quem está ouvindo (não surdo) na call, pela mesma foto que
+// os badges de call usam (call.CallSnapshot.Listeners).
+func (a *app) callListeners(callID string) []string {
+	for _, snap := range a.callService.CallSnapshots() {
+		if snap.CallID == callID {
+			return snap.Listeners
+		}
+	}
+	return nil
 }
 
 func (a *app) isServerMember(ctx context.Context, serverID, userID string) bool {
