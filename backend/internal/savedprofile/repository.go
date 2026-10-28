@@ -40,16 +40,13 @@ func (r *Repository) List(ctx context.Context, userID string) ([]SavedProfile, e
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := []SavedProfile{}
-	for rows.Next() {
-		sp, err := scan(rows)
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (SavedProfile, error) {
+		sp, err := scan(row)
 		if err != nil {
-			return nil, err
+			return SavedProfile{}, err
 		}
-		out = append(out, *sp)
-	}
-	return out, rows.Err()
+		return *sp, nil
+	})
 }
 
 func (r *Repository) Find(ctx context.Context, userID, id string) (*SavedProfile, error) {
@@ -59,33 +56,42 @@ func (r *Repository) Find(ctx context.Context, userID, id string) (*SavedProfile
 // Create salva respeitando o limite: a linha da pessoa fica travada enquanto
 // conta, então dois "Salvar" ao mesmo tempo não passam de MaxPerUser.
 func (r *Repository) Create(ctx context.Context, userID, name string, snap user.ProfileSnapshot) (*SavedProfile, error) {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
+	var sp *SavedProfile
+	err := pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
+		if err := checkRoom(ctx, tx, userID); err != nil {
+			return err
+		}
+		var err error
+		sp, err = scan(tx.QueryRow(ctx, `
+			INSERT INTO saved_profiles (user_id, name, avatar_url, banner_url, fields)
+			VALUES ($1, $2, $3, $4, $5)
+			RETURNING `+columns, userID, name, snap.AvatarURL, snap.BannerURL, snap.Fields))
+		return nameTaken(err)
+	})
+	return sp, err
+}
 
+// checkRoom trava a linha da pessoa e confere se cabe mais um perfil salvo.
+func checkRoom(ctx context.Context, tx pgx.Tx, userID string) error {
 	var count int
-	err = tx.QueryRow(ctx, `
+	err := tx.QueryRow(ctx, `
 		SELECT (SELECT COUNT(*) FROM saved_profiles WHERE user_id = $1)
 		FROM users WHERE id = $1 FOR UPDATE`, userID).Scan(&count)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, user.ErrUserNotFound
-	}
-	if err != nil {
-		return nil, err
+	if err := userRowErr(err); err != nil {
+		return err
 	}
 	if count >= MaxPerUser {
-		return nil, ErrLimit
+		return ErrLimit
 	}
-	sp, err := scan(tx.QueryRow(ctx, `
-		INSERT INTO saved_profiles (user_id, name, avatar_url, banner_url, fields)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING `+columns, userID, name, snap.AvatarURL, snap.BannerURL, snap.Fields))
-	if err != nil {
-		return nil, nameTaken(err)
+	return nil
+}
+
+// userRowErr: conta que não existe vira user.ErrUserNotFound.
+func userRowErr(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return user.ErrUserNotFound
 	}
-	return sp, tx.Commit(ctx)
+	return err
 }
 
 func (r *Repository) Rename(ctx context.Context, userID, id, name string) (*SavedProfile, error) {

@@ -60,25 +60,30 @@ func updateProfile(ctx context.Context, q rowQuerier, id string, in ProfileInput
 // ApplySnapshot troca o perfil inteiro (campos, avatar e banner) numa
 // transação e devolve as URLs de avatar e banner que estavam antes.
 func (r *Repository) ApplySnapshot(ctx context.Context, id string, s ProfileSnapshot) (*User, []*string, error) {
-	tx, err := r.db.Begin(ctx)
+	var (
+		u   *User
+		old []*string
+	)
+	err := pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
+		var err error
+		if old, err = swapProfileMedia(ctx, tx, id, s); err != nil {
+			return err
+		}
+		u, err = updateProfile(ctx, tx, id, s.Fields)
+		return err
+	})
 	if err != nil {
 		return nil, nil, err
 	}
-	defer tx.Rollback(ctx)
+	return u, old, nil
+}
 
-	var oldAvatar, oldBanner *string
-	if err := tx.QueryRow(ctx, `SELECT avatar_url, banner_url FROM users WHERE id = $1 FOR UPDATE`, id).Scan(&oldAvatar, &oldBanner); err != nil {
-		return nil, nil, err
+// swapProfileMedia grava avatar e banner novos e devolve os que estavam.
+func swapProfileMedia(ctx context.Context, tx pgx.Tx, id string, s ProfileSnapshot) ([]*string, error) {
+	var avatar, banner *string
+	if err := tx.QueryRow(ctx, `SELECT avatar_url, banner_url FROM users WHERE id = $1 FOR UPDATE`, id).Scan(&avatar, &banner); err != nil {
+		return nil, err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE users SET avatar_url = $2, banner_url = $3 WHERE id = $1`, id, s.AvatarURL, s.BannerURL); err != nil {
-		return nil, nil, err
-	}
-	u, err := updateProfile(ctx, tx, id, s.Fields)
-	if err != nil {
-		return nil, nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, nil, err
-	}
-	return u, []*string{oldAvatar, oldBanner}, nil
+	_, err := tx.Exec(ctx, `UPDATE users SET avatar_url = $2, banner_url = $3 WHERE id = $1`, id, s.AvatarURL, s.BannerURL)
+	return []*string{avatar, banner}, err
 }
