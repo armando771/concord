@@ -18,7 +18,7 @@ Discord, incluindo o kanban/propostas (referência: app do ClickUp).
 | Voz e vídeo (LiveKit) **fora** da primeira versão | LiveKit não roda no Expo Go e exige development build; vira spec própria depois |
 | `mobile/` independente, lógica pura portada por cópia adaptada | não mexe no desktop; extrair pacote compartilhado só se a duplicação doer (novo ADR) |
 | Expo Router + Zustand + cliente REST/WS portado | padrão do repo vence o empate ([ADR 0015](../../adr/0015-app-mobile-expo.md)) |
-| Navegação igual ao Discord: abas Início · Mensagens · Notificações · Você; gaveta lateral de servidores e canais dentro do Início | o design já é o do Discord; o kanban fica dentro do servidor, ao lado dos canais, como no desktop |
+| Navegação em coluna única, como o app web/desktop ([ADR 0007](../../adr/0007-navegacao-mobile-uma-coluna.md)): trilho de servidores + lista de canais/DMs + painel do usuário (com mic, fone e engrenagem); tocar abre o chat com voltar. **Sem barra de abas** (decidido em 2026-10-28, substitui as 4 abas da Fundação) | é o layout que o dono quer, igual às capturas do desktop; o kanban fica dentro do servidor, ao lado dos canais |
 | Push na spec do chat, via Expo Push + FCM V1 | chat sem push perde mensagem com o app fechado |
 | Textos do desktop reaproveitados; só os textos novos precisam de aprovação | já foram aprovados |
 
