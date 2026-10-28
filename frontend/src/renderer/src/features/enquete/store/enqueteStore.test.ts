@@ -11,6 +11,7 @@ vi.mock('../api/enquete', () => ({
 
 import { ApiError } from '../../../shared/api/client'
 import { fetchPendentes, responderEnquete, type Enquete } from '../api/enquete'
+import { faseAtual } from '../lib/enquete'
 import { useEnqueteStore } from './enqueteStore'
 
 const fetchMock = vi.mocked(fetchPendentes)
@@ -21,9 +22,9 @@ const enquete: Enquete = {
   titulo: 'T',
   descricao: 'D',
   opcoes: [
-    { id: 'l', rotulo: 'Fez o L', badge: 'l' },
-    { id: '22', rotulo: 'Fez o 22', badge: 'v22' },
-    { id: 'nenhum', rotulo: 'Prefiro não dizer' }
+    { id: 'l', rotulo: 'L', badge: 'l' },
+    { id: '22', rotulo: '22', badge: 'v22' },
+    { id: 'nulo', rotulo: 'Nulo', badge: 'nulo' }
   ]
 }
 const outra: Enquete = { ...enquete, id: 'outra' }
@@ -115,12 +116,40 @@ describe('enqueteStore', () => {
     expect(ensureBadges).toHaveBeenCalledWith('ana', true)
   })
 
-  it('confirmar "nenhum": aviso neutro e os badges ficam como estão', async () => {
-    await ate('nenhum')
-    responderMock.mockResolvedValue({ enquete: 'segundo-turno', opcao: 'nenhum' })
+  it('confirmar "nulo": celebra o badge Votou Nulo e recarrega os badges', async () => {
+    await ate('nulo')
+    responderMock.mockResolvedValue({ enquete: 'segundo-turno', opcao: 'nulo', badge: 'nulo' })
+    await estado().confirmar()
+    expect(estado().reacao).toEqual({ tipo: 'celebracao', badge: 'nulo', rotulo: 'Votou Nulo' })
+    expect(ensureBadges).toHaveBeenCalledWith('ana', true)
+  })
+
+  it('opção sem badge: aviso neutro e os badges ficam como estão', async () => {
+    fetchMock.mockResolvedValue([{ ...enquete, opcoes: [{ id: 'pular', rotulo: 'Pular' }] }])
+    await ate('pular')
+    responderMock.mockResolvedValue({ enquete: 'segundo-turno', opcao: 'pular' })
     await estado().confirmar()
     expect(estado().reacao).toEqual({ tipo: 'neutra' })
     expect(ensureBadges).not.toHaveBeenCalled()
+  })
+
+  // Reset geral do segundo turno (migration 000096): o servidor apagou as
+  // respostas, então quem já tinha respondido volta a ver a pergunta. O estado
+  // vive só em memória (nada de "já respondi" em localStorage), então um app
+  // novo, ou outro login, depende só do que o servidor devolver.
+  it('depois do reset do servidor, quem já respondeu vê a pergunta de novo', async () => {
+    await ate('22')
+    responderMock.mockResolvedValue({ enquete: 'segundo-turno', opcao: '22', badge: 'v22' })
+    await estado().confirmar()
+    estado().fecharReacao()
+    expect(faseAtual(estado())).toBe('oculto')
+
+    estado().reset()
+    await estado().carregar('ana')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(estado().pendentes).toEqual([enquete])
+    expect(estado().selecao).toBeNull()
+    expect(faseAtual(estado())).toBe('pergunta')
   })
 
   it('fecharReacao limpa a reação e mostra a próxima pendente', async () => {

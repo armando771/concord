@@ -31,13 +31,12 @@ import EnqueteHost from './EnqueteHost'
 
 const enquete = {
   id: 'segundo-turno',
-  titulo: 'Escolha o seu badge do segundo turno',
-  descricao:
-    'Você já estava na Salinha no dia, então pode escolher um badge de lembrança. A escolha é definitiva.',
+  titulo: 'Ganhe um badge da sua escolha no segundo turno:',
+  descricao: 'A escolha é definitiva.',
   opcoes: [
-    { id: 'l', rotulo: 'Fez o L', badge: 'l' },
-    { id: '22', rotulo: 'Fez o 22', badge: 'v22' },
-    { id: 'nenhum', rotulo: 'Prefiro não dizer' }
+    { id: 'l', rotulo: 'L', badge: 'l' },
+    { id: '22', rotulo: '22', badge: 'v22' },
+    { id: 'nulo', rotulo: 'Nulo', badge: 'nulo' }
   ]
 }
 
@@ -68,10 +67,10 @@ describe('enquete (componentes)', () => {
       const html = render()
       expect(html).toContain('role="dialog"')
       expect(html).toContain('aria-modal="true"')
-      expect(html).toContain('Escolha o seu badge do segundo turno')
+      expect(html).toContain('Ganhe um badge da sua escolha no segundo turno:')
       expect(html).toContain('A escolha é definitiva.')
-      for (const rotulo of ['Fez o L', 'Fez o 22', 'Prefiro não dizer'])
-        expect(html).toContain(rotulo)
+      for (const rotulo of ['>L<', '>22<', '>Nulo<']) expect(html).toContain(rotulo)
+      expect(html).not.toContain('Prefiro não dizer')
       expect(html.match(/type="radio"/g)?.length).toBe(3)
     })
 
@@ -104,7 +103,7 @@ describe('enquete (componentes)', () => {
     it('repete a opção e avisa que é definitivo, com Confirmar e Voltar', () => {
       estado({ etapa: 'confirmacao', selecao: '22' })
       const html = render()
-      expect(html).toContain('Confirmar: Fez o 22?')
+      expect(html).toContain('Confirmar: 22?')
       expect(html).toContain('Não dá para mudar depois.')
       expect(html).toMatch(/>Confirmar</)
       expect(html).toMatch(/>Voltar</)
@@ -143,6 +142,13 @@ describe('enquete (componentes)', () => {
       expect(html).toContain('enquete-badge')
       expect(html).toContain('width:224px')
       expect(html).toContain('aria-label="Fechar"')
+    })
+
+    it('celebração do Nulo: badge épico com o nome Votou Nulo', () => {
+      estado({ pendentes: [], reacao: { tipo: 'celebracao', badge: 'nulo', rotulo: 'Votou Nulo' } })
+      const html = render()
+      expect(html).toContain('Votou Nulo')
+      expect(html).toContain('#c38bff')
     })
 
     it('aviso neutro: sem animação de celebração e com Fechar', () => {

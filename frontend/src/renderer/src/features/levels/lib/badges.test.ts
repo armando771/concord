@@ -393,8 +393,8 @@ describe('Fez o L (resposta única do segundo turno)', () => {
     value: 1,
     tier: 1,
     tier_name: 'Fez o L',
-    rarity: 'lendario',
-    tiers: [{ tier: 1, name: 'Fez o L', threshold: 1, rarity: 'lendario' }]
+    rarity: 'epico',
+    tiers: [{ tier: 1, name: 'Fez o L', threshold: 1, rarity: 'epico' }]
   })
 
   it('não mostra número: diz o que a pessoa fez', () => {
@@ -422,7 +422,7 @@ describe('Fez o L (resposta única do segundo turno)', () => {
       category: 'v22',
       name: 'Fez o 22',
       tier_name: 'Fez o 22',
-      tiers: [{ tier: 1, name: 'Fez o 22', threshold: 1, rarity: 'lendario' as const }]
+      tiers: [{ tier: 1, name: 'Fez o 22', threshold: 1, rarity: 'epico' as const }]
     }
 
     it('statText diz o 22, não o L', () => {
@@ -439,6 +439,30 @@ describe('Fez o L (resposta única do segundo turno)', () => {
       expect(formatThreshold('vote', 1, 'v22')).toBe('Fez o 22')
     })
   })
+
+  describe('Votou Nulo (nulo)', () => {
+    const nulo = {
+      ...l,
+      category: 'nulo',
+      name: 'Votou Nulo',
+      tier_name: 'Votou Nulo',
+      tiers: [{ tier: 1, name: 'Votou Nulo', threshold: 1, rarity: 'epico' as const }]
+    }
+
+    it('statText diz Votou Nulo, não o L', () => {
+      expect(statText(nulo)).toBe('Votou Nulo no segundo turno')
+    })
+
+    it('publicStatText diz Votou Nulo, não o L', () => {
+      expect(publicStatText({ ...nulo, value: undefined, progress: undefined })).toBe(
+        'Votou Nulo no segundo turno'
+      )
+    })
+
+    it('formatThreshold diz Votou Nulo, não o L', () => {
+      expect(formatThreshold('vote', 1, 'nulo')).toBe('Votou Nulo')
+    })
+  })
 })
 
 describe('unlocksComAviso', () => {
@@ -450,8 +474,8 @@ describe('unlocksComAviso', () => {
     rarity: 'lendario'
   })
 
-  it('l e v22 têm celebração própria e ficam fora do aviso genérico', () => {
-    const lista = [unlock('l'), unlock('voz'), unlock('v22')]
+  it('l, v22 e nulo têm celebração própria e ficam fora do aviso genérico', () => {
+    const lista = [unlock('l'), unlock('voz'), unlock('v22'), unlock('nulo')]
     expect(unlocksComAviso(lista).map((u) => u.category)).toEqual(['voz'])
   })
 })

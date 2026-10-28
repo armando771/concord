@@ -163,13 +163,25 @@ var baseCategories = []Category{
 	},
 	{
 		// Quem escolheu "Fez o 22" na enquete do segundo turno
-		// (internal/enquete), com o mesmo peso do badge l.
+		// (internal/enquete), com o mesmo peso dos badges l e nulo.
 		Key:         "v22",
 		Name:        "Fez o 22",
 		Description: "Fez o 22 no segundo turno. Ganho escolhendo o badge do segundo turno.",
 		Unit:        UnitVote,
 		Tiers: []Tier{
-			{"Fez o 22", 1, RarityLegendary},
+			{"Fez o 22", 1, RarityEpic},
+		},
+		Exclusive: true,
+	},
+	{
+		// Quem escolheu "Nulo" na enquete do segundo turno (internal/enquete),
+		// com o mesmo peso dos badges l e v22.
+		Key:         "nulo",
+		Name:        "Votou Nulo",
+		Description: "Anulou o voto no segundo turno. Ganho escolhendo o badge do segundo turno.",
+		Unit:        UnitVote,
+		Tiers: []Tier{
+			{"Votou Nulo", 1, RarityEpic},
 		},
 		Exclusive: true,
 	},

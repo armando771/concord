@@ -61,7 +61,7 @@ describe('badgeStore', () => {
   })
 
   describe('Fez o L (tem celebração própria)', () => {
-    const l = { category: 'l', name: 'Fez o L', tier: 1, tier_name: 'Fez o L', rarity: 'lendario' }
+    const l = { category: 'l', name: 'Fez o L', tier: 1, tier_name: 'Fez o L', rarity: 'epico' }
     const voz = {
       category: 'voz',
       name: 'Tempo em call',
