@@ -41,3 +41,24 @@ func TestOpcoesComBadgeSaoConcedidasPeloCatalogo(t *testing.T) {
 		}
 	}
 }
+
+// O modal pergunta "Ganhe um badge da sua escolha no segundo turno:" e não tem
+// mais "Prefiro não dizer": L, 22 e Nulo, cada um com seu badge.
+func TestSegundoTurnoTemTresOpcoesComBadge(t *testing.T) {
+	if SegundoTurno.Titulo != "Ganhe um badge da sua escolha no segundo turno:" {
+		t.Errorf("título = %q", SegundoTurno.Titulo)
+	}
+	want := []Opcao{
+		{ID: "l", Rotulo: "L", Badge: "l"},
+		{ID: "22", Rotulo: "22", Badge: "v22"},
+		{ID: "nulo", Rotulo: "Nulo", Badge: "nulo"},
+	}
+	if len(SegundoTurno.Opcoes) != len(want) {
+		t.Fatalf("opções = %+v, want %+v", SegundoTurno.Opcoes, want)
+	}
+	for i, o := range want {
+		if SegundoTurno.Opcoes[i] != o {
+			t.Errorf("opção %d = %+v, want %+v", i, SegundoTurno.Opcoes[i], o)
+		}
+	}
+}

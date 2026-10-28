@@ -13,7 +13,9 @@ type Stats struct {
 	XP           int64
 	VoiceSeconds int64
 	MessagesSent int64
-	Reactions    int64
+	// Mensagens distintas em que a pessoa reagiu (várias reações dela na
+	// mesma mensagem contam 1).
+	Reactions int64
 	// Tempo compartilhando a tela numa call com mais gente.
 	StreamSeconds int64
 	// Tempo assistindo à transmissão de outra pessoa (sem estar surdo).
@@ -178,6 +180,7 @@ var valueFns = map[string]valueFn{
 	"criador":      func(s Stats, _ time.Time) int64 { return flag(s.IsDev) },
 	"l":            func(s Stats, _ time.Time) int64 { return flag(s.Escolhas["segundo-turno:l"]) },
 	"v22":          func(s Stats, _ time.Time) int64 { return flag(s.Escolhas["segundo-turno:22"]) },
+	"nulo":         func(s Stats, _ time.Time) int64 { return flag(s.Escolhas["segundo-turno:nulo"]) },
 	"dj":           func(s Stats, _ time.Time) int64 { return s.SongsQueued },
 	"barulhento":   func(s Stats, _ time.Time) int64 { return s.SoundsPlayed },
 	"figurinha":    func(s Stats, _ time.Time) int64 { return s.StickersSent },

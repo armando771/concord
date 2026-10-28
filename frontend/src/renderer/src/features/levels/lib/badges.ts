@@ -75,7 +75,11 @@ const HOUR = 3600
 const DEV_TEXT = 'Dev do Salinha'
 const DEV_ONLY = 'Só para os devs'
 /** O nome da escolha de cada badge do segundo turno (categoria -> "Fez o L"). */
-const VOTE_NAME: Record<string, string> = { l: 'Fez o L', v22: 'Fez o 22' }
+export const VOTE_NAME: Record<string, string> = {
+  l: 'Fez o L',
+  v22: 'Fez o 22',
+  nulo: 'Votou Nulo'
+}
 
 function voteName(category: string | undefined): string {
   return VOTE_NAME[category ?? ''] ?? VOTE_NAME.l
@@ -344,7 +348,7 @@ export function selectedBadge<T extends { category?: string }>(
 }
 
 /** Badges que têm celebração própria na tela e ficam de fora do aviso genérico. */
-const CELEBRACAO_PROPRIA = new Set(['l', 'v22'])
+const CELEBRACAO_PROPRIA = new Set(['l', 'v22', 'nulo'])
 
 /** Os desbloqueios que o aviso genérico mostra. */
 export function unlocksComAviso(unlocks: BadgeUnlockEvent['unlocks']): BadgeUnlockEvent['unlocks'] {

@@ -2,12 +2,9 @@ import { useId } from 'react'
 import BadgeIcon from '../../levels/components/BadgeIcon'
 import { rarityMeta } from '../../levels/lib/badges'
 import { useFecharEm } from '../hooks/useFecharEm'
-import { CELEBRACAO_MS } from '../lib/enquete'
+import { CELEBRACAO_MS, RARIDADE_BADGE } from '../lib/enquete'
 import { useEnqueteStore } from '../store/enqueteStore'
 import EnqueteCamada from './EnqueteCamada'
-
-// Os badges de enquete são todos Lendários (internal/badge/catalog.go).
-const RARIDADE = 'lendario'
 
 /**
  * O badge ganho em tamanho grande, com raios e brilho (parados com
@@ -22,7 +19,7 @@ function EnqueteCelebracao({
 }): React.JSX.Element {
   const fechar = useEnqueteStore((s) => s.fecharReacao)
   const titleId = useId()
-  const cor = rarityMeta(RARIDADE).color
+  const cor = rarityMeta(RARIDADE_BADGE).color
   useFecharEm(CELEBRACAO_MS, fechar)
 
   return (
@@ -37,7 +34,7 @@ function EnqueteCelebracao({
         <BadgeIcon
           category={badge}
           tier={1}
-          rarity={RARIDADE}
+          rarity={RARIDADE_BADGE}
           size={224}
           className="enquete-badge relative max-w-full"
         />

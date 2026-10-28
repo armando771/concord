@@ -22,8 +22,10 @@ func BadgeRepository(db *pgxpool.Pool) *Repository {
 
 // Stats junta os números da pessoa numa query só: contadores prontos, um
 // COUNT de servidores pelo índice de owner_id, um COUNT dos cards de propostas
-// pelo índice de author_id (Contribuinte), as amizades aceitas (Amigos) e se
-// ela está em dev_badge_users (Fundador).
+// pelo índice de author_id (Contribuinte), as mensagens distintas em que
+// reagiu pelo índice (user_id, message_id) (Reações: várias reações na mesma
+// mensagem contam 1), as amizades aceitas (Amigos) e se ela está em
+// dev_badge_users (Fundador).
 func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 	var s Stats
 	var escolhas []string
@@ -35,7 +37,7 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			COALESCE(l.xp, 0),
 			COALESCE(l.voice_seconds, 0),
 			COALESCE(b.messages_sent, 0),
-			COALESCE(b.reactions_given, 0),
+			(SELECT COUNT(DISTINCT r.message_id) FROM message_reactions r WHERE r.user_id = u.id),
 			COALESCE(b.stream_seconds, 0),
 			COALESCE(b.watch_seconds, 0),
 			COALESCE(b.night_seconds, 0),

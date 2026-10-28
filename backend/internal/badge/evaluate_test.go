@@ -324,7 +324,7 @@ func TestEvaluateLOnlyForWhoSaidYes(t *testing.T) {
 
 	badges, fresh = Evaluate(Stats{CreatedAt: FounderCutoff, Escolhas: map[string]bool{"segundo-turno:l": true}}, nil, now)
 	l := find(t, badges, "l")
-	if l.Tier != 1 || l.TierName != "Fez o L" || l.Rarity != RarityLegendary || l.Progress != 1 || l.NextThreshold != nil {
+	if l.Tier != 1 || l.TierName != "Fez o L" || l.Rarity != RarityEpic || l.Progress != 1 || l.NextThreshold != nil {
 		t.Fatalf("badge l = %+v", l)
 	}
 	var got bool
@@ -374,7 +374,7 @@ func TestEvaluateV22OnlyForWhoChoseIt(t *testing.T) {
 
 	badges, fresh = Evaluate(Stats{CreatedAt: FounderCutoff, Escolhas: map[string]bool{"segundo-turno:22": true}}, nil, now)
 	b := find(t, badges, "v22")
-	if b.Tier != 1 || b.TierName != "Fez o 22" || b.Rarity != RarityLegendary || b.Progress != 1 || b.NextThreshold != nil {
+	if b.Tier != 1 || b.TierName != "Fez o 22" || b.Rarity != RarityEpic || b.Progress != 1 || b.NextThreshold != nil {
 		t.Fatalf("badge v22 = %+v", b)
 	}
 	if hasBadge(badges, "l") {
@@ -386,18 +386,6 @@ func TestEvaluateV22OnlyForWhoChoseIt(t *testing.T) {
 	}
 	if !got {
 		t.Fatalf("fresh = %+v, want v22/1", fresh)
-	}
-}
-
-func TestEvaluateNenhumNaoDaBadge(t *testing.T) {
-	badges, fresh := Evaluate(Stats{CreatedAt: FounderCutoff, Escolhas: map[string]bool{"segundo-turno:nenhum": true}}, nil, now)
-	if hasBadge(badges, "l") || hasBadge(badges, "v22") {
-		t.Fatal("quem preferiu não dizer ganhou badge")
-	}
-	for _, u := range fresh {
-		if u.Category == "l" || u.Category == "v22" {
-			t.Fatalf("desbloqueio indevido: %+v", u)
-		}
 	}
 }
 
