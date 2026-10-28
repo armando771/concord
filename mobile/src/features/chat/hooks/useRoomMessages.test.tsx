@@ -2,14 +2,24 @@ import { act, renderHook, waitFor } from '@testing-library/react-native'
 import { ApiError } from '../../../shared/api/client'
 import { realtime } from '../../../shared/api/realtime'
 import type { WsEvent } from '../../../shared/api/ws'
-import { listChannelMessages, sendChannelMessage, type Message } from '../api/messages'
+import { markConversationRead } from '../api/conversations'
+import {
+  listChannelMessages,
+  listConversationMessages,
+  sendChannelMessage,
+  sendConversationMessage,
+  type Message
+} from '../api/messages'
 import { useRoomMessages } from './useRoomMessages'
 
 jest.mock('../api/messages', () => ({
   ...jest.requireActual('../api/messages'),
   listChannelMessages: jest.fn(),
-  sendChannelMessage: jest.fn()
+  sendChannelMessage: jest.fn(),
+  listConversationMessages: jest.fn(),
+  sendConversationMessage: jest.fn()
 }))
+jest.mock('../api/conversations', () => ({ markConversationRead: jest.fn().mockResolvedValue(undefined) }))
 jest.mock('../../../shared/api/realtime', () => {
   let reconnect: () => void = () => {}
   return {
@@ -149,5 +159,72 @@ describe('useRoomMessages', () => {
     await waitFor(() => expect(ids(result.current.messages)).toEqual(['d']))
     await act(async () => finishFirst([msg('velha', 1)]))
     expect(ids(result.current.messages)).toEqual(['d'])
+  })
+})
+
+describe('useRoomMessages: conversa (DM)', () => {
+  const listDm = jest.mocked(listConversationMessages)
+  const sendDm = jest.mocked(sendConversationMessage)
+  const dmMsg = (id: string, minute: number, conversation = 'd1'): Message => ({
+    id,
+    author_id: 'u2',
+    conversation_id: conversation,
+    content: id,
+    created_at: `2026-10-28T10:${String(minute).padStart(2, '0')}:00Z`
+  })
+  const open = () => renderHook(() => useRoomMessages({ kind: 'conversation', id: 'd1' }))
+
+  beforeEach(() => {
+    listDm.mockResolvedValue([dmMsg('b', 2), dmMsg('a', 1)])
+    jest.mocked(markConversationRead).mockClear()
+  })
+
+  it('carrega pelo endpoint da conversa e assina a sala conversation:<id>', async () => {
+    const { result } = await open()
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(listDm).toHaveBeenCalledWith('d1')
+    expect(list).not.toHaveBeenCalled()
+    expect(ids(result.current.messages)).toEqual(['b', 'a'])
+    expect(realtime.subscribe).toHaveBeenCalledWith('conversation:d1')
+  })
+
+  it('ao abrir, marca a conversa como lida', async () => {
+    await open()
+    await waitFor(() => expect(markConversationRead).toHaveBeenCalledWith('d1'))
+  })
+
+  it('mensagem nova desta conversa entra e é marcada como lida; a de outra é ignorada', async () => {
+    const { result } = await open()
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    jest.mocked(markConversationRead).mockClear()
+    await emit('message:create', { message: dmMsg('c', 3) })
+    await emit('message:create', { message: dmMsg('z', 4, 'outra') })
+    expect(ids(result.current.messages)).toEqual(['c', 'b', 'a'])
+    expect(markConversationRead).toHaveBeenCalledTimes(1)
+  })
+
+  it('message:delete filtra por conversation_id', async () => {
+    const { result } = await open()
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    await emit('message:delete', { message_id: 'b', conversation_id: 'd1' })
+    expect(ids(result.current.messages)).toEqual(['a'])
+    await emit('message:delete', { message_id: 'a', conversation_id: 'outra' })
+    expect(ids(result.current.messages)).toEqual(['a'])
+  })
+
+  it('enviar usa o endpoint da conversa', async () => {
+    sendDm.mockResolvedValue(dmMsg('n', 5))
+    const { result } = await open()
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    await act(async () => void (await result.current.send('oi')))
+    expect(sendDm).toHaveBeenCalledWith('d1', 'oi')
+    expect(send).not.toHaveBeenCalled()
+    expect(ids(result.current.messages)[0]).toBe('n')
+  })
+
+  it('canal não marca nada como lido', async () => {
+    const { result } = await renderHook(() => useRoomMessages({ kind: 'channel', id: 'c1' }))
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(markConversationRead).not.toHaveBeenCalled()
   })
 })

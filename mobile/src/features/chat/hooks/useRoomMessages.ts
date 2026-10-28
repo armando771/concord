@@ -2,81 +2,111 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError } from '../../../shared/api/client'
 import { onRealtimeReconnect, realtime } from '../../../shared/api/realtime'
 import { onWsEvent, type WsEvent } from '../../../shared/api/ws'
-import { listChannelMessages, MESSAGE_LIMIT, sendChannelMessage, type Message } from '../api/messages'
+import { markConversationRead } from '../api/conversations'
+import {
+  listChannelMessages,
+  listConversationMessages,
+  MESSAGE_LIMIT,
+  sendChannelMessage,
+  sendConversationMessage,
+  type Message
+} from '../api/messages'
 import { mergeMessages, oldestId, removeMessage } from '../lib/messageList'
 
 export type LoadStatus = 'loading' | 'ready' | 'error'
 export type SendOutcome = 'ok' | 'empty' | 'forbidden' | 'error'
 
-/** Aplica um evento do WebSocket à lista deste canal (null = não é deste canal/evento). */
-function applyEvent(current: Message[], event: WsEvent, channelId: string): Message[] | null {
-  const payload = event.payload as { message?: Message; message_id?: string; channel_id?: string }
+/** O que o chat mostra: um canal de texto ou uma conversa (DM ou grupo). */
+export interface ChatTarget {
+  kind: 'channel' | 'conversation'
+  id: string
+}
+
+type EventPayload = { message?: Message; message_id?: string; channel_id?: string; conversation_id?: string }
+
+const belongsTo = (target: ChatTarget, ids: { channel_id?: string | null; conversation_id?: string | null }): boolean =>
+  (target.kind === 'channel' ? ids.channel_id : ids.conversation_id) === target.id
+
+/** Aplica um evento do WebSocket à lista deste chat (null = não é deste chat/evento). */
+function applyEvent(current: Message[], event: WsEvent, target: ChatTarget): Message[] | null {
+  const payload = event.payload as EventPayload
   if (event.type === 'message:create' || event.type === 'message:update') {
-    return payload.message?.channel_id === channelId ? mergeMessages(current, [payload.message]) : null
+    return payload.message && belongsTo(target, payload.message) ? mergeMessages(current, [payload.message]) : null
   }
-  if (event.type === 'message:delete' && payload.channel_id === channelId && payload.message_id) {
+  if (event.type === 'message:delete' && payload.message_id && belongsTo(target, payload)) {
     return removeMessage(current, payload.message_id)
   }
   return null
 }
 
-/** O que o chat mostra: um canal de texto ou uma conversa (DM). */
-export interface ChatTarget {
-  kind: 'channel'
-  id: string
+function fetchPage(target: ChatTarget, before?: string): Promise<Message[]> {
+  const list = target.kind === 'channel' ? listChannelMessages : listConversationMessages
+  return before ? list(target.id, before) : list(target.id)
 }
 
-/** Histórico, tempo real e envio do chat de um canal de texto. */
+const sendTo = (target: ChatTarget, content: string): Promise<Message> =>
+  target.kind === 'channel' ? sendChannelMessage(target.id, content) : sendConversationMessage(target.id, content)
+
+/** Histórico, tempo real e envio do chat de um canal de texto ou de uma conversa. */
 export function useRoomMessages(target: ChatTarget) {
-  const channelId = target.id
+  const { kind, id } = target
   const [messages, setMessages] = useState<Message[]>([])
   const [status, setStatus] = useState<LoadStatus>('loading')
   const [hasMore, setHasMore] = useState(true)
-  const channelRef = useRef(channelId)
+  const currentKey = useRef(`${kind}:${id}`)
   const loadingMore = useRef(false)
-  channelRef.current = channelId
+  const key = `${kind}:${id}`
+  currentKey.current = key
 
-  /** Busca a página mais recente e junta; respostas de outro canal (já trocado) são descartadas. */
+  /** Busca a página mais recente e junta; respostas de outro chat (já trocado) são descartadas. */
   const fetchLatest = useCallback(
     async (showLoading: boolean) => {
       if (showLoading) setStatus('loading')
       try {
-        const page = await listChannelMessages(channelId)
-        if (channelRef.current !== channelId) return
+        const page = await fetchPage({ kind, id })
+        if (currentKey.current !== key) return
         setMessages((current) => mergeMessages(current, page))
         if (showLoading) setHasMore(page.length >= MESSAGE_LIMIT)
         setStatus('ready')
       } catch {
-        if (channelRef.current === channelId && showLoading) setStatus('error')
+        if (currentKey.current === key && showLoading) setStatus('error')
       }
     },
-    [channelId]
+    [kind, id, key]
   )
 
   useEffect(() => {
     setMessages([])
     setHasMore(true)
     void fetchLatest(true)
-  }, [fetchLatest])
+    // Abrir a conversa a marca como lida (o desktop para de mostrar não lida).
+    if (kind === 'conversation') void markConversationRead(id).catch(() => {})
+  }, [fetchLatest, kind, id])
 
   useEffect(() => {
-    const room = `channel:${channelId}`
+    const room = key
     realtime.subscribe(room)
-    const offEvents = onWsEvent((event) => setMessages((current) => applyEvent(current, event, channelId) ?? current))
+    const offEvents = onWsEvent((event) => {
+      setMessages((current) => applyEvent(current, event, { kind, id }) ?? current)
+      const incoming = (event.payload as EventPayload | null)?.message
+      if (kind === 'conversation' && event.type === 'message:create' && incoming && belongsTo({ kind, id }, incoming)) {
+        void markConversationRead(id).catch(() => {})
+      }
+    })
     const offReconnect = onRealtimeReconnect(() => void fetchLatest(false))
     return () => {
       realtime.unsubscribe(room)
       offEvents()
       offReconnect()
     }
-  }, [channelId, fetchLatest])
+  }, [key, kind, id, fetchLatest])
 
   const loadMore = useCallback(async () => {
     if (!hasMore || loadingMore.current || status !== 'ready') return
     loadingMore.current = true
     try {
-      const page = await listChannelMessages(channelId, oldestId(messages))
-      if (channelRef.current !== channelId) return
+      const page = await fetchPage({ kind, id }, oldestId(messages))
+      if (currentKey.current !== key) return
       setMessages((current) => mergeMessages(current, page))
       setHasMore(page.length >= MESSAGE_LIMIT)
     } catch {
@@ -84,21 +114,21 @@ export function useRoomMessages(target: ChatTarget) {
     } finally {
       loadingMore.current = false
     }
-  }, [channelId, hasMore, messages, status])
+  }, [kind, id, key, hasMore, messages, status])
 
   const send = useCallback(
     async (text: string): Promise<SendOutcome> => {
       const content = text.trim()
       if (!content) return 'empty'
       try {
-        const sent = await sendChannelMessage(channelId, content)
+        const sent = await sendTo({ kind, id }, content)
         setMessages((current) => mergeMessages(current, [sent]))
         return 'ok'
       } catch (err) {
         return err instanceof ApiError && err.status === 403 ? 'forbidden' : 'error'
       }
     },
-    [channelId]
+    [kind, id]
   )
 
   const retry = useCallback(() => fetchLatest(true), [fetchLatest])
