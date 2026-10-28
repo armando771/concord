@@ -18,3 +18,9 @@ export function guestErrorMessage(err: unknown, fallback: string): string {
   }
   return fallback
 }
+
+/** Quem já é membro e abriu o link: o caminho do canal de voz (o app abre normalmente). */
+export function alreadyMemberPath(err: unknown): string | null {
+  if (!(err instanceof ApiError) || err.code !== 'already_member') return null
+  return `/servers/${String(err.body.server_id)}/channels/${String(err.body.channel_id)}`
+}

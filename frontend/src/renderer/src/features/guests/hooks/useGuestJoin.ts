@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ApiError } from '../../../shared/api/client'
 import { useAuthStore } from '../../auth/store/authStore'
 import { joinAsGuest, joinWithAccount } from '../api/guestInvites'
-import { guestErrorMessage } from '../lib/guestErrors'
+import { alreadyMemberPath, guestErrorMessage } from '../lib/guestErrors'
 import { guestAsUser, hasAccount } from '../lib/guestSession'
 import { useGuestSessionStore } from '../store/guestSessionStore'
 
@@ -32,13 +31,9 @@ export function useGuestJoin(token: string): GuestJoin {
       useGuestSessionStore.getState().start(token, pass, false)
     } catch (err) {
       // Já é membro: abre o canal de voz normalmente.
-      if (err instanceof ApiError && err.code === 'already_member') {
-        navigate(`/servers/${String(err.body.server_id)}/channels/${String(err.body.channel_id)}`, {
-          replace: true
-        })
-        return
-      }
-      throw err
+      const memberPath = alreadyMemberPath(err)
+      if (!memberPath) throw err
+      navigate(memberPath, { replace: true })
     }
   }
 
