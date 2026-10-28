@@ -12,6 +12,8 @@ import ForgotPassword from '../features/auth/pages/ForgotPassword'
 import ResetPassword from '../features/auth/pages/ResetPassword'
 import VerifyEmail from '../features/auth/pages/VerifyEmail'
 import InviteLanding from '../features/servers/pages/InviteLanding'
+import GuestLanding from '../features/guests/pages/GuestLanding'
+import GuestSessionGate from '../features/guests/components/GuestSessionGate'
 import RequireAuth from '../features/auth/components/RequireAuth'
 import RedirectIfAuthed from '../features/auth/components/RedirectIfAuthed'
 import AppShell from './AppShell'
@@ -29,9 +31,11 @@ export const router = createRouter([
   {
     path: '/',
     element: (
-      <RequireAuth>
-        <AppShell />
-      </RequireAuth>
+      <GuestSessionGate>
+        <RequireAuth>
+          <AppShell />
+        </RequireAuth>
+      </GuestSessionGate>
     ),
     errorElement: <RouteErrorScreen />,
     children: [
@@ -94,6 +98,12 @@ export const router = createRouter([
     // Link de convite: abre sem login (o cartão mostra o servidor antes).
     path: '/convite/:code',
     element: <InviteLanding />,
+    errorElement: <RouteErrorScreen />
+  },
+  {
+    // Link de visitante para uma call: abre sem login (só a call, sem o app).
+    path: '/visitante/:token',
+    element: <GuestLanding />,
     errorElement: <RouteErrorScreen />
   },
   {

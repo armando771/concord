@@ -9,6 +9,7 @@ import VoiceConnectedBadges from './VoiceConnectedBadges'
 import VoiceLobby from './VoiceLobby'
 import useSpeaking from '../hooks/useSpeaking'
 import VoiceChatToggle from '../../chat/components/VoiceChatToggle'
+import GuestInviteEntry from '../../guests/components/GuestInviteEntry'
 
 /** O palco da chamada em que estou (quem fala acende). */
 function ConnectedStage({ serverId }: { serverId?: string }): React.JSX.Element {
@@ -29,7 +30,8 @@ function VoiceChannelView({ channelId }: { channelId: string }): React.JSX.Eleme
   return (
     <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
       {connectedHere && <VoiceConnectedBadges />}
-      <div className="absolute right-4 top-3 z-20">
+      <div className="absolute right-4 top-3 z-20 flex items-center gap-2">
+        {connectedHere && <GuestInviteEntry channelId={channelId} />}
         <VoiceChatToggle channelId={channelId} />
       </div>
 
