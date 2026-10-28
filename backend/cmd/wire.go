@@ -71,7 +71,8 @@ type app struct {
 	callAFK      *call.AFK
 	musicManager *music.Manager
 
-	// badgeDone fecha quando os badges terminam de gravar no desligamento.
+	// badgeDone fecha quando os badges (e o nível do servidor) terminam de
+	// gravar no desligamento.
 	badgeDone chan struct{}
 
 	routes []func(router *gin.Engine, api *gin.RouterGroup)
@@ -106,6 +107,7 @@ func wire(ctx context.Context, db *pgxpool.Pool) *app {
 	a.wireCalls()
 	a.wireMusic()
 	a.wireEngagement()
+	a.wireServerLevel()
 	a.wireRealtime()
 	a.wireAccount()
 	a.wireUpdates()
