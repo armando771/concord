@@ -20,6 +20,6 @@ describe('HubBackFrame', () => {
 
   it('o botão tem alvo de toque de 40 px e o cabeçalho abre espaço para ele', () => {
     expect(html).toContain('size-10')
-    expect(html).toContain('[&_header]:pl-14')
+    expect(html).toContain('[&amp;_header]:pl-14')
   })
 })

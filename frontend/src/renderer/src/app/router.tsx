@@ -75,7 +75,7 @@ export const router = createRouter([
             <Ranking />
           </HubBackFrame>
         )
-      }
+      },
       { path: 'dm/:userId', element: <DmChat /> },
       { path: 'dm/c/:conversationId', element: <GroupChat /> },
       { path: 'servers/:id', element: <ServerView /> },
