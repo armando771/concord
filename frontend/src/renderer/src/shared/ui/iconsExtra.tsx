@@ -57,3 +57,13 @@ export function MembersIcon({ className }: IconProps): React.JSX.Element {
     </Stroke>
   )
 }
+
+/** Coroa cheia (marca do dono do servidor). */
+export function CrownIcon({ className }: IconProps): React.JSX.Element {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M3 7.5 7.5 11 12 4l4.5 7L21 7.5 19.5 18h-15L3 7.5Z" />
+      <rect x="4.5" y="19" width="15" height="2" rx="1" />
+    </svg>
+  )
+}

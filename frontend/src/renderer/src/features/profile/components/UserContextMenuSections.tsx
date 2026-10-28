@@ -186,6 +186,8 @@ interface SelfMenuProps {
   top: number
   menuRef: React.RefObject<HTMLDivElement | null>
   nicknameItem?: React.JSX.Element | false | null
+  /** "Cargos ›" (só o dono dá cargos a si mesmo). */
+  rolesItem?: React.ReactNode
   openProfile: () => void
   itemClass: string
 }
@@ -196,6 +198,7 @@ export function SelfContextMenu({
   top,
   menuRef,
   nicknameItem,
+  rolesItem,
   openProfile,
   itemClass
 }: SelfMenuProps): React.JSX.Element {
@@ -215,6 +218,7 @@ export function SelfContextMenu({
         Perfil
       </button>
       {nicknameItem}
+      {rolesItem}
     </div>
   )
 }
@@ -275,11 +279,13 @@ interface SelfUserMenuProps {
   onEditNickname: () => void
   onOpenProfile: () => void
   itemClass: string
+  rolesItem?: React.ReactNode
 }
 
 export function SelfUserMenu({
   target,
   canNick,
+  rolesItem,
   left,
   top,
   menuRef,
@@ -299,6 +305,7 @@ export function SelfUserMenu({
       top={top}
       menuRef={menuRef}
       nicknameItem={nicknameItem}
+      rolesItem={rolesItem}
       openProfile={onOpenProfile}
       itemClass={itemClass}
     />

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useServerStore } from '../store/serverStore'
+import { useServerAccess } from '../hooks/useServerAccess'
 import { showToast } from '../../../shared/store/toastStore'
 import { actionErrorMessage } from '../lib/permissionErrors'
 import type { Role } from '../lib/permissions'
@@ -21,13 +22,15 @@ function RoleMembers({
   const members = useServerStore((s) => s.currentMembers)
   const addMemberRole = useServerStore((s) => s.addMemberRole)
   const removeMemberRole = useServerStore((s) => s.removeMemberRole)
+  const access = useServerAccess()
   const [query, setQuery] = useState('')
 
   const nameOf = (m: (typeof members)[number]): string => serverDisplayName(m, m)
   const withRole = members.filter((m) => m.role_ids?.includes(role.id))
   const term = query.trim().toLowerCase()
+  // Os cargos do dono só o próprio dono mexe.
   const candidates = members
-    .filter((m) => !m.role_ids?.includes(role.id))
+    .filter((m) => !m.role_ids?.includes(role.id) && access.canEditRolesOf(m.user_id))
     .filter((m) => !term || nameOf(m).toLowerCase().includes(term))
     .slice(0, 8)
 
@@ -93,7 +96,7 @@ function RoleMembers({
                   <Avatar userId={m.user_id} name={nameOf(m)} avatarUrl={m.avatar_url} size={24} />
                   <span className="truncate text-sm text-strong">{nameOf(m)}</span>
                 </span>
-                {manageable && !role.is_system && (
+                {manageable && !role.is_system && access.canEditRolesOf(m.user_id) && (
                   <button
                     type="button"
                     onClick={() => void run(() => removeMemberRole(serverId, m.user_id, role.id))}

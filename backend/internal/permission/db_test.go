@@ -12,8 +12,8 @@ import (
 	"testing"
 
 	"gin-quickstart/backend/internal/channel"
-	"gin-quickstart/backend/internal/platform/database"
 	"gin-quickstart/backend/internal/permission"
+	"gin-quickstart/backend/internal/platform/database"
 	"gin-quickstart/backend/internal/role"
 	"gin-quickstart/backend/internal/server"
 
@@ -117,6 +117,23 @@ func (e *env) roleByName(t *testing.T, serverID, name string) permission.Role {
 	return permission.Role{}
 }
 
+// legacyModerator: o que o antigo cargo padrão Moderador tem nos servidores
+// que já existiam (servidor novo não o cria mais).
+const legacyModerator = permission.DefaultEveryone | permission.ManageChannels | permission.ManageServer |
+	permission.MentionEveryone | permission.ManageMessages | permission.MoveMembers | permission.MuteMembers |
+	permission.DeafenMembers | permission.KickMembers | permission.ManageExpressions | permission.ManageNicknames |
+	permission.DisconnectMembers
+
+// newModerator cria no servidor um cargo "Moderador" como o antigo padrão.
+func (e *env) newModerator(t *testing.T, serverID string) permission.Role {
+	t.Helper()
+	mod := &permission.Role{ServerID: serverID, Name: "Moderador", Permissions: legacyModerator, Hoist: true}
+	if err := e.roleRepo.Create(e.ctx, mod); err != nil {
+		t.Fatal(err)
+	}
+	return *mod
+}
+
 func TestDBNewServerHasDefaultRoles(t *testing.T) {
 	e := newEnv(t)
 	owner := newUser(t, e.db, e.ctx)
@@ -126,14 +143,13 @@ func TestDBNewServerHasDefaultRoles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(roles) != 3 {
-		t.Fatalf("roles = %+v, want @everyone, Bots e Moderador", roles)
+	// Servidor novo nasce só com o @everyone e o cargo fixo Bots: sem
+	// Moderador e sem cargo de dono (o dono não é cargo).
+	if len(roles) != 2 {
+		t.Fatalf("roles = %+v, want só @everyone e Bots", roles)
 	}
-	// Do mais alto para o mais baixo: Moderador (2), Bots (1), @everyone (0).
-	mod, bots, everyone := roles[0], roles[1], roles[2]
-	if mod.Name != permission.ModeratorName || mod.Position != 2 || mod.Permissions != permission.DefaultModerator || !mod.Hoist || mod.IsDefault || mod.IsSystem {
-		t.Errorf("Moderador = %+v", mod)
-	}
+	// Do mais alto para o mais baixo: Bots (1), @everyone (0).
+	bots, everyone := roles[0], roles[1]
 	if bots.Name != permission.BotsRoleName || bots.Position != 1 || bots.Permissions != 0 || !bots.Hoist || bots.IsDefault || !bots.IsSystem {
 		t.Errorf("Bots = %+v", bots)
 	}
@@ -158,7 +174,7 @@ func TestDBSnapshotMatchesPermissions(t *testing.T) {
 	for _, u := range []string{modUser, vipUser, plain} {
 		e.join(t, srv.ID, u)
 	}
-	mod := e.roleByName(t, srv.ID, permission.ModeratorName)
+	mod := e.newModerator(t, srv.ID)
 	if err := e.roleRepo.AddMemberRole(e.ctx, srv.ID, modUser, mod.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +254,7 @@ func TestDBLegacyRoleAndRoleIDsInMemberList(t *testing.T) {
 	srv := e.newServer(t, owner)
 	e.join(t, srv.ID, modUser)
 	e.join(t, srv.ID, plain)
-	mod := e.roleByName(t, srv.ID, permission.ModeratorName)
+	mod := e.newModerator(t, srv.ID)
 	if err := e.roleRepo.AddMemberRole(e.ctx, srv.ID, modUser, mod.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -358,6 +374,7 @@ func TestDBRoleCreateAndReorderPositions(t *testing.T) {
 	owner := newUser(t, e.db, e.ctx)
 	srv := e.newServer(t, owner)
 
+	mod := e.newModerator(t, srv.ID)
 	a := &permission.Role{ServerID: srv.ID, Name: "A"}
 	b := &permission.Role{ServerID: srv.ID, Name: "B"}
 	for _, r := range []*permission.Role{a, b} {
@@ -377,11 +394,11 @@ func TestDBRoleCreateAndReorderPositions(t *testing.T) {
 		return out
 	}
 	// Cargo novo entra logo acima dos cargos fixos (Bots e @everyone), abaixo dos anteriores.
-	if got := names(); !reflect.DeepEqual(got, []string{permission.ModeratorName, "A", "B", permission.BotsRoleName, permission.EveryoneName}) {
+	if got := names(); !reflect.DeepEqual(got, []string{"Moderador", "A", "B", permission.BotsRoleName, permission.EveryoneName}) {
 		t.Fatalf("ordem = %v", got)
 	}
 
-	roles, err := e.roleSvc.Reorder(e.ctx, srv.ID, owner, []string{b.ID, e.roleByName(t, srv.ID, permission.ModeratorName).ID, a.ID})
+	roles, err := e.roleSvc.Reorder(e.ctx, srv.ID, owner, []string{b.ID, mod.ID, a.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,7 +406,7 @@ func TestDBRoleCreateAndReorderPositions(t *testing.T) {
 	for _, r := range roles {
 		got = append(got, r.Name)
 	}
-	if want := []string{"B", permission.ModeratorName, "A", permission.BotsRoleName, permission.EveryoneName}; !reflect.DeepEqual(got, want) {
+	if want := []string{"B", "Moderador", "A", permission.BotsRoleName, permission.EveryoneName}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("depois de reordenar = %v, want %v", got, want)
 	}
 
@@ -400,7 +417,7 @@ func TestDBRoleCreateAndReorderPositions(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(ids, []string{a.ID}) {
 		t.Fatalf("SetMemberRole = %v, %v", ids, err)
 	}
-	if _, err := e.roleSvc.SetModerator(e.ctx, srv.ID, owner, member, true); err != nil {
+	if _, err := e.roleSvc.SetMemberRole(e.ctx, srv.ID, owner, member, mod.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	snap, _ := e.permissions.Snapshot(e.ctx, srv.ID)
@@ -415,7 +432,7 @@ func TestDBBanFlow(t *testing.T) {
 	srv := e.newServer(t, owner)
 	e.join(t, srv.ID, mod)
 	e.join(t, srv.ID, victim)
-	modRole := e.roleByName(t, srv.ID, permission.ModeratorName)
+	modRole := e.newModerator(t, srv.ID)
 	if err := e.roleRepo.AddMemberRole(e.ctx, srv.ID, mod, modRole.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -424,7 +441,7 @@ func TestDBBanFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Moderador padrão não bane; o dono bane.
+	// O Moderador (como o antigo padrão) não bane; o dono bane.
 	if err := e.moderation.Ban(e.ctx, srv.ID, mod, victim, "spam"); !errors.Is(err, permission.ErrMissingPermission) {
 		t.Fatalf("moderador banindo: err = %v", err)
 	}
@@ -582,7 +599,7 @@ func TestDBMigrationBackfillsExistingServers(t *testing.T) {
 	}
 	if roles[2].Permissions != permission.DefaultEveryone || !roles[2].IsDefault ||
 		roles[1].Name != permission.BotsRoleName || !roles[1].IsSystem || !roles[1].Hoist ||
-		roles[0].Permissions != permission.DefaultModerator || roles[0].Name != permission.ModeratorName {
+		roles[0].Permissions != legacyModerator || roles[0].Name != "Moderador" {
 		t.Errorf("cargos padrão errados: %+v", roles)
 	}
 

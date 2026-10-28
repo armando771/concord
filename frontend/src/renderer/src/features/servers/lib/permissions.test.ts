@@ -6,6 +6,7 @@ import {
   Perm,
   canActOn,
   canDisconnectMember,
+  canEditRolesOf,
   canMoveMember,
   canGrant,
   canManageNicknameOf,
@@ -28,7 +29,7 @@ import {
 // têm que calcular igual.
 interface Vectors {
   bits: Record<string, number>
-  defaults: { everyone: string[]; moderator: string[] }
+  defaults: { everyone: string[] }
   compute: {
     name: string
     owner_id: string
@@ -62,6 +63,13 @@ interface Vectors {
     is_owner: boolean
     actor_highest: number
     role_position: number
+    expect: boolean
+  }[]
+  can_edit_roles_of: {
+    name: string
+    owner_id: string
+    actor: string
+    target: string
     expect: boolean
   }[]
   can_grant: { name: string; actor: string[]; changed: string[]; expect: boolean }[]
@@ -156,6 +164,11 @@ describe('hierarquia (casos do backend)', () => {
       expect(canActOn(tc.owner_id, tc.actor, tc.target, tc.actor_highest, tc.target_highest)).toBe(
         tc.expect
       )
+    })
+  }
+  for (const tc of vectors.can_edit_roles_of) {
+    it(`canEditRolesOf: ${tc.name}`, () => {
+      expect(canEditRolesOf(tc.owner_id, tc.actor, tc.target)).toBe(tc.expect)
     })
   }
   for (const tc of vectors.can_manage_role) {

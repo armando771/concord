@@ -123,6 +123,11 @@ func (s *Snapshot) CanActOn(actorID, targetID string) bool {
 	return CanActOn(s.OwnerID, actorID, targetID, s.Highest(actorID), s.Highest(targetID))
 }
 
+// CanEditRolesOf: o ator pode dar ou tirar cargos do alvo?
+func (s *Snapshot) CanEditRolesOf(actorID, targetID string) bool {
+	return CanEditRolesOf(s.OwnerID, actorID, targetID)
+}
+
 // CanManageRole: o ator pode editar/atribuir este cargo?
 func (s *Snapshot) CanManageRole(actorID string, role Role) bool {
 	return CanManageRole(s.IsOwner(actorID), s.Highest(actorID), role)

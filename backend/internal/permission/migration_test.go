@@ -8,6 +8,20 @@ import (
 	"testing"
 )
 
+// legacyModerator: as permissões de um cargo de moderação típico (as do antigo cargo
+// Moderador, que servidor novo não cria mais).
+const legacyModerator = DefaultEveryone | ManageChannels |
+	ManageServer |
+	MentionEveryone |
+	ManageMessages |
+	MoveMembers |
+	MuteMembers |
+	DeafenMembers |
+	KickMembers |
+	ManageExpressions |
+	ManageNicknames |
+	DisconnectMembers
+
 func readMigration(t *testing.T, name string) string {
 	t.Helper()
 	raw, err := os.ReadFile("../../migrations/" + name)
@@ -24,7 +38,7 @@ func TestMigrationDefaultsMatchConstants(t *testing.T) {
 	sql := readMigration(t, "000029_add_roles_permissions.up.sql")
 	added := nicknameMigrationBits(t)
 	disconnectBits := disconnectMigrationBits(t)
-	for name, want := range map[string]int64{"@everyone": DefaultEveryone, "Moderador": DefaultModerator} {
+	for name, want := range map[string]int64{"@everyone": DefaultEveryone, "Moderador": legacyModerator} {
 		needle := "'" + name + "', "
 		i := strings.Index(sql, "SELECT id, "+needle)
 		if i < 0 {
