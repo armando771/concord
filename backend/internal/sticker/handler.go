@@ -4,19 +4,14 @@ import (
 	"context"
 	"errors"
 	"gin-quickstart/backend/internal/permission"
-	"io"
 	"log"
 	"mime"
 	"net/http"
-	"syscall"
 
 	"gin-quickstart/backend/internal/platform/media"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
-
-const multipartOverhead = 256 << 10
 
 type stickerRepo interface {
 	Create(ctx context.Context, s *Sticker) error
@@ -105,153 +100,6 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, stickers)
-}
-
-func (h *Handler) Upload(c *gin.Context) {
-	userID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-	uploaderID := userID.(string)
-	serverID := c.Param("id")
-	ctx := c.Request.Context()
-
-	isMember, err := h.servers.IsMember(ctx, serverID, uploaderID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check membership"})
-		return
-	}
-	if !isMember {
-		c.JSON(http.StatusForbidden, gin.H{"error": ErrNotServerMember.Error()})
-		return
-	}
-
-	count, err := h.repo.CountByServer(ctx, serverID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check server sticker limit"})
-		return
-	}
-	if count >= h.maxPerServer {
-		c.JSON(http.StatusConflict, gin.H{"error": ErrServerFull.Error()})
-		return
-	}
-
-	incoming := c.Request.ContentLength
-	if incoming < 0 {
-		incoming = h.maxStickerBytes
-	}
-	if !h.space.HasRoom(incoming) {
-		c.JSON(http.StatusInsufficientStorage, gin.H{"error": "server out of space"})
-		return
-	}
-	if c.Request.ContentLength > h.maxStickerBytes+multipartOverhead {
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file too large (max 1 MB)"})
-		return
-	}
-
-	reader, err := c.Request.MultipartReader()
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "multipart/form-data required"})
-		return
-	}
-
-	sticker := &Sticker{
-		ID:         uuid.New().String(),
-		ServerID:   serverID,
-		UploaderID: uploaderID,
-	}
-
-	var (
-		rawName  string
-		head     []byte
-		declared string
-		saved    bool
-		keep     bool
-	)
-
-	defer func() {
-		if saved && !keep {
-			_ = h.store.Remove(sticker.ID)
-		}
-	}()
-
-	for {
-		part, err := reader.NextPart()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid multipart body"})
-			return
-		}
-
-		field := part.FormName()
-		switch {
-		case field == "file" && !saved:
-			declared = part.Header.Get("Content-Type")
-			size, sniffBytes, err := h.store.Save(sticker.ID, part, h.maxStickerBytes)
-			if errors.Is(err, media.ErrTooLarge) {
-				c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file too large (max 1 MB)"})
-				return
-			}
-			if errors.Is(err, syscall.ENOSPC) {
-				c.JSON(http.StatusInsufficientStorage, gin.H{"error": "server out of space"})
-				return
-			}
-			if err != nil {
-				log.Printf("sticker save failed: %v", err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save file"})
-				return
-			}
-			saved = true
-			sticker.SizeBytes = size
-			head = sniffBytes
-
-		case field == "name":
-			raw, _ := io.ReadAll(io.LimitReader(part, 1024))
-			rawName = string(raw)
-
-		default:
-			io.Copy(io.Discard, part)
-		}
-		part.Close()
-	}
-
-	if !saved {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "image file is required"})
-		return
-	}
-
-	name, err := sanitizeName(rawName)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	sticker.Name = name
-
-	kind, contentType, ok := media.Sniff(head, declared)
-	if !ok || kind != media.KindImage || (contentType != "image/png" && contentType != "image/webp" && contentType != "image/gif") {
-		c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "only image files (png, webp, gif) are allowed for stickers"})
-		return
-	}
-	sticker.ContentType = contentType
-
-	if err := h.repo.Create(ctx, sticker); err != nil {
-		log.Printf("sticker create record failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save sticker"})
-		return
-	}
-	keep = true
-
-	if h.publisher != nil {
-		h.publisher.BroadcastToRoom("server:"+serverID, marshalEvent("sticker:created", CreatedEvent{
-			ServerID: serverID,
-			Sticker:  *sticker,
-		}))
-	}
-
-	c.JSON(http.StatusCreated, sticker)
 }
 
 func (h *Handler) Delete(c *gin.Context) {
