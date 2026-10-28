@@ -48,3 +48,4 @@ O que fica mais fácil, o que fica mais difícil, o que precisa ser feito depois
 - [0008. Salvar o perfil no "Aplicar" de cada editor, sem rascunho nem barra de alterações](0008-perfil-salva-no-aplicar.md)
 - [0009. Tratar o dono como nível interno, sem cargos padrão além do @everyone](0009-dono-nao-e-cargo.md)
 - [0010. Detectar AFK em call pelo aviso de fala do app, com o AFK filtrando as fotos das calls](0010-afk-em-call.md)
+- [0011. Guardar perfis salvos com a mídia por referência, apagando o arquivo só quando ninguém mais usa](0011-perfis-salvos-midia-por-referencia.md)

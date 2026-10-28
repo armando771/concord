@@ -5,12 +5,11 @@ import ProfileCardBody from '../../../profile/components/ProfileCardBody'
 import ProfileCardFrame from '../../../profile/components/ProfileCardFrame'
 import { CardMemberSince, CardVisitorButtons } from '../../../profile/components/card/CardSampleExtras'
 import { linkError, normalizeLink } from '../../../profile/lib/profileLinks'
+import { DEFAULT_BANNER } from '../../../profile/lib/profileMedia'
 import { profileThemeLook, resolveProfileTheme } from '../../../profile/lib/profileTheme'
 import type { ProfileDraft } from '../../../profile/lib/profileValidation'
 import type { CardSpot } from '../../../profile/lib/cardSpots'
 
-/** Banner sem imagem nem cor escolhida (o cartão do próprio perfil, fora de servidor). */
-export const DEFAULT_BANNER = 'linear-gradient(135deg, #5865f2, #8b5cf6)'
 
 /** O que a prévia precisa além do rascunho: a conta e as imagens já resolvidas. */
 export interface PreviewBase {

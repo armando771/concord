@@ -100,6 +100,13 @@ describe('ProfilesSection', () => {
     expect(html).toContain('Remover banner')
   })
 
+  it('no topo, os perfis salvos para trocar o perfil inteiro', () => {
+    const html = render()
+    expect(html).toContain('Perfis salvos')
+    expect(html).toContain('Salvar perfil atual')
+    expect(html.indexOf('Perfis salvos')).toBeLessThan(html.indexOf('Como os outros veem'))
+  })
+
   it('nenhum modal começa aberto', () => {
     expect(render()).not.toContain('role="dialog"')
   })
