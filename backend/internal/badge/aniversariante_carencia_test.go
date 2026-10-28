@@ -26,8 +26,8 @@ func TestEvaluateAniversarianteNeedsTheDateFor30Days(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s := Stats{CreatedAt: FounderCutoff, BirthdayDay: 25, BirthdayMonth: 10, BirthdaySetAt: tc.setAt}
 			badges, _ := Evaluate(s, nil, day)
-			if b := find(t, badges, "aniversariante"); b.Tier != tc.want {
-				t.Fatalf("tier = %d, want %d", b.Tier, tc.want)
+			if got := tierOf(badges, "aniversariante"); got != tc.want {
+				t.Fatalf("tier = %d, want %d", got, tc.want)
 			}
 		})
 	}

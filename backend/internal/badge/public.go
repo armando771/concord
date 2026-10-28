@@ -2,14 +2,13 @@ package badge
 
 import "time"
 
-// PublicTier é um degrau da escada visto por outra pessoa: o catálogo e, se
-// conquistado, só o dia.
+// PublicTier é um degrau já conquistado visto por outra pessoa: só o dia.
 type PublicTier struct {
 	Tier      int    `json:"tier"`
 	Name      string `json:"name"`
 	Threshold int64  `json:"threshold"`
 	Rarity    string `json:"rarity"`
-	// "2006-01-02" em Brasília; vazio se ainda não conquistado.
+	// "2006-01-02" em Brasília.
 	UnlockedAt string `json:"unlocked_at,omitempty"`
 }
 

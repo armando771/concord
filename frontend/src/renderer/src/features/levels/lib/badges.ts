@@ -72,6 +72,7 @@ export function holoPointer(
 
 const HOUR = 3600
 
+const FOUNDER_TEXT = 'Chegou nas primeiras semanas'
 const DEV_TEXT = 'Dev do Salinha'
 const DEV_ONLY = 'Só para os devs'
 /** O nome da escolha de cada badge do segundo turno (categoria -> "Fez o L"). */
@@ -90,9 +91,8 @@ function voteText(category: string | undefined): string {
 }
 const BIRTHDAY_TEXT = 'Comemorou o aniversário no Salinha'
 
-function birthdayText(b: Badge, value: number): string {
-  if (value > 0) return 'Hoje é o seu aniversário!'
-  return b.tier > 0 ? BIRTHDAY_TEXT : 'Ganho no dia do seu aniversário'
+function birthdayText(value: number): string {
+  return value > 0 ? 'Hoje é o seu aniversário!' : BIRTHDAY_TEXT
 }
 
 /** "#3 de 10 a chegar no nível 100" (a posição vem também para os outros). */
@@ -152,10 +152,9 @@ const STAT_TEXT: Partial<Record<BadgeUnit, (b: Badge, value: number) => string>>
   stickers: (_, value) => plural(value, 'figurinha ou GIF enviado', 'figurinhas e GIFs enviados'),
   days: (_, value) => `Recorde de ${plural(value, 'dia seguido', 'dias seguidos')}`,
   votes: (_, value) => plural(value, 'voto dado', 'votos dados'),
-  birthday: birthdayText,
+  birthday: (_, value) => birthdayText(value),
   firsts: (_, value) => `Primeira mensagem de ${plural(value, 'servidor', 'servidores')}`,
-  founder: (_, value) =>
-    value > 0 ? 'Chegou nas primeiras semanas' : 'Chegou depois das primeiras semanas',
+  founder: () => FOUNDER_TEXT,
   dev: () => DEV_TEXT,
   vote: (b) => voteText(b.category)
 }
@@ -168,7 +167,7 @@ export function statText(b: Badge): string {
 
 /** Badges sem escada de números: no perfil dos outros, uma frase. */
 const PUBLIC_FIXED_TEXT: Partial<Record<BadgeUnit, (b: Badge) => string>> = {
-  founder: () => 'Chegou nas primeiras semanas',
+  founder: () => FOUNDER_TEXT,
   dev: () => DEV_TEXT,
   vote: (b) => voteText(b.category),
   rank: (b) => rankText(b.value),
@@ -228,63 +227,6 @@ export function formatThreshold(unit: BadgeUnit, threshold: number, category?: s
   return THRESHOLD_TEXT[unit]?.(threshold, category) ?? num(threshold)
 }
 
-function falta(n: number, one: string, many: string): string {
-  return n === 1 ? `Falta 1 ${one}` : `Faltam ${num(n)} ${many}`
-}
-
-const DAY_MS = 24 * 60 * 60 * 1000
-
-function secondsRemaining(left: number): string {
-  if (left < HOUR) return `Faltam ${Math.max(1, Math.ceil(left / 60))} min`
-  return falta(Math.ceil(left / HOUR), 'hora', 'horas')
-}
-
-/** Idade da conta conta pelo dia em que o próximo tier chega. */
-function monthsRemaining(b: Badge, left: number, now: Date): string {
-  if (!b.next_at) return falta(left, 'mês', 'meses')
-  const days = Math.max(1, Math.ceil((new Date(b.next_at).getTime() - now.getTime()) / DAY_MS))
-  if (days >= 60) return falta(Math.round(days / 30.44), 'mês', 'meses')
-  return falta(days, 'dia', 'dias')
-}
-
-type RemainingFn = (b: Badge, left: number, now: Date) => string
-
-/** Quanto falta, por unidade; unidade sem entrada não mostra nada. */
-const REMAINING_TEXT: Partial<Record<BadgeUnit, RemainingFn>> = {
-  seconds: (_, left) => secondsRemaining(left),
-  months: monthsRemaining,
-  messages: (_, left) => falta(left, 'mensagem', 'mensagens'),
-  reactions: (_, left) => falta(left, 'reação', 'reações'),
-  level: (_, left) => falta(left, 'nível', 'níveis'),
-  people: (b) => `Uma call com ${plural(b.next_threshold ?? 0, 'pessoa', 'pessoas')}`,
-  servers: (_, left) => falta(left, 'servidor', 'servidores'),
-  proposals: (_, left) => falta(left, 'proposta', 'propostas'),
-  friends: (_, left) => falta(left, 'amigo', 'amigos'),
-  bugs: (_, left) => falta(left, 'bug', 'bugs'),
-  songs: (_, left) => falta(left, 'música', 'músicas'),
-  sounds: (_, left) => falta(left, 'som', 'sons'),
-  stickers: (_, left) => falta(left, 'figurinha ou GIF', 'figurinhas e GIFs'),
-  // O valor é o recorde, não a sequência atual: a meta é uma sequência nova.
-  days: (b) => `Uma sequência de ${plural(b.next_threshold ?? 0, 'dia', 'dias')}`,
-  votes: (_, left) => falta(left, 'voto', 'votos'),
-  birthday: () => 'Chega no dia do seu aniversário',
-  firsts: (_, left) => falta(left, 'servidor', 'servidores'),
-  founder: () => 'Só para quem chegou nas primeiras semanas',
-  dev: () => DEV_ONLY
-}
-
-/** "Faltam 20 horas", "Faltam 4 meses", "Tier máximo!". */
-export function remainingText(b: Badge, now: Date = new Date()): string {
-  if (b.next_threshold === undefined || b.next_threshold === null) return 'Tier máximo!'
-  const left = Math.max(0, b.next_threshold - (b.value ?? 0))
-  return REMAINING_TEXT[b.unit]?.(b, left, now) ?? ''
-}
-
-/** 0–100 para a barra de progresso. */
-export function progressPercent(b: Badge): number {
-  return Math.min(100, Math.max(0, Math.round((b.progress ?? 0) * 100)))
-}
-
 /** "29/07/26" (vazio sem data). */
 export function formatUnlockDate(iso: string | undefined): string {
   if (!iso) return ''
@@ -314,24 +256,12 @@ export function profileBadgeRow(badges: Badge[], max = 6): { shown: Badge[]; ove
   return { shown: earned.slice(0, max), overflow: Math.max(0, earned.length - max) }
 }
 
-/** "Seus badges" e "Disponíveis para desbloquear". */
-export function splitBadges(badges: Badge[]): { earned: Badge[]; available: Badge[] } {
-  return {
-    earned: earnedBadges(badges),
-    available: badges.filter((b) => b.tier === 0 && b.obtainable === true)
-  }
-}
-
 /**
- * O que o modal de badges mostra: no próprio perfil, os ganhos e os que dá
- * para desbloquear; no dos outros, só os ganhos.
+ * O que o modal de badges mostra, no próprio perfil e no dos outros: só os
+ * conquistados. O que falta nunca aparece (nem bloqueado, nem progresso).
  */
-export function visibleBadges(
-  badges: Badge[] | undefined,
-  isMe: boolean
-): { earned: Badge[]; available: Badge[]; visible: Badge[] } {
-  const { earned, available } = splitBadges(badges ?? [])
-  return { earned, available, visible: isMe ? [...earned, ...available] : earned }
+export function visibleBadges(badges: Badge[] | undefined): Badge[] {
+  return earnedBadges(badges ?? [])
 }
 
 /**

@@ -81,13 +81,54 @@ describe('BadgesModal', () => {
       expect(html).not.toContain('Fez o L')
     })
 
-    it('no próprio perfil mostra o progresso e a escada com 22', () => {
+    it('no próprio perfil mostra os tiers conquistados com 22, sem progresso', () => {
       store.modal = { userId: 'me', name: 'Eu', avatarUrl: null }
       store.byUser = { me: { badges: [v22] } }
       const html = renderToStaticMarkup(<BadgesModal />)
-      expect(html).toContain('Seu progresso')
+      expect(html).toContain('Tiers conquistados')
       expect(html).toContain('Fez o 22 no segundo turno')
       expect(html).not.toContain('Fez o L')
+      expect(html).not.toContain('Seu progresso')
+    })
+  })
+
+  describe('só o que já foi conquistado', () => {
+    const voz = {
+      category: 'voz',
+      name: 'Tempo em call',
+      description: 'Fique em call.',
+      unit: 'seconds',
+      value: 30 * 3600,
+      tier: 2,
+      tier_name: 'Tagarela',
+      rarity: 'comum',
+      unlocked_at: '2026-10-24T12:00:00Z',
+      tiers: [
+        { tier: 1, name: 'Calado', threshold: 3600, rarity: 'comum', unlocked_at: '2026-10-20T12:00:00Z' },
+        { tier: 2, name: 'Tagarela', threshold: 36000, rarity: 'comum', unlocked_at: '2026-10-24T12:00:00Z' }
+      ]
+    }
+
+    it('no próprio perfil não mostra progresso, "faltam", barra, bloqueio nem total do catálogo', () => {
+      store.modal = { userId: 'me', name: 'Eu', avatarUrl: null }
+      store.byUser = { me: { badges: [voz] } }
+      const html = renderToStaticMarkup(<BadgesModal />)
+      expect(html).toContain('Tagarela')
+      expect(html).toContain('Desbloqueado em 24/10/')
+      expect(html).not.toContain('role="progressbar"')
+      expect(html).not.toMatch(/Faltam?\b/)
+      expect(html).not.toContain('Seu progresso')
+      expect(html).not.toContain('Bloqueado')
+      expect(html).not.toContain('Disponíveis')
+      expect(html).not.toMatch(/ de \d+ badges/)
+    })
+
+    it('sem nenhum badge, o próprio perfil mostra o convite', () => {
+      store.modal = { userId: 'me', name: 'Eu', avatarUrl: null }
+      store.byUser = { me: { badges: [] } }
+      const html = renderToStaticMarkup(<BadgesModal />)
+      expect(html).toContain('Nenhum badge ainda. Eles aparecem conforme você usa o Salinha.')
+      expect(html).not.toContain('Fique em call')
     })
   })
 })

@@ -17,7 +17,7 @@ func TestEvaluateNuloOnlyForWhoChoseIt(t *testing.T) {
 
 	badges, fresh := Evaluate(Stats{CreatedAt: FounderCutoff, Escolhas: map[string]bool{"segundo-turno:nulo": true}}, nil, now)
 	b := find(t, badges, "nulo")
-	if b.Tier != 1 || b.TierName != "Votou Nulo" || b.Rarity != RarityEpic || b.Progress != 1 || b.NextThreshold != nil {
+	if b.Tier != 1 || b.TierName != "Votou Nulo" || b.Rarity != RarityEpic {
 		t.Fatalf("badge nulo = %+v", b)
 	}
 	if hasBadge(badges, "l") || hasBadge(badges, "v22") {

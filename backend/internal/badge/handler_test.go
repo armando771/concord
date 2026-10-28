@@ -48,12 +48,42 @@ func TestHandlerOwnerGetsTheFullView(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
 		t.Fatal(err)
 	}
-	// Os exclusivos (Fundador, Fez o L) só aparecem para quem tem.
-	if !res.Self || len(res.Badges) != nonExclusiveCount() {
+	// 2.345 mensagens, 2 servidores e a conta de 2 meses: só o que já tem o
+	// tier 1 aparece (nada de categoria bloqueada).
+	if !res.Self || len(res.Badges) == 0 || hasBadge(res.Badges, "festeiro") {
 		t.Fatalf("owner body = %s", w.Body.String())
 	}
-	if msgs := find(t, res.Badges, "mensagens"); msgs.Value != 2345 || msgs.NextThreshold == nil {
+	if msgs := find(t, res.Badges, "mensagens"); msgs.Value != 2345 || msgs.Tier == 0 {
 		t.Fatalf("owner mensagens = %+v", msgs)
+	}
+}
+
+// A API nunca devolve o próximo limite nem o progresso, nem para a própria
+// pessoa: quem quer farmar ia achar pelo devtools.
+func TestHandlerNeverLeaksNextTierOrProgress(t *testing.T) {
+	for _, viewer := range []string{ownerID, otherID} {
+		w := serve(t, serviceWithOwner(), "/api/users/"+ownerID+"/badges", viewer)
+		var res struct {
+			Badges []map[string]any `json:"badges"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+			t.Fatal(err)
+		}
+		if len(res.Badges) == 0 {
+			t.Fatalf("viewer %s: sem badges: %s", viewer, w.Body.String())
+		}
+		for _, b := range res.Badges {
+			for _, key := range []string{"next_threshold", "next_tier_name", "next_at", "progress", "obtainable"} {
+				if _, ok := b[key]; ok {
+					t.Fatalf("viewer %s: %q vazou em %v", viewer, key, b)
+				}
+			}
+			tier := int(b["tier"].(float64))
+			tiers := b["tiers"].([]any)
+			if tier == 0 || len(tiers) != tier {
+				t.Fatalf("viewer %s: %v deveria ter %d tiers conquistados", viewer, b["category"], tier)
+			}
+		}
 	}
 }
 
