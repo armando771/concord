@@ -1,7 +1,7 @@
 // Eventos de WS da sala trancada: trancar/destrancar, pedidos de entrada
 // (quem está dentro) e a resposta ao meu pedido (quem bate na porta).
 import { showToast } from '../../../shared/store/toastStore'
-import { knockNotification, notifyDesktop } from '../../notifications/lib/notifications'
+import { deliverKnockAlert } from '../lib/knockAlert'
 import { playSound } from '../lib/sounds'
 import type { CallState, CallUserInfo } from './callStore'
 
@@ -81,8 +81,7 @@ function onLock({ get, set }: KnockEventDeps, payload: Payload): void {
 function onKnock({ get, set }: KnockEventDeps, payload: Payload): void {
   const p = payload as unknown as KnockPayload
   if (get().callId !== p.call_id) return
-  playSound('knock')
-  notifyDesktop(knockNotification(p.user, get().serverId, get().channelId))
+  deliverKnockAlert(p.user, get())
   set((s) => ({ joinRequests: upsert(s.joinRequests, p.user) }))
 }
 
