@@ -13,7 +13,9 @@ type Stats struct {
 	XP           int64
 	VoiceSeconds int64
 	MessagesSent int64
-	Reactions    int64
+	// Mensagens distintas em que a pessoa reagiu (várias reações dela na
+	// mesma mensagem contam 1).
+	Reactions int64
 	// Tempo compartilhando a tela numa call com mais gente.
 	StreamSeconds int64
 	// Tempo assistindo à transmissão de outra pessoa (sem estar surdo).

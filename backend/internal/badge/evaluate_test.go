@@ -324,7 +324,7 @@ func TestEvaluateLOnlyForWhoSaidYes(t *testing.T) {
 
 	badges, fresh = Evaluate(Stats{CreatedAt: FounderCutoff, Escolhas: map[string]bool{"segundo-turno:l": true}}, nil, now)
 	l := find(t, badges, "l")
-	if l.Tier != 1 || l.TierName != "Fez o L" || l.Rarity != RarityLegendary || l.Progress != 1 || l.NextThreshold != nil {
+	if l.Tier != 1 || l.TierName != "Fez o L" || l.Rarity != RarityEpic || l.Progress != 1 || l.NextThreshold != nil {
 		t.Fatalf("badge l = %+v", l)
 	}
 	var got bool

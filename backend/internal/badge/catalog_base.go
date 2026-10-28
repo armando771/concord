@@ -157,7 +157,7 @@ var baseCategories = []Category{
 		Description: "Fez o L no segundo turno. Ganho escolhendo o badge do segundo turno.",
 		Unit:        UnitVote,
 		Tiers: []Tier{
-			{"Fez o L", 1, RarityLegendary},
+			{"Fez o L", 1, RarityEpic},
 		},
 		Exclusive: true,
 	},
@@ -239,7 +239,7 @@ var baseCategories = []Category{
 	{
 		Key:         "reacoes",
 		Name:        "Reações",
-		Description: "Reaja às mensagens da galera com emojis.",
+		Description: "Reaja às mensagens da galera com emojis. Cada mensagem conta uma vez, mesmo com vários emojis.",
 		Unit:        UnitReactions,
 		Tiers: []Tier{
 			{"Curtidor", 50, RarityCommon},
