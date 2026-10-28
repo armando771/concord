@@ -35,7 +35,6 @@ var errorCodes = []struct {
 	{ErrInvalidName, http.StatusBadRequest, "invalid"},
 	{ErrInvalidColor, http.StatusBadRequest, "invalid"},
 	{ErrInvalidOrder, http.StatusBadRequest, "invalid"},
-	{ErrNoModeratorRole, http.StatusNotFound, "role_not_found"},
 }
 
 // errorStatus: status e código HTTP de um erro do domínio (500 se não é um deles).
@@ -171,26 +170,4 @@ func (h *Handler) setMemberRole(c *gin.Context, add bool) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"user_id": c.Param("userId"), "role_ids": ids})
-}
-
-// SetLegacyRole: PUT /servers/:id/members/:userId/role {role: "admin"|"member"},
-// usado pelos apps de antes dos cargos.
-func (h *Handler) SetLegacyRole(c *gin.Context) {
-	userID, ok := currentUser(c)
-	if !ok {
-		return
-	}
-	var in struct {
-		Role string `json:"role"`
-	}
-	if err := c.ShouldBindJSON(&in); err != nil || (in.Role != "admin" && in.Role != "member") {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cargo inválido", "code": "invalid"})
-		return
-	}
-	ids, err := h.service.SetModerator(c.Request.Context(), c.Param("id"), userID, c.Param("userId"), in.Role == "admin")
-	if err != nil {
-		respondError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"user_id": c.Param("userId"), "role": in.Role, "role_ids": ids})
 }

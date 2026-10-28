@@ -28,17 +28,19 @@ function memberNames(m: LookMember, me: LookMe | null | undefined): [string, str
   return [displayName ?? 'Membro', handle ?? 'membro']
 }
 
-/** Offline fica cinza; o dono, âmbar; os demais, índigo. */
-function memberTone(isOwner: boolean, offline: boolean): [string, string] {
-  if (offline) return ['bg-gray-600', 'text-gray-400']
-  return isOwner ? ['bg-amber-600', 'text-amber-300'] : ['bg-indigo-600', 'text-gray-200']
+/**
+ * Offline fica cinza; os demais, índigo. O dono não tem cor própria: vale a do
+ * cargo dele, como para todo mundo.
+ */
+function memberTone(offline: boolean): [string, string] {
+  return offline ? ['bg-gray-600', 'text-gray-400'] : ['bg-indigo-600', 'text-gray-200']
 }
 
 export function memberRowLook(
   m: LookMember,
-  ctx: { ownerId: string; me: LookMe | null | undefined; offline: boolean }
+  ctx: { me: LookMe | null | undefined; offline: boolean }
 ): MemberRowLook {
   const [displayName, handle] = memberNames(m, ctx.me)
-  const [colorClass, nameClass] = memberTone(m.user_id === ctx.ownerId, ctx.offline)
+  const [colorClass, nameClass] = memberTone(ctx.offline)
   return { displayName, handle, colorClass, nameClass }
 }

@@ -29,7 +29,7 @@ import {
 // têm que calcular igual.
 interface Vectors {
   bits: Record<string, number>
-  defaults: { everyone: string[]; moderator: string[] }
+  defaults: { everyone: string[] }
   compute: {
     name: string
     owner_id: string

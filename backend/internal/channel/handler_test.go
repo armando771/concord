@@ -59,7 +59,7 @@ func (f *fakeStore) DeleteOverwrite(context.Context, string, string, string) err
 // perms: dono, "mod" com o cargo Moderador e "ana" só com @everyone.
 func (f *fakeStore) perms() *permission.Service {
 	snap := permission.NewSnapshot(f.serverID, f.ownerID, permission.DefaultEveryone).
-		WithRole("moderador", 1, permission.DefaultModerator)
+		WithRole("moderador", 1, modPerms)
 	for id := range f.members {
 		if f.admins[id] {
 			snap.WithMember(id, "moderador")

@@ -446,21 +446,3 @@ func TestOnlyOwnerSetsOwnerRoles(t *testing.T) {
 		t.Fatalf("gerente se dando vip: %v", err)
 	}
 }
-
-func TestSetModeratorLegacy(t *testing.T) {
-	svc, f, _ := setup()
-	f.snap.Roles["mod"] = Role{ID: "mod", ServerID: "s1", Name: permission.ModeratorName, Position: 1, Permissions: permission.DefaultModerator}
-	if _, err := svc.SetModerator(ctx, "s1", "dono", "ana", true); err != nil {
-		t.Fatal(err)
-	}
-	if !permission.Has(f.snap.Server("ana"), permission.ManageChannels) {
-		t.Fatal("ana devia virar moderadora")
-	}
-	if _, err := svc.SetModerator(ctx, "s1", "ana", "vip", true); !errors.Is(err, permission.ErrMissingPermission) {
-		t.Fatalf("moderador não dá cargo (sem MANAGE_ROLES): err = %v", err)
-	}
-	delete(f.snap.Roles, "mod")
-	if _, err := svc.SetModerator(ctx, "s1", "dono", "ana", false); !errors.Is(err, ErrNoModeratorRole) {
-		t.Fatalf("err = %v, want ErrNoModeratorRole", err)
-	}
-}

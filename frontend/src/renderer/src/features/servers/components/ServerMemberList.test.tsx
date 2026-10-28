@@ -73,18 +73,24 @@ describe('ServerMemberList', () => {
     })
   })
 
-  it('agrupa como no Discord: dono, cargo exibido, membros e offline', () => {
+  it('agrupa como no Discord: cargo exibido, membros e offline (o dono não é grupo)', () => {
     const html = render()
-    expect(html).toContain('Dono do Servidor — 1')
+    expect(html).not.toContain('Dono do Servidor')
     expect(html).toContain('Moderador — 1')
-    expect(html).toContain('Membros — 1')
+    expect(html).toContain('Membros — 2')
     expect(html).toContain('Offline — 1')
     expect(html).toContain('data-alca')
   })
 
-  it('o dono fica âmbar, o cargo colorido pinta o nome e o offline fica cinza', () => {
+  it('o dono tem a coroa ao lado do nome, sem cor própria', () => {
     const html = render()
-    expect(html).toContain('data-cor="bg-amber-600"')
+    expect(html.match(/aria-label="Dono do servidor"/g)).toHaveLength(1)
+    expect(html).toContain('title="Dono do servidor"')
+    expect(html).not.toContain('bg-amber-600')
+  })
+
+  it('o cargo colorido pinta o nome e o offline fica cinza', () => {
+    const html = render()
     expect(html).toContain('color:#ff0000')
     expect(html).toContain('data-cor="bg-gray-600"')
     expect(html).toContain('opacity-70')

@@ -349,21 +349,6 @@ func checkMemberRole(snap *permission.Snapshot, actorID, targetID, roleID string
 	return nil
 }
 
-// SetModerator é o atalho do app antigo ("Tornar moderador"): põe ou tira o
-// cargo Moderador.
-func (s *Service) SetModerator(ctx context.Context, serverID, actorID, targetID string, moderator bool) ([]string, error) {
-	snap, err := s.perms.Snapshot(ctx, serverID)
-	if err != nil {
-		return nil, err
-	}
-	for _, r := range snap.Roles {
-		if !r.IsDefault && r.Name == permission.ModeratorName {
-			return s.SetMemberRole(ctx, serverID, actorID, targetID, r.ID, moderator)
-		}
-	}
-	return nil, ErrNoModeratorRole
-}
-
 func (s *Service) publishOrder(ctx context.Context, serverID string) {
 	roles, err := s.repository.List(ctx, serverID)
 	if err == nil {

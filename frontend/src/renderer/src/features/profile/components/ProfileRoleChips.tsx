@@ -1,4 +1,5 @@
 import { roleColorCss } from '../../servers/lib/permissions'
+import OwnerCrown from '../../servers/components/OwnerCrown'
 import type { Ink } from '../lib/profileInk'
 import { readableColor } from '../lib/readableColor'
 
@@ -13,7 +14,10 @@ interface Look {
 
 interface Props extends Look {
   roles: { id: string; name: string; color: number | null }[]
-  /** Quando vem, o dono do servidor abre a lista. */
+  /**
+   * Quando vem, a pessoa é o dono do servidor: a coroa abre a lista. O dono não
+   * é um cargo; sem cargo nenhum, a coroa vem com "Sem cargo".
+   */
   owner?: { label: string; color: string }
 }
 
@@ -43,8 +47,13 @@ export default function ProfileRoleChips({
   ink
 }: Props): React.JSX.Element {
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {owner && <Chip name={owner.label} color={owner.color} background={background} ink={ink} />}
+    <div className="flex flex-wrap items-center gap-1.5">
+      {owner && <OwnerCrown className="h-4 w-4" />}
+      {owner && roles.length === 0 && (
+        <span className="text-xs" style={{ color: readableColor('#9ca3af', background, ink) }}>
+          Sem cargo
+        </span>
+      )}
       {roles.map((r) => (
         <Chip
           key={r.id}

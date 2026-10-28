@@ -5,6 +5,7 @@ import type { Role } from '../lib/permissions'
 import Avatar from '../../../shared/ui/Avatar'
 import Button from '../../../shared/ui/Button'
 import MemberRolesEditor from './MemberRolesEditor'
+import OwnerCrown from './OwnerCrown'
 
 interface Props {
   serverId: string
@@ -19,7 +20,7 @@ interface Props {
   onToggleRole: (roleId: string, has: boolean) => void
 }
 
-/** Avatar, nome (com a marca do dono) e o @. */
+/** Avatar, nome (com a coroa do dono) e o @. */
 function MemberIdentity({
   member,
   name,
@@ -32,8 +33,8 @@ function MemberIdentity({
         <span className="block truncate text-sm font-semibold text-strong">
           {name}
           {isOwner && (
-            <span className="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-300">
-              Dono
+            <span className="ml-1.5 inline-flex align-[-2px]">
+              <OwnerCrown />
             </span>
           )}
         </span>

@@ -20,7 +20,7 @@ var (
 	ErrBanned           = errors.New("você foi banido deste servidor")
 )
 
-// RoleDefaults cria os cargos padrão (@everyone e Moderador) de um servidor novo.
+// RoleDefaults cria os cargos fixos (@everyone e Bots) de um servidor novo.
 type RoleDefaults interface {
 	CreateDefaults(ctx context.Context, serverID string) error
 }

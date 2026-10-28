@@ -8,9 +8,23 @@ import (
 	"time"
 
 	"gin-quickstart/backend/internal/channel"
-	"gin-quickstart/backend/internal/platform/livekit"
 	"gin-quickstart/backend/internal/permission"
+	"gin-quickstart/backend/internal/platform/livekit"
 )
+
+// modPerms: as permissões de um cargo de moderação típico (as do antigo cargo
+// Moderador, que servidor novo não cria mais).
+const modPerms = permission.DefaultEveryone | permission.ManageChannels |
+	permission.ManageServer |
+	permission.MentionEveryone |
+	permission.ManageMessages |
+	permission.MoveMembers |
+	permission.MuteMembers |
+	permission.DeafenMembers |
+	permission.KickMembers |
+	permission.ManageExpressions |
+	permission.ManageNicknames |
+	permission.DisconnectMembers
 
 type fakeMedia struct {
 	updates []mediaUpdate
@@ -46,7 +60,7 @@ func (f fakePerms) ChannelPerms(ctx context.Context, channelID, userID string) (
 // Canais de voz: geral (livre), vip-voz (só vip) e palco (@everyone sem falar).
 func voiceSnapshot() *permission.Snapshot {
 	return permission.NewSnapshot("srv-1", "dono", permission.DefaultEveryone).
-		WithRole("mod", 2, permission.DefaultModerator).
+		WithRole("mod", 2, modPerms).
 		WithRole("vip", 1, 0).
 		WithMember("dono").
 		WithMember("mod", "mod").

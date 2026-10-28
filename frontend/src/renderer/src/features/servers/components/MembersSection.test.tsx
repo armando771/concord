@@ -133,4 +133,12 @@ describe('MembersSection', () => {
     expect(html).toContain('Tirar o cargo vip de Ana')
     state.members[0].role_ids = []
   })
+
+  // Issue #332: o dono não aparece como um cargo "Dono", e sim com a coroa.
+  it('o dono tem a coroa ao lado do nome, não uma etiqueta de cargo', () => {
+    asOwner()
+    const html = renderToStaticMarkup(<MembersSection />)
+    expect(html.match(/aria-label="Dono do servidor"/g)).toHaveLength(1)
+    expect(html).not.toContain('>Dono<')
+  })
 })

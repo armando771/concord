@@ -24,8 +24,7 @@ type vectorRole struct {
 type vectorFile struct {
 	Bits     map[string]int64 `json:"bits"`
 	Defaults struct {
-		Everyone  []string `json:"everyone"`
-		Moderator []string `json:"moderator"`
+		Everyone []string `json:"everyone"`
 	} `json:"defaults"`
 	Compute []struct {
 		Name        string       `json:"name"`
@@ -114,9 +113,6 @@ func TestVectorBitsMatchConstants(t *testing.T) {
 	}
 	if got := bitsOf(t, v.Defaults.Everyone); got != DefaultEveryone {
 		t.Errorf("DefaultEveryone = %d, vectors = %d", DefaultEveryone, got)
-	}
-	if got := bitsOf(t, v.Defaults.Moderator); got != DefaultModerator {
-		t.Errorf("DefaultModerator = %d, vectors = %d", DefaultModerator, got)
 	}
 }
 

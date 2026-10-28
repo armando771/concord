@@ -1,6 +1,16 @@
 # Cargos e permissões
 
-Cada servidor tem **cargos** com permissões, como no Discord. O **dono** (quem criou) sempre pode tudo e nunca é alvo de expulsão, banimento ou silêncio.
+Cada servidor tem **cargos** com permissões, como no Discord.
+
+## O dono
+
+O **dono** (quem criou o servidor, `owner_id`) **não é um cargo**: é um nível interno e absoluto, preso à pessoa.
+
+- Pode tudo sem precisar de cargo nenhum e ignora as regras dos canais.
+- Está acima de qualquer cargo na hierarquia: mesmo sem cargo, expulsa, bane, silencia, move e mexe nos cargos de qualquer membro.
+- Nunca é alvo de expulsão, banimento, silêncio, ensurdecer, desconectar, mover nem troca de apelido ou de cargos por outra pessoa (nem por quem tem Administrador). Também não sai do servidor: apaga.
+- Pode dar e tirar de si mesmo qualquer cargo, só para a cor e o grupo na lista.
+- Na lista de membros, no perfil e na aba Membros, aparece como qualquer membro (agrupado e colorido pelo cargo que tiver) com uma **coroa** ao lado do nome ("Dono do servidor").
 
 ## Como as permissões são calculadas
 
@@ -34,7 +44,7 @@ O cálculo é o mesmo no backend (`backend/internal/permission`) e no app (`fron
 | | Usar mesa de áudio | Tocar e enviar áudios. |
 | | Silenciar / Ensurdecer / Mover membros | Moderação na chamada (mover inclui desconectar). |
 
-Padrões de um servidor novo: **@everyone** (ver, escrever, anexar, reagir, histórico, convidar, conectar, falar, transmitir, mesa de áudio) e um cargo **Moderador** (o que o antigo "admin" fazia: canais, servidor, @all, apagar mensagens, mover/silenciar/ensurdecer, expulsar, gerenciar mesa de áudio — sem gerenciar cargos nem banir).
+Padrões de um servidor novo: só o **@everyone** (ver, escrever, anexar, reagir, histórico, convidar, conectar, falar, transmitir, mesa de áudio, alterar o próprio apelido) e o cargo fixo **Bots** (dos bots do servidor). Não há mais cargo **Moderador** padrão: quem quiser cria os seus. Nos servidores antigos o Moderador que já existia continua, como um cargo comum (dá para editar, mover e apagar).
 
 ## Hierarquia
 
@@ -44,6 +54,7 @@ A posição do cargo define quem manda em quem (maior = mais alto).
 - Os cargos **do dono** só ele mesmo mexe (nem quem tem Administrador).
 - Expulsar, banir, silenciar, ensurdecer, desconectar e mover só vale sobre quem tem o cargo mais alto **menor** que o seu. Mesma posição não vale.
 - Ninguém dá ou tira uma permissão que **não tem** (Administrador pode tudo).
+- **Administrador** tem todas as permissões, mas a hierarquia vale para ele também: age sobre quem tem o cargo mais alto menor que o seu. Quem não tem cargo nenhum (só o @everyone, posição 0) está abaixo de qualquer cargo, então qualquer administrador com um cargo age sobre ele. Administrador dado só pelo @everyone não age sobre outros membros sem cargo (mesma posição); para isso, precisa de um cargo.
 
 ## Canais privados
 
@@ -62,7 +73,6 @@ A posição do cargo define quem manda em quem (maior = mais alto).
 |---|---|
 | `GET/POST /servers/:id/roles`, `PATCH/DELETE …/roles/:roleId`, `PUT …/roles/order` | membro / Gerenciar cargos |
 | `PUT/DELETE /servers/:id/members/:userId/roles/:roleId` | Gerenciar cargos (cargo abaixo do seu; nos cargos do dono, só o dono) |
-| `PUT /servers/:id/members/:userId/role` | compatibilidade com apps antigos: põe/tira o cargo Moderador |
 | `PUT/DELETE /servers/:id/channels/:channelId/overwrites/:role\|member/:targetId` | Gerenciar cargos no canal |
 | `POST /servers/:id/channels` com `private` e `role_ids` | Gerenciar canais |
 | `DELETE /servers/:id/members/:userId`, `POST /servers/:id/leave` | Expulsar / o próprio membro |

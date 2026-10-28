@@ -42,7 +42,9 @@ func (r *Repository) List(ctx context.Context, serverID string) ([]Role, error) 
 	return roles, rows.Err()
 }
 
-// CreateDefaults cria o @everyone, o cargo fixo Bots e o Moderador de um servidor novo.
+// CreateDefaults cria os cargos fixos de um servidor novo: o @everyone e o
+// cargo de sistema Bots. Não há cargo de dono nem Moderador padrão: o dono
+// manda por ser o dono (owner_id) e os outros cargos o servidor cria.
 func (r *Repository) CreateDefaults(ctx context.Context, serverID string) error {
 	_, err := r.db.Exec(
 		ctx,
@@ -50,15 +52,12 @@ func (r *Repository) CreateDefaults(ctx context.Context, serverID string) error 
 		INSERT INTO roles (server_id, name, position, permissions, is_default, is_system, hoist)
 		VALUES
 			($1, $2, 0, $3, TRUE, FALSE, FALSE),
-			($1, $4, 1, 0, FALSE, TRUE, TRUE),
-			($1, $5, 2, $6, FALSE, FALSE, TRUE)
+			($1, $4, 1, 0, FALSE, TRUE, TRUE)
 		`,
 		serverID,
 		permission.EveryoneName,
 		permission.DefaultEveryone,
 		permission.BotsRoleName,
-		permission.ModeratorName,
-		permission.DefaultModerator,
 	)
 	return err
 }
