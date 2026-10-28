@@ -162,14 +162,17 @@ func (h *Handler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "sound deleted"})
 }
 
+// ServeFile entrega o arquivo do som (o <audio> manda o media token na URL).
 func (h *Handler) ServeFile(c *gin.Context) {
 	token := c.Query("token")
 	if token == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid media token"})
 		return
 	}
-	userID, err := h.tokens.VerifyMediaToken(token)
-	if err != nil {
+	// Qualquer pessoa logada: favorito de outro servidor tocado numa chamada é
+	// ouvido por quem não é de lá, e o id (UUID) do som só chega a quem o vê
+	// na mesa ou o ouve (docs/adr/0013-mesa-de-audio-por-servidor.md).
+	if _, err := h.tokens.VerifyMediaToken(token); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid media token"})
 		return
 	}
@@ -184,16 +187,6 @@ func (h *Handler) ServeFile(c *gin.Context) {
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load sound"})
-		return
-	}
-
-	isMember, err := h.servers.IsMember(ctx, sound.ServerID, userID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check access"})
-		return
-	}
-	if !isMember {
-		notFound()
 		return
 	}
 

@@ -49,3 +49,4 @@ O que fica mais fácil, o que fica mais difícil, o que precisa ser feito depois
 - [0009. Tratar o dono como nível interno, sem cargos padrão além do @everyone](0009-dono-nao-e-cargo.md)
 - [0010. Detectar AFK em call pelo aviso de fala do app, com o AFK filtrando as fotos das calls](0010-afk-em-call.md)
 - [0011. Guardar perfis salvos com a mídia por referência, apagando o arquivo só quando ninguém mais usa](0011-perfis-salvos-midia-por-referencia.md)
+- [0013. Mesa de áudio por servidor, com favoritos da pessoa valendo em qualquer servidor](0013-mesa-de-audio-por-servidor.md)

@@ -6,11 +6,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -380,5 +382,21 @@ func TestStickerUploadRequiresAddStickers(t *testing.T) {
 	}
 	if len(repo.stickers) != 0 {
 		t.Fatal("a figurinha não devia ser salva")
+	}
+}
+
+func TestFormErrorStatus(t *testing.T) {
+	t.Parallel()
+	cases := map[error]int{
+		media.ErrMissingFile:                     http.StatusBadRequest,
+		fmt.Errorf("%w: lixo", media.ErrBadForm): http.StatusBadRequest,
+		media.ErrTooLarge:                        http.StatusRequestEntityTooLarge,
+		fmt.Errorf("gravar: %w", syscall.ENOSPC): http.StatusInsufficientStorage,
+		errors.New("disco quebrado"):             http.StatusInternalServerError,
+	}
+	for err, want := range cases {
+		if got, _ := formErrorStatus(err); got != want {
+			t.Errorf("%v: status = %d, want %d", err, got, want)
+		}
 	}
 }

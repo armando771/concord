@@ -21,16 +21,6 @@ const multipartOverhead = 256 << 10 // 256 KB para cabeçalhos e campos de texto
 // maxFieldBytes: limite de cada campo de texto do upload (nome, emoji, duração).
 const maxFieldBytes = 256
 
-// uploadErr é a resposta de uma etapa do upload que recusou o pedido.
-type uploadErr struct {
-	status int
-	body   gin.H
-}
-
-func fail(status int, msg string) *uploadErr {
-	return &uploadErr{status: status, body: gin.H{"error": msg}}
-}
-
 func (h *Handler) Upload(c *gin.Context) {
 	userID, exists := c.Get("userID")
 	if !exists {
@@ -52,7 +42,7 @@ func (h *Handler) Upload(c *gin.Context) {
 }
 
 // receiveSound confere quem envia e o corpo, salva o arquivo e grava o som.
-func (h *Handler) receiveSound(c *gin.Context, sound *Sound) *uploadErr {
+func (h *Handler) receiveSound(c *gin.Context, sound *Sound) *apiErr {
 	ctx := c.Request.Context()
 	if e := h.checkUploader(ctx, sound.ServerID, sound.UploaderID); e != nil {
 		return e
@@ -76,7 +66,7 @@ func (h *Handler) receiveSound(c *gin.Context, sound *Sound) *uploadErr {
 	return nil
 }
 
-func (h *Handler) checkUploader(ctx context.Context, serverID, userID string) *uploadErr {
+func (h *Handler) checkUploader(ctx context.Context, serverID, userID string) *apiErr {
 	isMember, err := h.servers.IsMember(ctx, serverID, userID)
 	if err != nil {
 		return fail(http.StatusInternalServerError, "failed to check membership")
@@ -89,14 +79,14 @@ func (h *Handler) checkUploader(ctx context.Context, serverID, userID string) *u
 		return fail(http.StatusInternalServerError, "failed to check permissions")
 	}
 	if !permission.Has(perms, permission.AddSounds) {
-		return &uploadErr{status: http.StatusForbidden, body: gin.H{
+		return &apiErr{status: http.StatusForbidden, body: gin.H{
 			"error": ErrCannotAddSound.Error(), "code": "missing_permission",
 		}}
 	}
 	return h.checkServerRoom(ctx, serverID)
 }
 
-func (h *Handler) checkServerRoom(ctx context.Context, serverID string) *uploadErr {
+func (h *Handler) checkServerRoom(ctx context.Context, serverID string) *apiErr {
 	count, err := h.repo.CountByServer(ctx, serverID)
 	if err != nil {
 		return fail(http.StatusInternalServerError, "failed to check server soundboard limit")
@@ -108,7 +98,7 @@ func (h *Handler) checkServerRoom(ctx context.Context, serverID string) *uploadE
 }
 
 // checkBody recusa corpo grande demais ou sem espaço em disco e limita a leitura.
-func (h *Handler) checkBody(c *gin.Context) *uploadErr {
+func (h *Handler) checkBody(c *gin.Context) *apiErr {
 	incoming := c.Request.ContentLength
 	if incoming < 0 {
 		incoming = h.maxSoundBytes
@@ -123,7 +113,7 @@ func (h *Handler) checkBody(c *gin.Context) *uploadErr {
 	return nil
 }
 
-func (h *Handler) readSoundForm(c *gin.Context, id string) (media.Form, *uploadErr) {
+func (h *Handler) readSoundForm(c *gin.Context, id string) (media.Form, *apiErr) {
 	reader, err := c.Request.MultipartReader()
 	if err != nil {
 		return media.Form{}, fail(http.StatusBadRequest, "invalid upload")
@@ -154,7 +144,7 @@ func formErrorStatus(err error) (int, string) {
 }
 
 // fillSound valida os campos e o tipo do arquivo e preenche o som.
-func fillSound(sound *Sound, form media.Form) *uploadErr {
+func fillSound(sound *Sound, form media.Form) *apiErr {
 	name, err := sanitizeName(form.Fields["name"])
 	if err != nil {
 		return fail(http.StatusBadRequest, err.Error())

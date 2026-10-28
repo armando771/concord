@@ -221,12 +221,25 @@ func TestUploadAndServeSound(t *testing.T) {
 		t.Fatalf("expected 200 serving sound file, got %d", getW.Code)
 	}
 
-	// Outsider cannot fetch sound file
+	// Quem não é do servidor também baixa: favorito tocado numa chamada de
+	// outro servidor é ouvido por todos dela (o id do som é o acesso).
 	outReq := httptest.NewRequest(http.MethodGet, "/api/soundboard/"+created.ID+"/file?token=tok-outsider", nil)
 	outW := httptest.NewRecorder()
 	r.ServeHTTP(outW, outReq)
-	if outW.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for non-member, got %d", outW.Code)
+	if outW.Code != http.StatusOK {
+		t.Fatalf("expected 200 for non-member, got %d", outW.Code)
+	}
+
+	for name, url := range map[string]string{
+		"token inválido":     "/api/soundboard/" + created.ID + "/file?token=nada",
+		"sem token":          "/api/soundboard/" + created.ID + "/file",
+		"som que não existe": "/api/soundboard/33333333-3333-3333-3333-333333333333/file?token=tok-1",
+	} {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, url, nil))
+		if w.Code == http.StatusOK {
+			t.Errorf("%s: status 200, want recusa", name)
+		}
 	}
 }
 
