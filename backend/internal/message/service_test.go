@@ -23,14 +23,14 @@ func TestDeleteChannelMessageBlockedInSystemChannels(t *testing.T) {
 	resolver := systemChannelTestResolver{
 		system: map[string]bool{
 			"avisos": true,
-			"bot":    true,
+			"musica": true,
 			"geral":  false,
 		},
 	}
 	svc := &Service{channelResolver: resolver}
 	ctx := context.Background()
 
-	for _, ch := range []string{"avisos", "bot"} {
+	for _, ch := range []string{"avisos", "musica"} {
 		err := svc.DeleteChannelMessage(ctx, ch, "m1", "ana")
 		if !errors.Is(err, ErrSystemChannelDelete) {
 			t.Fatalf("%s: DeleteChannelMessage err = %v, want ErrSystemChannelDelete", ch, err)

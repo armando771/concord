@@ -8,7 +8,7 @@ import (
 	"gin-quickstart/backend/internal/permission"
 )
 
-// systemStore: canais de sistema ("bot" e "avisos") e um comum em memória.
+// systemStore: canais de sistema ("musica" e "avisos") e um comum em memória.
 type systemStore struct {
 	fakeStore
 	channels map[string]*Channel
@@ -40,7 +40,7 @@ func newSystemStore() *systemStore {
 	return &systemStore{
 		fakeStore: *newFakeStore(),
 		channels: map[string]*Channel{
-			"bot":    {ID: "bot", ServerID: "s1", Name: SystemChannelName, Type: TypeText, IsSystem: true},
+			"musica": {ID: "musica", ServerID: "s1", Name: SystemChannelName, Type: TypeText, IsSystem: true},
 			"avisos": {ID: "avisos", ServerID: "s1", Name: NoticesChannelName, Type: TypeText, IsSystem: true},
 			"geral":  {ID: "geral", ServerID: "s1", Name: "geral", Type: TypeText},
 		},
@@ -52,7 +52,7 @@ func TestSystemChannelCannotBeChanged(t *testing.T) {
 	svc := newService(store, nil)
 	ctx := context.Background()
 
-	for _, id := range []string{"bot", "avisos"} {
+	for _, id := range []string{"musica", "avisos"} {
 		if _, err := svc.Update(ctx, id, "outro"); !errors.Is(err, ErrSystemChannel) {
 			t.Fatalf("%s: Update err = %v, want ErrSystemChannel", id, err)
 		}

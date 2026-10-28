@@ -116,6 +116,10 @@ describe('MessageItem', () => {
     expect(render(msg({ system_kind: 'music' }))).toContain('data-music')
   })
 
+  it('a lista de comandos fixada no #musica também vai para o card do Maestro', () => {
+    expect(render(msg({ system_kind: 'music_commands' }))).toContain('data-music')
+  })
+
   it('em edição mostra o editor no lugar do texto', () => {
     const html = render(msg({ author_id: 'ana' }), { isEditing: true })
     expect(html).toContain('<textarea')

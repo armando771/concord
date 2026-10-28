@@ -32,6 +32,7 @@ func (a *app) wireMusic() {
 	a.callService.OnCallEnded(a.musicManager.OnCallEnded)
 	a.serverService.OnMusicBotDisabled(a.musicManager.CloseServer)
 	a.messageHandler.SetCommandHandler(a.musicManager)
+	a.wireMusicCommands()
 
 	a.route(func(_ *gin.Engine, api *gin.RouterGroup) {
 		music.Routes(api, music.NewHandler(a.musicManager, a.authService), a.authMiddleware)
@@ -70,7 +71,7 @@ func (a *app) musicUser(ctx context.Context, userID string) (music.UserRef, erro
 	return music.UserRef{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, AvatarURL: u.AvatarURL}, nil
 }
 
-// postMusicMessage: as mensagens públicas do Maestro saem no canal "bot" do
+// postMusicMessage: as mensagens públicas do Maestro saem no canal "musica" do
 // servidor; sem ele (não deveria ocorrer) ficam no canal onde o comando foi dado.
 func (a *app) postMusicMessage(ctx context.Context, textChannelID, content string) error {
 	if origin, err := a.channelService.FindByID(ctx, textChannelID); err == nil {

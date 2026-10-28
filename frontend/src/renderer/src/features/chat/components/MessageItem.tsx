@@ -8,6 +8,7 @@ import { userMenuHandler } from '../../profile/store/userMenuStore'
 import { useServerMemberColor, useServerNickname } from '../../servers/hooks/useServerNames'
 import { serverDisplayName } from '../../servers/lib/serverNames'
 import MusicMessage from '../../music/components/MusicMessage'
+import { isMaestroMessageKind } from '../../music/lib/music'
 import { messageMentionsMe, type MentionLabels } from '../lib/mentions'
 import {
   authorFallbackName,
@@ -56,7 +57,7 @@ export interface MessageItemProps {
   canReact: boolean
   /** MANAGE_MESSAGES no canal: apaga mensagem de outros e encerra enquete. */
   canModerate: boolean
-  /** Em canais de sistema (#avisos e #bot) nenhuma mensagem pode ser excluída. */
+  /** Em canais de sistema (#avisos e #musica) nenhuma mensagem pode ser excluída. */
   canDelete?: boolean
 }
 
@@ -263,7 +264,7 @@ function MessageItem(props: MessageItemProps): React.JSX.Element {
   const actions = useMessageActionsState()
   const [revealBlocked, setRevealBlocked] = useState(false)
 
-  if (message.system_kind === 'music') return <MusicMessage message={message} />
+  if (isMaestroMessageKind(message.system_kind)) return <MusicMessage message={message} />
   if (message.system_kind) return <SystemMessage message={message} />
   if (author.blocked && !revealBlocked) {
     return <BlockedMessageNotice messageId={message.id} onReveal={() => setRevealBlocked(true)} />

@@ -102,7 +102,7 @@ interface ChatPaneProps {
   disabledReason?: string
   /** O que a pessoa pode neste canal (cargos). Sem isso (DM), vale o padrão do chat. */
   permissions?: ChatPermissions
-  /** Se falso (ex.: canais de sistema #avisos e #bot), esconde a ação de excluir mensagens. */
+  /** Se falso (ex.: canais de sistema #avisos e #musica), esconde a ação de excluir mensagens. */
   canDeleteMessages?: boolean
 }
 

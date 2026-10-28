@@ -10,6 +10,25 @@ export const maestroIdentity = (channelId: string): string => `bot-music:${chann
 export const isMaestroUser = (id: string): boolean =>
   id === MAESTRO_USER_ID || isMaestroIdentity(id)
 
+/** Nomes do canal de sistema do Maestro (backend: channel.SystemChannelName e SystemChannelAltName). */
+const MAESTRO_CHANNEL_NAMES = ['musica', 'musica-maestro']
+
+/** É o #musica, o canal de sistema onde o Maestro escreve? (canal comum com o mesmo nome não é) */
+export const isMaestroChannel = (channel: { name: string; is_system?: boolean }): boolean =>
+  Boolean(channel.is_system) && MAESTRO_CHANNEL_NAMES.includes(channel.name)
+
+/** Mensagem do Maestro ("music") ou a lista de comandos fixada ("music_commands"). */
+export const isMaestroMessageKind = (kind: string | null | undefined): boolean =>
+  kind === 'music' || kind === 'music_commands'
+
+/** O que o Maestro escreve e o que cai no #musica nunca avisa nem conta como não lido. */
+export const isMaestroQuiet = (
+  message: { author_id: string; channel_id?: string | null },
+  channels: { id: string; name: string; is_system?: boolean }[]
+): boolean =>
+  message.author_id === MAESTRO_USER_ID ||
+  channels.some((c) => c.id === message.channel_id && isMaestroChannel(c))
+
 // Textos aprovados (spec, seção 7). Não alterar sem aprovação.
 export const T14_LABEL = '👁️ Só você vê esta mensagem'
 export const T14_DISMISS = 'Dispensar'
