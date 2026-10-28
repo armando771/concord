@@ -27,7 +27,7 @@ function MemberIdentity({
   isOwner
 }: Pick<Props, 'member' | 'name' | 'isOwner'>): React.JSX.Element {
   return (
-    <span className="flex min-w-0 items-center gap-3">
+    <span className="flex min-w-40 flex-1 items-center gap-3">
       <Avatar userId={member.user_id} name={name} avatarUrl={member.avatar_url} size={32} />
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold text-strong">
@@ -86,7 +86,7 @@ function MemberSettingsRow(props: Props): React.JSX.Element {
   const { member, name, access, own, assignable, onToggleRole } = props
   return (
     <li className="px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <MemberIdentity member={member} name={name} isOwner={props.isOwner} />
         <MemberModeration
           serverId={props.serverId}
