@@ -57,10 +57,17 @@ function tsCoverage(files, tmp) {
 }
 
 // Jest do mobile/: coverage-final.json (istanbul) só dos arquivos pedidos.
+// Acima disso a linha de comando estoura o limite do Windows (PRs empilhados mexem em dezenas de arquivos):
+// roda o Jest inteiro e deixa a cobertura ampla; o CRAP só avalia as funções dos arquivos tocados.
+const MOBILE_MAX_FILES_ON_CLI = 25
+
 function mobileCoverage(files, tmp) {
   const rel = files.map((f) => f.slice('mobile/'.length))
-  const coverage = ['--coverage', '--coverageReporters=json', `--coverageDirectory=${tmp}`, ...rel.map((f) => `--collectCoverageFrom=${f}`)]
-  if (run('npx', ['jest', '--findRelatedTests', '--passWithNoTests', ...coverage, ...rel], path.join(ROOT, 'mobile')) !== 0) {
+  const many = rel.length > MOBILE_MAX_FILES_ON_CLI
+  const from = many ? ['src/**/*.{ts,tsx}', 'app/**/*.tsx'] : rel
+  const coverage = ['--coverage', '--coverageReporters=json', `--coverageDirectory=${tmp}`, ...from.map((f) => `--collectCoverageFrom=${f}`)]
+  const select = many ? [] : ['--findRelatedTests', '--passWithNoTests']
+  if (run('npx', ['jest', ...select, ...coverage, ...(many ? [] : rel)], path.join(ROOT, 'mobile')) !== 0) {
     fail('jest falhou: corrija os testes antes de medir o CRAP')
   }
   const report = path.join(tmp, 'coverage-final.json')
