@@ -5,6 +5,7 @@ import { useEffect } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { useCurrentUser } from '../src/features/auth/hooks/useCurrentUser'
+import { useUnreadLive } from '../src/features/chat/hooks/useUnreadLive'
 import { useResetOnSignOut } from '../src/features/servers/hooks/useResetOnSignOut'
 import { useNetworkWatcher, useRealtimeSession } from '../src/features/auth/hooks/useRealtimeSession'
 import { bindAuthSession } from '../src/features/auth/lib/bindAuthSession'
@@ -21,6 +22,7 @@ function Gate() {
   useNetworkWatcher()
   useCurrentUser()
   useResetOnSignOut()
+  useUnreadLive()
 
   useEffect(() => {
     void useAuthStore.getState().restore()

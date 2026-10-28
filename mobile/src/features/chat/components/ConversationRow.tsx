@@ -3,6 +3,7 @@ import { colors, fontSize, MIN_TOUCH, radius, spacing } from '../../../shared/th
 import { Avatar } from '../../../shared/ui/Avatar'
 import { PresenceDot } from '../../friends/components/PresenceDot'
 import type { PresenceStatus } from '../../friends/lib/presenceStatus'
+import { UnreadBadge } from './UnreadBadge'
 
 interface ConversationRowProps {
   title: string
@@ -10,10 +11,12 @@ interface ConversationRowProps {
   avatarUri?: string | null
   /** Só nas DMs 1 a 1; o grupo não mostra bolinha. */
   presence?: PresenceStatus | 'none'
+  /** Mensagens não lidas (selo vermelho à direita). */
+  unread?: number
   onPress: () => void
 }
 
-export function ConversationRow({ title, subtitle, avatarUri, presence = 'none', onPress }: ConversationRowProps) {
+export function ConversationRow({ title, subtitle, avatarUri, presence = 'none', unread = 0, onPress }: ConversationRowProps) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -39,6 +42,7 @@ export function ConversationRow({ title, subtitle, avatarUri, presence = 'none',
           </Text>
         ) : null}
       </View>
+      <UnreadBadge count={unread} />
     </Pressable>
   )
 }

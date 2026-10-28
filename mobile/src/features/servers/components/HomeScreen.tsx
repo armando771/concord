@@ -4,6 +4,9 @@ import { colors, spacing } from '../../../shared/theme/tokens'
 import { Banner } from '../../../shared/ui/Banner'
 import { Button } from '../../../shared/ui/Button'
 import { DirectMessages, type OpenConversationArgs } from '../../chat/components/DirectMessages'
+import { totalUnread } from '../../chat/lib/unreadCounts'
+import { useConversationsStore } from '../../chat/store/conversationsStore'
+import { useUnreadStore } from '../../chat/store/unreadStore'
 import { UserPanel } from '../../profile/components/UserPanel'
 import type { Channel } from '../api/channels'
 import { useSelectedServerStore } from '../store/selectedServerStore'
@@ -14,11 +17,12 @@ import { ServerRail } from './ServerRail'
 interface HomeScreenProps {
   onOpenChannel: (channel: Channel) => void
   onOpenConversation: (conversation: OpenConversationArgs) => void
+  onOpenFriends: () => void
   onOpenSettings: () => void
 }
 
 /** Tela principal: trilho de servidores, lista de canais (ou DMs) e o painel do usuário. */
-export function HomeScreen({ onOpenChannel, onOpenConversation, onOpenSettings }: HomeScreenProps) {
+export function HomeScreen({ onOpenChannel, onOpenConversation, onOpenFriends, onOpenSettings }: HomeScreenProps) {
   const servers = useServersStore((s) => s.servers)
   const status = useServersStore((s) => s.status)
   const channelsByServer = useServersStore((s) => s.channelsByServer)
@@ -27,6 +31,9 @@ export function HomeScreen({ onOpenChannel, onOpenConversation, onOpenSettings }
   const loadChannels = useServersStore((s) => s.loadChannels)
   const serverId = useSelectedServerStore((s) => s.serverId)
   const select = useSelectedServerStore((s) => s.select)
+  const dmUnread = useConversationsStore((s) => totalUnread(s.conversations))
+  const unreadServers = useUnreadStore((s) => s.byServer)
+  const unreadChannels = useUnreadStore((s) => s.byChannel)
   const ensureSelection = useSelectedServerStore((s) => s.ensureSelection)
 
   useEffect(() => {
@@ -47,7 +54,7 @@ export function HomeScreen({ onOpenChannel, onOpenConversation, onOpenSettings }
   return (
     <View style={styles.screen}>
       <View style={styles.columns}>
-        <ServerRail servers={servers} selectedId={serverId} onSelect={select} />
+        <ServerRail servers={servers} selectedId={serverId} onSelect={select} dmUnread={dmUnread} unreadServers={unreadServers} />
         <View style={styles.main}>
           {status === 'error' && servers.length === 0 ? (
             <View style={styles.centered}>
@@ -59,11 +66,12 @@ export function HomeScreen({ onOpenChannel, onOpenConversation, onOpenSettings }
               serverName={server.name}
               channels={channelsByServer[server.id] ?? []}
               error={channelsError[server.id] === true}
+              unreadChannels={unreadChannels}
               onOpenChannel={onOpenChannel}
               onRetry={() => void loadChannels(server.id)}
             />
           ) : (
-            <DirectMessages onOpenConversation={onOpenConversation} />
+            <DirectMessages onOpenConversation={onOpenConversation} onOpenFriends={onOpenFriends} />
           )}
         </View>
       </View>

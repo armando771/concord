@@ -29,8 +29,16 @@ describe('HomeScreen', () => {
   const onOpenChannel = jest.fn()
   const onOpenSettings = jest.fn()
   const onOpenConversation = jest.fn()
+  const onOpenFriends = jest.fn()
   const setup = () =>
-    render(<HomeScreen onOpenChannel={onOpenChannel} onOpenConversation={onOpenConversation} onOpenSettings={onOpenSettings} />)
+    render(
+      <HomeScreen
+        onOpenChannel={onOpenChannel}
+        onOpenConversation={onOpenConversation}
+        onOpenFriends={onOpenFriends}
+        onOpenSettings={onOpenSettings}
+      />
+    )
 
   beforeEach(() => {
     jest.clearAllMocks()

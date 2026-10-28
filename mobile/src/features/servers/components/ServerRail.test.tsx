@@ -24,6 +24,21 @@ describe('ServerRail', () => {
     expect(onSelect).toHaveBeenLastCalledWith(null)
   })
 
+  it('selo vermelho com o total de DMs não lidas no ícone de DMs', async () => {
+    await render(<ServerRail servers={servers} selectedId={null} onSelect={() => {}} dmUnread={5} />)
+    expect(screen.getByLabelText('5 mensagens não lidas')).toBeOnTheScreen()
+  })
+
+  it('sem DMs não lidas não há selo', async () => {
+    await render(<ServerRail servers={servers} selectedId={null} onSelect={() => {}} dmUnread={0} />)
+    expect(screen.queryByLabelText(/não lida/)).toBeNull()
+  })
+
+  it('ponto branco só nos servidores com mensagem não lida', async () => {
+    await render(<ServerRail servers={servers} selectedId={null} onSelect={() => {}} unreadServers={{ s2: 3 }} />)
+    expect(screen.getAllByLabelText('Mensagens não lidas')).toHaveLength(1)
+  })
+
   it('anuncia qual está selecionado', async () => {
     await render(<ServerRail servers={servers} selectedId="s2" onSelect={() => {}} />)
     expect(screen.getByRole('button', { name: 'Stations' })).toBeSelected()

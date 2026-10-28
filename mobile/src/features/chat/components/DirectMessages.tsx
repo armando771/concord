@@ -27,10 +27,11 @@ export interface OpenConversationArgs {
 
 interface DirectMessagesProps {
   onOpenConversation: (args: OpenConversationArgs) => void
+  onOpenFriends: () => void
 }
 
 /** Painel de DMs: busca, conversas (1 a 1 e grupos) com presença e amigos sem conversa na busca. */
-export function DirectMessages({ onOpenConversation }: DirectMessagesProps) {
+export function DirectMessages({ onOpenConversation, onOpenFriends }: DirectMessagesProps) {
   const myId = useAuthStore((s) => s.user?.id)
   const conversations = useConversationsStore((s) => s.conversations)
   const status = useConversationsStore((s) => s.status)
@@ -100,6 +101,7 @@ export function DirectMessages({ onOpenConversation }: DirectMessagesProps) {
       ListHeaderComponent={
         <View>
           <DmSearch value={query} onChangeText={setQuery} />
+          <ConversationRow title="Amigos" avatarUri={null} onPress={onOpenFriends} />
           <Text style={styles.section}>Mensagens diretas</Text>
           {empty ? <Text style={styles.note}>Você ainda não tem conversas.</Text> : null}
           {nothingFound ? <Text style={styles.note}>Nada encontrado.</Text> : null}
@@ -113,6 +115,7 @@ export function DirectMessages({ onOpenConversation }: DirectMessagesProps) {
             subtitle={conversationSubtitle(item)}
             avatarUri={item.type === 'group' ? item.icon_url : item.other_user?.avatar_url}
             presence={item.type === 'dm' && item.other_user ? (statuses[item.other_user.id] ?? 'offline') : 'none'}
+            unread={item.unread_count}
             onPress={() => onOpenConversation({ id: item.id, title, type: item.type })}
           />
         )
