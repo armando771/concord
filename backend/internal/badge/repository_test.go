@@ -70,8 +70,9 @@ func TestRepositoryDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.MessagesSent != 3 || s.Reactions != 2 || s.OwnedServers != 1 {
-		t.Fatalf("counters = msgs %d reactions %d servers %d, want 3/2/1", s.MessagesSent, s.Reactions, s.OwnedServers)
+	// Servidor sem membros além do dono não conta (dono_test.go).
+	if s.MessagesSent != 3 || s.Reactions != 2 || s.OwnedServers != 0 {
+		t.Fatalf("counters = msgs %d reactions %d servers %d, want 3/2/0", s.MessagesSent, s.Reactions, s.OwnedServers)
 	}
 	if s.StreamSeconds != 60 || s.WatchSeconds != 40 || s.NightSeconds != 10 || s.MorningSeconds != 5 || s.PeakCallSize != 6 || s.LongestSessionSeconds != 100 {
 		t.Fatalf("call stats = %+v", s)

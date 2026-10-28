@@ -27,7 +27,8 @@ type Stats struct {
 	PeakCallSize int64
 	// Maior tempo seguido numa call com mais alguém.
 	LongestSessionSeconds int64
-	OwnedServers          int64
+	// Servidores da pessoa com donoMinMembers membros além dela (Dono).
+	OwnedServers int64
 	// Amizades aceitas.
 	Friends int64
 	// Cards do quadro de propostas criados pela pessoa que ainda existem.

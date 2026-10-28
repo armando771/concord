@@ -201,9 +201,12 @@ var baseCategories = []Category{
 		Exclusive: true,
 	},
 	{
+		// Servidores criados com pelo menos 3 membros além do dono (bots não
+		// contam; donoMinMembers em repository.go). Criar servidores vazios
+		// em série não sobe o badge.
 		Key:         "dono",
 		Name:        "Dono de servidor",
-		Description: "Crie servidores e mantenha a turma reunida.",
+		Description: "Crie servidores e reúna a turma. Conta o servidor com pelo menos 3 membros além de você.",
 		Unit:        UnitServers,
 		Tiers: []Tier{
 			{"Anfitrião", 1, RarityCommon},

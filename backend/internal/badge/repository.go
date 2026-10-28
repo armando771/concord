@@ -20,8 +20,13 @@ func BadgeRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
 }
 
+// donoMinMembers: membros além do dono (bots não contam) para o servidor
+// contar no badge Dono (servidor vazio criado em série não vale).
+const donoMinMembers = 3
+
 // Stats junta os números da pessoa numa query só: contadores prontos, um
-// COUNT de servidores pelo índice de owner_id, um COUNT dos cards de propostas
+// COUNT de servidores pelo índice de owner_id (só os com donoMinMembers
+// membros além do dono, pela chave de server_members), um COUNT dos cards de propostas
 // pelo índice de author_id (Contribuinte), as mensagens distintas em que
 // reagiu pelo índice (user_id, message_id) (Reações: várias reações na mesma
 // mensagem contam 1), as amizades aceitas (Amigos) e se ela está em
@@ -44,7 +49,10 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			COALESCE(b.morning_seconds, 0),
 			COALESCE(b.peak_call_size, 0),
 			COALESCE(b.longest_session_seconds, 0),
-			(SELECT COUNT(*) FROM servers sv WHERE sv.owner_id = u.id),
+			(SELECT COUNT(*) FROM servers sv WHERE sv.owner_id = u.id AND (
+				SELECT COUNT(*) FROM server_members sm JOIN users mu ON mu.id = sm.user_id AND NOT mu.is_bot
+				WHERE sm.server_id = sv.id AND sm.user_id <> sv.owner_id
+			) >= $2),
 			(SELECT COUNT(*) FROM proposals p WHERE p.author_id = u.id),
 			(SELECT COUNT(*) FROM friendships f WHERE (f.requester_id = u.id OR f.addressee_id = u.id) AND f.status = 'accepted'),
 			EXISTS (SELECT 1 FROM dev_badge_users d WHERE d.user_id = u.id),
@@ -67,7 +75,7 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 		LEFT JOIN user_badge_stats b ON b.user_id = u.id
 		WHERE u.id = $1
 		`,
-		userID,
+		userID, donoMinMembers,
 	).Scan(
 		&s.CreatedAt,
 		&s.XP,
