@@ -1,5 +1,7 @@
 ## Novidades
 
+- Lives: a transmissão de tela agora sai em H.264, com texto bem mais nítido e menos banda (em Avançado, no seletor de qualidade, dá para voltar ao VP8). Em 60 FPS a live prioriza a fluidez, para jogos.
+- Lives: o ícone de gráfico no canto da live mostra as estatísticas (FPS, resolução, Mbps, codec, perda). O vídeo de uma live fora de vista (app minimizado ou live fora da tela do app) pausa, mas o som continua.
 - Melhorias: o diamante da barra lateral agora abre uma tela com três cards: Propostas de melhorias, Novidades e o novo Rank global, com os 100 maiores níveis do Salinha, o pódio dos 3 primeiros e a sua posição, mesmo fora do top 100.
 - Linux: o /tts agora fala no app desktop do Linux. A voz (cerca de 90 MB) é baixada na primeira mensagem /tts; o andamento aparece em Configurações → Voz.
 - Chat: novo comando /tts. Digite `/tts <mensagem>` e quem está em call no servidor (ou na call da DM) ouve a mensagem lida em voz; no chat ela aparece com um alto-falante. Até 200 caracteres, uma a cada 10 segundos por pessoa, e uma fala de cada vez. Quem estiver ensurdecido não ouve, e dá para desligar em Configurações → Voz → "Ouvir mensagens de TTS". Os cargos ganharam a permissão "Enviar mensagens TTS", ligada para todos.

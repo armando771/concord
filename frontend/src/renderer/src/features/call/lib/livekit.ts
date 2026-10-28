@@ -1,5 +1,4 @@
 import {
-  AudioPresets,
   ConnectionState,
   DisconnectReason,
   Room,
@@ -7,7 +6,8 @@ import {
   Track,
   type RemoteParticipant
 } from 'livekit-client'
-import { RemoteSubscriptions, watchHiddenWindow } from './remoteSubscriptions'
+import { RemoteSubscriptions } from './remoteSubscriptions'
+import { watchVideoPause } from './screenVideoPause'
 import {
   groupTracks,
   listScreenPublishers,
@@ -27,13 +27,14 @@ import {
   type PacketCounters,
   type QualityDetails
 } from './connectionQuality'
+import type { ScreenShareQuality } from './screenShareQuality'
+import { publishScreenTracks, updatePublishedScreenQuality } from './screenPublish'
+import type { ScreenStatsInput } from './screenStats'
 import {
-  screenEncoding,
-  screenSource,
-  screenVideoConstraints,
-  streamQuality,
-  type ScreenShareQuality
-} from './screenShareQuality'
+  clearActiveScreenStats,
+  readScreenStatsInput,
+  setActiveScreenStats
+} from './screenStatsSource'
 
 // Mídia das chamadas via SFU (LiveKit): cada pessoa envia uma cópia de cada
 // track para o servidor, que distribui para os demais. Substitui o mesh P2P.
@@ -88,7 +89,7 @@ export class CallMedia {
   private closing = false
   /** Tela/câmera pedidas antes disso são publicadas por quem chamou connect(). */
   private connected = false
-  /** O que baixar de cada pessoa (tela só de quem assisto; vídeo pausado fora da tela). */
+  /** O que baixar de cada pessoa (tela só de quem assisto; vídeo pausado fora de vista). */
   private subscriptions = new RemoteSubscriptions()
   private stopWindowWatch: () => void
   private refreshQueued = false
@@ -111,8 +112,9 @@ export class CallMedia {
         videoCodec: 'vp8'
       }
     })
-    this.stopWindowWatch = watchHiddenWindow((hidden) => {
-      if (this.subscriptions.setVideoPaused(hidden)) this.applySubscriptions()
+    setActiveScreenStats(this)
+    this.stopWindowWatch = watchVideoPause((pause) => {
+      if (this.subscriptions.setPause(pause)) this.applySubscriptions()
     })
 
     // Rajadas de eventos viram uma emissão só, depois do handler do SDK. Numa
@@ -256,6 +258,12 @@ export class CallMedia {
     return out
   }
 
+  /** getStats() do vídeo da live, para o painel de estatísticas (só com ele aberto). */
+  async readScreenStats(userId: string, local: boolean): Promise<ScreenStatsInput | null> {
+    if (this.closing) return null
+    return readScreenStatsInput(this.room, userId, local)
+  }
+
   /** Pode publicar essa fonte, segundo as permissões que o servidor deu. */
   canPublish(source: PublishSource): boolean {
     return canPublishSource(this.room.localParticipant.permissions, source)
@@ -314,26 +322,7 @@ export class CallMedia {
   async publishScreen(stream: MediaStream): Promise<void> {
     if (!this.connected) return
     if (!this.canPublish('screen_share')) throw new Error('no_stream_permission')
-    const [video] = stream.getVideoTracks()
-    if (video) {
-      await this.room.localParticipant.publishTrack(video, {
-        source: Track.Source.ScreenShare,
-        name: 'screen',
-        simulcast: false,
-        screenShareEncoding: screenEncoding(streamQuality(stream), video.getSettings())
-      })
-    }
-    const [audio] = stream.getAudioTracks()
-    if (audio) {
-      await this.room.localParticipant.publishTrack(audio, {
-        source: Track.Source.ScreenShareAudio,
-        name: 'screen-audio',
-        audioPreset: AudioPresets.musicHighQualityStereo,
-        forceStereo: true,
-        dtx: false,
-        red: false
-      })
-    }
+    await publishScreenTracks(this.room.localParticipant, stream)
   }
 
   async publishCamera(stream: MediaStream): Promise<void> {
@@ -348,48 +337,13 @@ export class CallMedia {
   }
 
   /** Não despublica: preserva SID, tracks e assinaturas de quem já está assistindo. */
-  async updateScreenQuality(stream: MediaStream, quality: ScreenShareQuality): Promise<void> {
-    const publication = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare)
-    const track = publication?.videoTrack
-    const video = stream.getVideoTracks()[0]
-    const sender = track?.sender
-    const current = (): boolean =>
-      this.connected &&
-      this.room.state === ConnectionState.Connected &&
-      video?.readyState === 'live' &&
-      this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare) === publication &&
-      track?.sender === sender
-    if (!track || !video || !sender || track.mediaStreamTrack !== video || !current()) {
-      throw new Error('screen_not_available')
-    }
-    const previous = video.getConstraints()
-    const oldParameters = sender.getParameters()
-    if (oldParameters.encodings.length !== 1) throw new Error('unsupported_screen_encodings')
-    const oldEncoding = { ...oldParameters.encodings[0] }
-    const encoding = screenEncoding(quality, screenSource(video))
-    let encodingApplied = false
-    try {
-      // applyConstraints substitui as restrições anteriores; Fonte remove width/height.
-      await video.applyConstraints(screenVideoConstraints(quality, screenSource(video)))
-      if (!current()) throw new Error('screen_changed')
-      const parameters = sender.getParameters()
-      Object.assign(parameters.encodings[0], encoding)
-      await sender.setParameters(parameters)
-      encodingApplied = true
-      if (!current()) throw new Error('screen_changed')
-      // Reconexões internas do SDK também precisam conhecer o novo orçamento.
-      track.publishOptions = { ...track.publishOptions, screenShareEncoding: encoding }
-      publication.options = { ...publication.options, screenShareEncoding: encoding }
-    } catch (error) {
-      // Nunca encerra a transmissão caso o browser recuse a alteração.
-      if (video.readyState === 'live') await video.applyConstraints(previous).catch(() => {})
-      if (encodingApplied && current()) {
-        const parameters = sender.getParameters()
-        parameters.encodings[0] = { ...oldEncoding }
-        await sender.setParameters(parameters).catch(() => {})
-      }
-      throw error
-    }
+  updateScreenQuality(stream: MediaStream, quality: ScreenShareQuality): Promise<void> {
+    return updatePublishedScreenQuality(
+      this.room.localParticipant,
+      stream,
+      quality,
+      () => this.connected && this.room.state === ConnectionState.Connected
+    )
   }
 
   /** Despublica as tracks do stream (quem chama é dono de parar as tracks). */
@@ -411,6 +365,7 @@ export class CallMedia {
 
   disconnect(): void {
     this.closing = true
+    clearActiveScreenStats(this)
     this.stopWindowWatch()
     this.cache.clear()
     void this.room.disconnect()
