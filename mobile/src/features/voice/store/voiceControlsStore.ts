@@ -30,8 +30,13 @@ async function load(): Promise<Persisted> {
   }
 }
 
-const persist = ({ muted, deafened, mutedBeforeDeafen }: Persisted): Promise<void> =>
-  SecureStore.setItemAsync(KEY, JSON.stringify({ muted, deafened, mutedBeforeDeafen })).catch(() => {})
+async function persist({ muted, deafened, mutedBeforeDeafen }: Persisted): Promise<void> {
+  try {
+    await SecureStore.setItemAsync(KEY, JSON.stringify({ muted, deafened, mutedBeforeDeafen }))
+  } catch {
+    // sem Keystore o estado só vale até fechar o app
+  }
+}
 
 export const useVoiceControlsStore = create<VoiceControlsState>()((set, get) => ({
   ...DEFAULTS,
