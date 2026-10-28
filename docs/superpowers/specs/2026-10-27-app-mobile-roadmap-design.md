@@ -17,7 +17,7 @@ Discord, incluindo o kanban/propostas (referência: app do ClickUp).
 | Distribuição por APK, como o `.exe`, com build local (`expo prebuild` + Gradle); EAS Build só como alternativa | sem loja, sem revisão e sem conta Expo; o `eas build --local` não roda no Windows |
 | Voz e vídeo (LiveKit) **fora** da primeira versão | LiveKit não roda no Expo Go e exige development build; vira spec própria depois |
 | `mobile/` independente, lógica pura portada por cópia adaptada | não mexe no desktop; extrair pacote compartilhado só se a duplicação doer (novo ADR) |
-| Expo Router + Zustand + cliente REST/WS portado | padrão do repo vence o empate ([ADR 0006](../../adr/0006-app-mobile-expo.md)) |
+| Expo Router + Zustand + cliente REST/WS portado | padrão do repo vence o empate ([ADR 0015](../../adr/0015-app-mobile-expo.md)) |
 | Navegação igual ao Discord: abas Início · Mensagens · Notificações · Você; gaveta lateral de servidores e canais dentro do Início | o design já é o do Discord; o kanban fica dentro do servidor, ao lado dos canais, como no desktop |
 | Push na spec do chat, via Expo Push + FCM V1 | chat sem push perde mensagem com o app fechado |
 | Textos do desktop reaproveitados; só os textos novos precisam de aprovação | já foram aprovados |

@@ -37,3 +37,33 @@ export function EnvelopeIcon({ className }: IconProps): React.JSX.Element {
     </Stroke>
   )
 }
+
+export function ArrowLeftIcon({ className }: IconProps): React.JSX.Element {
+  return (
+    <Stroke className={className}>
+      <path d="M19 12H5" />
+      <path d="m12 19-7-7 7-7" />
+    </Stroke>
+  )
+}
+
+export function MembersIcon({ className }: IconProps): React.JSX.Element {
+  return (
+    <Stroke className={className}>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M16 4.5a3.5 3.5 0 0 1 0 7" />
+      <path d="M18.5 14.5A6.5 6.5 0 0 1 21.5 20" />
+    </Stroke>
+  )
+}
+
+/** Coroa cheia (marca do dono do servidor). */
+export function CrownIcon({ className }: IconProps): React.JSX.Element {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M3 7.5 7.5 11 12 4l4.5 7L21 7.5 19.5 18h-15L3 7.5Z" />
+      <rect x="4.5" y="19" width="15" height="2" rx="1" />
+    </svg>
+  )
+}

@@ -30,7 +30,7 @@ const member = (id: string, ...roleIds: string[]): { user_id: string; role_ids: 
   role_ids: roleIds
 })
 const members = [
-  member('dono'),
+  member('dono', 'vip'),
   member('mod', 'mod'),
   member('vip', 'vip'),
   member('vipmod', 'vip', 'mod'),
@@ -42,12 +42,11 @@ const members = [
 const online = new Set(['dono', 'mod', 'vip', 'vipmod', 'maestro', 'artista', 'ana'])
 
 const group = (): MemberGroup<ReturnType<typeof member>>[] =>
-  groupMembers({ members, roles, ownerId: 'dono', isOnline: (id) => online.has(id) })
+  groupMembers({ members, roles, isOnline: (id) => online.has(id) })
 
 describe('groupMembers', () => {
-  it('põe o dono em cima, depois os cargos exibidos, Bots abaixo de todos os cargos, os membros sem cargo e os offline', () => {
+  it('os cargos exibidos em cima, Bots abaixo de todos os cargos, os membros sem cargo e os offline', () => {
     expect(group().map((g) => g.key)).toEqual([
-      'owner',
       'role:mod',
       'role:vip',
       'role:bots',
@@ -59,8 +58,19 @@ describe('groupMembers', () => {
   it('cada pessoa fica só no grupo do seu cargo exibido mais alto e o bot fica em Bots', () => {
     const byKey = Object.fromEntries(group().map((g) => [g.key, g.members.map((m) => m.user_id)]))
     expect(byKey['role:mod']).toEqual(['mod', 'vipmod'])
-    expect(byKey['role:vip']).toEqual(['vip'])
+    expect(byKey['role:vip']).toEqual(['dono', 'vip'])
     expect(byKey['role:bots']).toEqual(['maestro'])
+  })
+
+  // Issue #332: "Dono" não é cargo nem grupo; o dono fica no grupo do cargo dele.
+  it('o dono não tem grupo próprio: fica no do seu cargo ou em Membros', () => {
+    const groups = groupMembers({
+      members: [member('dono'), member('ana')],
+      roles,
+      isOnline: () => true
+    })
+    expect(groups.map((g) => g.key)).toEqual(['members'])
+    expect(groups[0].members.map((m) => m.user_id)).toEqual(['dono', 'ana'])
   })
 
   it('cargo colorido mas não exibido separadamente não cria grupo', () => {
@@ -86,7 +96,6 @@ describe('groupMembers', () => {
     const groups = groupMembers({
       members: [member('dono'), member('ana')],
       roles,
-      ownerId: 'dono',
       isOnline: (id) => id === 'ana'
     })
     expect(groups.map((g) => g.key)).toEqual(['members', 'offline'])
@@ -97,7 +106,6 @@ describe('groupMembers', () => {
     const groups = groupMembers({
       members: [member('ana', 'everyone')],
       roles: [{ ...everyone, hoist: true }],
-      ownerId: 'dono',
       isOnline: () => true
     })
     expect(groups.map((g) => g.key)).toEqual(['members'])
@@ -107,10 +115,9 @@ describe('groupMembers', () => {
     const groups = groupMembers({
       members: [{ user_id: 'a' }, { user_id: 'b' }],
       roles: [],
-      ownerId: 'a',
       isOnline: () => true
     })
-    expect(groups.map((g) => g.key)).toEqual(['owner', 'members'])
+    expect(groups.map((g) => g.key)).toEqual(['members'])
   })
 })
 

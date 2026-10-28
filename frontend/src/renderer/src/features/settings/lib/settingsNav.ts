@@ -172,3 +172,15 @@ export function currentSettingsSection(
 export function settingsContentWidth(id: SettingsSectionId): string {
   return id === 'profiles' ? 'max-w-[1080px]' : 'max-w-[740px]'
 }
+
+/**
+ * O Esc fecha as configurações, menos quando já foi tratado (o recorte de
+ * imagem para o evento) ou quando há um modal aberto por cima: o listener das
+ * configurações roda antes do do modal, então o Esc é só do modal.
+ */
+export function escClosesSettings(
+  e: { key: string; defaultPrevented: boolean },
+  modalOpen: boolean
+): boolean {
+  return e.key === 'Escape' && !e.defaultPrevented && !modalOpen
+}

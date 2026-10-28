@@ -221,8 +221,9 @@ Código novo que desenha em laço (canvas, rAF, vídeo) deve consultar esse stor
   traces.
 - Relógios de 1 s (duração da call) e polling de 10 s: uma pintura pequena por
   segundo, fora do ruído da medição.
-- Os AudioWorklets da call (supressão de ruído e voice mod processam mesmo sem
-  efeito ligado): é áudio da call, fica para outra mudança.
+- Os AudioWorklets da call (supressão de ruído e voice mod processavam mesmo
+  sem efeito ligado): resolvido depois, ver
+  [Etapas de áudio inativas fora do grafo](#etapas-de-áudio-inativas-fora-do-grafo).
 - Com foco o app desenha como antes (animações, transições, GIFs): o pedido era
   segundo plano.
 
@@ -346,3 +347,64 @@ Audio (filtros, delays, waveshapers, analisador, destino). O próximo ganho de
 áudio, se houver, está aí: tirar do grafo os nós do voice mod quando o preset
 é Normal (hoje eles processam com os ganhos em zero) e o RNNoise quando a
 supressão está desligada.
+
+## Etapas de áudio inativas fora do grafo
+
+Seguimento do trace acima. Antes, o microfone passava **sempre** pelo RNNoise
+(com a supressão desligada, só o ganho dele ia a 0) e pelo grafo inteiro do
+voice mod (no Normal, worklet + filtros + delays + waveshapers + convolver
+com os ganhos em 0). Agora (`features/call/lib/audioStageSwitch.ts`):
+
+- supressão desligada → o RNNoise não existe; voz Normal sem ajuste
+  (`isVoiceModActive` falso) → o grafo do voice mod não existe. O sinal passa
+  por um ganho direto.
+- Ligar no meio da chamada cria a etapa **nova** (estado limpo, sem resto de
+  áudio antigo nos buffers) e cruza direto → etapa com rampa linear de 15 ms,
+  depois de um aquecimento: 100 ms o RNNoise (no Electron 44 o primeiro som
+  sai em 17–26 ms: o WASM instancia na thread de áudio e o anel de 1920
+  amostras enche), 60 ms o voice mod (meia janela do pitch shifter). Desligar
+  cruza de volta e destrói a etapa ~50 ms depois do fim da rampa.
+- A track enviada é a mesma o tempo todo: nada é republicado no LiveKit e os
+  outros não perdem áudio. A detecção de fala, o portão e o medidor continuam
+  nos mesmos pontos (depois do ganho de entrada / da cauda do voice mod).
+- A supressão de ruído passou a vir **desligada por padrão** (o persist do
+  `noiseSuppressionStore` foi para a versão 1, que leva todo estado antigo a
+  desligado). Quem tinha ligado de propósito precisa ligar de novo uma vez.
+  Desligada é sem supressão nenhuma: sem o RNNoise, a do Chromium só entra se
+  a do usuário estiver ligada.
+
+O que foi medido no Electron 44 / Chromium 152 (`AudioContext` de verdade,
+contando as chamadas de `process()`):
+
+| Situação do AudioWorkletNode | `process()` por segundo |
+|---|---|
+| ligado na entrada e na saída, devolvendo true | 375 |
+| nunca ligado / desligado depois de usado, devolvendo true | 375 |
+| só a entrada ou só a saída ligada, devolvendo true | 375 |
+| depois de devolver false (desligado ou não) | 0 |
+| religado e "acordado" depois de ter devolvido false | 0 (nunca volta) |
+
+Ou seja: desconectar não basta (o worklet segue rodando, e o RNNoise sem
+entrada ainda é chamado, só pula o modelo), e devolver false é definitivo.
+Por isso a etapa inativa é destruída — o RNNoise pelo `destroy()` da
+biblioteca, o voice mod pela mensagem `'stop'` (`VOICE_MOD_STOP`) — e
+recriada ao voltar. Os nós nativos sem caminho até o destino não são
+processados.
+
+Estalo: uma senoide de 0,5 trocada pelo **inverso** (pior caso) com o
+`switchStage` de verdade, entrando, saindo, invertendo no meio da rampa e
+recriando: o maior degrau entre amostras foi 0,0144, o da própria senoide.
+Duas armadilhas que apareceram nessa medição e ficaram de fora do código:
+rampa marcada no `currentTime` (que fica até um buffer atrás da thread de
+áudio) começa no passado e salta — as rampas começam depois de
+`baseLatency` + 20 ms; e `cancelAndHoldAtTime` seguido de rampa saltava o
+ganho de 1 para 0,13 na hora — as rampas nunca cancelam, cada uma entra
+depois do fim da anterior.
+
+**Medição de CPU pendente**: o banco (`perf-bench.mjs`, cenários d e h com
+trace) não foi rodado para esta mudança. Pelo trace anterior (call de voz
+sem foco, voz Normal, supressão ligada), a thread do AudioWorklet gastava ~114
+ms/s: ~32–35 do RNNoise, ~5 do worklet do voice mod, ~5 da detecção e ~70 do
+grafo nativo, do qual o voice mod é a maior parte. Com a supressão desligada
+(agora o padrão) e a voz Normal, o esperado é sobrar só a detecção, o
+analisador, os ganhos e o destino.

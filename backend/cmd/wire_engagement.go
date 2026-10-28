@@ -10,6 +10,7 @@ import (
 	"gin-quickstart/backend/internal/bot"
 	"gin-quickstart/backend/internal/changelog"
 	"gin-quickstart/backend/internal/conversation"
+	"gin-quickstart/backend/internal/enquete"
 	"gin-quickstart/backend/internal/level"
 	"gin-quickstart/backend/internal/message"
 	"gin-quickstart/backend/internal/notifysettings"
@@ -26,8 +27,8 @@ func (a *app) wireEngagement() {
 	birthdayHandler := birthday.BirthdayHandler(birthdayService)
 	go birthdayService.Run(context.Background())
 
-	// Level (XP por tempo em call, sem mute)
-	levelService := level.LevelService(level.LevelRepository(a.db), a.hub, a.callService)
+	// Level (XP por tempo em call, sem mute e sem estar AFK)
+	levelService := level.LevelService(level.LevelRepository(a.db), a.hub, a.callAFK)
 	levelHandler := level.LevelHandler(levelService)
 	go levelService.Run(a.ctx)
 
@@ -40,8 +41,18 @@ func (a *app) wireEngagement() {
 	// olhando as chamadas; o resto vem dos contadores do banco)
 	// Horas de Coruja/Madrugador em Brasília (nil), não no relógio da VPS. No
 	// desligamento grava o que estava na memória antes de fechar o banco.
-	badgeService := badge.BadgeService(badge.BadgeRepository(a.db), a.hub, a.callService, a.hub, nil)
+	// Tempo em call de quem está AFK não conta (a.callAFK filtra).
+	badgeService := badge.BadgeService(badge.BadgeRepository(a.db), a.hub, a.callAFK, a.hub, nil)
 	badgeHandler := badge.BadgeHandler(badgeService)
+	a.wireBadgeEvents(badgeService)
+	// Amizade aceita já reavalia o badge Amigos das duas pessoas.
+	a.friendAccepted.OnAccepted(badgeService.Refresh)
+
+	// Enquetes de escolha única (hoje: badge do segundo turno). Opção com badge
+	// reavalia os badges na hora; só contas anteriores ao corte da enquete a veem.
+	enqueteHandler := enquete.EnqueteHandler(enquete.EnqueteService(
+		enquete.EnqueteRepository(a.db), badgeService, enquete.Todas,
+	))
 
 	// Card novo no quadro já reavalia o badge Contribuinte de quem criou.
 	proposalService := proposal.ProposalService(proposal.ProposalRepository(a.db), a.hub, issueCreator, proposalImages, techIDs).
@@ -61,6 +72,7 @@ func (a *app) wireEngagement() {
 	a.route(func(_ *gin.Engine, api *gin.RouterGroup) {
 		level.LevelRoutes(api, levelHandler, a.authMiddleware)
 		badge.BadgeRoutes(api, badgeHandler, a.authMiddleware)
+		enquete.EnqueteRoutes(api, enqueteHandler, a.authMiddleware)
 		notifysettings.Routes(api, notifySettingsHandler, a.authMiddleware)
 		proposal.ProposalRoutes(api, proposalHandler, a.authMiddleware, a.requireVerified)
 		birthday.BirthdayRoutes(api, birthdayHandler, a.authMiddleware)

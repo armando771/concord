@@ -34,7 +34,8 @@ export interface ServerLayoutClasses {
 // em cima da coluna da direita, com a largura dela (inclusive no arrasto da
 // alça). contain-inline-size: a busca não alarga a coluna, só a preenche; a
 // caixa (largura fixa no MessageSearchBar) estica junto.
-const SPAN_HEADER = 'col-span-2 row-start-1 grid grid-cols-subgrid border-b border-subtle'
+// relative: a busca do celular abre por cima da barra inteira (CollapsibleSearch).
+const SPAN_HEADER = 'col-span-2 row-start-1 grid grid-cols-subgrid border-b border-subtle relative'
 // Classes por extenso: o Tailwind só gera o que acha escrito literalmente.
 const FILL_BOX = '[&_div:has(>input[role=combobox])]:w-full'
 const LG_FILL_BOX = 'lg:[&_div:has(>input[role=combobox])]:w-full'
@@ -50,16 +51,17 @@ const LAYOUTS: Record<RightColumn, ServerLayoutClasses> = {
     right: 'col-start-2 row-start-2 hidden min-h-0 lg:flex'
   },
   // Os resultados aparecem em qualquer largura: a busca fica em cima deles.
+  // No celular eles tomam a tela (o canal volta ao fechar a busca).
   search: {
     header: SPAN_HEADER,
     search: `grid min-w-0 items-center px-2 contain-inline-size ${FILL_BOX}`,
-    content: `col-start-1 ${CONTENT}`,
-    right: 'col-start-2 row-start-2 flex min-h-0'
+    content: `col-start-1 ${CONTENT} max-md:hidden`,
+    right: 'relative col-start-2 row-start-2 flex min-h-0 max-md:col-span-2 max-md:col-start-1'
   },
   // O chat da call vai de cima a baixo; a barra (com a busca no fim) fica só
   // sobre a chamada.
   voiceChat: {
-    header: 'col-start-1 row-start-1 flex min-w-0 border-b border-subtle',
+    header: 'col-start-1 row-start-1 flex min-w-0 border-b border-subtle relative',
     search: 'grid shrink-0 items-center pr-4',
     content: `col-start-1 ${CONTENT}`,
     right: 'col-start-2 row-span-2 row-start-1 flex min-h-0'

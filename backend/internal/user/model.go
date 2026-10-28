@@ -36,8 +36,11 @@ type User struct {
 	// EmailVerifiedAt: nulo = e-mail não confirmado. Só a própria pessoa vê
 	// (SelfUser.EmailVerified).
 	EmailVerifiedAt *time.Time `json:"-"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	// UsernameChangedAt: a última troca do @ (nula = nunca trocou; o cadastro
+	// não conta). Limita a uma troca a cada UsernameCooldown.
+	UsernameChangedAt *time.Time `json:"-"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 // SelfUser é a conta vista pela própria pessoa (/users/me e /users/me/*):
@@ -46,6 +49,9 @@ type SelfUser struct {
 	User
 	Email         string `json:"email"`
 	EmailVerified bool   `json:"email_verified"`
+	// UsernameChangeAvailableAt: a partir de quando pode trocar o @ de novo
+	// (ausente = nunca trocou). O app compara com a hora atual.
+	UsernameChangeAvailableAt *time.Time `json:"username_change_available_at,omitempty"`
 }
 
 // Privacy: quem pode mandar pedido de amizade e se membros de servidores em
@@ -78,7 +84,12 @@ func (u *User) Privacy() Privacy {
 
 // Self monta a resposta das rotas da própria conta, com o e-mail.
 func (u *User) Self() SelfUser {
-	return SelfUser{User: *u, Email: u.Email, EmailVerified: u.EmailVerifiedAt != nil}
+	return SelfUser{
+		User:                      *u,
+		Email:                     u.Email,
+		EmailVerified:             u.EmailVerifiedAt != nil,
+		UsernameChangeAvailableAt: usernameAvailableAt(u.UsernameChangedAt),
+	}
 }
 
 // ProfileLink é um link do perfil (Steam, Twitch, site...). O app descobre o

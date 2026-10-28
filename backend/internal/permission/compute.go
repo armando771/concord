@@ -93,7 +93,7 @@ func implicit(perms int64, channelType string) int64 {
 		return 0
 	}
 	if perms&SendMessages == 0 {
-		perms &^= AttachFiles | MentionEveryone
+		perms &^= AttachFiles | MentionEveryone | SendTTSMessages
 	}
 	if channelType == ChannelVoice && perms&Connect == 0 {
 		perms &^= Speak | Stream | MuteMembers | DeafenMembers | MoveMembers | DisconnectMembers | UseSoundboard
@@ -125,6 +125,13 @@ func HighestPosition(roles []Role) int {
 // abaixo do seu cargo mais alto (mesma posição não pode).
 func CanManageRole(isOwner bool, actorHighest int, role Role) bool {
 	return isOwner || actorHighest > role.Position
+}
+
+// CanEditRolesOf: o ator pode dar ou tirar cargos do alvo? Os cargos do dono
+// só ele mesmo mexe (em si, qualquer cargo); nos demais membros, o próprio ator
+// incluso, vale só a hierarquia de cada cargo (CanManageRole).
+func CanEditRolesOf(ownerID, actorID, targetID string) bool {
+	return targetID != ownerID || actorID == ownerID
 }
 
 // CanActOn: o ator pode expulsar, banir, silenciar, mover ou trocar os cargos

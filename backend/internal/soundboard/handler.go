@@ -4,21 +4,14 @@ import (
 	"context"
 	"errors"
 	"gin-quickstart/backend/internal/permission"
-	"io"
 	"log"
 	"mime"
 	"net/http"
-	"strconv"
-	"strings"
-	"syscall"
 
 	"gin-quickstart/backend/internal/platform/media"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
-
-const multipartOverhead = 256 << 10 // 256 KB para cabeçalhos e campos de texto
 
 type soundRepo interface {
 	Create(ctx context.Context, s *Sound) error
@@ -84,22 +77,6 @@ func NewHandler(
 	}
 }
 
-func isTooLarge(err error) bool {
-	var maxBytes *http.MaxBytesError
-	return errors.Is(err, media.ErrTooLarge) || errors.As(err, &maxBytes)
-}
-
-func saveErrorStatus(err error) (int, string) {
-	switch {
-	case isTooLarge(err):
-		return http.StatusRequestEntityTooLarge, "file too large (max 5 MB)"
-	case errors.Is(err, syscall.ENOSPC):
-		return http.StatusInsufficientStorage, "server out of space"
-	default:
-		return http.StatusBadRequest, "invalid upload"
-	}
-}
-
 func (h *Handler) List(c *gin.Context) {
 	userID, exists := c.Get("userID")
 	if !exists {
@@ -125,181 +102,6 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, sounds)
-}
-
-func (h *Handler) Upload(c *gin.Context) {
-	userID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-	uploaderID := userID.(string)
-	serverID := c.Param("id")
-	ctx := c.Request.Context()
-
-	isMember, err := h.servers.IsMember(ctx, serverID, uploaderID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check membership"})
-		return
-	}
-	if !isMember {
-		c.JSON(http.StatusForbidden, gin.H{"error": ErrNotServerMember.Error()})
-		return
-	}
-
-	perms, err := h.permissions.ServerPerms(ctx, serverID, uploaderID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return
-	}
-	if !permission.Has(perms, permission.UseSoundboard) {
-		c.JSON(http.StatusForbidden, gin.H{"error": permission.ErrMissingPermission.Error(), "code": "missing_permission"})
-		return
-	}
-
-	count, err := h.repo.CountByServer(ctx, serverID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check server soundboard limit"})
-		return
-	}
-	if count >= h.maxPerServer {
-		c.JSON(http.StatusConflict, gin.H{"error": ErrServerFull.Error()})
-		return
-	}
-
-	incoming := c.Request.ContentLength
-	if incoming < 0 {
-		incoming = h.maxSoundBytes
-	}
-	if !h.space.HasRoom(incoming) {
-		c.JSON(http.StatusInsufficientStorage, gin.H{"error": "server out of space"})
-		return
-	}
-	if c.Request.ContentLength > h.maxSoundBytes+multipartOverhead {
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file too large (max 5 MB)"})
-		return
-	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, h.maxSoundBytes+multipartOverhead)
-
-	reader, err := c.Request.MultipartReader()
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid upload"})
-		return
-	}
-
-	sound := &Sound{
-		ServerID:   serverID,
-		UploaderID: uploaderID,
-	}
-
-	var (
-		saved    bool
-		keep     bool
-		head     []byte
-		declared string
-		rawName  string
-		rawEmoji string
-		rawDur   string
-	)
-	defer func() {
-		if saved && !keep {
-			if err := h.store.Remove(sound.ID); err != nil {
-				log.Printf("failed to remove rejected soundboard upload %s: %v", sound.ID, err)
-			}
-		}
-	}()
-
-	for {
-		part, err := reader.NextPart()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			if isTooLarge(err) {
-				c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file too large (max 5 MB)"})
-			} else {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid upload"})
-			}
-			return
-		}
-
-		switch part.FormName() {
-		case "file":
-			if saved {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid upload"})
-				return
-			}
-			sound.ID = uuid.NewString()
-			declared = part.Header.Get("Content-Type")
-			sound.SizeBytes, head, err = h.store.Save(sound.ID, part, h.maxSoundBytes)
-			if err != nil {
-				status, msg := saveErrorStatus(err)
-				c.JSON(status, gin.H{"error": msg})
-				return
-			}
-			saved = true
-		case "name", "emoji", "duration_ms":
-			raw, err := io.ReadAll(io.LimitReader(part, 256))
-			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid upload"})
-				return
-			}
-			switch part.FormName() {
-			case "name":
-				rawName = string(raw)
-			case "emoji":
-				rawEmoji = string(raw)
-			case "duration_ms":
-				rawDur = string(raw)
-			}
-		default:
-			io.Copy(io.Discard, part)
-		}
-		part.Close()
-	}
-
-	if !saved {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "audio file is required"})
-		return
-	}
-
-	name, err := sanitizeName(rawName)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	sound.Name = name
-	sound.Emoji = sanitizeEmoji(rawEmoji)
-
-	dur, err := strconv.Atoi(strings.TrimSpace(rawDur))
-	if err != nil || dur < MinSoundDurationMs || dur > MaxSoundDurationMs {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidDuration.Error()})
-		return
-	}
-	sound.DurationMs = dur
-
-	kind, contentType, ok := media.Sniff(head, declared)
-	if !ok || kind != media.KindAudio {
-		c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "only audio files (mp3, wav, ogg, m4a, webm) are allowed"})
-		return
-	}
-	sound.ContentType = contentType
-
-	if err := h.repo.Create(ctx, sound); err != nil {
-		log.Printf("failed to save soundboard item %s: %v", sound.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save sound"})
-		return
-	}
-	keep = true
-
-	if h.publisher != nil {
-		h.publisher.BroadcastToRoom("server:"+serverID, marshalEvent("soundboard:created", CreatedEvent{
-			ServerID: serverID,
-			Sound:    *sound,
-		}))
-	}
-
-	c.JSON(http.StatusCreated, sound)
 }
 
 func (h *Handler) Delete(c *gin.Context) {
@@ -360,14 +162,17 @@ func (h *Handler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "sound deleted"})
 }
 
+// ServeFile entrega o arquivo do som (o <audio> manda o media token na URL).
 func (h *Handler) ServeFile(c *gin.Context) {
 	token := c.Query("token")
 	if token == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid media token"})
 		return
 	}
-	userID, err := h.tokens.VerifyMediaToken(token)
-	if err != nil {
+	// Qualquer pessoa logada: favorito de outro servidor tocado numa chamada é
+	// ouvido por quem não é de lá, e o id (UUID) do som só chega a quem o vê
+	// na mesa ou o ouve (docs/adr/0013-mesa-de-audio-por-servidor.md).
+	if _, err := h.tokens.VerifyMediaToken(token); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid media token"})
 		return
 	}
@@ -382,16 +187,6 @@ func (h *Handler) ServeFile(c *gin.Context) {
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load sound"})
-		return
-	}
-
-	isMember, err := h.servers.IsMember(ctx, sound.ServerID, userID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check access"})
-		return
-	}
-	if !isMember {
-		notFound()
 		return
 	}
 

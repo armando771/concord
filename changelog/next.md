@@ -1,5 +1,10 @@
 ## Novidades
 
+- Linux: o /tts agora fala no app desktop do Linux. A voz (cerca de 90 MB) é baixada na primeira mensagem /tts; o andamento aparece em Configurações → Voz.
+- Chat: novo comando /tts. Digite `/tts <mensagem>` e quem está em call no servidor (ou na call da DM) ouve a mensagem lida em voz; no chat ela aparece com um alto-falante. Até 200 caracteres, uma a cada 10 segundos por pessoa, e uma fala de cada vez. Quem estiver ensurdecido não ouve, e dá para desligar em Configurações → Voz → "Ouvir mensagens de TTS". Os cargos ganharam a permissão "Enviar mensagens TTS", ligada para todos.
+- Mesa de áudio: cada som é do servidor onde foi enviado. Os favoritos (a estrela) agora ficam na sua conta e aparecem nas calls de qualquer servidor, com o nome do servidor de origem. Em Cargos há duas permissões novas, "Adicionar sons" e "Adicionar figurinhas", ligadas para todo mundo por padrão.
+- Tempo em call e XP de voz param de contar depois de 10 minutos sem falar.
+- Badges: o Festeiro agora conta só contas com e-mail confirmado e pelo menos 7 dias de criadas.
 - Chat: botão direito numa imagem (canais, mensagens diretas e fixadas) abre o menu com "Copiar imagem". Vale para PNG, JPEG e WebP; GIF não copia.
 - Perfil: 14 fontes novas e efeitos de nome animados (degradê animado, neon pulsante, glitch, fogo, onda, cintilante, brilhos, digitando, cromado e sombra 3D). O cartão de perfil ganhou tema: borda neon, arco-íris ou degradê, fundo em degradê com cor principal e de destaque, e efeitos de partículas, brilhos ou neve. Na prévia do editor, passe o mouse no avatar ou no banner para trocar a imagem.
 - Changelog: agora você vê, por versão, o que mudou no app. Clique no ícone de novidades na barra lateral.
@@ -10,8 +15,30 @@
 - Badges: novo badge Contribuinte para quem cria cards no quadro de propostas de melhorias (Ideia, Colaborador, Inovador, Visionário e Arquiteto, de 1 a 100 cards). Sobe na hora em que você cria o card, e quem já tinha cards ganha os tiers com a data certa.
 - Vídeo: nova seção em Configurações → Vídeo, com escolha da câmera, prévia ao vivo e fundo do vídeo como no Discord: desfocar o fundo (Borrar), usar uma das imagens do app, a sua própria ou até um GIF animado, sem precisar de pano verde. A separação roda no seu computador. Na chamada, o microfone, o fone e a câmera ganharam uma setinha para trocar de dispositivo, e a câmera também abre o "Mudar fundo de vídeo". Com "Sempre ver prévia do vídeo" você confere como aparece antes de ligar a câmera. O chroma key da versão anterior saiu.
 - Chamadas: novo botão "Convidar amigos" na linha do canal de voz em que você está, na barra lateral (o ícone de pessoa com "+", ao lado do balão do chat). Escolha um ou vários amigos e cada um recebe o convite como mensagem na conversa privada com você, num cartão com o canal e o botão "Abrir", que leva direto para a call. Quando a call acaba, o cartão vira "Convite inválido".
+- Chamadas: agora a transmissão de tela tem som. Quando alguém abre uma transmissão na call em que você está, toca um aviso; quando ela termina, toca outro; e quem já está com a transmissão aberta (inclusive quem transmite) ouve um som curto quando mais uma pessoa começa a assistir. Quem acabou de entrar na call ou na transmissão não ouve, e nada toca com o fone desligado (ensurdecido).
+- Badges: a escolha do badge do segundo turno voltou para quem já estava na Salinha até 25/10/2026, agora com três opções (L, 22 e Nulo, que ganhou o badge Votou Nulo). Todo mundo escolhe de novo, e a escolha é definitiva.
+- Badges: novo badge Espectador para quem assiste à transmissão de tela de outra pessoa numa call (Curioso, Pipoqueiro, Cinéfilo, Crítico e Camarote, de 1 a 500 horas). Conta só sem estar com o fone mutado (surdo), e ver duas lives ao mesmo tempo conta uma vez.
+- Badges: o badge Idade da conta agora vai até 10 anos, com oito tiers novos depois da Sequoia (Bosque, Floresta, Jequitibá, Baobá, Árvore Ancestral, Árvore Celestial, Árvore da Vida e Yggdrasil, de 3 a 10 anos). Os limites aparecem em anos ("1 ano", "2 anos").
+- Badges: novo badge Amigos pelo número de amizades (Enturmado, Popular, Galera Toda, Celebridade e Prefeito da Salinha, de 5 a 100 amigos). Sobe na hora em que um pedido de amizade é aceito, e desfazer uma amizade não tira o tier já conquistado.
+- Badges: novo badge Caçador de bugs para quem reporta bugs ao time (Olho Vivo, Detetive, Exterminador e Lenda do QA, de 1 a 25 bugs). O time concede a cada bug confirmado.
+- Badges: novo badge mítico Top 10 do Nível 100, o mais raro do app: só os 10 primeiros a chegar no nível 100 ganham, e o perfil mostra a posição de chegada ("#3 de 10").
+- Badges: novo badge DJ para quem põe músicas na fila do Maestro (Pede Música, Dono da Playlist, DJ de Churrasco, DJ Residente e Lenda das Pick-ups, de 10 a 5.000 músicas). Os pedidos antigos contam pelos avisos do Maestro no chat.
+- Badges: novo badge Barulhento para quem toca sons da mesa de áudio numa call com mais gente ouvindo (Buzina, Fanfarrão, Trio Elétrico e Caixa de Som do Vizinho, de 25 a 5.000 sons). Conta a partir de agora.
+- Badges: novo badge Figurinha para quem manda figurinhas e GIFs (Figurinha Repetida, Colecionador, Álbum da Copa e Rei do GIF, de 10 a 2.000). As que você já mandou contam, com a data certa.
+- Badges: novo badge Sequência para quem abre o Salinha todo dia, sem pular nenhum (Faísca, Foguinho, Fogueira, Incêndio e Chama Eterna, de 3 a 365 dias seguidos). Vale a sua maior sequência, então perder a sequência não tira o badge. Os dias em que você já mandou mensagem, reagiu, entrou em call ou votou contam.
+- Badges: novo badge Câmera ligada para quem fica em call com a câmera aberta e mais gente ouvindo (Rostinho, Ao Vivo, Galã, Influencer e Big Brother, de 1 a 500 horas). Conta a partir de agora.
+- Badges: novo badge Votante para quem vota nos cards do quadro de propostas (Eleitor, Cidadão, Fiscal de Urna, Mesário e Voto de Minerva, de 1 a 150 votos). Sobe na hora do voto, e quem já votou ganha os tiers com a data certa.
+- Badges: novo badge Aniversariante, ganho no dia do seu aniversário e seu para sempre. Vale para quem tem a data cadastrada e deixa ligado "Anunciar meu aniversário nos servidores".
+- Badges: novo badge exclusivo Primeira mensagem, de quem mandou a primeira mensagem de um servidor (Quebra-gelo, Desbravador e Big Bang, em 1, 3 e 10 servidores). Nos servidores que já existem, vale a mensagem mais antiga que ainda está lá.
+- A atualização agora baixa sozinha em segundo plano; o botão Atualizar instala na hora.
 
 ## Correções
+- Badges: o Figurinha não conta mais a mesma figurinha ou o mesmo GIF mandado logo em seguida, e o que for apagado em até 2 minutos sai da conta. Quem subiu o badge assim volta para o tier que as figurinhas que ainda estão no chat dão.
+- Badges: o Mensagens enviadas não conta mais mensagem repetida em seguida (a mesma que você acabou de mandar na sala), e mensagem apagada em até 2 minutos sai da conta. Quem subiu o badge assim volta para o tier que as mensagens que ainda estão no chat dão.
+- Badges: o Amigos agora conta só amizades com contas de e-mail confirmado e criadas há pelo menos 7 dias. Amigo com conta nova passa a contar quando completar os 7 dias, e quem subiu o badge com contas novas volta para o tier que os amigos de verdade dão.
+- Badges: o Dono de servidor agora conta só servidores com pelo menos 3 membros além de você (bots não contam). Quem subiu o badge com servidores vazios volta para o tier que os servidores com gente dão.
+- Badges: o DJ agora conta só a música que toca por pelo menos 30 segundos com mais alguém ouvindo na call, e não cada música posta na fila. Quem subiu o badge com playlists volta para o tier que os pedidos antigos dão.
+- Badges: o badge Reações agora conta uma vez por mensagem. Vários emojis seus na mesma mensagem valem 1, e quem já tinha subido o badge assim volta para o tier que as mensagens dão.
 - Janela estreita: Configurações, Configurações do servidor, badges e cargos agora cabem em telas pequenas, com a navegação em cima do conteúdo, e as setas para ordenar cargos aparecem em telas de toque.
 - Perfil e servidor: agora dá para arrastar e dar zoom (recortar) o avatar, o banner e o ícone também quando a imagem é um GIF. A animação continua.
 - Janela estreita: os avisos e os pedidos para entrar na sala não saem mais da tela, o seletor de atividades cabe, e os avisos de instalação no Linux não ficam um em cima do outro nem cobrem o microfone e o fone.
@@ -24,3 +51,4 @@
 - Sessão expirada: se a sua sessão expira no meio de uma chamada, a chamada agora é encerrada (antes o microfone continuava aberto até você fechar o app).
 - Avisos: os avisos (toasts) agora aparecem na frente das janelas abertas, em vez de ficarem escondidos atrás do fundo desfocado.
 - Grupos de DM: em janela estreita a lista de membros começa escondida e, ao abrir, aparece por cima do chat em vez de espremê-lo.
+- Perfil: em Configurações → Perfis, agora dá para salvar o perfil inteiro (avatar, banner, nome, tema, bio e o resto) com um nome e trocar entre até 10 perfis salvos com um toque. Quem está com você vê a troca na hora.

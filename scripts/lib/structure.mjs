@@ -33,7 +33,7 @@ function rendererError([top, second, third, ...rest]) {
   return null
 }
 
-// mobile/src: mesma estrutura por feature do renderer (ADR 0006).
+// mobile/src: mesma estrutura por feature do renderer (ADR 0015).
 function mobileError([top, second, third]) {
   if (!['features', 'shared'].includes(top) || second === undefined) return 'mobile/src aceita só features/<domínio>/ e shared/<tipo>/'
   if (top === 'features' && (third === undefined || !FEATURE_KINDS.includes(third))) {

@@ -1,9 +1,15 @@
 import VoiceSettings from '../../../call/components/VoiceSettings'
+import TTSSettings from '../../../tts/components/TTSSettings'
 import { DesktopSettings, NotificationSettings } from '../AppSettings'
 
-/** Configurações → Voz e áudio: microfone, saída, RNNoise e teste. */
+/** Configurações → Voz e áudio: microfone, saída, RNNoise, teste e mensagens TTS. */
 export function VoiceSection(): React.JSX.Element {
-  return <VoiceSettings />
+  return (
+    <div className="space-y-4">
+      <VoiceSettings />
+      <TTSSettings />
+    </div>
+  )
 }
 
 /** Configurações → Notificações. */

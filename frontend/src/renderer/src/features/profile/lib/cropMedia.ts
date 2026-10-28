@@ -1,7 +1,7 @@
 // Parte do navegador do "Editar imagem": desenha o recorte no canvas e, para
 // GIF, decodifica os quadros (WebCodecs) e reescreve o GIF recortado.
 import { cropGif, type SourceFrame, type SourceRect } from './gifCrop'
-import type { Size } from './imageCrop'
+import { coversWhole, gifOutput, type Size } from './imageCrop'
 import { MAX_PROFILE_IMAGE_BYTES, type MediaChange } from './profileValidation'
 
 type SetChange = Extract<MediaChange, { kind: 'set' }>
@@ -60,7 +60,8 @@ async function stillOf(gif: Blob, out: Size): Promise<Blob> {
   return canvasBlob(canvas)
 }
 
-async function animatedChange(file: Blob, rect: SourceRect, out: Size): Promise<SetChange> {
+async function animatedChange(file: Blob, rect: SourceRect, target: Size): Promise<SetChange> {
+  const out = gifOutput(rect, target)
   const bytes = await cropGif(gifFrames(file), rect, out, pixelsOf)
   if (bytes.byteLength > MAX_PROFILE_IMAGE_BYTES) {
     throw new Error('O GIF recortado passou de 10 MB. Tente um GIF menor ou mais curto.')
@@ -84,7 +85,10 @@ async function stillChange(
   return { kind: 'set', file: blob, previewUrl: URL.createObjectURL(blob), animated: false }
 }
 
-/** Sem WebCodecs não dá para ler os quadros: o GIF entra inteiro, como antes. */
+/**
+ * O GIF entra inteiro, sem reescrever: quando o recorte pega a imagem toda (o
+ * original é menor do que qualquer releitura) ou sem WebCodecs para ler os quadros.
+ */
 async function wholeGifChange(file: Blob): Promise<SetChange> {
   const bitmap = await createImageBitmap(file)
   const scale = Math.min(1, WHOLE_STILL_MAX / Math.max(bitmap.width, bitmap.height))
@@ -106,6 +110,7 @@ export function cropMedia(
   out: Size
 ): Promise<SetChange> {
   if (file.type !== 'image/gif') return stillChange(image, rect, out)
-  if (typeof ImageDecoder === 'undefined') return wholeGifChange(file)
+  const natural = { width: image.naturalWidth, height: image.naturalHeight }
+  if (typeof ImageDecoder === 'undefined' || coversWhole(rect, natural)) return wholeGifChange(file)
   return animatedChange(file, rect, out)
 }

@@ -37,6 +37,7 @@ func (a *app) wireChat() {
 	a.roomAccess = message.NewServiceRoomAccess(a.channelService, a.permissionService, a.conversationService, a.friendshipService)
 	attachmentHandler := message.NewAttachmentHandler(messageRepository, uploads, a.uploadSpace, a.roomAccess, a.authService)
 	searchHandler := message.NewSearchHandler(messageRepository, a.permissionService, a.roomAccess)
+	a.wireTTS(messageRepository)
 
 	a.serverService.OnMemberJoined(func(ctx context.Context, serverID string, member server.ServerMember) {
 		welcomeMember(ctx, a.channelService, a.messageService, serverID, member)
@@ -61,6 +62,7 @@ func (a *app) wireChat() {
 	profileStatic := mustStore(filepath.Join(profileMediaDir, "static"), "profile media dir")
 	profileService := user.NewProfileService(a.userRepository, a.hub)
 	a.profileHandler = user.NewProfileHandler(profileService, profileMedia, profileStatic, a.uploadSpace)
+	a.wireSavedProfiles(profileService)
 	entranceSounds := mustStore(filepath.Join(profileMediaDir, user.EntranceSoundDir), "entrance sounds dir")
 	entranceSoundHandler := user.NewEntranceSoundHandler(profileService, entranceSounds, a.uploadSpace)
 	conversationHandler := conversation.ConversationHandler(a.conversationService, a.userService, a.profileHandler)
@@ -76,6 +78,7 @@ func (a *app) wireChat() {
 		message.AttachmentRoutes(api, attachmentHandler, a.authMiddleware)
 		message.SearchRoutes(api, searchHandler, a.authMiddleware)
 		soundboard.Routes(api, soundboardHandler, a.authMiddleware)
+		soundboard.FavoriteRoutes(api, soundboard.NewFavoritesHandler(a.soundboardRepository, a.soundboardRepository, a.serverService), a.authMiddleware)
 		sticker.Routes(api, stickerHandler, a.authMiddleware)
 		giphy.Routes(api, giphyHandler, a.authMiddleware)
 	})

@@ -16,6 +16,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// modPerms: as permissões de um cargo de moderação típico (as do antigo cargo
+// Moderador, que servidor novo não cria mais).
+const modPerms = permission.DefaultEveryone | permission.ManageChannels |
+	permission.ManageServer |
+	permission.MentionEveryone |
+	permission.ManageMessages |
+	permission.MoveMembers |
+	permission.MuteMembers |
+	permission.DeafenMembers |
+	permission.KickMembers |
+	permission.ManageExpressions |
+	permission.ManageNicknames |
+	permission.DisconnectMembers
+
 // permStore: canais de verdade em memória, com as sobrescritas guardadas no
 // mesmo snapshot que responde as permissões.
 type permStore struct {
@@ -26,7 +40,7 @@ type permStore struct {
 
 func newPermStore() *permStore {
 	snap := permission.NewSnapshot("s1", "dono", permission.DefaultEveryone).
-		WithRole("mod", 2, permission.DefaultModerator).
+		WithRole("mod", 2, modPerms).
 		WithRole("gerente", 3, permission.DefaultEveryone|permission.ManageRoles).
 		WithRole("vip", 1, 0).
 		WithMember("dono").

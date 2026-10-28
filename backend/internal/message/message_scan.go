@@ -90,6 +90,7 @@ func scanMessageRow(row scannable, extra ...any) (Message, error) {
 		&stickerContentType,
 		&msg.GifURL,
 		&rawGifMeta,
+		&msg.TTS,
 		&rawCallInvite,
 	}
 	if err := row.Scan(append(dest, extra...)...); err != nil {

@@ -11,7 +11,10 @@ const (
 	TypeVoice = "voice"
 
 	// SystemChannelName: nome do canal de sistema do Maestro.
-	SystemChannelName = "bot"
+	SystemChannelName = "musica"
+	// SystemChannelAltName: nome do canal do Maestro quando o servidor já tinha
+	// outro canal chamado "musica" (migration 000116).
+	SystemChannelAltName = "musica-maestro"
 	// NoticesChannelName: nome do canal de sistema de avisos e boas-vindas.
 	NoticesChannelName = "avisos"
 )
@@ -22,7 +25,7 @@ type Channel struct {
 	Name      string    `json:"name"`
 	Type      string    `json:"type"`
 	Position  int       `json:"position"`
-	// IsSystem: canal fixo do servidor ("bot" e "avisos"); não pode ser editado nem removido, só movido.
+	// IsSystem: canal fixo do servidor ("musica" e "avisos"); não pode ser editado nem removido, só movido.
 	IsSystem  bool      `json:"is_system"`
 	CreatedBy string    `json:"created_by"`
 	CreatedAt time.Time `json:"created_at"`

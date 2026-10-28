@@ -24,6 +24,7 @@ var (
 	ErrInvalidName         = errors.New("sticker name is required (max 32 characters)")
 	ErrNotServerMember     = errors.New("you are not a member of this server")
 	ErrCannotDeleteSticker = errors.New("only the uploader, moderators or server owner can delete this sticker")
+	ErrCannotAddSticker    = errors.New("você não tem permissão para adicionar figurinhas neste servidor")
 )
 
 type Sticker struct {

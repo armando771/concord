@@ -61,7 +61,9 @@ export function ChannelActions({
             type="button"
             onClick={onTogglePins}
             title="Mensagens Fixadas"
-            className={`flex h-8 w-8 items-center justify-center rounded-lg border transition ${
+            aria-label="Mensagens fixadas"
+            aria-expanded={pinsOpen}
+            className={`flex size-10 items-center justify-center rounded-lg border transition md:size-8 ${
               pinsOpen
                 ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
                 : 'border-subtle bg-fg/5 text-gray-400 hover:border-normal hover:text-strong'
@@ -73,11 +75,11 @@ export function ChannelActions({
         {canInvite && (
           <Button
             variant="secondary"
-            className="flex items-center gap-1.5 px-3 py-1.5 text-ds-sm font-medium"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-ds-sm font-medium max-md:size-10 max-md:justify-center max-md:px-0"
             onClick={onInvite}
           >
             <UserPlusIcon className="h-4 w-4" />
-            <span>Convidar</span>
+            <span className="max-md:sr-only">Convidar</span>
           </Button>
         )}
       </div>

@@ -21,6 +21,10 @@ import { useServerRightColumn } from '../hooks/useServerRightColumn'
 import ServerInviteModal from '../components/ServerInviteModal'
 import ServerChannelContent from '../components/ServerChannelContent'
 import { ChannelActions, ChannelTitle, ServerSearch } from '../components/ChannelHeaderParts'
+import ServerMembersDrawer from '../components/ServerMembersDrawer'
+import MobileNavButton from '../../navigation/components/MobileNavButton'
+import MembersDrawerButton from '../../navigation/components/MembersDrawerButton'
+import CollapsibleSearch from '../../chat/components/CollapsibleSearch'
 
 export function ServerView(): React.JSX.Element {
   const { id, channelId } = useParams<{ id: string; channelId: string }>()
@@ -101,7 +105,8 @@ export function ServerView(): React.JSX.Element {
       right={right}
       bar={
         <>
-          <div className="flex min-w-0 flex-1 items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-1">
+            <MobileNavButton />
             <ChannelTitle channel={activeChannel} fallback={currentServer.name} />
           </div>
           <ChannelActions
@@ -114,9 +119,14 @@ export function ServerView(): React.JSX.Element {
             onInvite={openInviteModal}
             canModerate={chatPermissions.canModerate}
           />
+          <MembersDrawerButton />
         </>
       }
-      search={<ServerSearch server={currentServer} />}
+      search={
+        <CollapsibleSearch>
+          <ServerSearch server={currentServer} />
+        </CollapsibleSearch>
+      }
       content={
         <ServerChannelContent
           server={currentServer}
@@ -130,6 +140,7 @@ export function ServerView(): React.JSX.Element {
       {/* Tela estreita: o chat da call é uma sobreposição em tela cheia. */}
       {chatOverlay && channelId && <VoiceChatPanel channelId={channelId} />}
       <ServerInviteModal server={currentServer} />
+      <ServerMembersDrawer server={currentServer} />
     </ServerViewLayout>
   )
 }

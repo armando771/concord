@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { createLongPress, swallowNextClick, type LongPress } from '../../../shared/lib/longPress'
+import { useReactionPicker } from './useReactionPicker'
 
 export interface MessageActionsState {
   /**
@@ -7,16 +9,50 @@ export interface MessageActionsState {
    */
   showBar: boolean
   pickerOpen: boolean
-  togglePicker: () => void
+  /** Botão que abriu o seletor (o "+" dos chips); null = a barra de ações. */
+  pickerAnchor: HTMLElement | null
+  /** Sem `anchor`, o seletor abre no canto da linha, junto da barra de ações. */
+  togglePicker: (anchor?: HTMLElement | null) => void
   closePicker: () => void
   menuOpen: boolean
   setMenuOpen: (open: boolean) => void
+  /**
+   * contextmenu da linha vindo do toque (segurar o dedo no Android): abre o
+   * menu "Mais" no lugar do menu do autor. Devolve se tratou.
+   */
+  touchMenu: (e: React.MouseEvent) => boolean
   /** Vai na linha da mensagem. */
   rowProps: {
     onMouseEnter: () => void
     onMouseLeave: () => void
     onFocus: (e: React.FocusEvent<HTMLElement>) => void
     onBlur: (e: React.FocusEvent<HTMLElement>) => void
+    /** Segurar o dedo na mensagem abre o "Mais" (no iOS não há contextmenu). */
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => void
+    onPointerMove: (e: React.PointerEvent<HTMLElement>) => void
+    onPointerUp: () => void
+    onPointerCancel: () => void
+  }
+}
+
+/** O contextmenu veio de um dedo (o Chrome manda como PointerEvent)? */
+function fromTouch(e: React.MouseEvent): boolean {
+  return (e.nativeEvent as Partial<PointerEvent>).pointerType === 'touch'
+}
+
+/**
+ * contextmenu da linha: se veio do toque (ou logo depois de segurar o dedo),
+ * abre o "Mais" e diz que tratou; senão deixa para o menu do autor.
+ */
+export function touchMenuHandler(
+  longPress: Pick<LongPress, 'firedRecently'>,
+  openMenu: () => void
+): (e: React.MouseEvent) => boolean {
+  return (e) => {
+    if (!fromTouch(e) && !longPress.firedRecently()) return false
+    e.preventDefault()
+    openMenu()
+    return true
   }
 }
 
@@ -29,15 +65,24 @@ function focusLeft(e: React.FocusEvent<HTMLElement>): boolean {
 export function useMessageActionsState(): MessageActionsState {
   const [hover, setHover] = useState(false)
   const [focused, setFocused] = useState(false)
-  const [pickerOpen, setPickerOpen] = useState(false)
+  const picker = useReactionPicker()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [longPress] = useState(() =>
+    createLongPress(() => {
+      setMenuOpen(true)
+      // O clique do mesmo toque cairia num item do menu que abriu embaixo do dedo.
+      swallowNextClick(window)
+    })
+  )
   return {
-    showBar: hover || focused || pickerOpen || menuOpen,
-    pickerOpen,
-    togglePicker: () => setPickerOpen((v) => !v),
-    closePicker: () => setPickerOpen(false),
+    showBar: hover || focused || picker.open || menuOpen,
+    pickerOpen: picker.open,
+    pickerAnchor: picker.anchor,
+    togglePicker: picker.toggle,
+    closePicker: picker.close,
     menuOpen,
     setMenuOpen,
+    touchMenu: touchMenuHandler(longPress, () => setMenuOpen(true)),
     rowProps: {
       onMouseEnter: () => setHover(true),
       onMouseLeave: () => setHover(false),
@@ -45,7 +90,11 @@ export function useMessageActionsState(): MessageActionsState {
       onFocus: (e) => setFocused(e.target.matches(':focus-visible')),
       onBlur: (e) => {
         if (focusLeft(e)) setFocused(false)
-      }
+      },
+      onPointerDown: (e) => longPress.down(e),
+      onPointerMove: (e) => longPress.move(e),
+      onPointerUp: longPress.cancel,
+      onPointerCancel: longPress.cancel
     }
   }
 }

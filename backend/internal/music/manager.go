@@ -41,8 +41,10 @@ type Location struct {
 
 // ManagerDeps liga o manager ao resto do backend (main.go) ou a dublês.
 type ManagerDeps struct {
-	Locate          func(userID string) (Location, bool)
-	Humans          func(callID string) []string
+	Locate func(userID string) (Location, bool)
+	Humans func(callID string) []string
+	// Listeners: quem está ouvindo (não surdo) na call; nil = DJ não conta.
+	Listeners       func(callID string) []string
 	BotEnabled      func(ctx context.Context, serverID string) bool
 	IsMember        func(ctx context.Context, serverID, userID string) bool
 	ChannelName     func(ctx context.Context, channelID string) string
@@ -84,6 +86,8 @@ type Manager struct {
 	searches map[string]searchSession
 	// Um comando por vez por usuário: não deixa ninguém disparar yt-dlp sem limite.
 	busy map[string]struct{}
+	// onPlayed: quem pediu a música que tocou o bastante (badge DJ, played.go).
+	onPlayed func(userID string)
 }
 
 func NewManager(cfg Config, deps ManagerDeps) *Manager {
@@ -266,70 +270,6 @@ func (m *Manager) play(ctx context.Context, loc Location, serverID, textChannelI
 			return
 		}
 		m.enqueueTracks(ctx, loc, textChannelID, userID, ok, name, say)
-	}
-}
-
-func (m *Manager) enqueueURL(ctx context.Context, loc Location, textChannelID, userID, url string, say func(string)) {
-	mctx, cancel := context.WithTimeout(ctx, metadataTimeout)
-	t, err := m.deps.Source.Resolve(mctx, url)
-	cancel()
-	switch {
-	case errors.Is(err, ErrPrivate):
-		say(TextPrivate)
-	case err != nil:
-		say(TextVideoGone)
-	case t.IsLive:
-		say(TextLive)
-	case t.DurationMs > maxVideoMs:
-		say(TextTooLong)
-	default:
-		m.enqueueTracks(ctx, loc, textChannelID, userID, []Track{t}, "", say)
-	}
-}
-
-// enqueueTracks: playlistName vazio = um vídeo só.
-func (m *Manager) enqueueTracks(ctx context.Context, loc Location, textChannelID, userID string, tracks []Track, playlistName string, say func(string)) {
-	p, err := m.playerFor(ctx, loc)
-	if errors.Is(err, errTooManyPlayers) {
-		say(TextTooManyPlayers)
-		return
-	}
-	if err != nil {
-		log.Printf("[music] criar player: %v", err)
-		say(TextUnavailable)
-		return
-	}
-	user, err := m.deps.User(ctx, userID)
-	if err != nil {
-		p.IdleIfEmpty() // player criado sem nada na fila não pode ficar na call para sempre
-		say(TextUnavailable)
-		return
-	}
-	items := make([]*Item, len(tracks))
-	for i, t := range tracks {
-		items[i] = NewItem(t, user, textChannelID)
-	}
-	res, err := p.Enqueue(items, textChannelID)
-	if errors.Is(err, ErrQueueFull) {
-		say(TextQueueFull(m.cfg.QueueMax))
-		return
-	}
-	if err != nil {
-		p.IdleIfEmpty()
-		say(TextUnavailable)
-		return
-	}
-	var text string
-	switch {
-	case playlistName != "":
-		text = TextAddedPlaylist(user.Username, playlistName, res.Added, res.AddedMs, p.ChannelName)
-	case res.StartsNow:
-		text = TextAddedNow(user.Username, tracks[0].Title, tracks[0].DurationMs, p.ChannelName)
-	default:
-		text = TextAdded(user.Username, tracks[0].Title, tracks[0].DurationMs, p.ChannelName, res.FirstPos, MinutesCeil(res.StartsInMs))
-	}
-	if err := m.deps.PostPublic(ctx, textChannelID, text); err != nil {
-		log.Printf("[music] aviso público: %v", err)
 	}
 }
 
@@ -575,38 +515,4 @@ func (m *Manager) OnCallEnded(callID string) {
 	if p := m.playerByCall(callID); p != nil {
 		go p.Close()
 	}
-}
-
-// notifier é o Manager visto pelo Player (Notifier).
-type notifier Manager
-
-func (n *notifier) PublishState(p *Player) {
-	// Chamado com p.mu preso: monta o estado sem pegar o lock de novo.
-	n.deps.BroadcastToCall(p.CallID, event("music:state", buildStateLocked(p, time.Now())))
-}
-
-func (n *notifier) Public(textChannelID, content string) {
-	if textChannelID == "" {
-		return
-	}
-	go func() {
-		if err := n.deps.PostPublic(context.Background(), textChannelID, content); err != nil {
-			log.Printf("[music] aviso público: %v", err)
-		}
-	}()
-}
-
-func (n *notifier) Humans(callID string) []string { return n.deps.Humans(callID) }
-
-func (n *notifier) Closed(p *Player) {
-	m := (*Manager)(n)
-	m.mu.Lock()
-	if m.players[p.ChannelID] == p {
-		delete(m.players, p.ChannelID)
-	}
-	m.mu.Unlock()
-	n.deps.BroadcastToCall(p.CallID, event("music:state", ClosedState(p)))
-	n.deps.BroadcastToRoom("server:"+p.ServerID, event("music:presence", map[string]any{
-		"server_id": p.ServerID, "channel_id": p.ChannelID, "active": false,
-	}))
 }

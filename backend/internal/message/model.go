@@ -56,6 +56,8 @@ type Message struct {
 	GifMetadata     *GifMetadata    `json:"gif_metadata,omitempty"`
 	// Convite para a call de um canal de voz (cartão na DM); nil = mensagem comum.
 	CallInvite *CallInvite `json:"call_invite,omitempty"`
+	// Mensagem /tts: o app de quem está em call lê o texto em voz (tts.go).
+	TTS             bool         `json:"tts,omitempty"`
 	CreatedAt       time.Time    `json:"created_at"`
 	// Quando o autor editou o texto pela última vez; nil = nunca editada.
 	EditedAt *time.Time `json:"edited_at,omitempty"`

@@ -24,9 +24,10 @@ func (a *app) wireCalls() {
 	must(err, "invalid LiveKit address")
 
 	a.callService = call.CallService(call.CallRepository(a.db), a.hub, a.conversationService, a.serverService, a.channelService, a.userService, a.hub.IsOnline)
-	a.callService.SetSoundLookup(soundboard.NewCallLookup(a.soundboardRepository))
+	a.callService.SetSoundLookup(soundboard.NewCallLookup(a.soundboardRepository, a.soundboardRepository))
 	a.callService.SetPermissions(a.permissionService)
-	a.callService.SetMediaAdmin(livekit.NewAdmin("http://127.0.0.1:"+a.liveKitPort, liveKitKey, liveKitSecret))
+	a.liveKitAdmin = livekit.NewAdmin("http://127.0.0.1:"+a.liveKitPort, liveKitKey, liveKitSecret)
+	a.callService.SetMediaAdmin(a.liveKitAdmin)
 	// Mudou cargo ou canal: quem está em voz sem acesso sai; quem perdeu falar
 	// ou transmitir tem a mídia atualizada na hora.
 	a.hub.SetPermissionsChangedHook(func(serverID string) {
@@ -38,6 +39,8 @@ func (a *app) wireCalls() {
 	a.callService.SetFriendChecker(a.friendshipService)
 	a.callService.SetPlaceSources(a.channelService, a.serverService)
 	a.callService.SetInvitePoster(callInviteDM{conversations: a.conversationService, messages: a.messageService})
+	// AFK: XP de voz e badges de call param depois de 10 min sem falar.
+	a.callAFK = call.NewAFK(a.callService, time.Now)
 	callHandler := call.CallHandler(a.callService, a.liveKitTokens)
 	// Reinício do servidor não derruba quem está em chamada. Sem conseguir
 	// recarregar as chamadas o servidor não fica pronto (a porta nem abre):

@@ -17,9 +17,11 @@ import { roleColorCss } from '../lib/permissions'
 import { serverDisplayName } from '../lib/serverNames'
 import { ActivityLine } from '../../activity/components/ActivityLine'
 import { useActivity, useInVoice } from '../../activity/store/presenceActivityStore'
+import { useListening } from '../../activity/store/listeningStore'
 import StyledName from '../../profile/components/StyledName'
 import type { NameStyle } from '../../profile/lib/nameStyle'
 import type { Server } from '../api/servers'
+import OwnerCrown from './OwnerCrown'
 
 interface MemberRowProps {
   userId: string
@@ -36,6 +38,8 @@ interface MemberRowProps {
   nameColor?: string
   online: boolean
   isBot?: boolean
+  /** Dono do servidor: a coroa ao lado do nome. */
+  isOwner?: boolean
 }
 
 export function MemberRow({
@@ -49,12 +53,15 @@ export function MemberRow({
   nameClass,
   nameColor,
   online,
-  isBot = false
+  isBot = false,
+  isOwner = false
 }: MemberRowProps): React.JSX.Element {
   const meId = useAuthStore((s) => s.user?.id)
   const status = usePresenceStatus(userId)
-  // Só troca o @handle quando há jogo (ou "Em voz"): sem atividade, igual a antes.
-  const hasActivity = useActivity(userId) !== null
+  // Só troca o @handle quando há jogo, música (ou "Em voz"): sem atividade, igual a antes.
+  const playing = useActivity(userId) !== null
+  const listening = useListening(userId) !== null
+  const hasActivity = playing || listening
   const inVoice = useInVoice(userId)
   const activityShown = hasActivity || inVoice
   const look = useUserLook(userId, { name: displayName, avatarUrl })
@@ -92,6 +99,7 @@ export function MemberRow({
           >
             {nickname?.trim() ? name : <StyledName name={name} userId={userId} style={nameStyle} />}
           </p>
+          {isOwner && <OwnerCrown />}
           {isBot ? (
             <span className="rounded bg-violet-400/30 px-1 text-[9px] font-bold uppercase text-violet-100">
               {T18.tag}
@@ -131,10 +139,11 @@ export function MembersAside({ children }: { children: React.ReactNode }): React
 }
 
 /**
- * Membros do servidor aberto, agrupados como no Discord: dono, cargos exibidos
- * separadamente (online), membros e offline.
+ * Membros do servidor aberto, agrupados como no Discord: cargos exibidos
+ * separadamente (online), membros e offline; o dono tem a coroa. Sem moldura: vai na coluna da
+ * direita (ServerMemberList) ou na gaveta do celular.
  */
-function ServerMemberList({ server }: { server: Server }): React.JSX.Element {
+export function ServerMemberGroups({ server }: { server: Server }): React.JSX.Element {
   const me = useAuthStore((s) => s.user)
   const currentMembers = useServerStore((s) => s.currentMembers)
   const roles = useServerStore((s) => s.roles)
@@ -143,14 +152,13 @@ function ServerMemberList({ server }: { server: Server }): React.JSX.Element {
   const memberGroups = groupMembers({
     members: currentMembers,
     roles,
-    ownerId: server.owner_id,
     // O Maestro não tem websocket: está sempre online.
     isOnline: (userId) =>
       Boolean(presence[userId]) || currentMembers.some((m) => m.user_id === userId && m.is_bot)
   })
 
   return (
-    <MembersAside>
+    <>
       {memberGroups.map((group) => {
         const offline = group.key === 'offline'
         return (
@@ -160,7 +168,7 @@ function ServerMemberList({ server }: { server: Server }): React.JSX.Element {
             </p>
             <div className={`flex flex-col gap-1 ${offline ? 'opacity-70' : ''}`}>
               {group.members.map((m) => {
-                const look = memberRowLook(m, { ownerId: server.owner_id, me, offline })
+                const look = memberRowLook(m, { me, offline })
                 return (
                   <MemberRow
                     key={m.user_id}
@@ -175,6 +183,7 @@ function ServerMemberList({ server }: { server: Server }): React.JSX.Element {
                     nameColor={roleColorCss(memberColor(roles, m.role_ids))}
                     online={!offline}
                     isBot={!!m.is_bot}
+                    isOwner={m.user_id === server.owner_id}
                   />
                 )
               })}
@@ -182,6 +191,15 @@ function ServerMemberList({ server }: { server: Server }): React.JSX.Element {
           </div>
         )
       })}
+    </>
+  )
+}
+
+/** A coluna de membros à direita (do lg em diante). */
+function ServerMemberList({ server }: { server: Server }): React.JSX.Element {
+  return (
+    <MembersAside>
+      <ServerMemberGroups server={server} />
     </MembersAside>
   )
 }

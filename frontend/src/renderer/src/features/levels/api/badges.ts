@@ -1,6 +1,6 @@
 import { request } from '../../../shared/api/client'
 
-/** mitico: acima de lendário, só nos badges concedidos à mão (Fundador). */
+/** mitico: acima de lendário, só nos exclusivos (Fundador e Top 10 do Nível 100). */
 export type BadgeRarity = 'comum' | 'raro' | 'epico' | 'lendario' | 'mitico'
 
 export type BadgeUnit =
@@ -14,6 +14,17 @@ export type BadgeUnit =
   | 'founder'
   | 'dev'
   | 'proposals'
+  | 'vote'
+  | 'songs'
+  | 'sounds'
+  | 'stickers'
+  | 'days'
+  | 'votes'
+  | 'birthday'
+  | 'firsts'
+  | 'friends'
+  | 'bugs'
+  | 'rank'
 
 export interface BadgeTier {
   tier: number
@@ -24,17 +35,18 @@ export interface BadgeTier {
 }
 
 /**
- * Uma categoria de badge (backend: internal/badge). Tier 0 = nada ainda.
- * No perfil de outra pessoa só vêm os conquistados, sem value/progress/
- * próximos tiers, e unlocked_at é só o dia ("2026-07-29").
+ * Uma categoria de badge já conquistada (backend: internal/badge): a API não
+ * devolve categorias sem o tier 1. No perfil de outra pessoa não vêm
+ * value/progress/próximo tier, e unlocked_at é só o dia ("2026-07-29").
  */
 export interface Badge {
   category: string
   name: string
   description: string
   unit: BadgeUnit
-  /** Só no próprio perfil. */
+  /** Só no próprio perfil (no Top 10, a posição vem para todos). */
   value?: number
+  /** Tier atual (1 ou mais). */
   tier: number
   tier_name?: string
   rarity?: BadgeRarity
@@ -45,8 +57,6 @@ export interface Badge {
   next_at?: string
   /** Do tier atual até o próximo, de 0 a 1. */
   progress?: number
-  /** false: não dá mais para conseguir (Pioneiro depois do corte). */
-  obtainable?: boolean
   tiers: BadgeTier[]
 }
 
@@ -55,6 +65,11 @@ export interface BadgesResponse {
   /** true: a própria pessoa (visão completa). */
   self: boolean
   badges: Badge[]
+  /**
+   * Quantos badges a pessoa ainda não tem e ainda pode conseguir (sem dizer
+   * quais). Servidor antigo não manda.
+   */
+  hidden_remaining?: number
 }
 
 /** Evento badge:unlock (só para a própria pessoa). */

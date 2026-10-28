@@ -95,7 +95,7 @@ só faz deploy a cada merge na `main`: **quem garante os testes é você, localm
   (`window.api`), `src/renderer/src/{app,features,shared}`. Zustand (um store
   por responsabilidade), Tailwind v4 com tokens em `assets/main.css`. A URL do
   servidor é constante de build (`VITE_SERVER_URL`).
-- **Mobile** (`mobile/`, [ADR 0006](docs/adr/0006-app-mobile-expo.md)): app Android
+- **Mobile** (`mobile/`, [ADR 0015](docs/adr/0015-app-mobile-expo.md)): app Android
   independente do `frontend/`. Rotas finas em `app/` (Expo Router), código em
   `src/{features,shared}` com a mesma estrutura do desktop; lógica pura portada por
   cópia adaptada. Tokens no `expo-secure-store`; URL do servidor é constante de

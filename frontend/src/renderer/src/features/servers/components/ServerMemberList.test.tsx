@@ -3,7 +3,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 // O chatStore de verdade puxa o resto do app; aqui só a presença.
-const chat = vi.hoisted(() => ({ presence: {} as Record<string, unknown>, activity: '' }))
+const chat = vi.hoisted(() => ({ presence: {} as Record<string, unknown>, activity: '', listening: '' }))
 vi.mock('../../chat/store/chatStore', () => ({
   useChatStore: (sel: (s: unknown) => unknown) => sel({ presence: chat.presence }),
   usePresenceStatus: (id: string) => (chat.presence[id] ? 'online' : 'offline')
@@ -11,6 +11,9 @@ vi.mock('../../chat/store/chatStore', () => ({
 vi.mock('../../activity/store/presenceActivityStore', () => ({
   useActivity: (id: string) => (id === chat.activity ? { name: 'Jogo' } : null),
   useInVoice: () => false
+}))
+vi.mock('../../activity/store/listeningStore', () => ({
+  useListening: (id: string) => (id === chat.listening ? { app: 'Spotify', title: 'x', started_at: 0 } : null)
 }))
 vi.mock('../../activity/components/ActivityLine', () => ({
   ActivityLine: ({ statusLabel }: { statusLabel: string }) => <i data-atividade={statusLabel} />
@@ -55,6 +58,7 @@ describe('ServerMemberList', () => {
   beforeEach(() => {
     chat.presence = { dono: true, ana: true }
     chat.activity = ''
+    chat.listening = ''
     useAuthStore.setState({ user: { id: 'eu', username: 'eu', display_name: 'Eu' } as never })
     useServerStore.setState({
       roles: [
@@ -69,18 +73,24 @@ describe('ServerMemberList', () => {
     })
   })
 
-  it('agrupa como no Discord: dono, cargo exibido, membros e offline', () => {
+  it('agrupa como no Discord: cargo exibido, membros e offline (o dono não é grupo)', () => {
     const html = render()
-    expect(html).toContain('Dono do Servidor — 1')
+    expect(html).not.toContain('Dono do Servidor')
     expect(html).toContain('Moderador — 1')
-    expect(html).toContain('Membros — 1')
+    expect(html).toContain('Membros — 2')
     expect(html).toContain('Offline — 1')
     expect(html).toContain('data-alca')
   })
 
-  it('o dono fica âmbar, o cargo colorido pinta o nome e o offline fica cinza', () => {
+  it('o dono tem a coroa ao lado do nome, sem cor própria', () => {
     const html = render()
-    expect(html).toContain('data-cor="bg-amber-600"')
+    expect(html.match(/aria-label="Dono do servidor"/g)).toHaveLength(1)
+    expect(html).toContain('title="Dono do servidor"')
+    expect(html).not.toContain('bg-amber-600')
+  })
+
+  it('o cargo colorido pinta o nome e o offline fica cinza', () => {
+    const html = render()
     expect(html).toContain('color:#ff0000')
     expect(html).toContain('data-cor="bg-gray-600"')
     expect(html).toContain('opacity-70')
@@ -98,5 +108,12 @@ describe('ServerMemberList', () => {
     expect(html).toContain('title="Bibi"')
     expect(html).toContain('>@dono</p>')
     expect(html).toContain('data-atividade="@ana"')
+  })
+
+  it('quem só está ouvindo música também ganha a linha de atividade', () => {
+    chat.listening = 'dono'
+    const html = render()
+    expect(html).toContain('data-atividade="@dono"')
+    expect(html).not.toContain('>@dono</p>')
   })
 })

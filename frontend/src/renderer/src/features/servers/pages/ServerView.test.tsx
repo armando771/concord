@@ -10,6 +10,7 @@ vi.mock('../../chat/store/chatStore', () => ({
 // As peças da tela têm testes próprios: aqui importa o que aparece e onde.
 vi.mock('../components/ServerMemberList', () => ({
   default: () => <aside data-membros="" />,
+  ServerMemberGroups: () => null,
   MembersAside: ({ children }: { children: React.ReactNode }) => (
     <aside data-membros-esqueleto="">{children}</aside>
   )
@@ -108,6 +109,13 @@ describe('ServerView', () => {
     const html = render()
     expect(html).toContain('Carregando servidor…')
     expect(html).toContain('data-membros-esqueleto')
+  })
+
+  it('celular: a barra tem "voltar para a lista" e o botão da gaveta de membros', () => {
+    screen(false)
+    const html = render()
+    expect(html).toContain('aria-label="Voltar para canais e conversas"')
+    expect(html).toContain('aria-label="Membros"')
   })
 
   it('a barra de cima atravessa o conteúdo e a coluna de membros; a busca fica sobre ela', () => {

@@ -41,7 +41,7 @@ function DmPeerHeader({
           {handle && <p className="truncate text-ds-xs text-gray-400">@{handle}</p>}
         </div>
       </div>
-      <span className="text-ds-xs font-semibold" style={{ color: STATUS_META[status].textColor }}>
+      <span className="shrink-0 text-ds-xs font-semibold max-sm:hidden" style={{ color: STATUS_META[status].textColor }}>
         {STATUS_META[status].label}
       </span>
     </>

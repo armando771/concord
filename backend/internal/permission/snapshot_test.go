@@ -9,7 +9,7 @@ import (
 
 func testSnapshot() *Snapshot {
 	return NewSnapshot("s1", "dono", DefaultEveryone).
-		WithRole("mod", 2, DefaultModerator).
+		WithRole("mod", 2, legacyModerator).
 		WithRole("vip", 1, 0).
 		WithMember("dono").
 		WithMember("mod", "mod").

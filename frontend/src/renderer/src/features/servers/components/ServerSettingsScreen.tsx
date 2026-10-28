@@ -75,6 +75,7 @@ function ServerSettingsContent(): React.JSX.Element | null {
   return (
     <SettingsShell
       ariaLabel="Configurações do servidor"
+      sectionKey={current}
       title={label}
       titleClassName="text-xl font-bold text-strong"
       contentClassName="max-w-[860px]"

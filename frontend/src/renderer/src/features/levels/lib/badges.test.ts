@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Badge } from '../api/badges'
+import type { Badge, BadgeUnlockEvent } from '../api/badges'
 import {
   badgeLabel,
   formatThreshold,
@@ -11,10 +11,10 @@ import {
   publicStatText,
   RARITY,
   remainingText,
-  splitBadges,
   statText,
   unlockCount,
   selectedBadge,
+  unlocksComAviso,
   visibleBadges
 } from './badges'
 
@@ -29,7 +29,6 @@ function badge(over: Partial<Badge> = {}): Badge {
     value: 0,
     tier: 0,
     progress: 0,
-    obtainable: true,
     tiers: [],
     ...over
   }
@@ -42,6 +41,9 @@ describe('statText', () => {
     expect(statText(badge({ value: 45 * 60 }))).toBe('45 min em call')
     expect(statText(badge({ category: 'streamer', value: 12 * HOUR }))).toBe(
       '12 horas transmitindo'
+    )
+    expect(statText(badge({ category: 'espectador', value: 3 * HOUR }))).toBe(
+      '3 horas assistindo lives'
     )
     expect(statText(badge({ category: 'coruja', value: 3 * HOUR }))).toBe(
       '3 horas em call de madrugada'
@@ -79,44 +81,15 @@ describe('statText', () => {
   })
 })
 
-describe('Contribuinte (cards de propostas)', () => {
-  const contribuinte = (over: Partial<Badge> = {}): Badge =>
-    badge({ category: 'contribuinte', name: 'Contribuinte', unit: 'proposals', ...over })
-
-  it('conta as propostas criadas', () => {
-    expect(statText(contribuinte({ value: 1 }))).toBe('1 proposta criada')
-    expect(statText(contribuinte({ value: 0 }))).toBe('0 propostas criadas')
-    expect(statText(contribuinte({ value: 1234 }))).toBe('1.234 propostas criadas')
-  })
-
-  it('escada, quanto falta e visão pública', () => {
-    expect(formatThreshold('proposals', 1)).toBe('1 proposta')
-    expect(formatThreshold('proposals', 15)).toBe('15 propostas')
-    const now = new Date('2026-10-25T12:00:00Z')
-    expect(remainingText(contribuinte({ value: 4, next_threshold: 5 }), now)).toBe(
-      'Falta 1 proposta'
-    )
-    expect(remainingText(contribuinte({ value: 5, next_threshold: 15 }), now)).toBe(
-      'Faltam 10 propostas'
-    )
-    const pub = contribuinte({
-      value: undefined,
-      tier: 2,
-      tiers: [
-        { tier: 1, name: 'Ideia', threshold: 1, rarity: 'comum' },
-        { tier: 2, name: 'Colaborador', threshold: 5, rarity: 'raro' }
-      ]
-    })
-    expect(publicStatText(pub)).toBe('5+ propostas')
-  })
-})
-
 describe('formatThreshold', () => {
   it('rótulo curto da escada', () => {
     expect(formatThreshold('seconds', HOUR)).toBe('1 hora')
     expect(formatThreshold('seconds', 1000 * HOUR)).toBe('1.000 horas')
     expect(formatThreshold('months', 1)).toBe('1 mês')
-    expect(formatThreshold('months', 24)).toBe('24 meses')
+    expect(formatThreshold('months', 6)).toBe('6 meses')
+    expect(formatThreshold('months', 12)).toBe('1 ano')
+    expect(formatThreshold('months', 24)).toBe('2 anos')
+    expect(formatThreshold('months', 120)).toBe('10 anos')
     expect(formatThreshold('messages', 2000)).toBe('2.000 mensagens')
     expect(formatThreshold('level', 10)).toBe('Nível 10')
     expect(formatThreshold('people', 5)).toBe('5 pessoas')
@@ -200,18 +173,6 @@ describe('profileBadgeRow', () => {
   })
 })
 
-describe('splitBadges', () => {
-  it('separa conquistados dos que dá para desbloquear', () => {
-    const { earned, available } = splitBadges([
-      badge({ category: 'voz', tier: 1, rarity: 'comum' }),
-      badge({ category: 'conta' }),
-      badge({ category: 'fundador', unit: 'founder', obtainable: false })
-    ])
-    expect(earned.map((b) => b.category)).toEqual(['voz'])
-    expect(available.map((b) => b.category)).toEqual(['conta'])
-  })
-})
-
 describe('misc', () => {
   it('percentual da barra', () => {
     expect(progressPercent(badge({ progress: 0.666 }))).toBe(67)
@@ -247,6 +208,17 @@ describe('visão pública (perfil de outra pessoa)', () => {
       tiers: [{ tier: 1, name: 'Ouvinte', threshold: 3600, rarity: 'comum' }]
     })
     expect(publicStatText(voz)).toBe('1+ hora em call')
+    const espectador = badge({
+      category: 'espectador',
+      name: 'Espectador',
+      tier: 2,
+      value: undefined,
+      tiers: [
+        { tier: 1, name: 'Curioso', threshold: HOUR, rarity: 'comum' },
+        { tier: 2, name: 'Pipoqueiro', threshold: 10 * HOUR, rarity: 'comum' }
+      ]
+    })
+    expect(publicStatText(espectador)).toBe('10+ horas assistindo lives')
   })
 
   it('fundador não tem número', () => {
@@ -265,7 +237,6 @@ describe('visão pública (perfil de outra pessoa)', () => {
 
   it('sem value/progress (visão pública) não quebra as contas', () => {
     expect(progressPercent(badge({ progress: undefined }))).toBe(0)
-    expect(splitBadges([badge({ obtainable: undefined })]).available).toEqual([])
   })
 })
 
@@ -359,25 +330,19 @@ describe('holoPointer', () => {
 })
 
 describe('visibleBadges e selectedBadge (modal de badges)', () => {
-  const mk = (category: string, tier: number, obtainable = true): Badge =>
-    ({ category, name: category, tier, obtainable, tiers: [] }) as unknown as Badge
+  const mk = (category: string, tier: number): Badge =>
+    ({ category, name: category, tier, tiers: [] }) as unknown as Badge
   const ganho = mk('voz', 2)
-  const livre = mk('chat', 0)
-  const todos = [ganho, livre]
+  const raro = mk('chat', 1)
+  // Tier 0 nunca chega da API; se chegasse, o app não mostra.
+  const bloqueado = mk('conta', 0)
 
-  it('no próprio perfil aparecem os ganhos e os que dá para desbloquear', () => {
-    const v = visibleBadges(todos, true)
-    expect(v.earned).toEqual([ganho])
-    expect(v.available).toEqual([livre])
-    expect(v.visible).toEqual([ganho, livre])
-  })
-
-  it('no perfil dos outros, só os ganhos', () => {
-    expect(visibleBadges(todos, false).visible).toEqual([ganho])
+  it('só os conquistados aparecem, sem bloqueados nem "disponíveis"', () => {
+    expect(visibleBadges([ganho, bloqueado])).toEqual([ganho])
   })
 
   it('sem badges carregados, tudo vazio', () => {
-    expect(visibleBadges(undefined, true).visible).toEqual([])
+    expect(visibleBadges(undefined)).toEqual([])
   })
 
   type Alvo = { userId: string; name: string; category?: string }
@@ -385,16 +350,111 @@ describe('visibleBadges e selectedBadge (modal de badges)', () => {
   it('o escolhido vale só para a abertura em que foi escolhido', () => {
     const target: Alvo = { userId: 'u1', name: 'Ana', category: 'voz' }
     const outro: Alvo = { userId: 'u2', name: 'Bia' }
-    const v = [ganho, livre]
-    expect(selectedBadge(v, target, { target, category: 'chat' })).toBe(livre)
+    const v = [ganho, raro]
+    expect(selectedBadge(v, target, { target, category: 'chat' })).toBe(raro)
     expect(selectedBadge(v, target, { target: outro, category: 'chat' })).toBe(ganho)
   })
 
   it('sem escolha usa o do alvo, e se ele não existe, o primeiro', () => {
-    const v = [ganho, livre]
+    const v = [ganho, raro]
     const alvo = (category?: string): Alvo => ({ userId: 'u1', name: 'A', category })
-    expect(selectedBadge(v, alvo('chat'), null)).toBe(livre)
+    expect(selectedBadge(v, alvo('chat'), null)).toBe(raro)
     expect(selectedBadge(v, alvo('nada'), null)).toBe(ganho)
     expect(selectedBadge([], alvo(), null)).toBeUndefined()
+  })
+})
+
+describe('Fez o L (resposta única do segundo turno)', () => {
+  const l = badge({
+    category: 'l',
+    name: 'Fez o L',
+    unit: 'vote',
+    value: 1,
+    tier: 1,
+    tier_name: 'Fez o L',
+    rarity: 'epico',
+    tiers: [{ tier: 1, name: 'Fez o L', threshold: 1, rarity: 'epico' }]
+  })
+
+  it('não mostra número: diz o que a pessoa fez', () => {
+    expect(statText(l)).toBe('Fez o L no segundo turno')
+    expect(formatThreshold('vote', 1)).toBe('Fez o L')
+  })
+
+  it('no perfil dos outros não vira "Fez+ o L"', () => {
+    expect(publicStatText({ ...l, value: undefined, progress: undefined })).toBe(
+      'Fez o L no segundo turno'
+    )
+  })
+
+  it('o nome não se repete no rótulo', () => {
+    expect(badgeLabel(l)).toBe('Fez o L')
+  })
+
+  it('formatThreshold com a categoria l mantém o rótulo do L', () => {
+    expect(formatThreshold('vote', 1, 'l')).toBe('Fez o L')
+  })
+
+  describe('Fez o 22 (v22)', () => {
+    const v22 = {
+      ...l,
+      category: 'v22',
+      name: 'Fez o 22',
+      tier_name: 'Fez o 22',
+      tiers: [{ tier: 1, name: 'Fez o 22', threshold: 1, rarity: 'epico' as const }]
+    }
+
+    it('statText diz o 22, não o L', () => {
+      expect(statText(v22)).toBe('Fez o 22 no segundo turno')
+    })
+
+    it('publicStatText diz o 22, não o L', () => {
+      expect(publicStatText({ ...v22, value: undefined, progress: undefined })).toBe(
+        'Fez o 22 no segundo turno'
+      )
+    })
+
+    it('formatThreshold diz o 22, não o L', () => {
+      expect(formatThreshold('vote', 1, 'v22')).toBe('Fez o 22')
+    })
+  })
+
+  describe('Votou Nulo (nulo)', () => {
+    const nulo = {
+      ...l,
+      category: 'nulo',
+      name: 'Votou Nulo',
+      tier_name: 'Votou Nulo',
+      tiers: [{ tier: 1, name: 'Votou Nulo', threshold: 1, rarity: 'epico' as const }]
+    }
+
+    it('statText diz Votou Nulo, não o L', () => {
+      expect(statText(nulo)).toBe('Votou Nulo no segundo turno')
+    })
+
+    it('publicStatText diz Votou Nulo, não o L', () => {
+      expect(publicStatText({ ...nulo, value: undefined, progress: undefined })).toBe(
+        'Votou Nulo no segundo turno'
+      )
+    })
+
+    it('formatThreshold diz Votou Nulo, não o L', () => {
+      expect(formatThreshold('vote', 1, 'nulo')).toBe('Votou Nulo')
+    })
+  })
+})
+
+describe('unlocksComAviso', () => {
+  const unlock = (category: string): BadgeUnlockEvent['unlocks'][number] => ({
+    category,
+    name: category,
+    tier: 1,
+    tier_name: category,
+    rarity: 'lendario'
+  })
+
+  it('l, v22 e nulo têm celebração própria e ficam fora do aviso genérico', () => {
+    const lista = [unlock('l'), unlock('voz'), unlock('v22'), unlock('nulo')]
+    expect(unlocksComAviso(lista).map((u) => u.category)).toEqual(['voz'])
   })
 })

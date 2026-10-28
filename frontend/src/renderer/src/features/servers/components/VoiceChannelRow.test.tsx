@@ -67,6 +67,7 @@ function fakeAccess(perms: number, opts: { isPrivate?: boolean } = {}): ServerAc
     canInChannel: (_id, want) => (perms & want) === want,
     highestOf: () => 0,
     canActOnMember: () => true,
+    canEditRolesOf: () => true,
     canChangeNickname: () => false,
     canDisconnectMember: () => true,
     canMoveMember: () => true,

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { WsEvent } from '../../../shared/api/ws'
 import { fetchBadges, type Badge, type BadgeUnlockEvent } from '../api/badges'
 import { useAuthStore } from '../../auth/store/authStore'
+import { unlocksComAviso } from '../lib/badges'
 
 /** Cartão aberto de novo depois disso busca os badges outra vez. */
 const MAX_AGE_MS = 60_000
@@ -22,7 +23,7 @@ export interface UnlockToast {
 }
 
 interface BadgeState {
-  byUser: Record<string, { badges: Badge[]; loadedAt: number }>
+  byUser: Record<string, { badges: Badge[]; hiddenRemaining: number; loadedAt: number }>
   modal: BadgesModalTarget | null
   toast: UnlockToast | null
   /** Busca se ainda não tem (ou se está velho). */
@@ -53,7 +54,14 @@ export const useBadgeStore = create<BadgeState>()((set, get) => ({
       .then((res) => {
         if (useAuthStore.getState().accessToken !== token) return
         set((state) => ({
-          byUser: { ...state.byUser, [userId]: { badges: res.badges, loadedAt: Date.now() } }
+          byUser: {
+            ...state.byUser,
+            [userId]: {
+              badges: res.badges,
+              hiddenRemaining: res.hidden_remaining ?? 0,
+              loadedAt: Date.now()
+            }
+          }
         }))
       })
       .catch((err) => console.error('[badgeStore] fetchBadges failed:', err))
@@ -76,12 +84,14 @@ export const useBadgeStore = create<BadgeState>()((set, get) => ({
     if (event.type !== 'badge:unlock') return
     const payload = event.payload as BadgeUnlockEvent
     if (!payload?.unlocks?.length) return
+    void get().ensureBadges(payload.user_id, true)
+    const unlocks = unlocksComAviso(payload.unlocks)
+    if (!unlocks.length) return
     const key = ++toastSeq
-    set({ toast: { key, unlocks: payload.unlocks } })
+    set({ toast: { key, unlocks } })
     setTimeout(() => {
       if (get().toast?.key === key) set({ toast: null })
     }, UNLOCK_TOAST_MS)
-    void get().ensureBadges(payload.user_id, true)
   },
 
   reset: () => {

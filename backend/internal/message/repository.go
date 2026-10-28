@@ -48,6 +48,7 @@ var messageColumns = `
 	stk.content_type,
 	m.gif_url,
 	m.gif_metadata,
+	m.tts,
 	m.call_invite
 `
 
@@ -67,8 +68,8 @@ func (r *Repository) Create(ctx context.Context, msg *Message) error {
 	return r.db.QueryRow(
 		ctx,
 		`
-		INSERT INTO messages (id, author_id, channel_id, conversation_id, reply_to_id, content, system_kind, mention_everyone, sticker_id, gif_url, gif_metadata, call_invite)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		INSERT INTO messages (id, author_id, channel_id, conversation_id, reply_to_id, content, system_kind, mention_everyone, sticker_id, gif_url, gif_metadata, call_invite, tts)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING
 			id,
 			author_id,
@@ -90,6 +91,7 @@ func (r *Repository) Create(ctx context.Context, msg *Message) error {
 		msg.GifURL,
 		gifMetaBytes,
 		callInviteBytes(msg.CallInvite),
+		msg.TTS,
 	).Scan(
 		&msg.ID,
 		&msg.AuthorID,

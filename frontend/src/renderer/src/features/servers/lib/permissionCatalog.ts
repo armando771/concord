@@ -61,6 +61,16 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         name: 'MANAGE_EXPRESSIONS',
         label: 'Gerenciar mesa de áudio',
         description: 'Apagar os áudios que outras pessoas enviaram.'
+      },
+      {
+        name: 'ADD_SOUNDS',
+        label: 'Adicionar sons',
+        description: 'Enviar sons novos para a mesa de áudio deste servidor.'
+      },
+      {
+        name: 'ADD_STICKERS',
+        label: 'Adicionar figurinhas',
+        description: 'Enviar figurinhas novas para este servidor.'
       }
     ]
   },
@@ -117,6 +127,12 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         scope: 'text'
       },
       {
+        name: 'SEND_TTS_MESSAGES',
+        label: 'Enviar mensagens TTS',
+        description: 'Usar /tts: a mensagem é lida em voz para quem está em call.',
+        scope: 'text'
+      },
+      {
         name: 'MANAGE_MESSAGES',
         label: 'Gerenciar mensagens',
         description: 'Apagar mensagens de outras pessoas e encerrar enquetes.',
@@ -149,7 +165,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       {
         name: 'USE_SOUNDBOARD',
         label: 'Usar mesa de áudio',
-        description: 'Tocar e enviar áudios na mesa do servidor.',
+        description: 'Tocar os sons da mesa de áudio na chamada.',
         scope: 'voice'
       },
       {

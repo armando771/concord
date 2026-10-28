@@ -20,6 +20,8 @@ type Notifier interface {
 	Public(textChannelID, content string)
 	Humans(callID string) []string
 	Closed(p *Player)
+	// Played: a música de userID tocou o bastante (badge DJ, played.go).
+	Played(callID, userID string)
 }
 
 type PlayerDeps struct {
@@ -33,6 +35,8 @@ type PlayerDeps struct {
 	IdleTimeout time.Duration
 	Crossfade   time.Duration
 	SkipFade    time.Duration
+	// PlayedAfter: quanto a música toca até contar no DJ (0 = playedAfter).
+	PlayedAfter time.Duration
 }
 
 type EnqueueResult struct {
@@ -173,6 +177,7 @@ func (p *Player) handleEvent(e MixEvent) {
 		p.nextTag = ""
 		p.skipped = ""
 		p.votes.Reset()
+		p.armPlayedLocked(it)
 		p.stopIdleLocked()
 		p.ensurePreparingLocked()
 		p.ensureVideosLocked()
@@ -392,58 +397,6 @@ func (p *Player) dropPreparedLocked(itemID string) {
 	if cancel, ok := p.preparing[itemID]; ok {
 		cancel()
 	}
-}
-
-func (p *Player) SetWatching(userID string, watching bool) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if watching {
-		p.watchers[userID] = struct{}{}
-	} else {
-		delete(p.watchers, userID)
-	}
-	p.ensureVideosLocked()
-}
-
-// ensureVideosLocked: vídeo só é baixado se alguém está assistindo, para a
-// atual e a próxima.
-func (p *Player) ensureVideosLocked() {
-	if len(p.watchers) == 0 || p.closed {
-		return
-	}
-	for _, it := range []*Item{p.now, p.queue.Head()} {
-		if it == nil || !it.Track.HasVideo || it.VideoPath != "" || p.videoJobs[it.ID] {
-			continue
-		}
-		p.videoJobs[it.ID] = true
-		go func(it *Item) {
-			ctx, cancel := context.WithTimeout(p.ctx, downloadTimeout)
-			defer cancel()
-			path, err := p.deps.Source.DownloadVideo(ctx, it.Track.VideoID, p.deps.CacheDir)
-			p.mu.Lock()
-			defer p.mu.Unlock()
-			delete(p.videoJobs, it.ID)
-			if err != nil {
-				log.Printf("[music] vídeo de %s: %v", it.Track.VideoID, err)
-				return
-			}
-			it.VideoPath = path
-			if !p.closed {
-				p.deps.Notify.PublishState(p)
-			}
-		}(it)
-	}
-}
-
-func (p *Player) VideoPath(itemID string) (string, bool) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	for _, it := range append([]*Item{p.now}, p.queue.Items()...) {
-		if it != nil && it.ID == itemID && it.VideoPath != "" {
-			return it.VideoPath, true
-		}
-	}
-	return "", false
 }
 
 func (p *Player) Snapshot() Snapshot {

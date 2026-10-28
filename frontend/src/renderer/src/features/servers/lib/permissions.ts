@@ -33,7 +33,10 @@ export const Perm = {
   MANAGE_EXPRESSIONS: 1 << 23,
   DISCONNECT_MEMBERS: 1 << 24,
   CHANGE_NICKNAME: 1 << 26,
-  MANAGE_NICKNAMES: 1 << 27
+  MANAGE_NICKNAMES: 1 << 27,
+  ADD_SOUNDS: 1 << 28,
+  ADD_STICKERS: 1 << 29,
+  SEND_TTS_MESSAGES: 1 << 30
 } as const
 
 export type PermName = keyof typeof Perm
@@ -44,6 +47,8 @@ export const ALL_PERMISSIONS: number = Object.values(Perm).reduce((sum, bit) => 
 /**
  * O que todo membro faz num servidor novo (igual ao backend). "Alterar apelido"
  * vem ligado, como no Discord; nos servidores antigos a migration 000039 ligou.
+ * "Adicionar sons", "Adicionar figurinhas" (migration 000125) e "Enviar
+ * mensagens TTS" (a 000127 ligou nos antigos; ver docs/adr/0012-tts-no-cliente.md).
  */
 export const DEFAULT_EVERYONE: number =
   Perm.VIEW_CHANNEL |
@@ -56,7 +61,10 @@ export const DEFAULT_EVERYONE: number =
   Perm.SPEAK |
   Perm.STREAM |
   Perm.USE_SOUNDBOARD |
-  Perm.CHANGE_NICKNAME
+  Perm.CHANGE_NICKNAME |
+  Perm.ADD_SOUNDS |
+  Perm.ADD_STICKERS |
+  Perm.SEND_TTS_MESSAGES
 
 export interface Role {
   id: string
@@ -165,14 +173,14 @@ export function computeChannel(
 }
 
 /**
- * Sem ver o canal não se faz nada nele; sem enviar não anexa nem menciona
- * todos (no texto e no chat do canal de voz); em voz, sem conectar não fala,
+ * Sem ver o canal não se faz nada nele; sem enviar não anexa, menciona
+ * todos nem manda TTS (no texto e no chat do canal de voz); em voz, sem conectar não fala,
  * transmite nem modera.
  */
 function implicitChannel(perms: number, channelType: ChannelKind): number {
   if (!(perms & Perm.VIEW_CHANNEL)) return 0
   if (!(perms & Perm.SEND_MESSAGES)) {
-    perms &= ~(Perm.ATTACH_FILES | Perm.MENTION_EVERYONE)
+    perms &= ~(Perm.ATTACH_FILES | Perm.MENTION_EVERYONE | Perm.SEND_TTS_MESSAGES)
   }
   if (channelType === 'voice' && !(perms & Perm.CONNECT)) {
     perms &= ~(
@@ -206,6 +214,19 @@ export function canManageRole(
   rolePosition: number
 ): boolean {
   return isOwner || actorHighest > rolePosition
+}
+
+/**
+ * O ator pode dar ou tirar cargos do alvo? Os cargos do dono só ele mesmo mexe
+ * (em si, qualquer cargo); nos demais, o próprio ator incluso, vale só a
+ * hierarquia de cada cargo (canManageRole).
+ */
+export function canEditRolesOf(
+  ownerId: string | undefined,
+  actorId: string | undefined,
+  targetId: string
+): boolean {
+  return targetId !== ownerId || actorId === ownerId
 }
 
 /**
@@ -287,6 +308,7 @@ const PERMISSION_ERROR_MESSAGES: Record<string, string> = {
   missing_permission: 'Você não tem permissão para isso.',
   not_member: 'Você não faz parte deste servidor.',
   role_hierarchy: 'Você só pode fazer isso com cargos e pessoas abaixo do seu cargo mais alto.',
+  owner_roles: 'Só o dono do servidor mexe nos cargos dele.',
   cannot_grant: 'Você não pode dar ou tirar uma permissão que você mesmo não tem.',
   banned: 'Você foi banido deste servidor.',
   everyone_role: 'O cargo @everyone não pode ser renomeado, movido nem apagado.',

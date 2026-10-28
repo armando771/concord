@@ -42,6 +42,8 @@ export interface User extends PublicUser {
   email: string
   /** false até a pessoa abrir o link do e-mail de confirmação. */
   email_verified?: boolean
+  /** Quando dá para trocar o @ de novo (uma vez a cada 7 dias; ausente = nunca trocou). */
+  username_change_available_at?: string | null
 }
 
 interface AuthState {

@@ -6,6 +6,7 @@ import type { AppMetrics } from '../shared/appMetrics'
 import type { PerfEvent } from '../shared/perfLog'
 import type { PortalStatus, ScreenShareFlow } from '../shared/screenShareFlow'
 import type { ServerDiagnostics } from '../shared/serverConnection'
+import type { TTSVoiceState } from '../shared/ttsVoice'
 
 export interface ScreenSourceInfo {
   id: string
@@ -113,6 +114,15 @@ export interface GamesApi {
   onChange(cb: (game: DetectedGameInfo | null) => void): () => void
 }
 
+export interface MusicApi {
+  /** Liga/desliga a detecção da música tocando (Ouvindo). Windows e Linux. */
+  watch(enabled: boolean): void
+  /** Música atual; o renderer valida (sanitizeDetectedTrack). */
+  current(): Promise<unknown>
+  /** A música mudou (null = parou). Retorna unsubscribe. */
+  onChange(cb: (track: unknown) => void): () => void
+}
+
 export interface ActivitiesApi {
   /** Abre o jogo numa janela própria; false = link recusado pelo main. */
   open(activityId: string, url: string): Promise<boolean>
@@ -173,6 +183,16 @@ export interface OverlayApi {
   onLayout(cb: (layout: OverlayLayout) => void): () => void
 }
 
+/** Voz do /tts baixada no primeiro uso (Linux). */
+export interface TTSApi {
+  voiceState(): Promise<TTSVoiceState>
+  /** Baixa a voz se ainda não está pronta (ligou o interruptor, "Tentar de novo"). */
+  prepare(): void
+  /** WAV da fala, ou null (voz não pronta: a primeira chamada começa o download). */
+  speak(text: string): Promise<Uint8Array | null>
+  onVoiceState(cb: (state: TTSVoiceState) => void): () => void
+}
+
 declare global {
   interface Window {
     electron: ElectronAPI
@@ -190,9 +210,12 @@ declare global {
       inviteLinks?: InviteLinksApi
       activities?: ActivitiesApi
       games?: GamesApi
+      music?: MusicApi
       keybinds?: KeybindsApi
       windowTheme?: WindowThemeApi
       server?: ServerApi
+      /** Só no app desktop do Linux (docs/adr/0014-voz-piper-no-linux.md). */
+      tts?: TTSApi
     }
   }
 }

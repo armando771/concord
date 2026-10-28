@@ -28,11 +28,6 @@ export function openUserProfile(target: UserMenuActionTarget): void {
   })
 }
 
-export function copyUserId(userId: string): void {
-  void navigator.clipboard?.writeText(userId)
-  showToast.success('ID copiado.')
-}
-
 export function sendDirectMessage(userId: string): void {
   void router.navigate(`/dm/${userId}`)
 }
@@ -187,6 +182,18 @@ export function computeGivableRoles(
     actorHighest: access.highest,
     canManageRoles: access.can(Perm.MANAGE_ROLES)
   })
+}
+
+/**
+ * "Cargos ›" no menu de si mesmo: só o dono dá e tira cargos de si (qualquer
+ * cargo, acima de tudo na hierarquia).
+ */
+export function computeSelfGivableRoles(
+  inServer: boolean,
+  roles: Role[],
+  access: { isOwner: boolean; highest: number; can: (perm: number) => boolean }
+): Role[] {
+  return computeGivableRoles(inServer && access.isOwner, roles, access)
 }
 
 export function computeServerModerationPerms(

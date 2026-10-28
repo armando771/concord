@@ -35,6 +35,20 @@ describe('SOUNDS', () => {
     expect(last('userLeave')).toBeLessThan(first('userLeave'))
   })
 
+  it('transmissão: abrir sobe, encerrar desce, e entrar na live soa diferente dos dois', () => {
+    expect(last('liveStart')).toBeGreaterThan(first('liveStart'))
+    expect(last('liveEnd')).toBeLessThan(first('liveEnd'))
+    expect(last('liveJoin')).toBeGreaterThan(first('liveJoin'))
+    expect(SOUNDS.liveJoin).not.toEqual(SOUNDS.liveStart)
+    expect(SOUNDS.liveJoin).not.toEqual(SOUNDS.liveEnd)
+    // Nenhum dos três é igual a entrar/sair da call.
+    for (const live of ['liveStart', 'liveEnd', 'liveJoin'] as const) {
+      for (const call of ['join', 'leave', 'userJoin', 'userLeave'] as const) {
+        expect(SOUNDS[live]).not.toEqual(SOUNDS[call])
+      }
+    }
+  })
+
   it('mutar desce, desmutar sobe', () => {
     expect(last('mute')).toBeLessThan(first('mute'))
     expect(last('unmute')).toBeGreaterThan(first('unmute'))

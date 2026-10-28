@@ -29,6 +29,15 @@ describe('badgeStore', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  it('guarda o número de badges ocultos restantes (0 quando o servidor não manda)', async () => {
+    fetchMock.mockResolvedValueOnce({ user_id: 'ana', self: false, badges: [], hidden_remaining: 7 })
+    await useBadgeStore.getState().ensureBadges('ana')
+    expect(useBadgeStore.getState().byUser.ana.hiddenRemaining).toBe(7)
+
+    await useBadgeStore.getState().ensureBadges('bia')
+    expect(useBadgeStore.getState().byUser.bia.hiddenRemaining).toBe(0)
+  })
+
   it('badge:unlock mostra o aviso, some sozinho e recarrega os seus badges', async () => {
     await useBadgeStore.getState().ensureBadges('eu')
     useBadgeStore.getState().handleWsEvent({
@@ -58,5 +67,31 @@ describe('badgeStore', () => {
       .getState()
       .handleWsEvent({ type: 'badge:unlock', payload: { user_id: 'eu', unlocks: [] } })
     expect(useBadgeStore.getState().toast).toBeNull()
+  })
+
+  describe('Fez o L (tem celebração própria)', () => {
+    const l = { category: 'l', name: 'Fez o L', tier: 1, tier_name: 'Fez o L', rarity: 'epico' }
+    const voz = {
+      category: 'voz',
+      name: 'Tempo em call',
+      tier: 2,
+      tier_name: 'Tagarela',
+      rarity: 'comum'
+    }
+
+    it('não mostra o aviso genérico, mas recarrega os badges', () => {
+      useBadgeStore
+        .getState()
+        .handleWsEvent({ type: 'badge:unlock', payload: { user_id: 'eu', unlocks: [l] } })
+      expect(useBadgeStore.getState().toast).toBeNull()
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('junto com outro badge, o aviso mostra só o outro', () => {
+      useBadgeStore
+        .getState()
+        .handleWsEvent({ type: 'badge:unlock', payload: { user_id: 'eu', unlocks: [l, voz] } })
+      expect(useBadgeStore.getState().toast?.unlocks).toEqual([voz])
+    })
   })
 })

@@ -100,7 +100,7 @@ function ResizeHandle({
       }}
       // Barra da esquerda: a alça fica logo depois da borda (dentro dela está a
       // barra de rolagem). Da direita: logo dentro, longe da rolagem do chat.
-      className={`group/resize absolute inset-y-0 z-20 w-1.5 cursor-col-resize touch-none outline-none ${
+      className={`group/resize absolute inset-y-0 z-20 max-md:hidden w-1.5 cursor-col-resize touch-none outline-none ${
         side === 'left' ? 'left-full -ml-px' : 'left-0'
       }`}
     >

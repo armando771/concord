@@ -36,3 +36,14 @@ describe('createModalStack', () => {
     expect(stack.isTop('a')).toBe(true)
   })
 })
+
+describe('hasOpen', () => {
+  it('diz se há algum modal aberto', () => {
+    const stack = createModalStack()
+    expect(stack.hasOpen()).toBe(false)
+    stack.push('a')
+    expect(stack.hasOpen()).toBe(true)
+    stack.remove('a')
+    expect(stack.hasOpen()).toBe(false)
+  })
+})

@@ -42,6 +42,9 @@ type store interface {
 type Service struct {
 	repository store
 	publisher  EventPublisher
+
+	// Chamados quando o canal do Maestro nasce com um servidor novo.
+	onSystemCreated []func(ctx context.Context, ch *Channel)
 }
 
 func ChannelService(repository *Repository, publisher EventPublisher) *Service {
@@ -62,12 +65,13 @@ func (s *Service) Create(ctx context.Context, ch *Channel, overwrites ...permiss
 	return s.create(ctx, ch, overwrites)
 }
 
-// CreateSystem cria o canal "bot" do servidor (usado na criação do servidor).
+// CreateSystem cria o canal "musica" do servidor (usado na criação do servidor).
 func (s *Service) CreateSystem(ctx context.Context, serverID, createdBy string) (*Channel, error) {
 	ch := &Channel{ServerID: serverID, Name: SystemChannelName, Type: TypeText, CreatedBy: createdBy, IsSystem: true}
 	if err := s.create(ctx, ch, nil); err != nil {
 		return nil, err
 	}
+	s.notifySystemCreated(ctx, ch)
 	return ch, nil
 }
 
@@ -80,7 +84,7 @@ func (s *Service) CreateNotices(ctx context.Context, serverID, createdBy string)
 	return ch, nil
 }
 
-// SystemChannel: o canal "bot" do servidor (ErrChannelNotFound se não tem).
+// SystemChannel: o canal "musica" (do Maestro) do servidor (ErrChannelNotFound se não tem).
 func (s *Service) SystemChannel(ctx context.Context, serverID string) (*Channel, error) {
 	return s.repository.FindSystemByServerID(ctx, serverID)
 }

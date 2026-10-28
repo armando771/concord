@@ -14,6 +14,7 @@ import CallInviteCard from '../../call/components/CallInviteCard'
 import MessageAttachments from './MessageAttachments'
 import MessageSticker from './MessageSticker'
 import MessageGif from './MessageGif'
+import TTSBadge from '../../tts/components/TTSBadge'
 
 // Pedaços da linha de mensagem do chat (ver MessageItem).
 
@@ -32,10 +33,11 @@ function formatEditedAt(iso: string): string {
   return `Editada em ${when}`
 }
 
-/** "(editada)" e "fixada" ao lado do nome (ou sozinhos, na linha agrupada). */
+/** TTS, "(editada)" e "fixada" ao lado do nome (ou sozinhos, na linha agrupada). */
 export function MessageBadges({ message }: { message: Message }): React.JSX.Element {
   return (
     <>
+      <TTSBadge show={message.tts} />
       {message.edited_at && (
         <span className="text-ds-xs text-gray-500" title={formatEditedAt(message.edited_at)}>
           (editada)
@@ -149,19 +151,20 @@ export function MessageHeader({
   onOpenProfile: (e: React.MouseEvent<HTMLElement>) => void
 }): React.JSX.Element | null {
   if (compact) {
-    return message.edited_at || message.pinned_at ? (
+    return message.tts || message.edited_at || message.pinned_at ? (
       <div className="flex items-baseline gap-2">
         <MessageBadges message={message} />
       </div>
     ) : null
   }
   return (
-    <div className="flex items-baseline gap-2">
+    <div className="flex min-w-0 items-baseline gap-2">
+      {/* Nome longo: corta com reticências (no celular ele quebrava centralizado). */}
       <button
         type="button"
         onClick={onOpenProfile}
         style={nameColor ? { color: nameColor } : undefined}
-        className={`cursor-pointer text-ds-chat font-medium hover:underline ${
+        className={`min-w-0 cursor-pointer truncate text-left text-ds-chat font-medium hover:underline ${
           nameColor ? '' : 'text-strong'
         }`}
       >
@@ -171,7 +174,9 @@ export function MessageHeader({
           <StyledName name={name} userId={message.author_id} style={message.author?.name_style} />
         )}
       </button>
-      <span className="text-ds-xs font-medium text-gray-500">{formatTime(message.created_at)}</span>
+      <span className="shrink-0 text-ds-xs font-medium text-gray-500">
+        {formatTime(message.created_at)}
+      </span>
       <MessageBadges message={message} />
     </div>
   )

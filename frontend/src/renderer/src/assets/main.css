@@ -3,6 +3,8 @@
 @import './typography.css';
 /* Tokens de cor dos temas (lista e documentação no topo do arquivo). */
 @import './theme.css';
+/* Celular: altura visível, safe areas e animações de gaveta. */
+@import './mobile.css';
 
 @theme {
   /* Vidro dos painéis: seguem o tema (no AMOLED ficam translúcidos sobre o brilho). */
@@ -1206,33 +1208,6 @@ body.boost-quake #root {
   100% {
     transform: translateY(420px) rotate(540deg);
     opacity: 0;
-  }
-}
-
-/* Barra "alterações não salvas" do editor de perfil: treme ao tentar sair
-   sem salvar, como no Discord. */
-@keyframes unsaved-shake {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  20%,
-  60% {
-    transform: translateX(-8px);
-  }
-  40%,
-  80% {
-    transform: translateX(8px);
-  }
-}
-
-.unsaved-shake {
-  animation: unsaved-shake 0.45s ease-in-out;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .unsaved-shake {
-    animation: none;
   }
 }
 

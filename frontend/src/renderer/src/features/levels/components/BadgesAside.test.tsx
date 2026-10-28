@@ -8,7 +8,6 @@ vi.mock('../../../shared/ui/Avatar', () => ({ default: () => <i data-avatar /> }
 const badge = (category: string, tier: number): Badge =>
   ({ category, name: `Badge ${category}`, tier, tier_name: 'Prata', tiers: [] }) as unknown as Badge
 const ganho = badge('voz', 2)
-const livre = badge('chat', 0)
 
 function render(over: Partial<React.ComponentProps<typeof BadgesAside>> = {}): string {
   return renderToStaticMarkup(
@@ -18,7 +17,6 @@ function render(over: Partial<React.ComponentProps<typeof BadgesAside>> = {}): s
       titleId="t"
       badges={[ganho]}
       earned={[ganho]}
-      available={[]}
       selected={ganho}
       onSelect={() => {}}
       canViewMine
@@ -40,16 +38,14 @@ describe('BadgesAside', () => {
     expect(render({ canViewMine: false })).not.toContain('Ver seus badges')
   })
 
-  it('no próprio perfil: "Seus badges", sem avatar nem "Ver seus badges", e o que dá para desbloquear', () => {
-    const html = render({
-      isMe: true,
-      badges: [ganho, livre],
-      available: [livre]
-    })
+  it('no próprio perfil: "Seus badges", sem avatar nem "Ver seus badges", e nada do que falta ganhar', () => {
+    const html = render({ isMe: true })
     expect(html).toContain('Seus badges')
     expect(html).not.toContain('data-avatar')
     expect(html).not.toContain('Ver seus badges')
-    expect(html).toContain('Disponíveis para desbloquear')
+    expect(html).not.toContain('Disponíveis para desbloquear')
+    expect(html).not.toContain('desbloquear')
+    expect(html).not.toMatch(/ de \d+ badges/)
   })
 
   it('o badge selecionado fica marcado na grade', () => {
@@ -64,6 +60,37 @@ describe('BadgesAside', () => {
 
   it('sem badges ganhos diz isso, em cada perfil à sua maneira', () => {
     expect(render({ earned: [], badges: [] })).toContain('Nenhum badge ainda.')
-    expect(render({ earned: [], badges: [], isMe: true })).toContain('Você ainda não tem badges.')
+    expect(render({ earned: [], badges: [], isMe: true })).toContain(
+      'Nenhum badge ainda. Eles aparecem conforme você usa o Salinha.'
+    )
+  })
+
+  it('depois das conquistadas mostra quantos badges ocultos faltam', () => {
+    const html = render({ hiddenRemaining: 12 })
+    expect(html).toContain('12 badges ocultos restantes')
+    expect(html.indexOf('aria-pressed')).toBeLessThan(html.indexOf('12 badges ocultos'))
+  })
+
+  it('singular com 1', () => {
+    expect(render({ hiddenRemaining: 1 })).toContain('1 badge oculto restante')
+  })
+
+  it('com 0 o bloco some', () => {
+    const html = render({ hiddenRemaining: 0 })
+    expect(html).not.toContain('ocultos')
+    expect(html).not.toContain('oculto restante')
+  })
+
+  it('o estado vazio convive com o bloco, em cada perfil', () => {
+    const mine = render({ earned: [], badges: [], isMe: true, hiddenRemaining: 28 })
+    expect(mine).toContain('Nenhum badge ainda. Eles aparecem')
+    expect(mine).toContain('28 badges ocultos restantes')
+    const other = render({ earned: [], badges: [], hiddenRemaining: 28 })
+    expect(other).toContain('Nenhum badge ainda.')
+    expect(other).toContain('28 badges ocultos restantes')
+  })
+
+  it('enquanto carrega não mostra o bloco', () => {
+    expect(render({ badges: undefined, earned: [], hiddenRemaining: 5 })).not.toContain('ocultos')
   })
 })

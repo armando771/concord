@@ -3,6 +3,7 @@ import { useAuthStore } from '../../auth/store/authStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { logoutAndReset } from '../../profile/store/meActions'
 import {
+  escClosesSettings,
   SETTINGS_SECTIONS,
   accountName,
   currentSettingsSection,
@@ -10,6 +11,7 @@ import {
   settingsContentWidth,
   type SettingsSectionId
 } from '../lib/settingsNav'
+import { modalStack } from '../../../shared/lib/modalStack'
 import { IS_WEB } from '../../../shared/lib/config'
 import SettingsShell from '../../../shared/ui/SettingsShell'
 import SettingsNav from './SettingsNav'
@@ -41,8 +43,7 @@ const SECTION_VIEW: Record<SettingsSectionId, () => React.JSX.Element | null> = 
 
 /**
  * Configurações em tela cheia, como no Discord: navegação com busca à esquerda
- * e a seção à direita. ESC ou o ✕ fecham (com alterações não salvas no perfil,
- * a barra de aviso treme em vez de fechar).
+ * e a seção à direita. ESC ou o ✕ fecham.
  */
 function SettingsScreen(): React.JSX.Element | null {
   const open = useSettingsStore((s) => s.open)
@@ -62,8 +63,8 @@ function SettingsContent(): React.JSX.Element {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      // ESC dentro do recorte de imagem fecha só o recorte (ele para o evento).
-      if (e.key === 'Escape' && !e.defaultPrevented) close()
+      // ESC no recorte de imagem ou num modal por cima fecha só ele.
+      if (escClosesSettings(e, modalStack.hasOpen())) close()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -82,6 +83,7 @@ function SettingsContent(): React.JSX.Element {
   return (
     <SettingsShell
       ariaLabel="Configurações"
+      sectionKey={current.id}
       title={current.label}
       titleClassName="text-ds-lg font-semibold text-strong"
       contentClassName={settingsContentWidth(current.id)}

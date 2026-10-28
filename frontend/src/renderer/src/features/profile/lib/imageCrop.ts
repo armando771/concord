@@ -52,3 +52,25 @@ export function sourceRect(
   const sy = (image.height * scale - frame.height) / 2 / scale - y / scale
   return { sx, sy, sw, sh }
 }
+
+/**
+ * Tamanho do GIF recortado: a saída, mas nunca maior que o pedaço do original
+ * (ampliar só multiplica os pixels de cada quadro; quem mostra já escala).
+ */
+export function gifOutput(rect: { sw: number; sh: number }, out: Size): Size {
+  const scale = Math.min(1, out.width / rect.sw, out.height / rect.sh)
+  return {
+    width: Math.max(1, Math.round(rect.sw * scale)),
+    height: Math.max(1, Math.round(rect.sh * scale))
+  }
+}
+
+/** O recorte pega a imagem inteira (zoom mínimo e mesma proporção do quadro)? */
+export function coversWhole(
+  rect: { sx: number; sy: number; sw: number; sh: number },
+  image: Size
+): boolean {
+  return (
+    rect.sx <= 0.5 && rect.sy <= 0.5 && rect.sw >= image.width - 1 && rect.sh >= image.height - 1
+  )
+}

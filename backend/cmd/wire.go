@@ -48,7 +48,9 @@ type app struct {
 	moderationService *server.Moderation
 	nicknameService   *server.Nicknames
 
-	friendshipService      *friendship.Service
+	friendshipService *friendship.Service
+	// friendAccepted: amizade aceita reavalia o badge Amigos (wireEngagement).
+	friendAccepted         *friendship.AcceptHook
 	channelRepository      *channel.Repository
 	channelService         *channel.Service
 	conversationRepository *conversation.Repository
@@ -62,9 +64,12 @@ type app struct {
 	soundboardRepository *soundboard.Repository
 
 	liveKitTokens *livekit.TokenIssuer
+	liveKitAdmin  *livekit.Admin
 	liveKitPort   string
 	callService   *call.Service
-	musicManager  *music.Manager
+	// callAFK: o tempo de call (XP e badges) visto sem quem está 10 min sem falar.
+	callAFK      *call.AFK
+	musicManager *music.Manager
 
 	// badgeDone fecha quando os badges terminam de gravar no desligamento.
 	badgeDone chan struct{}

@@ -1,4 +1,4 @@
-# Em atividade (jogo em andamento)
+# Em atividade (jogo em andamento e música)
 
 Como no Discord: o jogo que a pessoa está jogando aparece embaixo do nome (lista
 de membros, amigos, DMs, barra do usuário, painel de voz e perfil) e na coluna
@@ -33,11 +33,40 @@ de membros, amigos, DMs, barra do usuário, painel de voz e perfil) e na coluna
 5. **Carga inicial.** `GET /api/presence/activities?ids=` devolve o que o
    usuário pode ver; usado junto de `fetchPresenceFor`.
 
+## Ouvindo (música)
+
+Mesmo caminho do jogo, num slot separado (dá para jogar e ouvir ao mesmo tempo).
+Decisão e alternativas: [ADR 0006](adr/0006-musica-em-atividade.md).
+
+1. **Detecção (Electron no Windows e no Linux).** `main/activity/smtcMedia.ts`
+   (Windows: PowerShell lendo o SMTC a cada 2 s) e `mprisMedia.ts` (Linux:
+   `busctl` no MPRIS a cada 3 s) viram `MediaSession`. `mediaSessions.ts` só
+   aceita players do catálogo `shared/musicApps.ts` (navegador só com álbum ou
+   site de música conhecido). `musicTracker.ts` manda a faixa (início = agora -
+   posição, duração) e só reenvia ao trocar de faixa, voltar da pausa ou pular
+   (no máximo um a cada 15 s); pausado/sem nada por 10 s limpa.
+2. **IPC.** `main/activity/music.ts` (`music:watch`, `music:current`), exposto
+   como `window.api.music`.
+3. **Publicação.** `MusicActivityBridge` + `listeningStore` mandam
+   `activity:set` com `kind: "listening"` (app, título, artista, álbum,
+   `position_ms`, `duration_ms`) e `activity:clear` com `kind: "listening"`.
+4. **Servidor.** `internal/platform/websocket/listening.go` valida (app até 64
+   caracteres, título/artista/álbum até 128, duração até 24 h), calcula o
+   início no relógio do servidor e manda `presence:activity` com `activity`
+   (jogo) e `listening` (música). Na carga inicial a música vem em
+   `listening`, ao lado dos campos do jogo.
+5. **Exibição.** Cartão de perfil: "Ouvindo Spotify", música, artista, álbum e a
+   barra de tempo andando a cada segundo (`TrackProgress`). Lista de membros,
+   amigos e DMs: "Ouvindo <música>" com o ícone do player (o jogo tem
+   prioridade). Coluna Atividade dos Amigos: card de quem está ouvindo.
+
 ## Privacidade
 
 - Quem vê: amigos aceitos + servidores em comum, menos bloqueios.
-- Opção em Configurações → Privacidade e segurança → Atividade (padrão: ligada).
-- Limite no servidor: nome até 64 caracteres, tipo `game`, no máximo 1 troca por segundo.
+- Opções em Configurações → Privacidade e segurança → Atividade (padrão: ligadas):
+  uma para o jogo, outra para a música.
+- Limite no servidor: nome até 64 caracteres, tipos `game` e `listening`, no máximo 1 troca por
+  segundo por tipo.
 
 ## Fora do escopo (por enquanto)
 

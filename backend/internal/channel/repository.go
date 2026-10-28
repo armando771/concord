@@ -145,7 +145,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Channel, error) 
 	return ch, nil
 }
 
-// FindSystemByName: canal de sistema do servidor pelo nome ("bot" ou "avisos").
+// FindSystemByName: canal de sistema do servidor pelo nome ("musica" ou "avisos").
 func (r *Repository) FindSystemByName(ctx context.Context, serverID string, names ...string) (*Channel, error) {
 	var id string
 	err := r.db.QueryRow(
@@ -163,9 +163,9 @@ func (r *Repository) FindSystemByName(ctx context.Context, serverID string, name
 	return r.FindByID(ctx, id)
 }
 
-// FindSystemByServerID: o canal de sistema ("bot") do servidor; ErrChannelNotFound se não tem.
+// FindSystemByServerID: o canal de sistema ("musica") do servidor; ErrChannelNotFound se não tem.
 func (r *Repository) FindSystemByServerID(ctx context.Context, serverID string) (*Channel, error) {
-	return r.FindSystemByName(ctx, serverID, SystemChannelName, "bot-maestro")
+	return r.FindSystemByName(ctx, serverID, SystemChannelName, SystemChannelAltName)
 }
 
 // FindNoticesByServerID: o canal de sistema ("avisos") do servidor; ErrChannelNotFound se não tem.
@@ -173,7 +173,7 @@ func (r *Repository) FindNoticesByServerID(ctx context.Context, serverID string)
 	return r.FindSystemByName(ctx, serverID, NoticesChannelName, "avisos-sistema")
 }
 
-// IsSystemChannel diz se o canal é de sistema ("bot" ou "avisos").
+// IsSystemChannel diz se o canal é de sistema ("musica" ou "avisos").
 func (r *Repository) IsSystemChannel(ctx context.Context, channelID string) (bool, error) {
 	var isSystem bool
 	err := r.db.QueryRow(ctx, `SELECT is_system FROM channels WHERE id = $1`, channelID).Scan(&isSystem)

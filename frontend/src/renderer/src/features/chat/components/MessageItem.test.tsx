@@ -85,6 +85,12 @@ describe('MessageItem', () => {
     expect(html).toContain('py-0.5')
   })
 
+  it('mensagem /tts leva o selo de alto-falante', () => {
+    expect(render(msg({ tts: true }))).toContain('Mensagem TTS')
+    expect(render(msg())).not.toContain('Mensagem TTS')
+    expect(render(msg({ tts: true }), { grouped: true })).toContain('Mensagem TTS')
+  })
+
   it('resposta a uma mensagem apagada mostra o aviso da original', () => {
     expect(render(msg({ reply_to_id: 'x' }))).toContain('Mensagem original foi excluída')
   })
@@ -114,6 +120,10 @@ describe('MessageItem', () => {
 
   it('mensagem da música vai para o card de música', () => {
     expect(render(msg({ system_kind: 'music' }))).toContain('data-music')
+  })
+
+  it('a lista de comandos fixada no #musica também vai para o card do Maestro', () => {
+    expect(render(msg({ system_kind: 'music_commands' }))).toContain('data-music')
   })
 
   it('em edição mostra o editor no lugar do texto', () => {

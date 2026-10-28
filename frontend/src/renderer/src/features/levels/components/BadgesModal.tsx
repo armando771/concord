@@ -5,32 +5,22 @@ import type { BadgesModalTarget } from '../store/badgeStore'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useBadgeStore } from '../store/badgeStore'
 import {
-  formatThreshold,
   formatUnlockDate,
   isMythic,
-  progressPercent,
   rarityMeta,
-  remainingText,
   selectedBadge,
   publicStatText,
   statText,
   visibleBadges
 } from '../lib/badges'
 import { trapTab } from '../../../shared/lib/focusTrap'
-import { LockIcon } from '../../../shared/ui/icons'
 import BadgeIcon from './BadgeIcon'
 import BadgesAside from './BadgesAside'
+import BadgeProgress from './BadgeProgress'
+import BadgeTierLadder from './BadgeTierLadder'
 import { BadgeDetailSkeleton } from '../../../shared/ui/skeleton/layouts'
 
 function RarityChip({ badge }: { badge: Badge }): React.JSX.Element {
-  if (badge.tier === 0) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-fg/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-gray-300">
-        <LockIcon className="h-3 w-3" />
-        Bloqueado
-      </span>
-    )
-  }
   const meta = rarityMeta(badge.rarity)
   if (isMythic(badge.rarity)) {
     return (
@@ -64,13 +54,11 @@ function Detail({
   isMe: boolean
   ownerName: string
 }): React.JSX.Element {
-  const earned = badge.tier > 0
   const meta = rarityMeta(badge.rarity)
-  const title = earned ? badge.tier_name : badge.next_tier_name
+  const title = badge.tier_name
   const unlocked = formatUnlockDate(badge.unlocked_at)
-  const maxed = badge.tier >= badge.tiers.length
   // O mítico tem a própria aura (MythicIcon); os outros, um brilho na cor.
-  const mythic = earned && isMythic(badge.rarity)
+  const mythic = isMythic(badge.rarity)
 
   return (
     <div className="flex flex-col items-center">
@@ -79,7 +67,7 @@ function Detail({
           <span
             aria-hidden="true"
             className="absolute inset-4 rounded-full blur-2xl"
-            style={{ background: earned ? `${meta.color}33` : 'var(--bg-hover)' }}
+            style={{ background: `${meta.color}33` }}
           />
         )}
         <BadgeIcon
@@ -87,7 +75,6 @@ function Detail({
           tier={badge.tier}
           rarity={badge.rarity}
           size={168}
-          locked={!earned}
           hero
           className="relative drop-shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
         />
@@ -117,49 +104,7 @@ function Detail({
       </p>
 
       <div className="mt-5 w-full rounded-xl bg-input p-4">
-        {isMe && (
-          <>
-            <p className="text-sm font-semibold text-strong">Seu progresso</p>
-            <div className="mt-3 flex items-center gap-3">
-              {earned && (
-                <BadgeIcon
-                  category={badge.category}
-                  tier={badge.tier}
-                  rarity={badge.rarity}
-                  size={32}
-                />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-gray-100">{remainingText(badge)}</p>
-                <div
-                  className="mt-1.5 h-2 overflow-hidden rounded-full bg-fg/10"
-                  role="progressbar"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={progressPercent(badge)}
-                  aria-label={`Progresso para ${badge.next_tier_name ?? 'o próximo tier'}`}
-                >
-                  <div
-                    className={`h-full rounded-full transition-[width] duration-500 ${
-                      mythic ? 'mythic-bar' : 'bg-brand'
-                    }`}
-                    style={{ width: `${progressPercent(badge)}%` }}
-                  />
-                </div>
-              </div>
-              {!maxed && (
-                <BadgeIcon
-                  category={badge.category}
-                  tier={badge.tier + 1}
-                  rarity={badge.tiers[badge.tier]?.rarity}
-                  size={32}
-                  locked
-                />
-              )}
-            </div>
-            <div className="my-4 h-px bg-fg/10" />
-          </>
-        )}
+        {isMe && <BadgeProgress badge={badge} mythic={mythic} />}
 
         <p className="text-sm leading-snug text-gray-200">{badge.description}</p>
 
@@ -167,37 +112,7 @@ function Detail({
         <p className="text-sm font-semibold text-strong">
           {isMe ? 'Tiers' : `Progresso de ${ownerName}`}
         </p>
-        <ol className="mt-3 grid grid-cols-4 gap-x-2 gap-y-4">
-          {badge.tiers.map((t) => {
-            const done = Boolean(t.unlocked_at)
-            return (
-              <li
-                key={t.tier}
-                className="flex flex-col items-center text-center"
-                title={done ? `Desbloqueado em ${formatUnlockDate(t.unlocked_at)}` : undefined}
-              >
-                <BadgeIcon
-                  category={badge.category}
-                  tier={t.tier}
-                  rarity={t.rarity}
-                  size={40}
-                  locked={!done}
-                />
-                <span
-                  className={`mt-1 text-xs font-semibold ${done ? 'text-gray-100' : 'text-gray-500'}`}
-                >
-                  {t.name}
-                </span>
-                <span
-                  className={`flex items-center gap-0.5 text-[11px] ${done ? 'text-gray-400' : 'text-gray-500'}`}
-                >
-                  {!done && <LockIcon className="h-2.5 w-2.5" />}
-                  {formatThreshold(badge.unit, t.threshold)}
-                </span>
-              </li>
-            )
-          })}
-        </ol>
+        <BadgeTierLadder badge={badge} />
       </div>
     </div>
   )
@@ -205,9 +120,10 @@ function Detail({
 
 /**
  * "Badges de Fulano" (como no Discord): grade à esquerda, o badge escolhido
- * à direita com arte grande, tier, estatística, raridade e a escada. No seu
- * próprio perfil aparecem também os que dá para desbloquear e a barra de
- * progresso até o próximo tier.
+ * à direita com arte grande, tier, estatística, raridade e a escada. Só
+ * aparecem os badges já conquistados (o primeiro tier faz a categoria
+ * surgir); no seu próprio perfil, também a barra de progresso até o próximo
+ * tier. Os que faltam entram só como "N badges ocultos restantes".
  */
 function BadgesModal(): React.JSX.Element | null {
   const target = useBadgeStore((s) => s.modal)
@@ -215,6 +131,9 @@ function BadgesModal(): React.JSX.Element | null {
   const openModal = useBadgeStore((s) => s.openModal)
   const me = useAuthStore((s) => s.user)
   const badges = useBadgeStore((s) => (target ? s.byUser[target.userId]?.badges : undefined))
+  const hiddenRemaining = useBadgeStore((s) =>
+    target ? s.byUser[target.userId]?.hiddenRemaining : undefined
+  )
   // Escolha vale só para esta abertura do modal (target novo = escolha nova).
   const [picked, setPicked] = useState<{ target: BadgesModalTarget; category: string } | null>(null)
 
@@ -252,8 +171,8 @@ function BadgesModal(): React.JSX.Element | null {
   if (!target) return null
 
   const isMe = target.userId === me?.id
-  const { earned, available, visible } = visibleBadges(badges, isMe)
-  const selected = selectedBadge(visible, target, picked)
+  const earned = visibleBadges(badges)
+  const selected = selectedBadge(earned, target, picked)
   const select = (category: string): void => setPicked({ target, category })
 
   const viewMine = (): void => {
@@ -285,7 +204,7 @@ function BadgesModal(): React.JSX.Element | null {
           titleId={titleId}
           badges={badges}
           earned={earned}
-          available={available}
+          hiddenRemaining={hiddenRemaining}
           selected={selected}
           onSelect={select}
           canViewMine={Boolean(me)}
@@ -308,7 +227,7 @@ function BadgesModal(): React.JSX.Element | null {
             <BadgeDetailSkeleton />
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-gray-500">
-              {isMe ? 'Fique em call e converse para ganhar o primeiro.' : 'Nada por aqui ainda.'}
+              Nada por aqui ainda.
             </div>
           )}
         </section>

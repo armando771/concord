@@ -14,7 +14,6 @@ import { copyText } from '../../../shared/lib/clipboard'
 import CreatePollModal from './CreatePollModal'
 import type { ServerSticker } from '../api/stickers'
 import type { GiphyItem } from '../api/giphy'
-import { PollIcon, SmileyIcon } from '../../../shared/ui/icons'
 import { usePinStore } from '../store/pinStore'
 import {
   ACCEPT_ATTRIBUTE,
@@ -30,6 +29,7 @@ import { useAttachmentDraft } from '../hooks/useAttachmentDraft'
 import { useRoomDraft } from '../hooks/useRoomDraft'
 import { useRoomState } from '../hooks/useRoomState'
 import { useTypingSender } from '../hooks/useTypingSender'
+import { useFileDropZone } from '../hooks/useFileDropZone'
 import TypingIndicator from './TypingIndicator'
 import { reportSendFailure, type ReplyState } from '../lib/sendFailure'
 import {
@@ -57,9 +57,11 @@ import {
 } from './MessageListStates'
 import {
   AttachButton,
-  ChannelSlashSuggestions,
+  SlashCommandSuggestions,
   ComposerGate,
   MediaPicker,
+  MediaPickerButton,
+  PollButton,
   ReplyBar,
   SubmitButton,
   VoiceButton
@@ -101,7 +103,7 @@ interface ChatPaneProps {
   disabledReason?: string
   /** O que a pessoa pode neste canal (cargos). Sem isso (DM), vale o padrão do chat. */
   permissions?: ChatPermissions
-  /** Se falso (ex.: canais de sistema #avisos e #bot), esconde a ação de excluir mensagens. */
+  /** Se falso (ex.: canais de sistema #avisos e #musica), esconde a ação de excluir mensagens. */
   canDeleteMessages?: boolean
 }
 
@@ -167,9 +169,7 @@ function ChatPane({
   const typing = useTypingSender(room)
   const attachmentState = draftStatus(drafts)
   const submittable = canSubmit(draft, drafts)
-  // dragenter/dragleave disparam a cada filho; o contador evita piscar.
-  const dragDepth = useRef(0)
-  const [dragging, setDragging] = useState(false)
+  const drop = useFileDropZone(addFiles)
   const [sendingVoice, setSendingVoice] = useState(false)
   // Sala atual, para um envio que termina depois da troca de sala não limpar
   // o campo da sala nova.
@@ -469,36 +469,6 @@ function ChatPane({
     }
   }
 
-  const hasFiles = (e: React.DragEvent): boolean => e.dataTransfer.types.includes('Files')
-
-  const handleDragEnter = (e: React.DragEvent): void => {
-    if (!hasFiles(e)) return
-    e.preventDefault()
-    dragDepth.current += 1
-    setDragging(true)
-  }
-
-  const handleDragLeave = (e: React.DragEvent): void => {
-    if (!hasFiles(e)) return
-    dragDepth.current = Math.max(0, dragDepth.current - 1)
-    if (dragDepth.current === 0) setDragging(false)
-  }
-
-  const handleDrop = (e: React.DragEvent): void => {
-    if (!hasFiles(e)) return
-    e.preventDefault()
-    dragDepth.current = 0
-    setDragging(false)
-    addFiles(Array.from(e.dataTransfer.files))
-  }
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>): void => {
-    // Colar texto continua normal; só arquivo (ex.: print) vira anexo.
-    if (e.clipboardData.files.length === 0) return
-    e.preventDefault()
-    addFiles(Array.from(e.clipboardData.files))
-  }
-
   const handleStartReply = (message: Message): void => {
     setReplyState({ room, message })
     requestAnimationFrame(() => inputRef.current?.focus())
@@ -571,16 +541,8 @@ function ChatPane({
   const replyTargetAuthor = messageAuthorName(replyingTo, nicknames)
 
   return (
-    <div
-      className="relative flex min-h-0 flex-1 flex-col"
-      onDragEnter={handleDragEnter}
-      onDragOver={(e) => {
-        if (hasFiles(e)) e.preventDefault()
-      }}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
-      <DropOverlay visible={dragging} />
+    <div className="relative flex min-h-0 flex-1 flex-col" {...drop.zoneProps}>
+      <DropOverlay visible={drop.dragging} />
 
       <PinnedMessageBar
         pins={pins}
@@ -630,7 +592,7 @@ function ChatPane({
         </RoomLoadingGate>
       </div>
 
-      <div className="relative shrink-0 px-4">
+      <div className="relative shrink-0 px-4 max-md:px-2">
         <JumpToPresentButton
           visible={jump.visible}
           newCount={jump.newCount}
@@ -660,10 +622,11 @@ function ChatPane({
             />
             <form
             onSubmit={handleSubmit}
-            className="relative flex items-center gap-2 rounded-xl border border-subtle bg-input px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40"
+            className="relative flex items-center gap-2 rounded-xl border border-subtle bg-input px-3 py-2 backdrop-blur-xl focus-within:border-violet-500/40 max-md:gap-0.5 max-md:px-1 max-md:py-1"
           >
-            <ChannelSlashSuggestions
+            <SlashCommandSuggestions
               isChannel={isChannel}
+              canSendTTS={permissions.canSendTTS}
               mentionOpen={mention !== null}
               input={draft}
               onPick={(text) => {
@@ -686,15 +649,7 @@ function ChatPane({
                 e.target.value = ''
               }}
             />
-            <button
-              type="button"
-              onClick={() => setPollOpen(true)}
-              title="Criar enquete"
-              aria-label="Criar enquete"
-              className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-fg/10 hover:text-strong"
-            >
-              <PollIcon className="h-5 w-5" />
-            </button>
+            <PollButton onClick={() => setPollOpen(true)} />
             <input
               ref={inputRef}
               value={draft}
@@ -705,21 +660,13 @@ function ChatPane({
                 setHighlight(null)
               }}
               onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
+              onPaste={drop.onPaste}
               onBlur={() => setMention(null)}
               placeholder={composerPlaceholder(replyingTo !== null, replyTargetAuthor, placeholder)}
               maxLength={2000}
               className="min-w-0 flex-1 bg-transparent text-ds-chat text-strong placeholder:text-gray-500 outline-none"
             />
-            <button
-              type="button"
-              onClick={() => setMediaPickerOpen((v) => !v)}
-              title="Emojis, GIFs e Figurinhas"
-              aria-label="Emojis, GIFs e Figurinhas"
-              className="shrink-0 cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              <SmileyIcon className="h-5 w-5" />
-            </button>
+            <MediaPickerButton onClick={() => setMediaPickerOpen((v) => !v)} />
             <VoiceButton
               show={permissions.canAttach}
               room={room}

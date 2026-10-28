@@ -1,5 +1,5 @@
 import { useCallStore } from '../store/callStore'
-import { useNoiseSuppressionStore } from '../store/noiseSuppressionStore'
+import { useRnnoiseStatusStore } from '../store/rnnoiseStatusStore'
 import { useVoiceAudioStore } from '../store/voiceAudioStore'
 import { deviceOptions, type DeviceOption } from '../lib/audioDevices'
 import { thresholdDb } from '../lib/voiceActivity'
@@ -53,7 +53,7 @@ function VoiceSettings(): React.JSX.Element {
   const setDetectionEnabled = useVoiceAudioStore((s) => s.setDetectionEnabled)
   const sensitivity = useVoiceAudioStore((s) => s.sensitivity)
   const setSensitivity = useVoiceAudioStore((s) => s.setSensitivity)
-  const rnnoiseAvailable = useNoiseSuppressionStore((s) => s.available)
+  const rnnoiseAvailable = useRnnoiseStatusStore((s) => s.available)
   const threshold = thresholdDb(sensitivity)
 
   return (

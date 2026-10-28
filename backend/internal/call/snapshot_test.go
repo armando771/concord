@@ -36,3 +36,21 @@ func TestCallSnapshotsListActiveCallsOnly(t *testing.T) {
 		t.Fatalf("screen sharers = %v", snap.ScreenSharers)
 	}
 }
+
+func TestCallSnapshotsListWhoWatchesSomeoneElsesLive(t *testing.T) {
+	s := serviceWithCall("call-1", "ana", "bia", "caio", "duda")
+	s.screenSharers["call-1"] = map[string]struct{}{"ana": {}, "bia": {}}
+	s.calls["call-1"].screenWatchers = map[string]map[string]struct{}{
+		// bia assiste à própria transmissão: não conta.
+		"bia": {"bia": {}, "caio": {}},
+		// caio vê as duas lives e aparece uma vez só; eli já saiu da call.
+		"ana": {"caio": {}, "bia": {}, "eli": {}},
+		// duda ficou presa a uma live que já acabou.
+		"fabi": {"duda": {}},
+	}
+
+	got := s.CallSnapshots()[0].ScreenWatchers
+	if !reflect.DeepEqual(got, []string{"bia", "caio"}) {
+		t.Fatalf("screen watchers = %v, want bia (watching ana) and caio once", got)
+	}
+}

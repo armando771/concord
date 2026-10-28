@@ -59,7 +59,7 @@ export interface MessageBarInput {
   message: Message
   meId: string | null | undefined
   isEditing: boolean
-  /** Em canais de sistema (#avisos e #bot) nada pode ser excluído. */
+  /** Em canais de sistema (#avisos e #musica) nada pode ser excluído. */
   canDelete: boolean
   /** MANAGE_MESSAGES: apaga mensagem dos outros. */
   canModerate: boolean

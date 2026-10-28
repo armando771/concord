@@ -28,6 +28,8 @@ function message(p: UpdateBarViewProps): string {
       ? 'A chamada será interrompida ao reiniciar. Você voltará automaticamente ao canal.'
       : 'Atualizar agora vai te tirar da chamada. A Salinha reinicia em seguida.'
   }
+  // Baixando sozinho em segundo plano: o botão continua (instala ao terminar).
+  if (!p.ready && p.progress > 0) return `Baixando a versão ${p.version}… ${p.progress}%`
   return `Versão ${p.version} disponível`
 }
 
@@ -64,7 +66,8 @@ export function UpdateBarView(p: UpdateBarViewProps): React.JSX.Element {
 
 /**
  * Barra "Versão X disponível" acima do painel "Voz conectada". Fica visível
- * enquanto houver versão nova — não some com um "Depois".
+ * enquanto houver versão nova — não some com um "Depois". O main baixa sozinho:
+ * enquanto baixa mostra o progresso; pronta, o Atualizar instala na hora.
  */
 function UpdateBar(): React.JSX.Element | null {
   const version = useUpdateStore((s) => s.version)
