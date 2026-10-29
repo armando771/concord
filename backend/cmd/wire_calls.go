@@ -41,6 +41,10 @@ func (a *app) wireCalls() {
 	a.callService.SetInvitePoster(callInviteDM{conversations: a.conversationService, messages: a.messageService})
 	// AFK: XP de voz e badges de call param depois de 10 min sem falar.
 	a.callAFK = call.NewAFK(a.callService, time.Now)
+	// Quem não está na sala de mídia não fica na lista da call (app reaberto
+	// sem voltar, cliente travado).
+	a.callPresence = call.NewMediaPresence(a.callService, a.liveKitAdmin, time.Now)
+	go a.callPresence.Run(a.ctx, call.MediaSweepEvery)
 	callHandler := call.CallHandler(a.callService, a.liveKitTokens)
 	// Reinício do servidor não derruba quem está em chamada. Sem conseguir
 	// recarregar as chamadas o servidor não fica pronto (a porta nem abre):

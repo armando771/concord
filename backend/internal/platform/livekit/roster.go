@@ -26,3 +26,18 @@ func (a *Admin) participants(ctx context.Context, room string) ([]*lk.Participan
 	}
 	return res.GetParticipants(), nil
 }
+
+// Identities lista as identidades de quem está na sala (o id do usuário; o bot
+// de música é "bot-music:<canal>"). Sala desconhecida é ninguém; LiveKit fora
+// do ar é erro.
+func (a *Admin) Identities(ctx context.Context, room string) ([]string, error) {
+	participants, err := a.participants(ctx, room)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(participants))
+	for _, p := range participants {
+		out = append(out, p.GetIdentity())
+	}
+	return out, nil
+}

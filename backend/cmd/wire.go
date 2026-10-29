@@ -71,7 +71,9 @@ type app struct {
 	liveKitPort   string
 	callService   *call.Service
 	// callAFK: o tempo de call (XP e badges) visto sem quem está 10 min sem falar.
-	callAFK      *call.AFK
+	callAFK *call.AFK
+	// callPresence: tira da call quem não está na sala de mídia (#374).
+	callPresence *call.MediaPresence
 	musicManager *music.Manager
 	// guestService: convite de visitante para uma call.
 	guestService *guest.Service
