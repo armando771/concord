@@ -40,7 +40,6 @@ export const GUEST_COPY = {
   namePlaceholder: 'Como querem te chamar?',
   nameHint: 'De 2 a 32 caracteres.',
   join: 'Entrar na call',
-  joinAs: (name: string): string => `Entrar como ${name}`,
   joining: 'Entrando...',
   unavailableTitle: 'Link indisponível',
   unavailable: 'Este link não existe mais, foi revogado ou já expirou.',
@@ -62,7 +61,38 @@ export const GUEST_COPY = {
     revoked: 'O link de convite foi revogado.',
     removed: 'Você foi removido da call.'
   } as Record<string, string>,
-  endedFallback: 'Seu acesso de visitante foi encerrado.'
+  endedFallback: 'Seu acesso de visitante foi encerrado.',
+  refused: 'Visitantes não podem fazer isso na call.',
+  // Visitante sem conta: sair e a tela final
+  closeLabel: 'Sair da call de visitante',
+  leaveTitle: 'Sair da call?',
+  leaveBody:
+    'Você sai da call e o acesso de visitante termina neste navegador. Para voltar, abra o link de novo.',
+  leaveConfirm: 'Sair',
+  stay: 'Continuar na call',
+  exit: 'Sair',
+  leftFinalTitle: 'Você saiu da call',
+  leftFinalBody: 'Seu acesso de visitante foi encerrado neste navegador.',
+  finalPitch: 'Com uma conta, você guarda amigos, servidores e conversas.',
+  createAccount: 'Criar conta no Salinha',
+  signIn: 'Entrar',
+  // Quem tem conta: a visita dentro do app
+  confirmTitle: (channel: string, server: string): string =>
+    `Entrar na call de #${channel} em ${server} como visitante?`,
+  confirmBody: (inviter: string): string =>
+    `${inviter} convidou você. Você entra só nesta call: os chats e os outros canais do servidor continuam fechados.`,
+  notNow: 'Agora não',
+  railSection: 'Visitas',
+  railLabel: (server: string): string => `${server} (visitante)`,
+  lobbyTitle: (server: string): string => `Você é visitante em ${server}`,
+  lobbyBody: (channel: string): string => `Só a call de #${channel} fica aberta para você.`,
+  sidebarHint: 'Só a call do convite fica aberta para você.',
+  visitEnded: {
+    expired: (server: string): string => `Sua visita em ${server} terminou.`,
+    revoked: (server: string): string => `O link de visitante de ${server} foi revogado.`,
+    removed: (server: string): string => `Você foi removido da call em ${server}.`
+  } as Record<string, (server: string) => string>,
+  visitEndedFallback: 'Sua visita terminou.'
 }
 
 /** Prazos que dá para escolher (os mesmos do servidor). */
@@ -75,8 +105,13 @@ export const DURATION_OPTIONS = [
 
 export type GuestDuration = (typeof DURATION_OPTIONS)[number]['value']
 
-/** Texto do botão de entrar: entrando, com a conta logada ou com o nome. */
-export function joinButtonLabel(joining: boolean, accountName: string | null): string {
-  if (joining) return GUEST_COPY.joining
-  return accountName ? GUEST_COPY.joinAs(accountName) : GUEST_COPY.join
+/** Texto do botão de entrar (visitante sem conta, com o nome digitado). */
+export function joinButtonLabel(joining: boolean): string {
+  return joining ? GUEST_COPY.joining : GUEST_COPY.join
+}
+
+/** Título e texto da tela final: saiu ('left') ou o acesso acabou (prazo, revogado, expulso). */
+export function endedTexts(reason: string): { title: string; body: string } {
+  if (reason === 'left') return { title: GUEST_COPY.leftFinalTitle, body: GUEST_COPY.leftFinalBody }
+  return { title: GUEST_COPY.endedTitle, body: GUEST_COPY.ended[reason] ?? GUEST_COPY.endedFallback }
 }

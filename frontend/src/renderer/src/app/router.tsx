@@ -17,6 +17,8 @@ import VerifyEmail from '../features/auth/pages/VerifyEmail'
 import InviteLanding from '../features/servers/pages/InviteLanding'
 import GuestLanding from '../features/guests/pages/GuestLanding'
 import GuestSessionGate from '../features/guests/components/GuestSessionGate'
+import GuestVisitPage from '../features/guests/pages/GuestVisitPage'
+import GuestVisitRedirect from '../features/guests/components/GuestVisitRedirect'
 import RequireAuth from '../features/auth/components/RequireAuth'
 import RedirectIfAuthed from '../features/auth/components/RedirectIfAuthed'
 import AppShell from './AppShell'
@@ -82,8 +84,25 @@ export const router = createRouter([
       },
       { path: 'dm/:userId', element: <DmChat /> },
       { path: 'dm/c/:conversationId', element: <GroupChat /> },
-      { path: 'servers/:id', element: <ServerView /> },
-      { path: 'servers/:id/channels/:channelId', element: <ServerView /> }
+      // Servidor em que a conta é só visitante abre a visita (/visitas/…).
+      {
+        path: 'servers/:id',
+        element: (
+          <GuestVisitRedirect>
+            <ServerView />
+          </GuestVisitRedirect>
+        )
+      },
+      {
+        path: 'servers/:id/channels/:channelId',
+        element: (
+          <GuestVisitRedirect>
+            <ServerView />
+          </GuestVisitRedirect>
+        )
+      },
+      // Link de visitante de quem tem conta: só a call do convite, dentro do app.
+      { path: 'visitas/:serverId', element: <GuestVisitPage /> }
     ]
   },
   {
@@ -122,7 +141,8 @@ export const router = createRouter([
     errorElement: <RouteErrorScreen />
   },
   {
-    // Link de visitante para uma call: abre sem login (só a call, sem o app).
+    // Link de visitante para uma call: sem conta, só a call; com conta, a
+    // confirmação dentro do app.
     path: '/visitante/:token',
     element: <GuestLanding />,
     errorElement: <RouteErrorScreen />

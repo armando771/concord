@@ -1,5 +1,6 @@
 ## Novidades
 
+- Visitante: com conta, o link de visitante abre dentro do app. A visita vira um item na seção "Visitas" da barra lateral e dá para ir às suas DMs e servidores sem cair da call. Sem conta, "Sair" e o X funcionam e levam a uma tela para criar conta ou entrar.
 - Perfil: nova predefinição de tema Pride, com fundo arco-íris do orgulho.
 - O Maestro volta sozinho e continua a música depois de uma atualização do servidor.
 - No Windows, a detecção da música ficou mais leve.

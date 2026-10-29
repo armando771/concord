@@ -20,12 +20,20 @@ export type NavigationAction = 'PUSH' | 'REPLACE' | 'POP'
 export function sectionOf(path: string): string {
   const server = /^\/servers\/([^/]+)/.exec(path)
   if (server) return `server:${server[1]}`
+  const visit = /^\/visitas\/([^/]+)/.exec(path)
+  if (visit) return `visit:${visit[1]}`
   if (isHubPath(path)) return 'improvements'
   return 'home'
 }
 
-// Rotas que são uma conversa/tela própria (não só "a lista daquele lugar").
-const CONTENT_PATHS = [/^\/servers\/[^/]+\/channels\//, /^\/dm\//]
+/** O tipo da seção ('server', 'visit', 'improvements' ou 'home'): a coluna da esquerda. */
+export function sectionKind(path: string): string {
+  return sectionOf(path).split(':')[0]
+}
+
+// Rotas que são uma conversa/tela própria (não só "a lista daquele lugar"). A
+// visita de visitante só tem a call: abre direto nela.
+const CONTENT_PATHS = [/^\/servers\/[^/]+\/channels\//, /^\/dm\//, /^\/visitas\//]
 
 // A aba do diamante (Melhorias, Propostas, Novidades, Rank global) não tem lista
 // própria: abre direto no conteúdo, e cada tela volta ao hub pelo próprio botão.

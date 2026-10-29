@@ -5,6 +5,7 @@ import type { GuestDuration } from '../lib/guestCopy'
 export interface GuestPass {
   server_id: string
   server_name: string
+  server_icon_url?: string | null
   channel_id: string
   channel_name: string
   expires_at: string
