@@ -6,6 +6,7 @@ import {
   codecSubtype,
   fps,
   num,
+  recoveryRows,
   resolution,
   text,
   type ScreenStatsSample,
@@ -139,7 +140,8 @@ function senderRows(
     { label: 'Codificador', value: encoder },
     ...backupRows(encoders),
     { label: 'Limitação', value: limitationLabel(text(stat.qualityLimitationReason)) },
-    ...averageQp(now, prev)
+    ...averageQp(now, prev),
+    ...recoveryRows(stat, 'keyFramesEncoded')
   ]
 }
 

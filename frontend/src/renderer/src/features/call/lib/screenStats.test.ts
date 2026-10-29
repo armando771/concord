@@ -147,7 +147,9 @@ describe('screenStatsView — quem transmite', () => {
       { label: 'Codec', value: 'H.264 · placa de vídeo' },
       { label: 'Codificador', value: 'Hardware · MediaFoundationVideoEncodeAccelerator' },
       { label: 'Limitação', value: 'Nenhuma' },
-      { label: 'QP médio', value: '26' }
+      { label: 'QP médio', value: '26' },
+      { label: 'Quadros-chave/PLI', value: '—' },
+      { label: 'NACK', value: '—' }
     ])
   })
 
@@ -247,6 +249,15 @@ describe('screenStatsView — quem transmite', () => {
     expect(value(view, 'Reserva')).toBe('H.264 · processador · 720p 30 fps')
   })
 
+  it('quadros-chave enviados e PLI recebidos (cada PLI pede um quadro-chave)', () => {
+    const { view } = screenStatsView(
+      sender([h264, outbound({ keyFramesEncoded: 7, pliCount: 6, nackCount: 2 })]),
+      null
+    )
+    expect(value(view, 'Quadros-chave/PLI')).toBe('7 / 6')
+    expect(value(view, 'NACK')).toBe('2')
+  })
+
   it('envio pausado porque ninguém está assistindo: diz isso em vez de "Ainda sem dados"', () => {
     // Regressão: o dynacast pausa a camada (active: false) quando ninguém vê a
     // live; o painel descartava o envio e mostrava só "Ainda sem dados".
@@ -326,7 +337,11 @@ describe('screenStatsView — quem assiste', () => {
       { label: 'Perda', value: '0,5%' },
       { label: 'Jitter', value: '12 ms' },
       { label: 'Descartados', value: '3' },
-      { label: 'Congelamentos', value: '2 (1,3 s)' }
+      { label: 'Congelamentos', value: '2 (1,3 s)' },
+      { label: 'Quadros-chave/PLI', value: '—' },
+      { label: 'NACK', value: '—' },
+      { label: 'Fora de ordem', value: '—' },
+      { label: 'Buffer', value: '—' }
     ])
   })
 
@@ -356,6 +371,28 @@ describe('screenStatsView — quem assiste', () => {
     expect(value(view, 'Codificado')).toBe('Na placa de vídeo')
     expect(value(view, 'Saindo em')).toBe('720p 30 (reserva)')
     expect(value(view, 'Decodificador')).toBe('Software · FFmpeg')
+  })
+
+  it('diagnóstico de congelamento: quadros-chave/PLI, NACK, pacotes fora de hora e buffer', () => {
+    const { view } = screenStatsView(
+      receiver([
+        h264,
+        inbound({
+          keyFramesDecoded: 12,
+          pliCount: 9,
+          firCount: 1,
+          nackCount: 40,
+          packetsDiscarded: 3,
+          jitterBufferDelay: 9,
+          jitterBufferEmittedCount: 100
+        })
+      ]),
+      null
+    )
+    expect(value(view, 'Quadros-chave/PLI')).toBe('12 / 10')
+    expect(value(view, 'NACK')).toBe('40')
+    expect(value(view, 'Fora de ordem')).toBe('3')
+    expect(value(view, 'Buffer')).toBe('90 ms')
   })
 
   it('perda só do intervalo (não acumulada desde o início)', () => {

@@ -7,6 +7,7 @@ import {
   decimal,
   fps,
   num,
+  recoveryRows,
   resolution,
   text,
   type ScreenStatsSample,
@@ -34,6 +35,13 @@ function freezes(stat: Stat): string {
  * decodificador fica na linha dele. Antes o "· processador" do decodificador
  * local parecia ser o codificador de quem transmite.
  */
+/** Espera média no buffer de jitter (desde o início da recepção). */
+function bufferDelay(stat: Stat): string {
+  const delay = num(stat.jitterBufferDelay)
+  const emitted = num(stat.jitterBufferEmittedCount)
+  return delay === null || !emitted ? '—' : `${Math.round((delay / emitted) * 1000)} ms`
+}
+
 export function receiverRows(
   report: RTCStatsReport,
   encoder: ScreenEncoderInfo | null,
@@ -56,6 +64,10 @@ export function receiverRows(
     { label: 'Perda', value: lossPercent(now, prev) },
     { label: 'Jitter', value: jitter === null ? '—' : `${Math.round(jitter * 1000)} ms` },
     { label: 'Descartados', value: String(num(stat.framesDropped) ?? '—') },
-    { label: 'Congelamentos', value: freezes(stat) }
+    { label: 'Congelamentos', value: freezes(stat) },
+    ...recoveryRows(stat, 'keyFramesDecoded'),
+    // Chegaram cedo ou tarde demais para o buffer (fora de ordem/atrasados).
+    { label: 'Fora de ordem', value: String(num(stat.packetsDiscarded) ?? '—') },
+    { label: 'Buffer', value: bufferDelay(stat) }
   ]
 }

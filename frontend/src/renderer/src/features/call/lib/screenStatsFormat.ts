@@ -86,3 +86,25 @@ export function fps(stat: Stat): string {
   const value = num(stat.framesPerSecond)
   return value === null ? '—' : String(Math.round(value))
 }
+
+const count = (value: unknown): string => {
+  const n = num(value)
+  return n === null ? '—' : String(n)
+}
+
+/**
+ * Quadros-chave e pedidos de quadro-chave (PLI + FIR) e retransmissões
+ * (NACK): para cruzar com os congelamentos (cada pedido custa um quadro
+ * grande; muitos seguidos = vídeo travando à espera dele).
+ */
+export function recoveryRows(stat: Stat, keyFramesKey: string): StatRow[] {
+  const pli = num(stat.pliCount)
+  const requests = pli === null ? null : pli + (num(stat.firCount) ?? 0)
+  const keyFrames = num(stat[keyFramesKey])
+  const value =
+    keyFrames === null && requests === null ? '—' : `${count(keyFrames)} / ${count(requests)}`
+  return [
+    { label: 'Quadros-chave/PLI', value },
+    { label: 'NACK', value: count(stat.nackCount) }
+  ]
+}
