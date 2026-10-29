@@ -91,6 +91,7 @@ func scanMessageRow(row scannable, extra ...any) (Message, error) {
 		&msg.GifURL,
 		&rawGifMeta,
 		&msg.TTS,
+		&msg.TTSVoiceChannelID,
 		&rawCallInvite,
 	}
 	if err := row.Scan(append(dest, extra...)...); err != nil {

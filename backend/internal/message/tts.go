@@ -13,7 +13,7 @@ import (
 )
 
 // Mensagens /tts (docs/adr/0012-tts-no-cliente.md): mensagem comum com
-// messages.tts = true; o app de quem está em call lê o texto em voz.
+// messages.tts = true; o app de quem está na call de origem lê o texto em voz.
 const (
 	// TTSMaxLength: limite do texto falado, em caracteres.
 	TTSMaxLength = 200
@@ -90,29 +90,55 @@ func (c *ttsCooldown) Release(userID string) {
 	c.mu.Unlock()
 }
 
+// TTSCalls: o que o TTS precisa saber das calls para decidir quem ouve.
+type TTSCalls interface {
+	// IsVoiceChannel: o canal é de voz?
+	IsVoiceChannel(ctx context.Context, channelID string) bool
+	// VoiceChannelOf: o canal de voz (e o servidor) em que a pessoa está em call.
+	VoiceChannelOf(userID string) (channelID, serverID string, ok bool)
+}
+
 // TTSService cria as mensagens TTS. Quem chama já conferiu a permissão.
 type TTSService struct {
 	store     inviteStore
 	channels  ChannelResolver
 	convs     ConversationResolver
+	calls     TTSCalls
 	publisher EventPublisher
 	cooldown  *ttsCooldown
 }
 
-func NewTTSService(repository *Repository, publisher EventPublisher, channels ChannelResolver, convs ConversationResolver) *TTSService {
+func NewTTSService(repository *Repository, publisher EventPublisher, channels ChannelResolver, convs ConversationResolver, calls TTSCalls) *TTSService {
 	return &TTSService{
 		store:     repository,
 		channels:  channels,
 		convs:     convs,
+		calls:     calls,
 		publisher: publisher,
 		cooldown:  newTTSCooldown(TTSCooldown, time.Now),
 	}
 }
 
-// SendToChannel posta a TTS no canal; o message:create vai para quem vê o canal.
+// voiceTarget: o canal de voz cuja call ouve a TTS do canal (issue #384). No
+// chat de um canal de voz é a call daquele canal; num canal de texto, a call
+// em que o autor está, se for do mesmo servidor. nil = ninguém ouve.
+func (s *TTSService) voiceTarget(ctx context.Context, channelID, serverID, authorID string) *string {
+	if s.calls.IsVoiceChannel(ctx, channelID) {
+		return &channelID
+	}
+	if voiceID, voiceServer, ok := s.calls.VoiceChannelOf(authorID); ok && voiceServer == serverID {
+		return &voiceID
+	}
+	return nil
+}
+
+// SendToChannel posta a TTS no canal; o message:create vai para quem vê o
+// canal e só a call de voiceTarget fala.
 func (s *TTSService) SendToChannel(ctx context.Context, channelID, authorID, content string) (*Message, error) {
 	return s.send(ctx, authorID, content, func(text string) (*Message, error) {
-		msg := &Message{ID: uuid.New().String(), AuthorID: authorID, ChannelID: &channelID, Content: text, TTS: true}
+		serverID, _ := s.channels.ChannelServerID(ctx, channelID)
+		msg := &Message{ID: uuid.New().String(), AuthorID: authorID, ChannelID: &channelID, Content: text, TTS: true,
+			TTSVoiceChannelID: s.voiceTarget(ctx, channelID, serverID, authorID)}
 		if err := s.store.Create(ctx, msg); err != nil {
 			return nil, err
 		}
@@ -120,7 +146,6 @@ func (s *TTSService) SendToChannel(ctx context.Context, channelID, authorID, con
 		if err != nil {
 			return nil, err
 		}
-		serverID, _ := s.channels.ChannelServerID(ctx, channelID)
 		s.publisher.PublishMessageCreate(CreateEvent{ChannelID: full.ChannelID, ServerID: serverID, Message: *full})
 		return full, nil
 	})

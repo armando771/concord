@@ -25,6 +25,8 @@ func TestValidate(t *testing.T) {
 		{"fundo degradê com duas", Theme{Border: "none", Background: "gradient", BackgroundColors: []string{"#1e1b4b", "#0f172a"}, Effect: "sparkles"}, true},
 		{"fundo degradê com três", Theme{Border: "none", Background: "gradient", BackgroundColors: []string{"#111111", "#222222", "#333333"}, Effect: "none"}, false},
 		{"fundo padrão com cor", Theme{Border: "none", Background: "default", BackgroundColors: []string{"#111111"}, Effect: "none"}, false},
+		{"fundo pride sem cor", Theme{Border: "rainbow", Background: "pride", Effect: "confetti"}, true},
+		{"fundo pride com cor", Theme{Border: "none", Background: "pride", BackgroundColors: []string{"#111111"}, Effect: "none"}, false},
 		{"fundo sólido", Theme{Border: "none", Background: "solid", BackgroundColors: []string{"#abcdef"}, Effect: "particles"}, true},
 		{"borda inexistente", Theme{Border: "dotted", Background: "default", Effect: "none"}, false},
 		{"fundo inexistente", Theme{Border: "none", Background: "image", Effect: "none"}, false},

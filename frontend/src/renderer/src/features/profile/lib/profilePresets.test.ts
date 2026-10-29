@@ -29,6 +29,17 @@ describe('predefinições novas', () => {
       expect(used.has(id), id).toBe(true)
     }
   })
+  it('Pride: fundo arco-íris do orgulho, borda arco-íris e confete', () => {
+    const pride = PROFILE_PRESETS.find((p) => p.id === 'pride')
+    expect(pride?.label).toBe('Pride')
+    expect(pride?.theme).toMatchObject({
+      background: 'pride',
+      background_colors: [],
+      border: 'rainbow',
+      border_width: 3,
+      effect: 'confetti'
+    })
+  })
   it('IDs e nomes únicos', () => {
     expect(new Set(PROFILE_PRESETS.map((p) => p.id)).size).toBe(PROFILE_PRESETS.length)
     expect(new Set(PROFILE_PRESETS.map((p) => p.label)).size).toBe(PROFILE_PRESETS.length)

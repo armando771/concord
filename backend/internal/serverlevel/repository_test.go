@@ -50,17 +50,15 @@ func (w *world) exec(sql string, args ...any) {
 	}
 }
 
-// user cria uma pessoa; real = e-mail confirmado e conta de 30 dias.
+// user cria uma pessoa; real = e-mail confirmado e conta de 30 dias (a outra
+// tem 12 horas, abaixo das 24 h da conta real).
 func (w *world) user(real bool) string {
 	w.t.Helper()
 	id := uuid.NewString()
 	name := "sl" + strings.ReplaceAll(id, "-", "")[:12]
-	age := "1 day"
-	if real {
-		age = "30 days"
-	}
-	w.exec(`INSERT INTO users (id, username, display_name, email, password_hash, email_verified_at, created_at)
-		VALUES ($1, $2::text, $2::text, $2::text || '@ex.com', 'x', NOW(), NOW() - $3::interval)`, id, name, age)
+	// Conta real é a que confirmou o e-mail, mesmo recém-criada.
+	w.exec(`INSERT INTO users (id, username, display_name, email, password_hash, email_verified_at)
+		VALUES ($1, $2::text, $2::text, $2::text || '@ex.com', 'x', CASE WHEN $3 THEN NOW() END)`, id, name, real)
 	w.t.Cleanup(func() {
 		w.db.Exec(w.ctx, `DELETE FROM messages WHERE author_id = $1`, id)
 		w.db.Exec(w.ctx, `DELETE FROM users WHERE id = $1`, id)
@@ -200,8 +198,8 @@ func TestRepositoryMembroNovoUmaVezPorPessoa(t *testing.T) {
 		t.Errorf("xp = %d, quer 50 depois de sair e voltar", got)
 	}
 
-	// Virou conta real depois: conta agora.
-	w.exec(`UPDATE users SET created_at = NOW() - INTERVAL '8 days' WHERE id = $1`, nova)
+	// Confirmou o e-mail depois: conta agora.
+	w.exec(`UPDATE users SET email_verified_at = NOW() WHERE id = $1`, nova)
 	if err := repo.GrantNewMembers(w.ctx); err != nil {
 		t.Fatal(err)
 	}

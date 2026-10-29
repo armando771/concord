@@ -76,8 +76,18 @@ func (s *mgrSource) Search(context.Context, string, int) ([]Track, error) {
 func newTestManager(t *testing.T, inVoice bool, enabled bool) (*Manager, *fakeHub) {
 	t.Helper()
 	hub := &fakeHub{}
-	cfg := Config{CacheDir: t.TempDir(), MaxPlayers: 1, QueueMax: 100, IdleTimeout: time.Minute}
-	deps := ManagerDeps{
+	m := NewManager(testConfig(t), testDeps(hub, inVoice, enabled))
+	t.Cleanup(func() { m.OnCallEnded("call1") })
+	return m, hub
+}
+
+func testConfig(t *testing.T) Config {
+	return Config{CacheDir: t.TempDir(), MaxPlayers: 1, QueueMax: 100, IdleTimeout: time.Minute}
+}
+
+// testDeps: um usuário (u1) na voz1 da call1 do srv1, tudo em memória.
+func testDeps(hub *fakeHub, inVoice bool, enabled bool) ManagerDeps {
+	return ManagerDeps{
 		Locate: func(userID string) (Location, bool) {
 			return Location{CallID: "call1", ChannelID: "voz1", ServerID: "srv1"}, inVoice
 		},
@@ -98,7 +108,7 @@ func newTestManager(t *testing.T, inVoice bool, enabled bool) (*Manager, *fakeHu
 		BroadcastToCall: func(c string, e []byte) { hub.record("call:"+c, e) },
 		BroadcastToRoom: func(r string, e []byte) { hub.record(r, e) },
 		Source:          &mgrSource{fakeSource{fail: map[string]bool{}}},
-		Prepare: func(context.Context, string) (io.ReadCloser, error) {
+		Prepare: func(context.Context, string, time.Duration) (io.ReadCloser, error) {
 			return src(30, 0.1), nil
 		},
 		NewOutput: func(_ context.Context, _, _ string, s FrameSource) (Output, error) {
@@ -106,9 +116,6 @@ func newTestManager(t *testing.T, inVoice bool, enabled bool) (*Manager, *fakeHu
 		},
 		Available: func() bool { return true },
 	}
-	m := NewManager(cfg, deps)
-	t.Cleanup(func() { m.OnCallEnded("call1") })
-	return m, hub
 }
 
 func waitReply(t *testing.T, hub *fakeHub) string {

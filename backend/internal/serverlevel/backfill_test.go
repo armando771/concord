@@ -37,14 +37,14 @@ func TestBackfillCalculaOXPInicialSemAvisarSubida(t *testing.T) {
 			t.Fatalf("%s: %v", sql, err)
 		}
 	}
-	user := func(age string, bot bool) string {
+	user := func(verified, bot bool) string {
 		id := uuid.NewString()
 		name := "bf" + strings.ReplaceAll(id, "-", "")[:12]
-		exec(`INSERT INTO users (id, username, display_name, email, password_hash, email_verified_at, created_at, is_bot)
-			VALUES ($1, $2::text, $2::text, $2::text || '@ex.com', 'x', NOW(), NOW() - $3::interval, $4)`, id, name, age, bot)
+		exec(`INSERT INTO users (id, username, display_name, email, password_hash, email_verified_at, is_bot)
+			VALUES ($1, $2::text, $2::text, $2::text || '@ex.com', 'x', CASE WHEN $3 THEN NOW() END, $4)`, id, name, verified, bot)
 		return id
 	}
-	ana, bia, nova, bot := user("60 days", false), user("60 days", false), user("1 day", false), user("60 days", true)
+	ana, bia, nova, bot := user(true, false), user(true, false), user(false, false), user(true, true)
 	server, channel := uuid.NewString(), uuid.NewString()
 	exec(`INSERT INTO servers (id, name, owner_id) VALUES ($1, 'bf', $2)`, server, ana)
 	exec(`INSERT INTO channels (id, server_id, name, created_by) VALUES ($1, $2, 'geral', $3)`, channel, server, ana)
@@ -57,7 +57,7 @@ func TestBackfillCalculaOXPInicialSemAvisarSubida(t *testing.T) {
 	msg(ana, "oi", "40 days 3 hours")
 	msg(ana, "oi", "40 days 2 hours 30 minutes") // repetida em < 1 h: não conta
 	msg(ana, "oi", "40 days 1 hour")             // repetida depois de 1 h: conta
-	msg(nova, "oi", "40 days")                   // conta não real
+	msg(nova, "oi", "40 days")                   // sem e-mail confirmado
 	msg(bot, "oi", "40 days")                    // bot
 	for i := 0; i < 60; i++ {                    // 60 mensagens no mesmo dia: teto de 100 XP
 		msg(bia, "msg "+uuid.NewString(), "20 days")
@@ -89,6 +89,6 @@ func TestBackfillCalculaOXPInicialSemAvisarSubida(t *testing.T) {
 		t.Fatal(err)
 	}
 	if members != 2 {
-		t.Errorf("membros contados = %d, quer 2 (sem a conta nova e o bot)", members)
+		t.Errorf("membros contados = %d, quer 2 (sem a conta sem e-mail e o bot)", members)
 	}
 }

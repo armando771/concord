@@ -27,6 +27,7 @@ func (a *app) wireMusic() {
 		BroadcastToCall: a.hub.BroadcastToCall,
 		BroadcastToRoom: a.hub.BroadcastToRoom,
 		Tokens:          a.liveKitTokens,
+		Sessions:        music.NewSessionRepository(a.db),
 	})
 	a.callService.OnParticipantLeft(a.musicManager.OnParticipantLeft)
 	a.callService.OnCallEnded(a.musicManager.OnCallEnded)
@@ -37,6 +38,23 @@ func (a *app) wireMusic() {
 	a.route(func(_ *gin.Engine, api *gin.RouterGroup) {
 		music.Routes(api, music.NewHandler(a.musicManager, a.authService), a.authMiddleware)
 	})
+}
+
+// wireMusicSessions: o Maestro volta sozinho aos canais depois de o servidor
+// reiniciar (docs/adr/0019-maestro-retoma-apos-reinicio.md). Roda depois de
+// wireCalls (as calls já estão recarregadas); no desligamento grava onde cada
+// player estava e o processo espera junto com os badges, antes de o banco fechar.
+func (a *app) wireMusicSessions() {
+	before := a.badgeDone
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		a.musicManager.RunSessions(a.ctx)
+		if before != nil {
+			<-before
+		}
+	}()
+	a.badgeDone = done
 }
 
 // callListeners: quem está ouvindo (não surdo) na call, pela mesma foto que

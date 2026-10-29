@@ -10,7 +10,7 @@ com o uso dele (membros novos, mensagens, figurinhas, sons, tempo em call,
 lives e quem assiste) e nunca pelo nível de quem entrou. Forças:
 
 - **Anti-farm**: o XP de usuário e os badges já têm regras (conta real = e-mail
-  confirmado e 7 dias de conta; mensagem repetida em < 1 h não conta; apagada
+  confirmado, sem prazo de idade, ver 000170; mensagem repetida em < 1 h não conta; apagada
   em ≤ 2 min desconta; AFK de 10 min; "mais alguém ouvindo"). Duplicá-las
   geraria divergência.
 - **Uma pessoa não pode explodir o nível** de um servidor sozinha.
@@ -80,8 +80,12 @@ Opção 3, num pacote novo `internal/serverlevel` (fora de `internal/level`).
   usuário em cascata não quebra. Desconto num dia diferente do envio (enviada
   23:59, apagada 00:01) não desconta; e apagar algo que tinha batido no teto
   desconta mesmo assim (a favor do anti-farm).
-- Quem tem conta nova (< 7 dias) não faz o servidor subir até a conta virar
-  real; o XP de membro novo vem quando virar.
+- Quem ainda não confirmou o e-mail não faz o servidor subir até confirmar;
+  o XP de membro novo vem quando confirmar.
+- O prazo da conta real caiu de 7 dias para 24 horas (migration 000165) e depois
+  foi removido (000170): conta real é quem confirmou o e-mail. Com 7 dias o
+  Salinha, novo, não tinha nenhuma conta real e o nível ficava em 0. Sem
+  retroativo: o XP que ficou de fora não volta, a regra nova vale daqui para a frente.
 - Até 1 min de tempo de call pode se perder num desligamento que não grave a
   tempo (o desligamento espera, como os badges).
 

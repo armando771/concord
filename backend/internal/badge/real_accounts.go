@@ -11,8 +11,16 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Conta real (anti-farm do Festeiro): e-mail confirmado e conta criada há
-// 7 dias ou mais. Só elas fazem número no pico da call e levam o crédito.
+// Conta real (anti-farm do Festeiro, do Amigos e do nível do servidor): não
+// é bot e confirmou o e-mail, sem prazo de idade da conta. Só elas fazem
+// número no pico da call, contam como amigo e dão XP ao servidor. A função SQL
+// server_level_real (migration 000170) tem a mesma regra; contareal_test.go
+// trava os dois.
+
+// contaRealSQL é a condição "u é conta real" (alias da tabela de users).
+func contaRealSQL(alias string) string {
+	return fmt.Sprintf("(NOT %[1]s.is_bot AND %[1]s.email_verified_at IS NOT NULL)", alias)
+}
 
 // RealAccountSource diz quais destes usuários são contas reais (Repository).
 type RealAccountSource interface {
@@ -20,7 +28,7 @@ type RealAccountSource interface {
 }
 
 const (
-	// Uma conta nova vira real em até 10 min depois de fazer 7 dias.
+	// Quem confirma o e-mail vira conta real em até 10 min.
 	realAccountTTL     = 10 * time.Minute
 	realAccountTimeout = 2 * time.Second
 	realAccountErrLog  = 10 * time.Minute
@@ -108,15 +116,13 @@ func (r *RealAccountCache) refresh(ctx context.Context, ids []string, now time.T
 	}
 }
 
-// RealAccounts: quais destes usuários têm e-mail confirmado e conta com 7
-// dias ou mais (a mesma regra do Amigos: amigoContaRealDias).
+// RealAccounts: quais destes usuários são contas reais.
 func (r *Repository) RealAccounts(ctx context.Context, userIDs []string) (map[string]bool, error) {
 	// Erro do Query volta pelo CollectRows (idioma do pgx).
 	rows, _ := r.db.Query(ctx, `
-		SELECT id::text FROM users
-		WHERE id = ANY($1::uuid[])
-		  AND email_verified_at IS NOT NULL
-		  AND created_at <= now() - make_interval(days => $2)`, userIDs, amigoContaRealDias)
+		SELECT u.id::text FROM users u
+		WHERE u.id = ANY($1::uuid[])
+		  AND `+contaRealSQL("u"), userIDs)
 	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
 	if err != nil {
 		return nil, fmt.Errorf("contas reais: %w", err)
