@@ -208,6 +208,14 @@ describe('FriendsScreen', () => {
     expect(onBack).toHaveBeenCalled()
   })
 
+  it('a área da pessoa tem pelo menos 44 dp de altura e o leitor de tela ouve também o subtítulo', async () => {
+    await render(<FriendsScreen onBack={onBack} onOpenConversation={onOpenConversation} onOpenProfile={jest.fn()} />)
+    expect(await screen.findByRole('button', { name: 'Ana' })).toHaveStyle({ minHeight: 44 })
+    await tab('Pendentes')
+    expect(await screen.findByRole('button', { name: 'Caio, Pedido recebido' })).toBeOnTheScreen()
+    expect(screen.getByRole('button', { name: 'Duda, Pedido enviado' })).toBeOnTheScreen()
+  })
+
   it('tocar numa pessoa abre o perfil dela (amigos, pendentes e bloqueados)', async () => {
     const onOpenProfile = jest.fn()
     await render(<FriendsScreen onBack={onBack} onOpenConversation={onOpenConversation} onOpenProfile={onOpenProfile} />)

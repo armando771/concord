@@ -14,6 +14,16 @@ describe('ProfileTap', () => {
     expect(onOpen).toHaveBeenCalledWith('u1')
   })
 
+  it('a área de toque passa de 44 dp mesmo em conteúdo pequeno (nome em texto)', async () => {
+    await render(
+      <ProfileTap userId="u1" label="Ana" onOpen={jest.fn()}>
+        <Text>Ana</Text>
+      </ProfileTap>
+    )
+    const { top, bottom } = screen.getByRole('button', { name: 'Ana' }).props.hitSlop
+    expect(top + bottom + 18).toBeGreaterThanOrEqual(44)
+  })
+
   it('sem onOpen ou sem id: só mostra o conteúdo, sem botão', async () => {
     await render(
       <>

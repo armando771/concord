@@ -20,6 +20,12 @@ describe('mediaSrc', () => {
     expect(mediaSrc('/api/profile-media/a_1', { animate: false })).toBe('http://localhost:8080/api/profile-media/a_1/static')
   })
 
+  it('o quadro parado entra antes da query string', () => {
+    expect(mediaSrc('/api/profile-media/a_1?v=2', { animate: false })).toBe(
+      'http://localhost:8080/api/profile-media/a_1/static?v=2'
+    )
+  })
+
   it('imagem que não anima fica igual nos dois modos', () => {
     expect(mediaSrc('/api/profile-media/abc', { animate: false })).toBe('http://localhost:8080/api/profile-media/abc')
   })

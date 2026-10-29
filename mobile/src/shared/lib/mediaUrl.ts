@@ -15,6 +15,12 @@ export function isAnimatedMedia(url: string | null | undefined): boolean {
   return last.startsWith('a_')
 }
 
+/** "/static" vai no fim do caminho, antes da query string (se houver). */
+function withStaticFrame(url: string): string {
+  const query = url.indexOf('?')
+  return query === -1 ? `${url}/static` : `${url.slice(0, query)}/static${url.slice(query)}`
+}
+
 /**
  * Endereço de imagem do servidor (avatar, ícone): caminho relativo ganha a origem da API.
  * `animate: false` pede o quadro parado de um GIF animado (listas); imagem que não anima, endereço
@@ -23,6 +29,6 @@ export function isAnimatedMedia(url: string | null | undefined): boolean {
 export function mediaSrc(url: string | null | undefined, { animate = true }: { animate?: boolean } = {}): string | null {
   if (!url) return null
   if (isLocalUri(url) || /^https?:\/\//.test(url)) return url
-  const path = !animate && isAnimatedMedia(url) ? `${url}/static` : url
+  const path = !animate && isAnimatedMedia(url) ? withStaticFrame(url) : url
   return `${ORIGIN}${path}`
 }

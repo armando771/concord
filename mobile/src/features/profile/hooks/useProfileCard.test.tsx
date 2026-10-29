@@ -82,6 +82,16 @@ describe('useProfileCard', () => {
     expect(getProfileMock).toHaveBeenCalledTimes(2)
   })
 
+  // Achado da revisão: a resposta de um cartão que chega depois do logout não pode voltar ao cache.
+  it('resposta que chega depois de sair da conta não entra no cache da próxima', async () => {
+    const reply = pending()
+    getProfileMock.mockReturnValue(reply.promise)
+    await renderHook(() => useProfileCard('u2'))
+    await act(async () => useProfileCardStore.getState().reset())
+    await act(async () => reply.resolve(ANA))
+    expect(useProfileCardStore.getState().cards).toEqual({})
+  })
+
   it('trocar o id busca o outro cartão', async () => {
     getProfileMock.mockImplementation(async (id) => ({ id, username: id, display_name: id }))
     const { result, rerender } = await renderHook((props: { id: string }) => useProfileCard(props.id), { initialProps: { id: 'u2' } })

@@ -26,8 +26,12 @@ export function useProfileCard(userId: string): ProfileCardResult {
   useEffect(() => {
     if (isMe) return
     let live = true
+    const { epoch } = useProfileCardStore.getState()
     getProfile(userId)
-      .then((profile) => useProfileCardStore.getState().put(profile))
+      .then((profile) => {
+        const store = useProfileCardStore.getState()
+        if (store.epoch === epoch) store.put(profile)
+      })
       .catch(() => live && setFailedFor(userId))
     return () => {
       live = false

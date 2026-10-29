@@ -44,7 +44,12 @@ export function FriendRow({ name, subtitle, avatarUri, presence, onPress, action
   return (
     <View style={styles.row}>
       {onPress ? (
-        <Pressable accessibilityRole="button" accessibilityLabel={name} onPress={onPress}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={subtitle ? `${name}, ${subtitle}` : name}
+          onPress={onPress}
+          style={styles.personButton}
+        >
           {person}
         </Pressable>
       ) : (
@@ -70,6 +75,7 @@ export function FriendRow({ name, subtitle, avatarUri, presence, onPress, action
 const styles = StyleSheet.create({
   row: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
   person: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  personButton: { minHeight: MIN_TOUCH, justifyContent: 'center' },
   dot: { position: 'absolute', right: -4, bottom: -4 },
   texts: { flex: 1 },
   name: { color: colors.textStrong, fontSize: fontSize.md, fontWeight: '600' },
