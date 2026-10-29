@@ -14,6 +14,8 @@ import {
 import type { ImageKind } from '../../ImageCropModal'
 import type { ProfileModalId } from '../modals/ProfileEditModal'
 import { DEFAULT_BANNER } from '../../../../profile/lib/profileMedia'
+import StatusIcon from '../../../../../shared/ui/StatusIcon'
+import { STATUS_META, type PresenceStatus } from '../../../../friends/lib/presenceStatus'
 import MediaTiles from './MediaTiles'
 import { Tile, TileRow, TileSection } from './Tile'
 
@@ -69,6 +71,24 @@ function NameTile({ user, onOpen }: { user: User; onOpen: Open }): React.JSX.Ele
           <StyledName name={display_name || user.username} style={name_style} />
         </span>
         <span className="text-xs text-gray-400">{nameStyleSummary(name_style)}</span>
+      </Tile>
+    </TileSection>
+  )
+}
+
+/** Status de presença: o ícone e o nome do status atual. */
+function StatusTile({ user, onOpen }: { user: User; onOpen: Open }): React.JSX.Element {
+  const currentStatus = (user.status as PresenceStatus) ?? 'online'
+  const meta = STATUS_META[currentStatus] ?? STATUS_META.online
+  return (
+    <TileSection title="Status">
+      <Tile
+        label="Mudar status de presença"
+        onClick={() => onOpen('status')}
+        className="w-full gap-2 px-3 py-2.5 pr-9"
+      >
+        <StatusIcon status={currentStatus} size={12} />
+        <span className="min-w-0 truncate text-ds-sm font-medium text-strong">{meta.label}</span>
       </Tile>
     </TileSection>
   )
@@ -156,6 +176,7 @@ export default function ProfileTiles({
       <BannerColorTile color={user.banner_color ?? null} onOpen={onOpen} />
       <ThemeTile user={user} onOpen={onOpen} />
       <NameTile user={user} onOpen={onOpen} />
+      <StatusTile user={user} onOpen={onOpen} />
       <TextTiles user={user} onOpen={onOpen} />
       <TileSection title="Som de entrada">
         <TileRow

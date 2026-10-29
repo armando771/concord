@@ -58,7 +58,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       'borda',
       'fundo do perfil',
       'textura',
-      'estilo do nome'
+      'estilo do nome',
+      'status',
+      'invisível',
+      'invisivel',
+      'presença',
+      'online',
+      'ausente',
+      'não perturbe'
     ]
   },
   {

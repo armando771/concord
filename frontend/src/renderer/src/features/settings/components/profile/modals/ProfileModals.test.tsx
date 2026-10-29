@@ -17,6 +17,9 @@ vi.mock('../../../../../shared/ui/Avatar', () => ({ default: () => <span data-av
 vi.mock('../../../../profile/components/EntranceSoundSettings', () => ({
   default: () => <i>som</i>
 }))
+vi.mock('../../../../profile/store/meActions', () => ({
+  changeMyStatus: vi.fn()
+}))
 
 import { renderToStaticMarkup } from 'react-dom/server'
 import { draftFromProfile } from '../../../../profile/lib/profileValidation'
@@ -147,6 +150,7 @@ describe('ProfileEditModal', () => {
     expect(render('bio')).toContain('data-title="Sobre mim"')
     expect(render('banner_color')).toContain('data-title="Cor do banner"')
     expect(render('sound')).toContain('data-title="Som de entrada"')
+    expect(render('status')).toContain('data-title="Status"')
   })
   it('o tema abre largo, com as predefinições', () => {
     const html = render('theme')

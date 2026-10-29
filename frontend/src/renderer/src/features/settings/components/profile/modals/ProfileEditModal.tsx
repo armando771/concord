@@ -1,13 +1,16 @@
+import type { ChosenStatus } from '../../../../friends/lib/presenceStatus'
 import { draftFromProfile } from '../../../../profile/lib/profileValidation'
+import { changeMyStatus } from '../../../../profile/store/meActions'
 import type { DraftPatch } from '../../../lib/draftPatch'
 import type { PreviewBase } from '../ProfilePreview'
 import EntranceSoundModal from './EntranceSoundModal'
 import FieldModal from './FieldModal'
 import NameStyleModal from './NameStyleModal'
 import { SPOT_FIELDS, type FieldModalId } from './spotFields'
+import StatusModal from './StatusModal'
 
 /** Cada editor de Configurações → Perfis que abre num modal. */
-export type ProfileModalId = 'name' | 'sound' | FieldModalId
+export type ProfileModalId = 'name' | 'sound' | 'status' | FieldModalId
 
 /**
  * O modal aberto (pela parte do cartão ou pelo bloco da coluna). "Aplicar"
@@ -29,6 +32,15 @@ export default function ProfileEditModal({
 }): React.JSX.Element | null {
   if (!modal) return null
   if (modal === 'sound') return <EntranceSoundModal onClose={onClose} />
+  if (modal === 'status') {
+    return (
+      <StatusModal
+        status={(base.user.status as ChosenStatus) ?? 'online'}
+        onClose={onClose}
+        onSelect={(s) => void changeMyStatus(s)}
+      />
+    )
+  }
   const draft = draftFromProfile(base.user)
   const apply = async (patch: DraftPatch): Promise<void> => {
     if (await onApply(patch)) onClose()

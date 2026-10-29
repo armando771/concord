@@ -28,12 +28,16 @@ describe('filterSections', () => {
     expect(ids('efeito')).toEqual(['profiles'])
     expect(ids('borda')).toEqual(['profiles'])
     expect(ids('modo escuro')).toEqual(['appearance'])
+    expect(ids('status')).toEqual(['profiles'])
+    expect(ids('invisivel')).toEqual(['profiles'])
+    expect(ids('invisível')).toEqual(['profiles'])
   })
 
   it('ignora acento e maiúscula', () => {
     expect(ids('NOTIFICACAO')).toEqual(['notifications'])
     expect(ids('aniversario')).toEqual(['profiles'])
     expect(ids('aparencia')).toEqual(['appearance'])
+    expect(ids('INVISIVEL')).toEqual(['profiles'])
   })
 
   it('"Vídeo" fica logo depois de "Voz e áudio" e acha câmera e fundo', () => {

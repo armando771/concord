@@ -14,6 +14,7 @@ vi.mock('../../../auth/store/authStore', () => ({
   })
 }))
 
+vi.mock('../../../profile/store/meActions', () => ({ changeMyStatus: vi.fn() }))
 vi.mock('../../../profile/components/EntranceSoundSettings', () => ({ default: () => null }))
 vi.mock('../../../../shared/ui/Avatar', () => ({ default: () => <span data-avatar /> }))
 // O corpo do cartão puxa a atividade (e a call); aqui basta o que a prévia recebe.
@@ -73,6 +74,7 @@ describe('ProfilesSection', () => {
       'Nota',
       'Sobre mim',
       'Links',
+      'Status',
       'Som de entrada'
     ]) {
       expect(html).toContain(`>${title}</h3>`)
@@ -82,6 +84,7 @@ describe('ProfilesSection', () => {
     expect(html).toContain('aria-label="Mudar a cor do banner"')
     expect(html).toContain('aria-label="Mudar o tema do perfil"')
     expect(html).toContain('aria-label="Editar nome de exibição e estilo"')
+    expect(html).toContain('aria-label="Mudar status de presença"')
   })
 
   it('os blocos resumem o que está salvo e convidam no vazio', () => {
@@ -105,6 +108,12 @@ describe('ProfilesSection', () => {
     expect(html).toContain('Perfis salvos')
     expect(html).toContain('Salvar perfil atual')
     expect(html.indexOf('Perfis salvos')).toBeLessThan(html.indexOf('Como os outros veem'))
+  })
+
+  it('mostra o status atual, inclusive invisível', () => {
+    state.auth.user = { ...state.auth.user, status: 'invisible' }
+    const html = render()
+    expect(html).toContain('Invisível')
   })
 
   it('nenhum modal começa aberto', () => {
