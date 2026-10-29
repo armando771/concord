@@ -24,8 +24,7 @@ type vectorRole struct {
 type vectorFile struct {
 	Bits     map[string]int64 `json:"bits"`
 	Defaults struct {
-		Everyone  []string `json:"everyone"`
-		Moderator []string `json:"moderator"`
+		Everyone []string `json:"everyone"`
 	} `json:"defaults"`
 	Compute []struct {
 		Name        string       `json:"name"`
@@ -57,6 +56,13 @@ type vectorFile struct {
 		RolePosition int    `json:"role_position"`
 		Expect       bool   `json:"expect"`
 	} `json:"can_manage_role"`
+	CanEditRolesOf []struct {
+		Name    string `json:"name"`
+		OwnerID string `json:"owner_id"`
+		Actor   string `json:"actor"`
+		Target  string `json:"target"`
+		Expect  bool   `json:"expect"`
+	} `json:"can_edit_roles_of"`
 	CanGrant []struct {
 		Name    string   `json:"name"`
 		Actor   []string `json:"actor"`
@@ -108,9 +114,6 @@ func TestVectorBitsMatchConstants(t *testing.T) {
 	if got := bitsOf(t, v.Defaults.Everyone); got != DefaultEveryone {
 		t.Errorf("DefaultEveryone = %d, vectors = %d", DefaultEveryone, got)
 	}
-	if got := bitsOf(t, v.Defaults.Moderator); got != DefaultModerator {
-		t.Errorf("DefaultModerator = %d, vectors = %d", DefaultModerator, got)
-	}
 }
 
 func TestVectorsCompute(t *testing.T) {
@@ -152,6 +155,11 @@ func TestVectorsHierarchy(t *testing.T) {
 	for _, tc := range v.CanManageRole {
 		if got := CanManageRole(tc.IsOwner, tc.ActorHighest, Role{Position: tc.RolePosition}); got != tc.Expect {
 			t.Errorf("CanManageRole %q = %v, want %v", tc.Name, got, tc.Expect)
+		}
+	}
+	for _, tc := range v.CanEditRolesOf {
+		if got := CanEditRolesOf(tc.OwnerID, tc.Actor, tc.Target); got != tc.Expect {
+			t.Errorf("CanEditRolesOf %q = %v, want %v", tc.Name, got, tc.Expect)
 		}
 	}
 	for _, tc := range v.CanGrant {

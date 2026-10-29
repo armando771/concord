@@ -59,8 +59,8 @@ func validateContent(content string, hasAttachments bool) error {
 
 // validateNewMessage confere texto e anexos antes de ir ao banco. A posse e a
 // sala de cada anexo são conferidas na transação (CreateWithAttachments).
-func validateNewMessage(content string, attachmentIDs []string) error {
-	if err := validateContent(content, len(attachmentIDs) > 0); err != nil {
+func validateNewMessageWithMedia(content string, attachmentIDs []string, hasOtherMedia bool) error {
+	if err := validateContent(content, len(attachmentIDs) > 0 || hasOtherMedia); err != nil {
 		return err
 	}
 	if len(attachmentIDs) > MaxAttachmentsPerMessage {
@@ -75,6 +75,11 @@ func validateNewMessage(content string, attachmentIDs []string) error {
 	}
 	return nil
 }
+
+func validateNewMessage(content string, attachmentIDs []string) error {
+	return validateNewMessageWithMedia(content, attachmentIDs, false)
+}
+
 
 // sanitizeFilename guarda só o nome (sem pastas nem caracteres de controle),
 // com até 200 caracteres. Ele só aparece na tela e no Content-Disposition;

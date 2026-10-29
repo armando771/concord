@@ -1,6 +1,11 @@
 package user
 
-import "time"
+import (
+	"time"
+
+	"gin-quickstart/backend/internal/namestyle"
+	"gin-quickstart/backend/internal/profiletheme"
+)
 
 type User struct {
 	ID          string `json:"id"`
@@ -8,16 +13,22 @@ type User struct {
 	DisplayName string `json:"display_name"`
 	// Email nunca vai no JSON de User: User aparece para outras pessoas
 	// (busca, amigos, eventos). A própria pessoa recebe Self().
-	Email        string        `json:"-"`
-	PasswordHash string        `json:"-"`
-	AvatarURL    *string       `json:"avatar_url,omitempty"`
-	BannerURL    *string       `json:"banner_url,omitempty"`
-	BannerColor  *string       `json:"banner_color,omitempty"`
-	Pronouns     string        `json:"pronouns"`
-	Bio          string        `json:"bio"`
-	StatusText   string        `json:"status_text"`
-	Links        []ProfileLink `json:"links"`
-	Status       string        `json:"status"`
+	Email        string  `json:"-"`
+	PasswordHash string  `json:"-"`
+	AvatarURL    *string `json:"avatar_url,omitempty"`
+	BannerURL    *string `json:"banner_url,omitempty"`
+	BannerColor  *string `json:"banner_color,omitempty"`
+	// EntranceSoundURL: som que toca para quem está na call quando a pessoa
+	// entra (nil = o som padrão do app).
+	EntranceSoundURL *string         `json:"entrance_sound_url,omitempty"`
+	Pronouns         string          `json:"pronouns"`
+	Bio              string          `json:"bio"`
+	StatusText       string          `json:"status_text"`
+	Links            []ProfileLink   `json:"links"`
+	Status           string          `json:"status"`
+	NameStyle        namestyle.Style `json:"name_style"`
+	// ProfileTheme: borda, fundo e efeito do cartão de perfil.
+	ProfileTheme profiletheme.Theme `json:"profile_theme"`
 	// Privacidade: só a própria pessoa vê (vai no SelfUser).
 	FriendRequestPolicy string `json:"-"`
 	AllowServerDMs      bool   `json:"-"`
@@ -25,8 +36,11 @@ type User struct {
 	// EmailVerifiedAt: nulo = e-mail não confirmado. Só a própria pessoa vê
 	// (SelfUser.EmailVerified).
 	EmailVerifiedAt *time.Time `json:"-"`
-	CreatedAt    time.Time     `json:"created_at"`
-	UpdatedAt    time.Time     `json:"updated_at"`
+	// UsernameChangedAt: a última troca do @ (nula = nunca trocou; o cadastro
+	// não conta). Limita a uma troca a cada UsernameCooldown.
+	UsernameChangedAt *time.Time `json:"-"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 // SelfUser é a conta vista pela própria pessoa (/users/me e /users/me/*):
@@ -35,6 +49,9 @@ type SelfUser struct {
 	User
 	Email         string `json:"email"`
 	EmailVerified bool   `json:"email_verified"`
+	// UsernameChangeAvailableAt: a partir de quando pode trocar o @ de novo
+	// (ausente = nunca trocou). O app compara com a hora atual.
+	UsernameChangeAvailableAt *time.Time `json:"username_change_available_at,omitempty"`
 }
 
 // Privacy: quem pode mandar pedido de amizade e se membros de servidores em
@@ -67,7 +84,12 @@ func (u *User) Privacy() Privacy {
 
 // Self monta a resposta das rotas da própria conta, com o e-mail.
 func (u *User) Self() SelfUser {
-	return SelfUser{User: *u, Email: u.Email, EmailVerified: u.EmailVerifiedAt != nil}
+	return SelfUser{
+		User:                      *u,
+		Email:                     u.Email,
+		EmailVerified:             u.EmailVerifiedAt != nil,
+		UsernameChangeAvailableAt: usernameAvailableAt(u.UsernameChangedAt),
+	}
 }
 
 // ProfileLink é um link do perfil (Steam, Twitch, site...). O app descobre o
@@ -90,7 +112,11 @@ type PublicProfile struct {
 	StatusText  string        `json:"status_text"`
 	Links       []ProfileLink `json:"links"`
 	Status      string        `json:"status"`
-	CreatedAt   time.Time     `json:"created_at"`
+	// IsBot: o Maestro. Aparece com o selo BOT e sempre online.
+	IsBot        bool               `json:"is_bot"`
+	NameStyle    namestyle.Style    `json:"name_style"`
+	ProfileTheme profiletheme.Theme `json:"profile_theme"`
+	CreatedAt    time.Time          `json:"created_at"`
 }
 
 // Public monta o perfil público com o status já calculado por quem chama.
@@ -100,17 +126,19 @@ func (u *User) Public(status string) PublicProfile {
 		links = []ProfileLink{}
 	}
 	return PublicProfile{
-		ID:          u.ID,
-		Username:    u.Username,
-		DisplayName: u.DisplayName,
-		AvatarURL:   u.AvatarURL,
-		BannerURL:   u.BannerURL,
-		BannerColor: u.BannerColor,
-		Pronouns:    u.Pronouns,
-		Bio:         u.Bio,
-		StatusText:  u.StatusText,
-		Links:       links,
-		Status:      status,
-		CreatedAt:   u.CreatedAt,
+		ID:           u.ID,
+		Username:     u.Username,
+		DisplayName:  u.DisplayName,
+		AvatarURL:    u.AvatarURL,
+		BannerURL:    u.BannerURL,
+		BannerColor:  u.BannerColor,
+		Pronouns:     u.Pronouns,
+		Bio:          u.Bio,
+		StatusText:   u.StatusText,
+		Links:        links,
+		Status:       status,
+		NameStyle:    u.NameStyle,
+		ProfileTheme: u.ProfileTheme,
+		CreatedAt:    u.CreatedAt,
 	}
 }

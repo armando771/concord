@@ -1,3 +1,4 @@
+if (process.platform === 'win32') process.exit(0);
 // Testa scripts/deploy-vps.sh de ponta a ponta com comandos falsos: o ssh junta
 // os argumentos num texto só como o OpenSSH (argumento vazio some) e roda o
 // "servidor" numa pasta temporária; go, rsync, docker, systemctl, curl e
@@ -227,6 +228,14 @@ test('TECH_TEAM_USER_IDS troca a linha que já existe (e as repetidas)', () => {
     read(ctx, '.env'),
     `A=1\nTECH_TEAM_USER_IDS=${IDS}\n# TECH_TEAM_USER_IDS=comentado\nB=2\n`
   )
+})
+
+test('CHANGELOG_TOKEN entra no .env da VPS sem apagar o resto', () => {
+  const ctx = setup({ current: fakeBinary('good') })
+  const r = deploy(ctx, ['root@vps'], { CHANGELOG_TOKEN: 'abc123DEF456' })
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /CHANGELOG_TOKEN gravado/)
+  assert.equal(read(ctx, '.env'), 'export PORT="8090" # backend\nCHANGELOG_TOKEN=abc123DEF456\n')
 })
 
 test('sem TECH_TEAM_USER_IDS (vazio ou ausente) o .env fica intacto', () => {

@@ -1,0 +1,9 @@
+/* App em segundo plano (sem foco, minimizado ou na bandeja; ver
+   app/WindowActivityBridge.tsx): sem transições. Cada uma pede quadros a 60 qps
+   enquanto dura, e na call o anel de quem fala dispara dezenas delas por segundo.
+   Nada no app espera transitionend, então cortar é só visual. */
+:root[data-app-background] *,
+:root[data-app-background] *::before,
+:root[data-app-background] *::after {
+  transition: none !important;
+}

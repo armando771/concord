@@ -1,9 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
-import type { OverlayFrame, OverlayLayout } from '../renderer/src/lib/overlayLayout'
 import type { CallResume, PendingCallResume } from '../shared/callResume'
 import type { AppMetrics } from '../shared/appMetrics'
+import type { PerfEvent } from '../shared/perfLog'
+import { screenShareFlow, type PortalStatus } from '../shared/screenShareFlow'
+import { serverFromArgv, type ServerDiagnostics } from '../shared/serverConnection'
+import { overlayApi } from './overlayApi'
+import { ttsApi } from './ttsApi'
 
 interface ScreenSourceInfo {
   id: string
@@ -15,9 +18,39 @@ interface ScreenSourceInfo {
 
 // Custom APIs for renderer
 const api = {
+  server: {
+    /** Endereço escolhido pelo main ao abrir (ver main/server); null = o do build. */
+    url: serverFromArgv(process.argv),
+    diagnostics(retest = false): Promise<ServerDiagnostics | null> {
+      return ipcRenderer.invoke('server:diagnostics', retest)
+    }
+  },
   appMetrics: {
     sample(reset = false): Promise<AppMetrics | null> {
       return ipcRenderer.invoke('app-metrics:sample', reset)
+    }
+  },
+  windowActivity: {
+    /** Foco e visibilidade da janela (o main avisa a cada mudança). Retorna unsubscribe. */
+    onChange(cb: (activity: unknown) => void): () => void {
+      const listener = (_event: unknown, activity: unknown): void => cb(activity)
+      ipcRenderer.on('window:activity', listener)
+      return () => ipcRenderer.removeListener('window:activity', listener)
+    }
+  },
+  perf: {
+    /** O main responde true só quando o app foi aberto com --perf-log. */
+    enabled(): Promise<boolean> {
+      return ipcRenderer.invoke('perf:enabled')
+    },
+    report(event: PerfEvent): void {
+      ipcRenderer.send('perf:report', event)
+    }
+  },
+  windowTheme: {
+    /** Pinta a barra de título nativa (Windows/Linux) com as cores do tema. */
+    setTitleBarColors(colors: { color: string; symbolColor: string }): void {
+      ipcRenderer.send('window:title-bar-colors', colors)
     }
   },
   screenPicker: {
@@ -38,15 +71,29 @@ const api = {
     }
   },
   screenShare: {
+    /** 'portal' = Linux/Wayland: o seletor é o do sistema, não o modal do app. */
+    flow: screenShareFlow(process.platform, process.env),
+    /** O portal de captura (xdg-desktop-portal ScreenCast) está instalado? */
+    portalStatus(): Promise<{ status: PortalStatus; message: string }> {
+      return ipcRenderer.invoke('screen-share:portal-status')
+    },
     /** A janela compartilhada sumiu da tela (minimizada): a live congela. */
     onWindowHidden(cb: () => void): () => void {
       const listener = (): void => cb()
       ipcRenderer.on('screen-share:window-hidden', listener)
       return () => ipcRenderer.removeListener('screen-share:window-hidden', listener)
     },
+    /** Acha a janela do jogo; id da fonte = o próximo compartilhamento a usa, sem o modal. */
+    preferGameWindow(gameName: string): Promise<string | null> {
+      return ipcRenderer.invoke('screen-share:prefer-game', gameName)
+    },
     /** O compartilhamento acabou: para de vigiar a janela. */
     ended(): void {
       ipcRenderer.send('screen-share:ended')
+    },
+    /** O que falta para a placa de vídeo decodificar (Linux/NVIDIA sem driver); null = nada. */
+    videoHint(): Promise<string | null> {
+      return ipcRenderer.invoke('screen-share:video-hint')
     }
   },
   screenAudio: {
@@ -67,6 +114,10 @@ const api = {
     },
     takeCallResume(): Promise<PendingCallResume | null> {
       return ipcRenderer.invoke('update:take-call-resume')
+    },
+    /** Versão instalada deste app. */
+    currentVersion(): Promise<string> {
+      return ipcRenderer.invoke('update:current-version')
     },
     /** Versão nova conhecida (e se já está pronta para instalar), ou null. */
     status(): Promise<{ version: string; ready: boolean } | null> {
@@ -143,6 +194,12 @@ const api = {
     setAutostart(enabled: boolean): Promise<boolean | null> {
       return ipcRenderer.invoke('settings:set-autostart', enabled)
     },
+    getCloseToTray(): Promise<{ enabled: boolean; available: boolean } | null> {
+      return ipcRenderer.invoke('settings:close-to-tray')
+    },
+    setCloseToTray(enabled: boolean): Promise<boolean | null> {
+      return ipcRenderer.invoke('settings:set-close-to-tray', enabled)
+    },
     onToggleMute(cb: () => void): () => void {
       const listener = (): void => cb()
       ipcRenderer.on('tray:toggle-mute', listener)
@@ -176,15 +233,41 @@ const api = {
     watch(enabled: boolean): void {
       ipcRenderer.send('games:watch', enabled)
     },
-    current(): Promise<{ name: string; startedAt: number; appId?: number; iconHash?: string } | null> {
+    current(): Promise<{
+      name: string
+      startedAt: number
+      appId?: number
+      iconHash?: string
+    } | null> {
       return ipcRenderer.invoke('games:current')
     },
     /** O jogo em andamento mudou (null = parou). Retorna unsubscribe. */
-    onChange(cb: (game: { name: string; startedAt: number; appId?: number; iconHash?: string } | null) => void): () => void {
-      const listener = (_e: unknown, game: { name: string; startedAt: number; appId?: number; iconHash?: string } | null): void =>
-        cb(game)
+    onChange(
+      cb: (
+        game: { name: string; startedAt: number; appId?: number; iconHash?: string } | null
+      ) => void
+    ): () => void {
+      const listener = (
+        _e: unknown,
+        game: { name: string; startedAt: number; appId?: number; iconHash?: string } | null
+      ): void => cb(game)
       ipcRenderer.on('games:current', listener)
       return () => ipcRenderer.removeListener('games:current', listener)
+    }
+  },
+  music: {
+    /** Liga/desliga a detecção da música tocando (Ouvindo). Windows e Linux. */
+    watch(enabled: boolean): void {
+      ipcRenderer.send('music:watch', enabled)
+    },
+    current(): Promise<unknown> {
+      return ipcRenderer.invoke('music:current')
+    },
+    /** A música mudou (null = parou); o renderer valida. Retorna unsubscribe. */
+    onChange(cb: (track: unknown) => void): () => void {
+      const listener = (_e: unknown, track: unknown): void => cb(track)
+      ipcRenderer.on('music:current', listener)
+      return () => ipcRenderer.removeListener('music:current', listener)
     }
   },
   activities: {
@@ -200,6 +283,12 @@ const api = {
       const listener = (_e: unknown, activityId: string): void => cb(activityId)
       ipcRenderer.on('activity:closed', listener)
       return () => ipcRenderer.removeListener('activity:closed', listener)
+    },
+    /** A janela do jogo entrou numa sala (partida/time) nova. */
+    onRoom(cb: (activityId: string, url: string) => void): () => void {
+      const listener = (_e: unknown, activityId: string, url: string): void => cb(activityId, url)
+      ipcRenderer.on('activity:room', listener)
+      return () => ipcRenderer.removeListener('activity:room', listener)
     }
   },
   keybinds: {
@@ -224,68 +313,9 @@ const api = {
       return () => ipcRenderer.removeListener('keybinds:status', listener)
     }
   },
-  overlay: {
-    /** Overlay de jogo existe nesta plataforma (só Windows). */
-    supported: process.platform === 'win32',
-    /** Renderer principal → main: estado atual da call para o overlay. */
-    setState(snapshot: OverlaySnapshot): void {
-      ipcRenderer.send('overlay:state', snapshot)
-    },
-    /**
-     * Página do overlay: avisa que carregou (chamar depois de assinar onUpdate e
-     * onEditing) e recebe o último estado e se está no modo de edição.
-     */
-    ready(): Promise<{
-      snapshot: OverlaySnapshot | null
-      editing: boolean
-      frame: OverlayFrame | null
-    }> {
-      return ipcRenderer.invoke('overlay:ready')
-    },
-    /** Página do overlay: onde a janela está na área de trabalho (muda ao mover/editar). */
-    onFrame(cb: (frame: OverlayFrame) => void): () => void {
-      const listener = (_e: unknown, frame: OverlayFrame): void => cb(frame)
-      ipcRenderer.on('overlay:frame', listener)
-      return () => ipcRenderer.removeListener('overlay:frame', listener)
-    },
-    /** Página do overlay: tamanho medido da lista, para a janela ficar só em volta dela. */
-    reportBox(size: { width: number; height: number }): void {
-      ipcRenderer.send('overlay:box', size)
-    },
-    /** Página do overlay: novos estados. */
-    onUpdate(cb: (snapshot: OverlaySnapshot) => void): () => void {
-      const listener = (_e: unknown, snapshot: OverlaySnapshot): void => cb(snapshot)
-      ipcRenderer.on('overlay:update', listener)
-      return () => ipcRenderer.removeListener('overlay:update', listener)
-    },
-    /** Página do overlay: modo de edição (Shift+Tab) ligado/desligado. */
-    onEditing(cb: (editing: boolean) => void): () => void {
-      const listener = (_e: unknown, editing: boolean): void => cb(editing)
-      ipcRenderer.on('overlay:editing', listener)
-      return () => ipcRenderer.removeListener('overlay:editing', listener)
-    },
-    /** Página do overlay: posição/tamanho novos, ao soltar o mouse. */
-    saveLayout(layout: OverlayLayout): void {
-      ipcRenderer.send('overlay:layout', layout)
-    },
-    /** Configurações: o atalho está livre? null = atalho inválido. */
-    checkShortcut(accelerator: string): Promise<{ accelerator: string; taken: boolean } | null> {
-      return ipcRenderer.invoke('overlay:check-shortcut', accelerator)
-    },
-    /** Configurações: resultado de segurar o atalho no jogo (outro programa pode ter). */
-    onShortcutStatus(cb: (status: { accelerator: string; taken: boolean }) => void): () => void {
-      const listener = (_e: unknown, status: { accelerator: string; taken: boolean }): void =>
-        cb(status)
-      ipcRenderer.on('overlay:shortcut-status', listener)
-      return () => ipcRenderer.removeListener('overlay:shortcut-status', listener)
-    },
-    /** Renderer principal: posição/tamanho editados no jogo, para salvar. */
-    onLayout(cb: (layout: OverlayLayout) => void): () => void {
-      const listener = (_e: unknown, layout: OverlayLayout): void => cb(layout)
-      ipcRenderer.on('overlay:layout', listener)
-      return () => ipcRenderer.removeListener('overlay:layout', listener)
-    }
-  }
+  overlay: overlayApi,
+  /** Voz do /tts baixada no primeiro uso: só no Linux (os outros usam a Web Speech). */
+  tts: process.platform === 'linux' ? ttsApi : undefined
 }
 
 // Som da janela compartilhada: o MessagePort não passa pelo contextBridge,

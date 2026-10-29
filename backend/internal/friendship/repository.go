@@ -99,6 +99,9 @@ func (r *Repository) ListFriends(ctx context.Context, userID string) ([]user.Use
 			u.username,
 			u.display_name,
 			u.avatar_url,
+			u.name_font,
+			u.name_effect,
+			u.name_colors,
 			u.status_text,
 			u.created_at,
 			u.updated_at
@@ -128,6 +131,9 @@ func (r *Repository) ListFriends(ctx context.Context, userID string) ([]user.Use
 			&u.Username,
 			&u.DisplayName,
 			&u.AvatarURL,
+			&u.NameStyle.Font,
+			&u.NameStyle.Effect,
+			&u.NameStyle.Colors,
 			&u.StatusText,
 			&u.CreatedAt,
 			&u.UpdatedAt,
@@ -153,6 +159,9 @@ func (r *Repository) ListPending(ctx context.Context, userID string) ([]PendingR
 			u.username,
 			u.display_name,
 			u.avatar_url,
+			u.name_font,
+			u.name_effect,
+			u.name_colors,
 			f.created_at
 		FROM friendships f
 		JOIN users u ON u.id = f.requester_id
@@ -175,6 +184,9 @@ func (r *Repository) ListPending(ctx context.Context, userID string) ([]PendingR
 			&r.Username,
 			&r.DisplayName,
 			&r.AvatarURL,
+			&r.NameStyle.Font,
+			&r.NameStyle.Effect,
+			&r.NameStyle.Colors,
 			&r.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -199,6 +211,9 @@ func (r *Repository) ListSent(ctx context.Context, userID string) ([]PendingRequ
 			u.username,
 			u.display_name,
 			u.avatar_url,
+			u.name_font,
+			u.name_effect,
+			u.name_colors,
 			f.created_at
 		FROM friendships f
 		JOIN users u ON u.id = f.addressee_id
@@ -221,6 +236,9 @@ func (r *Repository) ListSent(ctx context.Context, userID string) ([]PendingRequ
 			&r.Username,
 			&r.DisplayName,
 			&r.AvatarURL,
+			&r.NameStyle.Font,
+			&r.NameStyle.Effect,
+			&r.NameStyle.Colors,
 			&r.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -296,7 +314,7 @@ func (r *Repository) Blocks(ctx context.Context, a string, b string) (aBlocksB b
 func (r *Repository) ListBlocked(ctx context.Context, userID string) ([]user.User, error) {
 	return r.listUsers(
 		ctx,
-		`SELECT u.id, u.username, u.display_name, u.avatar_url, u.status_text, u.created_at, u.updated_at
+		`SELECT u.id, u.username, u.display_name, u.avatar_url, u.name_font, u.name_effect, u.name_colors, u.status_text, u.created_at, u.updated_at
 		FROM user_blocks b
 		JOIN users u ON u.id = b.blocked_id
 		WHERE b.blocker_id = $1
@@ -316,7 +334,7 @@ func (r *Repository) MutualFriends(ctx context.Context, a string, b string) ([]u
 			SELECT CASE WHEN requester_id = $2 THEN addressee_id ELSE requester_id END AS id
 			FROM friendships WHERE (requester_id = $2 OR addressee_id = $2) AND status = 'accepted'
 		)
-		SELECT u.id, u.username, u.display_name, u.avatar_url, u.status_text, u.created_at, u.updated_at
+		SELECT u.id, u.username, u.display_name, u.avatar_url, u.name_font, u.name_effect, u.name_colors, u.status_text, u.created_at, u.updated_at
 		FROM users u
 		WHERE u.id IN (SELECT id FROM fa) AND u.id IN (SELECT id FROM fb)
 		ORDER BY u.username`,
@@ -335,7 +353,7 @@ func (r *Repository) listUsers(ctx context.Context, query string, args ...any) (
 	users := []user.User{}
 	for rows.Next() {
 		var u user.User
-		if err := rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.StatusText, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.NameStyle.Font, &u.NameStyle.Effect, &u.NameStyle.Colors, &u.StatusText, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			return nil, err
 		}
 		users = append(users, u)

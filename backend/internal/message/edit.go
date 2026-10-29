@@ -45,22 +45,16 @@ func (s *Service) editMessage(ctx context.Context, channelID string, conversatio
 	if current.AuthorID != userID {
 		return nil, false, ErrNotEditAuthor
 	}
-	if current.SystemKind != nil {
-		return nil, false, ErrNotEditable
-	}
-	hasPoll, err := s.edits.HasPoll(ctx, messageID)
-	if err != nil {
+	if err := s.checkEditable(ctx, current); err != nil {
 		return nil, false, err
-	}
-	if hasPoll {
-		return nil, false, ErrNotEditable
 	}
 
 	attachmentIDs, err := s.edits.MessageAttachmentIDs(ctx, messageID)
 	if err != nil {
 		return nil, false, err
 	}
-	if err := validateContent(content, len(attachmentIDs) > 0); err != nil {
+	hasMedia := len(attachmentIDs) > 0 || current.StickerID != nil || current.GifURL != nil
+	if err := validateContent(content, hasMedia); err != nil {
 		return nil, false, err
 	}
 
@@ -81,6 +75,22 @@ func (s *Service) editMessage(ctx context.Context, channelID string, conversatio
 		return nil, false, err
 	}
 	return &page[0], changed, nil
+}
+
+// checkEditable: só texto comum (nada de mensagem do sistema, convite para a
+// call nem enquete).
+func (s *Service) checkEditable(ctx context.Context, current *Message) error {
+	if current.SystemKind != nil || current.CallInvite != nil {
+		return ErrNotEditable
+	}
+	hasPoll, err := s.edits.HasPoll(ctx, current.ID)
+	if err != nil {
+		return err
+	}
+	if hasPoll {
+		return ErrNotEditable
+	}
+	return nil
 }
 
 // EditChannelMessage troca o texto de uma mensagem do autor no canal e avisa

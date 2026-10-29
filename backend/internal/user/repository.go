@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"gin-quickstart/backend/internal/profiletheme"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -29,15 +31,26 @@ const userColumns = `
 	avatar_url,
 	banner_url,
 	banner_color,
+	entrance_sound_url,
 	pronouns,
 	bio,
 	status_text,
 	links,
 	status,
+	name_font,
+	name_effect,
+	name_colors,
+	profile_border,
+	profile_border_colors,
+	profile_background,
+	profile_background_colors,
+	profile_effect,
+	profile_theme_extras,
 	friend_request_policy,
 	allow_server_dms,
 	active,
 	email_verified_at,
+	username_changed_at,
 	created_at,
 	updated_at
 `
@@ -53,15 +66,26 @@ func scanUser(row pgx.Row) (*User, error) {
 		&user.AvatarURL,
 		&user.BannerURL,
 		&user.BannerColor,
+		&user.EntranceSoundURL,
 		&user.Pronouns,
 		&user.Bio,
 		&user.StatusText,
 		&user.Links,
 		&user.Status,
+		&user.NameStyle.Font,
+		&user.NameStyle.Effect,
+		&user.NameStyle.Colors,
+		&user.ProfileTheme.Border,
+		&user.ProfileTheme.BorderColors,
+		&user.ProfileTheme.Background,
+		&user.ProfileTheme.BackgroundColors,
+		&user.ProfileTheme.Effect,
+		&user.ProfileTheme.Extras,
 		&user.FriendRequestPolicy,
 		&user.AllowServerDMs,
 		&user.Active,
 		&user.EmailVerifiedAt,
+		&user.UsernameChangedAt,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -71,6 +95,7 @@ func scanUser(row pgx.Row) (*User, error) {
 	if user.Links == nil {
 		user.Links = []ProfileLink{}
 	}
+	user.ProfileTheme.Extras = user.ProfileTheme.Extras.Filled()
 	return user, nil
 }
 
@@ -180,7 +205,7 @@ func (r *Repository) FindByUsername(ctx context.Context, username string) (*User
 // (pedido de amizade digitado à mão). Se houver "Hugo" e "hugo", prefere a
 // caixa exata.
 func (r *Repository) FindByUsernameFold(ctx context.Context, username string) (*User, error) {
-	return scanUser(r.db.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE lower(username) = lower($1) ORDER BY (username = $1) DESC LIMIT 1`, username))
+	return scanUser(r.db.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE lower(username) = lower($1) AND NOT is_guest ORDER BY (username = $1) DESC LIMIT 1`, username))
 }
 
 // UpdatePrivacy grava as opções de privacidade.
@@ -202,7 +227,8 @@ func escapeLike(s string) string {
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 // SearchByUsername busca por trecho do username. Não traz o e-mail: o
-// resultado é de outras pessoas.
+// resultado é de outras pessoas. Visitantes de call (usuários efêmeros, ver
+// docs/adr/0017-visitante-na-call.md) não aparecem.
 func (r *Repository) SearchByUsername(ctx context.Context, query string, excludeUserID string) ([]User, error) {
 	rows, err := r.db.Query(
 		ctx,
@@ -212,11 +238,15 @@ func (r *Repository) SearchByUsername(ctx context.Context, query string, exclude
 			username,
 			display_name,
 			avatar_url,
+			name_font,
+			name_effect,
+			name_colors,
 			created_at,
 			updated_at
 		FROM users
 		WHERE username ILIKE '%' || $1 || '%' ESCAPE '\'
 		AND id <> $2
+		AND NOT is_guest
 		AND NOT EXISTS (
 			SELECT 1 FROM user_blocks b
 			WHERE (b.blocker_id = $2 AND b.blocked_id = users.id)
@@ -230,35 +260,32 @@ func (r *Repository) SearchByUsername(ctx context.Context, query string, exclude
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	return pgx.CollectRows(rows, scanSearchResult)
+}
 
-	var users []User
-	for rows.Next() {
-		var u User
-		if err := rows.Scan(
-			&u.ID,
-			&u.Username,
-			&u.DisplayName,
-			&u.AvatarURL,
-			&u.CreatedAt,
-			&u.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		users = append(users, u)
-	}
-
-	if users == nil {
-		users = []User{}
-	}
-
-	return users, nil
+// scanSearchResult lê uma linha da busca (as colunas de SearchByUsername).
+func scanSearchResult(row pgx.CollectableRow) (User, error) {
+	var u User
+	err := row.Scan(
+		&u.ID,
+		&u.Username,
+		&u.DisplayName,
+		&u.AvatarURL,
+		&u.NameStyle.Font,
+		&u.NameStyle.Effect,
+		&u.NameStyle.Colors,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+	)
+	return u, err
 }
 
 func (r *Repository) Create(
 	ctx context.Context,
 	user *User,
 ) error {
+	// As colunas do tema nascem com o padrão; o JSON da conta nova já sai igual.
+	user.ProfileTheme = profiletheme.Default()
 	return r.db.QueryRow(
 		ctx,
 		`
@@ -299,25 +326,6 @@ func (r *Repository) Create(
 	)
 }
 
-func (r *Repository) UpdateProfile(ctx context.Context, id string, in ProfileInput) (*User, error) {
-	return scanUser(r.db.QueryRow(
-		ctx,
-		`
-		UPDATE users
-		SET display_name = $2, pronouns = $3, bio = $4, status_text = $5,
-			banner_color = $6, links = $7, updated_at = NOW()
-		WHERE id = $1
-		RETURNING `+userColumns,
-		id,
-		in.DisplayName,
-		in.Pronouns,
-		in.Bio,
-		in.StatusText,
-		in.BannerColor,
-		in.Links,
-	))
-}
-
 // SetAvatar troca a URL do avatar e devolve a anterior (para apagar o arquivo).
 func (r *Repository) SetAvatar(ctx context.Context, id string, url *string) (*User, *string, error) {
 	return r.swapMedia(ctx, id, "avatar_url", url)
@@ -328,8 +336,13 @@ func (r *Repository) SetBanner(ctx context.Context, id string, url *string) (*Us
 	return r.swapMedia(ctx, id, "banner_url", url)
 }
 
+// SetEntranceSound troca a URL do som de entrada e devolve a anterior.
+func (r *Repository) SetEntranceSound(ctx context.Context, id string, url *string) (*User, *string, error) {
+	return r.swapMedia(ctx, id, "entrance_sound_url", url)
+}
+
 // swapMedia lê a URL antiga e grava a nova na mesma transação. column vem
-// sempre de SetAvatar/SetBanner, nunca do cliente.
+// sempre de SetAvatar/SetBanner/SetEntranceSound, nunca do cliente.
 func (r *Repository) swapMedia(ctx context.Context, id, column string, url *string) (*User, *string, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {

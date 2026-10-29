@@ -1,12 +1,17 @@
 package message
 
-import "time"
+import (
+	"time"
+
+	"gin-quickstart/backend/internal/namestyle"
+)
 
 type Author struct {
 	ID          string  `json:"id"`
 	Username    string  `json:"username"`
 	DisplayName string  `json:"display_name"`
 	AvatarURL   *string `json:"avatar_url,omitempty"`
+	NameStyle   namestyle.Style `json:"name_style"`
 }
 
 type ReplyPreview struct {
@@ -44,7 +49,18 @@ type Message struct {
 	// anti-spam); nil = não pinga ninguém, mesmo com "@all" no texto.
 	MentionEveryone *string      `json:"mention_everyone"`
 	Poll            *Poll        `json:"poll,omitempty"`
-	Attachments     []Attachment `json:"attachments,omitempty"`
+	Attachments     []Attachment    `json:"attachments,omitempty"`
+	StickerID       *string         `json:"sticker_id,omitempty"`
+	Sticker         *StickerPreview `json:"sticker,omitempty"`
+	GifURL          *string         `json:"gif_url,omitempty"`
+	GifMetadata     *GifMetadata    `json:"gif_metadata,omitempty"`
+	// Convite para a call de um canal de voz (cartão na DM); nil = mensagem comum.
+	CallInvite *CallInvite `json:"call_invite,omitempty"`
+	// Mensagem /tts: o app de quem está em call lê o texto em voz (tts.go).
+	TTS             bool         `json:"tts,omitempty"`
+	// Canal de voz cuja call ouve a TTS (tts.go); nil em DM e em TTS antiga:
+	// ninguém ouve em canal sem ele.
+	TTSVoiceChannelID *string `json:"tts_voice_channel_id,omitempty"`
 	CreatedAt       time.Time    `json:"created_at"`
 	// Quando o autor editou o texto pela última vez; nil = nunca editada.
 	EditedAt *time.Time `json:"edited_at,omitempty"`
@@ -97,6 +113,19 @@ type PinEvent struct {
 	ChannelID string        `json:"channel_id"`
 	ServerID  string        `json:"server_id,omitempty"`
 	Message   PinnedMessage `json:"message"`
+}
+
+type StickerPreview struct {
+	ID          string `json:"id"`
+	ServerID    string `json:"server_id"`
+	Name        string `json:"name"`
+	ContentType string `json:"content_type"`
+}
+
+type GifMetadata struct {
+	Width      int    `json:"width,omitempty"`
+	Height     int    `json:"height,omitempty"`
+	PreviewURL string `json:"preview_url,omitempty"`
 }
 
 type UnpinEvent struct {

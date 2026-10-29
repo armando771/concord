@@ -117,6 +117,10 @@ app-salinha.bhrx.com.br {
 	# Chamadas: sinalização direto no LiveKit (antes do @backend).
 	import salinha_rtc
 
+	# Atualizações do app desktop: este domínio é o endereço alternativo
+	# embutido no app (SERVER_FALLBACK_URLS); quem cai nele se atualiza por aqui.
+	import salinha_updates
+
 	# Backend: API (inclui os arquivos do chat em /api/media) e WebSocket do
 	# chat. O reverse_proxy repassa o upgrade de WS.
 	@backend path /api /api/* /ws

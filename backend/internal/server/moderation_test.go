@@ -9,6 +9,20 @@ import (
 	"gin-quickstart/backend/internal/permission"
 )
 
+// modPerms: as permissões de um cargo de moderação típico (as do antigo cargo
+// Moderador, que servidor novo não cria mais).
+const modPerms = permission.DefaultEveryone | permission.ManageChannels |
+	permission.ManageServer |
+	permission.MentionEveryone |
+	permission.ManageMessages |
+	permission.MoveMembers |
+	permission.MuteMembers |
+	permission.DeafenMembers |
+	permission.KickMembers |
+	permission.ManageExpressions |
+	permission.ManageNicknames |
+	permission.DisconnectMembers
+
 // fakeModeration guarda membros e bans num permission.Snapshot.
 type fakeModeration struct {
 	snap *permission.Snapshot
@@ -17,8 +31,8 @@ type fakeModeration struct {
 
 func newFakeModeration() *fakeModeration {
 	snap := permission.NewSnapshot("s1", "dono", permission.DefaultEveryone).
-		WithRole("admin", 3, permission.DefaultModerator|permission.BanMembers).
-		WithRole("mod", 2, permission.DefaultModerator).
+		WithRole("admin", 3, modPerms|permission.BanMembers).
+		WithRole("mod", 2, modPerms).
 		WithRole("vip", 1, 0).
 		WithMember("dono").
 		WithMember("chefe", "admin").

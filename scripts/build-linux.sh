@@ -3,7 +3,7 @@
 #   - AppImage x64 + latest-linux.yml (electron-updater);
 #   - Salinha-<versão>-x64.tar.gz: o mesmo app + salinha-launcher, para a
 #     instalação por usuário sem FUSE (site/install.sh e o updater próprio do
-#     Linux em src/main/linuxUpdater.ts). O manifesto dele é do release-linux.sh.
+#     Linux em src/main/updates/linuxUpdater.ts). O manifesto dele é do release-linux.sh.
 # Uso: scripts/build-linux.sh https://endereco-publico
 set -euo pipefail
 
@@ -20,6 +20,7 @@ docker run --rm --platform linux/amd64 \
   -v "$ROOT/frontend/dist:/out" \
   -v concord-builder-linux-cache:/root/.cache \
   -e VITE_SERVER_URL="$SERVER_URL" \
+  -e VITE_SERVER_FALLBACK_URLS="${SERVER_FALLBACK_URLS:-}" \
   -e CONCORD_UPDATE_URL="${SERVER_URL%/}/updates/" \
   -e CONCORD_UPDATE_PUBKEY="${CONCORD_UPDATE_PUBKEY:-}" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \

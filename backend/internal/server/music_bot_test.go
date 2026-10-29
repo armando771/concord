@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"gin-quickstart/backend/internal/bot"
-	"gin-quickstart/backend/internal/database"
+	"gin-quickstart/backend/internal/platform/database"
 
 	"github.com/google/uuid"
 )

@@ -1,6 +1,7 @@
 package user
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -8,7 +9,7 @@ import (
 	"net/http"
 	"syscall"
 
-	"gin-quickstart/backend/internal/media"
+	"gin-quickstart/backend/internal/platform/media"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -27,6 +28,8 @@ type ProfileHandler struct {
 	static   *media.Store
 	space    spaceChecker
 	maxBytes int64 // MaxProfileImageBytes; testes diminuem
+	// keeper: quem mais usa a mídia (perfis salvos). Nil = ninguém.
+	keeper MediaKeeper
 }
 
 func NewProfileHandler(service *ProfileService, store, static *media.Store, space spaceChecker) *ProfileHandler {
@@ -293,7 +296,7 @@ func (h *ProfileHandler) remove(c *gin.Context, set mediaSetter) {
 // removeMedia apaga o arquivo (e o quadro parado) de uma URL antiga.
 func (h *ProfileHandler) removeMedia(url *string) {
 	id, ok := mediaIDFromURL(url)
-	if !ok {
+	if !ok || h.inUse(*url) {
 		return
 	}
 	h.removeFile(h.store, id)
@@ -359,5 +362,19 @@ func (h *ProfileHandler) serve(c *gin.Context, wantStatic bool) {
 	header.Set("Content-Type", contentType)
 	header.Set("X-Content-Type-Options", "nosniff")
 	header.Set("Cache-Control", "public, max-age=31536000, immutable")
+	if contentType == "image/gif" && info.Size() <= maxGIFRewrite {
+		// GIF com repetição finita congela no fim: força repetir para sempre.
+		if data, err := io.ReadAll(file); err == nil {
+			http.ServeContent(c.Writer, c.Request, "", info.ModTime(), bytes.NewReader(loopForever(data)))
+			return
+		}
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			notFound()
+			return
+		}
+	}
 	http.ServeContent(c.Writer, c.Request, "", info.ModTime(), file)
 }
+
+// maxGIFRewrite limita o GIF lido na memória para ajustar a repetição.
+const maxGIFRewrite = 16 << 20

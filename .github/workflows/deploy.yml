@@ -15,6 +15,9 @@
 #     PUBLIC_URL       ex.: https://1-2-3-4.sslip.io
 #     SITE_URL         (opcional) página de download a conferir (padrão: https://salinha.bhrx.com.br)
 #     WEB_URL          (opcional) app web a conferir, ex.: https://app-salinha.bhrx.com.br
+#     SERVER_FALLBACK_URLS (opcional) endereços alternativos do servidor embutidos
+#                      no app desktop (padrão: WEB_URL ou https://app-salinha.bhrx.com.br);
+#                      o app usa o primeiro que responde se o PUBLIC_URL falhar
 name: Deploy
 
 on:
@@ -42,6 +45,8 @@ jobs:
       VPS_HOST: ${{ vars.VPS_HOST }}
       SITE_URL: ${{ vars.SITE_URL || 'https://salinha.bhrx.com.br' }}
       WEB_URL: ${{ vars.WEB_URL }}
+      # Domínio próprio como reserva do sslip.io (bloqueado na rede de alguns usuários).
+      SERVER_FALLBACK_URLS: ${{ vars.SERVER_FALLBACK_URLS || vars.WEB_URL || 'https://app-salinha.bhrx.com.br' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -49,6 +54,11 @@ jobs:
       # (docs/HOSPEDAGEM.md).
       - name: Migrations (números)
         run: node scripts/check-migrations.mjs
+
+      # Nota acima do limite do servidor faria o PUT do changelog falhar só no
+      # fim, com a versão já no ar. Aqui falha antes de publicar qualquer coisa.
+      - name: Changelog (limites)
+        run: node scripts/publish-changelog.mjs --check changelog/next.md
 
       - uses: actions/setup-go@v7
         with:
@@ -109,6 +119,7 @@ jobs:
       - name: Publicar na VPS (backend + página de download + app web + atualização do app)
         env:
           TECH_TEAM_USER_IDS: ${{ secrets.TECH_TEAM_USER_IDS }}
+          CHANGELOG_TOKEN: ${{ secrets.CHANGELOG_TOKEN }}
         run: scripts/deploy-vps.sh "$VPS_HOST"
 
       - name: Conferir
@@ -145,6 +156,14 @@ jobs:
             echo "App web no ar em ${WEB_URL%/}"
           fi
           echo "Salinha ${{ steps.version.outputs.version }} no ar em ${PUBLIC_URL%/}"
+
+      # Depois do "Conferir": a versão já está no ar e o endpoint novo também.
+      # O PUT é idempotente; o servidor guarda só as notas que nenhuma versão
+      # anterior trouxe, porque o next.md acumula entre deploys.
+      - name: Changelog
+        env:
+          CHANGELOG_TOKEN: ${{ secrets.CHANGELOG_TOKEN }}
+        run: node scripts/publish-changelog.mjs "${{ steps.version.outputs.version }}" changelog/next.md "$PUBLIC_URL"
 
       - name: Limpar chaves
         if: always()

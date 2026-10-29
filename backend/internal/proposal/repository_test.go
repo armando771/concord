@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"gin-quickstart/backend/internal/database"
+	"gin-quickstart/backend/internal/platform/database"
 
 	"github.com/google/uuid"
 )
@@ -126,7 +126,7 @@ func TestRepositoryDB(t *testing.T) {
 
 	// Mover antes do prazo marca o fechamento e a proposta segue no quadro.
 	before := p.MovedAt
-	if err := repo.SetStatus(ctx, id, other, StatusInProgress); err != nil {
+	if err := repo.SetStatus(ctx, id, other, StatusInProgress, other); err != nil {
 		t.Fatal(err)
 	}
 	p, _ = repo.Get(ctx, id, nil)
@@ -141,19 +141,78 @@ func TestRepositoryDB(t *testing.T) {
 	}
 	// Mover de novo avança moved_at e mantém quem encerrou a votação.
 	firstMove, closedBy := p.MovedAt, *p.ClosedByName
-	if err := repo.SetStatus(ctx, id, third, StatusDone); err != nil {
+	if err := repo.SetStatus(ctx, id, third, StatusDone, third); err != nil {
 		t.Fatal(err)
 	}
 	p, _ = repo.Get(ctx, id, nil)
 	if !p.MovedAt.After(firstMove) || *p.ClosedByName != closedBy {
 		t.Fatalf("segundo move: moved_at %v -> %v, closed_by %q -> %q", firstMove, p.MovedAt, closedBy, *p.ClosedByName)
 	}
-	if err := repo.SetStatus(ctx, id, other, StatusInProgress); err != nil {
+	if err := repo.SetStatus(ctx, id, other, StatusInProgress, other); err != nil {
 		t.Fatal(err)
 	}
 	missing, _ := repo.WithoutIssue(ctx)
 	if !slices.ContainsFunc(missing, func(m Proposal) bool { return m.ID == id }) {
 		t.Fatal("proposta movida deveria aparecer em WithoutIssue")
+	}
+
+	// Responsável, issue e sincronização (estado + assignee pelo login do GitHub).
+	p, _ = repo.Get(ctx, id, nil)
+	if p.Assignee == nil || p.Assignee.ID != other {
+		t.Fatalf("responsável depois do move: %+v", p.Assignee)
+	}
+	if err := repo.SetIssue(ctx, id, 77, "https://github.com/o/r/issues/77"); err != nil {
+		t.Fatal(err)
+	}
+	needs := func() bool {
+		list, err := repo.NeedingIssueSync(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.ContainsFunc(list, func(m Proposal) bool { return m.ID == id })
+	}
+	if needs() {
+		t.Fatal("issue recém-criada, aberta e sem login do dev: já está em dia")
+	}
+	login := "Dev-Outro"
+	if err := repo.SetGithubUsername(ctx, other, &login); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := repo.GithubUsername(ctx, other); got == nil || *got != login {
+		t.Fatalf("login salvo: %v", got)
+	}
+	if !needs() {
+		t.Fatal("o dev ganhou login: a issue precisa do assignee")
+	}
+	if err := repo.SetIssueSynced(ctx, id, IssueOpen, &login); err != nil {
+		t.Fatal(err)
+	}
+	if needs() {
+		t.Fatal("assignee aplicado: em dia")
+	}
+	if err := repo.SetStatus(ctx, id, other, StatusDone, other); err != nil {
+		t.Fatal(err)
+	}
+	p, _ = repo.Get(ctx, id, nil)
+	if !needs() || p.WantedIssueState() != IssueCompleted || p.AssigneeGithub == nil {
+		t.Fatalf("Concluída: a issue precisa fechar (%+v)", p)
+	}
+	if err := repo.SetIssueSynced(ctx, id, IssueCompleted, &login); err != nil {
+		t.Fatal(err)
+	}
+	if needs() {
+		t.Fatal("fechada: em dia")
+	}
+
+	// Salinha Bot (migration 000054): bot, sem login e fora dos servidores.
+	var isBot bool
+	var servers int
+	if err := db.QueryRow(ctx, `SELECT is_bot, (SELECT COUNT(*) FROM server_members WHERE user_id = u.id)
+		FROM users u WHERE id = '53414c49-4e48-4100-8000-000000000002'`).Scan(&isBot, &servers); err != nil {
+		t.Fatalf("Salinha Bot: %v", err)
+	}
+	if !isBot || servers != 0 {
+		t.Fatalf("Salinha Bot: is_bot=%v servidores=%d", isBot, servers)
 	}
 	if closed, _ := repo.CloseDue(ctx, now.Add(2*VotingDuration)); slices.Contains(closed, id) {
 		t.Fatal("CloseDue não pode reprocessar um card já movido")
@@ -227,5 +286,7 @@ func TestRepositoryDB(t *testing.T) {
 	if n, _ := repo.ListComments(ctx, id); len(n) != 0 {
 		t.Fatalf("comentários deveriam sumir com a proposta: %+v", n)
 	}
-	t.Cleanup(func() { db.Exec(ctx, `DELETE FROM proposals WHERE author_id = ANY($1)`, []string{author, other, third}) })
+	t.Cleanup(func() {
+		db.Exec(ctx, `DELETE FROM proposals WHERE author_id = ANY($1)`, []string{author, other, third})
+	})
 }

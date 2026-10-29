@@ -1,8 +1,12 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import type { OverlaySnapshot } from '../renderer/src/lib/overlayState'
-import type { OverlayFrame, OverlayLayout } from '../renderer/src/lib/overlayLayout'
+import type { OverlaySnapshot } from '../renderer/src/features/overlay/lib/overlayState'
+import type { OverlayFrame, OverlayLayout } from '../renderer/src/features/overlay/lib/overlayLayout'
 import type { CallResume, PendingCallResume } from '../shared/callResume'
 import type { AppMetrics } from '../shared/appMetrics'
+import type { PerfEvent } from '../shared/perfLog'
+import type { PortalStatus, ScreenShareFlow } from '../shared/screenShareFlow'
+import type { ServerDiagnostics } from '../shared/serverConnection'
+import type { TTSVoiceState } from '../shared/ttsVoice'
 
 export interface ScreenSourceInfo {
   id: string
@@ -25,13 +29,18 @@ export interface ScreenAudioApi {
 }
 
 export interface ScreenShareApi {
+  flow: ScreenShareFlow
+  portalStatus(): Promise<{ status: PortalStatus; message: string }>
+  preferGameWindow(gameName: string): Promise<string | null>
   onWindowHidden(cb: () => void): () => void
   ended(): void
+  videoHint(): Promise<string | null>
 }
 
 export interface UpdatesApi {
   setCallSnapshot(snapshot: CallResume | null): void
   takeCallResume(): Promise<PendingCallResume | null>
+  currentVersion(): Promise<string>
   status(): Promise<{ version: string; ready: boolean } | null>
   autoUpdateUnavailable(): Promise<boolean>
   onAvailable(cb: (version: string) => void): () => void
@@ -62,6 +71,9 @@ export interface BackgroundApi {
   /** null = não suportado nesta plataforma */
   getAutostart(): Promise<boolean | null>
   setAutostart(enabled: boolean): Promise<boolean | null>
+  /** Só Linux com bandeja criada (null nas outras plataformas). */
+  getCloseToTray(): Promise<{ enabled: boolean; available: boolean } | null>
+  setCloseToTray(enabled: boolean): Promise<boolean | null>
   onToggleMute(cb: () => void): () => void
   onQuitRequested(cb: () => void): () => void
   onNavigate(cb: (route: string) => void): () => void
@@ -103,18 +115,41 @@ export interface GamesApi {
   onChange(cb: (game: DetectedGameInfo | null) => void): () => void
 }
 
+export interface MusicApi {
+  /** Liga/desliga a detecção da música tocando (Ouvindo). Windows e Linux. */
+  watch(enabled: boolean): void
+  /** Música atual; o renderer valida (sanitizeDetectedTrack). */
+  current(): Promise<unknown>
+  /** A música mudou (null = parou). Retorna unsubscribe. */
+  onChange(cb: (track: unknown) => void): () => void
+}
+
 export interface ActivitiesApi {
   /** Abre o jogo numa janela própria; false = link recusado pelo main. */
   open(activityId: string, url: string): Promise<boolean>
   close(): void
   /** A janela do jogo fechou (pelo usuário ou pelo app). Retorna unsubscribe. */
   onClosed(cb: (activityId: string) => void): () => void
+  /** A janela do jogo entrou numa sala nova (URL já canônica). Retorna unsubscribe. */
+  onRoom(cb: (activityId: string, url: string) => void): () => void
 }
 
 /** Atalho do modo de edição e se outro programa já tem ele. */
 export interface OverlayShortcutStatus {
   accelerator: string
   taken: boolean
+}
+
+export interface ServerApi {
+  /** Endereço que respondeu ao abrir o app; null = o do build. */
+  url: string | null
+  /** Versão, endereço em uso e testes de rede (`retest`: testa de novo agora). */
+  diagnostics(retest?: boolean): Promise<ServerDiagnostics | null>
+}
+
+export interface WindowThemeApi {
+  /** Pinta a barra de título nativa (Windows/Linux) com as cores do tema. */
+  setTitleBarColors(colors: { color: string; symbolColor: string }): void
 }
 
 export interface OverlayApi {
@@ -149,11 +184,24 @@ export interface OverlayApi {
   onLayout(cb: (layout: OverlayLayout) => void): () => void
 }
 
+/** Voz do /tts baixada no primeiro uso (Linux). */
+export interface TTSApi {
+  voiceState(): Promise<TTSVoiceState>
+  /** Baixa a voz se ainda não está pronta (ligou o interruptor, "Tentar de novo"). */
+  prepare(): void
+  /** WAV da fala, ou null (voz não pronta: a primeira chamada começa o download). */
+  speak(text: string): Promise<Uint8Array | null>
+  onVoiceState(cb: (state: TTSVoiceState) => void): () => void
+}
+
 declare global {
   interface Window {
     electron: ElectronAPI
     api?: {
       appMetrics?: { sample(reset?: boolean): Promise<AppMetrics | null> }
+      perf?: { enabled(): Promise<boolean>; report(event: PerfEvent): void }
+      /** Foco/visibilidade da janela; o renderer valida com parseWindowActivity. */
+      windowActivity?: { onChange(cb: (activity: unknown) => void): () => void }
       screenPicker: ScreenPickerApi
       background?: BackgroundApi
       updates?: UpdatesApi
@@ -163,7 +211,12 @@ declare global {
       inviteLinks?: InviteLinksApi
       activities?: ActivitiesApi
       games?: GamesApi
+      music?: MusicApi
       keybinds?: KeybindsApi
+      windowTheme?: WindowThemeApi
+      server?: ServerApi
+      /** Só no app desktop do Linux (docs/adr/0014-voz-piper-no-linux.md). */
+      tts?: TTSApi
     }
   }
 }

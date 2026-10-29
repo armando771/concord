@@ -2,6 +2,7 @@ package message
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -37,25 +38,11 @@ func MessageHandler(service *Service, channelService *channel.Service, conversat
 // requireChannel confere se userID tem want no canal; se não tiver, já
 // responde o erro (canal que a pessoa não vê é 404).
 func (h *Handler) requireChannel(c *gin.Context, channelID string, userID string, want int64) bool {
-	err := channelAccess(c.Request.Context(), h.perms, channelID, userID, permission.ViewChannel|want)
-	switch {
-	case err == nil:
-		return true
-	case errors.Is(err, ErrRoomNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": "channel not found", "code": "channel_not_found"})
-	default:
-		c.JSON(http.StatusForbidden, gin.H{"error": permission.ErrMissingPermission.Error(), "code": "missing_permission"})
-	}
-	return false
+	return requireChannelAccess(c, h.perms, channelID, userID, want)
 }
 
 func (h *Handler) getUserID(c *gin.Context) (string, bool) {
-	userID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return "", false
-	}
-	return userID.(string), true
+	return requestUserID(c)
 }
 
 func parseListParams(c *gin.Context) (limit int, before string) {
@@ -90,7 +77,10 @@ func (h *Handler) CreateChannelMessage(c *gin.Context) {
 	var input struct {
 		Content       string   `json:"content"`
 		ReplyToID     *string  `json:"reply_to_id"`
-		AttachmentIDs []string `json:"attachment_ids"`
+		AttachmentIDs []string     `json:"attachment_ids"`
+		StickerID     *string      `json:"sticker_id"`
+		GifURL        *string      `json:"gif_url"`
+		GifMetadata   *GifMetadata `json:"gif_metadata"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -111,14 +101,14 @@ func (h *Handler) CreateChannelMessage(c *gin.Context) {
 		return
 	}
 
-	if len(input.AttachmentIDs) == 0 && h.commands != nil {
+	if len(input.AttachmentIDs) == 0 && input.StickerID == nil && input.GifURL == nil && h.commands != nil {
 		if ch, err := h.channelService.FindByID(c.Request.Context(), channelID); err == nil && h.tryCommand(ch.ServerID, channelID, userID, input.Content, input.AttachmentIDs) {
 			c.JSON(http.StatusAccepted, gin.H{"command": true})
 			return
 		}
 	}
 
-	msg, err := h.service.CreateChannelMessage(c.Request.Context(), channelID, userID, input.Content, input.ReplyToID, input.AttachmentIDs)
+	msg, err := h.service.CreateChannelMessage(c.Request.Context(), channelID, userID, input.Content, input.ReplyToID, input.AttachmentIDs, input.StickerID, input.GifURL, input.GifMetadata)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -148,6 +138,7 @@ func (h *Handler) ListChannelMessages(c *gin.Context) {
 
 	messages, err := h.service.ListChannelMessages(c.Request.Context(), channelID, userID, limit, before)
 	if err != nil {
+		log.Printf("[message] list messages error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list messages"})
 		return
 	}
@@ -164,8 +155,17 @@ func (h *Handler) DeleteChannelMessage(c *gin.Context) {
 		return
 	}
 
+	if h.channelService != nil {
+		if ch, err := h.channelService.FindByID(c.Request.Context(), channelID); err == nil && ch.IsSystem {
+			c.JSON(http.StatusForbidden, gin.H{"error": ErrSystemChannelDelete.Error(), "code": "system_channel"})
+			return
+		}
+	}
+
 	if err := h.service.DeleteChannelMessage(c.Request.Context(), channelID, messageID, userID); err != nil {
 		switch {
+		case errors.Is(err, ErrSystemChannelDelete):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "system_channel"})
 		case errors.Is(err, ErrNotAuthor):
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "missing_permission"})
 		case errors.Is(err, ErrMessageNotFound):
@@ -322,7 +322,10 @@ func (h *Handler) CreateConversationMessage(c *gin.Context) {
 	var input struct {
 		Content       string   `json:"content"`
 		ReplyToID     *string  `json:"reply_to_id"`
-		AttachmentIDs []string `json:"attachment_ids"`
+		AttachmentIDs []string     `json:"attachment_ids"`
+		StickerID     *string      `json:"sticker_id"`
+		GifURL        *string      `json:"gif_url"`
+		GifMetadata   *GifMetadata `json:"gif_metadata"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -339,7 +342,7 @@ func (h *Handler) CreateConversationMessage(c *gin.Context) {
 		return
 	}
 
-	msg, err := h.service.CreateConversationMessage(c.Request.Context(), conversationID, userID, input.Content, input.ReplyToID, input.AttachmentIDs)
+	msg, err := h.service.CreateConversationMessage(c.Request.Context(), conversationID, userID, input.Content, input.ReplyToID, input.AttachmentIDs, input.StickerID, input.GifURL, input.GifMetadata)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -351,22 +354,7 @@ func (h *Handler) CreateConversationMessage(c *gin.Context) {
 // canSendToConversation confere se userID pode escrever na DM; se não puder,
 // já responde o erro.
 func (h *Handler) canSendToConversation(c *gin.Context, conversationID string, userID string) bool {
-	err := h.access.CanWrite(c.Request.Context(), Room{ConversationID: conversationID}, userID)
-	switch {
-	case err == nil:
-		return true
-	case errors.Is(err, ErrRoomNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": "conversation not found"})
-	case errors.Is(err, ErrNoRoomAccess):
-		c.JSON(http.StatusForbidden, gin.H{"error": "you are not a participant of this conversation"})
-	case errors.Is(err, ErrBlocked):
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "blocked"})
-	case errors.Is(err, ErrCannotMessage):
-		c.JSON(http.StatusForbidden, gin.H{"error": "you can only message friends or people from your servers"})
-	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check access"})
-	}
-	return false
+	return requireConversationWrite(c, h.access, conversationID, userID)
 }
 
 func (h *Handler) ListConversationMessages(c *gin.Context) {
@@ -387,6 +375,7 @@ func (h *Handler) ListConversationMessages(c *gin.Context) {
 
 	messages, err := h.service.ListConversationMessages(c.Request.Context(), conversationID, userID, limit, before)
 	if err != nil {
+		log.Printf("[message] list messages error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list messages"})
 		return
 	}
@@ -440,43 +429,6 @@ func (h *Handler) DeleteConversationMessage(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "message deleted"})
 }
 
-func (h *Handler) AddChannelReaction(c *gin.Context) {
-	channelID := c.Param("channelId")
-	messageID := c.Param("messageId")
-
-	userID, ok := h.getUserID(c)
-	if !ok {
-		return
-	}
-
-	if !h.requireChannel(c, channelID, userID, permission.AddReactions) {
-		return
-	}
-
-	var input struct {
-		Emoji string `json:"emoji"`
-	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
-		return
-	}
-
-	if err := h.service.AddChannelReaction(c.Request.Context(), channelID, messageID, userID, input.Emoji); err != nil {
-		if errors.Is(err, ErrInvalidEmoji) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		if errors.Is(err, ErrMessageNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add reaction"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"ok": true})
-}
-
 func (h *Handler) RemoveChannelReaction(c *gin.Context) {
 	channelID := c.Param("channelId")
 	messageID := c.Param("messageId")
@@ -501,43 +453,6 @@ func (h *Handler) RemoveChannelReaction(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove reaction"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"ok": true})
-}
-
-func (h *Handler) AddConversationReaction(c *gin.Context) {
-	conversationID := c.Param("id")
-	messageID := c.Param("messageId")
-
-	userID, ok := h.getUserID(c)
-	if !ok {
-		return
-	}
-
-	if !h.isConversationParticipant(c, conversationID, userID) {
-		return
-	}
-
-	var input struct {
-		Emoji string `json:"emoji"`
-	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
-		return
-	}
-
-	if err := h.service.AddConversationReaction(c.Request.Context(), conversationID, messageID, userID, input.Emoji); err != nil {
-		if errors.Is(err, ErrInvalidEmoji) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		if errors.Is(err, ErrMessageNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add reaction"})
 		return
 	}
 

@@ -123,7 +123,27 @@ func (s *Snapshot) CanActOn(actorID, targetID string) bool {
 	return CanActOn(s.OwnerID, actorID, targetID, s.Highest(actorID), s.Highest(targetID))
 }
 
+// CanEditRolesOf: o ator pode dar ou tirar cargos do alvo?
+func (s *Snapshot) CanEditRolesOf(actorID, targetID string) bool {
+	return CanEditRolesOf(s.OwnerID, actorID, targetID)
+}
+
 // CanManageRole: o ator pode editar/atribuir este cargo?
 func (s *Snapshot) CanManageRole(actorID string, role Role) bool {
 	return CanManageRole(s.IsOwner(actorID), s.Highest(actorID), role)
+}
+
+// CanManageNicknameOf: o ator pode mudar o apelido do alvo neste servidor?
+func (s *Snapshot) CanManageNicknameOf(actorID, targetID string) bool {
+	return CanManageNicknameOf(s.OwnerID, actorID, targetID, s.Highest(actorID), s.Highest(targetID))
+}
+
+// CanDisconnectMember: o ator pode desconectar o alvo da chamada de voz neste servidor?
+func (s *Snapshot) CanDisconnectMember(actorID, targetID string) bool {
+	return CanDisconnectMember(s.OwnerID, actorID, targetID, s.Highest(actorID), s.Highest(targetID))
+}
+
+// CanMoveMember: o ator pode mover o alvo de canal de voz neste servidor?
+func (s *Snapshot) CanMoveMember(actorID, targetID string) bool {
+	return CanMoveMember(s.OwnerID, actorID, targetID, s.Highest(actorID), s.Highest(targetID))
 }

@@ -3,6 +3,9 @@
 #
 #   scripts/build-win.sh http://SEU-ENDERECO.ply.gg:PORTA
 #
+# SERVER_FALLBACK_URLS (opcional, separados por vírgula): endereços alternativos
+# do mesmo servidor; o app usa o primeiro que responde ao abrir.
+#
 # Saída em frontend/dist/: Salinha-<versão>-portable.exe (é só abrir) e
 # Salinha-<versão>-setup.exe (instalador). Roda dentro do Docker
 # (electronuserland/builder:wine) para não precisar de wine na máquina.
@@ -26,7 +29,8 @@ mkdir -p "$ROOT/frontend/dist"
 BUILD_TARGETS="${BUILD_TARGETS:-portable nsis}"
 UPDATE_URL="${SERVER_URL%/}/updates/"
 
-# Helper nativo do som da janela (Rust → concord-audio.exe), embutido no app.
+# Helper nativo (Rust → concord-audio.exe), embutido no app: som da janela,
+# overlay de jogo e a música em atividade (`media-watch`).
 docker build -q -t concord-rust-win "$ROOT/native/concord-audio" >/dev/null
 docker run --rm \
   -v "$ROOT/native/concord-audio:/src" \
@@ -47,6 +51,7 @@ docker run --rm \
   -v "$ROOT/frontend/dist:/out" \
   -v concord-builder-cache:/root/.cache \
   -e VITE_SERVER_URL="$SERVER_URL" \
+  -e VITE_SERVER_FALLBACK_URLS="${SERVER_FALLBACK_URLS:-}" \
   -e CONCORD_UPDATE_URL="$UPDATE_URL" \
   -e CONCORD_UPDATE_PUBKEY="${CONCORD_UPDATE_PUBKEY:-}" \
   -e BUILD_TARGETS="$BUILD_TARGETS" \

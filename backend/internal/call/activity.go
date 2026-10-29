@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 )
@@ -65,6 +66,18 @@ type callActivity struct {
 	activityID string
 	url        string
 	startedBy  UserInfo
+	// players: quem está com o jogo aberto agora (o app avisa ao abrir e ao
+	// fechar). Quem abriu está sempre aqui enquanto a atividade existe.
+	players map[string]struct{}
+}
+
+func (a *callActivity) playerIDs() []string {
+	ids := make([]string, 0, len(a.players))
+	for id := range a.players {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 type ActivityPayload struct {
@@ -73,12 +86,28 @@ type ActivityPayload struct {
 	URL        string `json:"url"`
 }
 
+// ActivityPresencePayload: call:activity:join / call:activity:leave (abri ou
+// fechei o jogo aqui).
+type ActivityPresencePayload struct {
+	CallID     string `json:"call_id"`
+	ActivityID string `json:"activity_id"`
+}
+
 // ActivityEvent: atividade aberta na chamada (call:activity e no estado).
 type ActivityEvent struct {
 	CallID     string   `json:"call_id"`
 	ActivityID string   `json:"activity_id"`
 	URL        string   `json:"url"`
 	StartedBy  UserInfo `json:"started_by"`
+	// Players: ids de quem está jogando (selo na lista e nos tiles).
+	Players []string `json:"players"`
+}
+
+// ActivityPlayersEvent: quem está jogando mudou (call:activity:players).
+type ActivityPlayersEvent struct {
+	CallID     string   `json:"call_id"`
+	ActivityID string   `json:"activity_id"`
+	Players    []string `json:"players"`
 }
 
 type ActivityStopEvent struct {
@@ -119,7 +148,17 @@ func (s *Service) StartActivity(ctx context.Context, callID, userID, activityID,
 		return ErrActivityCooldown
 	}
 	p.lastActivityAt = now
-	s.activities[callID] = &callActivity{activityID: activityID, url: link, startedBy: userInfo}
+	// Trocar o link (a sala capturada da janela do jogo) mantém quem já está
+	// jogando; uma atividade nova começa só com quem a abriu.
+	players := map[string]struct{}{userID: {}}
+	if prev, ok := s.activities[callID]; ok && prev.activityID == activityID && prev.startedBy.ID == userID {
+		for id := range prev.players {
+			players[id] = struct{}{}
+		}
+	}
+	act := &callActivity{activityID: activityID, url: link, startedBy: userInfo, players: players}
+	s.activities[callID] = act
+	playerIDs := act.playerIDs()
 	targets := participantIDsLocked(ac)
 	s.mu.Unlock()
 
@@ -128,8 +167,63 @@ func (s *Service) StartActivity(ctx context.Context, callID, userID, activityID,
 		ActivityID: activityID,
 		URL:        link,
 		StartedBy:  userInfo,
+		Players:    playerIDs,
 	}))
 	return nil
+}
+
+// JoinActivity: abri o jogo da atividade aqui. Sem atividade aberta (ou com
+// outra no lugar, corrida com o stop/troca) não faz nada.
+func (s *Service) JoinActivity(callID, userID, activityID string) error {
+	return s.setActivityPlayer(callID, userID, activityID, true)
+}
+
+// LeaveActivity: fechei o jogo aqui. Quem abriu não sai da lista por aqui:
+// fechar o jogo dele encerra a atividade (StopActivity).
+func (s *Service) LeaveActivity(callID, userID, activityID string) error {
+	return s.setActivityPlayer(callID, userID, activityID, false)
+}
+
+func (s *Service) setActivityPlayer(callID, userID, activityID string, playing bool) error {
+	s.mu.Lock()
+	ac, ok := s.calls[callID]
+	if !ok {
+		s.mu.Unlock()
+		return ErrNotFound
+	}
+	if _, ok := ac.participants[userID]; !ok {
+		s.mu.Unlock()
+		return ErrNotAllowed
+	}
+	act, ok := s.activities[callID]
+	if !ok || act.activityID != activityID || act.startedBy.ID == userID {
+		s.mu.Unlock()
+		return nil
+	}
+	_, had := act.players[userID]
+	if had == playing {
+		s.mu.Unlock()
+		return nil
+	}
+	if playing {
+		act.players[userID] = struct{}{}
+	} else {
+		delete(act.players, userID)
+	}
+	event := activityPlayersEvent(callID, act)
+	targets := participantIDsLocked(ac)
+	s.mu.Unlock()
+
+	s.sendToAll(targets, event)
+	return nil
+}
+
+func activityPlayersEvent(callID string, act *callActivity) []byte {
+	return marshalEvent("call:activity:players", ActivityPlayersEvent{
+		CallID:     callID,
+		ActivityID: act.activityID,
+		Players:    act.playerIDs(),
+	})
 }
 
 // StopActivity encerra a atividade da chamada (só quem abriu).
@@ -187,18 +281,27 @@ func (s *Service) ActivityFor(callID, userID string) *ActivityEvent {
 		ActivityID: act.activityID,
 		URL:        act.url,
 		StartedBy:  act.startedBy,
+		Players:    act.playerIDs(),
 	}
 }
 
-// dropActivityOfLocked tira a atividade se quem saiu foi quem a abriu. Devolve
-// o evento de fim (nil se nada mudou); quem chama avisa depois de soltar o lock.
+// dropActivityOfLocked trata a saída de alguém da chamada: se foi quem abriu,
+// a atividade acaba; se estava jogando, sai da lista. Devolve o evento a mandar
+// (nil se nada mudou); quem chama avisa depois de soltar o lock.
 func (s *Service) dropActivityOfLocked(callID, userID string) []byte {
 	act, ok := s.activities[callID]
-	if !ok || act.startedBy.ID != userID {
+	if !ok {
 		return nil
 	}
-	delete(s.activities, callID)
-	return activityStopEvent(callID, act)
+	if act.startedBy.ID == userID {
+		delete(s.activities, callID)
+		return activityStopEvent(callID, act)
+	}
+	if _, playing := act.players[userID]; !playing {
+		return nil
+	}
+	delete(act.players, userID)
+	return activityPlayersEvent(callID, act)
 }
 
 func activityStopEvent(callID string, act *callActivity) []byte {
@@ -249,6 +352,17 @@ func (s *Service) handleActivityStopMessage(userID string, payload json.RawMessa
 		return
 	}
 	if err := s.StopActivity(p.CallID, userID); err != nil {
+		s.sendActivityError(userID, p.CallID, activityErrorMessage(err))
+	}
+}
+
+func (s *Service) handleActivityPresenceMessage(userID string, playing bool, payload json.RawMessage) {
+	var p ActivityPresencePayload
+	if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" || p.ActivityID == "" {
+		s.sendActivityError(userID, "", "atividade inválida")
+		return
+	}
+	if err := s.setActivityPlayer(p.CallID, userID, p.ActivityID, playing); err != nil {
 		s.sendActivityError(userID, p.CallID, activityErrorMessage(err))
 	}
 }

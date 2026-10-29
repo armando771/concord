@@ -229,6 +229,10 @@ node scripts/e2e-noise.mjs
 node scripts/rnnoise-offline.mjs entrada.wav saida.wav
 ```
 
+### Changelog (novidades por versão)
+
+Todo PR de feature ou correção visível ao usuário acrescenta uma linha em `changelog/next.md`, em `## Novidades` ou `## Correções` (linguagem de usuário, uma frase). O deploy envia o arquivo na versão que subir (`scripts/publish-changelog.mjs`) e o servidor guarda nela só as notas que nenhuma versão anterior trouxe, então o arquivo acumula entre deploys. De tempos em tempos apague dele as notas que já saíram (o envio aceita até 1000 notas e o `--check` do deploy barra acima disso); reescrever uma nota faz ela sair de novo como nova.
+
 ## 🔌 API (resumo)
 
 Autenticação via header `Authorization: Bearer <access_token>` (exceto rotas públicas de auth).
@@ -248,6 +252,7 @@ Autenticação via header `Authorization: Bearer <access_token>` (exceto rotas p
 | ... | `/api/soundboard/*` | mesa de áudio |
 | GET | `/api/presence?ids=` | status online |
 | GET | `/api/presence/activities?ids=` | jogo em andamento de quem posso ver |
+| GET | `/api/changelog` | novidades por versão (o deploy publica via `PUT /api/changelog/:versão` com `CHANGELOG_TOKEN`) |
 
 > A lista completa de endpoints está no código (`internal/*/routes.go`).
 
