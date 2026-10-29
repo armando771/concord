@@ -6,6 +6,9 @@ export default function HomeRoute() {
   return (
     <HomeScreen
       onOpenChannel={(channel) => router.push({ pathname: '/canal/[channelId]', params: { channelId: channel.id, name: channel.name } })}
+      onOpenConversation={({ id, title, type }) =>
+        router.push({ pathname: '/dm/[conversationId]', params: { conversationId: id, name: title, type } })
+      }
       onOpenSettings={() => router.push('/conta')}
     />
   )

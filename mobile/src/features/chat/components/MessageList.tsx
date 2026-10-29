@@ -3,7 +3,7 @@ import { colors, fontSize, spacing } from '../../../shared/theme/tokens'
 import { Banner } from '../../../shared/ui/Banner'
 import { Button } from '../../../shared/ui/Button'
 import type { Message } from '../api/messages'
-import type { LoadStatus } from '../hooks/useChannelMessages'
+import type { LoadStatus } from '../hooks/useRoomMessages'
 import { groupMessages } from '../lib/messageGroups'
 import { MessageItem } from './MessageItem'
 

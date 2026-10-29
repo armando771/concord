@@ -2,14 +2,24 @@ import { act, renderHook, waitFor } from '@testing-library/react-native'
 import { ApiError } from '../../../shared/api/client'
 import { realtime } from '../../../shared/api/realtime'
 import type { WsEvent } from '../../../shared/api/ws'
-import { listChannelMessages, sendChannelMessage, type Message } from '../api/messages'
-import { useChannelMessages } from './useChannelMessages'
+import { markConversationRead } from '../api/conversations'
+import {
+  listChannelMessages,
+  listConversationMessages,
+  sendChannelMessage,
+  sendConversationMessage,
+  type Message
+} from '../api/messages'
+import { useRoomMessages } from './useRoomMessages'
 
 jest.mock('../api/messages', () => ({
   ...jest.requireActual('../api/messages'),
   listChannelMessages: jest.fn(),
-  sendChannelMessage: jest.fn()
+  sendChannelMessage: jest.fn(),
+  listConversationMessages: jest.fn(),
+  sendConversationMessage: jest.fn()
 }))
+jest.mock('../api/conversations', () => ({ markConversationRead: jest.fn().mockResolvedValue(undefined) }))
 jest.mock('../../../shared/api/realtime', () => {
   let reconnect: () => void = () => {}
   return {
@@ -42,9 +52,9 @@ beforeEach(() => {
   list.mockResolvedValue([msg('b', 2), msg('a', 1)])
 })
 
-describe('useChannelMessages', () => {
+describe('useRoomMessages', () => {
   it('carrega o histórico e assina a sala do canal', async () => {
-    const { result } = await renderHook(() => useChannelMessages('c1'))
+    const { result } = await renderHook(() => useRoomMessages({ kind: 'channel', id: 'c1' }))
     await waitFor(() => expect(result.current.status).toBe('ready'))
     expect(ids(result.current.messages)).toEqual(['b', 'a'])
     expect(list).toHaveBeenCalledWith('c1')
@@ -52,14 +62,14 @@ describe('useChannelMessages', () => {
   })
 
   it('ao sair, cancela a assinatura da sala', async () => {
-    const { unmount } = await renderHook(() => useChannelMessages('c1'))
+    const { unmount } = await renderHook(() => useRoomMessages({ kind: 'channel', id: 'c1' }))
     await unmount()
     expect(realtime.unsubscribe).toHaveBeenCalledWith('channel:c1')
   })
 
   it('falha ao carregar: status erro; retry tenta de novo', async () => {
     list.mockRejectedValueOnce(new Error('rede'))
-    const { result } = await renderHook(() => useChannelMessages('c1'))
+    const { result } = await renderHook(() => useRoomMessages({ kind: 'channel', id: 'c1' }))
     await waitFor(() => expect(result.current.status).toBe('error'))
     await act(async () => result.current.retry())
     await waitFor(() => expect(result.current.status).toBe('ready'))
@@ -67,7 +77,7 @@ describe('useChannelMessages', () => {
   })
 
   it('mensagem nova do WebSocket entra no topo; a de outro canal é ignorada', async () => {
-    const { result } = await renderHook(() => useChannelMessages('c1'))
+    const { result } = await renderHook(() => useRoomMessages({ kind: 'channel', id: 'c1' }))
     await waitFor(() => expect(result.current.status).toBe('ready'))
     await emit('message:create', { message: msg('c', 3) })
     await emit('message:create', { message: msg('z', 4, 'outro') })
@@ -75,7 +85,7 @@ describe('useChannelMessages', () => {
   })
 
   it('message:update troca o texto e message:delete remove', async () => {
-    const { result } = await renderHook(() => useChannelMessages('c1'))
+    const { result } = await renderHook(() => useRoomMessages({ kind: 'channel', id: 'c1' }))
     await waitFor(() => expect(result.current.status).toBe('ready'))
     await emit('message:update', { message: { ...msg('a', 1), content: 'editada' } })
     expect(result.current.messages.find((m) => m.id === 'a')?.content).toBe('editada')
@@ -87,7 +97,7 @@ describe('useChannelMessages', () => {
 
   it('loadMore pede a página anterior pelo cursor e some o "tem mais" quando a página vem curta', async () => {
     list.mockResolvedValueOnce(Array.from({ length: 50 }, (_, i) => msg(`m${String(i).padStart(2, '0')}`, i)))
-    const { result } = await renderHook(() => useChannelMessages('c1'))
+    const { result } = await renderHook(() => useRoomMessages({ kind: 'channel', id: 'c1' }))
     await waitFor(() => expect(result.current.status).toBe('ready'))
     expect(result.current.hasMore).toBe(true)
     list.mockResolvedValueOnce([{ ...msg('old', 0), created_at: '2026-10-27T09:00:00Z' }])
@@ -99,7 +109,7 @@ describe('useChannelMessages', () => {
 
   it('enviar: a resposta entra na lista e o evento do WS não duplica', async () => {
     send.mockResolvedValue(msg('n', 5))
-    const { result } = await renderHook(() => useChannelMessages('c1'))
+    const { result } = await renderHook(() => useRoomMessages({ kind: 'channel', id: 'c1' }))
     await waitFor(() => expect(result.current.status).toBe('ready'))
     let outcome = ''
     await act(async () => void (outcome = await result.current.send('  oi  ')))
@@ -110,7 +120,7 @@ describe('useChannelMessages', () => {
   })
 
   it('texto vazio não envia', async () => {
-    const { result } = await renderHook(() => useChannelMessages('c1'))
+    const { result } = await renderHook(() => useRoomMessages({ kind: 'channel', id: 'c1' }))
     await waitFor(() => expect(result.current.status).toBe('ready'))
     let outcome = ''
     await act(async () => void (outcome = await result.current.send('   ')))
@@ -119,7 +129,7 @@ describe('useChannelMessages', () => {
   })
 
   it('403 vira "forbidden"; outro erro vira "error"', async () => {
-    const { result } = await renderHook(() => useChannelMessages('c1'))
+    const { result } = await renderHook(() => useRoomMessages({ kind: 'channel', id: 'c1' }))
     await waitFor(() => expect(result.current.status).toBe('ready'))
     send.mockRejectedValueOnce(new ApiError(403, 'no'))
     let outcome = ''
@@ -131,7 +141,7 @@ describe('useChannelMessages', () => {
   })
 
   it('ao reconectar, busca de novo a página mais recente e junta (cobre eventos perdidos)', async () => {
-    const { result } = await renderHook(() => useChannelMessages('c1'))
+    const { result } = await renderHook(() => useRoomMessages({ kind: 'channel', id: 'c1' }))
     await waitFor(() => expect(result.current.status).toBe('ready'))
     list.mockResolvedValueOnce([msg('perdida', 9)])
     await act(async () => __reconnect())
@@ -142,12 +152,79 @@ describe('useChannelMessages', () => {
     let finishFirst: (m: Message[]) => void = () => {}
     list.mockReturnValueOnce(new Promise((r) => (finishFirst = r)))
     list.mockResolvedValueOnce([msg('d', 7, 'c2')])
-    const { result, rerender } = await renderHook<ReturnType<typeof useChannelMessages>, { id: string }>(({ id }) => useChannelMessages(id), {
+    const { result, rerender } = await renderHook<ReturnType<typeof useRoomMessages>, { id: string }>(({ id }) => useRoomMessages({ kind: 'channel', id }), {
       initialProps: { id: 'c1' }
     })
     await rerender({ id: 'c2' })
     await waitFor(() => expect(ids(result.current.messages)).toEqual(['d']))
     await act(async () => finishFirst([msg('velha', 1)]))
     expect(ids(result.current.messages)).toEqual(['d'])
+  })
+})
+
+describe('useRoomMessages: conversa (DM)', () => {
+  const listDm = jest.mocked(listConversationMessages)
+  const sendDm = jest.mocked(sendConversationMessage)
+  const dmMsg = (id: string, minute: number, conversation = 'd1'): Message => ({
+    id,
+    author_id: 'u2',
+    conversation_id: conversation,
+    content: id,
+    created_at: `2026-10-28T10:${String(minute).padStart(2, '0')}:00Z`
+  })
+  const open = () => renderHook(() => useRoomMessages({ kind: 'conversation', id: 'd1' }))
+
+  beforeEach(() => {
+    listDm.mockResolvedValue([dmMsg('b', 2), dmMsg('a', 1)])
+    jest.mocked(markConversationRead).mockClear()
+  })
+
+  it('carrega pelo endpoint da conversa e assina a sala conversation:<id>', async () => {
+    const { result } = await open()
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(listDm).toHaveBeenCalledWith('d1')
+    expect(list).not.toHaveBeenCalled()
+    expect(ids(result.current.messages)).toEqual(['b', 'a'])
+    expect(realtime.subscribe).toHaveBeenCalledWith('conversation:d1')
+  })
+
+  it('ao abrir, marca a conversa como lida', async () => {
+    await open()
+    await waitFor(() => expect(markConversationRead).toHaveBeenCalledWith('d1'))
+  })
+
+  it('mensagem nova desta conversa entra e é marcada como lida; a de outra é ignorada', async () => {
+    const { result } = await open()
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    jest.mocked(markConversationRead).mockClear()
+    await emit('message:create', { message: dmMsg('c', 3) })
+    await emit('message:create', { message: dmMsg('z', 4, 'outra') })
+    expect(ids(result.current.messages)).toEqual(['c', 'b', 'a'])
+    expect(markConversationRead).toHaveBeenCalledTimes(1)
+  })
+
+  it('message:delete filtra por conversation_id', async () => {
+    const { result } = await open()
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    await emit('message:delete', { message_id: 'b', conversation_id: 'd1' })
+    expect(ids(result.current.messages)).toEqual(['a'])
+    await emit('message:delete', { message_id: 'a', conversation_id: 'outra' })
+    expect(ids(result.current.messages)).toEqual(['a'])
+  })
+
+  it('enviar usa o endpoint da conversa', async () => {
+    sendDm.mockResolvedValue(dmMsg('n', 5))
+    const { result } = await open()
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    await act(async () => void (await result.current.send('oi')))
+    expect(sendDm).toHaveBeenCalledWith('d1', 'oi')
+    expect(send).not.toHaveBeenCalled()
+    expect(ids(result.current.messages)[0]).toBe('n')
+  })
+
+  it('canal não marca nada como lido', async () => {
+    const { result } = await renderHook(() => useRoomMessages({ kind: 'channel', id: 'c1' }))
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(markConversationRead).not.toHaveBeenCalled()
   })
 })

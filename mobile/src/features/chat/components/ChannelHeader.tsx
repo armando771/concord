@@ -4,15 +4,17 @@ import { IconButton } from '../../../shared/ui/IconButton'
 
 interface ChannelHeaderProps {
   name: string
+  /** "#" no canal (padrão), "@" na DM 1 a 1, vazio no grupo. */
+  prefix?: string
   onBack: () => void
 }
 
 /** Topo do chat: voltar para a lista e o nome do canal. */
-export function ChannelHeader({ name, onBack }: ChannelHeaderProps) {
+export function ChannelHeader({ name, prefix = '#', onBack }: ChannelHeaderProps) {
   return (
     <View style={styles.bar}>
       <IconButton icon="arrow-back" label="Voltar" onPress={onBack} />
-      <Text style={styles.hash}>#</Text>
+      {prefix ? <Text style={styles.hash}>{prefix}</Text> : null}
       <Text style={styles.name} numberOfLines={1}>
         {name}
       </Text>

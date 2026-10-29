@@ -1,11 +1,13 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native'
 import { useNetworkStore } from '../../../shared/store/networkStore'
-import type { SendOutcome } from '../hooks/useChannelMessages'
+import type { SendOutcome } from '../hooks/useRoomMessages'
 import { Composer } from './Composer'
 
 const type = (text: string) => fireEvent.changeText(screen.getByLabelText('Mensagem para #geral'), text)
 const press = () => fireEvent.press(screen.getByRole('button', { name: 'Enviar' }))
-const setup = (onSend: (t: string) => Promise<SendOutcome>) => render(<Composer channelName="geral" onSend={onSend} />)
+const FORBIDDEN = 'Você não tem permissão para enviar mensagens neste canal.'
+const setup = (onSend: (t: string) => Promise<SendOutcome>, forbiddenNotice: string | null = FORBIDDEN) =>
+  render(<Composer label="Mensagem para #geral" onSend={onSend} forbiddenNotice={forbiddenNotice ?? undefined} />)
 
 describe('Composer', () => {
   beforeEach(() => useNetworkStore.setState({ online: true }))
@@ -39,6 +41,13 @@ describe('Composer', () => {
     await type('oi')
     await press()
     expect(await screen.findByText('Você não tem permissão para enviar mensagens neste canal.')).toBeOnTheScreen()
+  })
+
+  it('403 sem texto próprio (DM): cai no aviso genérico de falha', async () => {
+    await setup(jest.fn().mockResolvedValue('forbidden'), null)
+    await type('oi')
+    await press()
+    expect(await screen.findByText('Não foi possível enviar. Tente de novo.')).toBeOnTheScreen()
   })
 
   it('sem rede: botão desativado mesmo com texto', async () => {
