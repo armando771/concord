@@ -1,13 +1,13 @@
 import { create } from 'zustand'
 import type { Tokens } from '../../../shared/lib/authRefresh'
+import type { ProfileAppearance } from '../../profile/lib/profileTypes'
 import { clearTokens, loadTokens, saveTokens } from '../lib/secureTokens'
 
 /** A própria conta (/users/me): com o e-mail. Só o que o app mobile usa por ora. */
-export interface User {
+export interface User extends ProfileAppearance {
   id: string
   username: string
   display_name: string
-  avatar_url?: string | null
   email: string
   /** false até a pessoa abrir o link do e-mail de confirmação. */
   email_verified?: boolean
