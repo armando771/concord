@@ -9,15 +9,6 @@ import { useGuestJoin } from '../hooks/useGuestJoin'
 import type { GuestPreview } from '../api/guestInvites'
 import GuestCard from './GuestCard'
 
-function JoinError({ message }: { message: string | null }): React.JSX.Element | null {
-  if (!message) return null
-  return (
-    <p role="alert" className="text-ds-sm text-red-300">
-      {message}
-    </p>
-  )
-}
-
 function JoinForm({ token, preview }: { token: string; preview: GuestPreview }): React.JSX.Element {
   const join = useGuestJoin(token)
   const [name, setName] = useState('')
@@ -40,23 +31,20 @@ function JoinForm({ token, preview }: { token: string; preview: GuestPreview }):
           void join.join(name)
         }}
       >
-        {!join.withAccount && (
-          <Input
-            label={GUEST_COPY.nameLabel}
-            placeholder={GUEST_COPY.namePlaceholder}
-            value={name}
-            maxLength={32}
-            autoComplete="nickname"
-            autoFocus
-            onChange={(e) => setName(e.target.value)}
-            error={join.error}
-          />
-        )}
-        {join.withAccount && <JoinError message={join.error} />}
+        <Input
+          label={GUEST_COPY.nameLabel}
+          placeholder={GUEST_COPY.namePlaceholder}
+          value={name}
+          maxLength={32}
+          autoComplete="nickname"
+          autoFocus
+          onChange={(e) => setName(e.target.value)}
+          error={join.error}
+        />
         <Button type="submit" className="min-h-10 w-full" disabled={join.joining}>
-          {joinButtonLabel(join.joining, join.withAccount ? join.accountName : null)}
+          {joinButtonLabel(join.joining)}
         </Button>
-        {!join.withAccount && <p className="text-ds-xs text-gray-400">{GUEST_COPY.nameHint}</p>}
+        <p className="text-ds-xs text-gray-400">{GUEST_COPY.nameHint}</p>
       </form>
     </>
   )
