@@ -1,7 +1,7 @@
 # App mobile, fatia 2c: notificações push (backend + app), prontas para ligar
 
 Última fatia do Chat ([roadmap](2026-10-27-app-mobile-roadmap-design.md)). Depende do #385. Decisão de
-arquitetura: [ADR 0016](../../adr/0016-push-direto-pelo-fcm.md) (FCM direto, sem conta Expo).
+arquitetura: [ADR 0022](../../adr/0022-push-direto-pelo-fcm.md) (FCM direto, sem conta Expo).
 
 ## Objetivo
 
@@ -13,7 +13,7 @@ e o app funcionam normalmente, só sem push.
 ## Decisões (com o porquê)
 
 - **Envio direto pelo FCM HTTP v1** com a conta de serviço do Firebase; JWT assinado com a lib padrão do
-  Go, sem dependência nova (ADR 0016). No app, `expo-notifications` com o token nativo
+  Go, sem dependência nova (ADR 0022). No app, `expo-notifications` com o token nativo
   (`getDevicePushTokenAsync`): sem conta Expo.
 - **Desligado sem credenciais**: backend sem `FCM_SERVICE_ACCOUNT_FILE` não envia (um log na subida) e
   o APK sem `google-services.json` não registra token (sem erro na tela). Nada quebra antes da hora.
@@ -32,7 +32,7 @@ e o app funcionam normalmente, só sem push.
 
 ```
 backend/
-  migrations/000128_create_push_tokens.up.sql / .down.sql     (user_id, token único, platform, updated_at)
+  migrations/000171_create_push_tokens.up.sql / .down.sql     (user_id, token único, platform, updated_at)
   internal/platform/fcm/
     client.go          JWT (crypto/rsa) → token OAuth2 (cache) → messages:send; ErrUnregistered; Disabled
     config.go          FCM_SERVICE_ACCOUNT_FILE|JSON, FCM_ENDPOINT e FCM_TOKEN_URL (para teste com servidor falso)
@@ -53,7 +53,7 @@ mobile/
 docs/PUSH.md           passo a passo para o dono criar o Firebase e ligar (variáveis, build)
 ```
 
-Estrutura por feature como o desktop; sem arquivo solto. `docs/PUSH.md` + ADR 0016 fecham a documentação.
+Estrutura por feature como o desktop; sem arquivo solto. `docs/PUSH.md` + ADR 0022 fecham a documentação.
 
 ## Fluxo de dados
 

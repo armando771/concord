@@ -11,7 +11,7 @@ import (
 	"gin-quickstart/backend/internal/push"
 )
 
-// wirePush liga o push do app mobile (ADR 0016). Sem credenciais do Firebase o envio fica desligado,
+// wirePush liga o push do app mobile (ADR 0022). Sem credenciais do Firebase o envio fica desligado,
 // mas as rotas de token continuam respondendo para o app registrar o aparelho.
 func (a *app) wirePush() {
 	repo := push.NewRepository(a.db)

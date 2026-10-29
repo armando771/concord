@@ -34,6 +34,8 @@ export interface CallParticipant {
   display_name?: string
   avatar_url?: string | null
   name_style?: NameStyle
+  /** Servidor de que a pessoa é visitante (selo "Visitante"; ausente = não é). */
+  guest_of?: string
 }
 
 export interface CallStateResponse {

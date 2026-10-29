@@ -1,6 +1,6 @@
 # Push do app mobile (Android)
 
-Decisão e desenho: [ADR 0016](adr/0016-push-direto-pelo-fcm.md) e a spec
+Decisão e desenho: [ADR 0022](adr/0022-push-direto-pelo-fcm.md) e a spec
 `docs/superpowers/specs/2026-10-29-app-mobile-push-design.md`.
 
 O backend fala direto com o FCM (HTTP v1), sem Expo Push e sem dependência nova.

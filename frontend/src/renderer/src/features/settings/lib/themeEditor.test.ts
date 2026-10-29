@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PROFILE_THEME, PROFILE_EFFECTS } from '../../profile/lib/profileTheme'
-import { EFFECT_GLYPHS, borderTunable, effectOptions, levelLabel, withEffect } from './themeEditor'
+import { DEFAULT_PROFILE_THEME } from '../../profile/lib/profileTheme'
+import { borderTunable, effectOptions, levelLabel, withEffect } from './themeEditor'
 
 describe('themeEditor', () => {
-  it('todo efeito tem ícone', () => {
-    for (const e of PROFILE_EFFECTS) expect(EFFECT_GLYPHS[e.id], e.id).toBeTruthy()
-  })
   it('trocar de efeito zera a cor escolhida', () => {
     const t = withEffect({ ...DEFAULT_PROFILE_THEME, effect_color: '#123456' }, 'fire')
     expect(t.effect).toBe('fire')

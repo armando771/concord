@@ -6,7 +6,7 @@ import type { ExpoConfig } from 'expo/config'
 const googleServices = process.env.GOOGLE_SERVICES_JSON
 
 // O package id e o keystore ficam fixos: trocar depois quebra as atualizações
-// do APK instalado e as credenciais do FCM (ADR 0015).
+// do APK instalado e as credenciais do FCM (ADR 0021).
 const config: ExpoConfig = {
   name: 'Salinha',
   slug: 'salinha',

@@ -1,5 +1,5 @@
 // Package fcm envia push pela API HTTP v1 do Firebase Cloud Messaging, autenticando com a conta de
-// serviço do Firebase (docs/adr/0016-push-direto-pelo-fcm.md). O JWT é assinado com a biblioteca
+// serviço do Firebase (docs/adr/0022-push-direto-pelo-fcm.md). O JWT é assinado com a biblioteca
 // padrão: sem dependência nova. Sem credenciais o push fica desligado e o resto do backend segue normal.
 package fcm
 

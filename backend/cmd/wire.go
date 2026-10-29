@@ -9,6 +9,7 @@ import (
 	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/friendship"
+	"gin-quickstart/backend/internal/guest"
 	"gin-quickstart/backend/internal/message"
 	"gin-quickstart/backend/internal/music"
 	"gin-quickstart/backend/internal/permission"
@@ -32,9 +33,11 @@ type app struct {
 	db  *pgxpool.Pool
 	hub *websocket.Hub
 
-	authRepository  *auth.Repository
-	authService     *auth.Service
-	authMiddleware  gin.HandlerFunc
+	authRepository *auth.Repository
+	authService    *auth.Service
+	authMiddleware gin.HandlerFunc
+	// memberOrGuest: rotas da call, que o visitante sem conta também usa.
+	memberOrGuest   gin.HandlerFunc
 	requireVerified gin.HandlerFunc
 
 	userRepository *user.Repository
@@ -71,10 +74,15 @@ type app struct {
 	liveKitPort   string
 	callService   *call.Service
 	// callAFK: o tempo de call (XP e badges) visto sem quem está 10 min sem falar.
-	callAFK      *call.AFK
+	callAFK *call.AFK
+	// callPresence: tira da call quem não está na sala de mídia (#374).
+	callPresence *call.MediaPresence
 	musicManager *music.Manager
+	// guestService: convite de visitante para uma call.
+	guestService *guest.Service
 
-	// badgeDone fecha quando os badges terminam de gravar no desligamento.
+	// badgeDone fecha quando os badges, o nível do servidor e o Maestro
+	// terminam de gravar no desligamento.
 	badgeDone chan struct{}
 
 	routes []func(router *gin.Engine, api *gin.RouterGroup)
@@ -108,8 +116,11 @@ func wire(ctx context.Context, db *pgxpool.Pool) *app {
 	a.wireChat()
 	a.wirePush()
 	a.wireCalls()
+	a.wireGuests()
 	a.wireMusic()
 	a.wireEngagement()
+	a.wireServerLevel()
+	a.wireMusicSessions()
 	a.wireRealtime()
 	a.wireAccount()
 	a.wireUpdates()

@@ -1,25 +1,5 @@
 import { useAnnotationStore } from '../store/annotationStore'
-import { EyeIcon, PencilIcon } from '../../../shared/ui/icons'
-
-/** Olho riscado: desenhos escondidos. */
-function EyeOffIcon({ className = '' }: { className?: string }): React.JSX.Element {
-  return (
-    <span className={`relative inline-flex ${className}`}>
-      <EyeIcon className="h-full w-full" />
-      <svg
-        viewBox="0 0 24 24"
-        className="absolute inset-0 h-full w-full"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        aria-hidden="true"
-      >
-        <path d="M3 3l18 18" />
-      </svg>
-    </span>
-  )
-}
+import { EyeIcon, EyeOffIcon, PencilIcon } from '../../../shared/ui/icons'
 
 /** `bar`: barra escura do tile (junto do volume). `overlay`: barra da tela cheia. */
 const VARIANTS = {

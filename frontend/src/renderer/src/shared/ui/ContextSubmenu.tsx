@@ -1,6 +1,6 @@
 import { useContextSubmenu } from '../hooks/useContextSubmenu'
 import { submenuPanelStyle } from '../lib/submenuPlacement'
-import { ChevronRightIcon } from './iconsExtra'
+import { ChevronRightIcon } from './icons'
 
 interface ContextSubmenuProps {
   /** Texto do item pai e nome acessível do painel. */

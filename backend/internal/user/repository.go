@@ -205,7 +205,7 @@ func (r *Repository) FindByUsername(ctx context.Context, username string) (*User
 // (pedido de amizade digitado à mão). Se houver "Hugo" e "hugo", prefere a
 // caixa exata.
 func (r *Repository) FindByUsernameFold(ctx context.Context, username string) (*User, error) {
-	return scanUser(r.db.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE lower(username) = lower($1) ORDER BY (username = $1) DESC LIMIT 1`, username))
+	return scanUser(r.db.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE lower(username) = lower($1) AND NOT is_guest ORDER BY (username = $1) DESC LIMIT 1`, username))
 }
 
 // UpdatePrivacy grava as opções de privacidade.
@@ -227,7 +227,8 @@ func escapeLike(s string) string {
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 // SearchByUsername busca por trecho do username. Não traz o e-mail: o
-// resultado é de outras pessoas.
+// resultado é de outras pessoas. Visitantes de call (usuários efêmeros, ver
+// docs/adr/0017-visitante-na-call.md) não aparecem.
 func (r *Repository) SearchByUsername(ctx context.Context, query string, excludeUserID string) ([]User, error) {
 	rows, err := r.db.Query(
 		ctx,
@@ -245,6 +246,7 @@ func (r *Repository) SearchByUsername(ctx context.Context, query string, exclude
 		FROM users
 		WHERE username ILIKE '%' || $1 || '%' ESCAPE '\'
 		AND id <> $2
+		AND NOT is_guest
 		AND NOT EXISTS (
 			SELECT 1 FROM user_blocks b
 			WHERE (b.blocker_id = $2 AND b.blocked_id = users.id)
@@ -258,32 +260,24 @@ func (r *Repository) SearchByUsername(ctx context.Context, query string, exclude
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	return pgx.CollectRows(rows, scanSearchResult)
+}
 
-	var users []User
-	for rows.Next() {
-		var u User
-		if err := rows.Scan(
-			&u.ID,
-			&u.Username,
-			&u.DisplayName,
-			&u.AvatarURL,
-			&u.NameStyle.Font,
-			&u.NameStyle.Effect,
-			&u.NameStyle.Colors,
-			&u.CreatedAt,
-			&u.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		users = append(users, u)
-	}
-
-	if users == nil {
-		users = []User{}
-	}
-
-	return users, nil
+// scanSearchResult lê uma linha da busca (as colunas de SearchByUsername).
+func scanSearchResult(row pgx.CollectableRow) (User, error) {
+	var u User
+	err := row.Scan(
+		&u.ID,
+		&u.Username,
+		&u.DisplayName,
+		&u.AvatarURL,
+		&u.NameStyle.Font,
+		&u.NameStyle.Effect,
+		&u.NameStyle.Colors,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+	)
+	return u, err
 }
 
 func (r *Repository) Create(

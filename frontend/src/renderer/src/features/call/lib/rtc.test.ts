@@ -62,6 +62,8 @@ describe('captura de tela', () => {
       frameRate: { ideal: 60, max: 60 }
     })
     expect(streamQuality(stream)).toEqual({ resolution: '720p', frameRate: 60 })
+    // 60 fps = jogo: dica de movimento (com 'detail' um jogo pesado caía para 4–8 fps).
+    expect((video as { contentHint?: string }).contentHint).toBe('motion')
   })
 
   it('web: só abre a captura nativa depois de confirmar a qualidade', async () => {
@@ -73,7 +75,12 @@ describe('captura de tela', () => {
     useScreenQualityStore.getState().request!.resolve({ resolution: 'source', frameRate: 60 })
     expect(await pending).toBe(stream)
     expect(capture).toHaveBeenCalledWith(expect.objectContaining({ video: { frameRate: 60 } }))
-    expect(video.applyConstraints).toHaveBeenCalledWith({ frameRate: { ideal: 60, max: 60 } })
+    // Fonte numa tela 4K: limitada a 1440p.
+    expect(video.applyConstraints).toHaveBeenCalledWith({
+      width: { max: 2560 },
+      height: { max: 1440 },
+      frameRate: { ideal: 60, max: 60 }
+    })
   })
 
   it('cancelar a qualidade na web não abre a captura', async () => {

@@ -54,7 +54,9 @@ var callEvents = map[string]bool{
 	"call:lock": true, "call:knock": true, "call:knock_cancel": true, "call:knock_respond": true,
 	"call:screen_watch": true,
 	// Fala detectada no app (AFK em call, ver call/afk.go).
-	"call:speaking":    true,
+	"call:speaking": true,
+	// Em que call o app está (null: nenhuma); ver call/media_presence.go.
+	"call:presence":    true,
 	"call:screen_draw": true, "call:screen_draw_clear": true, "call:screen_draw_undo": true,
 }
 

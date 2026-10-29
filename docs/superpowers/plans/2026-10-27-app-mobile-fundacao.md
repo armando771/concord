@@ -1,7 +1,7 @@
 # Plano: App mobile, fatia 1 (Fundação)
 
 Spec: [2026-10-27-app-mobile-fundacao-design.md](../specs/2026-10-27-app-mobile-fundacao-design.md).
-ADR: [0015](../../adr/0015-app-mobile-expo.md). Branch `feat/app-mobile`
+ADR: [0021](../../adr/0021-app-mobile-expo.md). Branch `feat/app-mobile`
 (worktree `concord-app-mobile`). Cada tarefa: teste primeiro (falhando pelo
 motivo certo) → código mínimo → verde → `node scripts/affected-tests.mjs loop`.
 Código novo, então o baseline de CRAP é "nenhum arquivo existente tocado" nas
@@ -27,7 +27,7 @@ tarefas do `mobile/`; as tarefas 1 e 2 mexem em scripts existentes e medem antes
   "Salinha", `android.package` fixo, `scheme`, `extra`), `tsconfig.json` (strict),
   `babel.config.js`, `jest.config.js` (preset `jest-expo`), `.gitignore`
   (`android/`, `ios/`, `.expo/`, `*.keystore`), `eas.json`.
-- Dependências do ADR 0015. Teste: `config.test.ts` falha sem
+- Dependências do ADR 0021. Teste: `config.test.ts` falha sem
   `EXPO_PUBLIC_SERVER_URL` e vira verde com `lib/config.ts`.
 - `src/shared/lib/config.ts`: `API_BASE_URL` e `WS_URL` a partir de
   `EXPO_PUBLIC_SERVER_URL` (reaproveita a lógica de `serverUrl.ts` do desktop).
