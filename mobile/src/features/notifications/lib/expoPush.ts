@@ -2,6 +2,8 @@ import * as Notifications from 'expo-notifications'
 import type { PushPlatform } from './pushRegistration'
 
 export const MESSAGES_CHANNEL = 'mensagens'
+/** Canal das chamadas de DM recebidas (o backend manda `channel_id: chamadas`). */
+export const CALLS_CHANNEL = 'chamadas'
 
 /** Com o app aberto a pessoa já vê a mensagem na tela: não mostra banner por cima. */
 export function silenceForeground(): void {
@@ -25,6 +27,10 @@ export const expoPlatform: PushPlatform = {
   async ensureChannel() {
     await Notifications.setNotificationChannelAsync(MESSAGES_CHANNEL, {
       name: 'Mensagens',
+      importance: Notifications.AndroidImportance.HIGH
+    })
+    await Notifications.setNotificationChannelAsync(CALLS_CHANNEL, {
+      name: 'Chamadas',
       importance: Notifications.AndroidImportance.HIGH
     })
   },

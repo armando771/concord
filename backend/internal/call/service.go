@@ -9,13 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"gin-quickstart/backend/internal/bot"
 	"gin-quickstart/backend/internal/channel"
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/server"
 	"gin-quickstart/backend/internal/user"
-
-	"github.com/google/uuid"
 )
 
 var (
@@ -103,12 +100,18 @@ type Service struct {
 	channelService      *channel.Service
 	userService         *user.Service
 	isOnline            func(userID string) bool
+	// Toque para quem está offline e tem push, limite de toque e observadores do convite (ring.go).
+	offlineRinger func(userID string) bool
+	ringTimeout   time.Duration
+	onDMInvite    []func(DMInvite)
 	perms               PermissionSource
 	invite              inviteDeps
 	// Visitantes (convite de visitante, ver guest.go).
 	guests GuestAccess
 	// Canal pelo id (trocável nos testes, que não têm banco).
 	findChannel func(ctx context.Context, id string) (*channel.Channel, error)
+	// Conversa pelo id (trocável nos testes, que não têm banco).
+	findConversation func(ctx context.Context, id string) (*conversation.Conversation, error)
 	media       MediaAdmin
 
 	mu    sync.RWMutex
@@ -184,6 +187,9 @@ func CallService(
 	s.findChannel = func(ctx context.Context, id string) (*channel.Channel, error) {
 		return channelService.FindByID(ctx, id)
 	}
+	s.findConversation = func(ctx context.Context, id string) (*conversation.Conversation, error) {
+		return conversationService.FindByID(ctx, id)
+	}
 	s.leaveAfterDisconnect = s.Leave
 	s.leaveCall = s.Leave
 	s.lookupUser = s.userInfo
@@ -195,203 +201,6 @@ func CallService(
 		return info.DisplayName
 	}
 	return s
-}
-
-func (s *Service) StartDM(ctx context.Context, initiatorID string, conversationID string) (*Call, error) {
-	conv, err := s.conversationService.FindByID(ctx, conversationID)
-	if err != nil {
-		return nil, ErrNotFound
-	}
-
-	// Chamada só na DM 1:1 (grupo não liga).
-	if conv.IsGroup() || (conv.UserAID != initiatorID && conv.UserBID != initiatorID) {
-		return nil, ErrNotParticipant
-	}
-
-	calleeID := conv.UserAID
-	if initiatorID == conv.UserAID {
-		calleeID = conv.UserBID
-	}
-	// DM com bot (Salinha Bot) é só leitura: não liga.
-	if bot.IsBot(calleeID) {
-		return nil, ErrNotParticipant
-	}
-
-	if s.blockedCheck != nil {
-		if blocked, err := s.blockedCheck(ctx, initiatorID, calleeID); err != nil || blocked {
-			return nil, ErrBlocked
-		}
-	}
-
-	if s.isOnline != nil && !s.isOnline(calleeID) {
-		return nil, ErrCalleeOffline
-	}
-
-	s.mu.Lock()
-	if callID, ok := s.busy[initiatorID]; ok {
-		existing := s.calls[callID]
-		if existing != nil && existing.info.ConversationID != nil && *existing.info.ConversationID == conversationID {
-			info := existing.info
-			s.mu.Unlock()
-			return info, nil
-		}
-		s.mu.Unlock()
-		return nil, ErrBusy
-	}
-	if _, ok := s.busy[calleeID]; ok {
-		s.mu.Unlock()
-		return nil, ErrBusy
-	}
-	if existing := s.findActiveByScopeLocked(TypeDM, conversationID); existing != nil {
-		ac := existing
-		s.mu.Unlock()
-		return ac.info, nil
-	}
-
-	initiatorInfo, err := s.userInfo(ctx, initiatorID)
-	if err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-	calleeInfo, err := s.userInfo(ctx, calleeID)
-	if err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-
-	call := &Call{
-		ID:             uuid.New().String(),
-		Type:           TypeDM,
-		ConversationID: &conv.ID,
-		InitiatorID:    initiatorID,
-		Status:         StatusRinging,
-	}
-	ac := &activeCall{
-		info:         call,
-		participants: make(map[string]*participantState),
-		inviteeID:    calleeID,
-	}
-	ac.participants[initiatorID] = &participantState{
-		userID:   initiatorID,
-		role:     RoleMember,
-		joinedAt: time.Now(),
-	}
-	s.calls[call.ID] = ac
-	s.busy[initiatorID] = call.ID
-	s.mu.Unlock()
-
-	if err := s.repository.Create(ctx, call); err != nil {
-		log.Printf("[call] persist call %s failed: %v", call.ID, err)
-	}
-	if err := s.addParticipant(ctx, &CallParticipant{
-		CallID: call.ID,
-		UserID: initiatorID,
-		Role:   RoleMember,
-	}); err != nil {
-		log.Printf("[call] persist participant %s failed: %v", initiatorID, err)
-	}
-
-	s.publisher.SendToUser(calleeID, marshalEvent("call:invite", InviteEvent{
-		CallID:         call.ID,
-		Type:           call.Type,
-		Initiator:      initiatorInfo,
-		ConversationID: call.ConversationID,
-	}))
-	s.publisher.SendToUser(initiatorID, marshalEvent("call:ring", RingEvent{
-		CallID: call.ID,
-		Callee: calleeInfo,
-	}))
-
-	return call, nil
-}
-
-func (s *Service) Accept(ctx context.Context, callID string, userID string) error {
-	s.mu.Lock()
-	ac, ok := s.calls[callID]
-	if !ok || ac.info.Status == StatusEnded {
-		s.mu.Unlock()
-		return ErrNotFound
-	}
-	if ac.info.Type == TypeDM && ac.inviteeID != userID {
-		s.mu.Unlock()
-		return ErrNotAllowed
-	}
-	if _, ok := ac.participants[userID]; ok {
-		s.mu.Unlock()
-		return nil
-	}
-	if otherID, ok := s.busy[userID]; ok && otherID != callID {
-		s.mu.Unlock()
-		return ErrBusy
-	}
-
-	userInfo, err := s.lookupUser(ctx, userID)
-	if err != nil {
-		s.mu.Unlock()
-		return err
-	}
-
-	now := time.Now()
-	ac.participants[userID] = &participantState{
-		userID:   userID,
-		role:     RoleMember,
-		joinedAt: now,
-	}
-	wasRinging := ac.info.Status != StatusActive
-	ac.info.Status = StatusActive
-	s.busy[userID] = callID
-	callIDCopy := ac.info.ID
-	s.mu.Unlock()
-
-	// Primeiro quem entrou, depois o status: se o backend cair entre os dois,
-	// a DM fica "ringing" com os dois dentro e a subida a cura (restore). Na
-	// ordem inversa ficaria "active" só com quem ligou.
-	if err := s.addParticipant(ctx, &CallParticipant{
-		CallID: callID,
-		UserID: userID,
-		Role:   RoleMember,
-	}); err != nil {
-		log.Printf("[call] persist participant %s failed: %v", userID, err)
-	}
-
-	if wasRinging {
-		s.markCallActive(callID)
-	}
-
-	s.publisher.BroadcastToCall(callIDCopy, marshalEvent("call:accept", ResponseEvent{
-		CallID: callIDCopy,
-		User:   userInfo,
-	}))
-
-	return nil
-}
-
-func (s *Service) Decline(ctx context.Context, callID string, userID string) error {
-	s.mu.Lock()
-	ac, ok := s.calls[callID]
-	if !ok || ac.info.Status == StatusEnded {
-		s.mu.Unlock()
-		return ErrNotFound
-	}
-	if ac.info.Type == TypeDM && ac.inviteeID != userID {
-		s.mu.Unlock()
-		return ErrNotAllowed
-	}
-
-	userInfo, err := s.userInfo(ctx, userID)
-	if err != nil {
-		s.mu.Unlock()
-		return err
-	}
-	initiatorID := ac.info.InitiatorID
-	s.mu.Unlock()
-
-	s.publisher.SendToUser(initiatorID, marshalEvent("call:decline", ResponseEvent{
-		CallID: callID,
-		User:   userInfo,
-	}))
-
-	return s.End(ctx, callID)
 }
 
 func (s *Service) Join(ctx context.Context, callID string, userID string) error {
@@ -532,8 +341,10 @@ func (s *Service) End(ctx context.Context, callID string) error {
 		return err
 	}
 
-	if err := s.repository.EndCall(ctx, callID); err != nil {
-		log.Printf("[call] persist end %s failed: %v", callID, err)
+	if s.repository != nil {
+		if err := s.repository.EndCall(ctx, callID); err != nil {
+			log.Printf("[call] persist end %s failed: %v", callID, err)
+		}
 	}
 
 	s.publisher.BroadcastToCall(callID, marshalEvent("call:ended", EndedEvent{

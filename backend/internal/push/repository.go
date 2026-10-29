@@ -36,6 +36,13 @@ func (r *Repository) TokensForUser(ctx context.Context, userID string) ([]string
 	return r.strings(ctx, `SELECT token FROM push_tokens WHERE user_id = $1`, userID)
 }
 
+// HasToken diz se a pessoa tem algum aparelho com o app registrado para push.
+func (r *Repository) HasToken(ctx context.Context, userID string) bool {
+	var has bool
+	err := r.db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM push_tokens WHERE user_id = $1)`, userID).Scan(&has)
+	return err == nil && has
+}
+
 func (r *Repository) ChannelName(ctx context.Context, channelID string) (string, error) {
 	var name string
 	err := r.db.QueryRow(ctx, `SELECT name FROM channels WHERE id = $1`, channelID).Scan(&name)

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native'
+import { useCallSessionStore } from '../../call/store/callSessionStore'
 import { listChannels, type Channel } from '../api/channels'
 import { listServers, type Server } from '../api/servers'
 import { useSelectedServerStore } from '../store/selectedServerStore'
@@ -11,6 +12,7 @@ jest.mock('../api/channels')
 jest.mock('../../chat/api/conversations', () => ({ listConversations: jest.fn().mockResolvedValue([]) }))
 jest.mock('../../friends/api/friends', () => ({ listFriends: jest.fn().mockResolvedValue([]) }))
 jest.mock('../../friends/api/presence', () => ({ fetchPresence: jest.fn().mockResolvedValue({}) }))
+jest.mock('../../call/api/calls', () => ({ listServerCalls: jest.fn().mockResolvedValue([]) }))
 
 const servers = jest.mocked(listServers)
 const channels = jest.mocked(listChannels)
@@ -30,18 +32,25 @@ describe('HomeScreen', () => {
   const onOpenSettings = jest.fn()
   const onOpenConversation = jest.fn()
   const onOpenFriends = jest.fn()
+  const onJoinVoice = jest.fn()
+  const onOpenCall = jest.fn()
+  const onLeaveCall = jest.fn()
   const setup = () =>
     render(
       <HomeScreen
         onOpenChannel={onOpenChannel}
         onOpenConversation={onOpenConversation}
         onOpenFriends={onOpenFriends}
+        onJoinVoice={onJoinVoice}
+        onOpenCall={onOpenCall}
+        onLeaveCall={onLeaveCall}
         onOpenSettings={onOpenSettings}
       />
     )
 
   beforeEach(() => {
     jest.clearAllMocks()
+    useCallSessionStore.getState().reset()
     useServersStore.setState(useServersStore.getInitialState(), true)
     useSelectedServerStore.setState(useSelectedServerStore.getInitialState(), true)
     servers.mockResolvedValue([srv('s1', 'BH RX'), srv('s2', 'Stations')])
@@ -66,6 +75,20 @@ describe('HomeScreen', () => {
     await setup()
     await fireEvent.press(await screen.findByRole('button', { name: 'geral' }))
     expect(onOpenChannel).toHaveBeenCalledWith(expect.objectContaining({ id: 'c1', name: 'geral' }))
+  })
+
+  it('tocar num canal de voz entra na chamada', async () => {
+    channels.mockImplementation(async () => [{ ...ch('v1', 'sala-1', 's1'), type: 'voice' }])
+    await setup()
+    await fireEvent.press(await screen.findByRole('button', { name: 'sala-1' }))
+    expect(onJoinVoice).toHaveBeenCalledWith(expect.objectContaining({ id: 'v1' }))
+  })
+
+  it('em chamada, a barra aparece acima do painel e abre a tela cheia', async () => {
+    useCallSessionStore.getState().begin({ callId: 'c1', kind: 'channel', phase: 'active', name: 'sala-1' })
+    await setup()
+    await fireEvent.press(await screen.findByRole('button', { name: 'Abrir chamada em sala-1' }))
+    expect(onOpenCall).toHaveBeenCalled()
   })
 
   it('DMs: o ícone do topo abre o painel com a busca e a lista de conversas', async () => {

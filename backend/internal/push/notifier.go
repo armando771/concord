@@ -105,6 +105,36 @@ func (n *Notifier) OnFriendRequest(recipientID string, requester *user.User) {
 	})
 }
 
+// CallInvite é uma chamada de DM que acabou de começar a tocar (vem do internal/call pelo wiring).
+type CallInvite struct {
+	CallID         string
+	ConversationID string
+	CalleeID       string
+	InitiatorName  string
+}
+
+// callChannel é o canal Android das chamadas, separado do das mensagens (o app o cria).
+const callChannel = "chamadas"
+
+// OnCallInvite avisa quem está sendo chamado numa DM e não está com o app aberto.
+func (n *Notifier) OnCallInvite(invite CallInvite) {
+	if !n.Sender.Enabled() {
+		return
+	}
+	n.Run(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), sendTimeout)
+		defer cancel()
+		n.deliver(ctx, invite.CalleeID, fcm.Message{
+			Title:   invite.InitiatorName,
+			Body:    "Está te ligando",
+			Channel: callChannel,
+			Data: map[string]string{
+				"type": "call_invite", "call_id": invite.CallID, "conversation_id": invite.ConversationID, "name": invite.InitiatorName,
+			},
+		})
+	})
+}
+
 func authorName(m message.Message) string {
 	if m.Author != nil {
 		return m.Author.DisplayName

@@ -42,4 +42,15 @@ describe('AccountPanel', () => {
     await waitFor(() => expect(useAuthStore.getState().status).toBe('signedOut'))
     expect(order).toEqual(['push:signedIn'])
   })
+
+  it('Sair desconecta a chamada antes de encerrar a sessão', async () => {
+    const order: string[] = []
+    const leaveCall = jest.fn(async () => {
+      order.push(`call:${useAuthStore.getState().status}`)
+    })
+    await render(<AccountPanel logout={async () => {}} forgetPush={async () => {}} leaveCall={leaveCall} />)
+    await fireEvent.press(screen.getByRole('button', { name: 'Sair' }))
+    await waitFor(() => expect(useAuthStore.getState().status).toBe('signedOut'))
+    expect(order).toEqual(['call:signedIn'])
+  })
 })
