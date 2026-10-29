@@ -19,6 +19,8 @@ import { FriendsTabs, type FriendsTab } from './FriendsTabs'
 interface FriendsScreenProps {
   onBack: () => void
   onOpenConversation: (args: OpenConversationArgs) => void
+  /** Tocar numa pessoa abre o perfil dela. */
+  onOpenProfile?: (userId: string) => void
 }
 
 type Confirm = { kind: 'remove' | 'block'; person: Friend }
@@ -31,7 +33,7 @@ const EMPTY: Record<Exclude<FriendsTab, 'add'>, string> = {
 }
 
 /** Tela de Amigos: Online, Todos, Pendentes, Bloqueados e Adicionar, com as ações de cada lista. */
-export function FriendsScreen({ onBack, onOpenConversation }: FriendsScreenProps) {
+export function FriendsScreen({ onBack, onOpenConversation, onOpenProfile }: FriendsScreenProps) {
   useFriendsLive()
   const { top } = useSafeAreaInsets()
   const friends = useFriendsStore((s) => s.friends)
@@ -64,6 +66,7 @@ export function FriendsScreen({ onBack, onOpenConversation }: FriendsScreenProps
   }
 
   const store = useFriendsStore.getState
+  const open = (id: string) => (onOpenProfile ? () => onOpenProfile(id) : undefined)
   const friendActions = (f: Friend): RowAction[] => [
     { label: 'Mensagem', onPress: () => void message(f) },
     { label: 'Remover amigo', danger: true, onPress: () => setConfirm({ kind: 'remove', person: f }) },
@@ -79,7 +82,7 @@ export function FriendsScreen({ onBack, onOpenConversation }: FriendsScreenProps
 
   const renderFriends = (list: Friend[]) =>
     list.map((f) => (
-      <FriendRow key={f.id} name={f.display_name} avatarUri={f.avatar_url} presence={statuses[f.id] ?? 'offline'} actions={friendActions(f)} />
+      <FriendRow key={f.id} onPress={open(f.id)} name={f.display_name} avatarUri={f.avatar_url} presence={statuses[f.id] ?? 'offline'} actions={friendActions(f)} />
     ))
 
   function body() {
@@ -102,7 +105,7 @@ export function FriendsScreen({ onBack, onOpenConversation }: FriendsScreenProps
     if (current === 'all') return renderFriends(sortByName(friends))
     if (current === 'blocked') {
       return sortByName(blocked).map((p) => (
-        <FriendRow key={p.id} name={p.display_name} avatarUri={p.avatar_url} actions={[{ label: 'Desbloquear', onPress: () => void run(store().unblock(p.id)) }]} />
+        <FriendRow key={p.id} onPress={open(p.id)} name={p.display_name} avatarUri={p.avatar_url} actions={[{ label: 'Desbloquear', onPress: () => void run(store().unblock(p.id)) }]} />
       ))
     }
     const { incoming, outgoing } = splitPending(pending)
@@ -112,6 +115,7 @@ export function FriendsScreen({ onBack, onOpenConversation }: FriendsScreenProps
           key={p.user_id}
           name={p.display_name}
           avatarUri={p.avatar_url}
+          onPress={open(p.user_id)}
           subtitle="Pedido recebido"
           actions={[
             { label: 'Aceitar', onPress: () => void run(store().accept(p.username)) },
@@ -124,6 +128,7 @@ export function FriendsScreen({ onBack, onOpenConversation }: FriendsScreenProps
           key={p.user_id}
           name={p.display_name}
           avatarUri={p.avatar_url}
+          onPress={open(p.user_id)}
           subtitle="Pedido enviado"
           actions={[{ label: 'Cancelar pedido', danger: true, onPress: () => void run(store().cancel(p.username)) }]}
         />

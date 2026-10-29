@@ -20,6 +20,9 @@ interface ChatScreenProps {
   title: string
   /** Servidor do canal (para descontar a não lida do servidor ao abrir). */
   serverId?: string
+  /** Só na DM 1 a 1: a outra pessoa (o nome do cabeçalho abre o perfil dela). */
+  peerId?: string
+  onOpenProfile?: (userId: string) => void
   onBack: () => void
 }
 
@@ -32,7 +35,7 @@ const PRESENTATION: Record<ChatVariant, { prefix: string; label: (title: string)
 }
 
 /** Chat em tela cheia de um canal de texto, de uma DM ou de um grupo: cabeçalho, histórico e campo de envio. */
-export function ChatScreen({ variant, id, title, serverId, onBack }: ChatScreenProps) {
+export function ChatScreen({ variant, id, title, serverId, peerId, onOpenProfile, onBack }: ChatScreenProps) {
   const { prefix, label, target } = PRESENTATION[variant]
 
   // Chat aberto: as mensagens dele não contam como não lidas, e abrir zera o que já havia.
@@ -53,8 +56,15 @@ export function ChatScreen({ variant, id, title, serverId, onBack }: ChatScreenP
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={top}
     >
-      <ChannelHeader name={title} prefix={prefix} onBack={onBack} />
-      <MessageList messages={messages} status={status} hasMore={hasMore} onLoadMore={() => void loadMore()} onRetry={() => void retry()} />
+      <ChannelHeader name={title} prefix={prefix} onBack={onBack} onPressName={peerId && onOpenProfile ? () => onOpenProfile(peerId) : undefined} />
+      <MessageList
+        messages={messages}
+        status={status}
+        hasMore={hasMore}
+        onLoadMore={() => void loadMore()}
+        onRetry={() => void retry()}
+        onOpenProfile={onOpenProfile}
+      />
       <Composer label={label(title)} onSend={send} forbiddenNotice={variant === 'channel' ? NO_PERMISSION : undefined} />
     </KeyboardAvoidingView>
   )

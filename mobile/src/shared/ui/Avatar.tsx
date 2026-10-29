@@ -11,13 +11,15 @@ interface AvatarProps {
   size: number
   /** Ícone de servidor é quadrado arredondado em vez de círculo. */
   square?: boolean
+  /** GIF animado só anima quando pedido (o cartão do perfil); nas listas fica o primeiro quadro. */
+  animated?: boolean
 }
 
 const initialOf = (name: string): string => name.trim().charAt(0).toUpperCase() || '?'
 
-export function Avatar({ name, uri, size, square = false }: AvatarProps) {
+export function Avatar({ name, uri, size, square = false, animated = false }: AvatarProps) {
   const [failed, setFailed] = useState(false)
-  const src = mediaSrc(uri)
+  const src = mediaSrc(uri, { animate: animated })
   const radius = square ? size * 0.3 : size / 2
   const box = { width: size, height: size, borderRadius: radius }
 

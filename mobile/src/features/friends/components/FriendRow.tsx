@@ -16,13 +16,14 @@ interface FriendRowProps {
   avatarUri?: string | null
   /** Bolinha de presença (só nas listas de amigos). */
   presence?: PresenceStatus
+  /** Tocar na pessoa (avatar e nome): abre o perfil. Sem ele, não é um botão. */
+  onPress?: () => void
   actions: RowAction[]
 }
 
 /** Linha de uma pessoa nas listas de amigos, com os botões de ação (cada um com o nome para o leitor de tela). */
-export function FriendRow({ name, subtitle, avatarUri, presence, actions }: FriendRowProps) {
-  return (
-    <View style={styles.row}>
+export function FriendRow({ name, subtitle, avatarUri, presence, onPress, actions }: FriendRowProps) {
+  const person = (
       <View style={styles.person}>
         <View>
           <Avatar name={name} uri={avatarUri} size={40} />
@@ -39,6 +40,21 @@ export function FriendRow({ name, subtitle, avatarUri, presence, actions }: Frie
           {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
         </View>
       </View>
+  )
+  return (
+    <View style={styles.row}>
+      {onPress ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={subtitle ? `${name}, ${subtitle}` : name}
+          onPress={onPress}
+          style={styles.personButton}
+        >
+          {person}
+        </Pressable>
+      ) : (
+        person
+      )}
       <View style={styles.actions}>
         {actions.map((action) => (
           <Pressable
@@ -59,6 +75,7 @@ export function FriendRow({ name, subtitle, avatarUri, presence, actions }: Frie
 const styles = StyleSheet.create({
   row: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
   person: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  personButton: { minHeight: MIN_TOUCH, justifyContent: 'center' },
   dot: { position: 'absolute', right: -4, bottom: -4 },
   texts: { flex: 1 },
   name: { color: colors.textStrong, fontSize: fontSize.md, fontWeight: '600' },

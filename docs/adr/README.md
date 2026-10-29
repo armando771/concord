@@ -61,3 +61,4 @@ O que fica mais fácil, o que fica mais difícil, o que precisa ser feito depois
 - [0021. Criar o app mobile em `mobile/` com Expo, Expo Router e Zustand](0021-app-mobile-expo.md)
 - [0022. Enviar o push do app mobile direto pelo FCM, com o JWT da biblioteca padrão](0022-push-direto-pelo-fcm.md)
 - [0023. Voz no app mobile com o SDK do LiveKit, atrás de uma porta `CallMedia`](0023-voz-no-app-mobile.md)
+- [0024. Desenhar efeitos e recortar imagens do perfil no app mobile com o Skia](0024-skia-e-midia-no-perfil-mobile.md)
