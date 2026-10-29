@@ -15,6 +15,8 @@ import {
 } from './screenCodecSupport'
 import { chooseScreenSimulcast, loadScreenSimulcast } from './screenSimulcast'
 import { ScreenAdapt } from './screenAdapt'
+import { senderReports } from './screenStatsSource'
+import { encoderInfoFromReport, type ScreenEncoderInfo } from './screenEncoderInfo'
 import { useScreenAdaptStore, type ScreenAdaptView } from '../store/screenAdaptStore'
 
 // A minha live na sala: publicar (codec e camadas), trocar a qualidade ao vivo
@@ -37,6 +39,8 @@ export class ScreenSender {
   /** Trocas de qualidade (minhas e do controlador) uma de cada vez. */
   private queue: Promise<void> = Promise.resolve()
   private view: ScreenAdaptView | null = null
+  /** Codec principal da live publicada ('h265'). */
+  private codec = 'vp8'
 
   constructor(
     private readonly participant: LocalParticipant,
@@ -60,6 +64,7 @@ export class ScreenSender {
       preference
     )
     const codec = screenCodecOptions(preference, support, simulcast)
+    this.codec = codec.videoCodec
     await publishScreenTracks(this.participant, stream, { codec, simulcast })
     if (video) this.watch(stream, quality, screenSource(video), simulcast)
   }
@@ -75,6 +80,17 @@ export class ScreenSender {
   /** Qualidade saindo agora (painel de estatísticas). */
   current(): ScreenAdaptView | null {
     return this.view
+  }
+
+  /** O que estou codificando (quem assiste pergunta por RPC); null = sem live. */
+  async encoderInfo(): Promise<ScreenEncoderInfo | null> {
+    const track = this.participant.getTrackPublication(Track.Source.ScreenShare)?.videoTrack
+    if (!track) return null
+    return encoderInfoFromReport(
+      await senderReports(track),
+      this.view?.effective ?? null,
+      this.codec
+    )
   }
 
   /** Parou de transmitir (sem stream: qualquer uma). */

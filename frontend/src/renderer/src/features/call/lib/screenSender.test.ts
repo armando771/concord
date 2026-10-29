@@ -257,6 +257,34 @@ describe('ScreenSender', () => {
     screen.stop()
   })
 
+  it('conta a quem assiste o codificador real: H.265 na placa e o degrau saindo', async () => {
+    const { screen, stream, track } = setup({ h265: true })
+    expect(await screen.encoderInfo()).toEqual({ quality: null, encoders: [] })
+    await screen.publish(stream)
+    track.getRTCStatsReport.mockResolvedValue(
+      new Map<string, Record<string, unknown>>([
+        ['c1', { id: 'c1', type: 'codec', mimeType: 'video/H265' }],
+        [
+          'o1',
+          {
+            id: 'o1',
+            type: 'outbound-rtp',
+            kind: 'video',
+            codecId: 'c1',
+            frameHeight: 1080,
+            framesPerSecond: 60,
+            powerEfficientEncoder: true
+          }
+        ]
+      ]) as never
+    )
+    expect(await screen.encoderInfo()).toEqual({
+      quality: '1080p 60',
+      encoders: [{ codec: 'H265', hardware: true, height: 1080, fps: 60, backup: false }]
+    })
+    screen.stop()
+  })
+
   it('jogo (60 fps) que desceu para 30 continua com a dica de movimento', async () => {
     const { screen, stream, video, views } = setup()
     rememberStreamQuality(stream, { resolution: '720p', frameRate: 60 })

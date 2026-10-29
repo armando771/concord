@@ -1,7 +1,9 @@
+import { remoteEncoderRows, type ScreenEncoderInfo } from './screenEncoderInfo'
 import {
   bitrate,
   codecImplementation,
   codecName,
+  codecSubtype,
   decimal,
   fps,
   num,
@@ -27,8 +29,14 @@ function freezes(stat: Stat): string {
   return count > 0 ? `${count} (${decimal(seconds)} s)` : '0'
 }
 
+/**
+ * O codec vem com onde QUEM TRANSMITE codifica (`encoder`, por RPC); o meu
+ * decodificador fica na linha dele. Antes o "· processador" do decodificador
+ * local parecia ser o codificador de quem transmite.
+ */
 export function receiverRows(
   report: RTCStatsReport,
+  encoder: ScreenEncoderInfo | null,
   stat: Stat,
   now: ScreenStatsSample,
   prev: ScreenStatsSample | null
@@ -42,7 +50,8 @@ export function receiverRows(
     { label: 'Quadros', value: `${fps(stat)} fps` },
     { label: 'Resolução', value: resolution(stat) },
     { label: 'Taxa', value: bitrate(now, prev) },
-    { label: 'Codec', value: codecName(report, stat, decoder) },
+    { label: 'Codec', value: codecName(report, stat, '') },
+    ...remoteEncoderRows(encoder, codecSubtype(report, stat) ?? ''),
     { label: 'Decodificador', value: decoder },
     { label: 'Perda', value: lossPercent(now, prev) },
     { label: 'Jitter', value: jitter === null ? '—' : `${Math.round(jitter * 1000)} ms` },

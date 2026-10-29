@@ -220,6 +220,33 @@ describe('screenStatsView — quem transmite', () => {
     expect(value(view, 'Codec')).toBe('VP8')
   })
 
+  it('reserva saindo junto com o principal: linha própria com codec, onde roda, tamanho e fps', () => {
+    const h265: Stat = { id: 'c3', type: 'codec', mimeType: 'video/H265' }
+    const { view } = screenStatsView(
+      sender([
+        h265,
+        h264,
+        outbound({
+          id: 'o1',
+          codecId: 'c3',
+          bytesSent: 9_000_000,
+          encoderImplementation: 'MediaFoundationVideoEncodeAccelerator',
+          powerEfficientEncoder: true
+        }),
+        outbound({
+          id: 'o2',
+          bytesSent: 10,
+          frameHeight: 720,
+          framesPerSecond: 29.7,
+          powerEfficientEncoder: false
+        })
+      ]),
+      null
+    )
+    expect(value(view, 'Codec')).toBe('H.265 · placa de vídeo')
+    expect(value(view, 'Reserva')).toBe('H.264 · processador · 720p 30 fps')
+  })
+
   it('envio pausado porque ninguém está assistindo: diz isso em vez de "Ainda sem dados"', () => {
     // Regressão: o dynacast pausa a camada (active: false) quando ninguém vê a
     // live; o painel descartava o envio e mostrava só "Ainda sem dados".
@@ -292,13 +319,43 @@ describe('screenStatsView — quem assiste', () => {
       { label: 'Quadros', value: '30 fps' },
       { label: 'Resolução', value: '1920×1080' },
       { label: 'Taxa', value: '4 Mbps' },
-      { label: 'Codec', value: 'H.264 · placa de vídeo' },
+      { label: 'Codec', value: 'H.264' },
+      { label: 'Codificado', value: '—' },
+      { label: 'Saindo em', value: '—' },
       { label: 'Decodificador', value: 'Hardware · D3D11VideoDecoder' },
       { label: 'Perda', value: '0,5%' },
       { label: 'Jitter', value: '12 ms' },
       { label: 'Descartados', value: '3' },
       { label: 'Congelamentos', value: '2 (1,3 s)' }
     ])
+  })
+
+  it('codec: onde quem transmite codifica, não o meu decodificador (Linux decodificando por software)', () => {
+    const { view } = screenStatsView(
+      receiver(
+        [
+          h264,
+          inbound({
+            decoderImplementation: 'FFmpeg',
+            powerEfficientDecoder: false
+          })
+        ],
+        {
+          encoder: {
+            quality: '1080p 30',
+            encoders: [
+              { codec: 'H265', hardware: true, height: 1080, fps: 30, backup: false },
+              { codec: 'H264', hardware: true, height: 720, fps: 30, backup: true }
+            ]
+          }
+        }
+      ),
+      null
+    )
+    expect(value(view, 'Codec')).toBe('H.264')
+    expect(value(view, 'Codificado')).toBe('Na placa de vídeo')
+    expect(value(view, 'Saindo em')).toBe('720p 30 (reserva)')
+    expect(value(view, 'Decodificador')).toBe('Software · FFmpeg')
   })
 
   it('perda só do intervalo (não acumulada desde o início)', () => {

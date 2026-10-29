@@ -29,7 +29,11 @@ export const text = (value: unknown): string | undefined =>
 export const decimal = (value: number, digits = 1): string =>
   value.toLocaleString('pt-BR', { maximumFractionDigits: digits })
 
-function implementationKind(name: string, powerEfficient: boolean | undefined): string | null {
+/** 'Hardware' | 'Software' | null (o navegador não conta). */
+export function implementationKind(
+  name: string,
+  powerEfficient: boolean | undefined
+): string | null {
   if (powerEfficient !== undefined) return powerEfficient ? 'Hardware' : 'Software'
   if (SOFTWARE.test(name)) return 'Software'
   return HARDWARE.test(name) ? 'Hardware' : null
@@ -48,13 +52,18 @@ export function codecImplementation(
 const CODEC_NAMES: Record<string, string> = { H264: 'H.264', H265: 'H.265' }
 const WHERE: Record<string, string> = { Hardware: 'placa de vídeo', Software: 'processador' }
 
-/** "H.265 · placa de vídeo": o codec em uso e onde ele roda (quando o navegador conta). */
-export function codecName(report: RTCStatsReport, stat: Stat, implementation: string): string {
+/** "H265": o subtipo do mimeType do codec desse RTP, em maiúsculas. */
+export function codecSubtype(report: RTCStatsReport, stat: Stat): string | null {
   const codec =
     typeof stat.codecId === 'string' ? (report.get(stat.codecId) as Stat | undefined) : undefined
   const mime = text(codec?.mimeType)
-  if (!mime) return '—'
-  const name = mime.slice(mime.indexOf('/') + 1).toUpperCase()
+  return mime ? mime.slice(mime.indexOf('/') + 1).toUpperCase() : null
+}
+
+/** "H.265 · placa de vídeo": o codec em uso e onde ele roda (quando o navegador conta). */
+export function codecName(report: RTCStatsReport, stat: Stat, implementation: string): string {
+  const name = codecSubtype(report, stat)
+  if (!name) return '—'
   const where = WHERE[implementation.split(' · ')[0]]
   return `${CODEC_NAMES[name] ?? name}${where ? ` · ${where}` : ''}`
 }

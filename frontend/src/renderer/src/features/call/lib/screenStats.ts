@@ -3,6 +3,7 @@ import {
   bitrate,
   codecImplementation,
   codecName,
+  codecSubtype,
   fps,
   num,
   resolution,
@@ -12,6 +13,7 @@ import {
   type StatRow
 } from './screenStatsFormat'
 import { receiverRows } from './screenStatsReceiver'
+import { backupRows, encoderInfoFromReport, type ScreenEncoderInfo } from './screenEncoderInfo'
 
 export { codecImplementation, type ScreenStatsSample, type StatRow }
 
@@ -32,6 +34,8 @@ export interface ScreenStatsInput {
   requestedFps: number | null
   /** Envio: degrau saindo agora (o controlador pode ter descido). */
   quality?: ScreenAdaptView | null
+  /** Recepção: o codificador de quem transmite (null = ainda não respondeu). */
+  encoder?: ScreenEncoderInfo | null
 }
 
 export interface ScreenStatsView {
@@ -124,6 +128,8 @@ function senderRows(
     text(stat.encoderImplementation),
     stat.powerEfficientEncoder as boolean | undefined
   )
+  // O principal é o que mais trafegou (videoRtp); os outros codecs ativos são a reserva.
+  const encoders = encoderInfoFromReport(input.report, null, codecSubtype(input.report, stat) ?? '')
   return [
     ...qualityRows(input.quality),
     { label: 'Quadros', value: `${fps(stat)}${requested} fps` },
@@ -131,6 +137,7 @@ function senderRows(
     { label: 'Taxa', value: bitrate(now, prev) },
     { label: 'Codec', value: codecName(input.report, stat, encoder) },
     { label: 'Codificador', value: encoder },
+    ...backupRows(encoders),
     { label: 'Limitação', value: limitationLabel(text(stat.qualityLimitationReason)) },
     ...averageQp(now, prev)
   ]
@@ -151,6 +158,6 @@ export function screenStatsView(
   const now = sampleOf(stat, bytesKey, framesKey)
   const rows = input.local
     ? senderRows(input, stat, now, prev)
-    : receiverRows(input.report, stat, now, prev)
+    : receiverRows(input.report, input.encoder ?? null, stat, now, prev)
   return { view: { rows, status: pauseText }, sample: now }
 }
