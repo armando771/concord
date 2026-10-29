@@ -17,7 +17,7 @@ var ErrInvalid = errors.New("tema de perfil inválido")
 
 var Borders = []string{"none", "solid", "neon", "rainbow", "gradient"}
 
-var Backgrounds = []string{"default", "solid", "gradient"}
+var Backgrounds = []string{"default", "solid", "gradient", "pride"}
 
 // Os três primeiros são CSS; os outros, canvas no app.
 var Effects = []string{
@@ -28,7 +28,7 @@ var Effects = []string{
 // borderColors e backgroundColors: quantas cores cada opção usa (exatamente).
 var borderColors = map[string]int{"none": 0, "solid": 1, "neon": 1, "rainbow": 0, "gradient": 2}
 
-var backgroundColors = map[string]int{"default": 0, "solid": 1, "gradient": 2}
+var backgroundColors = map[string]int{"default": 0, "solid": 1, "gradient": 2, "pride": 0}
 
 var colorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 

@@ -202,6 +202,16 @@ export const PROFILE_PRESETS: { id: string; label: string; theme: ProfileTheme }
     })
   },
   {
+    id: 'pride',
+    label: 'Pride',
+    theme: preset({
+      border: 'rainbow',
+      border_width: 3,
+      background: 'pride',
+      effect: 'confetti'
+    })
+  },
+  {
     id: 'outrun',
     label: 'Outrun',
     theme: preset({
