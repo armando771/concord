@@ -16,13 +16,27 @@ describe('chromiumFeatures', () => {
     )
   })
 
+  it('Linux só com NVIDIA e o nvidia-vaapi-driver: decodificação VA-API liberada na NVIDIA', () => {
+    expect(chromiumFeatures('linux', { nvidiaOnly: true, nvidiaVaapi: true }).enable).toBe(
+      'AllowWgcWindowCapturer,AllowWgcScreenCapturer,AcceleratedVideoEncoder,AcceleratedVideoDecoder,' +
+        'VaapiOnNvidiaGPUs,VaapiIgnoreDriverChecks,AcceleratedVideoDecodeLinuxGL'
+    )
+  })
+
+  it('Linux com Intel/AMD, híbrido ou NVIDIA sem o driver: nada de NVIDIA', () => {
+    const plain = chromiumFeatures('linux').enable
+    expect(chromiumFeatures('linux', { nvidiaOnly: false, nvidiaVaapi: false }).enable).toBe(plain)
+    expect(chromiumFeatures('linux', { nvidiaOnly: true, nvidiaVaapi: false }).enable).toBe(plain)
+  })
+
   it('macOS: só o que já vinha (VideoToolbox já é o padrão)', () => {
     expect(chromiumFeatures('darwin').enable).toBe('AllowWgcWindowCapturer,AllowWgcScreenCapturer')
   })
 
   it('sem nome repetido: o Chromium só lê o último --enable-features', () => {
     for (const platform of ['win32', 'linux', 'darwin'] as const) {
-      const names = chromiumFeatures(platform).enable.split(',')
+      const gpu = { nvidiaOnly: true, nvidiaVaapi: true }
+      const names = chromiumFeatures(platform, gpu).enable.split(',')
       expect(new Set(names).size).toBe(names.length)
     }
   })

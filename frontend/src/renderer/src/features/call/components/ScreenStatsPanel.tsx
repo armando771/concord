@@ -68,6 +68,7 @@ export function ScreenStatsCard({
           ))}
         </dl>
       )}
+      {view?.note && <p className="mt-1.5 text-gray-300">{view.note}</p>}
     </div>
   )
 }

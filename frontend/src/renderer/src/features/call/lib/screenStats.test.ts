@@ -395,6 +395,22 @@ describe('screenStatsView — quem assiste', () => {
     expect(value(view, 'Buffer')).toBe('90 ms')
   })
 
+  it('decodificando por software com NVIDIA sem driver: nota com o que instalar', () => {
+    const hint = 'Instale o nvidia-vaapi-driver para usar a placa de vídeo'
+    const software = inbound({ decoderImplementation: 'FFmpeg', powerEfficientDecoder: false })
+    const hardware = inbound({
+      decoderImplementation: 'VaapiVideoDecoder',
+      powerEfficientDecoder: true
+    })
+    expect(screenStatsView(receiver([h264, software], { driverHint: hint }), null).view.note).toBe(
+      hint
+    )
+    expect(
+      screenStatsView(receiver([h264, hardware], { driverHint: hint }), null).view.note
+    ).toBeNull()
+    expect(screenStatsView(receiver([h264, software]), null).view.note).toBeNull()
+  })
+
   it('perda só do intervalo (não acumulada desde o início)', () => {
     const first = screenStatsView(
       receiver([h264, inbound({ packetsReceived: 900, packetsLost: 100 })]),

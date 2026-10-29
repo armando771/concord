@@ -1,5 +1,6 @@
 import { Track } from 'livekit-client'
 import type { ScreenStatsInput } from './screenStats'
+import { loadVideoDriverHint } from './videoDriverHint'
 
 // Lê, sob demanda, o getStats() do vídeo da live (o meu envio ou a recepção da
 // de outra pessoa) e o estado da publicação. Só roda com o painel aberto.
@@ -72,7 +73,8 @@ async function readRemote(room: StatsRoomLike, userId: string): Promise<ScreenSt
     report: (await publication.track?.getRTCStatsReport()) ?? EMPTY(),
     enabled: publication.isEnabled,
     streamState: publication.track?.streamState ?? 'active',
-    requestedFps: null
+    requestedFps: null,
+    driverHint: await loadVideoDriverHint()
   }
 }
 

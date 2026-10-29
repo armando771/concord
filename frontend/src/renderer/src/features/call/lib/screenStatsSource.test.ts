@@ -101,7 +101,13 @@ describe('readScreenStatsInput', () => {
       'bia',
       false
     )
-    expect(input).toMatchObject({ local: false, report, enabled: false, streamState: 'paused' })
+    expect(input).toMatchObject({
+      local: false,
+      report,
+      enabled: false,
+      streamState: 'paused',
+      driverHint: null
+    })
   })
 
   it('ainda não assinada: relatório vazio', async () => {

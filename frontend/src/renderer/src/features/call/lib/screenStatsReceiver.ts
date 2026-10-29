@@ -42,6 +42,15 @@ function bufferDelay(stat: Stat): string {
   return delay === null || !emitted ? '—' : `${Math.round((delay / emitted) * 1000)} ms`
 }
 
+/** Decodificando pelo processador e há o que instalar para usar a placa: a dica. */
+export function receiverNote(stat: Stat, hint: string | null): string | null {
+  const decoder = codecImplementation(
+    text(stat.decoderImplementation),
+    stat.powerEfficientDecoder as boolean | undefined
+  )
+  return hint && decoder.startsWith('Software') ? hint : null
+}
+
 export function receiverRows(
   report: RTCStatsReport,
   encoder: ScreenEncoderInfo | null,

@@ -90,6 +90,10 @@ const api = {
     /** O compartilhamento acabou: para de vigiar a janela. */
     ended(): void {
       ipcRenderer.send('screen-share:ended')
+    },
+    /** O que falta para a placa de vídeo decodificar (Linux/NVIDIA sem driver); null = nada. */
+    videoHint(): Promise<string | null> {
+      return ipcRenderer.invoke('screen-share:video-hint')
     }
   },
   screenAudio: {

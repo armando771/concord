@@ -13,7 +13,7 @@ import {
   type Stat,
   type StatRow
 } from './screenStatsFormat'
-import { receiverRows } from './screenStatsReceiver'
+import { receiverNote, receiverRows } from './screenStatsReceiver'
 import { backupRows, encoderInfoFromReport, type ScreenEncoderInfo } from './screenEncoderInfo'
 
 export { codecImplementation, type ScreenStatsSample, type StatRow }
@@ -37,12 +37,16 @@ export interface ScreenStatsInput {
   quality?: ScreenAdaptView | null
   /** Recepção: o codificador de quem transmite (null = ainda não respondeu). */
   encoder?: ScreenEncoderInfo | null
+  /** Recepção: o que falta para a placa de vídeo decodificar (Linux/NVIDIA sem driver). */
+  driverHint?: string | null
 }
 
 export interface ScreenStatsView {
   rows: StatRow[]
   /** Aviso no topo do painel (pausada, sem dados) ou null. */
   status: string | null
+  /** Nota no pé do painel (o que instalar para decodificar na placa de vídeo) ou null. */
+  note?: string | null
 }
 
 export type LivePauseReason = 'offscreen' | 'connection'
@@ -158,8 +162,10 @@ export function screenStatsView(
   const pauseText = pause ? PAUSE_TEXT[pause] : stat?.active === false ? IDLE_TEXT : null
   if (!stat) return { view: { rows: [], status: pauseText ?? 'Ainda sem dados' }, sample: null }
   const now = sampleOf(stat, bytesKey, framesKey)
-  const rows = input.local
-    ? senderRows(input, stat, now, prev)
-    : receiverRows(input.report, input.encoder ?? null, stat, now, prev)
-  return { view: { rows, status: pauseText }, sample: now }
+  if (input.local) {
+    return { view: { rows: senderRows(input, stat, now, prev), status: pauseText }, sample: now }
+  }
+  const rows = receiverRows(input.report, input.encoder ?? null, stat, now, prev)
+  const note = receiverNote(stat, input.driverHint ?? null)
+  return { view: { rows, status: pauseText, note }, sample: now }
 }
