@@ -53,3 +53,4 @@ O que fica mais fácil, o que fica mais difícil, o que precisa ser feito depois
 - [0013. Mesa de áudio por servidor, com favoritos da pessoa valendo em qualquer servidor](0013-mesa-de-audio-por-servidor.md)
 - [0014. No app desktop do Linux, falar o /tts com o Piper baixado no primeiro uso](0014-voz-piper-no-linux.md)
 - [0015. Criar o app mobile em `mobile/` com Expo, Expo Router e Zustand](0015-app-mobile-expo.md)
+- [0016. Enviar o push do app mobile direto pelo FCM, com o JWT da biblioteca padrão](0016-push-direto-pelo-fcm.md)
