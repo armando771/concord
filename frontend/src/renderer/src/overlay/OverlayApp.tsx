@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { overlayRowOpacity, type OverlayMember, type OverlaySnapshot } from '../features/overlay/lib/overlayState'
+import { type OverlaySnapshot } from '../features/overlay/lib/overlayState'
 import {
   moveOverlayBox,
   normalizeOverlayLayout,
@@ -19,40 +19,7 @@ import {
   normalizeOverlayShortcut,
   overlayEditHint as editHint
 } from '../features/overlay/lib/overlayShortcut'
-import VoiceStateIcons from '../features/call/components/VoiceStateIcons'
-import OverlayAvatar from './OverlayAvatar'
-
-/** Opacidade na pílula (não na janela nem na lista): quem fala se destaca dos outros. */
-function rowStyle(resting: number, speaking: boolean): React.CSSProperties {
-  return { opacity: overlayRowOpacity(resting, speaking) / 100 }
-}
-
-/** Uma pessoa da call: avatar + nome + mic/fone cortados (estilo Discord). */
-function OverlayPill({
-  member,
-  opacity
-}: {
-  member: OverlayMember
-  opacity: number
-}): React.JSX.Element {
-  return (
-    <div
-      className="flex w-fit max-w-[240px] items-center gap-2 rounded-full bg-floating/85 py-1 pl-1 pr-3 transition-opacity duration-150"
-      style={rowStyle(opacity, member.speaking)}
-    >
-      <OverlayAvatar member={member} />
-      <span
-        className={`truncate text-sm ${
-          member.speaking ? 'font-bold text-strong' : 'font-medium text-gray-200'
-        }`}
-      >
-        {member.name}
-      </span>
-      {member.self && <span className="shrink-0 text-[10px] uppercase text-gray-400">você</span>}
-      <VoiceStateIcons muted={member.muted} deafened={member.deafened} />
-    </div>
-  )
-}
+import OverlayList from './OverlayList'
 
 /**
  * Área de trabalho do monitor do jogo e onde a janela começa nela (DIP = px do
@@ -216,17 +183,7 @@ function OverlayApp(): React.JSX.Element | null {
         onPointerCancel={onPointerUp}
       >
         <div className="flex flex-col gap-1.5" style={{ zoom: layout.scale }}>
-          {snapshot.members.map((m) => (
-            <OverlayPill key={m.id} member={m} opacity={snapshot.opacity} />
-          ))}
-          {snapshot.more > 0 && (
-            <div
-              className="w-fit rounded-full bg-floating/85 px-3 py-1 text-sm font-medium text-gray-200"
-              style={rowStyle(snapshot.opacity, false)}
-            >
-              +{snapshot.more}
-            </div>
-          )}
+          <OverlayList snapshot={snapshot} />
         </div>
         {editing && (
           <>
