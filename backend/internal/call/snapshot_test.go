@@ -54,3 +54,16 @@ func TestCallSnapshotsListWhoWatchesSomeoneElsesLive(t *testing.T) {
 		t.Fatalf("screen watchers = %v, want bia (watching ana) and caio once", got)
 	}
 }
+
+// O nível do servidor (internal/serverlevel) soma o tempo de call no servidor
+// da chamada; chamada de DM vem sem servidor.
+func TestCallSnapshotsCarryTheServer(t *testing.T) {
+	s := serviceWithCall("call-1", "ana", "bia")
+	serverID := "srv-1"
+	s.calls["call-1"].info.ServerID = &serverID
+
+	got := s.CallSnapshots()
+	if len(got) != 1 || got[0].ServerID == nil || *got[0].ServerID != serverID {
+		t.Fatalf("snapshots = %+v, quer ServerID %q", got, serverID)
+	}
+}

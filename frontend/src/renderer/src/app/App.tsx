@@ -25,6 +25,7 @@ import StreamJoinHost from './StreamJoinHost'
 import TitleBar from '../shared/ui/TitleBar'
 import WebNotificationBridge from '../features/notifications/components/WebNotificationBridge'
 import WebLeaveGuard from '../features/call/components/WebLeaveGuard'
+import CallPresenceBridge from '../features/call/components/CallPresenceBridge'
 import { IS_WEB } from '../shared/lib/config'
 import { currentPlatform, hasCustomTitleBar } from '../shared/lib/titleBar'
 
@@ -36,6 +37,7 @@ function App(): React.JSX.Element {
       <Background />
       <ToastContainer />
       <WindowActivityBridge />
+      <CallPresenceBridge />
       {IS_WEB ? (
         <>
           <WebNotificationBridge />

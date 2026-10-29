@@ -5,8 +5,8 @@ import (
 	"errors"
 	"log"
 
-	"gin-quickstart/backend/internal/platform/livekit"
 	"gin-quickstart/backend/internal/permission"
+	"gin-quickstart/backend/internal/platform/livekit"
 )
 
 var (
@@ -53,7 +53,7 @@ func (s *Service) requireConnect(ctx context.Context, channelID, userID string) 
 	if s.perms == nil {
 		return ErrNotMember
 	}
-	perms, err := s.perms.ChannelPerms(ctx, channelID, userID)
+	perms, err := s.channelPerms(ctx, channelID, userID)
 	switch {
 	case err != nil:
 		return ErrNotMember
@@ -110,7 +110,7 @@ func (s *Service) GrantFor(ctx context.Context, callID, userID string) livekit.G
 	if s.perms == nil {
 		return grantFor(0, serverMuted, serverDeafened)
 	}
-	perms, err := s.perms.ChannelPerms(ctx, channelID, userID)
+	perms, err := s.channelPerms(ctx, channelID, userID)
 	if err != nil {
 		perms = 0
 	}
@@ -194,7 +194,7 @@ func (s *Service) setServerVoice(ctx context.Context, callID, actorID, targetID 
 	s.saveServerVoiceState(callID, targetID, serverMuted, serverDeafened)
 
 	if s.media != nil {
-		grant := grantFor(snap.Channel(channelID, targetID), serverMuted, serverDeafened)
+		grant := grantFor(s.permsIn(ctx, snap, channelID, targetID), serverMuted, serverDeafened)
 		if err := s.media.UpdatePermissions(ctx, callID, targetID, grant); err != nil {
 			log.Printf("[call] update media permissions of %s in %s failed: %v", targetID, callID, err)
 		}
@@ -319,7 +319,7 @@ func (s *Service) RevalidateServer(ctx context.Context, serverID string) {
 	}
 	for callID, vc := range calls {
 		for userID, flags := range vc.participants {
-			perms := snap.Channel(vc.channelID, userID)
+			perms := s.permsIn(ctx, snap, vc.channelID, userID)
 			if !permission.Has(perms, permission.ViewChannel|permission.Connect) {
 				if err := s.kick(ctx, callID, userID); err != nil {
 					log.Printf("[call] revalidate: remove %s from %s failed: %v", userID, callID, err)

@@ -6,7 +6,7 @@ import type { TTSListenContext } from './ttsListen'
 function env(over: Partial<TTSListenContext> = {}) {
   let ctx: TTSListenContext & { callId: string | null } = {
     enabled: true,
-    call: { status: 'active', type: 'channel', serverId: 's1', conversationId: null },
+    call: { status: 'active', type: 'channel', serverId: 's1', channelId: 'vozA', conversationId: null },
     deafened: false,
     serverDeafened: false,
     callId: 'c1',
@@ -38,6 +38,7 @@ const event = (id = 'm1'): { type: string; payload: unknown } => ({
       channel_id: 'ch1',
       content: 'oi @bia',
       tts: true,
+      tts_voice_channel_id: 'vozA',
       created_at: ''
     }
   }
@@ -69,7 +70,7 @@ describe('createTTSListener', () => {
     e.set({ enabled: false })
     e.listener.onStateChange()
     expect(e.clears()).toBe(3)
-    e.set({ enabled: true, call: { status: 'idle', type: null, serverId: null, conversationId: null } })
+    e.set({ enabled: true, call: { status: 'idle', type: null, serverId: null, channelId: null, conversationId: null } })
     e.listener.onStateChange()
     expect(e.clears()).toBe(4)
   })

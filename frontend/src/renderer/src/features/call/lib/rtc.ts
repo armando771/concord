@@ -16,6 +16,7 @@ import {
   loadScreenQuality,
   rememberScreenSource,
   rememberStreamQuality,
+  screenMotion,
   screenVideoConstraints
 } from './screenShareQuality'
 
@@ -76,7 +77,8 @@ export async function getDisplayStream(): Promise<MediaStream> {
   }
   rememberStreamQuality(stream, quality)
   stream.getVideoTracks().forEach((track) => {
-    track.contentHint = 'detail'
+    // 60 fps (jogo) = 'motion'; 30 fps (texto) = 'detail'. Ver screenMotion.
+    track.contentHint = screenMotion(quality.frameRate).contentHint
     track.addEventListener('ended', () => window.api?.screenShare?.ended())
   })
   stream.getAudioTracks().forEach((track) => {

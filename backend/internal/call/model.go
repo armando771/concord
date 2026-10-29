@@ -57,6 +57,8 @@ type UserInfo struct {
 	NameStyle   namestyle.Style `json:"name_style"`
 	// EntranceSoundURL: o som que toca quando a pessoa entra (nil = padrão).
 	EntranceSoundURL *string `json:"entrance_sound_url,omitempty"`
+	// GuestOf: servidor de que a pessoa é visitante (selo "Visitante"; ver guest.go).
+	GuestOf string `json:"guest_of,omitempty"`
 }
 
 // Server -> Client events

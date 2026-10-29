@@ -34,6 +34,10 @@ const (
 	UseSoundboard     int64 = 1 << 22
 	ManageExpressions int64 = 1 << 23
 	DisconnectMembers int64 = 1 << 24
+	// Convidar visitantes: gerar o link que põe alguém de fora do servidor só
+	// na call em que você está (docs/adr/0017-visitante-na-call.md). Fora do
+	// @everyone: só o dono, o Administrador e cargos que ganharem.
+	InviteGuests int64 = 1 << 25
 	// Apelido no servidor: o próprio (todo mundo, como no Discord) e o dos
 	// outros (moderação, respeitando a hierarquia). Mesmos bits do Discord.
 	ChangeNickname  int64 = 1 << 26
@@ -72,6 +76,7 @@ var Names = map[string]int64{
 	"USE_SOUNDBOARD":       UseSoundboard,
 	"MANAGE_EXPRESSIONS":   ManageExpressions,
 	"DISCONNECT_MEMBERS":   DisconnectMembers,
+	"INVITE_GUESTS":        InviteGuests,
 	"CHANGE_NICKNAME":      ChangeNickname,
 	"MANAGE_NICKNAMES":     ManageNicknames,
 	"ADD_SOUNDS":           AddSounds,
@@ -83,7 +88,7 @@ var Names = map[string]int64{
 const All = ViewChannel | ManageChannels | ManageRoles | ManageServer | CreateInvite |
 	KickMembers | BanMembers | Administrator | SendMessages | AttachFiles | AddReactions |
 	MentionEveryone | ManageMessages | ReadHistory | Connect | Speak | Stream |
-	MuteMembers | DeafenMembers | MoveMembers | DisconnectMembers | UseSoundboard | ManageExpressions |
+	MuteMembers | DeafenMembers | MoveMembers | DisconnectMembers | InviteGuests | UseSoundboard | ManageExpressions |
 	ChangeNickname | ManageNicknames | AddSounds | AddStickers | SendTTSMessages
 
 // DefaultEveryone: o que qualquer membro faz num servidor novo. Nos servidores

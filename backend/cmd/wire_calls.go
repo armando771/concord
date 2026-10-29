@@ -41,6 +41,10 @@ func (a *app) wireCalls() {
 	a.callService.SetInvitePoster(callInviteDM{conversations: a.conversationService, messages: a.messageService})
 	// AFK: XP de voz e badges de call param depois de 10 min sem falar.
 	a.callAFK = call.NewAFK(a.callService, time.Now)
+	// Quem não está na sala de mídia não fica na lista da call (app reaberto
+	// sem voltar, cliente travado).
+	a.callPresence = call.NewMediaPresence(a.callService, a.liveKitAdmin, time.Now)
+	go a.callPresence.Run(a.ctx, call.MediaSweepEvery)
 	callHandler := call.CallHandler(a.callService, a.liveKitTokens)
 	// Reinício do servidor não derruba quem está em chamada. Sem conseguir
 	// recarregar as chamadas o servidor não fica pronto (a porta nem abre):
@@ -49,7 +53,7 @@ func (a *app) wireCalls() {
 	must(restoreCalls(a.ctx, a.callService, 30*time.Second), "não foi possível recarregar as chamadas")
 
 	a.route(func(router *gin.Engine, api *gin.RouterGroup) {
-		call.CallRoutes(api, callHandler, a.authMiddleware)
+		call.CallRoutes(api, callHandler, a.authMiddleware, a.memberOrGuest)
 		// Sinalização do LiveKit (auth pelo token do LiveKit em ?access_token=)
 		router.Any("/rtc", rtcProxy)
 		router.Any("/rtc/*path", rtcProxy)

@@ -191,6 +191,13 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         label: 'Desconectar membros',
         description: 'Desconectar membros da chamada de voz.',
         scope: 'voice'
+      },
+      {
+        name: 'INVITE_GUESTS',
+        label: 'Convidar visitantes',
+        description:
+          'Gerar um link para alguém de fora do servidor entrar só na call em que você está, por tempo limitado.',
+        scope: 'voice'
       }
     ]
   }

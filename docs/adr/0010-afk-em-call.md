@@ -10,7 +10,7 @@ Maratona, Streamer, Espectador, Câmera ligada e Festeiro) era farmado deixando
 o app aberto numa call sem ninguém falar. O pedido: 10 minutos sem falar e para
 de contar; voltou a falar, conta na hora. "Falar" é a voz ativa do microfone da
 pessoa. O Festeiro também passa a contar só contas reais (e-mail confirmado e
-conta com 7 dias ou mais).
+sem prazo de idade; eram 7 dias até a migration 000165 e 24 horas até a 000170).
 
 Forças: o servidor não vê a mídia (ela vai direto para o LiveKit); o XP e os
 badges já leem as calls a cada 10 s por duas interfaces pequenas

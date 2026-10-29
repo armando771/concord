@@ -3,6 +3,8 @@ import { useCallStore } from '../store/callStore'
 import { createHoverIntent } from '../../../shared/lib/hoverIntent'
 import { DEFAULT_SCREEN_QUALITY } from '../lib/screenShareQuality'
 import ScreenQualityControls from './ScreenQualityControls'
+import { useScreenAdaptStore } from '../store/screenAdaptStore'
+import { adaptStatusText } from '../lib/screenAdaptNotice'
 
 const DELAY_MS = 150
 
@@ -106,9 +108,21 @@ function QualityCard(): React.JSX.Element {
     >
       <p className="text-sm font-bold text-strong">Qualidade da transmissão</p>
       <ScreenQualityControls compact value={pending ?? applied} onChange={update} />
+      <AdaptStatus />
       <p className="mt-2 text-xs text-gray-500">
         {pending ? 'Aplicando…' : 'Não interrompe quem está assistindo.'}
       </p>
     </div>
+  )
+}
+
+/** O controlador baixou a qualidade (ou está no limite): diz o que está saindo e por quê. */
+function AdaptStatus(): React.JSX.Element | null {
+  const text = useScreenAdaptStore((s) => adaptStatusText(s.view))
+  if (!text) return null
+  return (
+    <p role="status" className="mt-2 text-xs font-semibold text-warning">
+      {text}
+    </p>
   )
 }

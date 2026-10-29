@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useLevelStore } from '../store/levelStore'
 import { levelTier, milestoneFor } from '../lib/levels'
+import { SPECIAL_BADGE_LEVELS } from '../lib/levelBadgeStyle'
 
 const LEVELS = [1, 5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 120, 250]
 const MILESTONES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
@@ -30,6 +31,17 @@ function LevelUpPreview(): React.JSX.Element {
       <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Níveis</p>
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
         {LEVELS.map((value) => (
+          <button key={value} onClick={() => preview(value)} className={chip}>
+            Nv {value}
+          </button>
+        ))}
+      </div>
+
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+        Selos especiais
+      </p>
+      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        {SPECIAL_BADGE_LEVELS.map((value) => (
           <button key={value} onClick={() => preview(value)} className={chip}>
             Nv {value}
           </button>

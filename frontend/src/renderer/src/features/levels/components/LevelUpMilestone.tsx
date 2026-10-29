@@ -1,191 +1,140 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { levelUpEffects, RAINBOW, type MilestoneKind } from '../lib/levels'
-import { canvasScale } from '../../call/lib/canvasBudget'
 import { useCallStore } from '../../call/store/callStore'
-import { buildScene, DRAWS_NUMBER, IMPACT_MS } from '../lib/milestoneScenes'
+import { buildScreenScene, sceneLayout, screenSceneFor, type ScreenScene } from '../lib/screenScene'
+import { prefersReducedMotion, runScene } from '../lib/sceneRunner'
 import Crown from './Crown'
 import { useScreenCelebration } from '../hooks/useScreenCelebration'
+import './levelSpecial.css'
 
-/** Quando o título entra em cada cena (ms): depois do "momento" dela. */
-const TITLE_AT: Record<MilestoneKind, number> = {
-  coins: 150,
-  shockwave: 120,
-  vines: 900,
-  ripple: 520,
-  crystals: 1500,
-  fire: 150,
-  prism: 700,
-  blackhole: 1950,
-  constellation: 2100,
-  legendary: 650
+/** Número grande (ou "LENDÁRIO") e a faixa embaixo, entrando depois do "momento" da cena. */
+function SceneTitle({
+  scene,
+  fontPx,
+  titleAt,
+  showNumber
+}: {
+  scene: ScreenScene
+  fontPx: number
+  titleAt: number
+  showNumber: boolean
+}): React.JSX.Element {
+  return (
+    <div
+      className="flex flex-col items-center"
+      style={{
+        animation: `level-ms-title ${scene.durationMs - titleAt}ms cubic-bezier(.3,1.3,.5,1) ${titleAt}ms both`
+      }}
+    >
+      {scene.crown && <Crown size={Math.round(fontPx * 0.45)} />}
+      <p
+        className={`bg-clip-text font-black leading-none tracking-tight text-transparent ${scene.shine ? 'level-number-shine' : ''}`}
+        style={{
+          fontSize: scene.crown ? fontPx * 0.42 : fontPx,
+          letterSpacing: scene.crown ? '0.18em' : undefined,
+          backgroundImage: scene.gradient,
+          visibility: showNumber ? undefined : 'hidden',
+          filter: `drop-shadow(0 4px 24px ${scene.color}aa)`
+        }}
+      >
+        {scene.numberText}
+      </p>
+      <p
+        className="mt-2 rounded-full border px-4 py-1 text-xs font-extrabold uppercase tracking-[0.3em] text-white shadow-lg"
+        style={{
+          borderColor: `${scene.color}88`,
+          background: `linear-gradient(90deg, ${scene.accent}cc, ${scene.color}aa)`,
+          textShadow: '0 1px 2px rgba(0,0,0,.6)'
+        }}
+      >
+        {scene.label}
+      </p>
+    </div>
+  )
 }
 
-const reducedMotion = (): boolean =>
-  typeof window !== 'undefined' &&
-  (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
-
 /**
- * Animação especial do marco (10, 20 … 100) quando VOCÊ chega nele: uma cena
- * diferente por faixa num <canvas> em tela cheia (moedas, onda dourada,
- * vinhas, água, cristais, fogo, prisma, buraco negro, constelação e a
- * sequência lendária) e o número do marco. Fica abaixo dos modais (z-40),
- * nunca recebe clique, para o requestAnimationFrame e sai do DOM quando
- * acaba. Com prefers-reduced-motion só o título aparece e some (fade).
+ * Cena em tela cheia quando VOCÊ chega num marco (10, 20 … 100) ou no nível
+ * 24: uma cena diferente por faixa num <canvas> (moedas, onda dourada,
+ * vinhas, água, cristais, fogo, prisma, buraco negro, constelação, a
+ * sequência lendária e o arco-íris do orgulho do 24) e o número. Fica abaixo
+ * dos modais (z-40), nunca recebe clique, para o requestAnimationFrame e sai
+ * do DOM quando acaba. Com prefers-reduced-motion só o título aparece e some.
  */
 function LevelUpMilestone(): React.JSX.Element | null {
   const celebration = useScreenCelebration()
-  const fx = useMemo(
-    () => (celebration ? levelUpEffects(celebration.level, celebration.previous) : null),
+  const scene = useMemo(
+    () => (celebration ? screenSceneFor(celebration.level, celebration.previous) : null),
     [celebration]
   )
-  const milestone = fx?.milestone ?? null
   const key = celebration?.key
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [doneKey, setDoneKey] = useState<number | null>(null)
-  const reduced = useMemo(() => (key === undefined ? false : reducedMotion()), [key])
-
-  // Tamanho do número (o mesmo no canvas e no título em DOM).
-  const layout = useMemo(() => {
-    if (key === undefined || typeof window === 'undefined') return null
-    const w = window.innerWidth
-    const h = window.innerHeight
-    return {
-      w,
-      h,
-      cx: w / 2,
-      cy: h * 0.46,
-      fontPx: Math.round(Math.min(w * 0.24, h * 0.32, 280))
-    }
-  }, [key])
+  const reduced = useMemo(() => key !== undefined && prefersReducedMotion(), [key])
+  const layout = useMemo(
+    () => (key === undefined ? null : sceneLayout(window.innerWidth, window.innerHeight)),
+    [key]
+  )
+  // O que o canvas desenha (nada com movimento reduzido).
+  const playing = useMemo(
+    () => (scene && layout && !reduced ? { scene, layout } : null),
+    [scene, layout, reduced]
+  )
 
   // Some sozinha no fim da cena (a celebração pode durar mais, por causa da faixa).
   useEffect(() => {
-    if (key === undefined || !milestone) return
-    const timer = setTimeout(() => setDoneKey(key), milestone.durationMs)
+    if (key === undefined || !scene) return
+    const timer = setTimeout(() => setDoneKey(key), scene.durationMs)
     return () => clearTimeout(timer)
-  }, [key, milestone])
+  }, [key, scene])
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas || !milestone || !fx || !layout || reduced) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    // Resolução por área (~2 MP no máximo) e 1× durante a call, que é quando
-    // os marcos tocam de verdade (o XP de voz só vem com a call ativa).
-    const scale = canvasScale({
+    if (!canvasRef.current || !playing) return
+    const { scene: s, layout: l } = playing
+    return runScene(canvasRef.current, {
+      w: l.w,
+      h: l.h,
+      durationMs: s.durationMs,
       dpr: window.devicePixelRatio,
-      w: layout.w,
-      h: layout.h,
-      inCall: useCallStore.getState().status === 'active'
+      // 1× durante a call, que é quando os marcos tocam de verdade.
+      inCall: useCallStore.getState().status === 'active',
+      build: (ctx) => buildScreenScene(s.kind, { ...l, ...s, level: s.level }, ctx)
     })
-    canvas.width = Math.round(layout.w * scale)
-    canvas.height = Math.round(layout.h * scale)
-    canvas.dataset.scale = String(scale)
-    const scene = buildScene(
-      milestone.kind,
-      {
-        ...layout,
-        level: milestone.level,
-        color: milestone.tier.color,
-        accent: milestone.tier.accent,
-        colors: fx.colors,
-        budget: fx.milestoneParticles,
-        power: fx.power,
-        durationMs: milestone.durationMs
-      },
-      ctx
-    )
-    canvas.dataset.particles = String(scene.particles)
-    let raf = 0
-    let start: number | null = null
-    const frame = (now: number): void => {
-      if (start === null) start = now
-      const t = now - start
-      ctx.setTransform(scale, 0, 0, scale, 0, 0)
-      ctx.globalAlpha = 1
-      ctx.globalCompositeOperation = 'source-over'
-      ctx.clearRect(0, 0, layout.w, layout.h)
-      if (t >= milestone.durationMs) return // acabou: não pede outro quadro
-      scene.draw(ctx, t)
-      raf = requestAnimationFrame(frame)
-    }
-    raf = requestAnimationFrame(frame)
-    return () => {
-      cancelAnimationFrame(raf)
-      // Libera a memória do canvas já na desmontagem (sem esperar o GC).
-      canvas.width = 0
-      canvas.height = 0
-    }
-  }, [milestone, fx, layout, reduced])
+  }, [playing])
 
-  if (!celebration || !fx || !milestone || !layout || doneKey === celebration.key) return null
+  if (!celebration || !scene || !layout || doneKey === celebration.key) return null
 
-  const { tier, kind } = milestone
-  const titleAt = reduced ? 0 : TITLE_AT[kind]
-  const showNumber = reduced || !DRAWS_NUMBER.has(kind)
-  const legendary = kind === 'legendary'
-  const gradient = legendary
-    ? `linear-gradient(90deg, ${RAINBOW.join(', ')})`
-    : `linear-gradient(180deg, #ffffff 0%, ${tier.color} 45%, ${tier.accent} 100%)`
+  const titleAt = reduced ? 0 : scene.titleAt
+  const showNumber = reduced || !scene.drawsNumber
 
   return (
     <div
       key={celebration.key}
       aria-hidden="true"
-      data-milestone={kind}
+      data-milestone={scene.kind}
       className={`level-anim pointer-events-none fixed inset-0 z-40 overflow-hidden ${reduced ? 'level-fade' : ''}`}
       style={
         {
-          '--level-fade-ms': `${milestone.durationMs}ms`,
-          '--shake': `${Math.min(6, fx.shake + 1)}px`
+          '--level-fade-ms': `${scene.durationMs}ms`,
+          '--shake': `${Math.min(6, scene.power * 4 + 1)}px`
         } as React.CSSProperties
       }
     >
       <div
         className="absolute inset-0"
-        style={{ animation: `level-shake 600ms linear ${IMPACT_MS[kind]}ms both` }}
+        style={{ animation: `level-shake 600ms linear ${scene.impactMs}ms both` }}
       >
         {!reduced && <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />}
 
         <div
           className="absolute left-1/2 flex flex-col items-center"
-          style={{
-            top: layout.cy,
-            transform: 'translate(-50%, -50%)'
-          }}
+          style={{ top: layout.cy, transform: 'translate(-50%, -50%)' }}
         >
-          <div
-            className="flex flex-col items-center"
-            style={{
-              animation: `level-ms-title ${milestone.durationMs - titleAt}ms cubic-bezier(.3,1.3,.5,1) ${titleAt}ms both`
-            }}
-          >
-            {legendary && <Crown size={Math.round(layout.fontPx * 0.45)} />}
-            <p
-              className="bg-clip-text font-black leading-none tracking-tight text-transparent"
-              style={{
-                fontSize: legendary ? layout.fontPx * 0.42 : layout.fontPx,
-                letterSpacing: legendary ? '0.18em' : undefined,
-                backgroundImage: gradient,
-                visibility: showNumber ? undefined : 'hidden',
-                filter: `drop-shadow(0 4px 24px ${tier.color}aa)`
-              }}
-            >
-              {legendary ? 'LENDÁRIO' : milestone.level}
-            </p>
-            <p
-              className="mt-2 rounded-full border px-4 py-1 text-xs font-extrabold uppercase tracking-[0.3em] text-white shadow-lg"
-              style={{
-                borderColor: `${tier.color}88`,
-                background: `linear-gradient(90deg, ${tier.accent}cc, ${tier.color}aa)`,
-                textShadow: '0 1px 2px rgba(0,0,0,.6)'
-              }}
-            >
-              {legendary
-                ? `Nível ${milestone.level}`
-                : `Marco ${milestone.level} · ${milestone.title}`}
-            </p>
-          </div>
+          <SceneTitle
+            scene={scene}
+            fontPx={layout.fontPx}
+            titleAt={titleAt}
+            showNumber={showNumber}
+          />
         </div>
       </div>
     </div>

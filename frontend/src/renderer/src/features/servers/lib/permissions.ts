@@ -32,6 +32,8 @@ export const Perm = {
   USE_SOUNDBOARD: 1 << 22,
   MANAGE_EXPRESSIONS: 1 << 23,
   DISCONNECT_MEMBERS: 1 << 24,
+  /** Gerar link de visitante para a call (fora do @everyone; ADR 0017). */
+  INVITE_GUESTS: 1 << 25,
   CHANGE_NICKNAME: 1 << 26,
   MANAGE_NICKNAMES: 1 << 27,
   ADD_SOUNDS: 1 << 28,
