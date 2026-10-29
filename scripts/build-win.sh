@@ -29,7 +29,8 @@ mkdir -p "$ROOT/frontend/dist"
 BUILD_TARGETS="${BUILD_TARGETS:-portable nsis}"
 UPDATE_URL="${SERVER_URL%/}/updates/"
 
-# Helper nativo do som da janela (Rust → concord-audio.exe), embutido no app.
+# Helper nativo (Rust → concord-audio.exe), embutido no app: som da janela,
+# overlay de jogo e a música em atividade (`media-watch`).
 docker build -q -t concord-rust-win "$ROOT/native/concord-audio" >/dev/null
 docker run --rm \
   -v "$ROOT/native/concord-audio:/src" \
