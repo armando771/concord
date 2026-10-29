@@ -220,6 +220,29 @@ describe('screenStatsView — quem transmite', () => {
     expect(value(view, 'Quadros')).toBe('0 de 60 fps')
   })
 
+  it('mostra o degrau saindo e por que desceu', () => {
+    const input = sender([h264, outbound({})], 60)
+    const reduced = {
+      chosen: '1080p 60',
+      effective: '720p 60',
+      reduced: true,
+      reason: 'bandwidth' as const,
+      step: 1
+    }
+    expect(value(screenStatsView({ ...input, quality: reduced }, null).view, 'Qualidade')).toBe(
+      '720p 60 (de 1080p 60, pela conexão)'
+    )
+    const cpuFloor = { ...reduced, effective: '720p 30', reason: 'cpu' as const }
+    expect(value(screenStatsView({ ...input, quality: cpuFloor }, null).view, 'Qualidade')).toBe(
+      '720p 30 (de 1080p 60, pelo PC)'
+    )
+    const full = { ...reduced, effective: '1080p 60', reduced: false, reason: null, step: 0 }
+    expect(value(screenStatsView({ ...input, quality: full }, null).view, 'Qualidade')).toBe(
+      '1080p 60'
+    )
+    expect(value(screenStatsView(input, null).view, 'Qualidade')).toBeUndefined()
+  })
+
   it('sem vídeo saindo ainda', () => {
     const { view, sample } = screenStatsView(sender([]), null)
     expect(view.rows).toEqual([])

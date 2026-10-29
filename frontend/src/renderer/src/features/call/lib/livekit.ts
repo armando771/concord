@@ -208,7 +208,8 @@ export class CallMedia {
   /** getStats() do vídeo da live, para o painel de estatísticas (só com ele aberto). */
   async readScreenStats(userId: string, local: boolean): Promise<ScreenStatsInput | null> {
     if (this.closing) return null
-    return readScreenStatsInput(this.room, userId, local)
+    const input = await readScreenStatsInput(this.room, userId, local)
+    return input?.local ? { ...input, quality: this.screen.current() } : input
   }
 
   /** Pode publicar essa fonte, segundo as permissões que o servidor deu. */
@@ -289,6 +290,7 @@ export class CallMedia {
 
   /** Despublica as tracks do stream (quem chama é dono de parar as tracks). */
   async unpublish(stream: MediaStream): Promise<void> {
+    this.screen.stop(stream)
     const tracks = stream.getTracks()
     if (!this.connected || tracks.length === 0) return
     await this.room.localParticipant.unpublishTracks(tracks)
@@ -307,6 +309,7 @@ export class CallMedia {
   disconnect(): void {
     this.closing = true
     clearActiveScreenStats(this)
+    this.screen.stop()
     this.stopWindowWatch()
     this.cache.clear()
     void this.room.disconnect()

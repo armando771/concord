@@ -40,7 +40,7 @@ const EMPTY = (): RTCStatsReport => new Map() as unknown as RTCStatsReport
  * O envio principal e o dos codecs de reserva num relatório só: quando o SFU
  * pede a reserva, o principal pausa e o vídeo sai pelo outro sender.
  */
-async function senderReports(track: StatsTrack & BackupCodecs): Promise<RTCStatsReport> {
+export async function senderReports(track: StatsTrack & BackupCodecs): Promise<RTCStatsReport> {
   const senders = [...(track.simulcastCodecs?.values() ?? [])].flatMap((codec) =>
     codec.sender ? [codec.sender.getStats().catch(() => undefined)] : []
   )

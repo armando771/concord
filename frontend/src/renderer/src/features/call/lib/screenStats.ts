@@ -1,3 +1,5 @@
+import type { ScreenAdaptView } from '../store/screenAdaptStore'
+
 // Estatísticas da live (painel no canto do vídeo): transforma o getStats() do
 // envio (quem transmite) ou da recepção (quem assiste) em linhas prontas para a
 // UI. Puro: quem lê o RTCStatsReport e guarda a leitura anterior é o hook.
@@ -13,6 +15,8 @@ export interface ScreenStatsInput {
   streamState: string
   /** Envio: fps pedido na qualidade da transmissão. */
   requestedFps: number | null
+  /** Envio: degrau saindo agora (o controlador pode ter descido). */
+  quality?: ScreenAdaptView | null
 }
 
 /** O que a próxima leitura precisa para calcular taxas no intervalo. */
@@ -153,6 +157,16 @@ function averageQp(now: ScreenStatsSample, prev: ScreenStatsSample | null): Stat
   ]
 }
 
+const REDUCED_BY: Record<string, string> = { cpu: 'pelo PC', bandwidth: 'pela conexão' }
+
+/** "720p 60 (de 1080p 60, pela conexão)": o degrau saindo e por que desceu. */
+function qualityRows(view: ScreenAdaptView | null | undefined): StatRow[] {
+  if (!view) return []
+  const why = view.reason ? `, ${REDUCED_BY[view.reason]}` : ''
+  const value = view.reduced ? `${view.effective} (de ${view.chosen}${why})` : view.effective
+  return [{ label: 'Qualidade', value }]
+}
+
 function senderRows(
   input: ScreenStatsInput,
   stat: Stat,
@@ -161,6 +175,7 @@ function senderRows(
 ): StatRow[] {
   const requested = input.requestedFps === null ? '' : ` de ${input.requestedFps}`
   return [
+    ...qualityRows(input.quality),
     { label: 'Quadros', value: `${fps(stat)}${requested} fps` },
     { label: 'Resolução', value: resolution(stat) },
     { label: 'Taxa', value: bitrate(now, prev) },
