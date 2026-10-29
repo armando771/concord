@@ -3,10 +3,11 @@ import type { ScreenCodecPreference } from '../lib/screenCodec'
 
 const OPTIONS: { value: ScreenCodecPreference; label: string }[] = [
   { value: 'auto', label: 'Automático' },
+  { value: 'h264', label: 'H.264' },
   { value: 'vp8', label: 'VP8' }
 ]
 
-/** "Avançado" do seletor de qualidade: o codec da live (Automático = H.264). */
+/** "Avançado" do seletor de qualidade: o codec da live (Automático = AV1 na placa de vídeo ou H.264). */
 export function ScreenCodecOptions({
   value,
   onChange,
@@ -44,7 +45,7 @@ export function ScreenCodecOptions({
         <p className="mt-1.5 text-xs text-gray-500">
           {compact
             ? 'Vale a partir da próxima transmissão.'
-            : 'Automático usa H.264. Use VP8 se a transmissão falhar para alguém.'}
+            : 'Automático usa AV1 se a sua placa de vídeo suportar, senão H.264. Use VP8 se a transmissão falhar para alguém.'}
         </p>
       </div>
     </details>
