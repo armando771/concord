@@ -37,7 +37,7 @@ use windows::Win32::UI::WindowsAndMessaging::{UpdateLayeredWindow, ULW_ALPHA};
 use windows_numerics::{Matrix3x2, Vector2};
 
 use crate::overlay::gif::Decoded;
-use crate::overlay::icons::{parse_path, Seg, HEADSET, HEADSET_SLASH, MIC_OFF};
+use crate::overlay::icons::{parse_path, Seg, EYE, HEADSET, HEADSET_SLASH, MIC_OFF};
 use crate::overlay::layout::{css, RectF, Scene};
 use crate::overlay::protocol::{Color, State};
 
@@ -72,6 +72,7 @@ pub struct Renderer {
     formats: RefCell<HashMap<FormatKey, IDWriteTextFormat>>,
     mic: ID2D1PathGeometry,
     headset: ID2D1PathGeometry,
+    eye: ID2D1PathGeometry,
     round: ID2D1StrokeStyle,
     dashed: ID2D1StrokeStyle,
     memory_dc: HDC,
@@ -178,10 +179,11 @@ impl Renderer {
             let rt = render_target(&d2d)?;
             let mic = geometry(&d2d, MIC_OFF)?;
             let headset = geometry(&d2d, HEADSET)?;
+            let eye = geometry(&d2d, EYE)?;
             let round = stroke(&d2d, D2D1_CAP_STYLE_ROUND, false)?;
             let dashed = stroke(&d2d, D2D1_CAP_STYLE_FLAT, true)?;
             let memory_dc = CreateCompatibleDC(None);
-            Ok(Renderer { d2d, dwrite, rt, formats: RefCell::new(HashMap::new()), mic, headset, round, dashed, memory_dc, dib: None })
+            Ok(Renderer { d2d, dwrite, rt, formats: RefCell::new(HashMap::new()), mic, headset, eye, round, dashed, memory_dc, dib: None })
         }
     }
 
@@ -344,6 +346,9 @@ impl Renderer {
                 for (i, icon) in pill.icons.iter().enumerate() {
                     self.icon(i == 1, offset(*icon, f.origin), color(theme.danger, 1.0))?;
                 }
+                if let Some(eye) = pill.eye {
+                    self.eye(offset(eye, f.origin), color(theme.speaking, 1.0))?;
+                }
                 self.rt.PopLayer();
             }
             if let Some(more) = &f.scene.more {
@@ -351,6 +356,14 @@ impl Renderer {
                 let r = offset(more.rect, f.origin);
                 self.rt.FillRoundedRectangle(&rounded(r, r.h / 2.0), &self.brush(color(theme.floating, 0.85))?);
                 self.text(&more.label, r, css::NAME_SIZE * f.scene.unit, false, true, color(theme.normal, 1.0))?;
+                self.rt.PopLayer();
+            }
+            if let Some(v) = &f.scene.viewers {
+                self.rt.PushLayer(&layer_params(v.opacity), &layer);
+                let r = offset(v.rect, f.origin);
+                self.rt.FillRoundedRectangle(&rounded(r, r.h / 2.0), &self.brush(color(theme.floating, 0.85))?);
+                self.eye(offset(v.eye, f.origin), color(theme.speaking, 1.0))?;
+                self.text(&v.label, offset(v.label_rect, f.origin), css::NAME_SIZE * f.scene.unit, false, false, color(theme.normal, 1.0))?;
                 self.rt.PopLayer();
             }
             if let Some(h) = f.handle {
@@ -406,6 +419,17 @@ impl Renderer {
                 let ring = D2D1_ELLIPSE { point: center, radiusX: radius + css::RING * u / 2.0, radiusY: radius + css::RING * u / 2.0 };
                 self.rt.DrawEllipse(&ring, &self.brush(color(theme.speaking, 1.0))?, css::RING * u, None::<&ID2D1StrokeStyle>);
             }
+        }
+        Ok(())
+    }
+
+    /// Olho preenchido (EyeIcon do app) no quadrado `r`.
+    fn eye(&self, r: RectF, c: D2D1_COLOR_F) -> Result<()> {
+        let s = r.w / 24.0;
+        unsafe {
+            self.rt.SetTransform(&(Matrix3x2::scale(s, s) * Matrix3x2::translation(r.x, r.y)));
+            self.rt.FillGeometry(&self.eye, &self.brush(c)?, None::<&ID2D1Brush>);
+            self.rt.SetTransform(&Matrix3x2::identity());
         }
         Ok(())
     }

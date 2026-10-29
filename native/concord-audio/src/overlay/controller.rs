@@ -140,6 +140,7 @@ mod tests {
             muted: false,
             deafened: false,
             speaking: false,
+            watching: false,
         }
     }
 
