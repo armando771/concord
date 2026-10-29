@@ -20,7 +20,7 @@ import { useScreenAdaptStore, type ScreenAdaptView } from '../store/screenAdaptS
 
 // A minha live na sala: publicar (codec e camadas), trocar a qualidade ao vivo
 // sem despublicar e o controlador que desce/sobe de degrau sozinho. O CallMedia
-// delega para cá (o livekit.ts não cresce com a tela). Ver docs/adr/0019.
+// delega para cá (o livekit.ts não cresce com a tela). Ver docs/adr/0020.
 
 /** O que a placa de vídeo/navegador codifica no tamanho da live. */
 function codecSupport(

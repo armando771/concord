@@ -52,7 +52,7 @@ const BOX: Record<ScreenShareQuality['resolution'], { width: number; height: num
 
 /**
  * Bitrate de referência do mercado (Twitch: 720p30 3, 720p60 4,5, 1080p30 4,5,
- * 1080p60 6–8 Mbps; YouTube 1440p 6–13). Ver docs/adr/0019.
+ * 1080p60 6–8 Mbps; YouTube 1440p 6–13). Ver docs/adr/0020.
  */
 const BITRATE: Record<ScreenShareQuality['resolution'], Record<30 | 60, number>> = {
   '720p': { 30: 3_000_000, 60: 4_500_000 },
@@ -118,7 +118,7 @@ export function streamQuality(stream: MediaStream): ScreenShareQuality {
  * Jogo (60 fps) = 'motion'; texto e apresentação (30 fps) = 'detail'. A
  * resolução é sempre mantida: o WebRTC sozinho derrubava para 180p (rampa da
  * banda) ou segurava 1080p a 5 fps. Quem troca de degrau, sem nunca passar de
- * 720p30, é o controlador (screenAdaptController). Ver docs/adr/0019.
+ * 720p30, é o controlador (screenAdaptController). Ver docs/adr/0020.
  */
 export function screenMotion(frameRate: ScreenShareQuality['frameRate']): {
   contentHint: 'motion' | 'detail'

@@ -3,7 +3,7 @@ import { captureSize, screenEncoding, type ScreenShareQuality } from './screenSh
 
 // Camada extra de 720p (opcional, desmarcada por padrão): como as "renditions"
 // da Twitch, quem tem internet fraca (ou vê a live pequena) recebe 720p em vez
-// de congelar. Custa um segundo encode no PC de quem transmite. Ver docs/adr/0019.
+// de congelar. Custa um segundo encode no PC de quem transmite. Ver docs/adr/0020.
 
 export const SIMULCAST_KEY = 'salinha:screen-share-720p-extra'
 
