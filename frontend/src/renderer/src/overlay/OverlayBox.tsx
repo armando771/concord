@@ -8,7 +8,7 @@ import {
   type OverlayLayout,
   type OverlaySize
 } from '../features/overlay/lib/overlayLayout'
-import OverlayEditChrome from './OverlayEditChrome'
+import OverlayEditChrome, { boxClassName } from './OverlayEditChrome'
 import OverlayList from './OverlayList'
 import { useBoxDrag } from './useBoxDrag'
 
@@ -68,10 +68,8 @@ function OverlayBox(props: OverlayBoxProps): React.JSX.Element {
     <div className="relative h-full w-full">
       <div
         ref={boxRef}
-        // w-max: a largura não depende da janela (que é do tamanho da caixa).
-        className={`absolute w-max rounded-xl border-2 p-2 ${
-          editing ? 'cursor-move border-dashed border-brand bg-black/20' : 'border-transparent'
-        }`}
+        // w-max (em boxClassName): a largura não depende da janela, que é do tamanho da caixa.
+        className={boxClassName(editing)}
         // Escondida até medir: sem o tamanho, não dá para centralizar nem encaixar.
         style={{
           left: pos.left - origin.x,
@@ -86,15 +84,14 @@ function OverlayBox(props: OverlayBoxProps): React.JSX.Element {
         <div className="flex flex-col gap-1.5" style={{ zoom: layout.scale }}>
           <OverlayList snapshot={snapshot} />
         </div>
-        {editing && (
-          <OverlayEditChrome
-            pos={pos}
-            box={box}
-            area={area}
-            shortcut={snapshot.shortcut}
-            onResizeStart={(e) => begin('resize', e)}
-          />
-        )}
+        <OverlayEditChrome
+          editing={editing}
+          pos={pos}
+          box={box}
+          area={area}
+          shortcut={snapshot.shortcut}
+          onResizeStart={(e) => begin('resize', e)}
+        />
       </div>
     </div>
   )

@@ -67,3 +67,9 @@ export function hintPlacement(
     right: pos.left + box.width / 2 > area.width / 2
   }
 }
+
+/** Classes de posição da dica em volta da caixa (ver hintPlacement). */
+export function hintPositionClass(pos: OverlayBoxPx, box: OverlaySize, area: OverlaySize): string {
+  const { below, right } = hintPlacement(pos, box, area)
+  return `${below ? 'top-full mt-3' : 'bottom-full mb-3'} ${right ? 'right-0' : 'left-0'}`
+}

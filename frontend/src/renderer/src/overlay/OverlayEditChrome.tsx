@@ -1,25 +1,35 @@
-import { hintPlacement } from '../features/overlay/lib/overlayDrag'
+import { hintPositionClass } from '../features/overlay/lib/overlayDrag'
 import type { OverlayBoxPx, OverlaySize } from '../features/overlay/lib/overlayLayout'
 import {
   normalizeOverlayShortcut,
   overlayEditHint as editHint
 } from '../features/overlay/lib/overlayShortcut'
 
+/** Classes da caixa: w-max (a largura não depende da janela); editando, moldura tracejada. */
+export function boxClassName(editing: boolean): string {
+  const frame = editing
+    ? 'cursor-move border-dashed border-brand bg-black/20'
+    : 'border-transparent'
+  return `absolute w-max rounded-xl border-2 p-2 ${frame}`
+}
+
 /** Moldura do modo de edição: canto de redimensionar e a dica do atalho. */
 function OverlayEditChrome({
+  editing,
   pos,
   box,
   area,
   shortcut,
   onResizeStart
 }: {
+  editing: boolean
   pos: OverlayBoxPx
   box: OverlaySize
   area: OverlaySize
   shortcut: string
   onResizeStart: (e: React.PointerEvent) => void
-}): React.JSX.Element {
-  const { below, right } = hintPlacement(pos, box, area)
+}): React.JSX.Element | null {
+  if (!editing) return null
   return (
     <>
       <div
@@ -28,9 +38,7 @@ function OverlayEditChrome({
         onPointerDown={onResizeStart}
       />
       <div
-        className={`pointer-events-none absolute whitespace-nowrap rounded-md bg-floating px-2 py-1 text-xs font-medium text-normal ${
-          below ? 'top-full mt-3' : 'bottom-full mb-3'
-        } ${right ? 'right-0' : 'left-0'}`}
+        className={`pointer-events-none absolute whitespace-nowrap rounded-md bg-floating px-2 py-1 text-xs font-medium text-normal ${hintPositionClass(pos, box, area)}`}
       >
         {editHint(normalizeOverlayShortcut(shortcut))}
       </div>

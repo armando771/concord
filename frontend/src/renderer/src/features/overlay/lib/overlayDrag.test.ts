@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { dragLayout, hintPlacement, startBoxDrag, type BoxDragStart } from './overlayDrag'
+import {
+  dragLayout,
+  hintPlacement,
+  hintPositionClass,
+  startBoxDrag,
+  type BoxDragStart
+} from './overlayDrag'
 import { OVERLAY_DEFAULT_LAYOUT } from './overlayLayout'
 
 const area = { width: 1920, height: 1000 }
@@ -65,5 +71,12 @@ describe('hintPlacement', () => {
       below: false,
       right: true
     })
+  })
+})
+
+describe('hintPositionClass', () => {
+  it('traduz a posição da dica em classes', () => {
+    expect(hintPositionClass({ left: 10, top: 100 }, box, area)).toBe('top-full mt-3 left-0')
+    expect(hintPositionClass({ left: 1700, top: 900 }, box, area)).toBe('bottom-full mb-3 right-0')
   })
 })
