@@ -15,24 +15,24 @@ import {
 import {
   BACKGROUND_COLOR_LABELS,
   BORDER_COLOR_LABELS,
-  EFFECT_GLYPHS,
   borderTunable,
   effectOptions,
   levelLabel,
   withEffect
 } from '../../../lib/themeEditor'
 import { ChipGroup, ColorSwatch, RangeField, SubLabel } from '../controls'
+import { EFFECT_ICONS, gradientArrow } from './effectIcons'
 
 interface Props {
   value: ProfileTheme
   onChange: (next: ProfileTheme) => void
 }
 
-const EFFECT_CHIPS = PROFILE_EFFECTS.map((e) => ({ ...e, glyph: EFFECT_GLYPHS[e.id] }))
+const EFFECT_CHIPS = PROFILE_EFFECTS.map((e) => ({ ...e, icon: EFFECT_ICONS[e.id] }))
 const DIRECTION_CHIPS = GRADIENT_DIRECTIONS.map((d) => ({
   id: String(d.angle),
   label: d.label,
-  glyph: d.arrow,
+  icon: gradientArrow(d.angle),
   iconOnly: true
 }))
 

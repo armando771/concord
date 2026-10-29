@@ -42,14 +42,14 @@ export const PROFILE_TEXTURES = [
 
 /** Direções do degradê (o ângulo é livre no backend; o editor oferece estas). */
 export const GRADIENT_DIRECTIONS = [
-  { angle: 360, label: 'Para cima', arrow: '↑' },
-  { angle: 45, label: 'Para cima e à direita', arrow: '↗' },
-  { angle: 90, label: 'Para a direita', arrow: '→' },
-  { angle: 135, label: 'Para baixo e à direita', arrow: '↘' },
-  { angle: 180, label: 'Para baixo', arrow: '↓' },
-  { angle: 225, label: 'Para baixo e à esquerda', arrow: '↙' },
-  { angle: 270, label: 'Para a esquerda', arrow: '←' },
-  { angle: 315, label: 'Para cima e à esquerda', arrow: '↖' }
+  { angle: 360, label: 'Para cima' },
+  { angle: 45, label: 'Para cima e à direita' },
+  { angle: 90, label: 'Para a direita' },
+  { angle: 135, label: 'Para baixo e à direita' },
+  { angle: 180, label: 'Para baixo' },
+  { angle: 225, label: 'Para baixo e à esquerda' },
+  { angle: 270, label: 'Para a esquerda' },
+  { angle: 315, label: 'Para cima e à esquerda' }
 ] as const
 
 export const DEFAULT_EXTRAS: ProfileThemeExtras = {

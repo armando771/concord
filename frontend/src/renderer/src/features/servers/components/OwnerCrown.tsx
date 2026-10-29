@@ -1,4 +1,4 @@
-import { CrownIcon } from '../../../shared/ui/iconsExtra'
+import { CrownIcon } from '../../../shared/ui/icons'
 
 /**
  * Coroa ao lado do nome do dono do servidor. O dono não é um cargo: ele aparece

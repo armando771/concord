@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ChevronRightIcon } from '../../../shared/ui/iconsExtra'
+import { ChevronRightIcon } from '../../../shared/ui/icons'
 
 /** Card grande da tela inicial da aba do diamante: leva à tela do assunto. */
 function HubCard({
