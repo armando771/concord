@@ -15,10 +15,15 @@ type notifier Manager
 func (n *notifier) PublishState(p *Player) {
 	// Chamado com p.mu preso: monta o estado sem pegar o lock de novo.
 	n.deps.BroadcastToCall(p.CallID, event("music:state", buildStateLocked(p, time.Now())))
+	if n.sessions != nil {
+		n.sessions.put(p.ChannelID, p.sessionLocked()) // nil (nada tocando) apaga
+	}
 }
 
 func (n *notifier) Public(textChannelID, content string) {
-	if textChannelID == "" {
+	// Desligando: falhas e quedas vêm dos ffmpeg mortos pelo SIGTERM, não
+	// são notícia (o Maestro volta sozinho no processo novo).
+	if textChannelID == "" || n.stopping.Load() {
 		return
 	}
 	go func() {
@@ -35,6 +40,9 @@ func (n *notifier) Closed(p *Player) {
 	m.mu.Lock()
 	if m.players[p.ChannelID] == p {
 		delete(m.players, p.ChannelID)
+		if m.sessions != nil {
+			m.sessions.put(p.ChannelID, nil) // fechou de verdade: nada a retomar
+		}
 	}
 	m.mu.Unlock()
 	n.deps.BroadcastToCall(p.CallID, event("music:state", ClosedState(p)))

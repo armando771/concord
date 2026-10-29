@@ -26,7 +26,7 @@ type Notifier interface {
 
 type PlayerDeps struct {
 	Source      Source
-	Prepare     func(ctx context.Context, path string) (io.ReadCloser, error)
+	Prepare     func(ctx context.Context, path string, at time.Duration) (io.ReadCloser, error)
 	NewOutput   func(ctx context.Context, callID, channelID string, src FrameSource) (Output, error)
 	Notify      Notifier
 	Now         func() time.Time
@@ -173,7 +173,8 @@ func (p *Player) handleEvent(e MixEvent) {
 			p.fading[p.now.ID] = p.now
 		}
 		p.now = it
-		p.nowStarted = p.deps.Now()
+		// Retomada: a faixa "começou" ResumeAt atrás (a barra do painel já andada).
+		p.nowStarted = p.deps.Now().Add(-it.ResumeAt)
 		p.nextTag = ""
 		p.skipped = ""
 		p.votes.Reset()
@@ -248,7 +249,7 @@ func (p *Player) ensurePreparingLocked() {
 		path, err := p.deps.Source.DownloadAudio(ctx, it.Track.VideoID, p.deps.CacheDir)
 		var r io.ReadCloser
 		if err == nil {
-			r, err = p.deps.Prepare(p.ctx, path)
+			r, err = p.deps.Prepare(p.ctx, path, it.ResumeAt)
 		}
 		cancel()
 		p.onPrepared(it, path, r, err)
@@ -286,72 +287,6 @@ func (p *Player) onPrepared(it *Item, path string, r io.ReadCloser, err error) {
 	it.AudioPath = path
 	p.nextTag = it.ID
 	p.mixer.SetNext(it.ID, r)
-}
-
-func (p *Player) Skip(userID string) SkipResult {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.now == nil || p.closed {
-		return SkipResult{Kind: SkipNothing}
-	}
-	if p.skipped == p.now.ID {
-		return SkipResult{Kind: SkipDone}
-	}
-	if p.now.RequestedBy.ID == userID {
-		p.deps.Notify.Public(p.lastTextFor(p.now), TextSkippedBy(p.now.Track.Title, p.now.RequestedBy.Username, p.ChannelName))
-		p.skipped = p.now.ID
-		p.mixer.Skip()
-		return SkipResult{Kind: SkipDone}
-	}
-	humans := p.deps.Notify.Humans(p.CallID)
-	p.votes.Prune(humans)
-	added := p.votes.Add(userID)
-	needed := NeededVotes(len(humans))
-	votes := p.votes.Count()
-	if votes >= needed {
-		p.skipByVoteLocked(votes, needed)
-		return SkipResult{Kind: SkipDone, Votes: votes, Needed: needed}
-	}
-	p.deps.Notify.PublishState(p)
-	if !added {
-		return SkipResult{Kind: SkipAlready, Votes: votes, Needed: needed}
-	}
-	return SkipResult{Kind: SkipVoted, Votes: votes, Needed: needed}
-}
-
-func (p *Player) skipByVoteLocked(votes, needed int) {
-	if p.skipped == p.now.ID {
-		return
-	}
-	p.skipped = p.now.ID
-	p.deps.Notify.Public(p.lastTextFor(p.now), TextSkippedByVote(p.now.Track.Title, votes, needed, p.ChannelName))
-	p.votes.Reset()
-	p.mixer.Skip()
-}
-
-// lastTextFor: o aviso vai para o canal de onde a música foi pedida.
-func (p *Player) lastTextFor(it *Item) string {
-	if it != nil && it.TextChannelID != "" {
-		return it.TextChannelID
-	}
-	return p.lastText
-}
-
-// ParticipantLeft recalcula a votação: com menos gente, metade pode já bastar.
-func (p *Player) ParticipantLeft(userID string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	delete(p.watchers, userID)
-	if p.now == nil || p.closed {
-		return
-	}
-	humans := p.deps.Notify.Humans(p.CallID)
-	p.votes.Prune(humans)
-	needed := NeededVotes(len(humans))
-	if votes := p.votes.Count(); votes > 0 && votes >= needed {
-		p.skipByVoteLocked(votes, needed)
-	}
-	p.deps.Notify.PublishState(p)
 }
 
 func (p *Player) Remove(itemID, userID string) error {
@@ -420,46 +355,6 @@ func (p *Player) snapshotLocked() Snapshot {
 	return s
 }
 
-// idleIfEmptyLocked arma o timer quando não há nada tocando, na fila nem sendo preparado.
-func (p *Player) idleIfEmptyLocked() {
-	if p.now == nil && p.queue.Len() == 0 && len(p.preparing) == 0 {
-		p.startIdleLocked()
-	}
-}
-
-func (p *Player) startIdleLocked() {
-	if p.idle != nil {
-		return
-	}
-	var t *time.Timer
-	t = time.AfterFunc(p.deps.IdleTimeout, func() {
-		// Se o timer foi parado/substituído enquanto esperava o lock, não fecha.
-		p.mu.Lock()
-		stale := p.idle != t
-		p.mu.Unlock()
-		if !stale {
-			p.shutdown(false)
-		}
-	})
-	p.idle = t
-}
-
-func (p *Player) stopIdleLocked() {
-	if p.idle != nil {
-		p.idle.Stop()
-		p.idle = nil
-	}
-}
-
-// IdleIfEmpty arma o timer de ociosidade se não há nada tocando nem na fila.
-func (p *Player) IdleIfEmpty() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if !p.closed {
-		p.idleIfEmptyLocked()
-	}
-}
-
 func (p *Player) IsClosed() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -485,6 +380,13 @@ func (p *Player) shutdown(crashed bool) {
 	}
 	p.mu.Unlock()
 
+	p.leave()
+	_ = os.RemoveAll(p.deps.CacheDir)
+	p.deps.Notify.Closed(p)
+}
+
+// leave para o áudio e sai da sala do LiveKit.
+func (p *Player) leave() {
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -494,8 +396,6 @@ func (p *Player) shutdown(crashed bool) {
 	if p.out != nil {
 		p.out.Close()
 	}
-	_ = os.RemoveAll(p.deps.CacheDir)
-	p.deps.Notify.Closed(p)
 }
 
 func removeFiles(it *Item) {

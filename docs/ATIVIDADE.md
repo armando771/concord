@@ -39,7 +39,8 @@ Mesmo caminho do jogo, num slot separado (dá para jogar e ouvir ao mesmo tempo)
 Decisão e alternativas: [ADR 0006](adr/0006-musica-em-atividade.md).
 
 1. **Detecção (Electron no Windows e no Linux).** `main/activity/smtcMedia.ts`
-   (Windows: PowerShell lendo o SMTC a cada 2 s) e `mprisMedia.ts` (Linux:
+   (Windows: o helper `concord-audio.exe media-watch` lendo o SMTC por eventos;
+   sem ele, o PowerShell de `smtcPowerShell.ts` a cada 2 s) e `mprisMedia.ts` (Linux:
    `busctl` no MPRIS a cada 3 s) viram `MediaSession`. `mediaSessions.ts` só
    aceita players do catálogo `shared/musicApps.ts` (navegador só com álbum ou
    site de música conhecido). `musicTracker.ts` manda a faixa (início = agora -
