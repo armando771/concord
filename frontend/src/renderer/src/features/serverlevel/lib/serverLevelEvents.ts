@@ -3,8 +3,8 @@ import { parseLevelUp, parseProgress, type ServerLevelProgress } from './serverL
 /** O que o tratamento dos eventos escreve (injetado: o teste não sobe o store). */
 export interface ServerLevelEventDeps {
   apply: (progress: ServerLevelProgress) => void
-  /** Subiu de nível: o aviso discreto (toast), sem mensagem no chat. */
-  levelUp: (serverId: string, level: number) => void
+  /** Subiu de nível (`previous`: o nível de antes, se veio no evento). */
+  levelUp: (serverId: string, level: number, previous?: number) => void
 }
 
 /** server:level:update e server:level:up do WebSocket. */
@@ -19,6 +19,6 @@ export function handleServerLevelEvent(
   }
   if (event.type === 'server:level:up') {
     const up = parseLevelUp(event.payload)
-    if (up) deps.levelUp(up.serverId, up.level)
+    if (up) deps.levelUp(up.serverId, up.level, up.previous)
   }
 }

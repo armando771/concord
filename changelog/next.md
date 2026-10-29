@@ -1,5 +1,6 @@
 ## Novidades
 
+- Servidores: quando o servidor sobe de nível, quem está nele vê uma animação em tela cheia com o ícone, a contagem do nível e efeitos que crescem por faixa (fogos no 5, raios no 10, galáxia no 20, aurora no 30) e cenas próprias nos níveis 10, 25, 50 e 100; quem estava fora vê uma vez ao abrir o servidor. O selo "Nv." do servidor muda de material por faixa (bronze, prata, ouro, cristal e lendário).
 - Níveis: selos especiais no nível 13 (vermelho com estrelinhas), 14 (onça-pintada), 22 (verde e amarelo do Brasil) e 24 (arco-íris do orgulho), e subir para o 24 toca uma cena própria com o arco-íris atravessando a tela.
 - Chamadas: convide alguém de fora do servidor só para a call em que você está. No topo da call, "Convidar visitante" gera um link de 2 horas, 6 horas, 12 horas ou 1 dia, e você escolhe se a pessoa pode falar e ligar câmera e tela. Quem abre o link digita um nome (ou entra com a própria conta) e vai direto para a call, com o selo "Visitante", sem ver chats nem outros canais. O link pode ser revogado e o visitante expulso a qualquer momento. Nova permissão de cargo "Convidar visitantes", desligada por padrão.
 - Servidores agora têm nível: ele sobe com o uso do servidor (membros novos, mensagens, figurinhas, sons, tempo em call e lives) e aparece no menu do nome do servidor, com o detalhamento dos últimos 7 dias.

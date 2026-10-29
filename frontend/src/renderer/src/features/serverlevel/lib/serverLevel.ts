@@ -89,8 +89,14 @@ export function parseProgress(payload: unknown): ServerLevelProgress | null {
 }
 
 /** Payload do "server:level:up" (ou null se veio torto). */
-export function parseLevelUp(payload: unknown): { serverId: string; level: number } | null {
-  const p = payload as { server_id?: unknown; level?: unknown } | null
+export function parseLevelUp(
+  payload: unknown
+): { serverId: string; level: number; previous?: number } | null {
+  const p = payload as { server_id?: unknown; level?: unknown; previous_level?: unknown } | null
   if (!p || typeof p.server_id !== 'string' || !isNum(p.level)) return null
-  return { serverId: p.server_id, level: p.level }
+  return {
+    serverId: p.server_id,
+    level: p.level,
+    previous: isNum(p.previous_level) ? p.previous_level : undefined
+  }
 }
