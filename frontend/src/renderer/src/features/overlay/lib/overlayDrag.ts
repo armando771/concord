@@ -73,3 +73,11 @@ export function hintPositionClass(pos: OverlayBoxPx, box: OverlaySize, area: Ove
   const { below, right } = hintPlacement(pos, box, area)
   return `${below ? 'top-full mt-3' : 'bottom-full mb-3'} ${right ? 'right-0' : 'left-0'}`
 }
+
+/** Classes da caixa: w-max (a largura não depende da janela); editando, moldura tracejada. */
+export function boxClassName(editing: boolean): string {
+  const frame = editing
+    ? 'cursor-move border-dashed border-brand bg-black/20'
+    : 'border-transparent'
+  return `absolute w-max rounded-xl border-2 p-2 ${frame}`
+}

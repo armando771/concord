@@ -5,14 +5,6 @@ import {
   overlayEditHint as editHint
 } from '../features/overlay/lib/overlayShortcut'
 
-/** Classes da caixa: w-max (a largura não depende da janela); editando, moldura tracejada. */
-export function boxClassName(editing: boolean): string {
-  const frame = editing
-    ? 'cursor-move border-dashed border-brand bg-black/20'
-    : 'border-transparent'
-  return `absolute w-max rounded-xl border-2 p-2 ${frame}`
-}
-
 /** Moldura do modo de edição: canto de redimensionar e a dica do atalho. */
 function OverlayEditChrome({
   editing,

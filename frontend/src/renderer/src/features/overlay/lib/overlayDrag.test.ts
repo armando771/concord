@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  boxClassName,
   dragLayout,
   hintPlacement,
   hintPositionClass,
@@ -78,5 +79,13 @@ describe('hintPositionClass', () => {
   it('traduz a posição da dica em classes', () => {
     expect(hintPositionClass({ left: 10, top: 100 }, box, area)).toBe('top-full mt-3 left-0')
     expect(hintPositionClass({ left: 1700, top: 900 }, box, area)).toBe('bottom-full mb-3 right-0')
+  })
+})
+
+describe('boxClassName', () => {
+  it('editando ganha moldura tracejada; fora dela a borda é transparente', () => {
+    expect(boxClassName(true)).toContain('border-dashed')
+    expect(boxClassName(false)).toContain('border-transparent')
+    expect(boxClassName(false)).toContain('w-max')
   })
 })

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { OverlaySnapshot } from '../features/overlay/lib/overlayState'
+import { boxClassName } from '../features/overlay/lib/overlayDrag'
 import {
   placeOverlayBox,
   shownOverlayLayout,
@@ -8,7 +9,7 @@ import {
   type OverlayLayout,
   type OverlaySize
 } from '../features/overlay/lib/overlayLayout'
-import OverlayEditChrome, { boxClassName } from './OverlayEditChrome'
+import OverlayEditChrome from './OverlayEditChrome'
 import OverlayList from './OverlayList'
 import { useBoxDrag } from './useBoxDrag'
 
