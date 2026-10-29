@@ -6,15 +6,18 @@ export const GOD_LINES = 400
 const RENDERER = 'frontend/src/renderer/src/'
 const MAIN = 'frontend/src/main/'
 const INTERNAL = 'backend/internal/'
+const MOBILE_SRC = 'mobile/src/'
 
 const FEATURE_KINDS = ['components', 'hooks', 'store', 'lib', 'api', 'pages']
 const SHARED_KINDS = ['ui', 'lib', 'hooks', 'store', 'api']
+const MOBILE_SHARED_KINDS = [...SHARED_KINDS, 'theme']
 const RENDERER_ROOT = ['app', 'assets', 'features', 'overlay', 'shared', 'main.tsx', 'env.d.ts']
 
 // structureError devolve o motivo de o arquivo estar fora do padrão, ou null.
 export function structureError(file) {
   if (file.startsWith(RENDERER)) return rendererError(file.slice(RENDERER.length).split('/'))
   if (file.startsWith(MAIN)) return mainError(file.slice(MAIN.length).split('/'))
+  if (file.startsWith(MOBILE_SRC)) return mobileError(file.slice(MOBILE_SRC.length).split('/'))
   if (file.startsWith(INTERNAL)) return internalError(file.slice(INTERNAL.length).split('/'))
   return null
 }
@@ -26,6 +29,18 @@ function rendererError([top, second, third, ...rest]) {
   }
   if (top === 'shared' && (third === undefined || !SHARED_KINDS.includes(second))) {
     return `shared/ aceita só ${SHARED_KINDS.join(', ')}`
+  }
+  return null
+}
+
+// mobile/src: mesma estrutura por feature do renderer (ADR 0021).
+function mobileError([top, second, third]) {
+  if (!['features', 'shared'].includes(top) || second === undefined) return 'mobile/src aceita só features/<domínio>/ e shared/<tipo>/'
+  if (top === 'features' && (third === undefined || !FEATURE_KINDS.includes(third))) {
+    return `features/<domínio>/ aceita só ${FEATURE_KINDS.join(', ')}`
+  }
+  if (top === 'shared' && (third === undefined || !MOBILE_SHARED_KINDS.includes(second))) {
+    return `shared/ aceita só ${MOBILE_SHARED_KINDS.join(', ')}`
   }
   return null
 }

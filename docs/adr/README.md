@@ -58,3 +58,5 @@ O que fica mais fácil, o que fica mais difícil, o que precisa ser feito depois
 - [0018. Quem está na call segue a sala de mídia (LiveKit), não só o WebSocket](0018-presenca-na-midia.md)
 - [0019. O Maestro grava onde cada player estava e volta sozinho depois de o servidor reiniciar](0019-maestro-retoma-apos-reinicio.md)
 - [0020. Qualidade das lives: presets com piso de 720p30, controlador próprio e vídeo na placa de vídeo](0020-qualidade-das-lives.md)
+- [0021. Criar o app mobile em `mobile/` com Expo, Expo Router e Zustand](0021-app-mobile-expo.md)
+- [0022. Enviar o push do app mobile direto pelo FCM, com o JWT da biblioteca padrão](0022-push-direto-pelo-fcm.md)

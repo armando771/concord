@@ -1,30 +1,47 @@
 import { useScreenSimulcastStore } from '../store/screenSimulcastStore'
+import type { SimulcastMode } from '../lib/screenSimulcast'
+
+const MODES: { mode: SimulcastMode; label: string }[] = [
+  { mode: 'auto', label: 'Automático' },
+  { mode: 'on', label: 'Ligada' },
+  { mode: 'off', label: 'Desligada' }
+]
 
 /** Camada extra de 720p (simulcast) para quem assiste com internet fraca. */
 export function ScreenSimulcastOption({
-  checked,
+  value,
   onChange,
   compact
 }: {
-  checked: boolean
-  onChange: (checked: boolean) => void
+  value: SimulcastMode
+  onChange: (mode: SimulcastMode) => void
   compact: boolean
 }): React.JSX.Element {
+  const size = compact ? 'px-2 py-1.5 text-xs' : 'px-3 py-2 text-sm'
   return (
-    <div className={compact ? 'mt-3' : 'mt-4'}>
-      <label className="flex min-h-6 cursor-pointer items-start gap-2 text-xs font-semibold text-gray-300">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-brand"
-        />
-        <span>Enviar também em 720p para quem tem internet fraca</span>
-      </label>
-      <p className="mt-1 pl-6 text-xs text-gray-500">
+    <div role="group" aria-label="Enviar também em 720p" className={compact ? 'mt-3' : 'mt-4'}>
+      <p className="mb-1.5 text-[11px] font-semibold text-gray-400">
+        Enviar também em 720p para quem tem internet fraca
+      </p>
+      <div className="flex overflow-hidden rounded-md">
+        {MODES.map(({ mode, label }) => (
+          <button
+            key={mode}
+            type="button"
+            aria-pressed={value === mode}
+            onClick={() => onChange(mode)}
+            className={`min-w-0 flex-1 cursor-pointer font-semibold transition-colors ${size} ${
+              value === mode ? 'bg-brand text-white' : 'bg-fg/5 text-gray-300 hover:bg-fg/10'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1.5 text-xs text-gray-500">
         {compact
-          ? 'Mais pesado para o seu PC. Vale a partir da próxima transmissão.'
-          : 'Deixa a transmissão mais pesada para o seu PC. Só vale em 1080p ou Fonte.'}
+          ? 'Automático liga quando a sua placa de vídeo aguenta. Vale a partir da próxima transmissão.'
+          : 'Automático liga quando a sua placa de vídeo aguenta; no processador fica desligada, porque deixa a transmissão mais pesada para o seu PC. Só vale em 1080p ou Fonte.'}
       </p>
     </div>
   )
@@ -35,7 +52,7 @@ export default function ScreenSimulcastToggle({
 }: {
   compact: boolean
 }): React.JSX.Element {
-  const enabled = useScreenSimulcastStore((s) => s.enabled)
-  const setEnabled = useScreenSimulcastStore((s) => s.setEnabled)
-  return <ScreenSimulcastOption checked={enabled} onChange={setEnabled} compact={compact} />
+  const mode = useScreenSimulcastStore((s) => s.mode)
+  const setMode = useScreenSimulcastStore((s) => s.setMode)
+  return <ScreenSimulcastOption value={mode} onChange={setMode} compact={compact} />
 }

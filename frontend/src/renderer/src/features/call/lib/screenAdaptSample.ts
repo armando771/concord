@@ -3,13 +3,13 @@
 
 export type Limitation = 'cpu' | 'bandwidth'
 
-/** Codecs que só valem na placa de vídeo. */
-export type HardwareOnlyCodec = 'av1' | 'h265'
+/** Codecs cuja queda para o processador fica marcada no aparelho (AV1/H.265 só valem na placa; H.264 decide a camada extra de 720p). */
+export type MarkedCodec = 'av1' | 'h265' | 'h264'
 
 export interface AdaptSample {
   limited: Limitation | null
-  /** Live em AV1/H.265 caiu no encoder por software (pesado): não usar esse codec de novo. */
-  softwareCodec: HardwareOnlyCodec | null
+  /** Live caiu no encoder por software: AV1/H.265 não se usam de novo; H.264 deixa de ligar a camada extra de 720p sozinha. */
+  softwareCodec: MarkedCodec | null
 }
 
 type Stat = Record<string, unknown>
@@ -49,19 +49,20 @@ function limitation(out: Stat, source: Stat | undefined, budget: number): Limita
   return target < budget * BANDWIDTH_DROP_RATIO ? 'bandwidth' : 'cpu'
 }
 
-const HARDWARE_ONLY: Record<string, HardwareOnlyCodec> = {
+const MARKED: Record<string, MarkedCodec> = {
   'video/av1': 'av1',
-  'video/h265': 'h265'
+  'video/h265': 'h265',
+  'video/h264': 'h264'
 }
 
-function softwareCodec(report: RTCStatsReport, out: Stat): HardwareOnlyCodec | null {
+function softwareCodec(report: RTCStatsReport, out: Stat): MarkedCodec | null {
   const codec = report.get(out.codecId as string) as Stat | undefined
-  const hardwareOnly = HARDWARE_ONLY[String(codec?.mimeType).toLowerCase()]
-  if (!hardwareOnly) return null
-  if (out.powerEfficientEncoder === false) return hardwareOnly
-  return /libaom|software|fallback/i.test(String(out.encoderImplementation ?? ''))
-    ? hardwareOnly
-    : null
+  const marked = MARKED[String(codec?.mimeType).toLowerCase()]
+  if (!marked) return null
+  if (out.powerEfficientEncoder === false) return marked
+  // H.264 só pela flag: o nome do encoder muda com o adaptador de simulcast.
+  if (marked === 'h264') return null
+  return /libaom|software|fallback/i.test(String(out.encoderImplementation ?? '')) ? marked : null
 }
 
 /** null = envio pausado (ninguém vendo) ou ainda sem envio: não conta. */

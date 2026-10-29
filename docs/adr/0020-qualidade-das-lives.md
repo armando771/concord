@@ -82,7 +82,7 @@ driver está na lista de bloqueio da GPU, abaixo de 360p no encode
 registra `video_decode`/`video_encode` em `gpu.log` e o painel mostra
 "Hardware · …"/"Software · …".
 
-**Camada extra de 720p** (opcional, desmarcada; `lib/screenSimulcast.ts`):
+**Camada extra de 720p** (opcional; `lib/screenSimulcast.ts`; Automático na emenda abaixo):
 com 1080p ou Fonte, publica também 720p30 a 3 Mbps; quem tem internet fraca
 recebe 720p. Com ela o envio principal não desce de 1080p (troca o fps) e o
 codec pula o AV1 (o SDK publica AV1 de tela numa camada só): H.265 ou H.264.
@@ -146,6 +146,39 @@ roda ("H.265 · placa de vídeo", "H.264 · processador") quando o navegador con
 envio = VP8/H.264/AV1/VP9 (sem H.265); `encodingInfo` = AV1 e H.264 por
 software, H.265 não suportado → Automático = H.264 com VP8 de reserva.
 H.265/AV1 na placa só no Windows (painel: Codec "H.265 · placa de vídeo").
+
+## Emenda (2026-10-28): camada de 720p automática e microfone a 64 kbps
+
+Decisão do dono.
+
+**Camada extra de 720p** (`lib/screenSimulcast.ts`, `chooseScreenSimulcast`):
+três modos, **Automático** (padrão), **Ligada** e **Desligada**, salvos em
+`salinha:screen-share-720p-extra` (`'1'` = ligada, `'0'` = desligada, ausente ou
+outro valor = Automático; quem já tinha marcado/desmarcado a caixa antiga mantém
+a escolha). A UI são três botões ao lado dos de resolução e fps, no mesmo estilo
+(mais simples e coerente que caixa de marcar com três estados; texto de apoio:
+"Automático liga quando a sua placa de vídeo aguenta").
+
+- Ligada/Desligada valem sempre (a camada só existe com captura acima de 720p).
+- Automático liga quando o codec que a ordem de codecs escolheria sai pela
+  placa de vídeo (`powerEfficient`) **e** a live é 1080p ou Fonte; pelo
+  processador, fica desligada.
+- **AV1 na placa**: o Automático mantém o AV1 e **não** liga a camada (o SDK
+  publica AV1 de tela numa camada só). O AV1 é o melhor codec da placa; quem
+  quiser a camada de 720p escolhe Ligada (e perde o AV1) ou H.265/H.264 em
+  Avançado.
+- **Queda para o software**: a marca por aparelho
+  (`salinha:screen-<codec>-software`) agora também é gravada para H.264 quando
+  o `getStats()` da live mostra `powerEfficientEncoder: false` (só pela flag,
+  não pelo nome do encoder). Na próxima live o H.264 conta como processador e o
+  Automático desliga a camada. Ligada força mesmo assim. Não há botão para
+  limpar a marca (como já era para AV1/H.265).
+
+**Microfone a 64 kbps** (`lib/micPublisher.ts`): `audioPreset: { maxBitrate:
+64_000 }` (mono, como o Discord; o padrão do SDK é ~32 kbps; o preset
+`musicHighQuality` é 96 kbps, por isso o valor explícito). DTX e RED continuam
+os da sala. Vale na publicação e na republicação (o `MicPublisher` publica
+clones); trocar o dispositivo mantém o mesmo sender e a mesma codificação.
 
 ## Consequências
 

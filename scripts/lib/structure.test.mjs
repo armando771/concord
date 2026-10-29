@@ -36,3 +36,16 @@ test('catraca anti-god: god file tocado tem que encolher', () => {
   assert.equal(godError('a_test.go', 900, 1000), null)
   assert.equal(godError('a.test.ts', null, 1000), null)
 })
+
+test('mobile/src: feature por domínio e camada, shared por tipo, nada solto', () => {
+  assert.equal(structureError('mobile/src/features/auth/lib/authRefresh.ts'), null)
+  assert.equal(structureError('mobile/src/features/auth/components/LoginForm.tsx'), null)
+  assert.equal(structureError('mobile/src/shared/ui/Button.tsx'), null)
+  assert.equal(structureError('mobile/src/shared/theme/tokens.ts'), null)
+  assert.equal(structureError('mobile/app/_layout.tsx'), null)
+  assert.equal(structureError('mobile/app.config.ts'), null)
+  assert.match(structureError('mobile/src/util.ts'), /mobile\/src aceita só/)
+  assert.match(structureError('mobile/src/features/auth/solto.ts'), /features\/<domínio>/)
+  assert.match(structureError('mobile/src/features/auth/utils/x.ts'), /features\/<domínio>/)
+  assert.match(structureError('mobile/src/shared/helpers/x.ts'), /shared\/ aceita só/)
+})

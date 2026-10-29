@@ -13,7 +13,7 @@ import {
   markSoftwareCodec,
   type ScreenCodecSupport
 } from './screenCodecSupport'
-import { loadScreenSimulcast, usesSimulcast } from './screenSimulcast'
+import { chooseScreenSimulcast, loadScreenSimulcast } from './screenSimulcast'
 import { ScreenAdapt } from './screenAdapt'
 import { senderReports } from './screenStatsSource'
 import { useScreenAdaptStore, type ScreenAdaptView } from '../store/screenAdaptStore'
@@ -51,9 +51,16 @@ export class ScreenSender {
     const [video] = stream.getVideoTracks()
     const quality = streamQuality(stream)
     const settings = video?.getSettings() ?? {}
-    const simulcast = usesSimulcast(loadScreenSimulcast(), quality, settings)
     const support = await codecSupport(quality, settings)
-    const codec = screenCodecOptions(loadScreenCodec(), support, simulcast)
+    const preference = loadScreenCodec()
+    const simulcast = chooseScreenSimulcast(
+      loadScreenSimulcast(),
+      quality,
+      settings,
+      support,
+      preference
+    )
+    const codec = screenCodecOptions(preference, support, simulcast)
     await publishScreenTracks(this.participant, stream, { codec, simulcast })
     if (video) this.watch(stream, quality, screenSource(video), simulcast)
   }
