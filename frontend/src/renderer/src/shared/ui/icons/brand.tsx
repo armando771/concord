@@ -2,9 +2,9 @@
 import { Icon, type IconProps } from './Icon'
 
 /** Marca da Salinha (luminária sobre o monitor), em uma cor. */
-export function SalinhaMarkIcon({ className, size }: IconProps): React.JSX.Element {
+export function SalinhaMarkIcon(props: IconProps): React.JSX.Element {
   return (
-    <Icon className={className} size={size}>
+    <Icon {...props}>
       <path
         d="M5.25 7.78 16.88 5.25Q18.94 4.83 19.13 6.94L19.69 17.25Q19.78 18.84 18.19 18.84H5.81Q4.5 18.84 4.5 17.53V9Q4.5 7.97 5.25 7.78Z"
         fill="none"

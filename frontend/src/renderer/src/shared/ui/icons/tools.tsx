@@ -1,101 +1,61 @@
 // Ferramentas da tela compartilhada (desenho) e do fundo da câmera.
+import { BoltIcon } from './effects'
 import { Icon, type IconProps } from './Icon'
 
-export function HighlighterIcon({ className, size }: IconProps): React.JSX.Element {
+/** Marca-texto inclinado. */
+export function HighlighterIcon(props: IconProps): React.JSX.Element {
   return (
-    <Icon
-      className={className}
-      size={size}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="m9 11-6 6v3h3l6-6" />
-      <path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4" />
+    <Icon {...props}>
+      <g transform="rotate(45 12 12)">
+        <rect x="9" y="0.5" width="6" height="11.5" rx="1.75" />
+        <path d="M9.25 13h5.5v2.5l-1.5 1.5h-2.5l-1.5-1.5z" />
+        <path d="M10.75 18h2.5l-.5 3.5h-1.5z" />
+      </g>
     </Icon>
   )
 }
 
-export function LaserIcon({ className, size }: IconProps): React.JSX.Element {
-  return (
-    <Icon
-      className={className}
-      size={size}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
-    </Icon>
-  )
-}
+/** Laser (risco que some): o mesmo raio. */
+export const LaserIcon = BoltIcon
 
-export function EraserIcon({ className, size }: IconProps): React.JSX.Element {
+/** Borracha inclinada sobre a linha. */
+export function EraserIcon(props: IconProps): React.JSX.Element {
   return (
-    <Icon
-      className={className}
-      size={size}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
-      <path d="M22 21H7" />
-      <path d="m5 11 9 9" />
-    </Icon>
-  )
-}
-
-/** Círculo cortado: nenhum (fundo da câmera). */
-export function CircleSlashIcon({ className, size }: IconProps): React.JSX.Element {
-  return (
-    <Icon className={className} size={size} fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M5.6 5.6l12.8 12.8" />
+    <Icon {...props}>
+      <g transform="rotate(-45 11 11)">
+        <rect x="3" y="7" width="7" height="8" rx="2" />
+        <path d="M11 7h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7z" />
+      </g>
+      <rect x="11" y="20" width="11" height="2" rx="1" />
     </Icon>
   )
 }
 
 /** Pessoa com o fundo desfocado. */
-export function BlurIcon({ className, size }: IconProps): React.JSX.Element {
+export function BlurIcon(props: IconProps): React.JSX.Element {
   return (
-    <Icon className={className} size={size}>
-      <circle cx="12" cy="8.5" r="3.5" />
-      <path d="M5 20c0-3.9 3.1-6.5 7-6.5s7 2.6 7 6.5z" />
-      <path
-        d="M3 4h2M3 8h1M19 4h2M20 8h1"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        fill="none"
-        opacity=".6"
-      />
+    <Icon {...props}>
+      <circle cx="12" cy="8.5" r="3.75" />
+      <path d="M4.5 20.5c0-4.1 3.3-7 7.5-7s7.5 2.9 7.5 7a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z" />
+      <g opacity=".55">
+        <circle cx="3.5" cy="5" r="1.25" />
+        <circle cx="3.5" cy="10" r="1" />
+        <circle cx="20.5" cy="5" r="1.25" />
+        <circle cx="20.5" cy="10" r="1" />
+      </g>
     </Icon>
   )
 }
 
 /** Imagem com "+": enviar uma imagem. */
-export function ImageAddIcon({ className, size }: IconProps): React.JSX.Element {
+export function ImageAddIcon(props: IconProps): React.JSX.Element {
   return (
-    <Icon
-      className={className}
-      size={size}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <circle cx="9" cy="10" r="1.5" />
-      <path d="M21 16l-5-5-8 8" />
-      <path d="M17 3v4M15 5h4" />
+    <Icon {...props}>
+      <path
+        fillRule="evenodd"
+        d="M5 7h9.5a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-9a3 3 0 0 1 3-3zm2.5 3a1.75 1.75 0 1 0 0 3.5 1.75 1.75 0 0 0 0-3.5zM4.5 19.5h10.5l-3.5-5-2.5 3-1.5-1.5z"
+      />
+      <path d="M19.5 1a1 1 0 0 1 1 1v2h2a1 1 0 1 1 0 2h-2v2a1 1 0 1 1-2 0V6h-2a1 1 0 1 1 0-2h2V2a1 1 0 0 1 1-1z" />
     </Icon>
   )
 }
