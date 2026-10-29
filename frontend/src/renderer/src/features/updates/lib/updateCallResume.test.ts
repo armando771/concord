@@ -111,3 +111,34 @@ describe('retomada após atualização', () => {
     expect(deps.navigate).not.toHaveBeenCalled()
   })
 })
+
+describe('retomada decidida (settled)', () => {
+  it('não decidiu antes de ler o arquivo nem enquanto tenta voltar', async () => {
+    const { deps, resumer } = fixture()
+    expect(resumer.settled()).toBe(false)
+    let finish: () => void = () => {}
+    deps.join.mockReturnValue(new Promise<void>((resolve) => (finish = resolve)))
+    const tick = resumer.tick()
+    await Promise.resolve()
+    expect(resumer.settled()).toBe(false)
+    finish()
+    await tick
+    expect(resumer.settled()).toBe(true)
+  })
+
+  it('sem retomada pendente, decide no primeiro tick', async () => {
+    const { deps } = fixture()
+    const resumer = createCallResumer({ ...deps, take: async () => null })
+    await resumer.tick()
+    expect(resumer.settled()).toBe(true)
+  })
+
+  it('erro transitório ainda vai tentar de novo; cancelar decide', async () => {
+    const { deps, resumer } = fixture()
+    deps.join.mockRejectedValue(new Error('rede'))
+    await resumer.tick()
+    expect(resumer.settled()).toBe(false)
+    resumer.cancel()
+    expect(resumer.settled()).toBe(true)
+  })
+})

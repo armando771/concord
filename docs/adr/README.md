@@ -55,3 +55,4 @@ O que fica mais fácil, o que fica mais difícil, o que precisa ser feito depois
 - [0015. Publicar a tela (lives) em H.264, com VP8 de reserva](0015-lives-em-h264.md)
 - [0016. Dar nível ao servidor pelo que acontece nele, com teto diário por pessoa e só contas reais](0016-nivel-do-servidor.md)
 - [0017. Convidar visitante para uma call com acesso escopado ao canal de voz, sem virar membro](0017-visitante-na-call.md)
+- [0018. Quem está na call segue a sala de mídia (LiveKit), não só o WebSocket](0018-presenca-na-midia.md)
