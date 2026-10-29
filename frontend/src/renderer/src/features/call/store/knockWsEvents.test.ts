@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const toast = vi.hoisted(() => ({ error: vi.fn(), info: vi.fn(), success: vi.fn() }))
 vi.mock('../../../shared/store/toastStore', () => ({ showToast: toast }))
-vi.mock('../lib/sounds', () => ({ playSound: vi.fn() }))
+const sounds = vi.hoisted(() => ({ playSound: vi.fn() }))
+vi.mock('../lib/sounds', () => sounds)
 
 import { createKnockEventHandlers } from './knockWsEvents'
 import type { CallState } from './callStore'
@@ -60,5 +61,50 @@ describe('call:knock_error', () => {
     handlers['call:knock_error']({})
     expect(toast.error).toHaveBeenCalledWith('Sem permissão')
     expect(toast.error).toHaveBeenCalledWith('Não foi possível solicitar entrada.')
+  })
+})
+
+describe('call:lock (trancar/destrancar a sala em que estou)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  function inCall(over: Partial<CallState>) {
+    let state = {
+      callId: 'call-1',
+      locked: false,
+      serverCalls: {},
+      muted: false,
+      deafened: false,
+      ...over
+    } as CallState
+    const set = (u: Partial<CallState> | ((s: CallState) => Partial<CallState>)): void => {
+      state = { ...state, ...(typeof u === 'function' ? u(state) : u) }
+    }
+    return { handlers: createKnockEventHandlers({ get: () => state, set }), state: () => state }
+  }
+  const lock = {
+    call_id: 'call-1',
+    locked: true,
+    by: { id: 'u2', display_name: 'Ana', username: 'ana' }
+  }
+
+  it('ouvindo e com o microfone aberto: toca o som e marca a sala', () => {
+    const { handlers, state } = inCall({})
+    handlers['call:lock'](lock)
+    expect(sounds.playSound).toHaveBeenCalledWith('lock')
+    expect(state().locked).toBe(true)
+  })
+
+  it('mutado: marca a sala, mas não toca o som de trancar nem o de destrancar (#360)', () => {
+    const { handlers, state } = inCall({ muted: true })
+    handlers['call:lock'](lock)
+    handlers['call:lock']({ ...lock, locked: false })
+    expect(sounds.playSound).not.toHaveBeenCalled()
+    expect(state().locked).toBe(false)
+  })
+
+  it('ensurdecido: não toca o som', () => {
+    const { handlers } = inCall({ deafened: true })
+    handlers['call:lock'](lock)
+    expect(sounds.playSound).not.toHaveBeenCalled()
   })
 })

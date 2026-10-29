@@ -1,7 +1,7 @@
 // Eventos de WS da sala trancada: trancar/destrancar, pedidos de entrada
 // (quem está dentro) e a resposta ao meu pedido (quem bate na porta).
 import { showToast } from '../../../shared/store/toastStore'
-import { deliverKnockAlert } from '../lib/knockAlert'
+import { deliverKnockAlert, roomSoundAllowed } from '../lib/knockAlert'
 import { playSound } from '../lib/sounds'
 import type { CallState, CallUserInfo } from './callStore'
 
@@ -75,7 +75,8 @@ function applyLock(s: CallState, p: LockPayload): Partial<CallState> {
 function onLock({ get, set }: KnockEventDeps, payload: Payload): void {
   const p = payload as unknown as LockPayload
   set((s) => applyLock(s, p))
-  if (get().callId === p.call_id) playSound(p.locked ? 'lock' : 'unlock')
+  const s = get()
+  if (s.callId === p.call_id && roomSoundAllowed(s)) playSound(p.locked ? 'lock' : 'unlock')
 }
 
 function onKnock({ get, set }: KnockEventDeps, payload: Payload): void {

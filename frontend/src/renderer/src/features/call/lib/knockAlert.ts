@@ -1,5 +1,5 @@
 // Aviso de quem bate na porta da sala trancada em que estou: som e notificação
-// do sistema, que respeitam o ensurdecer e as preferências de notificação
+// do sistema, que respeitam o mudo, o ensurdecer e as preferências de notificação
 // ("Não perturbe" incluso). O pedido na tela (JoinRequestsStack) é à parte e
 // aparece sempre, para ninguém ficar sem resposta.
 import { useAuthStore } from '../../auth/store/authStore'
@@ -14,7 +14,19 @@ import {
 import { notificationPrefs } from '../../notifications/store/notificationPrefsStore'
 import { playSound } from './sounds'
 
+/** Sons da sala trancada (batida, trancar, destrancar): calados com mudo ou ensurdecido (#360). */
+export function roomSoundAllowed({
+  muted,
+  deafened
+}: {
+  muted: boolean
+  deafened: boolean
+}): boolean {
+  return !muted && !deafened
+}
+
 export interface KnockAlertContext {
+  muted: boolean
   deafened: boolean
   prefs: NotificationPrefs
   serverId: string | null
@@ -30,11 +42,11 @@ export interface KnockAlert {
 
 export function knockAlert(
   requester: { display_name: string; username: string },
-  { deafened, prefs, serverId, channelId }: KnockAlertContext
+  { muted, deafened, prefs, serverId, channelId }: KnockAlertContext
 ): KnockAlert {
   const payload = desktopPayload(knockNotification(requester, serverId, channelId), prefs)
   return {
-    sound: prefs.sound && !deafened,
+    sound: prefs.sound && roomSoundAllowed({ muted, deafened }),
     payload: payload.toast || payload.taskbar ? payload : null
   }
 }
