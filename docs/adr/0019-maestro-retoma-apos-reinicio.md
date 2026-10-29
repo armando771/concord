@@ -38,7 +38,7 @@ Forças:
 
 ## Decisão
 
-Opção 3. Tabela `music_sessions` (migration 000160), uma linha por canal de
+Opção 3. Tabela `music_sessions` (migration 000167), uma linha por canal de
 voz: call, servidor, canal de texto do último pedido, faixa atual (só ID do
 vídeo e o que o painel mostra, com quem pediu), posição em ms, fila e quando
 foi gravada.

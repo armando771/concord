@@ -10,9 +10,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const sessionsMigration = "../../migrations/000160_music_sessions.up.sql"
+const sessionsMigration = "../../migrations/000167_music_sessions.up.sql"
 
-// newSessionDB: só a tabela da migration 000160, num schema descartável do
+// newSessionDB: só a tabela da migration 000167, num schema descartável do
 // Postgres de TEST_DATABASE_URL (sem rodar as migrations todas).
 func newSessionDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()

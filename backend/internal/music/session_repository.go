@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// SessionRepository guarda as sessões do Maestro (migration 000160).
+// SessionRepository guarda as sessões do Maestro (migration 000167).
 type SessionRepository struct {
 	db *pgxpool.Pool
 }
