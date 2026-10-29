@@ -6,6 +6,9 @@ import { Track, type LocalParticipant } from 'livekit-client'
 // LiveKit despublica o microfone e o SDK para a track publicada: se fosse a do
 // store, ao liberar a pessoa voltaria a publicar uma track morta, em silêncio.
 
+/** Voz a 64 kbps mono, como o Discord (o padrão do SDK é ~32 kbps). DTX e RED vêm da sala. */
+export const MIC_AUDIO_PRESET = { maxBitrate: 64_000 }
+
 export class MicPublisher {
   /** Microfone da chamada, guardado para publicar quando a permissão de falar chegar. */
   private track: MediaStreamTrack | null = null
@@ -21,7 +24,8 @@ export class MicPublisher {
     if (!this.track) return
     const publication = await this.participant().publishTrack(this.track.clone(), {
       source: Track.Source.Microphone,
-      name: 'microphone'
+      name: 'microphone',
+      audioPreset: MIC_AUDIO_PRESET
     })
     if (muted) await publication.mute()
   }

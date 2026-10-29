@@ -77,6 +77,23 @@ describe('MicPublisher', () => {
     expect(lk.published()?.readyState).toBe('live')
   })
 
+  it('publica o microfone a 64 kbps, com DTX e RED da sala, também ao republicar', async () => {
+    const lk = fakeParticipant()
+    const publisher = new MicPublisher(() => lk.participant)
+    publisher.setTrack(asTrack(new FakeTrack()))
+    await publisher.publish(false)
+    lk.serverUnpublish()
+    await publisher.ensure(false)
+
+    const publishTrack = vi.mocked(lk.participant.publishTrack)
+    expect(publishTrack).toHaveBeenCalledTimes(2)
+    for (const [, options] of publishTrack.mock.calls) {
+      expect(options).toMatchObject({ audioPreset: { maxBitrate: 64_000 } })
+      expect(options).not.toHaveProperty('dtx', false)
+      expect(options).not.toHaveProperty('red', false)
+    }
+  })
+
   it('não publica duas vezes', async () => {
     const lk = fakeParticipant()
     const publisher = new MicPublisher(() => lk.participant)
