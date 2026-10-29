@@ -20,6 +20,7 @@ vi.mock('../../../app/router', () => ({
 import type { Message } from '../api/messages'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useFriendStore } from '../../friends/store/friendStore'
+import { useChatStore } from '../store/chatStore'
 import MessageItem, { type MessageItemProps } from './MessageItem'
 
 const noop = (): void => {}
@@ -93,6 +94,53 @@ describe('MessageItem', () => {
 
   it('resposta a uma mensagem apagada mostra o aviso da original', () => {
     expect(render(msg({ reply_to_id: 'x' }))).toContain('Mensagem original foi excluída')
+  })
+
+  it('resposta a mensagem com imagem mostra avatar, nome e 🖼️ Imagem (nunca enquete)', () => {
+    useChatStore.setState({
+      messagesByRoom: {
+        'channel:c1': [
+          {
+            id: 'orig1',
+            author_id: 'jamal',
+            author: { id: 'jamal', username: 'jamal', display_name: 'Jamal', avatar_url: 'https://example.com/jamal.png' },
+            content: '',
+            attachments: [{ id: 'a1', kind: 'image', filename: 'foto.png', content_type: 'image/png', size_bytes: 1000 }],
+            created_at: '2026-01-01T09:00:00Z'
+          }
+        ]
+      }
+    })
+    const html = render(
+      msg({
+        channel_id: 'c1',
+        reply_to_id: 'orig1',
+        reply_to: { id: 'orig1', author_id: 'jamal', content: '' }
+      })
+    )
+    expect(html).toContain('@Jamal')
+    expect(html).toContain('https://example.com/jamal.png')
+    expect(html).toContain('🖼️ Imagem')
+    expect(html).not.toContain('Enquete')
+  })
+
+  it('resposta a mensagem só com imagem sem cache usa 🖼️ Imagem como fallback', () => {
+    useChatStore.setState({ messagesByRoom: {} })
+    const html = render(
+      msg({
+        channel_id: 'c1',
+        reply_to_id: 'orig2',
+        reply_to: {
+          id: 'orig2',
+          author_id: 'jamal',
+          author: { id: 'jamal', username: 'jamal', display_name: 'Jamal' },
+          content: ''
+        }
+      })
+    )
+    expect(html).toContain('@Jamal')
+    expect(html).toContain('🖼️ Imagem')
+    expect(html).not.toContain('Enquete')
   })
 
   it('reações viram chips com a contagem', () => {

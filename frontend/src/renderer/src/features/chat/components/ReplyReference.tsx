@@ -1,20 +1,26 @@
+import Avatar from '../../../shared/ui/Avatar'
+
 /**
- * Linha "↳ @fulano texto…" acima de uma mensagem que responde a outra. Clicar
+ * Linha "↳ [avatar] @fulano texto…" acima de uma mensagem que responde a outra. Clicar
  * leva até a original; se ela foi excluída, mostra o aviso.
  */
 function ReplyReference({
   authorName,
+  authorAvatarUrl,
+  authorId,
   authorColor,
   content,
-  emptyLabel = '📊 Enquete / Anexo',
+  emptyLabel = '🖼️ Imagem',
   onJump
 }: {
   /** Nulo quando a mensagem original foi excluída. */
   authorName: string | null
+  authorAvatarUrl?: string | null
+  authorId?: string
   /** Cor do cargo mais alto do autor no servidor (CSS). */
   authorColor?: string
   content: string
-  /** O que mostrar quando a original não tem texto (só anexo ou enquete). */
+  /** O que mostrar quando a original não tem texto (só anexo). */
   emptyLabel?: string
   onJump: () => void
 }): React.JSX.Element {
@@ -27,6 +33,13 @@ function ReplyReference({
           onClick={onJump}
           className="flex min-w-0 cursor-pointer items-center gap-1.5 text-left transition-colors hover:text-gray-200"
         >
+          <Avatar
+            userId={authorId}
+            name={authorName}
+            avatarUrl={authorAvatarUrl}
+            size={16}
+            className="shrink-0 rounded-full"
+          />
           <span
             style={authorColor ? { color: authorColor } : undefined}
             className={`shrink-0 font-semibold ${authorColor ? '' : 'text-gray-300'}`}

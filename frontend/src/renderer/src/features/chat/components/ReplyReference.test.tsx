@@ -20,9 +20,32 @@ describe('ReplyReference', () => {
     const html = renderToStaticMarkup(
       <ReplyReference authorName="Armando" content="Olá mundo" onJump={() => {}} />
     )
-    expect(html).toContain('@Armando')
-    expect(html).toContain('text-gray-300')
-    expect(html).not.toContain('style=')
+    expect(html).toContain('<span class="shrink-0 font-semibold text-gray-300">@Armando</span>')
+  })
+
+  it('renderiza o avatar do autor na referência com foto ou inicial', () => {
+    const htmlComFoto = renderToStaticMarkup(
+      <ReplyReference
+        authorName="Armando"
+        authorAvatarUrl="https://example.com/avatar.png"
+        content="Olá mundo"
+        onJump={() => {}}
+      />
+    )
+    expect(htmlComFoto).toContain('https://example.com/avatar.png')
+
+    const htmlSemFoto = renderToStaticMarkup(
+      <ReplyReference authorName="Armando" content="Olá mundo" onJump={() => {}} />
+    )
+    expect(htmlSemFoto).toContain('>A</div>')
+  })
+
+  it('usa emptyLabel padrão (🖼️ Imagem) quando content está vazio e nunca exibe como enquete', () => {
+    const html = renderToStaticMarkup(
+      <ReplyReference authorName="Armando" content="" onJump={() => {}} />
+    )
+    expect(html).toContain('🖼️ Imagem')
+    expect(html).not.toContain('Enquete')
   })
 
   it('mostra aviso quando a mensagem original foi excluída', () => {

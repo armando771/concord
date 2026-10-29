@@ -1,4 +1,4 @@
-import type { Message } from '../api/messages'
+import type { Message, ReplyPreview } from '../api/messages'
 import type { MentionLabels } from '../lib/mentions'
 import { stickerUnavailable } from '../lib/messageItem'
 import Avatar from '../../../shared/ui/Avatar'
@@ -15,6 +15,8 @@ import MessageAttachments from './MessageAttachments'
 import MessageSticker from './MessageSticker'
 import MessageGif from './MessageGif'
 import TTSBadge from '../../tts/components/TTSBadge'
+import { useChatStore } from '../store/chatStore'
+import { messagePreview } from '../lib/polls'
 
 // Pedaços da linha de mensagem do chat (ver MessageItem).
 
@@ -74,7 +76,17 @@ export function BlockedMessageNotice({
   )
 }
 
-/** "Respondendo a…" acima da mensagem, com o apelido e a cor de quem foi respondido. */
+/** Prévia do texto citado na resposta (anexo, enquete, figurinha, GIF ou texto comum). */
+export function replyPreviewText(
+  original: Message | undefined,
+  replyTo: ReplyPreview | null | undefined
+): string {
+  if (original) return messagePreview(original)
+  if (!replyTo) return ''
+  return replyTo.content || ''
+}
+
+/** "Respondendo a…" acima da mensagem, com o avatar, o apelido, a cor e a prévia do que foi respondido. */
 export function MessageReplyReference({
   message,
   serverId,
@@ -84,14 +96,31 @@ export function MessageReplyReference({
   serverId?: string
   onJumpToMessage: (messageId: string) => void
 }): React.JSX.Element {
-  const replyNickname = useServerNickname(serverId, message.reply_to?.author_id)
-  const replyAuthorColor = useServerMemberColor(serverId, message.reply_to?.author_id)
-  const replyAuthorName = serverDisplayName({ nickname: replyNickname }, message.reply_to?.author)
+  const room = message.channel_id
+    ? `channel:${message.channel_id}`
+    : message.conversation_id
+      ? `conversation:${message.conversation_id}`
+      : null
+  const originalMessage = useChatStore((s) => {
+    if (!message.reply_to?.id || !room) return undefined
+    return s.messagesByRoom[room]?.find((m) => m.id === message.reply_to?.id)
+  })
+
+  const replyAuthorId = originalMessage?.author_id ?? message.reply_to?.author_id
+  const replyAuthor = originalMessage?.author ?? message.reply_to?.author
+  const replyNickname = useServerNickname(serverId, replyAuthorId)
+  const replyAuthorColor = useServerMemberColor(serverId, replyAuthorId)
+  const replyAuthorName = serverDisplayName({ nickname: replyNickname }, replyAuthor)
+  const previewText = replyPreviewText(originalMessage, message.reply_to)
+
   return (
     <ReplyReference
       authorName={message.reply_to ? replyAuthorName : null}
+      authorAvatarUrl={replyAuthor?.avatar_url}
+      authorId={replyAuthorId}
       authorColor={replyAuthorColor}
-      content={message.reply_to?.content ?? ''}
+      content={previewText}
+      emptyLabel="🖼️ Imagem"
       onJump={() => message.reply_to && onJumpToMessage(message.reply_to.id)}
     />
   )
