@@ -4,6 +4,7 @@ import { useConversationsStore } from '../../chat/store/conversationsStore'
 import { useUnreadStore } from '../../chat/store/unreadStore'
 import { useFriendsStore } from '../../friends/store/friendsStore'
 import { usePresenceStore } from '../../friends/store/presenceStore'
+import { useProfileCardStore } from '../../profile/store/profileCardStore'
 import { useSelectedServerStore } from '../store/selectedServerStore'
 import { useServersStore } from '../store/serversStore'
 import { useResetOnSignOut } from './useResetOnSignOut'
@@ -17,6 +18,7 @@ describe('useResetOnSignOut', () => {
     usePresenceStore.setState({ statuses: { u1: 'online' } })
     useFriendsStore.setState({ friends: [{ id: 'f', username: 'f', display_name: 'F' }] })
     useUnreadStore.getState().add('c1', 's1')
+    useProfileCardStore.getState().put({ id: 'u9', username: 'z', display_name: 'Z' })
     await renderHook(() => useResetOnSignOut())
     expect(useServersStore.getState().servers).toHaveLength(1)
 
@@ -27,6 +29,7 @@ describe('useResetOnSignOut', () => {
     expect(usePresenceStore.getState().statuses).toEqual({})
     expect(useFriendsStore.getState().friends).toEqual([])
     expect(useUnreadStore.getState().byServer).toEqual({})
+    expect(useProfileCardStore.getState().cards).toEqual({})
   })
 
   it('logado: não mexe nos dados', async () => {
