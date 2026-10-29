@@ -1,4 +1,19 @@
 import type { ScreenAdaptView } from '../store/screenAdaptStore'
+import {
+  bitrate,
+  codecImplementation,
+  codecName,
+  fps,
+  num,
+  resolution,
+  text,
+  type ScreenStatsSample,
+  type Stat,
+  type StatRow
+} from './screenStatsFormat'
+import { receiverRows } from './screenStatsReceiver'
+
+export { codecImplementation, type ScreenStatsSample, type StatRow }
 
 // Estatísticas da live (painel no canto do vídeo): transforma o getStats() do
 // envio (quem transmite) ou da recepção (quem assiste) em linhas prontas para a
@@ -19,21 +34,6 @@ export interface ScreenStatsInput {
   quality?: ScreenAdaptView | null
 }
 
-/** O que a próxima leitura precisa para calcular taxas no intervalo. */
-export interface ScreenStatsSample {
-  timestamp: number
-  bytes: number
-  frames: number
-  qpSum: number | null
-  packetsReceived: number
-  packetsLost: number
-}
-
-export interface StatRow {
-  label: string
-  value: string
-}
-
 export interface ScreenStatsView {
   rows: StatRow[]
   /** Aviso no topo do painel (pausada, sem dados) ou null. */
@@ -41,8 +41,6 @@ export interface ScreenStatsView {
 }
 
 export type LivePauseReason = 'offscreen' | 'connection'
-
-type Stat = Record<string, unknown>
 
 const IDLE_TEXT = 'Envio pausado: ninguém está vendo a live agora'
 
@@ -58,17 +56,6 @@ const LIMITATION: Record<string, string> = {
   other: 'Outra'
 }
 
-const HARDWARE =
-  /accelerator|mediafoundation|vaapi|videotoolbox|nvenc|nvdec|d3d11|dxva|external|v4l2|mediacodec/i
-const SOFTWARE = /fallback|libvpx|openh264|ffmpeg|libaom|dav1d|software/i
-
-const num = (value: unknown): number | null => (typeof value === 'number' ? value : null)
-const text = (value: unknown): string | undefined =>
-  typeof value === 'string' && value ? value : undefined
-
-const decimal = (value: number, digits = 1): string =>
-  value.toLocaleString('pt-BR', { maximumFractionDigits: digits })
-
 export function limitationLabel(reason: string | undefined): string {
   return (reason && LIMITATION[reason]) || '—'
 }
@@ -77,36 +64,6 @@ export function limitationLabel(reason: string | undefined): string {
 export function livePauseReason(enabled: boolean, streamState: string): LivePauseReason | null {
   if (!enabled) return 'offscreen'
   return streamState === 'paused' ? 'connection' : null
-}
-
-function implementationKind(name: string, powerEfficient: boolean | undefined): string | null {
-  if (powerEfficient !== undefined) return powerEfficient ? 'Hardware' : 'Software'
-  if (SOFTWARE.test(name)) return 'Software'
-  return HARDWARE.test(name) ? 'Hardware' : null
-}
-
-/** "Hardware · MediaFoundationVideoEncodeAccelerator"; o navegador nem sempre conta. */
-export function codecImplementation(
-  name: string | undefined,
-  powerEfficient: boolean | undefined
-): string {
-  if (!name) return '—'
-  const kind = implementationKind(name, powerEfficient)
-  return kind ? `${kind} · ${name}` : name
-}
-
-const CODEC_NAMES: Record<string, string> = { H264: 'H.264', H265: 'H.265' }
-const WHERE: Record<string, string> = { Hardware: 'placa de vídeo', Software: 'processador' }
-
-/** "H.265 · placa de vídeo": o codec em uso e onde ele roda (quando o navegador conta). */
-function codecName(report: RTCStatsReport, stat: Stat, implementation: string): string {
-  const codec =
-    typeof stat.codecId === 'string' ? (report.get(stat.codecId) as Stat | undefined) : undefined
-  const mime = text(codec?.mimeType)
-  if (!mime) return '—'
-  const name = mime.slice(mime.indexOf('/') + 1).toUpperCase()
-  const where = WHERE[implementation.split(' · ')[0]]
-  return `${CODEC_NAMES[name] ?? name}${where ? ` · ${where}` : ''}`
 }
 
 /**
@@ -134,25 +91,6 @@ function sampleOf(stat: Stat, bytesKey: string, framesKey: string): ScreenStatsS
     packetsReceived: num(stat.packetsReceived) ?? 0,
     packetsLost: num(stat.packetsLost) ?? 0
   }
-}
-
-function bitrate(now: ScreenStatsSample, prev: ScreenStatsSample | null): string {
-  const seconds = prev ? (now.timestamp - prev.timestamp) / 1000 : 0
-  if (!prev || seconds <= 0) return '—'
-  const mbps = ((now.bytes - prev.bytes) * 8) / seconds / 1_000_000
-  return mbps < 0.05 ? '< 0,1 Mbps' : `${decimal(mbps)} Mbps`
-}
-
-function resolution(stat: Stat): string {
-  const width = num(stat.frameWidth)
-  const height = num(stat.frameHeight)
-  return width && height ? `${width}×${height}` : '—'
-}
-
-function fps(stat: Stat): string {
-  if (stat.active === false) return '0'
-  const value = num(stat.framesPerSecond)
-  return value === null ? '—' : String(Math.round(value))
 }
 
 function averageQp(now: ScreenStatsSample, prev: ScreenStatsSample | null): StatRow[] {
@@ -198,43 +136,6 @@ function senderRows(
   ]
 }
 
-function lossPercent(now: ScreenStatsSample, prev: ScreenStatsSample | null): string {
-  const lost = now.packetsLost - (prev?.packetsLost ?? 0)
-  const total = lost + now.packetsReceived - (prev?.packetsReceived ?? 0)
-  return total > 0 ? `${decimal((Math.max(0, lost) * 100) / total)}%` : '—'
-}
-
-function freezes(stat: Stat): string {
-  const count = num(stat.freezeCount)
-  if (count === null) return '—'
-  const seconds = num(stat.totalFreezesDuration) ?? 0
-  return count > 0 ? `${count} (${decimal(seconds)} s)` : '0'
-}
-
-function receiverRows(
-  input: ScreenStatsInput,
-  stat: Stat,
-  now: ScreenStatsSample,
-  prev: ScreenStatsSample | null
-): StatRow[] {
-  const jitter = num(stat.jitter)
-  const decoder = codecImplementation(
-    text(stat.decoderImplementation),
-    stat.powerEfficientDecoder as boolean | undefined
-  )
-  return [
-    { label: 'Quadros', value: `${fps(stat)} fps` },
-    { label: 'Resolução', value: resolution(stat) },
-    { label: 'Taxa', value: bitrate(now, prev) },
-    { label: 'Codec', value: codecName(input.report, stat, decoder) },
-    { label: 'Decodificador', value: decoder },
-    { label: 'Perda', value: lossPercent(now, prev) },
-    { label: 'Jitter', value: jitter === null ? '—' : `${Math.round(jitter * 1000)} ms` },
-    { label: 'Descartados', value: String(num(stat.framesDropped) ?? '—') },
-    { label: 'Congelamentos', value: freezes(stat) }
-  ]
-}
-
 /** Linhas do painel + a leitura que a próxima chamada recebe como `prev`. */
 export function screenStatsView(
   input: ScreenStatsInput,
@@ -250,6 +151,6 @@ export function screenStatsView(
   const now = sampleOf(stat, bytesKey, framesKey)
   const rows = input.local
     ? senderRows(input, stat, now, prev)
-    : receiverRows(input, stat, now, prev)
+    : receiverRows(input.report, stat, now, prev)
   return { view: { rows, status: pauseText }, sample: now }
 }
