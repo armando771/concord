@@ -101,7 +101,7 @@ export function DirectMessages({ onOpenConversation, onOpenFriends }: DirectMess
       ListHeaderComponent={
         <View>
           <DmSearch value={query} onChangeText={setQuery} />
-          <ConversationRow title="Amigos" avatarUri={null} onPress={onOpenFriends} />
+          <ConversationRow title="Amigos" icon="people" onPress={onOpenFriends} />
           <Text style={styles.section}>Mensagens diretas</Text>
           {empty ? <Text style={styles.note}>Você ainda não tem conversas.</Text> : null}
           {nothingFound ? <Text style={styles.note}>Nada encontrado.</Text> : null}
