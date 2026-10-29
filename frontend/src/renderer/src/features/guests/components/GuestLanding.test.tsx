@@ -11,7 +11,8 @@ const join: { current: GuestJoin } = { current: null as never }
 vi.mock('../hooks/useGuestJoin', () => ({ useGuestJoin: () => join.current }))
 const call: { phase: GuestCallPhase } = { phase: 'connecting' }
 vi.mock('../hooks/useGuestCall', () => ({
-  useGuestCall: () => ({ phase: call.phase, rejoin: vi.fn() })
+  useGuestCall: () => ({ phase: call.phase, rejoin: vi.fn() }),
+  leaveGuestSession: vi.fn()
 }))
 vi.mock('../../auth/hooks/useSessionConnection', () => ({ useSessionConnection: () => {} }))
 vi.mock('../../call/components/CallStage', () => ({ default: () => <div data-palco="" /> }))
@@ -31,15 +32,24 @@ vi.mock('../../call/store/callStore', () => ({
     getState: () => callState
   })
 }))
-vi.mock('../../../shared/ui/Modal', () => ({ default: () => null }))
+vi.mock('../../../shared/ui/Modal', () => ({
+  default: ({ open, title, children }: { open: boolean; title: string; children: never }) =>
+    open ? <div data-title={title}>{children}</div> : null
+}))
+const auth = { accessToken: null as string | null }
+vi.mock('../../auth/store/authStore', () => ({
+  useAuthStore: Object.assign((sel: (s: unknown) => unknown) => sel(auth), {
+    getState: () => ({ ...auth, clear: () => {} })
+  })
+}))
 // Render estático lê o estado inicial dos stores do zustand: a sessão é um fake.
 const session = {
   link: null as string | null,
   pass: null as unknown,
   ended: null as string | null,
   anonymous: false,
-  start(link: string, p: unknown, anonymous: boolean) {
-    Object.assign(session, { link, pass: p, anonymous, ended: null })
+  start(link: string, p: unknown) {
+    Object.assign(session, { link, pass: p, anonymous: true, ended: null })
   },
   end(reason: string) {
     session.ended = reason
@@ -58,6 +68,7 @@ vi.mock('../store/guestSessionStore', () => ({
 import GuestLanding from '../pages/GuestLanding'
 import GuestSessionGate from './GuestSessionGate'
 import GuestCallControls from './GuestCallControls'
+import { LeaveConfirm } from './GuestCallScreen'
 import { useGuestSessionStore } from '../store/guestSessionStore'
 
 const TOKEN = 'a'.repeat(43)
@@ -84,8 +95,6 @@ function render(path = `/visitante/${TOKEN}`): string {
 
 function joinState(over: Partial<GuestJoin> = {}): GuestJoin {
   return {
-    withAccount: false,
-    accountName: null,
     joining: false,
     error: null,
     join: vi.fn(),
@@ -96,6 +105,7 @@ function joinState(over: Partial<GuestJoin> = {}): GuestJoin {
 describe('página do link de visitante', () => {
   beforeEach(() => {
     useGuestSessionStore.getState().clear()
+    auth.accessToken = null
     join.current = joinState()
   })
 
@@ -133,20 +143,17 @@ describe('página do link de visitante', () => {
     expect(html).toContain('Entrar na call')
   })
 
-  it('com conta: entra com ela, sem pedir nome', () => {
-    join.current = joinState({
-      withAccount: true,
-      accountName: 'Carla',
-      error: 'Seu acesso de visitante foi encerrado.'
-    })
+  it('com conta: nada de tela isolada; a confirmação é dentro do app', () => {
+    auth.accessToken = 'conta'
+    preview.current = { status: 'loading' }
     const html = render()
     expect(html).not.toContain('Seu nome na call')
-    expect(html).toContain('Entrar como Carla')
-    expect(html).toContain('role="alert"')
+    expect(html).not.toContain('role="status"')
+    expect(html).not.toContain('data-palco')
   })
 
   it('já dentro: só a call, com selo e tempo restante (sem canais nem chat)', () => {
-    useGuestSessionStore.getState().start(TOKEN, pass, true)
+    useGuestSessionStore.getState().start(TOKEN, pass)
     call.phase = 'active'
     const html = render()
     expect(html).toContain('Sala de jogos')
@@ -155,26 +162,51 @@ describe('página do link de visitante', () => {
     expect(html).toContain('data-palco')
     expect(html).toContain('Sair da call')
     expect(html).not.toContain('Canais')
+    // O X do topo existe e diz o que faz.
+    expect(html).toContain('aria-label="Sair da call de visitante"')
   })
 
-  it('saiu: oferece voltar; entrando: carregando', () => {
-    useGuestSessionStore.getState().start(TOKEN, pass, true)
+  it('saiu: oferece voltar ou sair (sem limbo); entrando: carregando', () => {
+    useGuestSessionStore.getState().start(TOKEN, pass)
     call.phase = 'left'
-    expect(render()).toContain('Voltar para a call')
+    const html = render()
+    expect(html).toContain('Voltar para a call')
+    expect(html).toMatch(/>Sair<\/button>/)
+    expect(html).toContain('aria-label="Sair da call de visitante"')
     call.phase = 'connecting'
     expect(render()).toContain('role="status"')
   })
 
   it('acesso encerrado mostra o motivo', () => {
-    useGuestSessionStore.getState().start(TOKEN, pass, false)
+    useGuestSessionStore.getState().start(TOKEN, pass)
     useGuestSessionStore.getState().end('revoked')
     const html = render()
     expect(html).toContain('Seu acesso terminou')
     expect(html).toContain('O link de convite foi revogado.')
+    expect(html).toContain('Criar conta no Salinha')
+    expect(html).toMatch(/>Entrar<\/button>/)
+  })
+
+  it('saiu pelo X ou por Sair: tela final com criar conta e entrar', () => {
+    useGuestSessionStore.getState().start(TOKEN, pass)
+    useGuestSessionStore.getState().end('left')
+    const html = render()
+    expect(html).toContain('Você saiu da call')
+    expect(html).toContain('Seu acesso de visitante foi encerrado neste navegador.')
+    expect(html).toContain('Criar conta no Salinha')
+    expect(html).not.toContain('Voltar para a call')
+  })
+
+  it('o X pergunta antes de sair', () => {
+    expect(renderToStaticMarkup(<LeaveConfirm open={false} onClose={() => {}} />)).toBe('')
+    const html = renderToStaticMarkup(<LeaveConfirm open onClose={() => {}} />)
+    expect(html).toContain('data-title="Sair da call?"')
+    expect(html).toContain('Continuar na call')
+    expect(html).toMatch(/>Sair<\/button>/)
   })
 
   it('visitante sem conta não abre o resto do app', () => {
-    useGuestSessionStore.getState().start(TOKEN, pass, true)
+    useGuestSessionStore.getState().start(TOKEN, pass)
     const html = renderToStaticMarkup(
       <MemoryRouter initialEntries={['/']}>
         <Routes>

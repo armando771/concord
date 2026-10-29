@@ -109,14 +109,14 @@ export function BackgroundControls({ value, onChange }: Props): React.JSX.Elemen
         options={PROFILE_BACKGROUNDS}
         value={value.background}
         onPick={(id) => onChange(withBackground(value, id))}
-        className="grid-cols-3"
+        className="grid-cols-2 sm:grid-cols-4"
       />
       <Swatches
         labels={BACKGROUND_COLOR_LABELS[value.background] ?? []}
         colors={value.background_colors}
         onChange={(background_colors) => onChange({ ...value, background_colors })}
       />
-      {value.background === 'gradient' && (
+      {(value.background === 'gradient' || value.background === 'pride') && (
         <div className="flex flex-col gap-1">
           <SubLabel>Direção do degradê</SubLabel>
           <ChipGroup

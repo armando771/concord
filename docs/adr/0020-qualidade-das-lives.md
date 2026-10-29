@@ -1,4 +1,4 @@
-# 0019. Qualidade das lives: presets com piso de 720p30, controlador próprio e vídeo na placa de vídeo
+# 0020. Qualidade das lives: presets com piso de 720p30, controlador próprio e vídeo na placa de vídeo
 
 - Status: aceito
 - Data: 2026-10-28

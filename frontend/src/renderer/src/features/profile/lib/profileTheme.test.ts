@@ -13,6 +13,7 @@ import {
   withBackground,
   withBorder
 } from './profileTheme'
+import { PRIDE_PALETTE, prideGradient } from './profilePride'
 import { DEFAULT_EXTRAS, PROFILE_BORDER_ANIMATIONS, PROFILE_TEXTURES } from './profileThemeExtras'
 
 // Lê as listas e as contagens de cor do Go: mudou só de um lado, quebra aqui.
@@ -194,6 +195,33 @@ describe('profileThemeLook com extras', () => {
   it('effectDef: desconhecido vira Nenhum', () => {
     expect(effectDef('nope').id).toBe('none')
     expect(effectDef('glitch').color).toBeNull()
+  })
+})
+
+describe('fundo pride', () => {
+  const pride = { ...DEFAULT_PROFILE_THEME, background: 'pride' }
+  it('não tem cor escolhível; cores soltas invalidam o fundo', () => {
+    expect(resolveProfileTheme(pride).background).toBe('pride')
+    expect(resolveProfileTheme({ ...pride, background_colors: ['#111111'] }).background).toBe(
+      'default'
+    )
+    expect(withBackground(withBackground(DEFAULT_PROFILE_THEME, 'gradient'), 'pride')).toMatchObject(
+      { background: 'pride', background_colors: [] }
+    )
+  })
+  it('faixas horizontais por padrão, o ângulo vale, texto claro e paleta fixa', () => {
+    const look = profileThemeLook(pride)
+    expect(look.style).toMatchObject({ '--pt-bg': prideGradient(180) })
+    expect(profileThemeLook({ ...pride, background_angle: 90 }).style).toMatchObject({
+      '--pt-bg': prideGradient(90)
+    })
+    expect(look.palette).toEqual(PRIDE_PALETTE)
+    expect(look.surface).toBe(PRIDE_PALETTE[0])
+    expect(look.ink).toBe('light')
+    expect(look.className).toContain('pt-ink-light')
+  })
+  it('outros fundos: a paleta são as cores escolhidas', () => {
+    expect(profileThemeLook(DEFAULT_PROFILE_THEME).palette).toEqual([])
   })
 })
 

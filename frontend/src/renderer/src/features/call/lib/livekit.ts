@@ -19,6 +19,7 @@ import {
 import { canPublishSource, type PublishSource } from './mediaPermissions'
 import { asCallQuality, type CallQuality, type QualityDetails } from './connectionQuality'
 import { CallQualityReader } from './callQualityReader'
+import { MicPublisher } from './micPublisher'
 import type { ScreenShareQuality } from './screenShareQuality'
 import { ScreenSender } from './screenSender'
 import type { ScreenStatsInput } from './screenStats'
@@ -85,8 +86,7 @@ export class CallMedia {
   private subscriptions = new RemoteSubscriptions()
   private stopWindowWatch: () => void
   private refreshQueued = false
-  /** Microfone da chamada, guardado para publicar quando a permissão de falar chegar. */
-  private micTrack: MediaStreamTrack | null = null
+  private mic = new MicPublisher(() => this.room.localParticipant)
   /** Latência e perda de pacotes (tooltip de conexão ruim). */
   private quality: CallQualityReader
   /** A minha live (publicar e trocar a qualidade ao vivo). */
@@ -181,11 +181,11 @@ export class CallMedia {
     await this.room.connect(url, token, { autoSubscribe: false })
     // TrackPublished não dispara para o que já estava publicado ao entrar.
     this.applySubscriptions()
-    this.micTrack = mic
+    this.mic.setTrack(mic)
     // Sem permissão de falar o microfone nem é publicado: a pessoa entra e
     // escuta. Se a permissão chegar depois, ensureMic publica.
     if (this.canPublish('microphone')) {
-      await this.publishMic(mic, muted)
+      await this.mic.publish(muted)
     }
     this.connected = true
     this.emitRemoteMedia()
@@ -224,35 +224,19 @@ export class CallMedia {
     })
   }
 
-  private async publishMic(mic: MediaStreamTrack, muted: boolean): Promise<void> {
-    const publication = await this.room.localParticipant.publishTrack(mic, {
-      source: Track.Source.Microphone,
-      name: 'microphone'
-    })
-    if (muted) await publication.mute()
-  }
-
   /** Publica o microfone se agora pode e ainda não está publicado. */
   async ensureMic(muted: boolean): Promise<void> {
-    if (!this.connected || !this.micTrack || !this.canPublish('microphone')) return
-    if (this.room.localParticipant.getTrackPublication(Track.Source.Microphone)) return
-    await this.publishMic(this.micTrack, muted)
+    if (!this.connected || !this.canPublish('microphone')) return
+    await this.mic.ensure(muted)
   }
 
-  async setMicMuted(muted: boolean): Promise<void> {
-    const publication = this.room.localParticipant.getTrackPublication(Track.Source.Microphone)
-    if (!publication) return
-    if (muted) await publication.mute()
-    else await publication.unmute()
+  setMicMuted(muted: boolean): Promise<void> {
+    return this.mic.setMuted(muted)
   }
 
   /** Troca o microfone publicado (outro dispositivo) sem sair da sala. */
-  async replaceMic(track: MediaStreamTrack): Promise<void> {
-    this.micTrack = track
-    const publication = this.room.localParticipant.getTrackPublication(Track.Source.Microphone)
-    if (!publication?.track) return
-    // userProvidedTrack: o SDK não para nem recria a track — o store é o dono.
-    await publication.track.replaceTrack(track, true)
+  replaceMic(track: MediaStreamTrack): Promise<void> {
+    return this.mic.replace(track)
   }
 
   /**

@@ -1,5 +1,9 @@
 ## Novidades
 
+- Visitante: com conta, o link de visitante abre dentro do app. A visita vira um item na seção "Visitas" da barra lateral e dá para ir às suas DMs e servidores sem cair da call. Sem conta, "Sair" e o X funcionam e levam a uma tela para criar conta ou entrar.
+- Perfil: nova predefinição de tema Pride, com fundo arco-íris do orgulho.
+- O Maestro volta sozinho e continua a música depois de uma atualização do servidor.
+- No Windows, a detecção da música ficou mais leve.
 - Chamadas: convide alguém de fora do servidor só para a call em que você está. No topo da call, "Convidar visitante" gera um link de 2 horas, 6 horas, 12 horas ou 1 dia, e você escolhe se a pessoa pode falar e ligar câmera e tela. Quem abre o link digita um nome (ou entra com a própria conta) e vai direto para a call, com o selo "Visitante", sem ver chats nem outros canais. O link pode ser revogado e o visitante expulso a qualquer momento. Nova permissão de cargo "Convidar visitantes", desligada por padrão.
 - Servidores agora têm nível: ele sobe com o uso do servidor (membros novos, mensagens, figurinhas, sons, tempo em call e lives) e aparece no menu do nome do servidor, com o detalhamento dos últimos 7 dias.
 - Lives: a qualidade nunca cai abaixo de 720p 30. Se a sua conexão ou o PC não derem conta, a live baixa um degrau (ex.: 1080p 60 → 720p 60) e avisa você, e volta sozinha quando puder. A live codifica na placa de vídeo com o melhor codec que ela tiver (AV1, depois H.265, depois H.264), e quem não consegue assistir nesse codec recebe em H.264. Novo no seletor de qualidade: "Enviar também em 720p para quem tem internet fraca" e a escolha do codec em Avançado (os que a sua placa não codifica aparecem desabilitados).
@@ -10,7 +14,7 @@
 - Chat: novo comando /tts. Digite `/tts <mensagem>` e quem está em call no servidor (ou na call da DM) ouve a mensagem lida em voz; no chat ela aparece com um alto-falante. Até 200 caracteres, uma a cada 10 segundos por pessoa, e uma fala de cada vez. Quem estiver ensurdecido não ouve, e dá para desligar em Configurações → Voz → "Ouvir mensagens de TTS". Os cargos ganharam a permissão "Enviar mensagens TTS", ligada para todos.
 - Mesa de áudio: cada som é do servidor onde foi enviado. Os favoritos (a estrela) agora ficam na sua conta e aparecem nas calls de qualquer servidor, com o nome do servidor de origem. Em Cargos há duas permissões novas, "Adicionar sons" e "Adicionar figurinhas", ligadas para todo mundo por padrão.
 - Tempo em call e XP de voz param de contar depois de 10 minutos sem falar.
-- Badges: o Festeiro agora conta só contas com e-mail confirmado e pelo menos 24 horas de criadas.
+- Badges: o Festeiro agora conta só contas com e-mail confirmado.
 - Chat: botão direito numa imagem (canais, mensagens diretas e fixadas) abre o menu com "Copiar imagem". Vale para PNG, JPEG e WebP; GIF não copia.
 - Perfil: 14 fontes novas e efeitos de nome animados (degradê animado, neon pulsante, glitch, fogo, onda, cintilante, brilhos, digitando, cromado e sombra 3D). O cartão de perfil ganhou tema: borda neon, arco-íris ou degradê, fundo em degradê com cor principal e de destaque, e efeitos de partículas, brilhos ou neve. Na prévia do editor, passe o mouse no avatar ou no banner para trocar a imagem.
 - Changelog: agora você vê, por versão, o que mudou no app. Clique no ícone de novidades na barra lateral.
@@ -39,12 +43,12 @@
 - A atualização agora baixa sozinha em segundo plano; o botão Atualizar instala na hora.
 
 ## Correções
-- Badges e nível do servidor: conta real agora é e-mail confirmado e pelo menos 24 horas de conta (antes eram 7 dias, e ninguém chegava lá). O nível dos servidores volta a subir daqui para a frente, o Festeiro volta a contar, e o badge Amigos devolve os tiers que tinham sumido, sem aviso de desbloqueio.
+- Badges e nível do servidor: conta real agora é quem confirmou o e-mail, sem prazo de idade da conta (antes eram 7 dias, e ninguém chegava lá). O nível dos servidores volta a subir daqui para a frente, o Festeiro volta a contar, e o badge Amigos devolve os tiers que tinham sumido, sem aviso de desbloqueio.
 - Chat: o /tts não toca mais em todas as calls do servidor. Mandado num canal de texto, só quem está na mesma call de quem enviou ouve (se você não está em call, ninguém ouve); mandado no chat de um canal de voz, só quem está na call daquele canal.
 - Chamadas: quem é movido de canal de voz por um moderador agora entra de fato no canal novo, com áudio funcionando, mesmo quando estava sozinho na sala antiga. Antes a pessoa aparecia na lista do canal novo, mas precisava clicar no canal para entrar.
 - Badges: o Figurinha não conta mais a mesma figurinha ou o mesmo GIF mandado logo em seguida, e o que for apagado em até 2 minutos sai da conta. Quem subiu o badge assim volta para o tier que as figurinhas que ainda estão no chat dão.
 - Badges: o Mensagens enviadas não conta mais mensagem repetida em seguida (a mesma que você acabou de mandar na sala), e mensagem apagada em até 2 minutos sai da conta. Quem subiu o badge assim volta para o tier que as mensagens que ainda estão no chat dão.
-- Badges: o Amigos agora conta só amizades com contas de e-mail confirmado e criadas há pelo menos 24 horas. Amigo com conta nova passa a contar quando completar as 24 horas, e quem subiu o badge com contas novas volta para o tier que os amigos de verdade dão.
+- Badges: o Amigos agora conta só amizades com contas de e-mail confirmado. Amigo que ainda não confirmou o e-mail passa a contar quando confirmar, e quem subiu o badge com contas novas volta para o tier que os amigos de verdade dão.
 - Badges: o Dono de servidor agora conta só servidores com pelo menos 3 membros além de você (bots não contam). Quem subiu o badge com servidores vazios volta para o tier que os servidores com gente dão.
 - Badges: o DJ agora conta só a música que toca por pelo menos 30 segundos com mais alguém ouvindo na call, e não cada música posta na fila. Quem subiu o badge com playlists volta para o tier que os pedidos antigos dão.
 - Badges: o badge Reações agora conta uma vez por mensagem. Vários emojis seus na mesma mensagem valem 1, e quem já tinha subido o badge assim volta para o tier que as mensagens dão.

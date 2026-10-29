@@ -6,6 +6,12 @@ import { useGuestSessionStore } from '../store/guestSessionStore'
 import { showToast } from '../../../shared/store/toastStore'
 import { GUEST_COPY } from '../lib/guestCopy'
 
+/** Sai da call e encerra a sessão de visitante deste navegador (vai para a tela final). */
+export function leaveGuestSession(): void {
+  useCallStore.getState().endCall()
+  useGuestSessionStore.getState().end('left')
+}
+
 /** Entra na call do canal; sala trancada vira aviso (a tela oferece voltar). */
 function enter(channelId: string): Promise<void> {
   return useCallStore

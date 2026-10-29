@@ -8,6 +8,7 @@ import { isHomePath } from '../lib/railHome'
 import { HUB_PATH, isHubPath } from '../../improvements/lib/hub'
 import { RailHomeButton, RailNavButton } from './ServerRailButtons'
 import ServerRailList from './ServerRailList'
+import GuestVisitsRail from '../../guests/components/GuestVisitsRail'
 import CreateServerModal from './CreateServerModal'
 
 function ServerRail(): React.JSX.Element {
@@ -48,6 +49,9 @@ function ServerRail(): React.JSX.Element {
         />
 
         <ServerRailList />
+
+        {/* Visitas: acessos de visitante (link para uma call) da conta */}
+        <GuestVisitsRail />
 
         {/* Add Server Button */}
         <div className="group/btn relative flex items-center justify-center">

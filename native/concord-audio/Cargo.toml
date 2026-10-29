@@ -2,7 +2,7 @@
 name = "concord-audio"
 version = "0.1.0"
 edition = "2021"
-description = "Helper nativo da Salinha no Windows: áudio por processo (compartilhamento de tela) e janela em tela cheia (overlay de jogo)"
+description = "Helper nativo da Salinha no Windows: áudio por processo (compartilhamento de tela), janela em tela cheia (overlay de jogo) e sessões de mídia (música em atividade)"
 publish = false
 
 [target.'cfg(windows)'.dependencies]
@@ -25,6 +25,10 @@ windows = { version = "0.62", features = [
     "Win32_System_Variant",
     "Win32_System_LibraryLoader",
     "Win32_UI_Input_KeyboardAndMouse",
+    # Música em atividade (docs/adr/0006-musica-em-atividade.md): sessões do SMTC.
+    "Foundation",
+    "Foundation_Collections",
+    "Media_Control",
 ] }
 # Matrix3x2/Vector2 das APIs do Direct2D; já vinha junto com o `windows` (mesmo projeto windows-rs).
 windows-numerics = "0.3"

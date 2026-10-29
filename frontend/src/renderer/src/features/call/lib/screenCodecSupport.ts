@@ -1,7 +1,7 @@
 // O que a máquina de quem transmite codifica para a live, codec a codec, e
 // onde: na placa de vídeo ('hardware'), no processador ('software') ou não
 // codifica (null). Pergunta ao Chromium no tamanho da live e guarda a resposta
-// na sessão. Ver docs/adr/0019-qualidade-das-lives.md.
+// na sessão. Ver docs/adr/0020-qualidade-das-lives.md.
 
 export type ScreenVideoCodec = 'av1' | 'h265' | 'h264' | 'vp8'
 export type CodecEncoder = 'hardware' | 'software' | null
