@@ -288,72 +288,6 @@ func (p *Player) onPrepared(it *Item, path string, r io.ReadCloser, err error) {
 	p.mixer.SetNext(it.ID, r)
 }
 
-func (p *Player) Skip(userID string) SkipResult {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.now == nil || p.closed {
-		return SkipResult{Kind: SkipNothing}
-	}
-	if p.skipped == p.now.ID {
-		return SkipResult{Kind: SkipDone}
-	}
-	if p.now.RequestedBy.ID == userID {
-		p.deps.Notify.Public(p.lastTextFor(p.now), TextSkippedBy(p.now.Track.Title, p.now.RequestedBy.Username, p.ChannelName))
-		p.skipped = p.now.ID
-		p.mixer.Skip()
-		return SkipResult{Kind: SkipDone}
-	}
-	humans := p.deps.Notify.Humans(p.CallID)
-	p.votes.Prune(humans)
-	added := p.votes.Add(userID)
-	needed := NeededVotes(len(humans))
-	votes := p.votes.Count()
-	if votes >= needed {
-		p.skipByVoteLocked(votes, needed)
-		return SkipResult{Kind: SkipDone, Votes: votes, Needed: needed}
-	}
-	p.deps.Notify.PublishState(p)
-	if !added {
-		return SkipResult{Kind: SkipAlready, Votes: votes, Needed: needed}
-	}
-	return SkipResult{Kind: SkipVoted, Votes: votes, Needed: needed}
-}
-
-func (p *Player) skipByVoteLocked(votes, needed int) {
-	if p.skipped == p.now.ID {
-		return
-	}
-	p.skipped = p.now.ID
-	p.deps.Notify.Public(p.lastTextFor(p.now), TextSkippedByVote(p.now.Track.Title, votes, needed, p.ChannelName))
-	p.votes.Reset()
-	p.mixer.Skip()
-}
-
-// lastTextFor: o aviso vai para o canal de onde a música foi pedida.
-func (p *Player) lastTextFor(it *Item) string {
-	if it != nil && it.TextChannelID != "" {
-		return it.TextChannelID
-	}
-	return p.lastText
-}
-
-// ParticipantLeft recalcula a votação: com menos gente, metade pode já bastar.
-func (p *Player) ParticipantLeft(userID string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	delete(p.watchers, userID)
-	if p.now == nil || p.closed {
-		return
-	}
-	humans := p.deps.Notify.Humans(p.CallID)
-	p.votes.Prune(humans)
-	needed := NeededVotes(len(humans))
-	if votes := p.votes.Count(); votes > 0 && votes >= needed {
-		p.skipByVoteLocked(votes, needed)
-	}
-	p.deps.Notify.PublishState(p)
-}
-
 func (p *Player) Remove(itemID, userID string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -418,46 +352,6 @@ func (p *Player) snapshotLocked() Snapshot {
 	}
 	s.Needed = NeededVotes(len(p.deps.Notify.Humans(p.CallID)))
 	return s
-}
-
-// idleIfEmptyLocked arma o timer quando não há nada tocando, na fila nem sendo preparado.
-func (p *Player) idleIfEmptyLocked() {
-	if p.now == nil && p.queue.Len() == 0 && len(p.preparing) == 0 {
-		p.startIdleLocked()
-	}
-}
-
-func (p *Player) startIdleLocked() {
-	if p.idle != nil {
-		return
-	}
-	var t *time.Timer
-	t = time.AfterFunc(p.deps.IdleTimeout, func() {
-		// Se o timer foi parado/substituído enquanto esperava o lock, não fecha.
-		p.mu.Lock()
-		stale := p.idle != t
-		p.mu.Unlock()
-		if !stale {
-			p.shutdown(false)
-		}
-	})
-	p.idle = t
-}
-
-func (p *Player) stopIdleLocked() {
-	if p.idle != nil {
-		p.idle.Stop()
-		p.idle = nil
-	}
-}
-
-// IdleIfEmpty arma o timer de ociosidade se não há nada tocando nem na fila.
-func (p *Player) IdleIfEmpty() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if !p.closed {
-		p.idleIfEmptyLocked()
-	}
 }
 
 func (p *Player) IsClosed() bool {
