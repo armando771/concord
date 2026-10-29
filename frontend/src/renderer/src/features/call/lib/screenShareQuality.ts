@@ -88,3 +88,17 @@ export function rememberStreamQuality(stream: MediaStream, quality: ScreenShareQ
 export function streamQuality(stream: MediaStream): ScreenShareQuality {
   return { ...(streamQualities.get(stream) ?? DEFAULT_SCREEN_QUALITY) }
 }
+
+/**
+ * Jogo (60 fps) quer fluidez: 'motion' + manter fps (cai a resolução se faltar
+ * banda/CPU). Texto e apresentação (30 fps) querem nitidez: 'detail' + manter
+ * a resolução. Com 'detail' em 60 fps um jogo pesado caía para 4–8 fps.
+ */
+export function screenMotion(frameRate: ScreenShareQuality['frameRate']): {
+  contentHint: 'motion' | 'detail'
+  degradationPreference: RTCDegradationPreference
+} {
+  return frameRate === 60
+    ? { contentHint: 'motion', degradationPreference: 'maintain-framerate' }
+    : { contentHint: 'detail', degradationPreference: 'maintain-resolution' }
+}

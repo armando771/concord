@@ -8,6 +8,7 @@ import { useScreenTileProps } from '../hooks/useScreenTileProps'
 import { watchedExtras } from '../lib/stagePeople'
 import type { ScreenEntry } from '../lib/screenWatch'
 import ParticipantTile from './ParticipantTile'
+import { useGuestTagged } from '../../guests/hooks/useGuestTagged'
 
 type TileSize = 'md' | 'lg' | 'fill'
 
@@ -27,10 +28,11 @@ export function PersonTile({
   const meId = useAuthStore((s) => s.user?.id ?? 'me')
   const voice = useCallStore((s) => s.voiceStates[user.id])
   const locallyMuted = useUserAudioStore((s) => s.settings[user.id]?.muted ?? false)
+  const shown = useGuestTagged(user)
 
   return (
     <ParticipantTile
-      user={user}
+      user={shown}
       selfMuted={voice?.muted}
       onContextMenu={userMenuHandler(user.id, user.display_name, meId, user.username)}
       locallyMuted={locallyMuted}

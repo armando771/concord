@@ -1,4 +1,5 @@
 import type { ScreenShareQuality } from '../lib/screenShareQuality'
+import ScreenCodecControl from './ScreenCodecControl'
 
 export default function ScreenQualityControls({
   value,
@@ -56,6 +57,7 @@ export default function ScreenQualityControls({
           </div>
         </div>
       </div>
+      <ScreenCodecControl compact={compact} />
       {!compact && (
         <p className="mt-3 text-xs text-gray-500">
           Fonte mantém a resolução original. A taxa de quadros depende da fonte, da conexão e do

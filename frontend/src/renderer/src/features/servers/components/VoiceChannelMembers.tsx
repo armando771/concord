@@ -13,6 +13,7 @@ import { GameBadge } from '../../activity/components/ActivityLine'
 import { userMenuHandler } from '../../profile/store/userMenuStore'
 import { profileCardHandler } from '../../profile/store/profileCardStore'
 import StyledName from '../../profile/components/StyledName'
+import GuestBadge from '../../guests/components/GuestBadge'
 // Na lista do canal de voz o GIF anima sempre, como na chamada (ver CallAvatar).
 import Avatar from '../../call/components/CallAvatar'
 import MaestroAvatar from '../../music/components/MaestroAvatar'
@@ -53,6 +54,7 @@ function VoiceParticipantBadges({
       {/* Atividade da chamada: só sabemos de quem joga na nossa. */}
       {connectedHere && <CallActivityBadge userId={p.user_id} arrival={false} />}
       <GameBadge userId={p.user_id} />
+      {p.guest_of && <GuestBadge />}
       {live && <LiveBadge />}
       {!isMe && mutedByMe && (
         <span title="Silenciado por você" className="text-gray-400">

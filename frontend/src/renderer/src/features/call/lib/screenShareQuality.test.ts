@@ -3,6 +3,7 @@ import {
   DEFAULT_SCREEN_QUALITY,
   rememberStreamQuality,
   screenEncoding,
+  screenMotion,
   screenVideoConstraints,
   streamQuality,
   type ScreenShareQuality
@@ -88,5 +89,21 @@ describe('preferências', () => {
       JSON.stringify({ resolution: '720p', frameRate: 60 })
     )
     expect(loadScreenQuality()).toEqual({ resolution: '720p', frameRate: 60 })
+  })
+})
+
+describe('dica de conteúdo da tela', () => {
+  it('60 fps (jogo): movimento, mantendo a fluidez', () => {
+    expect(screenMotion(60)).toEqual({
+      contentHint: 'motion',
+      degradationPreference: 'maintain-framerate'
+    })
+  })
+
+  it('30 fps (texto, apresentação): detalhe, mantendo a resolução', () => {
+    expect(screenMotion(30)).toEqual({
+      contentHint: 'detail',
+      degradationPreference: 'maintain-resolution'
+    })
   })
 })

@@ -54,7 +54,7 @@ func TestDispatchSubscribeWithoutValidator(t *testing.T) {
 
 func TestDispatchRoutesTypingAndIgnoresUnknown(t *testing.T) {
 	typing := &recordingTyping{}
-	router := &recordingRouter{events: make(chan routedEvent, 4)}
+	router := &recordingRouter{events: make(chan routedEvent, 5)}
 	c := newDispatchClient(nil)
 	c.typing = typing
 	c.callRouter = router
@@ -65,12 +65,13 @@ func TestDispatchRoutesTypingAndIgnoresUnknown(t *testing.T) {
 	c.dispatch(ctx, event("call:qualquer", `{}`)) // não é mensagem de chamada
 	c.dispatch(ctx, event("call:leave", `{}`))
 	c.dispatch(ctx, event("call:speaking", `{"call_id":"c1"}`))
+	c.dispatch(ctx, event("call:presence", `{"call_id":null}`))
 
 	if len(typing.got) != 2 || typing.got[0] != "ana typing" {
 		t.Fatalf("digitação = %v", typing.got)
 	}
-	if len(router.events) != 2 {
-		t.Fatalf("repassadas ao call = %d, want 2 (call:leave e call:speaking)", len(router.events))
+	if len(router.events) != 3 {
+		t.Fatalf("repassadas ao call = %d, want 3 (call:leave, call:speaking e call:presence)", len(router.events))
 	}
 
 	// Sem roteadores ligados, nada quebra.

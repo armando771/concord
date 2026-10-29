@@ -26,6 +26,7 @@ import QuickSwitcherModal from '../features/friends/components/QuickSwitcherModa
 import ShortcutsModal from '../features/settings/components/ShortcutsModal'
 import { useGlobalShortcuts } from '../features/settings/hooks/useGlobalShortcuts'
 import { useInviteLinkClicks } from '../features/servers/hooks/useInviteLinkClicks'
+import { useGuestLinkClicks } from '../features/guests/hooks/useGuestLinkClicks'
 import { useAuthStore } from '../features/auth/store/authStore'
 import { useSessionConnection } from '../features/auth/hooks/useSessionConnection'
 import { useUIStore } from '../shared/store/uiStore'
@@ -41,6 +42,7 @@ function AppShell(): React.JSX.Element {
   useFlushPendingLevelUp()
   useGlobalShortcuts()
   useInviteLinkClicks()
+  useGuestLinkClicks()
   const quickSwitcherOpen = useUIStore((s) => s.quickSwitcherOpen)
   const setQuickSwitcherOpen = useUIStore((s) => s.setQuickSwitcherOpen)
   const location = useLocation()

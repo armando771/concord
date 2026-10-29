@@ -6,12 +6,17 @@ import DmChat from '../features/chat/pages/DmChat'
 import GroupChat from '../features/chat/pages/GroupChat'
 import Proposals from '../features/proposals/pages/Proposals'
 import Changelog from '../features/updates/pages/Changelog'
+import HubBackFrame from '../features/improvements/components/HubBackFrame'
+import ImprovementsHub from '../features/improvements/pages/ImprovementsHub'
+import Ranking from '../features/ranking/pages/Ranking'
 import Login from '../features/auth/pages/Login'
 import Register from '../features/auth/pages/Register'
 import ForgotPassword from '../features/auth/pages/ForgotPassword'
 import ResetPassword from '../features/auth/pages/ResetPassword'
 import VerifyEmail from '../features/auth/pages/VerifyEmail'
 import InviteLanding from '../features/servers/pages/InviteLanding'
+import GuestLanding from '../features/guests/pages/GuestLanding'
+import GuestSessionGate from '../features/guests/components/GuestSessionGate'
 import RequireAuth from '../features/auth/components/RequireAuth'
 import RedirectIfAuthed from '../features/auth/components/RedirectIfAuthed'
 import AppShell from './AppShell'
@@ -29,9 +34,11 @@ export const router = createRouter([
   {
     path: '/',
     element: (
-      <RequireAuth>
-        <AppShell />
-      </RequireAuth>
+      <GuestSessionGate>
+        <RequireAuth>
+          <AppShell />
+        </RequireAuth>
+      </GuestSessionGate>
     ),
     errorElement: <RouteErrorScreen />,
     children: [
@@ -39,20 +46,38 @@ export const router = createRouter([
       { path: 'friends', element: <Friends /> },
       // Antiga página de convites: agora é a aba "Convites" do Início.
       { path: 'invites', element: <Navigate to="/friends?tab=invites" replace /> },
+      // Aba do diamante: o hub com 3 cards e as telas que ele abre. As telas
+      // ganham o "voltar" para o hub (HubBackFrame); só o hub leva à lista no celular.
+      {
+        path: 'melhorias',
+        element: (
+          <MobileBackFrame>
+            <ImprovementsHub />
+          </MobileBackFrame>
+        )
+      },
       {
         path: 'proposals',
         element: (
-          <MobileBackFrame>
+          <HubBackFrame>
             <Proposals />
-          </MobileBackFrame>
+          </HubBackFrame>
         )
       },
       {
         path: 'changelog',
         element: (
-          <MobileBackFrame>
+          <HubBackFrame>
             <Changelog />
-          </MobileBackFrame>
+          </HubBackFrame>
+        )
+      },
+      {
+        path: 'ranking',
+        element: (
+          <HubBackFrame>
+            <Ranking />
+          </HubBackFrame>
         )
       },
       { path: 'dm/:userId', element: <DmChat /> },
@@ -94,6 +119,12 @@ export const router = createRouter([
     // Link de convite: abre sem login (o cartão mostra o servidor antes).
     path: '/convite/:code',
     element: <InviteLanding />,
+    errorElement: <RouteErrorScreen />
+  },
+  {
+    // Link de visitante para uma call: abre sem login (só a call, sem o app).
+    path: '/visitante/:token',
+    element: <GuestLanding />,
     errorElement: <RouteErrorScreen />
   },
   {

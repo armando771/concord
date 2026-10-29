@@ -1,0 +1,17 @@
+DROP TRIGGER IF EXISTS soundboard_sounds_level_uncount ON soundboard_sounds;
+DROP TRIGGER IF EXISTS soundboard_sounds_level_count ON soundboard_sounds;
+DROP TRIGGER IF EXISTS server_stickers_level_uncount ON server_stickers;
+DROP TRIGGER IF EXISTS server_stickers_level_count ON server_stickers;
+DROP TRIGGER IF EXISTS messages_server_level_uncount ON messages;
+DROP TRIGGER IF EXISTS messages_server_level_count ON messages;
+DROP FUNCTION IF EXISTS server_level_uncount_upload();
+DROP FUNCTION IF EXISTS server_level_count_upload();
+DROP FUNCTION IF EXISTS server_level_uncount_message();
+DROP FUNCTION IF EXISTS server_level_count_message();
+DROP FUNCTION IF EXISTS server_level_add(UUID, UUID, TEXT, INT);
+DROP FUNCTION IF EXISTS server_level_today();
+DROP FUNCTION IF EXISTS server_level_cap(TEXT);
+DROP FUNCTION IF EXISTS server_level_real(UUID);
+DROP TABLE IF EXISTS server_level_members;
+DROP TABLE IF EXISTS server_level_daily;
+DROP TABLE IF EXISTS server_levels;

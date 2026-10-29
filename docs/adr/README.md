@@ -53,3 +53,7 @@ O que fica mais fácil, o que fica mais difícil, o que precisa ser feito depois
 - [0013. Mesa de áudio por servidor, com favoritos da pessoa valendo em qualquer servidor](0013-mesa-de-audio-por-servidor.md)
 - [0014. No app desktop do Linux, falar o /tts com o Piper baixado no primeiro uso](0014-voz-piper-no-linux.md)
 - [0015. Criar o app mobile em `mobile/` com Expo, Expo Router e Zustand](0015-app-mobile-expo.md)
+- [0015. Publicar a tela (lives) em H.264, com VP8 de reserva](0015-lives-em-h264.md)
+- [0016. Dar nível ao servidor pelo que acontece nele, com teto diário por pessoa e só contas reais](0016-nivel-do-servidor.md)
+- [0017. Convidar visitante para uma call com acesso escopado ao canal de voz, sem virar membro](0017-visitante-na-call.md)
+- [0018. Quem está na call segue a sala de mídia (LiveKit), não só o WebSocket](0018-presenca-na-midia.md)
