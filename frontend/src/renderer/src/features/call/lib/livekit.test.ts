@@ -408,23 +408,27 @@ describe('CallMedia — qualidade de tela', () => {
       frameRate: { ideal: 60, max: 60 }
     })
     expect(sender.getParameters().encodings[0]).toMatchObject({
-      maxBitrate: 8_000_000,
+      maxBitrate: 7_000_000,
       maxFramerate: 60,
       active: true
     })
     expect(track.publishOptions).toMatchObject({
-      screenShareEncoding: { maxBitrate: 8_000_000, maxFramerate: 60 }
+      screenShareEncoding: { maxBitrate: 7_000_000, maxFramerate: 60 }
     })
     expect(room().localParticipant.getTrackPublication('screen_share').options).toMatchObject({
-      screenShareEncoding: { maxBitrate: 8_000_000, maxFramerate: 60 }
+      screenShareEncoding: { maxBitrate: 7_000_000, maxFramerate: 60 }
     })
     expect(room().localParticipant.publishTrack).not.toHaveBeenCalled()
     expect(video.stop).not.toHaveBeenCalled()
-    // 60 fps = jogo: fluidez antes de resolução.
+    // 60 fps = jogo: dica de movimento; a resolução é mantida (o controlador troca de degrau).
     expect((video as { contentHint?: string }).contentHint).toBe('motion')
-    expect(track.setDegradationPreference).toHaveBeenLastCalledWith('maintain-framerate')
+    expect(track.setDegradationPreference).toHaveBeenLastCalledWith('maintain-resolution')
     await media.updateScreenQuality(stream, { resolution: 'source', frameRate: 30 })
-    expect(video.applyConstraints).toHaveBeenLastCalledWith({ frameRate: { ideal: 30, max: 30 } })
+    expect(video.applyConstraints).toHaveBeenLastCalledWith({
+      width: { max: 2560 },
+      height: { max: 1440 },
+      frameRate: { ideal: 30, max: 30 }
+    })
     expect((video as { contentHint?: string }).contentHint).toBe('detail')
     expect(track.setDegradationPreference).toHaveBeenLastCalledWith('maintain-resolution')
   })
@@ -483,10 +487,10 @@ describe('CallMedia — qualidade de tela', () => {
       source: 'screen_share',
       name: 'screen',
       simulcast: false,
-      screenShareEncoding: { maxBitrate: 8_000_000, maxFramerate: 60 },
+      screenShareEncoding: { maxBitrate: 7_000_000, maxFramerate: 60 },
       videoCodec: 'h264',
       backupCodec: { codec: 'vp8' },
-      degradationPreference: 'maintain-framerate'
+      degradationPreference: 'maintain-resolution'
     })
     expect(room().localParticipant.publishTrack).toHaveBeenCalledWith(
       audio,

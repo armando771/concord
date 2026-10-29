@@ -5,7 +5,13 @@ import {
   type CustomBackground,
   type VideoBackground
 } from '../lib/videoBackground'
-import { CheckIcon, XIcon } from '../../../shared/ui/icons'
+import {
+  BlurIcon,
+  CheckIcon,
+  CircleSlashIcon,
+  ImageAddIcon,
+  XIcon
+} from '../../../shared/ui/icons'
 
 const BASE_TILE =
   'relative flex aspect-video w-full cursor-pointer flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border-2 text-ds-xs font-medium transition-colors'
@@ -16,61 +22,6 @@ const tile = (selected: boolean): string =>
       ? 'border-brand text-strong'
       : 'border-transparent text-gray-300 hover:border-fg/20 hover:text-strong'
   }`
-
-function NoneIcon(): React.JSX.Element {
-  return (
-    <svg
-      width="22"
-      height="22"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M5.6 5.6l12.8 12.8" />
-    </svg>
-  )
-}
-
-function BlurIcon(): React.JSX.Element {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <circle cx="12" cy="8.5" r="3.5" />
-      <path d="M5 20c0-3.9 3.1-6.5 7-6.5s7 2.6 7 6.5z" />
-      <path
-        d="M3 4h2M3 8h1M19 4h2M20 8h1"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        fill="none"
-        opacity=".6"
-      />
-    </svg>
-  )
-}
-
-function UploadIcon(): React.JSX.Element {
-  return (
-    <svg
-      width="22"
-      height="22"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <circle cx="9" cy="10" r="1.5" />
-      <path d="M21 16l-5-5-8 8" />
-      <path d="M17 3v4M15 5h4" />
-    </svg>
-  )
-}
 
 /**
  * "Fundo do vídeo" (como no Discord): Nenhum, Borrar, Personalizado e as
@@ -107,7 +58,7 @@ function BackgroundPicker({
           onClick={() => onChange({ mode: 'none', image: null })}
           className={`${tile(value.mode === 'none')} bg-fg/5`}
         >
-          <NoneIcon />
+          <CircleSlashIcon size={24} />
           Nenhum
         </button>
         <button
@@ -116,7 +67,7 @@ function BackgroundPicker({
           onClick={() => onChange({ mode: 'blur', image: null })}
           className={`${tile(value.mode === 'blur')} bg-fg/5`}
         >
-          <BlurIcon />
+          <BlurIcon size={24} />
           Borrar
         </button>
         <button
@@ -124,7 +75,7 @@ function BackgroundPicker({
           onClick={() => fileRef.current?.click()}
           className={`${tile(false)} bg-brand/15`}
         >
-          <UploadIcon />
+          <ImageAddIcon size={24} />
           Personalizado
         </button>
         <input

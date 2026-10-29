@@ -65,7 +65,14 @@ describe('parseProgress / parseLevelUp', () => {
     expect(parseProgress(p)).toEqual(p)
     expect(parseLevelUp({ server_id: 's', level: 2, previous_level: 1 })).toEqual({
       serverId: 's',
-      level: 2
+      level: 2,
+      previous: 1
+    })
+    // Sem o anterior (ou torto), segue sem ele.
+    expect(parseLevelUp({ server_id: 's', level: 2, previous_level: 'x' })).toEqual({
+      serverId: 's',
+      level: 2,
+      previous: undefined
     })
   })
 

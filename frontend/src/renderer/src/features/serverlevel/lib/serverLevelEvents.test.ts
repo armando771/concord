@@ -16,8 +16,11 @@ describe('handleServerLevelEvent', () => {
 
   it('up avisa a subida', () => {
     const d = deps()
-    handleServerLevelEvent({ type: 'server:level:up', payload: { server_id: 's', level: 3 } }, d)
-    expect(d.levelUp).toHaveBeenCalledWith('s', 3)
+    handleServerLevelEvent(
+      { type: 'server:level:up', payload: { server_id: 's', level: 3, previous_level: 2 } },
+      d
+    )
+    expect(d.levelUp).toHaveBeenCalledWith('s', 3, 2)
   })
 
   it('ignora outros eventos e payload torto', () => {

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ArrowLeftIcon } from '../../../shared/ui/iconsExtra'
+import { ArrowLeftIcon } from '../../../shared/ui/icons'
 import { HUB_PATH } from '../lib/hub'
 
 // O primeiro <header> da página abre espaço à esquerda para o "voltar" e rola

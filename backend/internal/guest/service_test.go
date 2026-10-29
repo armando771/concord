@@ -178,7 +178,7 @@ func TestEndGuestKicksAndNotifies(t *testing.T) {
 	if len(w.calls.removed) != 1 || w.calls.removed[0] != "srv|bia" {
 		t.Fatalf("tirado das calls: %v", w.calls.removed)
 	}
-	if got := w.notify.sent["bia"]; len(got) != 1 || !strings.Contains(got[0], `"reason":"removed"`) {
+	if got := w.notify.sent["bia"]; len(got) != 2 || !strings.Contains(got[1], `"reason":"removed"`) {
 		t.Fatalf("aviso: %v", got)
 	}
 	if _, ok := w.svc.GuestChannelPerms(ctx, "sala", "bia"); ok {
@@ -315,4 +315,80 @@ func (s *Service) mustPassID(userID, inviteID string) string {
 		panic(err)
 	}
 	return p.ID
+}
+
+func TestJoinWithAccountKeepsHimOutOfTheServer(t *testing.T) {
+	w := newWorld()
+	inv := w.invite()
+	ctx := context.Background()
+	if _, err := w.svc.JoinWithAccount(ctx, inv.Token, "bia"); err != nil {
+		t.Fatal(err)
+	}
+	// A conta entra na call do convite com o token normal, sem virar membro:
+	// o resto do servidor (canais de texto, outros canais de voz) segue fechado.
+	snap, _ := w.svc.perms.Snapshot(ctx, "srv")
+	if snap.IsMember("bia") {
+		t.Fatal("visitante com conta não vira membro")
+	}
+	if _, ok := w.svc.GuestChannelPerms(ctx, "sala", "bia"); !ok {
+		t.Fatal("o canal do convite abre")
+	}
+	for _, ch := range []string{"outra", "geral"} {
+		if _, ok := w.svc.GuestChannelPerms(ctx, ch, "bia"); ok {
+			t.Fatalf("canal %s não abre para o visitante", ch)
+		}
+	}
+}
+
+func TestPassesListsEveryActiveVisit(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	inv := w.invite()
+	if _, err := w.svc.JoinWithAccount(ctx, inv.Token, "bia"); err != nil {
+		t.Fatal(err)
+	}
+	// Outro servidor com acesso da mesma conta (dois acessos ativos).
+	other := Pass{ID: "p2", UserID: "bia", ServerID: "srv2", ChannelID: "voz2", ExpiresAt: w.now.Add(time.Hour)}
+	_ = w.store.CreatePass(ctx, &other)
+	w.svc.active.put(other)
+
+	got := w.svc.Passes(ctx, "bia")
+	if len(got) != 2 {
+		t.Fatalf("as duas visitas aparecem: %+v", got)
+	}
+	for _, v := range got {
+		if v.ServerIconURL != "https://cdn/icone.png" || v.ServerName != "Salinha" {
+			t.Fatalf("o trilho mostra nome e ícone do servidor: %+v", v)
+		}
+	}
+
+	w.now = w.now.Add(90 * time.Minute)
+	w.svc.Sweep(ctx)
+	if got := w.svc.Passes(ctx, "bia"); len(got) != 1 || got[0].ServerID != "srv" {
+		t.Fatalf("o vencido sai da lista: %+v", got)
+	}
+	w.now = w.now.Add(time.Hour)
+	w.svc.Sweep(ctx)
+	if got := w.svc.Passes(ctx, "bia"); len(got) != 0 {
+		t.Fatalf("expirou: lista vazia: %+v", got)
+	}
+}
+
+func TestVisitChangesReachTheUserApps(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	inv := w.invite()
+	if _, err := w.svc.JoinWithAccount(ctx, inv.Token, "bia"); err != nil {
+		t.Fatal(err)
+	}
+	if !w.svc.MoveGuest(ctx, "bia", "srv", "outra") {
+		t.Fatal("mover")
+	}
+	sent := w.notify.sent["bia"]
+	if len(sent) != 2 || !strings.Contains(sent[0], `"type":"guest:pass"`) || !strings.Contains(sent[0], `"channel_id":"sala"`) {
+		t.Fatalf("entrar avisa os apps da conta (trilho): %v", sent)
+	}
+	if !strings.Contains(sent[1], `"type":"guest:pass"`) || !strings.Contains(sent[1], `"channel_id":"outra"`) {
+		t.Fatalf("mover avisa o canal novo: %v", sent)
+	}
 }

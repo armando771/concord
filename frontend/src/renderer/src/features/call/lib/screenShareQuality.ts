@@ -43,42 +43,67 @@ export function saveScreenQuality(quality: ScreenShareQuality): void {
   }
 }
 
+/** Caixa de cada preset. Fonte vai até 1440p (teto dos apps de live). */
+const BOX: Record<ScreenShareQuality['resolution'], { width: number; height: number }> = {
+  '720p': { width: 1280, height: 720 },
+  '1080p': { width: 1920, height: 1080 },
+  source: { width: 2560, height: 1440 }
+}
+
+/**
+ * Bitrate de referência do mercado (Twitch: 720p30 3, 720p60 4,5, 1080p30 4,5,
+ * 1080p60 6–8 Mbps; YouTube 1440p 6–13). Ver docs/adr/0020.
+ */
+const BITRATE: Record<ScreenShareQuality['resolution'], Record<30 | 60, number>> = {
+  '720p': { 30: 3_000_000, 60: 4_500_000 },
+  '1080p': { 30: 4_500_000, 60: 7_000_000 },
+  source: { 30: 8_000_000, 60: 10_000_000 }
+}
+
+/** Tamanho da fonte dentro da caixa do preset, sem ampliar nem alterar proporção. */
+export function captureSize(
+  resolution: ScreenShareQuality['resolution'],
+  source: MediaTrackSettings
+): { width: number; height: number } {
+  const box = BOX[resolution]
+  const width = source.width || box.width
+  const height = source.height || box.height
+  const scale = Math.min(1, box.width / width, box.height / height)
+  return {
+    width: Math.max(1, Math.floor(width * scale)),
+    height: Math.max(1, Math.floor(height * scale))
+  }
+}
+
 /** Ajusta a fonte dentro da caixa escolhida, sem ampliar nem alterar proporção. */
 export function screenVideoConstraints(
   quality: ScreenShareQuality,
   source: MediaTrackSettings
 ): MediaTrackConstraints {
-  const constraints: MediaTrackConstraints = {
-    frameRate: { ideal: quality.frameRate, max: quality.frameRate }
+  const size = captureSize(quality.resolution, source)
+  return {
+    frameRate: { ideal: quality.frameRate, max: quality.frameRate },
+    width: { max: size.width },
+    height: { max: size.height }
   }
-  if (quality.resolution === 'source') return constraints
-  const width = quality.resolution === '720p' ? 1280 : 1920
-  const height = quality.resolution === '720p' ? 720 : 1080
-  const scale = Math.min(1, width / (source.width || width), height / (source.height || height))
-  constraints.width = { max: Math.max(1, Math.floor((source.width || width) * scale)) }
-  constraints.height = { max: Math.max(1, Math.floor((source.height || height) * scale)) }
-  return constraints
 }
 
 export function screenEncoding(
   quality: ScreenShareQuality,
-  settings: MediaTrackSettings = {}
+  source: MediaTrackSettings = {}
 ): {
   maxBitrate: number
   maxFramerate: number
 } {
-  const pixels =
-    quality.resolution === '720p'
-      ? 1280 * 720
-      : quality.resolution === '1080p'
-        ? 1920 * 1080
-        : (settings.width || 1920) * (settings.height || 1080)
-  // Orçamento proporcional ao tamanho e FPS, com teto para fontes muito grandes.
-  const base = Math.max(2_500_000, Math.min(16_000_000, (4_000_000 * pixels) / (1920 * 1080)))
-  return {
-    maxBitrate: Math.round((base * quality.frameRate) / 30),
-    maxFramerate: quality.frameRate
+  const fps = quality.frameRate
+  let maxBitrate = BITRATE[quality.resolution][fps]
+  if (quality.resolution === 'source') {
+    // Entre 1080p e 1440p, proporcional aos pixels da fonte.
+    const { width, height } = captureSize('source', source)
+    const full = BITRATE['1080p'][fps]
+    maxBitrate = Math.min(maxBitrate, Math.max(full, (full * width * height) / (1920 * 1080)))
   }
+  return { maxBitrate: Math.round(maxBitrate), maxFramerate: fps }
 }
 
 export function rememberStreamQuality(stream: MediaStream, quality: ScreenShareQuality): void {
@@ -90,15 +115,17 @@ export function streamQuality(stream: MediaStream): ScreenShareQuality {
 }
 
 /**
- * Jogo (60 fps) quer fluidez: 'motion' + manter fps (cai a resolução se faltar
- * banda/CPU). Texto e apresentação (30 fps) querem nitidez: 'detail' + manter
- * a resolução. Com 'detail' em 60 fps um jogo pesado caía para 4–8 fps.
+ * Jogo (60 fps) = 'motion'; texto e apresentação (30 fps) = 'detail'. A
+ * resolução é sempre mantida: o WebRTC sozinho derrubava para 180p (rampa da
+ * banda) ou segurava 1080p a 5 fps. Quem troca de degrau, sem nunca passar de
+ * 720p30, é o controlador (screenAdaptController). Ver docs/adr/0020.
  */
 export function screenMotion(frameRate: ScreenShareQuality['frameRate']): {
   contentHint: 'motion' | 'detail'
   degradationPreference: RTCDegradationPreference
 } {
-  return frameRate === 60
-    ? { contentHint: 'motion', degradationPreference: 'maintain-framerate' }
-    : { contentHint: 'detail', degradationPreference: 'maintain-resolution' }
+  return {
+    contentHint: frameRate === 60 ? 'motion' : 'detail',
+    degradationPreference: 'maintain-resolution'
+  }
 }

@@ -172,7 +172,9 @@ func (fakeDir) Channel(_ context.Context, id string) (*channel.Channel, error) {
 	}
 	return &channel.Channel{ID: id, ServerID: "srv", Name: strings.ToUpper(id[:1]) + id[1:], Type: t}, nil
 }
-func (fakeDir) ServerName(context.Context, string) string { return "Salinha" }
+func (fakeDir) Server(context.Context, string) ServerInfo {
+	return ServerInfo{Name: "Salinha", IconURL: "https://cdn/icone.png"}
+}
 func (fakeDir) DisplayName(_ context.Context, id string) string {
 	return "Nome de " + id
 }

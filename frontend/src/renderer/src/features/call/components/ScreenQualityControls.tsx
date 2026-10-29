@@ -1,5 +1,6 @@
 import type { ScreenShareQuality } from '../lib/screenShareQuality'
 import ScreenCodecControl from './ScreenCodecControl'
+import ScreenSimulcastToggle from './ScreenSimulcastToggle'
 
 export default function ScreenQualityControls({
   value,
@@ -57,11 +58,12 @@ export default function ScreenQualityControls({
           </div>
         </div>
       </div>
+      <ScreenSimulcastToggle compact={compact} />
       <ScreenCodecControl compact={compact} />
       {!compact && (
         <p className="mt-3 text-xs text-gray-500">
-          Fonte mantém a resolução original. A taxa de quadros depende da fonte, da conexão e do
-          desempenho do dispositivo.
+          Fonte mantém a resolução original, até 1440p. Se a conexão ou o PC não derem conta, a
+          qualidade baixa sozinha, sem passar de 720p 30, e volta quando puder.
         </p>
       )}
     </fieldset>

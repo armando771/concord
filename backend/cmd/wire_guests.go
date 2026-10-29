@@ -49,12 +49,12 @@ func (d guestDirectory) Channel(ctx context.Context, id string) (*channel.Channe
 	return d.channels.FindByID(ctx, id)
 }
 
-func (d guestDirectory) ServerName(ctx context.Context, id string) string {
+func (d guestDirectory) Server(ctx context.Context, id string) guest.ServerInfo {
 	srv, err := d.servers.FindByID(ctx, id)
 	if err != nil {
-		return ""
+		return guest.ServerInfo{}
 	}
-	return srv.Name
+	return guest.ServerInfo{Name: srv.Name, IconURL: srv.IconURL}
 }
 
 func (d guestDirectory) DisplayName(ctx context.Context, userID string) string {

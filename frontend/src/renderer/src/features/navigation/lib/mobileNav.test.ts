@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { initialPanel, panelAfterNavigation, sectionOf, shellPanelClasses } from './mobileNav'
+import {
+  initialPanel,
+  panelAfterNavigation,
+  sectionKind,
+  sectionOf,
+  shellPanelClasses
+} from './mobileNav'
 
 describe('sectionOf', () => {
   it.each([
@@ -12,9 +18,17 @@ describe('sectionOf', () => {
     ['/melhorias', 'improvements'],
     ['/proposals', 'improvements'],
     ['/changelog', 'improvements'],
-    ['/ranking', 'improvements']
+    ['/ranking', 'improvements'],
+    ['/visitas/s1', 'visit:s1']
   ])('%s → %s', (path, section) => {
     expect(sectionOf(path)).toBe(section)
+  })
+
+  it('o tipo da seção escolhe a coluna da esquerda (servidor, visita ou Início)', () => {
+    expect(sectionKind('/servers/s1/channels/c1')).toBe('server')
+    expect(sectionKind('/visitas/s1')).toBe('visit')
+    expect(sectionKind('/friends')).toBe('home')
+    expect(sectionKind('/proposals')).toBe('improvements')
   })
 })
 
@@ -29,7 +43,9 @@ describe('initialPanel', () => {
     ['/melhorias', 'content'],
     ['/proposals', 'content'],
     ['/changelog', 'content'],
-    ['/ranking', 'content']
+    ['/ranking', 'content'],
+    // Visita (link de visitante): abre direto na call, com o voltar para a lista.
+    ['/visitas/s1', 'content']
   ] as const)('abrir em %s mostra %s', (path, panel) => {
     expect(initialPanel(path)).toBe(panel)
   })

@@ -44,6 +44,17 @@ describe('nível do servidor na tela', () => {
     expect(renderToStaticMarkup(<ServerLevelChip serverId="s1" />)).toContain('Nv. 3')
   })
 
+  it('chip muda de material por faixa de nível', () => {
+    useServerLevelStore.getState().apply(progress)
+    expect(renderToStaticMarkup(<ServerLevelChip serverId="s1" />)).toContain('data-tier="Bronze"')
+    useServerLevelStore.getState().apply({ ...progress, level: 12 })
+    expect(renderToStaticMarkup(<ServerLevelChip serverId="s1" />)).toContain('data-tier="Ouro"')
+    useServerLevelStore.getState().apply({ ...progress, level: 31 })
+    expect(renderToStaticMarkup(<ServerLevelChip serverId="s1" />)).toContain(
+      'server-level-legendary'
+    )
+  })
+
   it('cartão do menu mostra nível, barra e o XP do nível', () => {
     useServerLevelStore.getState().apply(progress)
     const html = renderToStaticMarkup(<ServerLevelCard serverId="s1" onOpen={() => {}} />)

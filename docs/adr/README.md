@@ -57,3 +57,5 @@ O que fica mais fácil, o que fica mais difícil, o que precisa ser feito depois
 - [0016. Dar nível ao servidor pelo que acontece nele, com teto diário por pessoa e só contas reais](0016-nivel-do-servidor.md)
 - [0017. Convidar visitante para uma call com acesso escopado ao canal de voz, sem virar membro](0017-visitante-na-call.md)
 - [0018. Quem está na call segue a sala de mídia (LiveKit), não só o WebSocket](0018-presenca-na-midia.md)
+- [0019. O Maestro grava onde cada player estava e volta sozinho depois de o servidor reiniciar](0019-maestro-retoma-apos-reinicio.md)
+- [0020. Qualidade das lives: presets com piso de 720p30, controlador próprio e vídeo na placa de vídeo](0020-qualidade-das-lives.md)

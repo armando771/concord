@@ -17,19 +17,11 @@ import {
   type TrackEntry
 } from './callMedia'
 import { canPublishSource, type PublishSource } from './mediaPermissions'
+import { asCallQuality, type CallQuality, type QualityDetails } from './connectionQuality'
+import { CallQualityReader } from './callQualityReader'
 import { MicPublisher } from './micPublisher'
-import { reportLatency } from './connectionStats'
-import {
-  asCallQuality,
-  inboundCounters,
-  lossBetween,
-  reportOutboundLoss,
-  type CallQuality,
-  type PacketCounters,
-  type QualityDetails
-} from './connectionQuality'
 import type { ScreenShareQuality } from './screenShareQuality'
-import { publishScreenTracks, updatePublishedScreenQuality } from './screenPublish'
+import { ScreenSender } from './screenSender'
 import type { ScreenStatsInput } from './screenStats'
 import {
   clearActiveScreenStats,
@@ -95,8 +87,10 @@ export class CallMedia {
   private stopWindowWatch: () => void
   private refreshQueued = false
   private mic = new MicPublisher(() => this.room.localParticipant)
-  /** Última leitura dos pacotes recebidos de cada pessoa (perda entre leituras). */
-  private inbound = new Map<string, PacketCounters>()
+  /** Latência e perda de pacotes (tooltip de conexão ruim). */
+  private quality: CallQualityReader
+  /** A minha live (publicar e trocar a qualidade ao vivo). */
+  private screen: ScreenSender
 
   constructor(private readonly handlers: CallMediaHandlers) {
     this.room = new Room({
@@ -112,6 +106,11 @@ export class CallMedia {
         videoCodec: 'vp8'
       }
     })
+    this.quality = new CallQualityReader(this.room, () => this.closing)
+    this.screen = new ScreenSender(
+      this.room.localParticipant,
+      () => this.connected && this.room.state === ConnectionState.Connected
+    )
     setActiveScreenStats(this)
     this.stopWindowWatch = watchVideoPause((pause) => {
       if (this.subscriptions.setPause(pause)) this.applySubscriptions()
@@ -194,74 +193,23 @@ export class CallMedia {
   }
 
   /** RTT até o SFU pelas estatísticas públicas das tracks, inclusive em modo ouvinte. */
-  async getLatency(): Promise<number | null> {
-    if (this.closing || this.room.state !== ConnectionState.Connected) return null
-    const publications = [
-      ...this.room.localParticipant.trackPublications.values(),
-      ...Array.from(this.room.remoteParticipants.values()).flatMap((participant) =>
-        Array.from(participant.trackPublications.values())
-      )
-    ]
-    for (const publication of publications) {
-      if (!publication.track) continue
-      try {
-        const report = await publication.track.getRTCStatsReport()
-        if (this.closing || this.room.state !== ConnectionState.Connected) return null
-        const ms = report ? reportLatency(report) : null
-        if (ms !== null) return ms
-      } catch {
-        // Track removida durante a consulta: tenta outra, sem interferir na chamada.
-      }
-    }
-    return null
+  getLatency(): Promise<number | null> {
+    return this.quality.latency()
   }
 
-  /**
-   * Perda de pacotes e latência para o tooltip de conexão ruim. `selfId`: eu
-   * (perda do que envio + latência até o servidor); os demais: perda do áudio
-   * deles que chega até mim, desde a leitura anterior.
-   */
-  async getQualityDetails(
+  /** Perda de pacotes e latência para o tooltip de conexão ruim (ver CallQualityReader). */
+  getQualityDetails(
     userIds: string[],
     selfId: string | null
   ): Promise<Record<string, QualityDetails>> {
-    const out: Record<string, QualityDetails> = {}
-    if (this.closing || this.room.state !== ConnectionState.Connected) return out
-    for (const userId of userIds) {
-      try {
-        if (userId === selfId) {
-          const mic = this.room.localParticipant.getTrackPublication(Track.Source.Microphone)
-          const report = await mic?.track?.getRTCStatsReport()
-          out[userId] = {
-            lossPercent: report ? reportOutboundLoss(report) : null,
-            latencyMs: await this.getLatency()
-          }
-          continue
-        }
-        const participant = this.room.remoteParticipants.get(userId)
-        const mic = participant?.getTrackPublication(Track.Source.Microphone)
-        const report = await mic?.track?.getRTCStatsReport()
-        const counters = report ? inboundCounters(report) : null
-        if (!counters) {
-          this.inbound.delete(userId)
-          out[userId] = { lossPercent: null, latencyMs: null }
-          continue
-        }
-        const lossPercent = lossBetween(this.inbound.get(userId) ?? null, counters)
-        this.inbound.set(userId, counters)
-        out[userId] = { lossPercent, latencyMs: null }
-      } catch {
-        // Track trocada no meio da leitura: fica sem número desta vez.
-      }
-      if (this.closing) return {}
-    }
-    return out
+    return this.quality.details(userIds, selfId)
   }
 
   /** getStats() do vídeo da live, para o painel de estatísticas (só com ele aberto). */
   async readScreenStats(userId: string, local: boolean): Promise<ScreenStatsInput | null> {
     if (this.closing) return null
-    return readScreenStatsInput(this.room, userId, local)
+    const input = await readScreenStatsInput(this.room, userId, local)
+    return input?.local ? { ...input, quality: this.screen.current() } : input
   }
 
   /** Pode publicar essa fonte, segundo as permissões que o servidor deu. */
@@ -306,7 +254,7 @@ export class CallMedia {
   async publishScreen(stream: MediaStream): Promise<void> {
     if (!this.connected) return
     if (!this.canPublish('screen_share')) throw new Error('no_stream_permission')
-    await publishScreenTracks(this.room.localParticipant, stream)
+    await this.screen.publish(stream)
   }
 
   async publishCamera(stream: MediaStream): Promise<void> {
@@ -320,18 +268,13 @@ export class CallMedia {
     })
   }
 
-  /** Não despublica: preserva SID, tracks e assinaturas de quem já está assistindo. */
   updateScreenQuality(stream: MediaStream, quality: ScreenShareQuality): Promise<void> {
-    return updatePublishedScreenQuality(
-      this.room.localParticipant,
-      stream,
-      quality,
-      () => this.connected && this.room.state === ConnectionState.Connected
-    )
+    return this.screen.update(stream, quality)
   }
 
   /** Despublica as tracks do stream (quem chama é dono de parar as tracks). */
   async unpublish(stream: MediaStream): Promise<void> {
+    this.screen.stop(stream)
     const tracks = stream.getTracks()
     if (!this.connected || tracks.length === 0) return
     await this.room.localParticipant.unpublishTracks(tracks)
@@ -350,6 +293,7 @@ export class CallMedia {
   disconnect(): void {
     this.closing = true
     clearActiveScreenStats(this)
+    this.screen.stop()
     this.stopWindowWatch()
     this.cache.clear()
     void this.room.disconnect()

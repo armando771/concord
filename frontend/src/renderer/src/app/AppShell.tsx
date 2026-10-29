@@ -18,6 +18,7 @@ import BoostBanner from '../features/levels/components/BoostBanner'
 import LevelUpScreen from '../features/levels/components/LevelUpScreen'
 import InviteConfirmModal from '../features/servers/components/InviteConfirmModal'
 import LevelUpMilestone from '../features/levels/components/LevelUpMilestone'
+import ServerLevelUpOverlay from '../features/serverlevel/components/ServerLevelUpOverlay'
 import { useFlushPendingLevelUp } from '../features/levels/hooks/useScreenCelebration'
 import BadgesModal from '../features/levels/components/BadgesModal'
 import BadgeUnlockToast from '../features/levels/components/BadgeUnlockToast'
@@ -27,11 +28,22 @@ import ShortcutsModal from '../features/settings/components/ShortcutsModal'
 import { useGlobalShortcuts } from '../features/settings/hooks/useGlobalShortcuts'
 import { useInviteLinkClicks } from '../features/servers/hooks/useInviteLinkClicks'
 import { useGuestLinkClicks } from '../features/guests/hooks/useGuestLinkClicks'
+import { useGuestVisitsSync } from '../features/guests/hooks/useGuestVisitsSync'
+import GuestVisitSidebar from '../features/guests/components/GuestVisitSidebar'
+import GuestVisitConfirmModal from '../features/guests/components/GuestVisitConfirmModal'
+import { sectionKind } from '../features/navigation/lib/mobileNav'
 import { useAuthStore } from '../features/auth/store/authStore'
 import { useSessionConnection } from '../features/auth/hooks/useSessionConnection'
 import { useUIStore } from '../shared/store/uiStore'
 import { useAppViewportHeight } from '../shared/hooks/useAppViewportHeight'
 import { useMobileShell } from '../features/navigation/hooks/useMobileShell'
+
+// A coluna ao lado do trilho: a do servidor, a da visita (link de visitante)
+// ou, no resto, as DMs.
+const SIDEBARS: Record<string, () => React.JSX.Element> = {
+  server: ServerSidebar,
+  visit: GuestVisitSidebar
+}
 
 // Celular: a barra de canais/DMs (a <aside> depois da do trilho) ocupa o resto
 // da largura, sem a largura arrastável do desktop.
@@ -46,10 +58,11 @@ function AppShell(): React.JSX.Element {
   const quickSwitcherOpen = useUIStore((s) => s.quickSwitcherOpen)
   const setQuickSwitcherOpen = useUIStore((s) => s.setQuickSwitcherOpen)
   const location = useLocation()
-  const isServerPage = location.pathname.startsWith('/servers/')
+  const Sidebar = SIDEBARS[sectionKind(location.pathname)] ?? FriendsSidebar
   const hasToken = Boolean(useAuthStore((s) => s.accessToken))
 
   useSessionConnection(hasToken)
+  useGuestVisitsSync(hasToken)
   useAppViewportHeight()
   // Celular: uma coluna por vez (a lista ou o conteúdo). Desktop: as duas.
   const { columns, contentRef } = useMobileShell()
@@ -58,7 +71,7 @@ function AppShell(): React.JSX.Element {
     <div className="flex h-full">
       <div className={`${columns.nav} ${NAV_FILL}`}>
         <ServerRail />
-        {isServerPage ? <ServerSidebar /> : <FriendsSidebar />}
+        <Sidebar />
       </div>
       <div ref={contentRef} className={`flex min-w-0 flex-1 flex-col ${columns.content}`}>
         <ConnectionBanner />
@@ -77,7 +90,9 @@ function AppShell(): React.JSX.Element {
       <VideoBackgroundModal />
       <LevelUpScreen />
       <InviteConfirmModal />
+      <GuestVisitConfirmModal />
       <LevelUpMilestone />
+      <ServerLevelUpOverlay />
 
       <LevelUpBanner />
       <BoostBanner />

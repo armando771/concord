@@ -40,7 +40,7 @@ type PermissionSource interface {
 // Directory: nomes e regras de outros domínios que o convite mostra ou confere.
 type Directory interface {
 	Channel(ctx context.Context, id string) (*channel.Channel, error)
-	ServerName(ctx context.Context, id string) string
+	Server(ctx context.Context, id string) ServerInfo
 	DisplayName(ctx context.Context, userID string) string
 	IsBanned(ctx context.Context, serverID, userID string) bool
 }
@@ -117,6 +117,8 @@ func (s *Service) MoveGuest(ctx context.Context, userID, serverID, channelID str
 		return false
 	}
 	s.active.moveTo(userID, serverID, channelID)
+	p.ChannelID = channelID
+	s.announce(ctx, p)
 	return true
 }
 
@@ -140,6 +142,15 @@ func (s *Service) end(ctx context.Context, p Pass, reason string) {
 	s.active.remove(p)
 	s.calls.RemoveFromServerCalls(ctx, p.ServerID, p.UserID)
 	s.notify.SendToUser(p.UserID, endedEvent(p.ServerID, reason))
+}
+
+// announce manda o acesso (novo ou com o canal trocado) aos apps do usuário:
+// o trilho de visitas e a tela da call se atualizam em todos eles.
+func (s *Service) announce(ctx context.Context, p Pass) PassView {
+	view := s.passView(ctx, p)
+	data, _ := json.Marshal(map[string]any{"type": "guest:pass", "payload": view})
+	s.notify.SendToUser(p.UserID, data)
+	return view
 }
 
 func endedEvent(serverID, reason string) []byte {
@@ -256,7 +267,7 @@ func (s *Service) JoinWithAccount(ctx context.Context, token, userID string) (*P
 	if err != nil {
 		return nil, err
 	}
-	view := s.passView(ctx, p)
+	view := s.announce(ctx, p)
 	return &view, nil
 }
 

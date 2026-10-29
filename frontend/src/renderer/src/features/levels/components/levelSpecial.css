@@ -1,0 +1,88 @@
+/*
+ * Movimento dos selos especiais de nível (cores em lib/levelBadgeStyle.ts):
+ * estrelinhas que piscam no 13 e o brilho que passa no arco-íris do 24.
+ * O enfeite fica num ::before atrás do texto (isolation + z-index -1).
+ * E o número grande da cena do 24, com o degradê do orgulho correndo.
+ */
+.level-badge-special {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.level-badge-estrelas::before,
+.level-badge-orgulho::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.level-badge-estrelas::before {
+  background-image:
+    radial-gradient(circle at 22% 70%, #ffffff 0 0.6px, transparent 1.1px),
+    radial-gradient(circle at 62% 45%, #ffffff 0 0.6px, transparent 1.1px),
+    radial-gradient(circle at 80% 80%, #ffffff 0 0.5px, transparent 1px),
+    radial-gradient(circle at 6% 55%, #ffffff 0 0.5px, transparent 1px);
+  animation: level-badge-twinkle 2.2s ease-in-out infinite alternate;
+}
+
+.level-badge-orgulho::before {
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.55) 48%,
+    transparent 66%
+  );
+  background-size: 250% 100%;
+  animation: level-badge-shine 2.8s ease-in-out infinite;
+}
+
+.level-number-shine {
+  background-size: 200% 100%;
+  animation: level-number-shine 2.4s linear infinite;
+}
+
+@keyframes level-number-shine {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes level-badge-twinkle {
+  0% {
+    opacity: 0.15;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes level-badge-shine {
+  0% {
+    background-position: 130% 0;
+  }
+  60%,
+  100% {
+    background-position: -40% 0;
+  }
+}
+
+/* Sem movimento: as estrelinhas ficam acesas e o brilho some. */
+@media (prefers-reduced-motion: reduce) {
+  .level-badge-estrelas::before {
+    animation: none;
+    opacity: 0.8;
+  }
+  .level-badge-orgulho::before {
+    animation: none;
+    display: none;
+  }
+  .level-number-shine {
+    animation: none;
+  }
+}
