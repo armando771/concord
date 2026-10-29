@@ -49,6 +49,7 @@ var messageColumns = `
 	m.gif_url,
 	m.gif_metadata,
 	m.tts,
+	m.tts_voice_channel_id,
 	m.call_invite
 `
 
@@ -68,8 +69,8 @@ func (r *Repository) Create(ctx context.Context, msg *Message) error {
 	return r.db.QueryRow(
 		ctx,
 		`
-		INSERT INTO messages (id, author_id, channel_id, conversation_id, reply_to_id, content, system_kind, mention_everyone, sticker_id, gif_url, gif_metadata, call_invite, tts)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		INSERT INTO messages (id, author_id, channel_id, conversation_id, reply_to_id, content, system_kind, mention_everyone, sticker_id, gif_url, gif_metadata, call_invite, tts, tts_voice_channel_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING
 			id,
 			author_id,
@@ -92,6 +93,7 @@ func (r *Repository) Create(ctx context.Context, msg *Message) error {
 		gifMetaBytes,
 		callInviteBytes(msg.CallInvite),
 		msg.TTS,
+		msg.TTSVoiceChannelID,
 	).Scan(
 		&msg.ID,
 		&msg.AuthorID,

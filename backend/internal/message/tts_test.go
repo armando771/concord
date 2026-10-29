@@ -58,11 +58,78 @@ func TestTTSCooldownReleaseDevolveAVez(t *testing.T) {
 	}
 }
 
+// fakeTTSCalls: onde cada pessoa está em call (userID → canal de voz/servidor)
+// e quais canais são de voz.
+type fakeTTSCalls struct {
+	voice map[string]bool
+	where map[string][2]string
+}
+
+func (f fakeTTSCalls) IsVoiceChannel(_ context.Context, channelID string) bool {
+	return f.voice[channelID]
+}
+
+func (f fakeTTSCalls) VoiceChannelOf(userID string) (string, string, bool) {
+	w, ok := f.where[userID]
+	return w[0], w[1], ok
+}
+
 func ttsEnv(store *fakeInviteStore) (*TTSService, *captureCreates, *fakeClock) {
+	return ttsEnvWith(store, fakeTTSCalls{})
+}
+
+func ttsEnvWith(store *fakeInviteStore, calls TTSCalls) (*TTSService, *captureCreates, *fakeClock) {
 	pub := &captureCreates{}
 	clock := &fakeClock{now: time.Unix(1000, 0)}
-	s := &TTSService{store: store, channels: fakeRooms{}, convs: fakeRooms{}, publisher: pub, cooldown: newTTSCooldown(TTSCooldown, clock.Now)}
+	s := &TTSService{store: store, channels: fakeRooms{}, convs: fakeRooms{}, calls: calls, publisher: pub, cooldown: newTTSCooldown(TTSCooldown, clock.Now)}
 	return s, pub, clock
+}
+
+// Issue #384: a TTS só toca na call de onde veio. O servidor grava na mensagem
+// o canal de voz cuja call ouve.
+func TestTTSAlvoDaMensagemDeCanal(t *testing.T) {
+	calls := fakeTTSCalls{
+		voice: map[string]bool{"vozB": true},
+		where: map[string][2]string{
+			"ana":  {"vozA", "s1"},    // na call A do servidor s1
+			"caio": {"vozX", "outro"}, // call de outro servidor
+			"bia":  {"vozA", "s1"},
+		},
+	}
+	cases := []struct {
+		name, author, channel string
+		want                  *string
+	}{
+		{"canal de texto: a call do autor", "ana", "txt", strPtr("vozA")},
+		{"canal de texto, autor fora de call: ninguém", "dani", "txt", nil},
+		{"canal de texto, autor em call de outro servidor: ninguém", "caio", "txt", nil},
+		{"chat do canal de voz: a call daquele canal, mesmo com o autor em outra", "ana", "vozB", strPtr("vozB")},
+		{"chat do canal de voz, autor fora de call: a call do canal", "dani", "vozB", strPtr("vozB")},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s, pub, _ := ttsEnvWith(&fakeInviteStore{}, calls)
+			msg, err := s.SendToChannel(context.Background(), c.channel, c.author, "oi")
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := msg.TTSVoiceChannelID
+			if (got == nil) != (c.want == nil) || (got != nil && *got != *c.want) {
+				t.Fatalf("alvo = %v, want %v", got, c.want)
+			}
+			if len(pub.events) != 1 || pub.events[0].Message.TTSVoiceChannelID != got {
+				t.Fatalf("o evento precisa levar o alvo: %+v", pub.events)
+			}
+		})
+	}
+}
+
+func TestTTSDeConversaNaoTemCanalDeVozAlvo(t *testing.T) {
+	s, _, _ := ttsEnvWith(&fakeInviteStore{}, fakeTTSCalls{where: map[string][2]string{"ana": {"vozA", "s1"}}})
+	msg, err := s.SendToConversation(context.Background(), "dm1", "ana", "oi")
+	if err != nil || msg.TTSVoiceChannelID != nil {
+		t.Fatalf("msg = %+v, err = %v", msg, err)
+	}
 }
 
 func TestTTSSendToChannelPublicaMensagemTTSNoServidor(t *testing.T) {

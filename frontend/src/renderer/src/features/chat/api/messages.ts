@@ -94,6 +94,8 @@ export interface Message {
   call_invite?: CallInvite | null
   /** Mensagem /tts: lida em voz para quem está em call (features/tts). */
   tts?: boolean
+  /** Canal de voz cuja call ouve a TTS; ausente em DM e em TTS antiga (ninguém ouve em canal). */
+  tts_voice_channel_id?: string | null
   attachments?: Attachment[] | null
   sticker_id?: string | null
   sticker?: { id: string; server_id: string; name: string; content_type: string } | null
