@@ -1,7 +1,10 @@
 import { Track, type LocalParticipant } from 'livekit-client'
 
 // Microfone da chamada na sala do LiveKit: publica, muta e troca o
-// dispositivo. A track é do store (ele a cria e para); aqui só se publica.
+// dispositivo. A track é do store (ele a cria e para); a sala recebe uma cópia.
+// Quando o servidor tira a permissão de falar ("silenciar no servidor"), o
+// LiveKit despublica o microfone e o SDK para a track publicada: se fosse a do
+// store, ao liberar a pessoa voltaria a publicar uma track morta, em silêncio.
 
 export class MicPublisher {
   /** Microfone da chamada, guardado para publicar quando a permissão de falar chegar. */
@@ -16,7 +19,7 @@ export class MicPublisher {
 
   async publish(muted: boolean): Promise<void> {
     if (!this.track) return
-    const publication = await this.participant().publishTrack(this.track, {
+    const publication = await this.participant().publishTrack(this.track.clone(), {
       source: Track.Source.Microphone,
       name: 'microphone'
     })
@@ -42,7 +45,9 @@ export class MicPublisher {
     this.track = track
     const publication = this.participant().getTrackPublication(Track.Source.Microphone)
     if (!publication?.track) return
-    // userProvidedTrack: o SDK não para nem recria a track — o store é o dono.
-    await publication.track.replaceTrack(track, true)
+    const sent = publication.track.mediaStreamTrack
+    // userProvidedTrack: o SDK não para nem recria a track; a cópia antiga é nossa.
+    await publication.track.replaceTrack(track.clone(), true)
+    sent.stop()
   }
 }
