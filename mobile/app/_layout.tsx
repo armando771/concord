@@ -6,6 +6,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { useCurrentUser } from '../src/features/auth/hooks/useCurrentUser'
 import { useUnreadLive } from '../src/features/chat/hooks/useUnreadLive'
+import { useNotificationTap } from '../src/features/notifications/hooks/useNotificationTap'
+import { usePushRegistration } from '../src/features/notifications/hooks/usePushRegistration'
 import { useResetOnSignOut } from '../src/features/servers/hooks/useResetOnSignOut'
 import { useNetworkWatcher, useRealtimeSession } from '../src/features/auth/hooks/useRealtimeSession'
 import { bindAuthSession } from '../src/features/auth/lib/bindAuthSession'
@@ -23,6 +25,8 @@ function Gate() {
   useCurrentUser()
   useResetOnSignOut()
   useUnreadLive()
+  usePushRegistration()
+  useNotificationTap()
 
   useEffect(() => {
     void useAuthStore.getState().restore()

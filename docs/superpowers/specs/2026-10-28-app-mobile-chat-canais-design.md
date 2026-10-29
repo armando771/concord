@@ -27,7 +27,7 @@ recebe mensagens em tempo real e envia texto.
 - **`FlatList` invertida**, sem lib nova (FlashList só se medirmos problema).
 - **Tempo real pelo WebSocket já pronto** (`onWsEvent`): sala `channel:<id>` ao abrir,
   sai ao fechar; a resposta do POST e o evento `message:create` se fundem por `id`.
-- Dados do servidor em stores Zustand pequenos por responsabilidade (padrão do ADR 0015).
+- Dados do servidor em stores Zustand pequenos por responsabilidade (padrão do ADR 0021).
   Sem dependência nova.
 
 ## Arquitetura (arquivos e pastas)

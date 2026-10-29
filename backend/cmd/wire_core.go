@@ -9,6 +9,7 @@ import (
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/friendship"
 	"gin-quickstart/backend/internal/permission"
+	"gin-quickstart/backend/internal/push"
 	"gin-quickstart/backend/internal/platform/websocket"
 	"gin-quickstart/backend/internal/role"
 	"gin-quickstart/backend/internal/server"
@@ -56,7 +57,7 @@ func (a *app) wireCore() {
 	a.moderationService = server.ModerationService(serverRepository, a.permissionService, a.hub)
 	a.nicknameService = server.NicknameService(serverRepository, a.permissionService, a.hub)
 
-	a.friendAccepted = friendship.WithAcceptHook(a.hub)
+	a.friendAccepted = friendship.WithAcceptHook(push.WrapFriends(a.hub, a.pushTap))
 	a.friendshipService = friendship.FriendshipService(friendship.FriendshipRepository(a.db), a.userService, a.friendAccepted)
 	friendshipHandler := friendship.FriendshipHandler(a.friendshipService)
 
