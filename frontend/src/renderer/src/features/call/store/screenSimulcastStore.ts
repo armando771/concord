@@ -1,18 +1,18 @@
 import { create } from 'zustand'
-import { loadScreenSimulcast, saveScreenSimulcast } from '../lib/screenSimulcast'
+import { loadScreenSimulcast, saveScreenSimulcast, type SimulcastMode } from '../lib/screenSimulcast'
 
-// "Enviar também em 720p" (salvo neste dispositivo, desmarcado por padrão).
-// Lido ao publicar a tela.
+// "Enviar também em 720p": Automático (padrão), Ligada ou Desligada, salvo neste
+// dispositivo. Lido ao publicar a tela.
 
 interface ScreenSimulcastState {
-  enabled: boolean
-  setEnabled: (enabled: boolean) => void
+  mode: SimulcastMode
+  setMode: (mode: SimulcastMode) => void
 }
 
 export const useScreenSimulcastStore = create<ScreenSimulcastState>((set) => ({
-  enabled: loadScreenSimulcast(),
-  setEnabled: (enabled) => {
-    saveScreenSimulcast(enabled)
-    set({ enabled })
+  mode: loadScreenSimulcast(),
+  setMode: (mode) => {
+    saveScreenSimulcast(mode)
+    set({ mode })
   }
 }))
