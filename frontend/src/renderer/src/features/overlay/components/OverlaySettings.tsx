@@ -4,7 +4,7 @@ import { useOverlayPrefsStore } from '../store/overlayPrefsStore'
 import OverlayShortcutField from './OverlayShortcutField'
 
 /** Configurações → Aplicativo → Overlay (só onde há overlay, ex.: Windows). */
-function OverlaySettings(): React.JSX.Element {
+function OverlaySettings({ show }: { show: boolean }): React.JSX.Element | null {
   const overlayEnabled = useOverlayPrefsStore((s) => s.enabled)
   const setOverlayEnabled = useOverlayPrefsStore((s) => s.setEnabled)
   const overlayOpacity = useOverlayPrefsStore((s) => s.opacity)
@@ -14,6 +14,7 @@ function OverlaySettings(): React.JSX.Element {
   )
   const resetOverlayLayout = useOverlayPrefsStore((s) => s.resetLayout)
 
+  if (!show) return null
   return (
     <div className="rounded-xl border border-subtle bg-fg/5 p-4">
       <h3 className="mb-3 text-ds-sm font-medium text-gray-400">Overlay</h3>
