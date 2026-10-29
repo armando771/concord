@@ -144,7 +144,7 @@ describe('screenStatsView — quem transmite', () => {
       { label: 'Quadros', value: '59 de 60 fps' },
       { label: 'Resolução', value: '1920×1080' },
       { label: 'Taxa', value: '8 Mbps' },
-      { label: 'Codec', value: 'H264' },
+      { label: 'Codec', value: 'H.264 · placa de vídeo' },
       { label: 'Codificador', value: 'Hardware · MediaFoundationVideoEncodeAccelerator' },
       { label: 'Limitação', value: 'Nenhuma' },
       { label: 'QP médio', value: '26' }
@@ -176,7 +176,7 @@ describe('screenStatsView — quem transmite', () => {
     )
     expect(value(view, 'Quadros')).toBe('20 de 30 fps')
     expect(value(view, 'Taxa')).toBe('2 Mbps')
-    expect(value(view, 'Codec')).toBe('VP8')
+    expect(value(view, 'Codec')).toBe('VP8 · processador')
     expect(value(view, 'Codificador')).toBe('Software · libvpx')
     expect(value(view, 'Limitação')).toBe('CPU')
     expect(value(view, 'QP médio')).toBeUndefined()
@@ -193,6 +193,18 @@ describe('screenStatsView — quem transmite', () => {
     )
     expect(value(view, 'Limitação')).toBe('Banda')
     expect(value(view, 'Taxa')).toBe('0,2 Mbps')
+  })
+
+  it('H.265 na placa de vídeo: codec e onde codifica', () => {
+    const h265: Stat = { id: 'c3', type: 'codec', mimeType: 'video/H265' }
+    const { view } = screenStatsView(
+      sender([
+        h265,
+        outbound({ codecId: 'c3', encoderImplementation: 'MediaFoundationVideoEncodeAccelerator' })
+      ]),
+      null
+    )
+    expect(value(view, 'Codec')).toBe('H.265 · placa de vídeo')
   })
 
   it('codec de reserva publicando: lê o envio que está ativo', () => {
@@ -216,7 +228,7 @@ describe('screenStatsView — quem transmite', () => {
       null
     )
     expect(view.status).toBe('Envio pausado: ninguém está vendo a live agora')
-    expect(value(view, 'Codec')).toBe('H264')
+    expect(value(view, 'Codec')).toBe('H.264')
     expect(value(view, 'Quadros')).toBe('0 de 60 fps')
   })
 
@@ -280,7 +292,7 @@ describe('screenStatsView — quem assiste', () => {
       { label: 'Quadros', value: '30 fps' },
       { label: 'Resolução', value: '1920×1080' },
       { label: 'Taxa', value: '4 Mbps' },
-      { label: 'Codec', value: 'H264' },
+      { label: 'Codec', value: 'H.264 · placa de vídeo' },
       { label: 'Decodificador', value: 'Hardware · D3D11VideoDecoder' },
       { label: 'Perda', value: '0,5%' },
       { label: 'Jitter', value: '12 ms' },

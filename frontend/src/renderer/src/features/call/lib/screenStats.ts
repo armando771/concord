@@ -95,10 +95,18 @@ export function codecImplementation(
   return kind ? `${kind} · ${name}` : name
 }
 
-function codecName(report: RTCStatsReport, codecId: unknown): string {
-  const codec = typeof codecId === 'string' ? (report.get(codecId) as Stat | undefined) : undefined
+const CODEC_NAMES: Record<string, string> = { H264: 'H.264', H265: 'H.265' }
+const WHERE: Record<string, string> = { Hardware: 'placa de vídeo', Software: 'processador' }
+
+/** "H.265 · placa de vídeo": o codec em uso e onde ele roda (quando o navegador conta). */
+function codecName(report: RTCStatsReport, stat: Stat, implementation: string): string {
+  const codec =
+    typeof stat.codecId === 'string' ? (report.get(stat.codecId) as Stat | undefined) : undefined
   const mime = text(codec?.mimeType)
-  return mime ? mime.slice(mime.indexOf('/') + 1).toUpperCase() : '—'
+  if (!mime) return '—'
+  const name = mime.slice(mime.indexOf('/') + 1).toUpperCase()
+  const where = WHERE[implementation.split(' · ')[0]]
+  return `${CODEC_NAMES[name] ?? name}${where ? ` · ${where}` : ''}`
 }
 
 /**
@@ -174,19 +182,17 @@ function senderRows(
   prev: ScreenStatsSample | null
 ): StatRow[] {
   const requested = input.requestedFps === null ? '' : ` de ${input.requestedFps}`
+  const encoder = codecImplementation(
+    text(stat.encoderImplementation),
+    stat.powerEfficientEncoder as boolean | undefined
+  )
   return [
     ...qualityRows(input.quality),
     { label: 'Quadros', value: `${fps(stat)}${requested} fps` },
     { label: 'Resolução', value: resolution(stat) },
     { label: 'Taxa', value: bitrate(now, prev) },
-    { label: 'Codec', value: codecName(input.report, stat.codecId) },
-    {
-      label: 'Codificador',
-      value: codecImplementation(
-        text(stat.encoderImplementation),
-        stat.powerEfficientEncoder as boolean | undefined
-      )
-    },
+    { label: 'Codec', value: codecName(input.report, stat, encoder) },
+    { label: 'Codificador', value: encoder },
     { label: 'Limitação', value: limitationLabel(text(stat.qualityLimitationReason)) },
     ...averageQp(now, prev)
   ]
@@ -212,18 +218,16 @@ function receiverRows(
   prev: ScreenStatsSample | null
 ): StatRow[] {
   const jitter = num(stat.jitter)
+  const decoder = codecImplementation(
+    text(stat.decoderImplementation),
+    stat.powerEfficientDecoder as boolean | undefined
+  )
   return [
     { label: 'Quadros', value: `${fps(stat)} fps` },
     { label: 'Resolução', value: resolution(stat) },
     { label: 'Taxa', value: bitrate(now, prev) },
-    { label: 'Codec', value: codecName(input.report, stat.codecId) },
-    {
-      label: 'Decodificador',
-      value: codecImplementation(
-        text(stat.decoderImplementation),
-        stat.powerEfficientDecoder as boolean | undefined
-      )
-    },
+    { label: 'Codec', value: codecName(input.report, stat, decoder) },
+    { label: 'Decodificador', value: decoder },
     { label: 'Perda', value: lossPercent(now, prev) },
     { label: 'Jitter', value: jitter === null ? '—' : `${Math.round(jitter * 1000)} ms` },
     { label: 'Descartados', value: String(num(stat.framesDropped) ?? '—') },

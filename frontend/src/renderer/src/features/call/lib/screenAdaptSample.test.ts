@@ -5,9 +5,15 @@ type Stat = Record<string, unknown> & { id: string; type: string }
 const report = (...stats: Stat[]): RTCStatsReport =>
   new Map(stats.map((s) => [s.id, s])) as unknown as RTCStatsReport
 
-const source = (fps: number): Stat => ({ id: 's1', type: 'media-source', kind: 'video', framesPerSecond: fps })
+const source = (fps: number): Stat => ({
+  id: 's1',
+  type: 'media-source',
+  kind: 'video',
+  framesPerSecond: fps
+})
 const h264: Stat = { id: 'c1', type: 'codec', mimeType: 'video/H264' }
 const av1: Stat = { id: 'c2', type: 'codec', mimeType: 'video/AV1' }
+const h265: Stat = { id: 'c3', type: 'codec', mimeType: 'video/H265' }
 function out(extra: Record<string, unknown>): Stat {
   return {
     id: 'o1',
@@ -29,14 +35,17 @@ describe('adaptSample', () => {
   it('folgado: fps da fonte saindo e banda do preset', () => {
     expect(adaptSample(report(source(60), h264, out({})), BUDGET)).toEqual({
       limited: null,
-      softwareAv1: false
+      softwareCodec: null
     })
   })
 
   it('o navegador diz que limitou por CPU ou banda', () => {
-    expect(adaptSample(report(source(60), out({ qualityLimitationReason: 'cpu' })), BUDGET)?.limited).toBe('cpu')
     expect(
-      adaptSample(report(source(60), out({ qualityLimitationReason: 'bandwidth' })), BUDGET)?.limited
+      adaptSample(report(source(60), out({ qualityLimitationReason: 'cpu' })), BUDGET)?.limited
+    ).toBe('cpu')
+    expect(
+      adaptSample(report(source(60), out({ qualityLimitationReason: 'bandwidth' })), BUDGET)
+        ?.limited
     ).toBe('bandwidth')
   })
 
@@ -52,9 +61,12 @@ describe('adaptSample', () => {
   })
 
   it('banda estimada bem abaixo do preset: banda, mesmo com fps ok', () => {
-    expect(adaptSample(report(source(30), out({ framesPerSecond: 30, targetBitrate: 3_000_000 })), BUDGET)?.limited).toBe(
-      'bandwidth'
-    )
+    expect(
+      adaptSample(
+        report(source(30), out({ framesPerSecond: 30, targetBitrate: 3_000_000 })),
+        BUDGET
+      )?.limited
+    ).toBe('bandwidth')
   })
 
   it('envio pausado (ninguém vendo) ou sem envio: sem amostra', () => {
@@ -62,10 +74,30 @@ describe('adaptSample', () => {
     expect(adaptSample(report(), BUDGET)).toBeNull()
   })
 
-  it('AV1 caindo no encoder por software é avisado', () => {
-    const soft = out({ codecId: 'c2', encoderImplementation: 'libaom', powerEfficientEncoder: false })
-    expect(adaptSample(report(source(60), av1, soft), BUDGET)?.softwareAv1).toBe(true)
-    const hard = out({ codecId: 'c2', encoderImplementation: 'MediaFoundationVideoEncodeAccelerator', powerEfficientEncoder: true })
-    expect(adaptSample(report(source(60), av1, hard), BUDGET)?.softwareAv1).toBe(false)
+  it('AV1 ou H.265 caindo no encoder por software é avisado (qual codec)', () => {
+    const soft = out({
+      codecId: 'c2',
+      encoderImplementation: 'libaom',
+      powerEfficientEncoder: false
+    })
+    expect(adaptSample(report(source(60), av1, soft), BUDGET)?.softwareCodec).toBe('av1')
+    const hard = out({
+      codecId: 'c2',
+      encoderImplementation: 'MediaFoundationVideoEncodeAccelerator',
+      powerEfficientEncoder: true
+    })
+    expect(adaptSample(report(source(60), av1, hard), BUDGET)?.softwareCodec).toBeNull()
+    const softHevc = out({ codecId: 'c3', powerEfficientEncoder: false })
+    expect(adaptSample(report(source(60), h265, softHevc), BUDGET)?.softwareCodec).toBe('h265')
+    const fallback = out({
+      codecId: 'c3',
+      encoderImplementation: 'SimulcastEncoderAdapter (fallback)'
+    })
+    expect(adaptSample(report(source(60), h265, fallback), BUDGET)?.softwareCodec).toBe('h265')
+  })
+
+  it('H.264 no processador não é avisado (é a reserva esperada)', () => {
+    const soft = out({ encoderImplementation: 'OpenH264', powerEfficientEncoder: false })
+    expect(adaptSample(report(source(60), h264, soft), BUDGET)?.softwareCodec).toBeNull()
   })
 })

@@ -1,4 +1,4 @@
-import { adaptSample } from './screenAdaptSample'
+import { adaptSample, type HardwareOnlyCodec } from './screenAdaptSample'
 import { ADAPT, adaptTick, initialAdapt, type AdaptState } from './screenAdaptController'
 import { qualityLabel, qualityLadder } from './screenQualityLadder'
 import { screenEncoding, type ScreenShareQuality } from './screenShareQuality'
@@ -13,7 +13,8 @@ export interface ScreenAdaptDeps {
   /** Aplica um degrau ao vivo (captura + encodings), sem despublicar. */
   apply(quality: ScreenShareQuality): Promise<void>
   report(view: ScreenAdaptView): void
-  softwareAv1(): void
+  /** Uma live em AV1/H.265 saiu pelo processador: as próximas evitam o codec. */
+  softwareCodec(codec: HardwareOnlyCodec): void
 }
 
 export class ScreenAdapt {
@@ -84,7 +85,7 @@ export class ScreenAdapt {
     const report = await this.deps.read()
     if (!report || !this.timer) return
     const sample = adaptSample(report, screenEncoding(this.effective(), this.source).maxBitrate)
-    if (sample?.softwareAv1) this.deps.softwareAv1()
+    if (sample?.softwareCodec) this.deps.softwareCodec(sample.softwareCodec)
     const before = this.state
     this.state = adaptTick(before, sample, this.ladder.length)
     if (this.state.step !== before.step) {

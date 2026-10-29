@@ -7,14 +7,12 @@ import {
   streamQuality,
   type ScreenShareQuality
 } from './screenShareQuality'
+import { loadScreenCodec, screenCodecOptions } from './screenCodec'
 import {
-  av1HardwareEncode,
-  canEncodeH264,
-  loadScreenCodec,
-  markAv1Software,
-  screenCodecOptions,
+  detectScreenCodecs,
+  markSoftwareCodec,
   type ScreenCodecSupport
-} from './screenCodec'
+} from './screenCodecSupport'
 import { loadScreenSimulcast, usesSimulcast } from './screenSimulcast'
 import { ScreenAdapt } from './screenAdapt'
 import { senderReports } from './screenStatsSource'
@@ -25,16 +23,13 @@ import { useScreenAdaptStore, type ScreenAdaptView } from '../store/screenAdaptS
 // delega para cá (o livekit.ts não cresce com a tela). Ver docs/adr/0019.
 
 /** O que a placa de vídeo/navegador codifica no tamanho da live. */
-async function codecSupport(
+function codecSupport(
   quality: ScreenShareQuality,
   settings: MediaTrackSettings
 ): Promise<ScreenCodecSupport> {
   const { width, height } = captureSize(quality.resolution, settings)
   const bitrate = screenEncoding(quality, settings).maxBitrate
-  return {
-    h264: canEncodeH264(),
-    av1Hardware: await av1HardwareEncode({ width, height, bitrate, framerate: quality.frameRate })
-  }
+  return detectScreenCodecs({ width, height, bitrate, framerate: quality.frameRate })
 }
 
 export class ScreenSender {
@@ -118,7 +113,7 @@ export class ScreenSender {
             )
           ),
         report: (view) => this.report(view),
-        softwareAv1: markAv1Software
+        softwareCodec: markSoftwareCodec
       },
       quality,
       source,

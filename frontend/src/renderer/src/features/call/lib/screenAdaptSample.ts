@@ -3,10 +3,13 @@
 
 export type Limitation = 'cpu' | 'bandwidth'
 
+/** Codecs que só valem na placa de vídeo. */
+export type HardwareOnlyCodec = 'av1' | 'h265'
+
 export interface AdaptSample {
   limited: Limitation | null
-  /** Live em AV1 caiu no encoder por software (pesado): não usar AV1 de novo. */
-  softwareAv1: boolean
+  /** Live em AV1/H.265 caiu no encoder por software (pesado): não usar esse codec de novo. */
+  softwareCodec: HardwareOnlyCodec | null
 }
 
 type Stat = Record<string, unknown>
@@ -46,11 +49,19 @@ function limitation(out: Stat, source: Stat | undefined, budget: number): Limita
   return target < budget * BANDWIDTH_DROP_RATIO ? 'bandwidth' : 'cpu'
 }
 
-function isSoftwareAv1(report: RTCStatsReport, out: Stat): boolean {
+const HARDWARE_ONLY: Record<string, HardwareOnlyCodec> = {
+  'video/av1': 'av1',
+  'video/h265': 'h265'
+}
+
+function softwareCodec(report: RTCStatsReport, out: Stat): HardwareOnlyCodec | null {
   const codec = report.get(out.codecId as string) as Stat | undefined
-  if (String(codec?.mimeType).toLowerCase() !== 'video/av1') return false
-  if (out.powerEfficientEncoder === false) return true
+  const hardwareOnly = HARDWARE_ONLY[String(codec?.mimeType).toLowerCase()]
+  if (!hardwareOnly) return null
+  if (out.powerEfficientEncoder === false) return hardwareOnly
   return /libaom|software|fallback/i.test(String(out.encoderImplementation ?? ''))
+    ? hardwareOnly
+    : null
 }
 
 /** null = envio pausado (ninguém vendo) ou ainda sem envio: não conta. */
@@ -58,5 +69,5 @@ export function adaptSample(report: RTCStatsReport, budgetBps: number): AdaptSam
   const out = activeVideo(report)
   if (!out) return null
   const source = report.get(out.mediaSourceId as string) as Stat | undefined
-  return { limited: limitation(out, source, budgetBps), softwareAv1: isSoftwareAv1(report, out) }
+  return { limited: limitation(out, source, budgetBps), softwareCodec: softwareCodec(report, out) }
 }

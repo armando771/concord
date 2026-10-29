@@ -4,10 +4,22 @@ import { ADAPT } from './screenAdaptController'
 import type { ScreenShareQuality } from './screenShareQuality'
 
 const limited = new Map([
-  ['o1', { id: 'o1', type: 'outbound-rtp', kind: 'video', bytesSent: 1, qualityLimitationReason: 'bandwidth' }]
+  [
+    'o1',
+    {
+      id: 'o1',
+      type: 'outbound-rtp',
+      kind: 'video',
+      bytesSent: 1,
+      qualityLimitationReason: 'bandwidth'
+    }
+  ]
 ]) as unknown as RTCStatsReport
 const fine = new Map([
-  ['o1', { id: 'o1', type: 'outbound-rtp', kind: 'video', bytesSent: 1, qualityLimitationReason: 'none' }]
+  [
+    'o1',
+    { id: 'o1', type: 'outbound-rtp', kind: 'video', bytesSent: 1, qualityLimitationReason: 'none' }
+  ]
 ]) as unknown as RTCStatsReport
 
 function deps(reports: () => RTCStatsReport | null): ScreenAdaptDeps & {
@@ -21,7 +33,7 @@ function deps(reports: () => RTCStatsReport | null): ScreenAdaptDeps & {
       applied.push(q)
     }),
     report: vi.fn(),
-    softwareAv1: vi.fn()
+    softwareCodec: vi.fn()
   }
 }
 
@@ -89,14 +101,24 @@ describe('ScreenAdapt', () => {
   it('AV1 caindo no software é repassado; parado, não lê mais', async () => {
     const soft = new Map([
       ['c', { id: 'c', type: 'codec', mimeType: 'video/AV1' }],
-      ['o1', { id: 'o1', type: 'outbound-rtp', kind: 'video', codecId: 'c', bytesSent: 1, powerEfficientEncoder: false }]
+      [
+        'o1',
+        {
+          id: 'o1',
+          type: 'outbound-rtp',
+          kind: 'video',
+          codecId: 'c',
+          bytesSent: 1,
+          powerEfficientEncoder: false
+        }
+      ]
     ]) as unknown as RTCStatsReport
     const read = vi.fn(async () => soft)
     const d = { ...deps(() => soft), read }
     const adapt = new ScreenAdapt(d, chosen, fullHd, false)
     adapt.start()
     await vi.advanceTimersByTimeAsync(ADAPT.tickMs)
-    expect(d.softwareAv1).toHaveBeenCalled()
+    expect(d.softwareCodec).toHaveBeenCalledWith('av1')
     adapt.stop()
     const calls = read.mock.calls.length
     await vi.advanceTimersByTimeAsync(ADAPT.tickMs * 3)

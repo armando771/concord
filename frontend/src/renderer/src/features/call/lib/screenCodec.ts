@@ -1,107 +1,70 @@
-// Codec da live (vídeo da tela). Automático: AV1 se a placa de vídeo codifica
-// AV1 (melhor imagem com a mesma banda, sem pesar a CPU), com H.264 de reserva
-// para quem não decodifica AV1; senão H.264 (placa de vídeo ou OpenH264), com
-// VP8 de reserva; VP8 só sem H.264. AV1 por software nunca (pesado demais).
-// "H.264" e "VP8" em Avançado fixam o codec. Ver docs/adr/0015 e 0019.
+// Codec da live (vídeo da tela). Automático: sempre na placa de vídeo, do
+// melhor para o pior — AV1 → H.265 → H.264 —, depois H.264 pelo processador e,
+// por último, VP8. AV1 e H.265 por software nunca (pesados demais). AV1/H.265
+// levam H.264 de reserva (todo mundo decodifica); H.264 leva VP8. Escolher um
+// codec em Avançado começa a ordem por ele. Ver docs/adr/0015 e 0019.
 
-export type ScreenCodecPreference = 'auto' | 'h264' | 'vp8'
+import type { ScreenCodecSupport, ScreenVideoCodec } from './screenCodecSupport'
+
+export type ScreenCodecPreference = 'auto' | ScreenVideoCodec
 
 export const SCREEN_CODEC_KEY = 'salinha:screen-share-codec'
-/** Uma live em AV1 caiu no encoder por software: as próximas vão em H.264. */
-const AV1_SOFTWARE_KEY = 'salinha:screen-av1-software'
 
 export interface ScreenCodecOptions {
-  videoCodec: 'av1' | 'h264' | 'vp8'
+  videoCodec: ScreenVideoCodec
   backupCodec: false | { codec: 'h264' | 'vp8' }
 }
 
-export interface ScreenCodecSupport {
-  /** A placa de vídeo codifica AV1 no modo que o LiveKit usa para tela. */
-  av1Hardware: boolean
-  /** O navegador codifica H.264 (placa de vídeo ou software). */
-  h264: boolean
-}
+/** Do melhor para o pior. */
+export const CODEC_ORDER: readonly ScreenVideoCodec[] = ['av1', 'h265', 'h264', 'vp8']
 
-type SenderCapabilities = { codecs: { mimeType: string }[] } | null
-
-const senderCapabilities = (): SenderCapabilities =>
-  globalThis.RTCRtpSender?.getCapabilities?.('video') ?? null
-
-const hasCodec = (capabilities: SenderCapabilities, mime: string): boolean =>
-  !!capabilities?.codecs.some((codec) => codec.mimeType.toLowerCase() === mime)
-
-/** O navegador sabe codificar H.264 (Chromium/Electron sim; algumas builds não). */
-export function canEncodeH264(capabilities: SenderCapabilities = senderCapabilities()): boolean {
-  return hasCodec(capabilities, 'video/h264')
-}
-
-interface EncodingInfoApi {
-  encodingInfo(config: unknown): Promise<{ supported: boolean; powerEfficient: boolean }>
-}
-
-/**
- * A placa de vídeo codifica AV1 para WebRTC no tamanho da live? O LiveKit
- * publica tela em AV1 com L1T3, então a pergunta inclui o modo; powerEfficient
- * = hardware (o Chromium responde pelo encoder da GPU).
- */
-export async function av1HardwareEncode(
-  video: { width: number; height: number; bitrate: number; framerate: number },
-  api: EncodingInfoApi | undefined = globalThis.navigator?.mediaCapabilities as
-    | EncodingInfoApi
-    | undefined,
-  capabilities: SenderCapabilities = senderCapabilities()
-): Promise<boolean> {
-  if (readFlag(AV1_SOFTWARE_KEY) || !api || !hasCodec(capabilities, 'video/av1')) return false
-  try {
-    const info = await api.encodingInfo({
-      type: 'webrtc',
-      video: { contentType: 'video/AV1', scalabilityMode: 'L1T3', ...video }
-    })
-    return info.supported && info.powerEfficient
-  } catch {
-    return false
+/** O que dá para usar: AV1/H.265 só na placa; H.264 também no processador; VP8 sempre. */
+export function codecChoices(support: ScreenCodecSupport): Record<ScreenVideoCodec, boolean> {
+  return {
+    av1: support.av1 === 'hardware',
+    h265: support.h265 === 'hardware',
+    h264: support.h264 !== null,
+    vp8: true
   }
 }
 
-const VP8_ONLY: ScreenCodecOptions = { videoCodec: 'vp8', backupCodec: false }
+function backupFor(
+  codec: ScreenVideoCodec,
+  support: ScreenCodecSupport
+): ScreenCodecOptions['backupCodec'] {
+  if (codec === 'vp8') return false
+  if (codec === 'h264' || support.h264 === null) return { codec: 'vp8' }
+  return { codec: 'h264' }
+}
 
-/** `simulcast`: com a camada extra de 720p vai H.264 (AV1 de tela é uma camada só no SDK). */
+/** `simulcast`: com a camada extra de 720p pula o AV1 (o SDK publica AV1 de tela numa camada só). */
 export function screenCodecOptions(
   preference: ScreenCodecPreference,
   support: ScreenCodecSupport,
   simulcast = false
 ): ScreenCodecOptions {
-  if (preference === 'vp8' || !support.h264) return VP8_ONLY
-  if (preference === 'auto' && support.av1Hardware && !simulcast)
-    return { videoCodec: 'av1', backupCodec: { codec: 'h264' } }
-  return { videoCodec: 'h264', backupCodec: { codec: 'vp8' } }
+  const usable = codecChoices(support)
+  if (simulcast) usable.av1 = false
+  const start = preference === 'auto' ? 0 : CODEC_ORDER.indexOf(preference)
+  const videoCodec = CODEC_ORDER.slice(start).find((codec) => usable[codec]) ?? 'vp8'
+  return { videoCodec, backupCodec: backupFor(videoCodec, support) }
 }
 
-function readFlag(key: string): string | null {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-function writeFlag(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value)
-  } catch {
-    /* Compartilhar continua funcionando sem armazenamento local. */
-  }
-}
-
-export function markAv1Software(): void {
-  writeFlag(AV1_SOFTWARE_KEY, '1')
-}
+const PREFERENCES: readonly string[] = ['auto', ...CODEC_ORDER]
 
 export function loadScreenCodec(): ScreenCodecPreference {
-  const value = readFlag(SCREEN_CODEC_KEY)
-  return value === 'vp8' || value === 'h264' ? value : 'auto'
+  try {
+    const value = localStorage.getItem(SCREEN_CODEC_KEY)
+    return value && PREFERENCES.includes(value) ? (value as ScreenCodecPreference) : 'auto'
+  } catch {
+    return 'auto'
+  }
 }
 
 export function saveScreenCodec(preference: ScreenCodecPreference): void {
-  writeFlag(SCREEN_CODEC_KEY, preference)
+  try {
+    localStorage.setItem(SCREEN_CODEC_KEY, preference)
+  } catch {
+    /* Compartilhar continua funcionando sem armazenamento local. */
+  }
 }

@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { ADAPT, adaptTick, initialAdapt, type AdaptState } from './screenAdaptController'
 import type { AdaptSample } from './screenAdaptSample'
 
-const ok: AdaptSample = { limited: null, softwareAv1: false }
-const bw: AdaptSample = { limited: 'bandwidth', softwareAv1: false }
-const cpu: AdaptSample = { limited: 'cpu', softwareAv1: false }
+const ok: AdaptSample = { limited: null, softwareCodec: null }
+const bw: AdaptSample = { limited: 'bandwidth', softwareCodec: null }
+const cpu: AdaptSample = { limited: 'cpu', softwareCodec: null }
 
 /** Roda amostras e devolve o estado final. */
 function run(state: AdaptState, samples: (AdaptSample | null)[], steps = 3): AdaptState {
   return samples.reduce((s, sample) => adaptTick(s, sample, steps), state)
 }
-const times = <T,>(n: number, value: T): T[] => Array.from({ length: n }, () => value)
+const times = <T>(n: number, value: T): T[] => Array.from({ length: n }, () => value)
 const ready = (): AdaptState => ({ ...initialAdapt(), hold: 0 })
 
 describe('adaptTick', () => {

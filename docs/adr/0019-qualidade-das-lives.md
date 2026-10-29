@@ -67,13 +67,9 @@ teto do preset (`computeStartTargetBitrate`); o 180p vinha do
 fps menor, na resolução do preset. Bitrate mínimo por preset não foi
 configurado: só existe por SDP munging (`x-google-min-bitrate`), frágil.
 
-**Codec** (`lib/screenCodec.ts`): Automático = AV1 se a placa de vídeo codifica
-AV1 para WebRTC (`mediaCapabilities.encodingInfo` com `type: 'webrtc'`,
-`scalabilityMode: 'L1T3'` — o modo que o LiveKit usa em tela — e
-`powerEfficient`), com H.264 de reserva; senão H.264 (placa de vídeo quando
-houver, ou OpenH264), com VP8 de reserva; VP8 só sem H.264. AV1 por software
-nunca. Se uma live em AV1 cair no encoder por software, as próximas vão em
-H.264 (fica salvo no aparelho). Avançado: Automático / H.264 / VP8.
+**Codec** (`lib/screenCodec.ts`, detecção em `lib/screenCodecSupport.ts`):
+sempre na placa de vídeo, do melhor para o pior. Ver a emenda "Ordem de
+codecs" abaixo.
 
 **Placa de vídeo** (`main/screen/chromiumFeatures.ts`, uma chamada só de
 `--enable-features`): no Chromium atual o H.264 por Media Foundation
@@ -89,11 +85,67 @@ registra `video_decode`/`video_encode` em `gpu.log` e o painel mostra
 **Camada extra de 720p** (opcional, desmarcada; `lib/screenSimulcast.ts`):
 com 1080p ou Fonte, publica também 720p30 a 3 Mbps; quem tem internet fraca
 recebe 720p. Com ela o envio principal não desce de 1080p (troca o fps) e o
-codec é H.264 (o SDK publica AV1 de tela numa camada só).
+codec pula o AV1 (o SDK publica AV1 de tela numa camada só): H.265 ou H.264.
 
 **Painel "Sua transmissão"**: junta o envio do codec de reserva e mostra
 "Envio pausado: ninguém está vendo a live agora" quando o dynacast pausa a
 camada (antes: "Ainda sem dados"), e a linha Qualidade.
+
+## Emenda (2026-10-28): ordem de codecs, com HEVC/H.265
+
+Decisão do dono: "o padrão dos encoders é sempre pela placa de vídeo e do
+melhor para o pior: se não tem suporte para o melhor, tenta o segundo melhor".
+
+**Ordem do Automático**: AV1 na placa → H.265 na placa → H.264 na placa →
+H.264 no processador (OpenH264) → VP8. AV1 e H.265 por software nunca.
+Escolher um codec em Avançado começa a ordem por ele (se a placa não codifica,
+desce para o próximo; nunca sobe).
+
+**Detecção** (`lib/screenCodecSupport.ts`, cache por sessão por tamanho/fps/
+bitrate): o codec precisa estar em `RTCRtpSender.getCapabilities('video')` e
+`mediaCapabilities.encodingInfo({ type: 'webrtc', … })` no tamanho da live
+responder `supported` (`powerEfficient` = placa de vídeo). AV1 é perguntado com
+`scalabilityMode: 'L1T3'` (o modo que o LiveKit usa em tela); H.265 e H.264 sem
+modo (o SDK não usa SVC neles). Sem a API ou com erro, conta como processador.
+Se uma live em AV1 ou H.265 cair no encoder por software
+(`powerEfficientEncoder: false`, `libaom`/`fallback`), fica salvo no aparelho
+(`salinha:screen-<codec>-software`) e as próximas pulam o codec.
+
+**H.265 no WebRTC** (Electron 44 = Chromium 152): `WebRtcAllowH265Send` e
+`WebRtcAllowH265Receive` vêm ligados por padrão (desde o Chromium 136), e
+`PlatformHEVCEncoderSupport` também, mas só existe no Windows/macOS/Android:
+no Linux o Chromium não codifica H.265 (decodifica, pela VA-API). O
+`getCapabilities` de envio só lista H.265 quando há encoder na GPU (não há
+H.265 por software no Chromium). Nenhuma feature nova em
+`main/screen/chromiumFeatures.ts`.
+
+**LiveKit**: o livekit-client 2.23 aceita `videoCodec: 'h265'` (não é SVC:
+simulcast e a camada extra de 720p funcionam com ele; o AV1 continua pulado com
+a camada extra). O livekit-server v1.13.10 traz `video/H265` nos
+`enabled_codecs` padrão (medido: o `JoinResponse` anuncia VP8, H.264, VP9, AV1 e
+H.265), então o `backend/docker-compose.yml` não muda e o LiveKit de produção
+não precisa ser recriado.
+
+**Reserva**: o SDK só aceita VP8 ou H.264 de reserva, uma por publicação. AV1 e
+H.265 levam H.264 (todo mundo decodifica; VP8 se o navegador não codifica
+H.264); H.264 leva VP8; VP8 nenhuma. A reserva é negociada pelo SFU por
+assinante: quem não lista o codec principal na recepção faz o SFU pedir ao
+publicador a reserva (`subscribedCodecs`). Com a política padrão
+(`backupCodecPolicy` = regressão), a live inteira passa para a reserva enquanto
+essa pessoa assiste — menos peso para quem transmite, e todo mundo vê a mesma
+coisa. Decodificar H.265 no Chromium depende da placa de quem assiste.
+
+**UI**: Avançado = Automático / AV1 / H.265 / H.264 / VP8 (Automático numa
+linha, os quatro abaixo, para caber no popover da chamada a partir de 360 px).
+AV1 e H.265 sem placa ficam desabilitados ("Sua placa não codifica" e a linha
+"AV1 e H.265: sua placa não codifica."); H.264 só pelo processador continua
+disponível. O painel "Sua transmissão"/"Recebendo" mostra o codec com onde ele
+roda ("H.265 · placa de vídeo", "H.264 · processador") quando o navegador conta.
+
+**Medido nesta máquina** (Linux, AMD Lucienne, Chromium 156 headless):
+envio = VP8/H.264/AV1/VP9 (sem H.265); `encodingInfo` = AV1 e H.264 por
+software, H.265 não suportado → Automático = H.264 com VP8 de reserva.
+H.265/AV1 na placa só no Windows (painel: Codec "H.265 · placa de vídeo").
 
 ## Consequências
 
@@ -125,5 +177,11 @@ camada (antes: "Ainda sem dados"), e a linha Qualidade.
 - MDN — `MediaCapabilities.encodingInfo()` com `type: 'webrtc'`:
   https://developer.mozilla.org/en-US/docs/Web/API/MediaCapabilities/encodingInfo
 - W3C — MediaStreamTrack Content Hints: https://www.w3.org/TR/mst-content-hint/
-- livekit-client 2.23: `computeStartTargetBitrate`, `computeVideoEncodings`
+- Chromium `media/webrtc/webrtc_features.cc` (`WebRtcAllowH265Send`/`Receive` ligados) e
+  `media/base/media_switches.cc` (`PlatformHEVCEncoderSupport`, só Windows/Apple/Android):
+  https://chromium.googlesource.com/chromium/src/+/main/media/webrtc/webrtc_features.cc
+- LiveKit `pkg/config/config.go` v1.13.10 (`EnabledCodecs` com H.265):
+  https://github.com/livekit/livekit/blob/v1.13.10/pkg/config/config.go
+- Electron 44.9.3 = Chromium 152: https://releases.electronjs.org/release/v44.9.3
+- livekit-client 2.23: `backupVideoCodecs` (VP8/H.264), `BackupCodecPolicy`, `computeStartTargetBitrate`, `computeVideoEncodings`
   (`screenShareSimulcastLayers`), `LocalParticipant.publish` (L1T3 em tela com AV1/VP9).
