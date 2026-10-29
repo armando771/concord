@@ -82,6 +82,26 @@ Regras:
 | cache de convites (Go) | `internal/inviteCache.go` | `internal/server/invite_cache.go` |
 | cliente S3 (Go) | `internal/s3/` | `internal/platform/s3/` |
 
+## Mobile (`mobile/`)
+
+App Android em Expo, independente do `frontend/` ([ADR 0021](../adr/0021-app-mobile-expo.md)).
+
+```
+mobile/
+  app/                      rotas finas do Expo Router: só montam telas de src/
+    _layout.tsx             providers, ErrorBoundary, guarda de sessão
+    (auth)/ (app)/(tabs)/   grupos de rotas por estado de sessão
+  src/
+    features/<domínio>/     components/ hooks/ store/ lib/ api/ (mesmas camadas do desktop)
+    shared/                 ui/ lib/ hooks/ store/ api/ theme/ (não importa de features/)
+  app.config.ts eas.json jest.config.js
+```
+
+Regras: as do front do desktop (lógica em `lib/`, teste ao lado, `shared/` não
+importa de `features/`). O `check-structure.mjs` confere `mobile/src`. O que
+precisa de `features/` em `shared/` entra por uma porta (ex.: `shared/api/session.ts`,
+ligada por `features/auth` no boot).
+
 ## Escolhendo a arquitetura de uma feature
 
 Em `/ideia` e `/feature`, antes de planejar:

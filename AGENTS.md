@@ -5,8 +5,9 @@ Instruções para agentes de IA (Claude Code, Gemini CLI, Codex...) neste repo. 
 que você deve ler quando o assunto aparecer.
 
 Salinha (repo `concord`): chat estilo Discord. Backend Go (Gin + Postgres +
-WebSocket), cliente Electron/React (também publicado como app web), LiveKit
-para voz/vídeo/tela e um helper Rust para áudio de janela no Windows.
+WebSocket), cliente Electron/React (também publicado como app web), app Android
+em Expo/React Native (`mobile/`), LiveKit para voz/vídeo/tela e um helper Rust
+para áudio de janela no Windows.
 
 ## Regras inegociáveis
 
@@ -70,6 +71,11 @@ scripts/server-up.sh                    # Postgres + LiveKit (docker compose) e 
 yarn dev            # Electron;   yarn dev:web  → app no navegador
 yarn typecheck && yarn test
 npx vitest run src/renderer/src/features/chat/lib/mentions.test.ts
+
+# Mobile (mobile/, Expo SDK 58, Yarn 1, Jest com jest-expo)
+yarn start                              # Metro; abre no emulador/aparelho (Dev Client)
+yarn typecheck && yarn test
+EXPO_PUBLIC_SERVER_URL=https://servidor node scripts/mobile-build.mjs   # APK local (prebuild + Gradle)
 ```
 
 A base dos scripts é `origin/develop` (ou `origin/main`, se não houver develop);
@@ -89,6 +95,11 @@ só faz deploy a cada merge na `main`: **quem garante os testes é você, localm
   (`window.api`), `src/renderer/src/{app,features,shared}`. Zustand (um store
   por responsabilidade), Tailwind v4 com tokens em `assets/main.css`. A URL do
   servidor é constante de build (`VITE_SERVER_URL`).
+- **Mobile** (`mobile/`, [ADR 0021](docs/adr/0021-app-mobile-expo.md)): app Android
+  independente do `frontend/`. Rotas finas em `app/` (Expo Router), código em
+  `src/{features,shared}` com a mesma estrutura do desktop; lógica pura portada por
+  cópia adaptada. Tokens no `expo-secure-store`; URL do servidor é constante de
+  build (`EXPO_PUBLIC_SERVER_URL`).
 - Docs de domínio: [docs/CARGOS.md](docs/CARGOS.md) (permissões),
   [docs/ATIVIDADE.md](docs/ATIVIDADE.md), [docs/HOSPEDAGEM.md](docs/HOSPEDAGEM.md).
   Specs e planos antigos: `docs/superpowers/` (registro histórico: confie no
