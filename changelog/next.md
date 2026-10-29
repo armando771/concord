@@ -1,5 +1,7 @@
 ## Novidades
 
+- Servidores: quando o servidor sobe de nível, quem está nele vê uma animação em tela cheia com o ícone, a contagem do nível e efeitos que crescem por faixa (fogos no 5, raios no 10, galáxia no 20, aurora no 30) e cenas próprias nos níveis 10, 25, 50 e 100; quem estava fora vê uma vez ao abrir o servidor. O selo "Nv." do servidor muda de material por faixa (bronze, prata, ouro, cristal e lendário).
+- Níveis: selos especiais no nível 13 (vermelho com estrelinhas), 14 (onça-pintada), 22 (verde e amarelo do Brasil) e 24 (arco-íris do orgulho), e subir para o 24 toca uma cena própria com o arco-íris atravessando a tela.
 - Visitante: com conta, o link de visitante abre dentro do app. A visita vira um item na seção "Visitas" da barra lateral e dá para ir às suas DMs e servidores sem cair da call. Sem conta, "Sair" e o X funcionam e levam a uma tela para criar conta ou entrar.
 - Perfil: nova predefinição de tema Pride, com fundo arco-íris do orgulho.
 - O Maestro volta sozinho e continua a música depois de uma atualização do servidor.

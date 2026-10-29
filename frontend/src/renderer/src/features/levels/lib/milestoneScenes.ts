@@ -1,4 +1,18 @@
 import { RAINBOW, type MilestoneKind } from './levels'
+import {
+  rng,
+  clamp01,
+  prog,
+  easeOut,
+  easeIn,
+  easeInOut,
+  easeOutBack,
+  window4,
+  hexA,
+  drawGlow,
+  sparkle,
+  type Scene
+} from './sceneKit'
 
 /**
  * Cenas das animações de marco (10, 20 … 100), desenhadas num <canvas> só
@@ -26,114 +40,6 @@ export interface SceneInput {
   /** Centro da cena (o número fica aqui). */
   cx: number
   cy: number
-}
-
-export interface Scene {
-  draw: (ctx: CanvasRenderingContext2D, t: number) => void
-  /** Partículas criadas (nunca passa do budget). */
-  particles: number
-}
-
-// ---------- utilidades ----------
-
-/** Aleatório com semente: a mesma cena sai igual toda vez. */
-function rng(seed: number): () => number {
-  let a = seed >>> 0
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0
-    let x = a
-    x = Math.imul(x ^ (x >>> 15), x | 1)
-    x ^= x + Math.imul(x ^ (x >>> 7), x | 61)
-    return ((x ^ (x >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v)
-/** Progresso 0–1 de `t` entre `a` e `b`. */
-const prog = (t: number, a: number, b: number): number => clamp01((t - a) / (b - a))
-const easeOut = (x: number): number => 1 - (1 - x) ** 3
-const easeIn = (x: number): number => x * x * x
-const easeInOut = (x: number): number => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2)
-const easeOutBack = (x: number): number => {
-  const c = 1.7
-  return 1 + (c + 1) * (x - 1) ** 3 + c * (x - 1) ** 2
-}
-/** Sobe de 0 a 1 em [a, b] e volta a 0 em [c, d]. */
-const window4 = (t: number, a: number, b: number, c: number, d: number): number =>
-  Math.min(prog(t, a, b), 1 - prog(t, c, d))
-
-/** "#rrggbb" + alfa → "rgba(...)". Só na montagem da cena (paradas de gradiente), nunca por quadro. */
-function hexA(hex: string, alpha: number): string {
-  const h = hex.replace('#', '')
-  const n = parseInt(
-    h.length === 3
-      ? h
-          .split('')
-          .map((c) => c + c)
-          .join('')
-      : h,
-    16
-  )
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${clamp01(alpha).toFixed(3)})`
-}
-
-/** Brilho redondo pré-desenhado por cor (drawImage é bem mais leve que shadowBlur). */
-const sprites = new Map<string, HTMLCanvasElement>()
-function glow(color: string): HTMLCanvasElement {
-  let c = sprites.get(color)
-  if (c) return c
-  c = document.createElement('canvas')
-  c.width = c.height = 64
-  const g = c.getContext('2d')!
-  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32)
-  grad.addColorStop(0, hexA('#ffffff', 1))
-  grad.addColorStop(0.18, hexA(color, 0.95))
-  grad.addColorStop(0.5, hexA(color, 0.3))
-  grad.addColorStop(1, hexA(color, 0))
-  g.fillStyle = grad
-  g.fillRect(0, 0, 64, 64)
-  sprites.set(color, c)
-  return c
-}
-
-function drawGlow(
-  ctx: CanvasRenderingContext2D,
-  color: string,
-  x: number,
-  y: number,
-  r: number,
-  alpha: number
-): void {
-  if (alpha <= 0.002 || r <= 0.5) return
-  ctx.globalAlpha = clamp01(alpha)
-  ctx.drawImage(glow(color), x - r, y - r, r * 2, r * 2)
-  ctx.globalAlpha = 1
-}
-
-/** Estrelinha de 4 pontas (brilho de cristal / estrela). */
-function sparkle(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  r: number,
-  color: string,
-  alpha: number,
-  rot = 0
-): void {
-  if (alpha <= 0.002 || r <= 0.3) return
-  ctx.save()
-  ctx.translate(x, y)
-  ctx.rotate(rot)
-  ctx.globalAlpha = clamp01(alpha)
-  ctx.fillStyle = color
-  ctx.beginPath()
-  ctx.moveTo(0, -r)
-  ctx.quadraticCurveTo(0, 0, r, 0)
-  ctx.quadraticCurveTo(0, 0, 0, r)
-  ctx.quadraticCurveTo(0, 0, -r, 0)
-  ctx.quadraticCurveTo(0, 0, 0, -r)
-  ctx.fill()
-  ctx.restore()
 }
 
 /** Desenha o número numa tela escondida e devolve pontos dentro dele. */

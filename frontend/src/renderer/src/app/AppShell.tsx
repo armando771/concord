@@ -18,6 +18,7 @@ import BoostBanner from '../features/levels/components/BoostBanner'
 import LevelUpScreen from '../features/levels/components/LevelUpScreen'
 import InviteConfirmModal from '../features/servers/components/InviteConfirmModal'
 import LevelUpMilestone from '../features/levels/components/LevelUpMilestone'
+import ServerLevelUpOverlay from '../features/serverlevel/components/ServerLevelUpOverlay'
 import { useFlushPendingLevelUp } from '../features/levels/hooks/useScreenCelebration'
 import BadgesModal from '../features/levels/components/BadgesModal'
 import BadgeUnlockToast from '../features/levels/components/BadgeUnlockToast'
@@ -91,6 +92,7 @@ function AppShell(): React.JSX.Element {
       <InviteConfirmModal />
       <GuestVisitConfirmModal />
       <LevelUpMilestone />
+      <ServerLevelUpOverlay />
 
       <LevelUpBanner />
       <BoostBanner />

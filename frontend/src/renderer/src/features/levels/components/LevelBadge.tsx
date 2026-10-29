@@ -1,6 +1,9 @@
 import { useEffect } from 'react'
 import { useLevelStore } from '../store/levelStore'
-import { levelTier, levelUpEffects, LEGENDARY_TIER } from '../lib/levels'
+import { levelTier, levelUpEffects } from '../lib/levels'
+import { badgeShadow, levelBadgeStyle } from '../lib/levelBadgeStyle'
+import type { Celebration } from '../store/levelStore'
+import './levelSpecial.css'
 
 interface LevelBadgeProps {
   userId: string
@@ -14,7 +17,61 @@ interface LevelBadgeProps {
 const ROLL_STEPS = 6
 
 /**
- * Selo "Nv 12" com a cor da faixa. Quando a pessoa sobe de nível, o selo
+ * O número do selo: parado; ou o antigo saindo por cima e o novo entrando
+ * por baixo; ou, do 20 em diante, rolando como contador até o novo.
+ */
+function LevelNumber({
+  level,
+  celebration
+}: {
+  level: number
+  celebration: Celebration | undefined
+}): React.JSX.Element {
+  const changed = celebration !== undefined && celebration.previous !== level
+  const rolling = changed && levelUpEffects(level).rollNumber
+  const rollFrom = Math.max(0, level - ROLL_STEPS)
+  return (
+    <span className="relative inline-flex overflow-hidden">
+      {rolling ? (
+        <span
+          className="level-roll flex flex-col tabular-nums"
+          style={
+            {
+              '--roll': level - rollFrom,
+              height: '1em',
+              animation: 'level-roll 1.1s cubic-bezier(.12,.8,.2,1) 300ms both'
+            } as React.CSSProperties
+          }
+        >
+          {Array.from({ length: level - rollFrom + 1 }, (_, i) => (
+            <span key={i} aria-hidden={i < level - rollFrom} className="block h-[1em] shrink-0">
+              {rollFrom + i}
+            </span>
+          ))}
+        </span>
+      ) : changed ? (
+        <>
+          <span
+            aria-hidden="true"
+            className="level-num-old absolute inset-0"
+            style={{ animation: 'level-num-out 450ms ease-in 250ms both' }}
+          >
+            {celebration.previous}
+          </span>
+          <span style={{ animation: 'level-num-in 450ms cubic-bezier(.2,1.4,.5,1) 450ms both' }}>
+            {level}
+          </span>
+        </>
+      ) : (
+        level
+      )}
+    </span>
+  )
+}
+
+/**
+ * Selo "Nv 12" com a cor da faixa (ou o selo especial do nível, ver
+ * levelBadgeStyle). Quando a pessoa sobe de nível, o selo
  * pula e o número antigo sai por cima enquanto o novo entra por baixo; do
  * 20 em diante o número rola como um contador até o novo.
  */
@@ -35,10 +92,7 @@ function LevelBadge({
   if (level === undefined) return null
 
   const tier = levelTier(level)
-  const legendary = tier === LEGENDARY_TIER
-  const changed = celebration !== undefined && celebration.previous !== level
-  const rolling = changed && levelUpEffects(level).rollNumber
-  const rollFrom = Math.max(0, level - ROLL_STEPS)
+  const look = levelBadgeStyle(level)
   const text = size === 'md' ? 'text-[11px] px-1.5 py-0.5' : 'text-[9px] px-1 py-px'
 
   const title = `Nível ${level} · ${tier.name}`
@@ -73,56 +127,12 @@ function LevelBadge({
       }
     >
       <span
-        className={`inline-flex items-center gap-0.5 rounded-md font-extrabold leading-none tracking-wide ${text} ${
-          legendary ? 'level-legendary text-[#1a1022]' : 'text-[#0b0b0f]'
-        }`}
-        style={
-          legendary
-            ? { boxShadow: `0 0 10px ${tier.accent}aa` }
-            : {
-                backgroundImage: `linear-gradient(135deg, ${tier.color}, ${tier.accent})`,
-                boxShadow: celebration ? `0 0 14px ${tier.color}` : undefined
-              }
-        }
+        data-badge={look.variant}
+        className={`inline-flex items-center gap-0.5 rounded-md font-extrabold leading-none tracking-wide ${text} ${look.className}`}
+        style={{ ...look.style, boxShadow: badgeShadow(look, celebration !== undefined) }}
       >
-        <span className="opacity-70">Nv</span>
-        <span className="relative inline-flex overflow-hidden">
-          {rolling ? (
-            <span
-              className="level-roll flex flex-col tabular-nums"
-              style={
-                {
-                  '--roll': level - rollFrom,
-                  height: '1em',
-                  animation: 'level-roll 1.1s cubic-bezier(.12,.8,.2,1) 300ms both'
-                } as React.CSSProperties
-              }
-            >
-              {Array.from({ length: level - rollFrom + 1 }, (_, i) => (
-                <span key={i} aria-hidden={i < level - rollFrom} className="block h-[1em] shrink-0">
-                  {rollFrom + i}
-                </span>
-              ))}
-            </span>
-          ) : changed ? (
-            <>
-              <span
-                aria-hidden="true"
-                className="level-num-old absolute inset-0"
-                style={{ animation: 'level-num-out 450ms ease-in 250ms both' }}
-              >
-                {celebration.previous}
-              </span>
-              <span
-                style={{ animation: 'level-num-in 450ms cubic-bezier(.2,1.4,.5,1) 450ms both' }}
-              >
-                {level}
-              </span>
-            </>
-          ) : (
-            level
-          )}
-        </span>
+        <span className={look.dimLabel ? 'opacity-70' : 'opacity-90'}>Nv</span>
+        <LevelNumber level={level} celebration={celebration} />
       </span>
     </span>
   )
