@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -29,6 +30,7 @@ var (
 	ErrNotInMusicCall = errors.New("você não está nessa call")
 	errTooManyPlayers = errors.New("muitos players")
 	errPlayerClosed   = errors.New("player encerrado antes de entrar no mapa")
+	errChannelBusy    = errors.New("o canal já tem player")
 )
 
 type Location struct {
@@ -55,9 +57,12 @@ type ManagerDeps struct {
 
 	// Opcionais (testes); nil = implementação real a partir do Config.
 	Source    Source
-	Prepare   func(ctx context.Context, path string) (io.ReadCloser, error)
+	Prepare   func(ctx context.Context, path string, at time.Duration) (io.ReadCloser, error)
 	NewOutput func(ctx context.Context, callID, channelID string, src FrameSource) (Output, error)
 	Available func() bool
+	// Sessions: onde guardar os players para voltar depois de reiniciar
+	// (restart.go); nil = não guarda.
+	Sessions SessionStore
 }
 
 type searchSession struct {
@@ -79,6 +84,9 @@ type Manager struct {
 	busy map[string]struct{}
 	// onPlayed: quem pediu a música que tocou o bastante (badge DJ, played.go).
 	onPlayed func(userID string)
+	// sessions: nil sem deps.Sessions. stopping: o servidor está desligando.
+	sessions *sessionWriter
+	stopping atomic.Bool
 }
 
 func NewManager(cfg Config, deps ManagerDeps) *Manager {
@@ -102,6 +110,9 @@ func NewManager(cfg Config, deps ManagerDeps) *Manager {
 		deps.Available = func() bool { return binariesPresent(cfg) }
 	}
 	m := &Manager{cfg: cfg, deps: deps, players: map[string]*Player{}, pending: map[string]*pendingPlayer{}, searches: map[string]searchSession{}, busy: map[string]struct{}{}}
+	if deps.Sessions != nil {
+		m.sessions = newSessionWriter(deps.Sessions)
+	}
 	m.available = deps.Available()
 	if !m.available {
 		log.Printf("[music] yt-dlp/ffmpeg não encontrados: o Maestro fica indisponível")

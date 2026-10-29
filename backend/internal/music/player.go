@@ -26,7 +26,7 @@ type Notifier interface {
 
 type PlayerDeps struct {
 	Source      Source
-	Prepare     func(ctx context.Context, path string) (io.ReadCloser, error)
+	Prepare     func(ctx context.Context, path string, at time.Duration) (io.ReadCloser, error)
 	NewOutput   func(ctx context.Context, callID, channelID string, src FrameSource) (Output, error)
 	Notify      Notifier
 	Now         func() time.Time
@@ -173,7 +173,8 @@ func (p *Player) handleEvent(e MixEvent) {
 			p.fading[p.now.ID] = p.now
 		}
 		p.now = it
-		p.nowStarted = p.deps.Now()
+		// Retomada: a faixa "começou" ResumeAt atrás (a barra do painel já andada).
+		p.nowStarted = p.deps.Now().Add(-it.ResumeAt)
 		p.nextTag = ""
 		p.skipped = ""
 		p.votes.Reset()
@@ -248,7 +249,7 @@ func (p *Player) ensurePreparingLocked() {
 		path, err := p.deps.Source.DownloadAudio(ctx, it.Track.VideoID, p.deps.CacheDir)
 		var r io.ReadCloser
 		if err == nil {
-			r, err = p.deps.Prepare(p.ctx, path)
+			r, err = p.deps.Prepare(p.ctx, path, it.ResumeAt)
 		}
 		cancel()
 		p.onPrepared(it, path, r, err)
@@ -379,6 +380,13 @@ func (p *Player) shutdown(crashed bool) {
 	}
 	p.mu.Unlock()
 
+	p.leave()
+	_ = os.RemoveAll(p.deps.CacheDir)
+	p.deps.Notify.Closed(p)
+}
+
+// leave para o áudio e sai da sala do LiveKit.
+func (p *Player) leave() {
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -388,8 +396,6 @@ func (p *Player) shutdown(crashed bool) {
 	if p.out != nil {
 		p.out.Close()
 	}
-	_ = os.RemoveAll(p.deps.CacheDir)
-	p.deps.Notify.Closed(p)
 }
 
 func removeFiles(it *Item) {

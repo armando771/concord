@@ -112,7 +112,7 @@ func newHarnessPlayed(t *testing.T, secs float64, idle, played time.Duration) *h
 	h := &harness{n: &fakeNotifier{humans: []string{"ana"}}, src: &fakeSource{fail: map[string]bool{}}}
 	deps := PlayerDeps{
 		Source: h.src,
-		Prepare: func(context.Context, string) (io.ReadCloser, error) {
+		Prepare: func(context.Context, string, time.Duration) (io.ReadCloser, error) {
 			return src(secs, 0.3), nil
 		},
 		NewOutput: func(_ context.Context, _, _ string, s FrameSource) (Output, error) {
@@ -364,7 +364,7 @@ func TestPlayerLateStartedAfterRemove(t *testing.T) {
 func TestPlayerIdleAfterRemovingPreparingItem(t *testing.T) {
 	h := newHarness(t, 1, 50*time.Millisecond)
 	release := make(chan struct{})
-	h.p.deps.Prepare = func(context.Context, string) (io.ReadCloser, error) {
+	h.p.deps.Prepare = func(context.Context, string, time.Duration) (io.ReadCloser, error) {
 		<-release
 		return src(1, 0.3), nil
 	}

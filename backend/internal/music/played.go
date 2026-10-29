@@ -9,11 +9,15 @@ import "time"
 
 const playedAfter = 30 * time.Second
 
-// armPlayedLocked: a faixa começou a tocar agora.
+// armPlayedLocked: a faixa começou a tocar agora. Retomada depois de
+// reiniciar (ResumeAt) conta só o que falta: passada do tempo, já contou.
 func (p *Player) armPlayedLocked(it *Item) {
 	after := p.deps.PlayedAfter
 	if after <= 0 {
 		after = playedAfter
+	}
+	if after -= it.ResumeAt; after <= 0 {
+		return
 	}
 	time.AfterFunc(after, func() { p.creditPlayed(it) })
 }

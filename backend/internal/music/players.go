@@ -44,13 +44,34 @@ func (m *Manager) playerFor(ctx context.Context, loc Location) (*Player, error) 
 	if pe, ok := m.pending[loc.ChannelID]; ok {
 		// Outro comando já está conectando esse canal: espera o resultado.
 		m.mu.Unlock()
-		select {
-		case <-pe.ready:
-			return pe.p, pe.err
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
+		return pe.wait(ctx)
 	}
+	return m.startLocked(ctx, loc)
+}
+
+// newPlayerFor só cria: se o canal já tem player (ou está criando um),
+// errChannelBusy. É o da retomada, que não mistura a fila salva na de quem
+// pediu música agora.
+func (m *Manager) newPlayerFor(ctx context.Context, loc Location) (*Player, error) {
+	m.mu.Lock()
+	if m.players[loc.ChannelID] != nil || m.pending[loc.ChannelID] != nil {
+		m.mu.Unlock()
+		return nil, errChannelBusy
+	}
+	return m.startLocked(ctx, loc)
+}
+
+func (pe *pendingPlayer) wait(ctx context.Context) (*Player, error) {
+	select {
+	case <-pe.ready:
+		return pe.p, pe.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// startLocked cria o player e entra na sala; chamado com m.mu preso, solta.
+func (m *Manager) startLocked(ctx context.Context, loc Location) (*Player, error) {
 	if len(m.players)+len(m.pending) >= m.cfg.MaxPlayers {
 		m.mu.Unlock()
 		return nil, errTooManyPlayers
