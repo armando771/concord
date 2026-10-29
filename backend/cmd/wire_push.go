@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
 	"github.com/gin-gonic/gin"
 
+	"gin-quickstart/backend/internal/call"
 	"gin-quickstart/backend/internal/notifysettings"
 	"gin-quickstart/backend/internal/platform/fcm"
 	"gin-quickstart/backend/internal/push"
@@ -26,12 +28,30 @@ func (a *app) wirePush() {
 		log.Println("[push] push desligado (sem credenciais do FCM)")
 	}
 	settings := notifysettings.NotifySettingsService(notifysettings.NotifySettingsRepository(a.db), a.permissionService, a.hub)
-	a.pushTap.Set(push.NewNotifier(push.Deps{
+	notifier := push.NewNotifier(push.Deps{
 		Presence: a.hub, Settings: settings, Directory: repo,
 		Access: push.ViewAccess{Perms: a.permissionService}, Tokens: repo, Sender: client,
-	}))
+	})
+	a.pushTap.Set(notifier)
+	a.pushNotifier, a.pushRepo, a.pushEnabled = notifier, repo, client.Enabled()
 	handler := push.PushHandler(push.NewService(repo))
 	a.route(func(_ *gin.Engine, api *gin.RouterGroup) {
 		push.Routes(api, handler, a.authMiddleware)
+	})
+}
+
+// wirePushCalls liga a chamada de DM ao push (depois do wireCalls): quem está offline mas tem o app com push
+// registrado pode ser chamado, e o convite vira notificação. Sem credenciais do FCM nada muda.
+func (a *app) wirePushCalls() {
+	if a.pushNotifier == nil || !a.pushEnabled {
+		return
+	}
+	a.callService.SetOfflineRinger(func(userID string) bool {
+		return a.pushRepo.HasToken(context.Background(), userID)
+	})
+	a.callService.OnDMInvite(func(i call.DMInvite) {
+		a.pushNotifier.OnCallInvite(push.CallInvite{
+			CallID: i.CallID, ConversationID: i.ConversationID, CalleeID: i.CalleeID, InitiatorName: i.InitiatorName,
+		})
 	})
 }

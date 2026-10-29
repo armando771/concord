@@ -308,3 +308,16 @@ func TestSendErros(t *testing.T) {
 		}
 	})
 }
+
+func TestSendUsaOCanalDaMensagem(t *testing.T) {
+	f := &fakeGoogle{}
+	c := newClient(t, f, time.Now)
+	if err := c.Send(context.Background(), Message{Token: "d", Title: "Ana", Body: "Está te ligando", Channel: "chamadas"}); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	msg := f.sendCalls[0]["message"].(map[string]any)
+	channel := msg["android"].(map[string]any)["notification"].(map[string]any)["channel_id"]
+	if channel != "chamadas" {
+		t.Fatalf("channel_id = %v, esperava chamadas", channel)
+	}
+}

@@ -14,6 +14,9 @@ Só quando a pessoa **não está online** (sem app aberto) e **não está em Nã
 - mensagem em DM ou grupo (de outra pessoa);
 - menção em canal: `@usuario` ou `@all` (`@here` não notifica);
 - pedido de amizade recebido.
+- **chamada de DM** (1:1): "{nome} está te ligando", em um canal de alta prioridade (`chamadas`). Com o push ligado, o
+  backend passa a deixar ligar para quem está offline **e tem o app com push registrado**; sem push registrado a
+  chamada continua recusada. A chamada sem resposta termina em 45 s.
 
 Respeita as preferências já existentes (`notifysettings`): canal/servidor silenciado,
 nível "só menções"/"nada" e "suprimir @everyone". Menção em canal que a pessoa não
