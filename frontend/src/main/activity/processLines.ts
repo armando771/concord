@@ -1,5 +1,5 @@
-// Leitura de processos que escrevem uma linha por evento (o PowerShell do
-// SMTC) e quando abrir de novo um que caiu. Puro.
+// Leitura de processos que escrevem uma linha por evento (o helper nativo ou
+// o PowerShell do SMTC) e quando abrir de novo um que caiu. Puro.
 
 /** Linha maior que isso é lixo: descarta para não crescer sem limite. */
 const MAX_LINE_CHARS = 256 * 1024
@@ -34,4 +34,9 @@ const QUICK_EXIT_MS = 10_000
 /** Quedas seguidas logo ao abrir: soma uma; se ele viveu bem, zera. */
 export function nextFailures(failures: number, livedMs: number): number {
   return livedMs < QUICK_EXIT_MS ? failures + 1 : 0
+}
+
+/** O helper nativo saiu logo sem nenhuma leitura: não serve (exe antigo, SMTC falhou nele). */
+export function helperBroken(livedMs: number, gotLine: boolean): boolean {
+  return !gotLine && livedMs < QUICK_EXIT_MS
 }

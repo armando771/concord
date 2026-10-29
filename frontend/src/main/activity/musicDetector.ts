@@ -1,6 +1,7 @@
 import { pickNowPlaying, type MediaSession } from './mediaSessions'
 import { watchMpris } from './mprisMedia'
 import { watchSmtc } from './smtcMedia'
+import { smtcSources } from './smtcSources'
 import { INITIAL_TRACKER, stepTracker, type DetectedTrack, type TrackerState } from './musicTracker'
 
 // "Ouvindo": junta a fonte de sessões da plataforma (SMTC no Windows, MPRIS no
@@ -9,11 +10,17 @@ import { INITIAL_TRACKER, stepTracker, type DetectedTrack, type TrackerState } f
 /** Começa a ler as sessões de mídia; devolve o "parar". */
 export type SessionWatcher = (onSessions: (sessions: MediaSession[]) => void) => () => void
 
-/** A fonte desta plataforma; null onde não há (macOS). */
+/**
+ * A fonte desta plataforma; null onde não há (macOS). No Windows, o helper
+ * nativo em `helperPath` (procurado a cada início) ou o PowerShell.
+ */
 export function platformWatcher(
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  helperPath: string | null = null,
+  log?: (message: string) => void
 ): SessionWatcher | null {
-  if (platform === 'win32') return watchSmtc
+  if (platform === 'win32')
+    return (onSessions) => watchSmtc(onSessions, smtcSources(helperPath, log))
   if (platform === 'linux') return watchMpris
   return null
 }
@@ -51,7 +58,7 @@ export function createMusicDetector(watcher: SessionWatcher | null): MusicDetect
     step(sessions)
   }
 
-  // A fonte pode calar (PowerShell caiu): sem leitura fresca, a pausa corre igual.
+  // A fonte pode calar (helper ou PowerShell caiu): sem leitura fresca, a pausa corre igual.
   const checkStale = (): void => {
     if (Date.now() - latestAt > STALE_MS) step([])
   }
