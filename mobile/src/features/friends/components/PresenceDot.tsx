@@ -5,15 +5,17 @@ import { STATUS_COLOR, STATUS_LABEL, type PresenceStatus } from '../lib/presence
 interface PresenceDotProps {
   /** Sem status conhecido, vale offline. */
   status: PresenceStatus | undefined
+  /** Cor do recorte ao redor da bolinha: a do fundo onde ela está (padrão: o fundo do app). */
+  cutout?: string
 }
 
 /** Bolinha de presença no canto do avatar, com o recorte na cor do fundo (como no Discord). */
-export function PresenceDot({ status = 'offline' }: PresenceDotProps) {
+export function PresenceDot({ status = 'offline', cutout = colors.bgPrimary }: PresenceDotProps) {
   return (
     <View
       accessible
       accessibilityLabel={STATUS_LABEL[status]}
-      style={[styles.dot, { backgroundColor: STATUS_COLOR[status] }]}
+      style={[styles.dot, { backgroundColor: STATUS_COLOR[status], borderColor: cutout }]}
     />
   )
 }
