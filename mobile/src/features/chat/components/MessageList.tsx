@@ -14,10 +14,11 @@ interface MessageListProps {
   hasMore: boolean
   onLoadMore: () => void
   onRetry: () => void
+  onOpenProfile?: (userId: string) => void
 }
 
 /** Histórico do canal: lista invertida (a mais nova embaixo), pagina ao rolar para cima. */
-export function MessageList({ messages, status, hasMore, onLoadMore, onRetry }: MessageListProps) {
+export function MessageList({ messages, status, hasMore, onLoadMore, onRetry, onOpenProfile }: MessageListProps) {
   // Os estados vazios ficam fora da FlatList: dentro de uma lista invertida eles saem de cabeça para baixo.
   if (status === 'loading' && messages.length === 0) return <Centered text="Carregando mensagens…" />
   if (status === 'error' && messages.length === 0) {
@@ -35,7 +36,7 @@ export function MessageList({ messages, status, hasMore, onLoadMore, onRetry }: 
       inverted
       data={groupMessages(messages)}
       keyExtractor={(item) => item.message.id}
-      renderItem={({ item }) => <MessageItem item={item} />}
+      renderItem={({ item }) => <MessageItem item={item} onOpenProfile={onOpenProfile} />}
       onEndReached={hasMore ? onLoadMore : undefined}
       onEndReachedThreshold={0.5}
       keyboardShouldPersistTaps="handled"

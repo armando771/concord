@@ -207,4 +207,17 @@ describe('FriendsScreen', () => {
     await press('Voltar')
     expect(onBack).toHaveBeenCalled()
   })
+
+  it('tocar numa pessoa abre o perfil dela (amigos, pendentes e bloqueados)', async () => {
+    const onOpenProfile = jest.fn()
+    await render(<FriendsScreen onBack={onBack} onOpenConversation={onOpenConversation} onOpenProfile={onOpenProfile} />)
+    await fireEvent.press(await screen.findByText('Ana'))
+    expect(onOpenProfile).toHaveBeenLastCalledWith('ana')
+    await tab('Pendentes')
+    await fireEvent.press(await screen.findByText('Caio'))
+    expect(onOpenProfile).toHaveBeenLastCalledWith('caio')
+    await tab('Bloqueados')
+    await fireEvent.press(await screen.findByText('Edu'))
+    expect(onOpenProfile).toHaveBeenLastCalledWith('edu')
+  })
 })

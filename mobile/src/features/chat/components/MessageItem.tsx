@@ -4,17 +4,20 @@ import { Avatar } from '../../../shared/ui/Avatar'
 import type { Message } from '../api/messages'
 import { dayLabelText, timeText } from '../lib/dayLabel'
 import type { GroupedMessage } from '../lib/messageGroups'
+import { ProfileTap } from '../../profile/components/ProfileTap'
 
 interface MessageItemProps {
   item: GroupedMessage
   timeZone?: string
+  /** Tocar no avatar ou no nome do autor abre o perfil dele. */
+  onOpenProfile?: (userId: string) => void
 }
 
 /** Anexo, figurinha ou GIF sem texto: ainda não aparecem no app. */
 const hasUnsupportedOnly = (m: Message): boolean =>
   !m.content.trim() && (!!m.attachments?.length || !!m.sticker_id || !!m.gif_url)
 
-export function MessageItem({ item, timeZone }: MessageItemProps) {
+export function MessageItem({ item, timeZone, onOpenProfile }: MessageItemProps) {
   const { message, showHeader, dayLabel } = item
   const name = message.author?.display_name ?? 'Usuário'
   return (
@@ -28,12 +31,18 @@ export function MessageItem({ item, timeZone }: MessageItemProps) {
       ) : null}
       <View style={[styles.row, showHeader && styles.withHeader]}>
         <View style={styles.gutter}>
-          {showHeader ? <Avatar name={name} uri={message.author?.avatar_url} size={40} /> : null}
+          {showHeader ? (
+            <ProfileTap userId={message.author_id} label={name} onOpen={onOpenProfile}>
+              <Avatar name={name} uri={message.author?.avatar_url} size={40} />
+            </ProfileTap>
+          ) : null}
         </View>
         <View style={styles.body}>
           {showHeader ? (
             <View style={styles.head}>
-              <Text style={styles.author}>{name}</Text>
+              <ProfileTap userId={message.author_id} label={name} onOpen={onOpenProfile}>
+                <Text style={styles.author}>{name}</Text>
+              </ProfileTap>
               <Text style={styles.time}>{timeText(message.created_at, timeZone)}</Text>
             </View>
           ) : null}

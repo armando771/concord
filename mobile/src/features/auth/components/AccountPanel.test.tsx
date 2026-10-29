@@ -17,6 +17,16 @@ describe('AccountPanel', () => {
     expect(screen.getByText('@ana')).toBeOnTheScreen()
   })
 
+  it('mostra o cartão do perfil com o que a pessoa preencheu', async () => {
+    useAuthStore.setState({
+      user: { ...user, bio: 'Oi, sou a Ana', pronouns: 'ela/dela', links: [{ url: 'https://github.com/ana' }] }
+    })
+    await render(<AccountPanel logout={async () => {}} />)
+    expect(screen.getByText('Sobre mim')).toBeOnTheScreen()
+    expect(screen.getByText('ela/dela')).toBeOnTheScreen()
+    expect(screen.getByRole('link', { name: 'github.com/ana' })).toBeOnTheScreen()
+  })
+
   it('Sair avisa o servidor e encerra a sessão local', async () => {
     const logout = jest.fn().mockResolvedValue(undefined)
     await render(<AccountPanel logout={logout} />)

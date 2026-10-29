@@ -1,8 +1,10 @@
+import { fireEvent } from '@testing-library/react-native'
 import { renderRouter, screen } from 'expo-router/testing-library'
 import { loadTokens } from '../src/features/auth/lib/secureTokens'
 import { useAuthStore } from '../src/features/auth/store/authStore'
 import { useCallSessionStore } from '../src/features/call/store/callSessionStore'
 import { useIncomingCallStore } from '../src/features/call/store/incomingCallStore'
+import { listConversations } from '../src/features/chat/api/conversations'
 
 jest.mock('expo-splash-screen', () => ({
   preventAutoHideAsync: jest.fn().mockResolvedValue(true),
@@ -38,6 +40,9 @@ jest.mock('../src/features/auth/api/auth', () => ({
   ...jest.requireActual('../src/features/auth/api/auth'),
   getMe: jest.fn().mockResolvedValue({ id: 'u1', username: 'ana', display_name: 'Ana', email: 'a@b.co' })
 }))
+jest.mock('../src/features/profile/api/users', () => ({
+  getProfile: jest.fn().mockResolvedValue({ id: 'u9', username: 'zed', display_name: 'Zed' })
+}))
 jest.mock('../src/features/call/api/calls', () => ({ listServerCalls: jest.fn().mockResolvedValue([]), getCallState: jest.fn() }))
 jest.mock('@react-native-community/netinfo', () => ({
   __esModule: true,
@@ -52,6 +57,7 @@ describe('rotas do app', () => {
     useAuthStore.setState(useAuthStore.getInitialState(), true)
     useCallSessionStore.getState().reset()
     useIncomingCallStore.getState().clear()
+    jest.mocked(listConversations).mockResolvedValue([])
   })
 
   it('sem sessão, "/" mostra o login', async () => {
@@ -91,6 +97,32 @@ describe('rotas do app', () => {
     await renderRouter('./app', { initialUrl: '/dm/d1?name=Paulo&type=dm' })
     expect(await screen.findByLabelText('Mensagem para @Paulo')).toBeOnTheScreen()
     expect(screen.getByRole('button', { name: 'Voltar' })).toBeOnTheScreen()
+  })
+
+  it('sessão salva: /perfil/<id> abre o cartão da pessoa, com Voltar', async () => {
+    jest.mocked(loadTokens).mockResolvedValueOnce({ accessToken: 'a', refreshToken: 'r' })
+    await renderRouter('./app', { initialUrl: '/perfil/u9' })
+    expect(await screen.findByText('@zed')).toBeOnTheScreen()
+    expect(screen.getByRole('button', { name: 'Voltar' })).toBeOnTheScreen()
+  })
+
+  it('sessão salva: o nome no cabeçalho da DM 1 a 1 abre o perfil da outra pessoa', async () => {
+    jest.mocked(loadTokens).mockResolvedValueOnce({ accessToken: 'a', refreshToken: 'r' })
+    jest.mocked(listConversations).mockResolvedValue([
+      {
+        id: 'd1',
+        type: 'dm',
+        name: '',
+        other_user: { id: 'u9', username: 'zed', display_name: 'Zed' },
+        members: [],
+        unread_count: 0,
+        created_at: '',
+        updated_at: ''
+      }
+    ])
+    await renderRouter('./app', { initialUrl: '/dm/d1?name=Zed&type=dm' })
+    await fireEvent.press(await screen.findByRole('button', { name: 'Zed' }))
+    expect(await screen.findByText('@zed')).toBeOnTheScreen()
   })
 
   it('sessão salva: /chamada mostra a tela da chamada em andamento', async () => {

@@ -21,4 +21,16 @@ describe('ChannelHeader', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Voltar' }))
     expect(onBack).toHaveBeenCalled()
   })
+
+  it('com onPressName o nome é um botão (abre o perfil da pessoa)', async () => {
+    const onPressName = jest.fn()
+    await render(<ChannelHeader name="Paulo" prefix="@" onBack={() => {}} onPressName={onPressName} />)
+    await fireEvent.press(screen.getByRole('button', { name: 'Paulo' }))
+    expect(onPressName).toHaveBeenCalled()
+  })
+
+  it('sem onPressName o nome não é um botão', async () => {
+    await render(<ChannelHeader name="geral" onBack={() => {}} />)
+    expect(screen.queryByRole('button', { name: 'geral' })).toBeNull()
+  })
 })

@@ -1,8 +1,10 @@
-import { StyleSheet, Text, View } from 'react-native'
-import { colors, fontSize, spacing } from '../../../shared/theme/tokens'
+import { ScrollView, StyleSheet } from 'react-native'
+import { colors, spacing } from '../../../shared/theme/tokens'
 import { Button } from '../../../shared/ui/Button'
 import { callController } from '../../call/lib/callRuntime'
 import { pushRegistration } from '../../notifications/lib/pushSession'
+import { ProfileCard } from '../../profile/components/card/ProfileCard'
+import { useCardPresence } from '../../profile/hooks/useCardPresence'
 import { logout as logoutRequest } from '../api/auth'
 import { useAuthStore } from '../store/authStore'
 
@@ -14,9 +16,10 @@ interface AccountPanelProps {
   leaveCall?: () => Promise<void>
 }
 
-/** Aba "Você" por enquanto: quem está logado e o botão Sair. */
+/** Aba "Você": o cartão do próprio perfil e o botão Sair. */
 export function AccountPanel({ logout = logoutRequest, forgetPush = pushRegistration.forget, leaveCall = callController.leave }: AccountPanelProps) {
   const user = useAuthStore((s) => s.user)
+  const presence = useCardPresence(user?.id ?? '')
 
   async function signOut(): Promise<void> {
     await leaveCall().catch(() => {})
@@ -27,20 +30,14 @@ export function AccountPanel({ logout = logoutRequest, forgetPush = pushRegistra
   }
 
   return (
-    <View style={styles.panel}>
-      {user ? (
-        <View>
-          <Text style={styles.name}>{user.display_name}</Text>
-          <Text style={styles.username}>@{user.username}</Text>
-        </View>
-      ) : null}
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.panel}>
+      {user ? <ProfileCard profile={user} status={presence} /> : null}
       <Button title="Sair" variant="danger" onPress={signOut} />
-    </View>
+    </ScrollView>
   )
 }
 
 const styles = StyleSheet.create({
-  panel: { flex: 1, gap: spacing.xl, padding: spacing.xl, backgroundColor: colors.bgPrimary },
-  name: { color: colors.textStrong, fontSize: fontSize.xl, fontWeight: '700' },
-  username: { color: colors.textMuted, fontSize: fontSize.md }
+  scroll: { flex: 1, backgroundColor: colors.bgPrimary },
+  panel: { gap: spacing.xl, padding: spacing.xl }
 })
