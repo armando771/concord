@@ -93,13 +93,54 @@ Opção 2, no padrão de domínio do repo (`internal/guest`, ligado em
   do app abre a mesma tela; não há protocolo `salinha://` próprio (o visitante
   sem conta usa o navegador).
 
+## Emenda (2026-10-28): visitante com conta dentro do app
+
+Em produção, quem tinha conta e abria um link de visitante caía na mesma tela
+isolada do visitante sem conta: sem trilho, sem DMs, e ao sair da call ficava
+num "Você saiu da call" sem saída (o X do canto era o da janela). Decisões:
+
+- **Com conta, nada de modo isolado.** O link (no navegador ou clicado no app)
+  abre uma confirmação dentro do app (`GuestVisitConfirmModal`, padrão do
+  `InviteConfirmModal`). Entrar cria/reaproveita o acesso com o **token normal
+  da conta** (o backend já checava o acesso em `call_guest_passes` na
+  chamada); a conta continua sem ser membro, então canais, mensagens,
+  membros e o próprio servidor seguem 403.
+- **A visita é um item do trilho** (seção "Visitas", ícone do servidor com anel
+  âmbar), em `/visitas/<servidor>`: a coluna da esquerda mostra só o canal de
+  voz do convite e o rodapé de sempre; o conteúdo é o palco e os controles de
+  uma call comum. Um acesso por servidor; vários servidores ao mesmo tempo.
+  Fora da call, "Entrar na call" e o tempo que falta.
+- **Fonte das visitas:** `GET /guest/passes` (agora com o ícone do servidor) ao
+  abrir o app e quando a rede volta; `guest:pass` (novo, ao entrar e ao ser
+  movido) e `guest:ended` mantêm o trilho em todos os apps da conta. O fim
+  tira o item, sai da call daquela visita e mostra um aviso curto.
+- **Links para o servidor visitado** (painel "Voz conectada", que leva a
+  `/servers/<id>/channels/<id>`) redirecionam para a visita
+  (`GuestVisitRedirect`). O nome do canal entra no cache de nomes do painel
+  (a lista de canais do servidor é fechada para o visitante).
+- **Recusa do `CallGate` virou `guest:refused`.** Era `call:error` sem
+  `call_id`, que o app trata como queda e tirava o visitante da call ao tocar
+  em trancar, mesa de áudio ou atividade (o painel comum mostra esses botões).
+- **Sem conta:** a tela dedicada fica, mas o X do topo pergunta "Sair da
+  call?" e, fora da call, "Sair" fica ao lado de "Voltar para a call". Sair
+  ou o fim do acesso descartam a sessão local e levam à tela final com
+  "Criar conta no Salinha" e "Entrar". A sessão salva de quem tinha conta
+  (versão antiga do store) é descartada na migração.
+- **Celular:** `/visitas/` é rota de conteúdo (abre na call, com o voltar);
+  a lista mostra o trilho com a visita e a coluna da visita.
+
+Fica para depois: esconder no painel "Voz conectada" os botões que o
+visitante não usa (trancar, mesa de áudio, atividades); hoje o servidor
+recusa com um aviso. O painel tem complexidade 67 e precisa ser quebrado
+antes.
+
 ## Modelo de ameaça (resumo)
 
 | Ameaça | Mitigação |
 |---|---|
 | Adivinhar links | 256 bits; prévia (60/10 min) e entrada (10/10 min) limitadas por IP; formato conferido antes do banco. |
 | Vazamento do banco expõe links | Só o hash do token fica salvo. |
-| Visitante sair do escopo (chat, outros canais, DMs, perfis) | Token `guest` recusado em toda rota fora da call (lista do que abre); WebSocket só nas salas próprias; a chamada só aceita o canal do acesso. |
+| Visitante sair do escopo (chat, outros canais, DMs, perfis) | Token `guest` recusado em toda rota fora da call (lista do que abre); WebSocket só nas salas próprias; a chamada só aceita o canal do acesso. Visitante com conta usa o token normal, mas não é membro: as rotas do servidor seguem 403. |
 | Visitante criar coisas ou moderar | Sem permissões de membro; `CallGate` recusa trancar/aceitar/atividade/mesa de áudio; não gera convites (exige ser membro). |
 | Link vazado continua valendo | Prazo máximo de 1 dia, revogação a qualquer momento, limite de 10 pessoas; revogar e expulsar tiram da mídia na hora. |
 | Banido entrar como visitante | Conta banida não entra; visitante sem conta expulso não volta pelo mesmo acesso (para barrar o link, revogue). |

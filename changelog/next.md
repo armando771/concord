@@ -1,5 +1,6 @@
 ## Novidades
 
+- Visitante: com conta, o link de visitante abre dentro do app. A visita vira um item na seção "Visitas" da barra lateral e dá para ir às suas DMs e servidores sem cair da call. Sem conta, "Sair" e o X funcionam e levam a uma tela para criar conta ou entrar.
 - Chamadas: convide alguém de fora do servidor só para a call em que você está. No topo da call, "Convidar visitante" gera um link de 2 horas, 6 horas, 12 horas ou 1 dia, e você escolhe se a pessoa pode falar e ligar câmera e tela. Quem abre o link digita um nome (ou entra com a própria conta) e vai direto para a call, com o selo "Visitante", sem ver chats nem outros canais. O link pode ser revogado e o visitante expulso a qualquer momento. Nova permissão de cargo "Convidar visitantes", desligada por padrão.
 - Servidores agora têm nível: ele sobe com o uso do servidor (membros novos, mensagens, figurinhas, sons, tempo em call e lives) e aparece no menu do nome do servidor, com o detalhamento dos últimos 7 dias.
 - Lives: a transmissão de tela agora sai em H.264, com texto bem mais nítido e menos banda (em Avançado, no seletor de qualidade, dá para voltar ao VP8). Em 60 FPS a live prioriza a fluidez, para jogos.
