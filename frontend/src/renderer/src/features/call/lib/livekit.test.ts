@@ -26,11 +26,17 @@ const lk = vi.hoisted(() => {
       trackPublications: Map<string, FakePublication>
       publishTrack: ReturnType<typeof vi.fn>
       getTrackPublication: ReturnType<typeof vi.fn>
+      performRpc: ReturnType<typeof vi.fn>
       permissions?: { canPublish?: boolean; canPublishSources?: number[] }
     } = {
       trackPublications: new Map(),
       publishTrack: vi.fn(async () => ({ mute: vi.fn(async () => {}) })),
-      getTrackPublication: vi.fn()
+      getTrackPublication: vi.fn(),
+      performRpc: vi.fn(async () => 'null')
+    }
+    rpc = new Map<string, () => Promise<string>>()
+    registerRpcMethod(method: string, handler: () => Promise<string>): void {
+      this.rpc.set(method, handler)
     }
     on(event: string, fn: (...args: unknown[]) => void): this {
       this.listeners.set(event, [...(this.listeners.get(event) ?? []), fn])
@@ -59,6 +65,7 @@ vi.mock('livekit-client', () => ({
   ConnectionState: { Connected: 'connected', Reconnecting: 'reconnecting' },
   DisconnectReason: { CLIENT_INITIATED: 1, PARTICIPANT_REMOVED: 4 },
   AudioPresets: { musicHighQualityStereo: {} },
+  BackupCodecPolicy: { SIMULCAST: 1 },
   Track: {
     Source: {
       Microphone: 'microphone',
@@ -390,7 +397,8 @@ describe('CallMedia — qualidade de tela', () => {
       mediaStreamTrack: video,
       sender,
       publishOptions: { simulcast: false },
-      setDegradationPreference: vi.fn(async () => {})
+      setDegradationPreference: vi.fn(async () => {}),
+      simulcastCodecs: new Map()
     }
     const pub = { videoTrack: track }
     room().localParticipant.getTrackPublication.mockReturnValue(pub)
@@ -490,6 +498,7 @@ describe('CallMedia — qualidade de tela', () => {
       screenShareEncoding: { maxBitrate: 7_000_000, maxFramerate: 60 },
       videoCodec: 'h264',
       backupCodec: { codec: 'vp8' },
+      backupCodecPolicy: 1,
       degradationPreference: 'maintain-resolution'
     })
     expect(room().localParticipant.publishTrack).toHaveBeenCalledWith(
@@ -640,5 +649,35 @@ describe('CallMedia — sinais de conexão', () => {
     counters = { packetsReceived: 180, packetsLost: 20 }
     const second = await media.getQualityDetails(['ana'], 'eu')
     expect(second.ana.lossPercent).toBeCloseTo(20)
+  })
+})
+
+describe('CallMedia — codificador de quem transmite (painel "Recebendo")', () => {
+  const encoder = {
+    quality: '1080p 30',
+    encoders: [{ codec: 'H265', hardware: true, height: 1080, fps: 30, backup: false }]
+  }
+
+  it('quem assiste pergunta por RPC, sem esperar a resposta para mostrar o resto', async () => {
+    const media = createMedia()
+    room().remoteParticipants.set('ana', {
+      getTrackPublication: () => ({
+        isEnabled: true,
+        track: { streamState: 'active', getRTCStatsReport: async () => new Map() }
+      })
+    })
+    room().localParticipant.performRpc.mockResolvedValue(JSON.stringify(encoder))
+    expect((await media.readScreenStats('ana', false))?.encoder).toBeNull()
+    expect(room().localParticipant.performRpc).toHaveBeenCalledWith(
+      expect.objectContaining({ destinationIdentity: 'ana', method: 'salinha.screen-encoder' })
+    )
+    await microtasks()
+    expect((await media.readScreenStats('ana', false))?.encoder).toEqual(encoder)
+  })
+
+  it('quem transmite responde; sem live publicada, null', async () => {
+    createMedia()
+    room().localParticipant.getTrackPublication.mockReturnValue(undefined)
+    expect(await room().rpc.get('salinha.screen-encoder')?.()).toBe('null')
   })
 })

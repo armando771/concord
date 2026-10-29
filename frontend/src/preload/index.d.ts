@@ -34,6 +34,7 @@ export interface ScreenShareApi {
   preferGameWindow(gameName: string): Promise<string | null>
   onWindowHidden(cb: () => void): () => void
   ended(): void
+  videoHint(): Promise<string | null>
 }
 
 export interface UpdatesApi {

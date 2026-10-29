@@ -1,3 +1,5 @@
+import type { LinuxGpu } from './linuxGpu'
+
 // Features do Chromium ligadas/desligadas no boot (captura de tela e vídeo
 // por placa de vídeo). Uma lista só por switch: o Chromium lê apenas o último
 // --enable-features, então duas chamadas de appendSwitch se sobrescrevem.
@@ -17,12 +19,29 @@ const HARDWARE_VIDEO: Partial<Record<NodeJS.Platform, string[]>> = {
   linux: ['AcceleratedVideoEncoder', 'AcceleratedVideoDecoder']
 }
 
+/**
+ * Linux só com NVIDIA e o nvidia-vaapi-driver instalado: o Chromium recusa
+ * VA-API em NVIDIA sem `VaapiOnNvidiaGPUs`, e o driver não passa nas checagens
+ * de fabricante sem `VaapiIgnoreDriverChecks`; a decodificação vai pelo
+ * caminho GL (ANGLE). Só decodifica (H.265 inclusive): o driver não codifica.
+ */
+const NVIDIA_VAAPI = [
+  'VaapiOnNvidiaGPUs',
+  'VaapiIgnoreDriverChecks',
+  'AcceleratedVideoDecodeLinuxGL'
+]
+
 /** Oclusão nativa marca a janela coberta como oculta e congela a captura. */
 const DISABLE = ['CalculateNativeWinOcclusion']
 
-export function chromiumFeatures(platform: NodeJS.Platform): { enable: string; disable: string } {
+export function chromiumFeatures(
+  platform: NodeJS.Platform,
+  /** Placa de vídeo no Linux (ver linuxGpu); null nas outras plataformas. */
+  gpu: LinuxGpu | null = null
+): { enable: string; disable: string } {
+  const nvidia = platform === 'linux' && gpu?.nvidiaVaapi ? NVIDIA_VAAPI : []
   return {
-    enable: [...CAPTURE, ...(HARDWARE_VIDEO[platform] ?? [])].join(','),
+    enable: [...CAPTURE, ...(HARDWARE_VIDEO[platform] ?? []), ...nvidia].join(','),
     disable: DISABLE.join(',')
   }
 }

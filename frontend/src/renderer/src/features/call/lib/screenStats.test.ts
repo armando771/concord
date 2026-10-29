@@ -147,7 +147,9 @@ describe('screenStatsView — quem transmite', () => {
       { label: 'Codec', value: 'H.264 · placa de vídeo' },
       { label: 'Codificador', value: 'Hardware · MediaFoundationVideoEncodeAccelerator' },
       { label: 'Limitação', value: 'Nenhuma' },
-      { label: 'QP médio', value: '26' }
+      { label: 'QP médio', value: '26' },
+      { label: 'Quadros-chave/PLI', value: '—' },
+      { label: 'NACK', value: '—' }
     ])
   })
 
@@ -218,6 +220,42 @@ describe('screenStatsView — quem transmite', () => {
       null
     )
     expect(value(view, 'Codec')).toBe('VP8')
+  })
+
+  it('reserva saindo junto com o principal: linha própria com codec, onde roda, tamanho e fps', () => {
+    const h265: Stat = { id: 'c3', type: 'codec', mimeType: 'video/H265' }
+    const { view } = screenStatsView(
+      sender([
+        h265,
+        h264,
+        outbound({
+          id: 'o1',
+          codecId: 'c3',
+          bytesSent: 9_000_000,
+          encoderImplementation: 'MediaFoundationVideoEncodeAccelerator',
+          powerEfficientEncoder: true
+        }),
+        outbound({
+          id: 'o2',
+          bytesSent: 10,
+          frameHeight: 720,
+          framesPerSecond: 29.7,
+          powerEfficientEncoder: false
+        })
+      ]),
+      null
+    )
+    expect(value(view, 'Codec')).toBe('H.265 · placa de vídeo')
+    expect(value(view, 'Reserva')).toBe('H.264 · processador · 720p 30 fps')
+  })
+
+  it('quadros-chave enviados e PLI recebidos (cada PLI pede um quadro-chave)', () => {
+    const { view } = screenStatsView(
+      sender([h264, outbound({ keyFramesEncoded: 7, pliCount: 6, nackCount: 2 })]),
+      null
+    )
+    expect(value(view, 'Quadros-chave/PLI')).toBe('7 / 6')
+    expect(value(view, 'NACK')).toBe('2')
   })
 
   it('envio pausado porque ninguém está assistindo: diz isso em vez de "Ainda sem dados"', () => {
@@ -292,13 +330,85 @@ describe('screenStatsView — quem assiste', () => {
       { label: 'Quadros', value: '30 fps' },
       { label: 'Resolução', value: '1920×1080' },
       { label: 'Taxa', value: '4 Mbps' },
-      { label: 'Codec', value: 'H.264 · placa de vídeo' },
+      { label: 'Codec', value: 'H.264' },
+      { label: 'Codificado', value: '—' },
+      { label: 'Saindo em', value: '—' },
       { label: 'Decodificador', value: 'Hardware · D3D11VideoDecoder' },
       { label: 'Perda', value: '0,5%' },
       { label: 'Jitter', value: '12 ms' },
       { label: 'Descartados', value: '3' },
-      { label: 'Congelamentos', value: '2 (1,3 s)' }
+      { label: 'Congelamentos', value: '2 (1,3 s)' },
+      { label: 'Quadros-chave/PLI', value: '—' },
+      { label: 'NACK', value: '—' },
+      { label: 'Fora de ordem', value: '—' },
+      { label: 'Buffer', value: '—' }
     ])
+  })
+
+  it('codec: onde quem transmite codifica, não o meu decodificador (Linux decodificando por software)', () => {
+    const { view } = screenStatsView(
+      receiver(
+        [
+          h264,
+          inbound({
+            decoderImplementation: 'FFmpeg',
+            powerEfficientDecoder: false
+          })
+        ],
+        {
+          encoder: {
+            quality: '1080p 30',
+            encoders: [
+              { codec: 'H265', hardware: true, height: 1080, fps: 30, backup: false },
+              { codec: 'H264', hardware: true, height: 720, fps: 30, backup: true }
+            ]
+          }
+        }
+      ),
+      null
+    )
+    expect(value(view, 'Codec')).toBe('H.264')
+    expect(value(view, 'Codificado')).toBe('Na placa de vídeo')
+    expect(value(view, 'Saindo em')).toBe('720p 30 (reserva)')
+    expect(value(view, 'Decodificador')).toBe('Software · FFmpeg')
+  })
+
+  it('diagnóstico de congelamento: quadros-chave/PLI, NACK, pacotes fora de hora e buffer', () => {
+    const { view } = screenStatsView(
+      receiver([
+        h264,
+        inbound({
+          keyFramesDecoded: 12,
+          pliCount: 9,
+          firCount: 1,
+          nackCount: 40,
+          packetsDiscarded: 3,
+          jitterBufferDelay: 9,
+          jitterBufferEmittedCount: 100
+        })
+      ]),
+      null
+    )
+    expect(value(view, 'Quadros-chave/PLI')).toBe('12 / 10')
+    expect(value(view, 'NACK')).toBe('40')
+    expect(value(view, 'Fora de ordem')).toBe('3')
+    expect(value(view, 'Buffer')).toBe('90 ms')
+  })
+
+  it('decodificando por software com NVIDIA sem driver: nota com o que instalar', () => {
+    const hint = 'Instale o nvidia-vaapi-driver para usar a placa de vídeo'
+    const software = inbound({ decoderImplementation: 'FFmpeg', powerEfficientDecoder: false })
+    const hardware = inbound({
+      decoderImplementation: 'VaapiVideoDecoder',
+      powerEfficientDecoder: true
+    })
+    expect(screenStatsView(receiver([h264, software], { driverHint: hint }), null).view.note).toBe(
+      hint
+    )
+    expect(
+      screenStatsView(receiver([h264, hardware], { driverHint: hint }), null).view.note
+    ).toBeNull()
+    expect(screenStatsView(receiver([h264, software]), null).view.note).toBeNull()
   })
 
   it('perda só do intervalo (não acumulada desde o início)', () => {

@@ -23,6 +23,7 @@ import { MicPublisher } from './micPublisher'
 import type { ScreenShareQuality } from './screenShareQuality'
 import { ScreenSender } from './screenSender'
 import type { ScreenStatsInput } from './screenStats'
+import { RemoteEncoders, serveScreenEncoder } from './screenEncoderRpc'
 import {
   clearActiveScreenStats,
   readScreenStatsInput,
@@ -91,6 +92,8 @@ export class CallMedia {
   private quality: CallQualityReader
   /** A minha live (publicar e trocar a qualidade ao vivo). */
   private screen: ScreenSender
+  /** O codificador de quem transmite, para o painel "Recebendo" (por RPC). */
+  private remoteEncoders: RemoteEncoders
 
   constructor(private readonly handlers: CallMediaHandlers) {
     this.room = new Room({
@@ -112,6 +115,8 @@ export class CallMedia {
       () => this.connected && this.room.state === ConnectionState.Connected
     )
     setActiveScreenStats(this)
+    this.remoteEncoders = new RemoteEncoders(this.room)
+    serveScreenEncoder(this.room, () => this.screen.encoderInfo())
     this.stopWindowWatch = watchVideoPause((pause) => {
       if (this.subscriptions.setPause(pause)) this.applySubscriptions()
     })
@@ -209,7 +214,10 @@ export class CallMedia {
   async readScreenStats(userId: string, local: boolean): Promise<ScreenStatsInput | null> {
     if (this.closing) return null
     const input = await readScreenStatsInput(this.room, userId, local)
-    return input?.local ? { ...input, quality: this.screen.current() } : input
+    if (!input) return null
+    return input.local
+      ? { ...input, quality: this.screen.current() }
+      : { ...input, encoder: this.remoteEncoders.get(userId) }
   }
 
   /** Pode publicar essa fonte, segundo as permissões que o servidor deu. */

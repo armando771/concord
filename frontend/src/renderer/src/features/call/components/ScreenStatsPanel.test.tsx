@@ -43,6 +43,24 @@ describe('ScreenStatsCard', () => {
     expect(html).toContain('max-w-[calc(100%-1rem)]')
   })
 
+  it('nota do driver no pé do painel, quebrando linha (não corta em 360 px)', () => {
+    const html = renderToStaticMarkup(
+      <ScreenStatsCard
+        local={false}
+        onClose={() => {}}
+        view={{
+          rows: [{ label: 'Decodificador', value: 'Software · FFmpeg' }],
+          status: null,
+          note: 'Instale o nvidia-vaapi-driver para usar a placa de vídeo'
+        }}
+      />
+    )
+    expect(html).toMatch(
+      /<p class="[^"]*">Instale o nvidia-vaapi-driver para usar a placa de vídeo<\/p>/
+    )
+    expect(html).not.toMatch(/truncate[^>]*>Instale/)
+  })
+
   it('minha transmissão', () => {
     const html = renderToStaticMarkup(
       <ScreenStatsCard local onClose={() => {}} view={{ rows: [], status: null }} />
