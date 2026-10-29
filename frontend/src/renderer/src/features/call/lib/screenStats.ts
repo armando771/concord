@@ -1,3 +1,5 @@
+import type { ScreenAdaptView } from '../store/screenAdaptStore'
+
 // Estatísticas da live (painel no canto do vídeo): transforma o getStats() do
 // envio (quem transmite) ou da recepção (quem assiste) em linhas prontas para a
 // UI. Puro: quem lê o RTCStatsReport e guarda a leitura anterior é o hook.
@@ -13,6 +15,8 @@ export interface ScreenStatsInput {
   streamState: string
   /** Envio: fps pedido na qualidade da transmissão. */
   requestedFps: number | null
+  /** Envio: degrau saindo agora (o controlador pode ter descido). */
+  quality?: ScreenAdaptView | null
 }
 
 /** O que a próxima leitura precisa para calcular taxas no intervalo. */
@@ -39,6 +43,8 @@ export interface ScreenStatsView {
 export type LivePauseReason = 'offscreen' | 'connection'
 
 type Stat = Record<string, unknown>
+
+const IDLE_TEXT = 'Envio pausado: ninguém está vendo a live agora'
 
 const PAUSE_TEXT: Record<LivePauseReason, string> = {
   offscreen: 'Vídeo pausado (fora de vista)',
@@ -89,20 +95,34 @@ export function codecImplementation(
   return kind ? `${kind} · ${name}` : name
 }
 
-function codecName(report: RTCStatsReport, codecId: unknown): string {
-  const codec = typeof codecId === 'string' ? (report.get(codecId) as Stat | undefined) : undefined
+const CODEC_NAMES: Record<string, string> = { H264: 'H.264', H265: 'H.265' }
+const WHERE: Record<string, string> = { Hardware: 'placa de vídeo', Software: 'processador' }
+
+/** "H.265 · placa de vídeo": o codec em uso e onde ele roda (quando o navegador conta). */
+function codecName(report: RTCStatsReport, stat: Stat, implementation: string): string {
+  const codec =
+    typeof stat.codecId === 'string' ? (report.get(stat.codecId) as Stat | undefined) : undefined
   const mime = text(codec?.mimeType)
-  return mime ? mime.slice(mime.indexOf('/') + 1).toUpperCase() : '—'
+  if (!mime) return '—'
+  const name = mime.slice(mime.indexOf('/') + 1).toUpperCase()
+  const where = WHERE[implementation.split(' · ')[0]]
+  return `${CODEC_NAMES[name] ?? name}${where ? ` · ${where}` : ''}`
 }
 
-/** O RTP de vídeo que está mandando/recebendo (com codec de reserva, o ativo que mais trafegou). */
+/**
+ * O RTP de vídeo que está mandando/recebendo (com codec de reserva, o ativo que
+ * mais trafegou). Nenhum ativo: o pausado (o dynacast pausa o envio quando
+ * ninguém está vendo a live), para o painel dizer isso em vez de "sem dados".
+ */
 function videoRtp(report: RTCStatsReport, type: string, bytesKey: string): Stat | null {
   let best: Stat | null = null
+  let idle: Stat | null = null
   report.forEach((stat: Stat) => {
-    if (stat.type !== type || stat.kind !== 'video' || stat.active === false) return
-    if (!best || (num(stat[bytesKey]) ?? 0) > (num(best[bytesKey]) ?? 0)) best = stat
+    if (stat.type !== type || stat.kind !== 'video') return
+    if (stat.active === false) idle ??= stat
+    else if (!best || (num(stat[bytesKey]) ?? 0) > (num(best[bytesKey]) ?? 0)) best = stat
   })
-  return best
+  return best ?? idle
 }
 
 function sampleOf(stat: Stat, bytesKey: string, framesKey: string): ScreenStatsSample {
@@ -130,6 +150,7 @@ function resolution(stat: Stat): string {
 }
 
 function fps(stat: Stat): string {
+  if (stat.active === false) return '0'
   const value = num(stat.framesPerSecond)
   return value === null ? '—' : String(Math.round(value))
 }
@@ -144,6 +165,16 @@ function averageQp(now: ScreenStatsSample, prev: ScreenStatsSample | null): Stat
   ]
 }
 
+const REDUCED_BY: Record<string, string> = { cpu: 'pelo PC', bandwidth: 'pela conexão' }
+
+/** "720p 60 (de 1080p 60, pela conexão)": o degrau saindo e por que desceu. */
+function qualityRows(view: ScreenAdaptView | null | undefined): StatRow[] {
+  if (!view) return []
+  const why = view.reason ? `, ${REDUCED_BY[view.reason]}` : ''
+  const value = view.reduced ? `${view.effective} (de ${view.chosen}${why})` : view.effective
+  return [{ label: 'Qualidade', value }]
+}
+
 function senderRows(
   input: ScreenStatsInput,
   stat: Stat,
@@ -151,18 +182,17 @@ function senderRows(
   prev: ScreenStatsSample | null
 ): StatRow[] {
   const requested = input.requestedFps === null ? '' : ` de ${input.requestedFps}`
+  const encoder = codecImplementation(
+    text(stat.encoderImplementation),
+    stat.powerEfficientEncoder as boolean | undefined
+  )
   return [
+    ...qualityRows(input.quality),
     { label: 'Quadros', value: `${fps(stat)}${requested} fps` },
     { label: 'Resolução', value: resolution(stat) },
     { label: 'Taxa', value: bitrate(now, prev) },
-    { label: 'Codec', value: codecName(input.report, stat.codecId) },
-    {
-      label: 'Codificador',
-      value: codecImplementation(
-        text(stat.encoderImplementation),
-        stat.powerEfficientEncoder as boolean | undefined
-      )
-    },
+    { label: 'Codec', value: codecName(input.report, stat, encoder) },
+    { label: 'Codificador', value: encoder },
     { label: 'Limitação', value: limitationLabel(text(stat.qualityLimitationReason)) },
     ...averageQp(now, prev)
   ]
@@ -188,18 +218,16 @@ function receiverRows(
   prev: ScreenStatsSample | null
 ): StatRow[] {
   const jitter = num(stat.jitter)
+  const decoder = codecImplementation(
+    text(stat.decoderImplementation),
+    stat.powerEfficientDecoder as boolean | undefined
+  )
   return [
     { label: 'Quadros', value: `${fps(stat)} fps` },
     { label: 'Resolução', value: resolution(stat) },
     { label: 'Taxa', value: bitrate(now, prev) },
-    { label: 'Codec', value: codecName(input.report, stat.codecId) },
-    {
-      label: 'Decodificador',
-      value: codecImplementation(
-        text(stat.decoderImplementation),
-        stat.powerEfficientDecoder as boolean | undefined
-      )
-    },
+    { label: 'Codec', value: codecName(input.report, stat, decoder) },
+    { label: 'Decodificador', value: decoder },
     { label: 'Perda', value: lossPercent(now, prev) },
     { label: 'Jitter', value: jitter === null ? '—' : `${Math.round(jitter * 1000)} ms` },
     { label: 'Descartados', value: String(num(stat.framesDropped) ?? '—') },
@@ -217,7 +245,7 @@ export function screenStatsView(
     : ['inbound-rtp', 'bytesReceived', 'framesDecoded']
   const stat = videoRtp(input.report, type, bytesKey)
   const pause = input.local ? null : livePauseReason(input.enabled, input.streamState)
-  const pauseText = pause ? PAUSE_TEXT[pause] : null
+  const pauseText = pause ? PAUSE_TEXT[pause] : stat?.active === false ? IDLE_TEXT : null
   if (!stat) return { view: { rows: [], status: pauseText ?? 'Ainda sem dados' }, sample: null }
   const now = sampleOf(stat, bytesKey, framesKey)
   const rows = input.local
