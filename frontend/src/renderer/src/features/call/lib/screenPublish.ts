@@ -1,5 +1,5 @@
 import { AudioPresets, Track, type LocalParticipant, type LocalVideoTrack } from 'livekit-client'
-import { canEncodeH264, loadScreenCodec, screenCodecOptions } from './screenCodec'
+import type { ScreenCodecOptions } from './screenCodec'
 import {
   screenEncoding,
   screenMotion,
@@ -8,15 +8,21 @@ import {
   streamQuality,
   type ScreenShareQuality
 } from './screenShareQuality'
+import { screenSenderEncodings, simulcastLayers } from './screenSimulcast'
 
 // Publicação da tela (vídeo + som) e troca de qualidade ao vivo, sem
 // despublicar. Quem decide se a sala está conectada é o CallMedia (`connected`).
 
-type ScreenEncoding = ReturnType<typeof screenEncoding>
+/** Como publicar: codec (AV1/H.264/VP8 e reserva) e a camada extra de 720p. */
+export interface ScreenPublishPlan {
+  codec: ScreenCodecOptions
+  simulcast: boolean
+}
 
 export async function publishScreenTracks(
   participant: LocalParticipant,
-  stream: MediaStream
+  stream: MediaStream,
+  plan: ScreenPublishPlan
 ): Promise<void> {
   const [video] = stream.getVideoTracks()
   if (video) {
@@ -24,10 +30,11 @@ export async function publishScreenTracks(
     await participant.publishTrack(video, {
       source: Track.Source.ScreenShare,
       name: 'screen',
-      simulcast: false,
+      simulcast: plan.simulcast,
+      ...(plan.simulcast ? { screenShareSimulcastLayers: simulcastLayers() } : {}),
       screenShareEncoding: screenEncoding(quality, video.getSettings()),
       // Codec por publicação: só a tela; a câmera segue o padrão da sala (VP8).
-      ...screenCodecOptions(loadScreenCodec(), canEncodeH264()),
+      ...plan.codec,
       degradationPreference: screenMotion(quality.frameRate).degradationPreference
     })
   }
@@ -54,9 +61,10 @@ function publishedScreen(participant: LocalParticipant, stream: MediaStream) {
   return { publication, track, video, sender }
 }
 
-async function setSenderEncoding(sender: RTCRtpSender, encoding: RTCRtpEncodingParameters) {
+/** Troca bitrate/fps/escala de cada camada; o `active` (do dynacast) fica como está. */
+async function setSenderEncodings(sender: RTCRtpSender, encodings: RTCRtpEncodingParameters[]) {
   const parameters = sender.getParameters()
-  Object.assign(parameters.encodings[0], encoding)
+  parameters.encodings.forEach((encoding, index) => Object.assign(encoding, encodings[index]))
   await sender.setParameters(parameters)
 }
 
@@ -68,7 +76,9 @@ export async function updatePublishedScreenQuality(
   participant: LocalParticipant,
   stream: MediaStream,
   quality: ScreenShareQuality,
-  connected: () => boolean
+  connected: () => boolean,
+  /** fps escolhido pela pessoa: um jogo que o controlador desceu para 30 segue 'motion'. */
+  chosenFps: ScreenShareQuality['frameRate'] = quality.frameRate
 ): Promise<void> {
   const screen = publishedScreen(participant, stream)
   const current = (): boolean =>
@@ -79,16 +89,18 @@ export async function updatePublishedScreenQuality(
   if (!screen || !current()) throw new Error('screen_not_available')
   const { publication, track, video, sender } = screen
   const previous = video.getConstraints()
-  const oldParameters = sender.getParameters()
-  if (oldParameters.encodings.length !== 1) throw new Error('unsupported_screen_encodings')
-  const oldEncoding = { ...oldParameters.encodings[0] }
-  const encoding: ScreenEncoding = screenEncoding(quality, screenSource(video))
+  const oldEncodings = sender.getParameters().encodings.map((encoding) => ({ ...encoding }))
+  // 1 camada, ou 2 com a camada extra de 720p (por baixo).
+  if (oldEncodings.length < 1 || oldEncodings.length > 2)
+    throw new Error('unsupported_screen_encodings')
+  const encodings = screenSenderEncodings(quality, screenSource(video), oldEncodings.length)
+  const encoding = screenEncoding(quality, screenSource(video))
   let encodingApplied = false
   try {
     // applyConstraints substitui as restrições anteriores; Fonte remove width/height.
     await video.applyConstraints(screenVideoConstraints(quality, screenSource(video)))
     if (!current()) throw new Error('screen_changed')
-    await setSenderEncoding(sender, encoding)
+    await setSenderEncodings(sender, encodings)
     encodingApplied = true
     if (!current()) throw new Error('screen_changed')
     // Reconexões internas do SDK também precisam conhecer o novo orçamento.
@@ -99,21 +111,21 @@ export async function updatePublishedScreenQuality(
     if (video.readyState === 'live') await video.applyConstraints(previous).catch(() => {})
     if (encodingApplied && current()) {
       const parameters = sender.getParameters()
-      parameters.encodings[0] = { ...oldEncoding }
+      parameters.encodings = oldEncodings
       await sender.setParameters(parameters).catch(() => {})
     }
     throw error
   }
-  await applyScreenMotion(video, track, quality)
+  await applyScreenMotion(video, track, chosenFps)
 }
 
-/** Dica de conteúdo e degradação seguem o fps: jogo (60) fluido, texto (30) nítido. */
+/** Dica de conteúdo pelo fps (jogo 60 = motion, texto 30 = detail); a resolução é mantida. */
 async function applyScreenMotion(
   video: MediaStreamTrack,
   track: LocalVideoTrack,
-  quality: ScreenShareQuality
+  frameRate: ScreenShareQuality['frameRate']
 ): Promise<void> {
-  const { contentHint, degradationPreference } = screenMotion(quality.frameRate)
+  const { contentHint, degradationPreference } = screenMotion(frameRate)
   video.contentHint = contentHint
   track.publishOptions = { ...track.publishOptions, degradationPreference }
   // Recusar a preferência não derruba a troca já aplicada.
