@@ -120,10 +120,10 @@ stores; nenhum arquivo concentra duas responsabilidades. Nada vai para `callStor
 ## PRs empilhados
 
 1. **Base e cartão estático:** lógica portada, `ProfileCard` sem efeitos, aba "Você" com o cartão,
-   rota `perfil/[id]`, ADR 0024 e dependências.
-2. **Skia:** adaptador, efeitos do tema e nome estilizado, fontes.
+   rota `perfil/[id]` e o ADR 0024. Sem dependência nova: ela entra no PR que a usa.
+2. **Skia:** `@shopify/react-native-skia`, adaptador, efeitos do tema e nome estilizado, fontes.
 3. **Editor:** as quatro seções, rascunho, prévia ao vivo, salvar e descartar.
-4. **Imagem e GIF:** seleção (galeria e câmera), recorte e `cropGif` com a superfície do Skia.
+4. **Imagem e GIF:** `expo-image-picker`, seleção (galeria e câmera), recorte e `cropGif` com a superfície do Skia.
 
 Antes do plano do PR 2 e do PR 4, um **spike curto** prova que o Skia (a) roda o adaptador com o efeito
 Fogo sem ficar abaixo de 24 fps de forma sustentada e (b) decodifica os quadros de um GIF no Android.
