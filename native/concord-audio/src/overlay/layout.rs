@@ -49,6 +49,8 @@ pub mod css {
     pub const INITIAL_SIZE: f32 = 12.0;
     pub const ICON: f32 = 14.0;
     pub const ICON_GAP: f32 = 2.0;
+    /// gap-1.5 entre o olho e o número do selo de espectadores.
+    pub const VIEWERS_GAP: f32 = 6.0;
     pub const MORE_PAD_X: f32 = 12.0;
     pub const HINT_SIZE: f32 = 12.0;
     pub const HINT_LINE: f32 = 16.0;
@@ -79,6 +81,8 @@ pub struct Pill {
     pub tag: Option<RectF>,
     /// Microfone cortado e, se ensurdecido, fone cortado.
     pub icons: Vec<RectF>,
+    /// Olho de quem assiste a minha live (depois dos ícones de mudo).
+    pub eye: Option<RectF>,
     /// 0–1.
     pub opacity: f32,
 }
@@ -90,6 +94,16 @@ pub struct More {
     pub opacity: f32,
 }
 
+/// Selo "olho + número" de espectadores da minha live, no fim da lista.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Viewers {
+    pub rect: RectF,
+    pub eye: RectF,
+    pub label: String,
+    pub label_rect: RectF,
+    pub opacity: f32,
+}
+
 /// A lista montada, em coordenadas da caixa (0,0 = canto da caixa).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Scene {
@@ -97,6 +111,7 @@ pub struct Scene {
     pub height: f32,
     pub pills: Vec<Pill>,
     pub more: Option<More>,
+    pub viewers: Option<Viewers>,
     /// k × escala: tamanho de 1 px do CSS dentro da lista.
     pub unit: f32,
     pub k: f32,
@@ -113,8 +128,9 @@ fn pill(index: usize, member: &Member, top: f32, u: f32, opacity: u32, measure: 
     let tag_w = member.tag.as_deref().map(|t| measure(t, TAG_SIZE * u, false).ceil());
     let icon_count = if member.deafened { 2 } else if member.muted { 1 } else { 0 };
     let icons_w = if icon_count == 0 { 0.0 } else { (ICON * icon_count as f32 + ICON_GAP * (icon_count - 1) as f32) * u };
+    let eye_w = if member.watching { PILL_GAP * u + ICON * u } else { 0.0 };
     // Tudo menos o nome; o nome corta com "…" quando a pílula passa de 240 px.
-    let fixed = x + tag_w.map_or(0.0, |w| PILL_GAP * u + w) + if icon_count > 0 { PILL_GAP * u + icons_w } else { 0.0 } + PILL_PAD_RIGHT * u;
+    let fixed = x + tag_w.map_or(0.0, |w| PILL_GAP * u + w) + if icon_count > 0 { PILL_GAP * u + icons_w } else { 0.0 } + eye_w + PILL_PAD_RIGHT * u;
     let natural = measure(&member.name, NAME_SIZE * u, member.speaking).ceil();
     let name_w = natural.min(PILL_MAX_W * u - fixed).max(0.0);
     let name = RectF { x, y: mid - NAME_LINE * u / 2.0, w: name_w, h: NAME_LINE * u };
@@ -134,6 +150,12 @@ fn pill(index: usize, member: &Member, top: f32, u: f32, opacity: u32, measure: 
             x += ICON * u + if i + 1 < icon_count { ICON_GAP * u } else { 0.0 };
         }
     }
+    let eye = member.watching.then(|| {
+        x += PILL_GAP * u;
+        let r = RectF { x, y: mid - ICON * u / 2.0, w: ICON * u, h: ICON * u };
+        x += ICON * u;
+        r
+    });
     x += PILL_PAD_RIGHT * u;
     Pill {
         index,
@@ -142,12 +164,30 @@ fn pill(index: usize, member: &Member, top: f32, u: f32, opacity: u32, measure: 
         name,
         tag,
         icons,
+        eye,
         opacity: row_opacity(opacity, member.speaking) as f32 / 100.0,
     }
 }
 
 fn shift(r: RectF, dx: f32, dy: f32) -> RectF {
     RectF { x: r.x + dx, y: r.y + dy, ..r }
+}
+
+/// Selo de espectadores (mesma altura do "+N"): olho, espaço e o número.
+fn viewers_badge(count: u32, top: f32, u: f32, opacity: u32, measure: Measure) -> Viewers {
+    use css::*;
+    let label = count.to_string();
+    let text_w = measure(&label, NAME_SIZE * u, false).ceil();
+    let h = (PILL_PAD_Y * 2.0 + NAME_LINE) * u;
+    let mid = top + h / 2.0;
+    let eye = RectF { x: MORE_PAD_X * u, y: mid - ICON * u / 2.0, w: ICON * u, h: ICON * u };
+    let label_rect = RectF { x: eye.right() + VIEWERS_GAP * u, y: mid - NAME_LINE * u / 2.0, w: text_w, h: NAME_LINE * u };
+    let rect = RectF { x: 0.0, y: top, w: label_rect.right() + MORE_PAD_X * u, h };
+    Viewers { rect, eye, label, label_rect, opacity: row_opacity(opacity, false) as f32 / 100.0 }
+}
+
+fn shift_viewers(v: Viewers, by: f32) -> Viewers {
+    Viewers { rect: shift(v.rect, by, by), eye: shift(v.eye, by, by), label_rect: shift(v.label_rect, by, by), ..v }
 }
 
 /// Monta a lista. `scale` = escala em uso (a salva ou a do arraste); `k` = DPI/96.
@@ -169,8 +209,13 @@ pub fn scene(state: &State, scale: f64, k: f32, measure: Measure) -> Scene {
         top += rect.h + ROW_GAP * u;
         More { rect, label, opacity: row_opacity(state.opacity, false) as f32 / 100.0 }
     });
+    let viewers = state.viewers.map(|count| {
+        let badge = viewers_badge(count, top, u, state.opacity, measure);
+        top += badge.rect.h + ROW_GAP * u;
+        badge
+    });
     let column_h = if top > 0.0 { top - ROW_GAP * u } else { 0.0 };
-    let column_w = pills.iter().map(|p| p.rect.w).chain(more.iter().map(|m| m.rect.w)).fold(0.0, f32::max);
+    let column_w = pills.iter().map(|p| p.rect.w).chain(more.iter().map(|m| m.rect.w)).chain(viewers.iter().map(|v| v.rect.w)).fold(0.0, f32::max);
 
     // Tudo para dentro da caixa (padding + borda, que não escalam).
     for p in &mut pills {
@@ -181,9 +226,11 @@ pub fn scene(state: &State, scale: f64, k: f32, measure: Measure) -> Scene {
         for icon in &mut p.icons {
             *icon = shift(*icon, inset, inset);
         }
+        p.eye = p.eye.map(|e| shift(e, inset, inset));
     }
     let more = more.map(|m| More { rect: shift(m.rect, inset, inset), ..m });
-    Scene { width: (column_w + inset * 2.0).ceil(), height: (column_h + inset * 2.0).ceil(), pills, more, unit: u, k }
+    let viewers = viewers.map(|v| shift_viewers(v, inset));
+    Scene { width: (column_w + inset * 2.0).ceil(), height: (column_h + inset * 2.0).ceil(), pills, more, viewers, unit: u, k }
 }
 
 // ---- Posição na área de trabalho (overlayLayout.ts) ----
@@ -327,6 +374,7 @@ mod tests {
             muted: false,
             deafened: false,
             speaking: false,
+            watching: false,
         }
     }
 
@@ -409,6 +457,55 @@ mod tests {
         assert_eq!(more.rect.w, 24.0 + 14.0);
         assert_eq!(s.height, more.rect.bottom() + 10.0);
         assert_eq!(s.width, s.pills[1].rect.w + 20.0);
+    }
+
+    #[test]
+    fn olho_de_quem_assiste_vem_depois_dos_icones_e_alarga_a_pilula() {
+        let mut ana = member("Ana");
+        ana.muted = true;
+        ana.watching = true;
+        let p = &scene(&state(vec![ana.clone()]), 1.0, 1.0, &measure).pills[0];
+        let eye = p.eye.unwrap();
+        assert_eq!((eye.w, eye.h), (14.0, 14.0));
+        assert_eq!(eye.x, p.icons[0].right() + 8.0);
+        assert_eq!(p.rect.right(), eye.right() + 12.0);
+        ana.watching = false;
+        assert!(scene(&state(vec![ana]), 1.0, 1.0, &measure).pills[0].eye.is_none());
+    }
+
+    #[test]
+    fn olho_entra_na_conta_do_corte_do_nome() {
+        let mut m = member(&"x".repeat(100));
+        m.watching = true;
+        let p = &scene(&state(vec![m]), 1.0, 1.0, &measure).pills[0];
+        assert_eq!(p.rect.w, 240.0);
+        assert_eq!(p.name.w, 240.0 - 4.0 - 28.0 - 8.0 - (8.0 + 14.0) - 12.0);
+    }
+
+    #[test]
+    fn selo_de_espectadores_depois_da_lista() {
+        let mut st = state(vec![member("Ana")]);
+        st.more = 2;
+        st.viewers = Some(12);
+        let s = scene(&st, 1.0, 1.0, &measure);
+        let more = s.more.as_ref().unwrap();
+        let v = s.viewers.as_ref().unwrap();
+        assert_eq!(v.label, "12");
+        assert_eq!(v.rect.y, more.rect.bottom() + 6.0);
+        assert_eq!(v.rect.h, 28.0);
+        // 12 + 14 (olho) + 6 + 14 (dois dígitos) + 12.
+        assert_eq!(v.rect.w, 12.0 + 14.0 + 6.0 + 14.0 + 12.0);
+        assert_eq!(v.eye.x, v.rect.x + 12.0);
+        assert_eq!(v.label_rect.x, v.eye.right() + 6.0);
+        assert_eq!(s.height, v.rect.bottom() + 10.0);
+    }
+
+    #[test]
+    fn sem_live_nao_tem_selo_e_zero_espectadores_tem() {
+        let mut st = state(vec![member("Ana")]);
+        assert!(scene(&st, 1.0, 1.0, &measure).viewers.is_none());
+        st.viewers = Some(0);
+        assert_eq!(scene(&st, 1.0, 1.0, &measure).viewers.unwrap().label, "0");
     }
 
     #[test]

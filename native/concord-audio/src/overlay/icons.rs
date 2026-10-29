@@ -8,6 +8,10 @@ pub const MIC_OFF: &str = "M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98
 pub const HEADSET: &str = "M12 1c-4.97 0-9 4.03-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7c0-4.97-4.03-9-9-9z";
 pub const HEADSET_SLASH: ((f32, f32), (f32, f32), f32) = ((3.5, 2.5), (21.5, 20.5), 2.4);
 
+/// EyeIcon (sem arcos, que o leitor não lê): contorno + íris (sentido contrário, vira
+/// furo no winding) + pupila. Mesmo desenho de shared/ui/icons/actions.tsx.
+pub const EYE: &str = "M12 5C6.6 5 3.1 9.3 2 12c1.1 2.7 4.6 7 10 7s8.9-4.3 10-7c-1.1-2.7-4.6-7-10-7zM12 8c2.21 0 4 1.79 4 4s-1.79 4-4 4-4-1.79-4-4 1.79-4 4-4zM12 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z";
+
 /// Segmento em coordenadas absolutas.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Seg {
@@ -206,6 +210,17 @@ mod tests {
         for seg in mic.iter().chain(&headset) {
             if let Seg::Line(x, y) | Seg::Move(x, y) | Seg::Cubic(_, _, _, _, x, y) = *seg {
                 assert!((-0.01..=24.01).contains(&x) && (-0.01..=24.01).contains(&y), "{seg:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn olho_le_inteiro_e_cabe_no_viewbox() {
+        let eye = parse_path(EYE).unwrap();
+        assert_eq!(eye.iter().filter(|s| matches!(s, Seg::Move(..))).count(), 3);
+        for seg in &eye {
+            if let Seg::Line(x, y) | Seg::Move(x, y) | Seg::Cubic(_, _, _, _, x, y) = *seg {
+                assert!((0.0..=24.0).contains(&x) && (0.0..=24.0).contains(&y), "{seg:?}");
             }
         }
     }
