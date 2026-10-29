@@ -44,7 +44,7 @@ func TestBackfillCalculaOXPInicialSemAvisarSubida(t *testing.T) {
 			VALUES ($1, $2::text, $2::text, $2::text || '@ex.com', 'x', NOW(), NOW() - $3::interval, $4)`, id, name, age, bot)
 		return id
 	}
-	ana, bia, nova, bot := user("60 days", false), user("60 days", false), user("1 day", false), user("60 days", true)
+	ana, bia, nova, bot := user("60 days", false), user("60 days", false), user("12 hours", false), user("60 days", true)
 	server, channel := uuid.NewString(), uuid.NewString()
 	exec(`INSERT INTO servers (id, name, owner_id) VALUES ($1, 'bf', $2)`, server, ana)
 	exec(`INSERT INTO channels (id, server_id, name, created_by) VALUES ($1, $2, 'geral', $3)`, channel, server, ana)
