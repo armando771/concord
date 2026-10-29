@@ -38,8 +38,16 @@ func TestGateBlocksGuestOnlyActionsInTheirCall(t *testing.T) {
 	if strings.Join(next.got, ",") != strings.Join(want, ",") {
 		t.Fatalf("repassado = %v, want %v", next.got, want)
 	}
-	if n := len(w.notify.sent[sess.User.ID]); n != 5 || !strings.Contains(w.notify.sent[sess.User.ID][0], "call:error") {
-		t.Fatalf("o visitante recebe o erro de cada recusa: %v", w.notify.sent[sess.User.ID])
+	refusals := w.notify.sent[sess.User.ID]
+	if n := len(refusals); n != 5 || !strings.Contains(refusals[0], `"type":"guest:refused"`) {
+		t.Fatalf("o visitante recebe o aviso de cada recusa: %v", refusals)
+	}
+	// Regressão: call:error sem call_id derruba a call no app (cleanup); a
+	// recusa não pode tirar o visitante da call.
+	for _, ev := range refusals {
+		if strings.Contains(ev, "call:error") {
+			t.Fatalf("recusa como call:error derruba a call: %s", ev)
+		}
 	}
 	if !gate.IsParticipant("c", "u") || gate.IsParticipant("c", "x") {
 		t.Fatal("IsParticipant repassa")
