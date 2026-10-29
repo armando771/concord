@@ -70,6 +70,70 @@ func TestInvisibleConnectsSilently(t *testing.T) {
 	}
 }
 
+func TestInvisibleDisconnectsSilently(t *testing.T) {
+	h := hubWithStatuses(map[string]string{"b": user.StatusInvisible})
+	watcher := newTestClient(h, "a")
+	h.Register(watcher)
+	drain(t, watcher)
+
+	b := newTestClient(h, "b")
+	h.Register(b)
+	if events := drain(t, watcher); len(events) != 0 {
+		t.Fatalf("invisível não pode anunciar que conectou: %+v", events)
+	}
+
+	h.Unregister(b)
+	if events := drain(t, watcher); len(events) != 0 {
+		t.Fatalf("invisível não pode anunciar que desconectou: %+v", events)
+	}
+}
+
+func TestInternalPresenceDifferentiation(t *testing.T) {
+	h := hubWithStatuses(map[string]string{"b": user.StatusInvisible})
+
+	// Desconectado
+	if h.IsConnected("b") {
+		t.Fatal("desconectado não deve estar conectado")
+	}
+	if h.IsInvisible("b") {
+		t.Fatal("desconectado não deve ser invisível")
+	}
+	if got := h.ChosenStatus("b"); got != user.StatusOffline {
+		t.Fatalf("desconectado: status = %q, want %q", got, user.StatusOffline)
+	}
+
+	// Conectado como invisível
+	b := newTestClient(h, "b")
+	h.Register(b)
+	if !h.IsConnected("b") {
+		t.Fatal("deve diferenciar que está conectado")
+	}
+	if !h.IsInvisible("b") {
+		t.Fatal("deve diferenciar que está invisível")
+	}
+	if got := h.ChosenStatus("b"); got != user.StatusInvisible {
+		t.Fatalf("status escolhido = %q, want %q", got, user.StatusInvisible)
+	}
+	if got := h.EffectiveStatus("b"); got != user.StatusOffline {
+		t.Fatalf("status efetivo = %q, want %q", got, user.StatusOffline)
+	}
+
+	// Transição para online
+	h.SetUserStatus("b", user.StatusOnline)
+	if !h.IsConnected("b") {
+		t.Fatal("continua conectado")
+	}
+	if h.IsInvisible("b") {
+		t.Fatal("não é mais invisível")
+	}
+	if got := h.ChosenStatus("b"); got != user.StatusOnline {
+		t.Fatalf("status escolhido = %q, want %q", got, user.StatusOnline)
+	}
+	if got := h.EffectiveStatus("b"); got != user.StatusOnline {
+		t.Fatalf("status efetivo = %q, want %q", got, user.StatusOnline)
+	}
+}
+
 func TestConnectAnnouncesChosenStatus(t *testing.T) {
 	h := hubWithStatuses(map[string]string{"b": user.StatusDND})
 	watcher := newTestClient(h, "a")

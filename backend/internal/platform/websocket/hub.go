@@ -143,10 +143,11 @@ func (h *Hub) Unregister(client *Client) {
 	hadActivity := false
 	h.presence[client.userID]--
 	if h.presence[client.userID] <= 0 {
+		wasInvisible := h.statuses[client.userID] == user.StatusInvisible
 		delete(h.presence, client.userID)
 		delete(h.statuses, client.userID)
 		hadActivity = h.rich.drop(client.userID)
-		wasOnline = !h.shuttingDown
+		wasOnline = !h.shuttingDown && !wasInvisible
 	}
 	h.mu.Unlock()
 
@@ -211,49 +212,6 @@ func (h *Hub) ShuttingDown() bool {
 	return h.shuttingDown
 }
 
-// broadcastPresence avisa todo mundo do status efetivo. "online" continua no
-// evento para quem só quer saber se está conectado.
-func (h *Hub) broadcastPresence(userID, status string) {
-	h.BroadcastAll(writeEvent("presence:update", map[string]interface{}{
-		"user_id": userID,
-		"online":  status != user.StatusOffline,
-		"status":  status,
-	}))
-}
-
-// effectiveStatusLocked: precisa de h.mu (leitura).
-func (h *Hub) effectiveStatusLocked(userID string) string {
-	connected := h.presence[userID] > 0
-	status, ok := h.statuses[userID]
-	if !ok {
-		status = user.StatusOnline
-	}
-	return user.EffectiveStatus(status, connected)
-}
-
-// EffectiveStatus é o status que os outros veem (offline se desconectado ou
-// invisível).
-func (h *Hub) EffectiveStatus(userID string) string {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return h.effectiveStatusLocked(userID)
-}
-
-// SetUserStatus guarda o status escolhido e avisa a presença se mudou o que
-// os outros veem.
-func (h *Hub) SetUserStatus(userID, status string) {
-	h.mu.Lock()
-	before := h.effectiveStatusLocked(userID)
-	wasInvisible := h.statuses[userID] == user.StatusInvisible
-	h.statuses[userID] = status
-	after := h.effectiveStatusLocked(userID)
-	h.mu.Unlock()
-
-	if before != after {
-		h.broadcastPresence(userID, after)
-	}
-	h.republishOnVisibility(userID, wasInvisible, status == user.StatusInvisible)
-}
 
 // PublishUserUpdate manda o perfil novo (nome, avatar, banner, bio...) para
 // todo mundo, como a presença.
@@ -425,39 +383,6 @@ func (h *Hub) PublishAppUpdate(file, version string) {
 	}))
 }
 
-func (h *Hub) IsOnline(userID string) bool {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return h.presence[userID] > 0
-}
-
-// OnlineUserIDs lista quem tem pelo menos uma conexão aberta (badges).
-func (h *Hub) OnlineUserIDs() []string {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	ids := make([]string, 0, len(h.presence))
-	for id, n := range h.presence {
-		if n > 0 {
-			ids = append(ids, id)
-		}
-	}
-	return ids
-}
-
-// PresenceMap devolve o status efetivo de cada id ("offline" se desconectado
-// ou invisível).
-func (h *Hub) PresenceMap(userIDs []string) map[string]string {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	result := make(map[string]string, len(userIDs))
-	for _, id := range userIDs {
-		if id == "" {
-			continue
-		}
-		result[id] = h.effectiveStatusLocked(id)
-	}
-	return result
-}
 
 // messageRooms são as salas por onde chegam message:create, message:update e
 // message:delete:
