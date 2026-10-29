@@ -1,7 +1,6 @@
 import { useReducer } from 'react'
 import { createPortal } from 'react-dom'
-import { XIcon } from './icons'
-import { ArrowLeftIcon } from './iconsExtra'
+import { ArrowLeftIcon, XIcon } from './icons'
 import {
   settingsMobileStart,
   settingsMobileView,

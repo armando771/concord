@@ -1,0 +1,9 @@
+// Conjunto único de ícones da Salinha, por grupo. Importe sempre daqui
+// (`shared/ui/icons`); ícone novo vai no arquivo do grupo dele.
+export { Icon, LineIcon, type IconProps, type IconSize } from './Icon'
+export * from './actions'
+export * from './brand'
+export * from './media'
+export * from './nav'
+export * from './people'
+export * from './tools'

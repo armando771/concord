@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactionTooltip from './ReactionTooltip'
-import { AddReactionIcon } from './messageActionIcons'
+import { AddReactionIcon } from '../../../shared/ui/icons'
 
 export interface ReactionSummary {
   emoji: string
