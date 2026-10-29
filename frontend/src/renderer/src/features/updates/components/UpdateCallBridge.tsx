@@ -5,6 +5,7 @@ import { useChatStore } from '../../chat/store/chatStore'
 import { API_BASE_URL } from '../../../shared/lib/config'
 import { ApiError } from '../../../shared/api/client'
 import { createCallResumer } from '../lib/updateCallResume'
+import { useCallResumeStore } from '../store/callResumeStore'
 import { showToast } from '../../../shared/store/toastStore'
 import router from '../../../app/router'
 import type { PendingCallResume } from '../../../../../shared/callResume'
@@ -78,7 +79,9 @@ export default function UpdateCallBridge(): null {
     })
     void resumer.tick()
     const timer = setInterval(() => {
-      void resumer.tick()
+      void resumer.tick().then(() => {
+        if (resumer.settled()) useCallResumeStore.getState().markSettled()
+      })
     }, 1000)
     return () => {
       clearInterval(timer)

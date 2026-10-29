@@ -240,14 +240,13 @@ var baseCategories = []Category{
 		},
 	},
 	{
-		// Amizades aceitas agora com conta real: e-mail confirmado e criada há
-		// 7 dias (amigoContaRealDias). Aceitar reavalia na hora (AcceptHook da
-		// amizade); o amigo que vira conta real depois entra na próxima
+		// Amizades aceitas agora com conta real: e-mail confirmado e não bot.
+		// Aceitar reavalia na hora (AcceptHook da amizade); o amigo que vira conta real depois entra na próxima
 		// avaliação (varredura dos online ou perfil aberto), sem custo extra.
 		// Desfazer não tira o tier já conquistado.
 		Key:         "amigos",
 		Name:        "Amigos",
-		Description: "Faça amizades no Salinha. Contam os pedidos de amizade aceitos com contas de e-mail confirmado e criadas há pelo menos 7 dias.",
+		Description: "Faça amizades no Salinha. Contam os pedidos de amizade aceitos com contas de e-mail confirmado.",
 		Unit:        UnitFriends,
 		Tiers: []Tier{
 			{"Enturmado", 5, RarityCommon},

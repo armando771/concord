@@ -16,6 +16,7 @@ import { startCallInvites } from './features/call/lib/callInviteStart'
 import { startSpeechReport } from './features/call/lib/speechReportStart'
 import { startPresenceActivity } from './features/activity/lib/presenceActivityStart'
 import { startTTS } from './features/tts/lib/ttsStart'
+import { startServerLevels } from './features/serverlevel/lib/serverLevelStart'
 
 // Tema salvo antes do primeiro render: o app já abre com as cores certas.
 startThemeSync()
@@ -37,6 +38,9 @@ startCallInvites()
 
 // O jogo e a música dos outros agora (presence:activity).
 startPresenceActivity()
+
+// Nível do servidor: a barra anda e a subida vira um toast (server:level:*).
+startServerLevels()
 
 // Mensagens /tts lidas em voz para quem está em call.
 startTTS()

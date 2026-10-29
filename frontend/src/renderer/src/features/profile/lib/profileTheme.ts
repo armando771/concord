@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { pickInk, type Ink } from './profileInk'
+import { PRIDE_PALETTE, prideGradient } from './profilePride'
 import type { EffectParams } from './effects/types'
 import {
   DEFAULT_EXTRAS,
@@ -49,7 +50,8 @@ export const PROFILE_BORDERS = [
 export const PROFILE_BACKGROUNDS = [
   { id: 'default', label: 'Padrão', colors: 0 },
   { id: 'solid', label: 'Cor sólida', colors: 1 },
-  { id: 'gradient', label: 'Degradê', colors: 2 }
+  { id: 'gradient', label: 'Degradê', colors: 2 },
+  { id: 'pride', label: 'Arco-íris do orgulho', colors: 0 }
 ] as const
 
 /**
@@ -143,6 +145,8 @@ export interface ProfileThemeLook {
   className: string
   /** Variáveis que o CSS lê (assets/profileTheme.css). */
   style: CSSProperties
+  /** Cores reais do fundo (no pride, as faixas escurecidas): contraste de cargos e níveis. */
+  palette: string[]
   /** Cor do fundo logo abaixo do banner: o anel do avatar e o recorte do status. */
   surface: string
   ink: Ink
@@ -153,9 +157,15 @@ export interface ProfileThemeLook {
 /** Fundo do corpo: sempre uma imagem (no "background" em camadas a cor só vai na última). */
 function bodyBackground(theme: ProfileTheme, surface: string): string {
   const bg = theme.background_colors
+  if (theme.background === 'pride') return prideGradient(theme.background_angle)
   return theme.background === 'gradient'
     ? `linear-gradient(${theme.background_angle}deg, ${bg[0]}, ${bg[1]})`
     : `linear-gradient(${surface}, ${surface})`
+}
+
+/** Cores que o texto precisa vencer: as do fundo (as faixas, no pride). */
+function backgroundPalette(theme: ProfileTheme): string[] {
+  return theme.background === 'pride' ? PRIDE_PALETTE : theme.background_colors
 }
 
 function themeVars(theme: ProfileTheme, surface: string): Record<string, string> {
@@ -175,7 +185,7 @@ function inkClass(bg: string[], ink: Ink): string[] {
 
 /** Como desenhar o cartão com o tema (já resolvido). */
 export function profileThemeLook(theme: ProfileTheme): ProfileThemeLook {
-  const bg = theme.background_colors
+  const bg = backgroundPalette(theme)
   const surface = bg[0] ?? CARD_BG
   const ink = bg.length ? pickInk(bg) : 'light'
   const className = [
@@ -186,7 +196,14 @@ export function profileThemeLook(theme: ProfileTheme): ProfileThemeLook {
   ].join(' ')
   const def = effectDef(theme.effect)
   const fx = { id: def.id, kind: def.kind, params: effectParams(theme, def.color ?? '#ffffff') }
-  return { className, style: themeVars(theme, surface) as CSSProperties, surface, ink, fx }
+  return {
+    className,
+    style: themeVars(theme, surface) as CSSProperties,
+    palette: bg,
+    surface,
+    ink,
+    fx
+  }
 }
 
 /** Mesmo tema (compara já resolvido). */

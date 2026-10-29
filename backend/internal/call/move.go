@@ -103,7 +103,9 @@ func authorizeMove(snap *permission.Snapshot, actorID, targetID string, from voi
 	if targetID != actorID && !snap.CanMoveMember(actorID, targetID) {
 		return ErrCannotActOnMember
 	}
-	if !permission.Has(snap.Channel(dest.ID, targetID), permission.ViewChannel|permission.Connect) {
+	// Visitante (não é membro): o acesso dele passa para o destino
+	// (admitMovedGuest) e a entrada é conferida ao entrar na chamada.
+	if snap.IsMember(targetID) && !permission.Has(snap.Channel(dest.ID, targetID), permission.ViewChannel|permission.Connect) {
 		return ErrTargetCannotJoin
 	}
 	return nil
@@ -114,11 +116,19 @@ func authorizeMove(snap *permission.Snapshot, actorID, targetID string, from voi
 // destino e estar no mesmo nível de hierarquia ou acima da pessoa; o destino precisa deixar a
 // pessoa entrar (CONNECT).
 func (s *Service) MoveToChannel(ctx context.Context, actorID, targetID, channelID string) (*Call, error) {
-	dest, err := s.channelService.FindByID(ctx, channelID)
+	dest, err := s.findChannel(ctx, channelID)
 	if err != nil {
 		return nil, ErrNotFound
 	}
+	// Mover é ação de moderador: passa mesmo por sala trancada.
+	return s.moveTo(ctx, actorID, targetID, dest, func() (*Call, error) {
+		return s.startChannel(ctx, targetID, dest.ID, true)
+	})
+}
 
+// moveTo autoriza e faz a troca de canal; join põe a pessoa no destino
+// (trocável nos testes, que não têm banco).
+func (s *Service) moveTo(ctx context.Context, actorID, targetID string, dest *channel.Channel, join func() (*Call, error)) (*Call, error) {
 	from, inVoice := s.voiceLocationOf(targetID)
 
 	if s.perms == nil {
@@ -131,22 +141,48 @@ func (s *Service) MoveToChannel(ctx context.Context, actorID, targetID, channelI
 	if err := authorizeMove(snap, actorID, targetID, from, inVoice, dest); err != nil {
 		return nil, err
 	}
-
-	if err := s.Leave(ctx, from.callID, targetID); err != nil {
+	if err := s.admitMovedGuest(ctx, snap, targetID, dest); err != nil {
 		return nil, err
 	}
-	// Mover é ação de moderador: passa mesmo por sala trancada.
-	call, err := s.startChannel(ctx, targetID, dest.ID, true)
+
+	s.leaveCallRoom(targetID, from.callID)
+	if err := s.leaveCall(ctx, from.callID, targetID); err != nil {
+		return nil, err
+	}
+	call, err := join()
 	if err != nil {
 		log.Printf("[call] move %s to %s failed after leaving: %v", targetID, dest.ID, err)
 		return nil, err
 	}
+	s.announceMove(ctx, actorID, targetID, call, from, dest)
+	return call, nil
+}
 
-	targetInfo, err := s.userInfo(ctx, targetID)
-	if err != nil {
-		return call, nil
+// callRoomLeaver tira as conexões de alguém de uma sala do WS (o Hub).
+type callRoomLeaver interface {
+	UnsubscribeUser(userID, room string)
+}
+
+// leaveCallRoom tira quem vai ser movido da sala WS da chamada antiga antes
+// de ele sair dela. Senão o call:left dele (e o call:ended, se estava
+// sozinho) chegava antes do call:moved: o cliente largava a chamada (ou
+// tentava voltar para ela) e ignorava o call:moved, ficando na lista do canal
+// novo sem estar nele de fato (issue #368). Quem fica na sala antiga continua
+// vendo a saída.
+func (s *Service) leaveCallRoom(userID, callID string) {
+	if r, ok := s.publisher.(callRoomLeaver); ok {
+		r.UnsubscribeUser(userID, "call:"+callID)
 	}
-	actorInfo, _ := s.userInfo(ctx, actorID)
+}
+
+// announceMove avisa quem foi movido (o cliente dele troca de sala sozinho)
+// e o servidor (listas dos canais de voz).
+func (s *Service) announceMove(ctx context.Context, actorID, targetID string, call *Call, from voiceLocation, dest *channel.Channel) {
+	targetInfo, err := s.lookupUser(ctx, targetID)
+	if err != nil {
+		return
+	}
+	actorInfo, _ := s.lookupUser(ctx, actorID)
 	event := marshalEvent("call:moved", MovedEvent{
 		CallID:        call.ID,
 		FromCallID:    from.callID,
@@ -159,6 +195,4 @@ func (s *Service) MoveToChannel(ctx context.Context, actorID, targetID, channelI
 	})
 	s.publisher.SendToUser(targetID, event)
 	s.broadcastServer(dest.ServerID, &dest.ID, event)
-
-	return call, nil
 }

@@ -95,7 +95,7 @@ type Service struct {
 	cameras     CameraSource
 	cameraErrAt time.Time
 	// Contas reais para o Festeiro (real_accounts.go); nil = todas contam.
-	real *realAccounts
+	real *RealAccountCache
 	// As 10 vagas do Top 10 do nível 100 acabaram (ver top10.go).
 	top10Full atomic.Bool
 }

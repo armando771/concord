@@ -1,3 +1,6 @@
+import type { ComponentType } from 'react'
+import type { IconProps } from '../../../../shared/ui/icons'
+
 // Controles compactos do editor de perfil: chips de escolha única, amostra
 // de cor, régua curta e o bloco de seção. Alvo de toque ≥ 40 px.
 
@@ -11,9 +14,34 @@ const chipClass = (active: boolean): string =>
 export interface ChipOption {
   id: string
   label: string
-  glyph?: string
+  /** Ícone do conjunto (shared/ui/icons), em 16 px; texto/emoji não entra. */
+  icon?: ComponentType<IconProps>
   /** Só o ícone à mostra; o rótulo vira o nome acessível. */
   iconOnly?: boolean
+}
+
+function Chip({
+  option: { id, label, icon: Icon, iconOnly },
+  active,
+  onPick
+}: {
+  option: ChipOption
+  active: boolean
+  onPick: (id: string) => void
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={iconOnly ? label : undefined}
+      title={iconOnly ? label : undefined}
+      className={chipClass(active)}
+      onClick={() => onPick(id)}
+    >
+      {Icon && <Icon size={16} className="shrink-0" />}
+      {!iconOnly && <span className="truncate">{label}</span>}
+    </button>
+  )
 }
 
 /** Escolha única em chips (grade densa que quebra linha). */
@@ -33,22 +61,7 @@ export function ChipGroup({
   return (
     <div className={`grid gap-1.5 ${className}`} role="group" aria-label={label}>
       {options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          aria-pressed={value === o.id}
-          aria-label={o.iconOnly ? o.label : undefined}
-          title={o.iconOnly ? o.label : undefined}
-          className={chipClass(value === o.id)}
-          onClick={() => onPick(o.id)}
-        >
-          {o.glyph && (
-            <span aria-hidden="true" className="text-sm leading-none">
-              {o.glyph}
-            </span>
-          )}
-          {!o.iconOnly && <span className="truncate">{o.label}</span>}
-        </button>
+        <Chip key={o.id} option={o} active={value === o.id} onPick={onPick} />
       ))}
     </div>
   )

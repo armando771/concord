@@ -11,7 +11,7 @@ import (
 func (a *app) wireBadgeEvents(badges *badge.Service) {
 	// Câmera ligada: quem está de câmera vem do LiveKit, a cada tick.
 	badges.WithCameras(a.liveKitAdmin)
-	// Festeiro: só contas reais (e-mail confirmado e 7 dias de conta) fazem pico.
+	// Festeiro: só contas reais (e-mail confirmado) fazem pico.
 	badges.WithRealAccounts(badge.BadgeRepository(a.db))
 	// DJ: músicas do Maestro que tocaram 30 s com mais alguém ouvindo (o
 	// timer do player chama fora de qualquer lock).

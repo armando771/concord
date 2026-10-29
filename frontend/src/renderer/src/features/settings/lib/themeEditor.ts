@@ -14,24 +14,6 @@ export const BACKGROUND_COLOR_LABELS: Record<string, string[]> = {
   gradient: ['Cor principal', 'Cor de destaque']
 }
 
-/** Ícone (decorativo) de cada efeito no seletor. */
-export const EFFECT_GLYPHS: Record<string, string> = {
-  none: '—',
-  particles: '•',
-  sparkles: '✦',
-  snow: '❄',
-  fire: '🔥',
-  matrix: '01',
-  glitch: '▚',
-  storm: '⚡',
-  galaxy: '🌀',
-  aurora: '〰',
-  hearts: '♥',
-  confetti: '🎉',
-  synthwave: '▦',
-  rain: '☂'
-}
-
 /** Troca o efeito; a cor escolhida volta ao automático (cada efeito tem a sua). */
 export function withEffect(theme: ProfileTheme, effect: string): ProfileTheme {
   return { ...theme, effect, effect_color: '' }

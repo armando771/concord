@@ -1,15 +1,18 @@
 import type { Message } from '../../chat/api/messages'
 
 // Quem ouve uma mensagem /tts (docs/adr/0012-tts-no-cliente.md). Quem recebeu
-// o message:create já vê o canal (ou é da DM); falta estar numa call ativa
-// do mesmo servidor (canal) ou daquela DM, sem ensurdecer e com o
-// interruptor "Ouvir mensagens de TTS" ligado.
+// o message:create já vê o canal (ou é da DM); falta estar na call de origem
+// da mensagem (o canal de voz que o backend gravou em tts_voice_channel_id, ou
+// a call daquela DM), sem ensurdecer e com o interruptor "Ouvir mensagens de
+// TTS" ligado. Issue #384: não basta estar numa call do mesmo servidor.
 
 /** O pedaço do estado da call que decide se a TTS é comigo. */
 export interface TTSCallView {
   status: string
   type: string | null
   serverId: string | null
+  /** O canal de voz da call (type === 'channel'). */
+  channelId: string | null
   conversationId: string | null
 }
 
@@ -23,15 +26,14 @@ export interface TTSListenContext {
 }
 
 interface CreatePayload {
-  server_id?: string
   conversation_id?: string | null
   message?: Message
 }
 
-/** A call em que estou é a da mensagem? */
-function sameCall(p: CreatePayload, msg: Message, call: TTSCallView): boolean {
+/** A call em que estou é a de origem da mensagem? Sem origem, ninguém ouve. */
+function sameCall(msg: Message, call: TTSCallView): boolean {
   if (msg.channel_id) {
-    return call.type === 'channel' && !!p.server_id && p.server_id === call.serverId
+    return call.type === 'channel' && !!msg.tts_voice_channel_id && msg.tts_voice_channel_id === call.channelId
   }
   return call.type === 'dm' && !!msg.conversation_id && msg.conversation_id === call.conversationId
 }
@@ -49,6 +51,6 @@ export function ttsMessageToSpeak(
   if (event.type !== 'message:create' || !canHearTTS(ctx)) return null
   const p = event.payload as CreatePayload | null
   const msg = p?.message
-  if (!p || !msg?.tts || !sameCall(p, msg, ctx.call)) return null
+  if (!p || !msg?.tts || !sameCall(msg, ctx.call)) return null
   return msg
 }

@@ -20,6 +20,8 @@ interface Dependencies {
 export function createCallResumer(deps: Dependencies): {
   tick: () => Promise<void>
   cancel: () => void
+  /** Já decidiu: voltou, desistiu ou não havia o que retomar. */
+  settled: () => boolean
 } {
   let loaded = false
   let pending: PendingCallResume | null = null
@@ -29,6 +31,7 @@ export function createCallResumer(deps: Dependencies): {
   let retryAt = 0
   const controller = new AbortController()
   return {
+    settled: () => cancelled || (loaded && !busy && pending === null),
     cancel: () => {
       cancelled = true
       pending = null

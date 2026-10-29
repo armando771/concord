@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { ChatBubbleIcon, DotsIcon, XIcon } from '../../../shared/ui/icons'
+import { ChatBubbleIcon, CheckIcon, DotsIcon, XIcon } from '../../../shared/ui/icons'
 import type { PublicUser } from '../../auth/store/authStore'
 import { useFriendStore } from '../store/friendStore'
 import { usePresenceStatus } from '../../chat/store/chatStore'
@@ -61,20 +61,6 @@ export function FriendRow({ friend }: { friend: PublicUser }): React.JSX.Element
   )
 }
 
-function AcceptIcon(): React.JSX.Element {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.5}
-    >
-      <path d="M5 12.5l4.5 4.5L19 7.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
 export function PendingRow({ request }: { request: PendingRequest }): React.JSX.Element {
   const { incoming, accept, deny } = usePendingActions(request)
   const user = { ...request, id: request.user_id }
@@ -83,7 +69,7 @@ export function PendingRow({ request }: { request: PendingRequest }): React.JSX.
     <PersonRow user={user} showStatus={false} subtitle={copy.subtitle}>
       {incoming && (
         <RowAction label="Aceitar" tone="accept" onClick={accept}>
-          <AcceptIcon />
+          <CheckIcon className="h-5 w-5" />
         </RowAction>
       )}
       <RowAction label={copy.denyLabel} tone="deny" onClick={deny}>

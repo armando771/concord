@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 )
 
 const sampleAnalysis = `[silencedetect @ 0x1] silence_start: 0
@@ -63,15 +64,34 @@ func TestGainDB(t *testing.T) {
 }
 
 func TestDecodeArgs(t *testing.T) {
-	args := strings.Join(DecodeArgs("/c/a.webm", Analysis{IntegratedLUFS: -9.6, TruePeakDB: 0.4, StartSec: 1.25, EndSec: 210.75}), " ")
+	args := strings.Join(DecodeArgs("/c/a.webm", Analysis{IntegratedLUFS: -9.6, TruePeakDB: 0.4, StartSec: 1.25, EndSec: 210.75}, 0), " ")
 	for _, want := range []string{"-ss 1.250", "-to 210.750", "-i /c/a.webm", "volume=-4.40dB", "-f f32le", "-ar 48000", "-ac 2", "pipe:1"} {
 		if !strings.Contains(args, want) {
 			t.Errorf("faltou %q em %q", want, args)
 		}
 	}
-	plain := strings.Join(DecodeArgs("/c/a.webm", Analysis{IntegratedLUFS: -14, TruePeakDB: -2}), " ")
+	plain := strings.Join(DecodeArgs("/c/a.webm", Analysis{IntegratedLUFS: -14, TruePeakDB: -2}, 0), " ")
 	if strings.Contains(plain, "-ss") || strings.Contains(plain, "-to") {
 		t.Errorf("sem silêncio não corta: %q", plain)
+	}
+}
+
+// Retomada depois de reiniciar: o seek soma a posição salva ao corte do
+// silêncio do começo (a posição conta do primeiro som).
+func TestDecodeArgsResumeSeeks(t *testing.T) {
+	cases := []struct {
+		a    Analysis
+		at   time.Duration
+		want string
+	}{
+		{Analysis{StartSec: 1.25, EndSec: 210.75}, 90 * time.Second, "-ss 91.250"},
+		{Analysis{}, 30500 * time.Millisecond, "-ss 30.500"},
+	}
+	for _, c := range cases {
+		args := strings.Join(DecodeArgs("/c/a.webm", c.a, c.at), " ")
+		if !strings.Contains(args, c.want+" ") || strings.Count(args, "-ss") != 1 {
+			t.Errorf("DecodeArgs(%+v, %v) = %q, want %q", c.a, c.at, args, c.want)
+		}
 	}
 }
 
@@ -86,7 +106,7 @@ func TestPrepareWithFFmpeg(t *testing.T) {
 	if out, err := exec.Command(ff, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=2", "-ac", "2", "-c:a", "libopus", src).CombinedOutput(); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
-	r, err := NewPreparer(ff, ExecRunner).Prepare(context.Background(), src)
+	r, err := NewPreparer(ff, ExecRunner).Prepare(context.Background(), src, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +171,7 @@ func TestPrepareTrimsSilenceWithFFmpeg(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
-	r, err := NewPreparer(ff, ExecRunner).Prepare(context.Background(), src)
+	r, err := NewPreparer(ff, ExecRunner).Prepare(context.Background(), src, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

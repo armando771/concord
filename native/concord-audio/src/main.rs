@@ -3,7 +3,8 @@
 //! Escreve "ready" em stderr quando a captura começa; erros também em stderr.
 //! No modo `foreground`, informa em stdout a janela em tela cheia na frente
 //! (overlay de jogo). No modo `overlay`, desenha o overlay de jogo numa janela
-//! nativa com o estado que chega em stdin.
+//! nativa com o estado que chega em stdin. No modo `media-watch`, informa em
+//! stdout as sessões de mídia do Windows (música em atividade).
 
 mod args;
 // Regra pura (testada no Linux); só o laço do Windows a usa.
@@ -12,6 +13,9 @@ mod fullscreen;
 // Puro em boa parte (testado no Linux); a janela só existe no Windows.
 #[cfg_attr(not(windows), allow(dead_code))]
 mod overlay;
+// Formato e ritmo puros (testados no Linux); o SMTC só existe no Windows.
+#[cfg_attr(not(windows), allow(dead_code))]
+mod media;
 #[cfg(windows)]
 mod capture;
 #[cfg(windows)]
@@ -56,6 +60,7 @@ fn run(mode: &args::Mode) -> ExitCode {
     let result = match mode {
         args::Mode::Foreground => foreground::run(),
         args::Mode::Overlay => overlay::run(),
+        args::Mode::MediaWatch => media::run(),
         _ => capture::run(mode),
     };
     match result {

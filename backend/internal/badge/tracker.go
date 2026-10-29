@@ -118,7 +118,7 @@ func (t *tracker) accruePeak(s call.CallSnapshot) {
 }
 
 // partygoers: quem conta para o Festeiro — ouvindo (surdo não conta), sem
-// estar AFK e conta real (e-mail confirmado e conta com 7 dias ou mais).
+// estar AFK e conta real (e-mail confirmado).
 func (t *tracker) partygoers(s call.CallSnapshot) []string {
 	var out []string
 	for _, userID := range s.Listeners {

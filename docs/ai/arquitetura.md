@@ -84,7 +84,7 @@ Regras:
 
 ## Mobile (`mobile/`)
 
-App Android em Expo, independente do `frontend/` ([ADR 0015](../adr/0015-app-mobile-expo.md)).
+App Android em Expo, independente do `frontend/` ([ADR 0021](../adr/0021-app-mobile-expo.md)).
 
 ```
 mobile/

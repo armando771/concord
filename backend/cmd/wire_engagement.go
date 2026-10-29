@@ -28,9 +28,11 @@ func (a *app) wireEngagement() {
 	go birthdayService.Run(context.Background())
 
 	// Level (XP por tempo em call, sem mute e sem estar AFK)
-	levelService := level.LevelService(level.LevelRepository(a.db), a.hub, a.callAFK)
+	levelRepository := level.LevelRepository(a.db)
+	levelService := level.LevelService(levelRepository, a.hub, a.callAFK)
 	levelHandler := level.LevelHandler(levelService)
 	go levelService.Run(a.ctx)
+	rankingHandler := level.LevelRankingHandler(level.RankingServiceFor(levelRepository))
 
 	// Propostas (kanban com votação de 7 dias; aprovadas viram issue no GitHub)
 	issueCreator := newIssueCreator()
@@ -70,7 +72,7 @@ func (a *app) wireEngagement() {
 	}()
 
 	a.route(func(_ *gin.Engine, api *gin.RouterGroup) {
-		level.LevelRoutes(api, levelHandler, a.authMiddleware)
+		level.LevelRoutes(api, levelHandler, rankingHandler, a.authMiddleware)
 		badge.BadgeRoutes(api, badgeHandler, a.authMiddleware)
 		enquete.EnqueteRoutes(api, enqueteHandler, a.authMiddleware)
 		notifysettings.Routes(api, notifySettingsHandler, a.authMiddleware)

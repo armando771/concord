@@ -16,6 +16,10 @@ import { canOpenServerSettings } from '../lib/serverSettingsNav'
 import { serverMenuItems, type ServerMenuItem } from '../lib/sidebarMenus'
 import { WRAP_NAME } from '../lib/voiceChannelRow'
 import SidebarMenuItem, { type SidebarMenuTone } from './SidebarMenuItem'
+import ServerLevelCard from '../../serverlevel/components/ServerLevelCard'
+import ServerLevelChip from '../../serverlevel/components/ServerLevelChip'
+import ServerLevelModal from '../../serverlevel/components/ServerLevelModal'
+import { useServerLevelModalStore } from '../../serverlevel/store/serverLevelModalStore'
 
 const LOOK: Record<
   ServerMenuItem,
@@ -84,6 +88,15 @@ export function ServerMenuItems({
   }
   return (
     <div className="absolute top-14 left-3 right-3 z-30 flex flex-col rounded-xl border border-subtle bg-floating p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2">
+      {server && (
+        <ServerLevelCard
+          serverId={server.id}
+          onOpen={() => {
+            onPicked()
+            useServerLevelModalStore.getState().open(server.id)
+          }}
+        />
+      )}
       {items.map((item) => (
         <SidebarMenuItem
           key={item}
@@ -117,7 +130,10 @@ function ServerHeaderMenu({
       >
         {/* Até duas linhas (o cabeçalho tem altura fixa); o resto no title. */}
         {server ? (
-          <span className={`line-clamp-2 min-w-0 leading-5 ${WRAP_NAME}`}>{name}</span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className={`line-clamp-2 min-w-0 leading-5 ${WRAP_NAME}`}>{name}</span>
+            <ServerLevelChip serverId={server.id} />
+          </span>
         ) : (
           // Sem servidor ainda (abrindo): o nome real entra no lugar da barra.
           <span className="flex h-5 min-w-0 flex-1 items-center">
@@ -128,6 +144,7 @@ function ServerHeaderMenu({
         <span className="shrink-0 text-xs text-gray-400">▼</span>
       </button>
       {open && <ServerMenuItems server={server} access={access} onPicked={() => setOpen(false)} />}
+      <ServerLevelModal />
     </div>
   )
 }

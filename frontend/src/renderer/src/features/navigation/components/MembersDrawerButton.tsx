@@ -1,4 +1,4 @@
-import { MembersIcon } from '../../../shared/ui/iconsExtra'
+import { MembersIcon } from '../../../shared/ui/icons'
 import { useMobileNavStore } from '../store/mobileNavStore'
 
 /**

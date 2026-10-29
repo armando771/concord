@@ -13,7 +13,7 @@ import {
 } from '../lib/miniPlayerPosition'
 import { miniPlayerTarget } from '../lib/screenWatch'
 import { XIcon } from '../../../shared/ui/icons'
-import { VideoFill } from './ParticipantTile'
+import VideoFill from './VideoFill'
 import { callRoute } from '../lib/callUtils'
 
 // w-72 + aspect-video (no render; nos eventos vale o tamanho medido).
