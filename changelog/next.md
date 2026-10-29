@@ -1,5 +1,6 @@
 ## Novidades
 
+- Lives: a opção "Enviar também em 720p para quem tem internet fraca" agora é Automático por padrão: liga sozinha quando a sua placa de vídeo codifica a live (1080p ou Fonte) e fica desligada quando seria pelo processador. Dá para forçar Ligada ou Desligada no seletor de qualidade.
 - Chamadas: o microfone agora sai a 64 kbps (antes ~32), com a voz mais clara, como no Discord.
 - Servidores: quando o servidor sobe de nível, quem está nele vê uma animação em tela cheia com o ícone, a contagem do nível e efeitos que crescem por faixa (fogos no 5, raios no 10, galáxia no 20, aurora no 30) e cenas próprias nos níveis 10, 25, 50 e 100; quem estava fora vê uma vez ao abrir o servidor. O selo "Nv." do servidor muda de material por faixa (bronze, prata, ouro, cristal e lendário).
 - Níveis: selos especiais no nível 13 (vermelho com estrelinhas), 14 (onça-pintada), 22 (verde e amarelo do Brasil) e 24 (arco-íris do orgulho), e subir para o 24 toca uma cena própria com o arco-íris atravessando a tela.

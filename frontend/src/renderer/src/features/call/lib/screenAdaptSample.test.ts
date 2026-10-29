@@ -96,8 +96,13 @@ describe('adaptSample', () => {
     expect(adaptSample(report(source(60), h265, fallback), BUDGET)?.softwareCodec).toBe('h265')
   })
 
-  it('H.264 no processador não é avisado (é a reserva esperada)', () => {
+  it('H.264 que a placa de vídeo codificaria e caiu no processador é avisado (desliga a camada de 720p automática)', () => {
     const soft = out({ encoderImplementation: 'OpenH264', powerEfficientEncoder: false })
-    expect(adaptSample(report(source(60), h264, soft), BUDGET)?.softwareCodec).toBeNull()
+    expect(adaptSample(report(source(60), h264, soft), BUDGET)?.softwareCodec).toBe('h264')
+  })
+
+  it('H.264 sem a flag de eficiência não é avisado só pelo nome do encoder', () => {
+    const named = out({ encoderImplementation: 'SimulcastEncoderAdapter (fallback)' })
+    expect(adaptSample(report(source(60), h264, named), BUDGET)?.softwareCodec).toBeNull()
   })
 })

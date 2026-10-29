@@ -35,7 +35,7 @@ const limited = new Map([
 ])
 
 /** Codecs que a placa de vídeo codifica (o resto, só o processador). */
-type Card = { av1?: boolean; h265?: boolean }
+type Card = { av1?: boolean; h265?: boolean; h264?: boolean }
 
 function setup(options: Card & { storage?: Record<string, string> } = {}) {
   const data = new Map(Object.entries(options.storage ?? {}))
@@ -51,6 +51,7 @@ function setup(options: Card & { storage?: Record<string, string> } = {}) {
     })
   })
   const hardware: Record<string, boolean> = {
+    'video/H264': !!options.h264,
     'video/AV1': !!options.av1,
     'video/H265': !!options.h265
   }
@@ -160,6 +161,46 @@ describe('ScreenSender', () => {
           expect.objectContaining({ width: 1280, height: 720, maxBitrate: 3_000_000 })
         ]
       })
+    )
+    screen.stop()
+  })
+
+  it('Automático: H.264 na placa de vídeo e 1080p → liga a camada de 720p', async () => {
+    const { screen, participant, stream } = setup({ h264: true })
+    await screen.publish(stream)
+    expect(participant.publishTrack).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ simulcast: true, videoCodec: 'h264' })
+    )
+    screen.stop()
+  })
+
+  it('Automático: H.264 no processador → uma camada só', async () => {
+    const { screen, participant, stream } = setup()
+    await screen.publish(stream)
+    expect(participant.publishTrack).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ simulcast: false })
+    )
+    screen.stop()
+  })
+
+  it('Automático com AV1 na placa: fica o AV1, sem a camada extra', async () => {
+    const { screen, participant, stream } = setup({ av1: true, h264: true })
+    await screen.publish(stream)
+    expect(participant.publishTrack).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ simulcast: false, videoCodec: 'av1' })
+    )
+    screen.stop()
+  })
+
+  it('Desligada respeitada mesmo com H.264 na placa de vídeo', async () => {
+    const { screen, participant, stream } = setup({ h264: true, storage: { [SIMULCAST_KEY]: '0' } })
+    await screen.publish(stream)
+    expect(participant.publishTrack).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ simulcast: false })
     )
     screen.stop()
   })

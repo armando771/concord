@@ -69,16 +69,20 @@ describe('ScreenCodecOptions', () => {
 })
 
 describe('ScreenSimulcastOption', () => {
-  it('desmarcada por padrão no seletor, com o aviso de peso para o PC', () => {
+  it('Automático por padrão no seletor, com a explicação da placa de vídeo', () => {
     const html = renderToStaticMarkup(<ScreenQualityControls value={value} onChange={() => {}} />)
     expect(html).toContain('Enviar também em 720p para quem tem internet fraca')
-    expect(html).not.toMatch(/type="checkbox"[^>]*checked/)
+    expect(html).toMatch(/aria-pressed="true"[^>]*>Automático<\/button><button[^>]*aria-pressed="false"[^>]*>Ligada</)
+    expect(html).toContain('Automático liga quando a sua placa de vídeo aguenta')
     expect(html).toContain('mais pesada para o seu PC')
   })
 
-  it('marcada; durante a live avisa que vale na próxima transmissão', () => {
-    const html = renderToStaticMarkup(<ScreenSimulcastOption checked onChange={() => {}} compact />)
-    expect(html).toMatch(/type="checkbox"[^>]*checked/)
+  it('Desligada escolhida; durante a live avisa que vale na próxima transmissão', () => {
+    const html = renderToStaticMarkup(
+      <ScreenSimulcastOption value="off" onChange={() => {}} compact />
+    )
+    expect(html).toMatch(/aria-pressed="true"[^>]*>Desligada</)
+    expect(html).toMatch(/aria-pressed="false"[^>]*>Automático</)
     expect(html).toContain('Vale a partir da próxima transmissão.')
   })
 })
