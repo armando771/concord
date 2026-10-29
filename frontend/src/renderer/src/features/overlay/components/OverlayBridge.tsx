@@ -9,6 +9,18 @@ import { API_BASE_URL } from '../../../shared/lib/config'
 import { useOverlayPrefsStore } from '../store/overlayPrefsStore'
 import { useServerStore } from '../../servers/store/serverStore'
 import { useOverlayTheme } from '../hooks/useOverlayTheme'
+import { useMyLiveWatchers } from '../hooks/useMyLiveWatchers'
+
+/** Store que muda sem mudar o que o overlay mostra não vira IPC nem repaint no jogo. */
+function sendIfChanged(
+  overlay: { setState: (state: OverlaySnapshot) => void },
+  lastSent: { current: OverlaySnapshot | null },
+  next: OverlaySnapshot
+): void {
+  if (sameOverlaySnapshot(lastSent.current, next)) return
+  lastSent.current = next
+  overlay.setState(next)
+}
 
 /**
  * Manda ao main o estado da call para o overlay de jogo (só Windows). A lista
@@ -35,6 +47,7 @@ function OverlayBridge(): null {
 
   const lastSent = useRef<OverlaySnapshot | null>(null)
   const meId = me?.id ?? null
+  const liveWatchers = useMyLiveWatchers(meId)
   // Call num canal de voz: apelidos daquele servidor (mesmo olhando outro).
   const nicknames = useCallNicknames()
   const participants = useMemo(
@@ -76,19 +89,18 @@ function OverlayBridge(): null {
       opacity,
       layout,
       shortcut,
+      liveWatchers,
       mediaBase: API_BASE_URL,
       theme
     })
-    // Store que muda sem mudar o que o overlay mostra não vira IPC nem repaint no jogo.
-    if (sameOverlaySnapshot(lastSent.current, next)) return
-    lastSent.current = next
-    overlay.setState(next)
+    sendIfChanged(overlay, lastSent, next)
   }, [
     overlay,
     enabled,
     opacity,
     layout,
     shortcut,
+    liveWatchers,
     status,
     meInOverlay,
     participants,

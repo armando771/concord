@@ -58,9 +58,10 @@ Só quando muda (o main corta linhas repetidas). Escondido:
              "brand": "#5865f2", "speaking": "#45a366", "danger": "#ff6467" },
   "members": [
     { "id": "u1", "name": "Ana", "initial": "A", "avatar": "C:\\...\\9f3c...", "animated": true,
-      "tag": "VOCÊ", "muted": false, "deafened": false, "speaking": true }
+      "tag": "VOCÊ", "muted": false, "deafened": false, "speaking": true, "watching": false }
   ],
-  "more": 0
+  "more": 0,
+  "viewers": null
 }
 ```
 
@@ -76,6 +77,8 @@ Só quando muda (o main corta linhas repetidas). Escondido:
 | `members[].avatar` | arquivo local baixado pelo main; `null` = mostra a inicial |
 | `members[].animated` | o arquivo é GIF animado: anima só enquanto `speaking`, senão fica no 1º quadro |
 | `members[].tag` | etiqueta depois do nome (`VOCÊ` no próprio usuário) |
+| `members[].watching` | assiste à live de quem usa o overlay: olho verde depois dos ícones de mudo |
+| `viewers` | espectadores da live de quem usa o overlay (selo "olho + número" no fim da lista); `null` = sem live ou opção desligada, `0` = live sem ninguém |
 | `more` | quantos não couberam (pílula "+N"); `members` vem com no máximo 8 |
 
 Valores fora do lugar são encaixados nos limites pelos dois lados.

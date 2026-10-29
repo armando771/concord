@@ -106,6 +106,8 @@ pub struct Member {
     pub muted: bool,
     pub deafened: bool,
     pub speaking: bool,
+    /// Está assistindo a live de quem usa o overlay (olho ao lado do nome).
+    pub watching: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -124,6 +126,8 @@ pub struct State {
     pub members: Vec<Member>,
     /// Quantos ficaram de fora ("+N").
     pub more: u32,
+    /// Espectadores da live de quem usa o overlay (olho + número); None = sem live.
+    pub viewers: Option<u32>,
 }
 
 impl Default for State {
@@ -139,6 +143,7 @@ impl Default for State {
             theme: Theme::default(),
             members: Vec::new(),
             more: 0,
+            viewers: None,
         }
     }
 }
@@ -263,6 +268,7 @@ fn parse_member(v: &Json) -> Member {
         deafened: flag(v.get("deafened")),
         // Mesmo que no app: mudo não aparece falando.
         speaking: flag(v.get("speaking")) && !muted,
+        watching: flag(v.get("watching")),
     }
 }
 
@@ -273,6 +279,7 @@ fn parse_state(v: &Json) -> State {
         .map(|items| items.iter().take(MAX_ROWS).map(parse_member).collect())
         .unwrap_or_default();
     let more = number(v.get("more")).filter(|n| *n >= 0.0).map(|n| n.min(1e6) as u32).unwrap_or(0);
+    let viewers = number(v.get("viewers")).filter(|n| *n >= 0.0).map(|n| n.min(1e6) as u32);
     State {
         visible: flag(v.get("visible")),
         editing: flag(v.get("editing")),
@@ -284,6 +291,7 @@ fn parse_state(v: &Json) -> State {
         theme: parse_theme(v.get("theme")),
         members,
         more,
+        viewers,
     }
 }
 
@@ -329,7 +337,7 @@ mod tests {
         "theme":{"floating":"#111214","strong":"#ffffff","normal":"#eeeeee","muted":"#999999",
           "brand":"#5865f2","speaking":"#00ff00","danger":"#ff0000"},
         "members":[{"id":"u1","name":"Ana","initial":"A","avatar":"C:\\cache\\a.gif","animated":true,
-          "tag":"VOCÊ","muted":false,"deafened":false,"speaking":true}],"more":3}"##;
+          "tag":"VOCÊ","muted":false,"deafened":false,"speaking":true,"watching":true}],"more":3,"viewers":5}"##;
 
     fn state(line: &str) -> State {
         match parse_command(line).unwrap() {
@@ -351,6 +359,16 @@ mod tests {
         assert_eq!(m.avatar.as_deref(), Some(r"C:\cache\a.gif"));
         assert!(m.animated && m.speaking);
         assert_eq!(m.tag.as_deref(), Some("VOCÊ"));
+        assert!(m.watching);
+        assert_eq!(s.viewers, Some(5));
+    }
+
+    #[test]
+    fn espectadores_ausentes_ou_estragados_nao_mostram_o_olho() {
+        assert_eq!(state(r#"{"type":"state","viewers":null}"#).viewers, None);
+        assert_eq!(state(r#"{"type":"state","viewers":-2}"#).viewers, None);
+        assert_eq!(state(r#"{"type":"state","viewers":0}"#).viewers, Some(0));
+        assert!(!state(r#"{"type":"state","members":[{"name":"Ana"}]}"#).members[0].watching);
     }
 
     #[test]

@@ -5,13 +5,14 @@ import {
 } from '../features/overlay/lib/overlayState'
 import VoiceStateIcons from '../features/call/components/VoiceStateIcons'
 import OverlayAvatar from './OverlayAvatar'
+import { OverlayViewers, OverlayWatchingEye } from './OverlayViewers'
 
 /** Opacidade na pílula (não na janela nem na lista): quem fala se destaca dos outros. */
 function rowStyle(resting: number, speaking: boolean): React.CSSProperties {
   return { opacity: overlayRowOpacity(resting, speaking) / 100 }
 }
 
-/** Uma pessoa da call: avatar + nome + mic/fone cortados (estilo Discord). */
+/** Uma pessoa da call: avatar + nome + mic/fone cortados (estilo Discord) + olho de quem assiste. */
 function OverlayPill({
   member,
   opacity
@@ -34,11 +35,12 @@ function OverlayPill({
       </span>
       {member.self && <span className="shrink-0 text-[10px] uppercase text-gray-400">você</span>}
       <VoiceStateIcons muted={member.muted} deafened={member.deafened} />
+      <OverlayWatchingEye watching={member.watchingMe} />
     </div>
   )
 }
 
-/** A lista do overlay: pílulas e "+N". */
+/** A lista do overlay: pílulas, "+N" e o selo de espectadores da minha live. */
 function OverlayList({ snapshot }: { snapshot: OverlaySnapshot }): React.JSX.Element {
   return (
     <>
@@ -53,6 +55,7 @@ function OverlayList({ snapshot }: { snapshot: OverlaySnapshot }): React.JSX.Ele
           +{snapshot.more}
         </div>
       )}
+      <OverlayViewers viewers={snapshot.viewers} opacity={snapshot.opacity} />
     </>
   )
 }

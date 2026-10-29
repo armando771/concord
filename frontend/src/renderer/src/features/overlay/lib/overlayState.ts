@@ -6,6 +6,7 @@ import { normalizeOverlayLayout, type OverlayLayout } from './overlayLayout'
 import { isAnimatedMedia, profileMediaSrc } from '../../profile/lib/profileMedia'
 import { normalizeOverlayShortcut, OVERLAY_SHORTCUT_DEFAULT } from './overlayShortcut'
 import type { OverlayTheme } from './overlayTheme'
+import { myLiveWatchers, type MyLiveInput } from './overlayWatchers'
 
 export interface OverlayMember {
   id: string
@@ -22,6 +23,8 @@ export interface OverlayMember {
   muted: boolean
   deafened: boolean
   speaking: boolean
+  /** Está assistindo a minha live (ganha um olho ao lado do nome). */
+  watchingMe: boolean
 }
 
 export interface OverlaySnapshot {
@@ -30,6 +33,8 @@ export interface OverlaySnapshot {
   members: OverlayMember[]
   /** Quantos ficaram de fora ("+N"); 0 = todos aparecem. */
   more: number
+  /** Espectadores da minha live (olho + número); null = sem live ou opção desligada. */
+  viewers: number | null
   /** Opacidade das pílulas em repouso, em % (OVERLAY_OPACITY_MIN–MAX). */
   opacity: number
   /** Posição e tamanho da lista (atalho para editar no jogo). */
@@ -61,6 +66,8 @@ export interface OverlayInput {
   opacity: number
   layout: OverlayLayout
   shortcut: string
+  /** Minha live e quem a assiste (vem do callStore); sem isso, nada de olho. */
+  liveWatchers?: Omit<MyLiveInput, 'meId'>
   /** API_BASE_URL: dá a origem aos avatares (a janela do overlay não é a da API). */
   mediaBase: string
   theme?: Partial<OverlayTheme> | null
@@ -115,7 +122,9 @@ export function normalizeOverlayPrefs(persisted: unknown): Record<string, unknow
     ...saved,
     opacity: clampOverlayOpacity(saved.opacity as number),
     layout: normalizeOverlayLayout(saved.layout),
-    shortcut: normalizeOverlayShortcut(saved.shortcut)
+    shortcut: normalizeOverlayShortcut(saved.shortcut),
+    // Só false explícito desliga: valor estragado volta ao padrão (ligado).
+    showWatchers: saved.showWatchers !== false
   }
 }
 
@@ -152,28 +161,8 @@ export function sameOverlaySnapshot(a: OverlaySnapshot | null, b: OverlaySnapsho
   return a !== null && JSON.stringify(a) === JSON.stringify(b)
 }
 
-export function buildOverlaySnapshot(
-  input: OverlayInput,
-  maxRows = OVERLAY_MAX_ROWS
-): OverlaySnapshot {
-  const { me } = input
-  const opacity = clampOverlayOpacity(input.opacity)
-  const layout = normalizeOverlayLayout(input.layout)
-  const shortcut = normalizeOverlayShortcut(input.shortcut)
-  const theme = input.theme ?? null
-  if (input.status !== 'active' || me === null) {
-    return {
-      enabled: input.enabled,
-      inCall: false,
-      members: [],
-      more: 0,
-      opacity,
-      layout,
-      shortcut,
-      theme
-    }
-  }
-
+/** Lista da call: eu no topo, depois os outros; `watching` = quem assiste a minha live. */
+function overlayMembers(input: OverlayInput, me: OverlayPerson, watching: string[]): OverlayMember[] {
   const member = (
     person: OverlayPerson,
     self: boolean,
@@ -192,11 +181,11 @@ export function buildOverlaySnapshot(
       self,
       muted,
       deafened,
-      speaking: input.speakingIds.includes(person.id) && !muted
+      speaking: input.speakingIds.includes(person.id) && !muted,
+      watchingMe: watching.includes(person.id)
     }
   }
-
-  const all: OverlayMember[] = [
+  return [
     member(me, true, input.muted, input.deafened),
     ...input.participants
       .filter((p) => p.id !== me.id)
@@ -205,28 +194,32 @@ export function buildOverlaySnapshot(
         return member(p, false, voice?.muted ?? false, voice?.deafened ?? false)
       })
   ]
+}
 
-  if (all.length <= maxRows) {
-    return {
-      enabled: input.enabled,
-      inCall: true,
-      members: all,
-      more: 0,
-      opacity,
-      layout,
-      shortcut,
-      theme
-    }
-  }
-  const shown = all.slice(0, maxRows - 1)
-  return {
+export function buildOverlaySnapshot(
+  input: OverlayInput,
+  maxRows = OVERLAY_MAX_ROWS
+): OverlaySnapshot {
+  const { me } = input
+  const base = {
     enabled: input.enabled,
+    opacity: clampOverlayOpacity(input.opacity),
+    layout: normalizeOverlayLayout(input.layout),
+    shortcut: normalizeOverlayShortcut(input.shortcut),
+    theme: input.theme ?? null
+  }
+  if (input.status !== 'active' || me === null) {
+    return { ...base, inCall: false, members: [], more: 0, viewers: null }
+  }
+
+  const live = myLiveWatchers({ live: false, show: false, watchers: [], ...input.liveWatchers, meId: me.id })
+  const all = overlayMembers(input, me, live.ids)
+  const shown = all.length <= maxRows ? all : all.slice(0, maxRows - 1)
+  return {
+    ...base,
     inCall: true,
     members: shown,
     more: all.length - shown.length,
-    opacity,
-    layout,
-    shortcut,
-    theme
+    viewers: live.viewers
   }
 }

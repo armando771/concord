@@ -40,10 +40,12 @@ const snapshot: OverlaySnapshot = {
       self: true,
       muted: false,
       deafened: false,
-      speaking: false
+      speaking: false,
+      watchingMe: false
     }
   ],
   more: 0,
+  viewers: null,
   opacity: 30,
   layout: { position: null, scale: 1 },
   shortcut: 'Shift+Tab'

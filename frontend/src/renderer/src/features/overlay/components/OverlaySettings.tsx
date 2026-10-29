@@ -13,6 +13,8 @@ function OverlaySettings({ show }: { show: boolean }): React.JSX.Element | null 
     (s) => s.layout.position !== null || s.layout.scale !== 1
   )
   const resetOverlayLayout = useOverlayPrefsStore((s) => s.resetLayout)
+  const overlayShowWatchers = useOverlayPrefsStore((s) => s.showWatchers)
+  const setOverlayShowWatchers = useOverlayPrefsStore((s) => s.setShowWatchers)
 
   if (!show) return null
   return (
@@ -25,6 +27,14 @@ function OverlaySettings({ show }: { show: boolean }): React.JSX.Element | null 
         onChange={() => setOverlayEnabled(!overlayEnabled)}
       />
       <OverlayShortcutField disabled={!overlayEnabled} />
+      <div className="mt-4">
+        <Toggle
+          title="Mostrar quem assiste a minha live"
+          description="Quando você transmite a tela, o overlay mostra um olho com o número de espectadores e um olho em quem está assistindo."
+          checked={overlayShowWatchers}
+          onChange={() => setOverlayShowWatchers(!overlayShowWatchers)}
+        />
+      </div>
       <div className="mt-4 flex items-center justify-between gap-3">
         <span>
           <span className="block text-ds-md font-medium text-strong">Posição e tamanho</span>
