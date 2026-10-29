@@ -59,6 +59,7 @@ vi.mock('livekit-client', () => ({
   ConnectionState: { Connected: 'connected', Reconnecting: 'reconnecting' },
   DisconnectReason: { CLIENT_INITIATED: 1, PARTICIPANT_REMOVED: 4 },
   AudioPresets: { musicHighQualityStereo: {} },
+  BackupCodecPolicy: { SIMULCAST: 1 },
   Track: {
     Source: {
       Microphone: 'microphone',
@@ -390,7 +391,8 @@ describe('CallMedia — qualidade de tela', () => {
       mediaStreamTrack: video,
       sender,
       publishOptions: { simulcast: false },
-      setDegradationPreference: vi.fn(async () => {})
+      setDegradationPreference: vi.fn(async () => {}),
+      simulcastCodecs: new Map()
     }
     const pub = { videoTrack: track }
     room().localParticipant.getTrackPublication.mockReturnValue(pub)
@@ -490,6 +492,7 @@ describe('CallMedia — qualidade de tela', () => {
       screenShareEncoding: { maxBitrate: 7_000_000, maxFramerate: 60 },
       videoCodec: 'h264',
       backupCodec: { codec: 'vp8' },
+      backupCodecPolicy: 1,
       degradationPreference: 'maintain-resolution'
     })
     expect(room().localParticipant.publishTrack).toHaveBeenCalledWith(

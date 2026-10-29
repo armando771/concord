@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('livekit-client', () => ({
   AudioPresets: { musicHighQualityStereo: {} },
+  BackupCodecPolicy: { SIMULCAST: 1 },
   Track: { Source: { ScreenShare: 'screen_share', ScreenShareAudio: 'screen_share_audio' } },
   VideoPreset: class {
     constructor(
@@ -83,7 +84,9 @@ function setup(options: Card & { storage?: Record<string, string> } = {}) {
     sender,
     publishOptions: {},
     getRTCStatsReport: vi.fn(async () => limited),
-    setDegradationPreference: vi.fn(async () => {})
+    setDegradationPreference: vi.fn(async () => {}),
+    simulcastCodecs: new Map(),
+    setSimulcastTrackSender: vi.fn(async () => {})
   }
   const publication = { videoTrack: track, options: {} }
   const participant = {
@@ -101,7 +104,7 @@ function setup(options: Card & { storage?: Record<string, string> } = {}) {
     () => true,
     (view) => views.push(view)
   )
-  return { screen, participant, stream, sender, views, video }
+  return { screen, participant, stream, sender, views, video, track }
 }
 
 beforeEach(() => {
@@ -124,6 +127,7 @@ describe('ScreenSender', () => {
       screenShareEncoding: { maxBitrate: 7_000_000, maxFramerate: 60 },
       videoCodec: 'av1',
       backupCodec: { codec: 'h264' },
+      backupCodecPolicy: 1,
       degradationPreference: 'maintain-resolution'
     })
     screen.stop()
@@ -224,6 +228,32 @@ describe('ScreenSender', () => {
       step: 1
     })
     expect(screen.current()).toEqual(views.at(-1))
+    screen.stop()
+  })
+
+  it('reserva sofrendo não derruba o principal: o controlador só lê o envio principal', async () => {
+    const { screen, stream, views, track, video } = setup()
+    const healthy = new Map([
+      ['o1', { id: 'o1', type: 'outbound-rtp', kind: 'video', bytesSent: 1 }]
+    ])
+    const backupLimited = new Map([
+      [
+        'o2',
+        {
+          id: 'o2',
+          type: 'outbound-rtp',
+          kind: 'video',
+          bytesSent: 10,
+          qualityLimitationReason: 'cpu'
+        }
+      ]
+    ])
+    track.getRTCStatsReport.mockResolvedValue(healthy as never)
+    track.simulcastCodecs.set('h264', { sender: { getStats: async () => backupLimited } })
+    await screen.publish(stream)
+    await vi.advanceTimersByTimeAsync(ADAPT.tickMs * (ADAPT.startHold + ADAPT.downAfter))
+    expect(video.applyConstraints).not.toHaveBeenCalled()
+    expect(views.at(-1)).toMatchObject({ effective: '1080p 60', reduced: false })
     screen.stop()
   })
 

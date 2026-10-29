@@ -1,4 +1,11 @@
-import { AudioPresets, Track, type LocalParticipant, type LocalVideoTrack } from 'livekit-client'
+import {
+  AudioPresets,
+  BackupCodecPolicy,
+  Track,
+  type LocalParticipant,
+  type LocalVideoTrack
+} from 'livekit-client'
+import { syncBackupHint, tuneScreenBackup } from './screenBackup'
 import type { ScreenCodecOptions } from './screenCodec'
 import {
   screenEncoding,
@@ -27,7 +34,7 @@ export async function publishScreenTracks(
   const [video] = stream.getVideoTracks()
   if (video) {
     const quality = streamQuality(stream)
-    await participant.publishTrack(video, {
+    const publication = await participant.publishTrack(video, {
       source: Track.Source.ScreenShare,
       name: 'screen',
       simulcast: plan.simulcast,
@@ -35,8 +42,11 @@ export async function publishScreenTracks(
       screenShareEncoding: screenEncoding(quality, video.getSettings()),
       // Codec por publicação: só a tela; a câmera segue o padrão da sala (VP8).
       ...plan.codec,
+      // Quem decodifica o principal continua nele; só quem não decodifica recebe a reserva.
+      ...(plan.codec.backupCodec ? { backupCodecPolicy: BackupCodecPolicy.SIMULCAST } : {}),
       degradationPreference: screenMotion(quality.frameRate).degradationPreference
     })
+    if (plan.codec.backupCodec && publication.videoTrack) tuneScreenBackup(publication.videoTrack)
   }
   const [audio] = stream.getAudioTracks()
   if (audio) {
@@ -127,6 +137,7 @@ async function applyScreenMotion(
 ): Promise<void> {
   const { contentHint, degradationPreference } = screenMotion(frameRate)
   video.contentHint = contentHint
+  syncBackupHint(track)
   track.publishOptions = { ...track.publishOptions, degradationPreference }
   // Recusar a preferência não derruba a troca já aplicada.
   await track.setDegradationPreference(degradationPreference).catch(() => {})

@@ -15,7 +15,6 @@ import {
 } from './screenCodecSupport'
 import { chooseScreenSimulcast, loadScreenSimulcast } from './screenSimulcast'
 import { ScreenAdapt } from './screenAdapt'
-import { senderReports } from './screenStatsSource'
 import { useScreenAdaptStore, type ScreenAdaptView } from '../store/screenAdaptStore'
 
 // A minha live na sala: publicar (codec e camadas), trocar a qualidade ao vivo
@@ -129,9 +128,13 @@ export class ScreenSender {
     this.adapt.start()
   }
 
+  /**
+   * Só o envio principal: a reserva (720p30 fixa, ver screenBackup) não tem
+   * degrau para descer, e ler a dela faria o principal descer à toa.
+   */
   private async readSender(stream: MediaStream): Promise<RTCStatsReport | null> {
     const track = this.participant.getTrackPublication(Track.Source.ScreenShare)?.videoTrack
     if (!track || track.mediaStreamTrack !== stream.getVideoTracks()[0]) return null
-    return senderReports(track)
+    return (await track.getRTCStatsReport()) ?? null
   }
 }
