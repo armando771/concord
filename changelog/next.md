@@ -38,6 +38,7 @@
 - A atualização agora baixa sozinha em segundo plano; o botão Atualizar instala na hora.
 
 ## Correções
+- Chat: o /tts não toca mais em todas as calls do servidor. Mandado num canal de texto, só quem está na mesma call de quem enviou ouve (se você não está em call, ninguém ouve); mandado no chat de um canal de voz, só quem está na call daquele canal.
 - Chamadas: quem é movido de canal de voz por um moderador agora entra de fato no canal novo, com áudio funcionando, mesmo quando estava sozinho na sala antiga. Antes a pessoa aparecia na lista do canal novo, mas precisava clicar no canal para entrar.
 - Badges: o Figurinha não conta mais a mesma figurinha ou o mesmo GIF mandado logo em seguida, e o que for apagado em até 2 minutos sai da conta. Quem subiu o badge assim volta para o tier que as figurinhas que ainda estão no chat dão.
 - Badges: o Mensagens enviadas não conta mais mensagem repetida em seguida (a mesma que você acabou de mandar na sala), e mensagem apagada em até 2 minutos sai da conta. Quem subiu o badge assim volta para o tier que as mensagens que ainda estão no chat dão.
