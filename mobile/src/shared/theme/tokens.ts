@@ -24,6 +24,7 @@ export const colors = {
   textPositive: '#5eb479',
   textDanger: '#ffa09b',
   textWarning: '#fcb529',
+  interactiveNormal: '#96979e',
   interactiveMuted: '#4e5058',
   brand: '#5865f2',
   brandHover: '#4752c4',
