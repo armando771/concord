@@ -50,12 +50,13 @@ func (w *world) exec(sql string, args ...any) {
 	}
 }
 
-// user cria uma pessoa; real = e-mail confirmado e conta de 30 dias.
+// user cria uma pessoa; real = e-mail confirmado e conta de 30 dias (a outra
+// tem 12 horas, abaixo das 24 h da conta real).
 func (w *world) user(real bool) string {
 	w.t.Helper()
 	id := uuid.NewString()
 	name := "sl" + strings.ReplaceAll(id, "-", "")[:12]
-	age := "1 day"
+	age := "12 hours"
 	if real {
 		age = "30 days"
 	}
@@ -201,7 +202,7 @@ func TestRepositoryMembroNovoUmaVezPorPessoa(t *testing.T) {
 	}
 
 	// Virou conta real depois: conta agora.
-	w.exec(`UPDATE users SET created_at = NOW() - INTERVAL '8 days' WHERE id = $1`, nova)
+	w.exec(`UPDATE users SET created_at = NOW() - INTERVAL '25 hours' WHERE id = $1`, nova)
 	if err := repo.GrantNewMembers(w.ctx); err != nil {
 		t.Fatal(err)
 	}

@@ -87,15 +87,18 @@ func TestRepositoryRealAccounts(t *testing.T) {
 	real, _ := d.user()
 	young, _ := d.user()
 	unverified, _ := d.user()
-	d.exec(`UPDATE users SET email_verified_at = now(), created_at = now() - interval '8 days' WHERE id = $1`, real)
-	d.exec(`UPDATE users SET email_verified_at = now(), created_at = now() - interval '6 days' WHERE id = $1`, young)
+	bot, _ := d.user()
+	d.exec(`UPDATE users SET email_verified_at = now(), created_at = now() - interval '25 hours' WHERE id = $1`, real)
+	d.exec(`UPDATE users SET email_verified_at = now(), created_at = now() - interval '23 hours' WHERE id = $1`, young)
 	d.exec(`UPDATE users SET email_verified_at = NULL, created_at = now() - interval '30 days' WHERE id = $1`, unverified)
 
-	got, err := BadgeRepository(d.db).RealAccounts(d.ctx, []string{real, young, unverified})
+	d.exec(`UPDATE users SET email_verified_at = now(), created_at = now() - interval '30 days', is_bot = true WHERE id = $1`, bot)
+
+	got, err := BadgeRepository(d.db).RealAccounts(d.ctx, []string{real, young, unverified, bot})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got, map[string]bool{real: true}) {
-		t.Fatalf("contas reais = %v, want só a de 8 dias com e-mail confirmado", got)
+	if !reflect.DeepEqual(got, map[string]bool{real: true}) { // 23 h, sem e-mail e bot ficam de fora
+		t.Fatalf("contas reais = %v, want só a de 25 h com e-mail confirmado", got)
 	}
 }

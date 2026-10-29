@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lineSplitter, nextFailures, restartDelay } from './processLines'
+import { helperBroken, lineSplitter, nextFailures, restartDelay } from './processLines'
 
 describe('lineSplitter', () => {
   it('junta pedaços e entrega linhas inteiras, sem \\r e sem linhas vazias', () => {
@@ -33,5 +33,13 @@ describe('nextFailures', () => {
   it('queda logo ao abrir soma; depois de rodar bem, zera', () => {
     expect(nextFailures(1, 2_000)).toBe(2)
     expect(nextFailures(2, 60_000)).toBe(0)
+  })
+})
+
+describe('helperBroken', () => {
+  it('só quando saiu logo e sem nenhuma leitura', () => {
+    expect(helperBroken(500, false)).toBe(true)
+    expect(helperBroken(500, true)).toBe(false)
+    expect(helperBroken(60_000, false)).toBe(false)
   })
 })

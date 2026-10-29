@@ -1,6 +1,6 @@
 # 0012. Falar as mensagens /tts no app de cada um (Web Speech), decidindo no cliente quem ouve
 
-- Status: aceito; no app desktop do Linux, emendado pelo [0014](0014-voz-piper-no-linux.md)
+- Status: aceito; no app desktop do Linux, emendado pelo [0014](0014-voz-piper-no-linux.md); quem ouve, emendado em 2026-10-28 (issue #384, ver "Emenda: só a call de origem")
 - Data: 2026-10-28
 
 ## Contexto
@@ -46,8 +46,9 @@ de quem ouve (`ttsListen.ts`) e põe a fala numa fila (`ttsQueue.ts`) que fala
 uma mensagem por vez. A voz escolhida é a primeira `pt-BR` (depois `pt-*`); sem
 voz nenhuma, nada toca e a mensagem fica só no chat.
 
-Quem ouve: quem recebeu a mensagem (logo vê o canal, ou é da DM), está numa
-call **ativa** do mesmo servidor (canal) ou na call daquela DM, não está
+Quem ouve (regra original, **substituída** pela emenda abaixo): quem recebeu a
+mensagem (logo vê o canal, ou é da DM), está numa call **ativa** do mesmo
+servidor (canal) ou na call daquela DM, não está
 ensurdecido (nem pelo servidor) e não desligou "Ouvir mensagens de TTS"
 (Configurações → Voz, guardado neste aparelho). Quem envia também ouve, se
 estiver em call, como no Discord.
@@ -76,6 +77,32 @@ pela do servidor: o ouvinte lembra os ids para falar uma vez só.
 O texto falado é "<nome> disse: <mensagem>", com `@nick` trocado pelo nome de
 exibição (apelido no servidor, quando o app conhece), links viram "link" e
 emojis saem.
+
+## Emenda: só a call de origem (issue #384)
+
+Pela regra original, uma `/tts` tocava em **todas** as calls do servidor (o
+cliente só comparava o `server_id`). Agora toca só na call de onde veio:
+
+- **Chat de um canal de voz**: só quem está na call daquele canal.
+- **Canal de texto**: só quem está na **mesma call de quem enviou**. Quem não
+  está em call no servidor ao enviar (ou está na call de outro servidor) não
+  faz ninguém ouvir: a mensagem fica só no chat.
+- **DM/grupo**: como antes, só quem está na call daquela conversa.
+- Ensurdecido, interruptor, cooldown, permissão e limites: iguais.
+
+Quem decide é o **servidor**, na hora do envio, que sabe a call do autor
+(`call.VoiceLocationOf`). Ele grava na mensagem a coluna
+`messages.tts_voice_channel_id` (migration 000152; `tts_voice_channel_id` no
+JSON do `message:create`) e o app só compara com o canal da call em que está
+(`callStore.channelId`). Gravar o alvo é mais robusto que o cliente inferir a
+call do autor (que ele nem conhece). Usamos o id do **canal de voz**, não o da
+call, porque a call de um canal acaba e recomeça com outro id, e o canal é o
+que o app sabe. Mensagens antigas e TTS de canal sem call de origem ficam com o
+campo vazio: ninguém ouve. A TTS continua sendo entregue pelo `message:create`
+normal (quem vê o canal a recebe; só não fala).
+
+Se o autor sai da call logo depois de enviar, a mensagem já tem o alvo gravado
+e continua tocando para a call dele; sem mudança no cooldown.
 
 ## Consequências
 
