@@ -5,7 +5,7 @@ import {
   sameTheme,
   type ProfileTheme
 } from '../../../../profile/lib/profileTheme'
-import { EFFECT_GLYPHS } from '../../../lib/themeEditor'
+import { EFFECT_ICONS } from './effectIcons'
 
 /**
  * Predefinições em grade densa de miniaturas (sem animar: o efeito aparece
@@ -26,7 +26,7 @@ export default function ThemePresets({
     >
       {PROFILE_PRESETS.map((preset) => {
         const active = sameTheme(preset.theme, value)
-        const glyph = preset.theme.effect === 'none' ? null : EFFECT_GLYPHS[preset.theme.effect]
+        const EffectIcon = preset.theme.effect === 'none' ? null : EFFECT_ICONS[preset.theme.effect]
         return (
           <button
             key={preset.id}
@@ -43,10 +43,11 @@ export default function ThemePresets({
               aria-hidden="true"
               className="relative h-10 w-full"
             >
-              {glyph && (
-                <span className="absolute bottom-0.5 right-1 text-[11px] leading-none">
-                  {glyph}
-                </span>
+              {EffectIcon && (
+                <EffectIcon
+                  size={12}
+                  className="absolute bottom-1 right-1 text-white drop-shadow-sm"
+                />
               )}
             </ProfileCardFrame>
             <span className="mt-1 block truncate text-[11px] text-gray-300">{preset.label}</span>

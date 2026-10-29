@@ -4,6 +4,9 @@ import { DEFAULT_PROFILE_THEME, type ProfileTheme } from '../../../../profile/li
 import { PROFILE_PRESETS } from '../../../../profile/lib/profilePresets'
 import ProfileThemeEditor from './ProfileThemeEditor'
 
+/** Setas, símbolos e emoji que eram usados como ícone (agora só SVG). */
+const GLYPH = /[\u2190-\u21ff\u2500-\u27bf\u3030\u{1f300}-\u{1faff}]|>01</u
+
 const render = (theme: Partial<ProfileTheme>): string =>
   renderToStaticMarkup(
     <ProfileThemeEditor value={{ ...DEFAULT_PROFILE_THEME, ...theme }} onChange={() => {}} />
@@ -55,5 +58,23 @@ describe('ProfileThemeEditor', () => {
     expect(html).toContain('Quantidade')
     expect(html).not.toContain('Cor do efeito')
     expect(html).not.toContain('Usar a cor original')
+  })
+
+  it('direção do degradê: a mesma seta girada pelo ângulo, sem setas de texto', () => {
+    const html = render({ background: 'gradient', background_colors: ['#333333', '#444444'] })
+    const group = html.match(/aria-label="Direção do degradê">([\s\S]*?)<\/div>/)![1]
+    expect(group.match(/<svg/g)).toHaveLength(8)
+    for (const angle of [360, 45, 90, 135, 180, 225, 270, 315]) {
+      expect(group).toContain(`rotate:${angle}deg`)
+    }
+    expect(group).not.toMatch(GLYPH)
+  })
+
+  it('efeitos e predefinições com ícones do conjunto, sem emoji nem símbolos', () => {
+    const html = render({ effect: 'fire' })
+    const effects = html.match(/aria-label="Efeito">([\s\S]*?)<\/div>/)![1]
+    expect(effects.match(/<button/g)!.length).toBe(effects.match(/<svg/g)!.length)
+    expect(html).not.toMatch(GLYPH)
+    expect(html).not.toMatch(/[✦•—▚▦☂❄♥]/)
   })
 })

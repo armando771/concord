@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Button from '../../../../../shared/ui/Button'
+import { DiceIcon } from '../../../../../shared/ui/icons'
 import type { NameStyle } from '../../../../profile/lib/nameStyle'
 import { surpriseNameStyle } from '../../../../profile/lib/nameStylePicker'
 import type { ProfileDraft } from '../../../../profile/lib/profileValidation'
@@ -51,10 +52,11 @@ export default function NameStyleModal({
         <Button
           type="button"
           variant="ghost"
-          className="min-h-10"
+          className="inline-flex min-h-10 items-center gap-1.5"
           onClick={() => setStyle((current) => surpriseNameStyle(current))}
         >
-          🎲 Surpreenda-me
+          <DiceIcon size={16} />
+          Surpreenda-me
         </Button>
       }
       preview={

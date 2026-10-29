@@ -26,11 +26,9 @@ function importedNames(): Set<string> {
           /import\s*\{([^}]*)\}\s*from\s*'(?:[\w./]*\/ui|\.)\/icons'/g
         )) {
           for (const n of m[1].split(',')) {
-            const name = n
-              .replace(/^\s*type\s+/, '')
-              .split(' as ')[0]
-              .trim()
-            if (name) names.add(name)
+            // Tipos (`type IconProps`) não existem em tempo de execução: o typecheck cobre.
+            const name = n.split(' as ')[0].trim()
+            if (name && !name.startsWith('type ')) names.add(name)
           }
         }
       }
