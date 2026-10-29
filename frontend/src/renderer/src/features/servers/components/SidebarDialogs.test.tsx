@@ -42,6 +42,7 @@ import { useChannelSidebarStore } from '../store/channelSidebarStore'
 import SidebarDialogs from './SidebarDialogs'
 import { PrivateRolesPicker } from './ChannelFormModal'
 import ServerHeaderMenu, { ServerMenuItems } from './ServerHeaderMenu'
+import { useServerLevelStore } from '../../serverlevel/store/serverLevelStore'
 
 const server: Server = { id: 's1', name: 'Salinha', owner_id: 'dono' }
 const voice = { id: 'v1', server_id: 's1', name: 'resenha', type: 'voice' } as Channel
@@ -169,6 +170,23 @@ describe('ServerHeaderMenu', () => {
     expect(render(<ServerHeaderMenu server={null} access={fakeAccess(0)} />)).toContain(
       'Carregando servidor…'
     )
+  })
+
+  it('com o nível carregado: selo no cabeçalho e cartão no topo do menu', () => {
+    useServerLevelStore.getState().apply({
+      server_id: 's1',
+      level: 4,
+      xp: 4000,
+      xp_into_level: 500,
+      xp_for_next: 4000
+    })
+    expect(render(<ServerHeaderMenu server={server} access={fakeAccess(0)} />)).toContain('Nv. 4')
+    const menu = render(
+      <ServerMenuItems server={server} access={fakeAccess(0)} onPicked={() => {}} />
+    )
+    expect(menu).toContain('Nível 4')
+    expect(menu.indexOf('Nível 4')).toBeLessThan(menu.indexOf('Sair do servidor'))
+    useServerLevelStore.getState().reset()
   })
 
   it('membro: convidar, apelido, notificações e sair', () => {

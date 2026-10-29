@@ -22,6 +22,7 @@ function liveContext(): TTSListenerContext {
       status: call.status,
       type: call.type,
       serverId: call.serverId,
+      channelId: call.channelId,
       conversationId: call.conversationId
     },
     deafened: call.deafened,

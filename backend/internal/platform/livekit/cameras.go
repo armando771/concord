@@ -2,10 +2,8 @@ package livekit
 
 import (
 	"context"
-	"errors"
 
 	lk "github.com/livekit/protocol/livekit"
-	"github.com/twitchtv/twirp"
 )
 
 // CamerasOn lista quem está com a câmera ligada na sala (faixa de câmera
@@ -13,20 +11,12 @@ import (
 // metadados da sala: a mídia continua indo direto para o LiveKit. Sala que
 // o LiveKit não conhece é ninguém.
 func (a *Admin) CamerasOn(ctx context.Context, room string) ([]string, error) {
-	ctx, err := a.authed(ctx, room)
-	if err != nil {
-		return nil, err
-	}
-	res, err := a.client.ListParticipants(ctx, &lk.ListParticipantsRequest{Room: room})
-	var twerr twirp.Error
-	if errors.As(err, &twerr) && twerr.Code() == twirp.NotFound {
-		return nil, nil
-	}
+	participants, err := a.participants(ctx, room)
 	if err != nil {
 		return nil, err
 	}
 	var out []string
-	for _, p := range res.GetParticipants() {
+	for _, p := range participants {
 		if hasLiveCamera(p) {
 			out = append(out, p.GetIdentity())
 		}

@@ -3,6 +3,8 @@
 // "conteúdo" (chat, chamada, amigos). Quem decide qual aparece é a rota: estas
 // funções puras traduzem cada navegação no painel da frente. Ver ADR 0007.
 
+import { isHubPath } from '../../improvements/lib/hub'
+
 /** Qual coluna aparece no celular. No desktop as duas aparecem sempre. */
 export type MobilePanel = 'nav' | 'content'
 
@@ -18,15 +20,25 @@ export type NavigationAction = 'PUSH' | 'REPLACE' | 'POP'
 export function sectionOf(path: string): string {
   const server = /^\/servers\/([^/]+)/.exec(path)
   if (server) return `server:${server[1]}`
-  if (path.startsWith('/proposals')) return 'proposals'
-  if (path.startsWith('/changelog')) return 'changelog'
+  const visit = /^\/visitas\/([^/]+)/.exec(path)
+  if (visit) return `visit:${visit[1]}`
+  if (isHubPath(path)) return 'improvements'
   return 'home'
 }
 
-// Rotas que são uma conversa/tela própria (não só "a lista daquele lugar").
-const CONTENT_PATHS = [/^\/servers\/[^/]+\/channels\//, /^\/dm\//, /^\/proposals/, /^\/changelog/]
+/** O tipo da seção ('server', 'visit', 'improvements' ou 'home'): a coluna da esquerda. */
+export function sectionKind(path: string): string {
+  return sectionOf(path).split(':')[0]
+}
 
-const isContentPath = (path: string): boolean => CONTENT_PATHS.some((re) => re.test(path))
+// Rotas que são uma conversa/tela própria (não só "a lista daquele lugar"). A
+// visita de visitante só tem a call: abre direto nela.
+const CONTENT_PATHS = [/^\/servers\/[^/]+\/channels\//, /^\/dm\//, /^\/visitas\//]
+
+// A aba do diamante (Melhorias, Propostas, Novidades, Rank global) não tem lista
+// própria: abre direto no conteúdo, e cada tela volta ao hub pelo próprio botão.
+const isContentPath = (path: string): boolean =>
+  isHubPath(path) || CONTENT_PATHS.some((re) => re.test(path))
 
 /** Ao abrir o app (ou recarregar): link direto de um chat abre nele; o resto, na lista. */
 export function initialPanel(path: string): MobilePanel {

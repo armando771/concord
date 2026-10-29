@@ -8,6 +8,7 @@ import MosaicStage from './MosaicStage'
 import MusicStage from './MusicStage'
 import StagePeopleStrip from './StagePeopleStrip'
 import VoiceGrid from './VoiceGrid'
+import { useGuestRoster } from '../../guests/hooks/useGuestRoster'
 
 /**
  * Palco da chamada estilo Discord: sem vídeo = grid de avatares; com telas
@@ -28,6 +29,8 @@ function CallStage({
   speaking?: Set<string>
 }): React.JSX.Element | null {
   const stage = useStageData()
+  // Quem entrou por link de visitante (selo nos tiles e no painel de volumes).
+  useGuestRoster()
   const music = useMusicStage(serverId)
   const focusedId = useCallStore((s) => s.focusedScreenUserId)
   const setStageVisible = useCallStore((s) => s.setStageVisible)

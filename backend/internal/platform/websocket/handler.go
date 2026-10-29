@@ -78,10 +78,21 @@ func (h *Handler) validator(ctx context.Context, userID string, channelID string
 	return false
 }
 
-func (h *Handler) ServeWS(c *gin.Context) {
-	token := c.Query("token")
+// wsUser: quem o token deixa conectar — a conta (token de acesso) ou o
+// visitante sem conta (token de visitante, docs/adr/0017-visitante-na-call.md).
+// O visitante não é membro de nada: o validador das salas só o deixa entrar na
+// sala do próprio usuário e na da call em que está.
+func (h *Handler) wsUser(token string) (string, bool) {
 	claims, err := h.authService.ValidateToken(token)
-	if err != nil || claims.Type != "access" {
+	if err != nil || (claims.Type != "access" && claims.Type != auth.TokenGuest) {
+		return "", false
+	}
+	return claims.UserID, true
+}
+
+func (h *Handler) ServeWS(c *gin.Context) {
+	userID, ok := h.wsUser(c.Query("token"))
+	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}
@@ -94,14 +105,19 @@ func (h *Handler) ServeWS(c *gin.Context) {
 	if err != nil {
 		return
 	}
-	ctx, cancel := context.WithCancel(c.Request.Context())
+	h.serve(c.Request.Context(), conn, userID)
+}
+
+// serve registra a conexão no hub e fica lendo até ela fechar.
+func (h *Handler) serve(parent context.Context, conn *websocket.Conn, userID string) {
+	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 
 	client := &Client{
 		cancel:     cancel,
 		hub:        h.hub,
 		conn:       conn,
-		userID:     claims.UserID,
+		userID:     userID,
 		send:       make(chan []byte, 32),
 		rooms:      make(map[string]struct{}),
 		validator:  h.validator,

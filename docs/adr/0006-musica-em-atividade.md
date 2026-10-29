@@ -1,6 +1,6 @@
 # 0006. Detectar a música tocando pelas sessões de mídia do sistema, sem dependência nova
 
-- Status: aceito
+- Status: aceito; no Windows, emendado em 2026-10-28 (ver "Emenda: helper nativo no Windows")
 - Data: 2026-10-27
 
 ## Contexto
@@ -78,6 +78,40 @@ MPRIS, como URL externa (vazaria o IP de quem vê para terceiros).
   `kind: "listening"` seria lido como "parei de jogar". O app só manda esse
   clear depois de ter mandado uma música.
 
+## Emenda: helper nativo no Windows (2026-10-28)
+
+O PowerShell aberto custava ~50–80 MB e era lento para notar a troca de faixa.
+Virou a opção 1 da lista: o subcomando `concord-audio.exe media-watch`
+(`native/concord-audio/src/media/`), no mesmo exe do áudio da janela e do
+overlay, então já sai no `scripts/build-win.sh` e no `electron-builder.yml`
+sem passo novo.
+
+- **Por eventos**: assina `SessionsChanged`, `CurrentSessionChanged` e, em cada
+  sessão, `MediaPropertiesChanged`, `PlaybackInfoChanged` e
+  `TimelinePropertiesChanged`. A rajada de eventos de uma troca de faixa vira
+  uma leitura só (200 ms de sossego, no máximo 1 s). Parado, repete a última
+  linha a cada 4 s, sem chamar o WinRT, para o `musicDetector` (que desiste de
+  fonte calada há 10 s) saber que o helper está vivo.
+- **Mesmo formato do script** (`[{"app","title","artist","album","status",
+  "position","duration","updated"}]`): o `parseSmtcLine` é um só para as duas
+  fontes, e o nome amigável do app continua saindo do catálogo
+  (`shared/musicApps.ts`) pelo AUMID, em vez de duplicar o catálogo no Rust.
+  A sessão atual do Windows vem primeiro: com duas tocando, é ela que aparece.
+- `TryGetMediaPropertiesAsync` com prazo de 3 s (player travado não segura os
+  outros); o helper sai quando o stdin fecha (Salinha fechou ou morreu).
+- **Fallback**: sem o exe, ou se ele sai em menos de 10 s sem nenhuma leitura
+  (exe antigo sem o subcomando, SMTC falhou nele), o `watchSmtc` passa na hora
+  para o PowerShell de antes (`smtcPowerShell.ts`) até o detector ser parado.
+  O resto (throttle de 15 s, limpeza em 10 s) não mudou.
+- **Cargo**: só as features `Foundation`, `Foundation_Collections` e
+  `Media_Control` da crate `windows`, que já era dependência; nenhuma crate
+  nova no `Cargo.lock` (`windows-future` e `windows-collections` já vinham com
+  ela).
+- Compila no cross-compile (`x86_64-pc-windows-gnu`, imagem do
+  `build-win.sh`), mas não dá para rodar daqui: o laço WinRT
+  (`media/win.rs`) só é provado no Windows; o formato e o ritmo
+  (`media/snapshot.rs`, `media/pacing.rs`) são testados no Linux.
+
 ## Fontes
 
 - Microsoft, Windows.Media.Control: https://learn.microsoft.com/en-us/uwp/api/windows.media.control
@@ -85,3 +119,4 @@ MPRIS, como URL externa (vazaria o IP de quem vê para terceiros).
 - windows-rs, `GlobalSystemMediaTransportControlsSession`: https://microsoft.github.io/windows-docs-rs/doc/windows/Media/Control/struct.GlobalSystemMediaTransportControlsSession.html
 - MPRIS 2, interface Player: https://specifications.freedesktop.org/mpris-spec/latest/Player_Interface.html
 - mpris2 (Position em microssegundos, sem PropertiesChanged): https://mpris2.readthedocs.io/en/latest/mpris2.player.html
+- windows-rs, `IAsyncOperation::when` (resultado sem bloquear, usado para o prazo): https://microsoft.github.io/windows-docs-rs/doc/windows/Foundation/struct.IAsyncOperation.html

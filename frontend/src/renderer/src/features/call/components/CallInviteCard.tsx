@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import Avatar from '../../../shared/ui/Avatar'
-import { VolumeIcon } from '../../../shared/ui/icons'
-import { ChevronRightIcon, EnvelopeIcon } from '../../../shared/ui/iconsExtra'
+import { ChevronRightIcon, EnvelopeIcon, VolumeIcon } from '../../../shared/ui/icons'
 import { useAuthStore } from '../../auth/store/authStore'
 import type { Message } from '../../chat/api/messages'
 import { useOpenCallInvite } from '../hooks/useOpenCallInvite'

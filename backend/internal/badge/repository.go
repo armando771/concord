@@ -24,11 +24,6 @@ func BadgeRepository(db *pgxpool.Pool) *Repository {
 // contar no badge Dono (servidor vazio criado em série não vale).
 const donoMinMembers = 3
 
-// amigoContaRealDias: no badge Amigos só conta amizade com conta real, de
-// e-mail confirmado e criada há pelo menos esses dias (conta criada só para
-// aceitar o pedido não vale).
-const amigoContaRealDias = 7
-
 // Stats junta os números da pessoa numa query só: contadores prontos, um
 // COUNT de servidores pelo índice de owner_id (só os com donoMinMembers
 // membros além do dono, pela chave de server_members), um COUNT dos cards de propostas
@@ -62,7 +57,7 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			(SELECT COUNT(*) FROM friendships f
 				JOIN users o ON o.id = CASE WHEN f.requester_id = u.id THEN f.addressee_id ELSE f.requester_id END
 				WHERE (f.requester_id = u.id OR f.addressee_id = u.id) AND f.status = 'accepted'
-				AND o.email_verified_at IS NOT NULL AND o.created_at <= NOW() - make_interval(days => $3)),
+				AND `+contaRealSQL("o")+`),
 			EXISTS (SELECT 1 FROM dev_badge_users d WHERE d.user_id = u.id),
 			ARRAY(SELECT e.enquete || ':' || e.opcao FROM escolhas e WHERE e.user_id = u.id),
 			COALESCE(b.songs_played, 0),
@@ -78,13 +73,13 @@ func (r *Repository) Stats(ctx context.Context, userID string) (Stats, error) {
 			(SELECT COUNT(*) FROM server_first_messages f WHERE f.user_id = u.id),
 			COALESCE((SELECT h.bugs FROM bug_hunters h WHERE h.user_id = u.id), 0),
 			COALESCE((SELECT t.posicao FROM badge_top10 t WHERE t.user_id = u.id), 0),
-			(SELECT COUNT(*) FROM badge_top10) >= $4
+			(SELECT COUNT(*) FROM badge_top10) >= $3
 		FROM users u
 		LEFT JOIN user_levels l ON l.user_id = u.id
 		LEFT JOIN user_badge_stats b ON b.user_id = u.id
 		WHERE u.id = $1
 		`,
-		userID, donoMinMembers, amigoContaRealDias, Top10Slots,
+		userID, donoMinMembers, Top10Slots,
 	).Scan(
 		&s.CreatedAt,
 		&s.XP,
