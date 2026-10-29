@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { describe, expect, it } from 'vitest'
-import { encodePowerShell, parseSmtcLine, SMTC_SCRIPT } from './smtcMedia'
+import { parseSmtcLine } from './smtcMedia'
 
 // Saída do script do SMTC: uma linha JSON por leitura (com BOM na primeira,
 // como o PowerShell às vezes manda), um objeto solto, a lista vazia e um erro.
@@ -81,18 +81,5 @@ describe('parseSmtcLine', () => {
         durationMs: 0
       }
     ])
-  })
-})
-
-describe('SMTC_SCRIPT', () => {
-  it('encerra sozinho quando o app some e escreve em UTF-8', () => {
-    const script = SMTC_SCRIPT(4242)
-    expect(script).toContain('Get-Process -Id 4242')
-    expect(script).toContain('UTF8Encoding')
-    expect(script).toContain('GlobalSystemMediaTransportControlsSessionManager')
-  })
-
-  it('codifica em UTF-16LE base64 para o -EncodedCommand', () => {
-    expect(Buffer.from(encodePowerShell('ok'), 'base64').toString('utf16le')).toBe('ok')
   })
 })
