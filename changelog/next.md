@@ -1,5 +1,6 @@
 ## Novidades
 
+- Perfil: nova predefinição de tema Pride, com fundo arco-íris do orgulho.
 - O Maestro volta sozinho e continua a música depois de uma atualização do servidor.
 - No Windows, a detecção da música ficou mais leve.
 - Chamadas: convide alguém de fora do servidor só para a call em que você está. No topo da call, "Convidar visitante" gera um link de 2 horas, 6 horas, 12 horas ou 1 dia, e você escolhe se a pessoa pode falar e ligar câmera e tela. Quem abre o link digita um nome (ou entra com a própria conta) e vai direto para a call, com o selo "Visitante", sem ver chats nem outros canais. O link pode ser revogado e o visitante expulso a qualquer momento. Nova permissão de cargo "Convidar visitantes", desligada por padrão.
