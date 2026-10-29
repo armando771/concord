@@ -57,6 +57,32 @@ describe('readScreenStatsInput', () => {
     })
   })
 
+  it('codec de reserva ativo: junta o envio do sender de reserva (VP8) ao do principal', async () => {
+    // Regressão: com o VP8 de reserva publicando, o vídeo sai por outro sender
+    // (simulcastCodecs) e o painel só lia o principal, pausado → "Ainda sem dados".
+    const principal = new Map([
+      ['o1', { id: 'o1', type: 'outbound-rtp', kind: 'video', active: false }]
+    ]) as unknown as RTCStatsReport
+    const reserva = new Map([
+      ['o2', { id: 'o2', type: 'outbound-rtp', kind: 'video', active: true }]
+    ]) as unknown as RTCStatsReport
+    const input = await readScreenStatsInput(
+      room({
+        local: {
+          videoTrack: {
+            getRTCStatsReport: async () => principal,
+            simulcastCodecs: new Map([['vp8', { sender: { getStats: async () => reserva } }]])
+          }
+        }
+      }),
+      'eu',
+      true
+    )
+    const ids: string[] = []
+    input?.report.forEach((stat: { id: string }) => ids.push(stat.id))
+    expect(ids.sort()).toEqual(['o1', 'o2'])
+  })
+
   it('sem live publicada: null', async () => {
     expect(await readScreenStatsInput(room({}), 'eu', true)).toBeNull()
     expect(await readScreenStatsInput(room({}), 'bia', false)).toBeNull()

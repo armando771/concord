@@ -208,6 +208,18 @@ describe('screenStatsView — quem transmite', () => {
     expect(value(view, 'Codec')).toBe('VP8')
   })
 
+  it('envio pausado porque ninguém está assistindo: diz isso em vez de "Ainda sem dados"', () => {
+    // Regressão: o dynacast pausa a camada (active: false) quando ninguém vê a
+    // live; o painel descartava o envio e mostrava só "Ainda sem dados".
+    const { view } = screenStatsView(
+      sender([h264, outbound({ active: false, bytesSent: 5_000_000 })], 60),
+      null
+    )
+    expect(view.status).toBe('Envio pausado: ninguém está vendo a live agora')
+    expect(value(view, 'Codec')).toBe('H264')
+    expect(value(view, 'Quadros')).toBe('0 de 60 fps')
+  })
+
   it('sem vídeo saindo ainda', () => {
     const { view, sample } = screenStatsView(sender([]), null)
     expect(view.rows).toEqual([])

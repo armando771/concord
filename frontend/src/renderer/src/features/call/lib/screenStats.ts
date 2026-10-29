@@ -40,6 +40,8 @@ export type LivePauseReason = 'offscreen' | 'connection'
 
 type Stat = Record<string, unknown>
 
+const IDLE_TEXT = 'Envio pausado: ninguém está vendo a live agora'
+
 const PAUSE_TEXT: Record<LivePauseReason, string> = {
   offscreen: 'Vídeo pausado (fora de vista)',
   connection: 'Pausada pela sua conexão'
@@ -95,14 +97,20 @@ function codecName(report: RTCStatsReport, codecId: unknown): string {
   return mime ? mime.slice(mime.indexOf('/') + 1).toUpperCase() : '—'
 }
 
-/** O RTP de vídeo que está mandando/recebendo (com codec de reserva, o ativo que mais trafegou). */
+/**
+ * O RTP de vídeo que está mandando/recebendo (com codec de reserva, o ativo que
+ * mais trafegou). Nenhum ativo: o pausado (o dynacast pausa o envio quando
+ * ninguém está vendo a live), para o painel dizer isso em vez de "sem dados".
+ */
 function videoRtp(report: RTCStatsReport, type: string, bytesKey: string): Stat | null {
   let best: Stat | null = null
+  let idle: Stat | null = null
   report.forEach((stat: Stat) => {
-    if (stat.type !== type || stat.kind !== 'video' || stat.active === false) return
-    if (!best || (num(stat[bytesKey]) ?? 0) > (num(best[bytesKey]) ?? 0)) best = stat
+    if (stat.type !== type || stat.kind !== 'video') return
+    if (stat.active === false) idle ??= stat
+    else if (!best || (num(stat[bytesKey]) ?? 0) > (num(best[bytesKey]) ?? 0)) best = stat
   })
-  return best
+  return best ?? idle
 }
 
 function sampleOf(stat: Stat, bytesKey: string, framesKey: string): ScreenStatsSample {
@@ -130,6 +138,7 @@ function resolution(stat: Stat): string {
 }
 
 function fps(stat: Stat): string {
+  if (stat.active === false) return '0'
   const value = num(stat.framesPerSecond)
   return value === null ? '—' : String(Math.round(value))
 }
@@ -217,7 +226,7 @@ export function screenStatsView(
     : ['inbound-rtp', 'bytesReceived', 'framesDecoded']
   const stat = videoRtp(input.report, type, bytesKey)
   const pause = input.local ? null : livePauseReason(input.enabled, input.streamState)
-  const pauseText = pause ? PAUSE_TEXT[pause] : null
+  const pauseText = pause ? PAUSE_TEXT[pause] : stat?.active === false ? IDLE_TEXT : null
   if (!stat) return { view: { rows: [], status: pauseText ?? 'Ainda sem dados' }, sample: null }
   const now = sampleOf(stat, bytesKey, framesKey)
   const rows = input.local
