@@ -39,6 +39,7 @@
 
 ## Correções
 - Badges e nível do servidor: conta real agora é e-mail confirmado e pelo menos 24 horas de conta (antes eram 7 dias, e ninguém chegava lá). O nível dos servidores volta a subir daqui para a frente, o Festeiro volta a contar, e o badge Amigos devolve os tiers que tinham sumido, sem aviso de desbloqueio.
+- Chat: o /tts não toca mais em todas as calls do servidor. Mandado num canal de texto, só quem está na mesma call de quem enviou ouve (se você não está em call, ninguém ouve); mandado no chat de um canal de voz, só quem está na call daquele canal.
 - Chamadas: quem é movido de canal de voz por um moderador agora entra de fato no canal novo, com áudio funcionando, mesmo quando estava sozinho na sala antiga. Antes a pessoa aparecia na lista do canal novo, mas precisava clicar no canal para entrar.
 - Badges: o Figurinha não conta mais a mesma figurinha ou o mesmo GIF mandado logo em seguida, e o que for apagado em até 2 minutos sai da conta. Quem subiu o badge assim volta para o tier que as figurinhas que ainda estão no chat dão.
 - Badges: o Mensagens enviadas não conta mais mensagem repetida em seguida (a mesma que você acabou de mandar na sala), e mensagem apagada em até 2 minutos sai da conta. Quem subiu o badge assim volta para o tier que as mensagens que ainda estão no chat dão.
