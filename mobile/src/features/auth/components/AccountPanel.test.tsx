@@ -31,4 +31,15 @@ describe('AccountPanel', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Sair' }))
     await waitFor(() => expect(useAuthStore.getState().status).toBe('signedOut'))
   })
+
+  it('Sair tira o aparelho do push antes de encerrar a sessão', async () => {
+    const order: string[] = []
+    const forgetPush = jest.fn(async () => {
+      order.push(`push:${useAuthStore.getState().status}`)
+    })
+    await render(<AccountPanel logout={async () => {}} forgetPush={forgetPush} />)
+    await fireEvent.press(screen.getByRole('button', { name: 'Sair' }))
+    await waitFor(() => expect(useAuthStore.getState().status).toBe('signedOut'))
+    expect(order).toEqual(['push:signedIn'])
+  })
 })
