@@ -1,7 +1,11 @@
+import { useEffect } from 'react'
 import { KeyboardAvoidingView, Platform, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../../../shared/theme/tokens'
 import { useRoomMessages, type ChatTarget } from '../hooks/useRoomMessages'
+import { useActiveRoomStore } from '../store/activeRoomStore'
+import { useConversationsStore } from '../store/conversationsStore'
+import { useUnreadStore } from '../store/unreadStore'
 import { ChannelHeader } from './ChannelHeader'
 import { Composer } from './Composer'
 import { MessageList } from './MessageList'
@@ -14,6 +18,8 @@ interface ChatScreenProps {
   id: string
   /** Nome do canal, da pessoa ou do grupo. */
   title: string
+  /** Servidor do canal (para descontar a não lida do servidor ao abrir). */
+  serverId?: string
   onBack: () => void
 }
 
@@ -26,8 +32,17 @@ const PRESENTATION: Record<ChatVariant, { prefix: string; label: (title: string)
 }
 
 /** Chat em tela cheia de um canal de texto, de uma DM ou de um grupo: cabeçalho, histórico e campo de envio. */
-export function ChatScreen({ variant, id, title, onBack }: ChatScreenProps) {
+export function ChatScreen({ variant, id, title, serverId, onBack }: ChatScreenProps) {
   const { prefix, label, target } = PRESENTATION[variant]
+
+  // Chat aberto: as mensagens dele não contam como não lidas, e abrir zera o que já havia.
+  useEffect(() => {
+    useActiveRoomStore.getState().setActive({ kind: target, id })
+    if (target === 'channel') useUnreadStore.getState().clearChannel(id, serverId)
+    else useConversationsStore.getState().markRead(id)
+    return () => useActiveRoomStore.getState().setActive(null)
+  }, [target, id, serverId])
+
   const { messages, status, hasMore, loadMore, send, retry } = useRoomMessages({ kind: target, id })
   // O layout do app tem paddingTop (área segura): o KeyboardAvoidingView mede a posição relativa ao pai
   // e não a conta, então sem este deslocamento o campo de envio ficava atrás do teclado.

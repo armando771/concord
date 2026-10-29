@@ -45,6 +45,19 @@ export function applyMessage(list: ConversationSummary[], message: Message): { l
   return { list: sortConversations(updated), unknown: false }
 }
 
+const mapOne = (list: ConversationSummary[], id: string, change: (c: ConversationSummary) => ConversationSummary): ConversationSummary[] =>
+  list.map((c) => (c.id === id ? change(c) : c))
+
+/** +1 não lida na conversa. */
+export const bumpUnread = (list: ConversationSummary[], id: string): ConversationSummary[] =>
+  mapOne(list, id, (c) => ({ ...c, unread_count: c.unread_count + 1 }))
+
+/** Zera a não lida da conversa (devolve a mesma lista se já estava zerada). */
+export function clearUnread(list: ConversationSummary[], id: string): ConversationSummary[] {
+  if (!list.some((c) => c.id === id && c.unread_count > 0)) return list
+  return mapOne(list, id, (c) => ({ ...c, unread_count: 0 }))
+}
+
 /** Minúsculas e sem acento: "José" casa com "jose". */
 const normalize = (text: string): string =>
   text

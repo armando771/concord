@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { buildDir, buildPlan, cmakeDirProperty, ninjaSupportsLongPaths } from './mobileBuild.mjs'
+import { apkInfo, buildDir, buildPlan, cmakeDirProperty, ninjaSupportsLongPaths } from './mobileBuild.mjs'
 
 const SIGNING = {
   SALINHA_KEYSTORE_PATH: 'C:/chaves/salinha.jks',
@@ -79,4 +79,37 @@ test('ninjaSupportsLongPaths: só do 1.12 em diante (manifesto de caminho longo)
 
 test('cmakeDirProperty: linha do local.properties com barras normais', () => {
   assert.equal(cmakeDirProperty(String.raw`C:\sb\.cmake`), 'cmake.dir=C:/sb/.cmake')
+})
+
+test('modo dev: não exige a URL do servidor nem keystore (o Metro entrega o JS)', () => {
+  const plan = buildPlan({ ANDROID_HOME: 'C:/Android/Sdk' }, 'dev')
+  assert.deepEqual(plan.problems, [])
+  assert.deepEqual(plan.warnings, [])
+  assert.deepEqual(plan.gradleArgs, [])
+})
+
+test('modo dev ignora um keystore pela metade (não é usado)', () => {
+  const plan = buildPlan({ ANDROID_HOME: 'C:/Android/Sdk', SALINHA_KEYSTORE_PATH: 'x' }, 'dev')
+  assert.deepEqual(plan.problems, [])
+})
+
+test('modo dev ainda exige o Android SDK', () => {
+  assert.match(buildPlan({}, 'dev').problems.join('\n'), /ANDROID_HOME/)
+})
+
+test('modo release continua sendo o padrão', () => {
+  assert.match(buildPlan({ ANDROID_HOME: 'C:/Android/Sdk' }).problems.join('\n'), /EXPO_PUBLIC_SERVER_URL/)
+})
+
+test('apkInfo: tarefa do Gradle, caminho do APK gerado e nome da cópia', () => {
+  assert.deepEqual(apkInfo('release'), {
+    task: 'assembleRelease',
+    built: 'app/build/outputs/apk/release/app-release.apk',
+    out: 'dist/salinha.apk'
+  })
+  assert.deepEqual(apkInfo('dev'), {
+    task: 'assembleDebug',
+    built: 'app/build/outputs/apk/debug/app-debug.apk',
+    out: 'dist/salinha-dev.apk'
+  })
 })

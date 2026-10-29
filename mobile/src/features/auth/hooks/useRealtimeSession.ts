@@ -22,6 +22,13 @@ export function useRealtimeSession(): void {
       realtime.disconnect()
     }
   }, [signedIn])
+
+  // O usuário só carrega (GET /users/me) depois do WebSocket abrir, e o cliente só assina a sala pessoal
+  // sozinho se já souber o id na abertura: sem isto, pedidos de amizade e DMs não chegavam ao vivo.
+  const userId = useAuthStore((s) => s.user?.id)
+  useEffect(() => {
+    if (signedIn && userId) realtime.subscribe(`user:${userId}`)
+  }, [signedIn, userId])
 }
 
 /** Espelha o estado da rede no networkStore (faixa "Sem conexão"). */

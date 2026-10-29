@@ -2,7 +2,8 @@ import { create } from 'zustand'
 import { listFriends, type Friend } from '../../friends/api/friends'
 import { listConversations, type ConversationSummary } from '../api/conversations'
 import type { Message } from '../api/messages'
-import { applyMessage as applyToList, sortConversations } from '../lib/conversationList'
+import { applyMessage as applyToList, bumpUnread, clearUnread, sortConversations } from '../lib/conversationList'
+import { shouldCountUnread, type ActiveRoom } from '../lib/unreadCounts'
 
 type Status = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -13,8 +14,13 @@ interface ConversationsState {
   friends: Friend[]
   friendsLoaded: boolean
   load: () => Promise<void>
-  /** Mensagem nova (WebSocket): sobe a conversa; desconhecida refaz a lista. */
-  applyMessage: (message: Message) => Promise<void>
+  /**
+   * Mensagem nova (WebSocket): sobe a conversa; desconhecida refaz a lista. Com `ctx`, conta como
+   * não lida se for de outra pessoa e a conversa não estiver aberta.
+   */
+  applyMessage: (message: Message, ctx?: { myId: string | undefined; active: ActiveRoom | null }) => Promise<void>
+  /** Abriu a conversa: zera a não lida localmente (o servidor é avisado pelo chat). */
+  markRead: (conversationId: string) => void
   loadFriends: () => Promise<void>
   reset: () => void
 }
@@ -36,11 +42,13 @@ export const useConversationsStore = create<ConversationsState>()((set, get) => 
       set({ status: 'error' })
     }
   },
-  applyMessage: async (message) => {
+  applyMessage: async (message, ctx) => {
     const { list, unknown } = applyToList(get().conversations, message)
     if (unknown) return get().load()
-    set({ conversations: list })
+    const counts = ctx && message.conversation_id && shouldCountUnread(message, ctx.myId, ctx.active)
+    set({ conversations: counts ? bumpUnread(list, message.conversation_id as string) : list })
   },
+  markRead: (conversationId) => set((s) => ({ conversations: clearUnread(s.conversations, conversationId) })),
   loadFriends: async () => {
     if (get().friendsLoaded) return
     try {

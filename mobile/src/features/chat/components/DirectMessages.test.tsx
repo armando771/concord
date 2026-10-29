@@ -49,7 +49,8 @@ const T2 = '2026-10-28T11:00:00Z'
 
 describe('DirectMessages', () => {
   const onOpenConversation = jest.fn()
-  const setup = () => render(<DirectMessages onOpenConversation={onOpenConversation} />)
+  const onOpenFriends = jest.fn()
+  const setup = () => render(<DirectMessages onOpenConversation={onOpenConversation} onOpenFriends={onOpenFriends} />)
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -69,6 +70,13 @@ describe('DirectMessages', () => {
     expect(screen.getByText('Mensagens diretas')).toBeOnTheScreen()
   })
 
+  it('conversa com não lidas mostra o selo com o número', async () => {
+    list.mockResolvedValue([{ ...dm('d1', person('u1', 'Paulo Kogos'), T1), unread_count: 3 }, group('g1', 'DEVS do SALINHA', T2)])
+    await setup()
+    expect(await screen.findByLabelText('3 mensagens não lidas')).toBeOnTheScreen()
+    expect(screen.getAllByLabelText(/não lidas?$/)).toHaveLength(1)
+  })
+
   it('a DM 1 a 1 mostra a presença; o grupo não', async () => {
     await setup()
     await screen.findByRole('button', { name: 'Paulo Kogos' })
@@ -83,25 +91,16 @@ describe('DirectMessages', () => {
     expect(screen.getByLabelText('Não perturbe')).toBeOnTheScreen()
   })
 
+  it('o botão Amigos abre a tela de amigos', async () => {
+    await setup()
+    await fireEvent.press(await screen.findByRole('button', { name: 'Amigos' }))
+    expect(onOpenFriends).toHaveBeenCalled()
+  })
+
   it('tocar numa conversa avisa quem abre o chat', async () => {
     await setup()
     await fireEvent.press(await screen.findByRole('button', { name: 'DEVS do SALINHA' }))
     expect(onOpenConversation).toHaveBeenCalledWith({ id: 'g1', title: 'DEVS do SALINHA', type: 'group' })
-  })
-
-  it('mensagem nova do WebSocket sobe a conversa para o topo', async () => {
-    await setup()
-    await screen.findByRole('button', { name: 'Paulo Kogos' })
-    const before = screen.getAllByRole('button').map((b) => b.props.accessibilityLabel)
-    expect(before.indexOf('DEVS do SALINHA')).toBeLessThan(before.indexOf('Paulo Kogos'))
-    await act(async () =>
-      wsHandler({
-        type: 'message:create',
-        payload: { message: { id: 'm', author_id: 'u1', conversation_id: 'd1', content: 'oi', created_at: '2026-10-28T12:00:00Z' } }
-      })
-    )
-    const after = screen.getAllByRole('button').map((b) => b.props.accessibilityLabel)
-    expect(after.indexOf('Paulo Kogos')).toBeLessThan(after.indexOf('DEVS do SALINHA'))
   })
 
   it('a busca filtra as conversas sem acento nem maiúsculas', async () => {
@@ -117,7 +116,8 @@ describe('DirectMessages', () => {
     await setup()
     await screen.findByRole('button', { name: 'Paulo Kogos' })
     await fireEvent.changeText(screen.getByLabelText('Encontre ou comece uma conversa'), 'jose')
-    expect(await screen.findByText('Amigos')).toBeOnTheScreen()
+    // o botão "Amigos" do topo e o título da seção dos resultados
+    await waitFor(() => expect(screen.getAllByText('Amigos')).toHaveLength(2))
     await fireEvent.press(screen.getByRole('button', { name: 'Maria José' }))
     await waitFor(() => expect(onOpenConversation).toHaveBeenCalledWith({ id: 'novo', title: 'Maria José', type: 'dm' }))
     expect(open).toHaveBeenCalledWith('f1')

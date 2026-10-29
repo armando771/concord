@@ -37,6 +37,11 @@ describe('ChannelList', () => {
     expect(screen.getByText('Canais de voz chegam em breve')).toBeOnTheScreen()
   })
 
+  it('canal com mensagem não lida ganha o ponto; os outros não', async () => {
+    await render(<ChannelList {...base} channels={[ch('t1', 'geral', 'text'), ch('t2', 'avisos', 'text')]} unreadChannels={{ t2: 4 }} />)
+    expect(screen.getAllByLabelText('Mensagens não lidas')).toHaveLength(1)
+  })
+
   it('falha ao carregar os canais: oferece tentar de novo', async () => {
     const onRetry = jest.fn()
     await render(<ChannelList {...base} channels={[]} error onRetry={onRetry} />)

@@ -1,4 +1,7 @@
 import { render, screen } from '@testing-library/react-native'
+import { useActiveRoomStore } from '../store/activeRoomStore'
+import { useConversationsStore } from '../store/conversationsStore'
+import { useUnreadStore } from '../store/unreadStore'
 import { ChatScreen } from './ChatScreen'
 
 const mockKeyboardAvoidingView = jest.fn()
@@ -25,7 +28,31 @@ jest.mock('../hooks/useRoomMessages', () => ({
 }))
 
 describe('ChatScreen', () => {
-  beforeEach(() => jest.clearAllMocks())
+  beforeEach(() => {
+    jest.clearAllMocks()
+    useActiveRoomStore.setState({ active: null })
+    useUnreadStore.setState(useUnreadStore.getInitialState(), true)
+  })
+
+  it('canal: registra o chat aberto, zera as não lidas dele e desfaz ao sair', async () => {
+    useUnreadStore.getState().add('c1', 's1')
+    useUnreadStore.getState().add('c2', 's1')
+    const { unmount } = await render(<ChatScreen variant="channel" id="c1" serverId="s1" title="geral" onBack={() => {}} />)
+    expect(useActiveRoomStore.getState().active).toEqual({ kind: 'channel', id: 'c1' })
+    expect(useUnreadStore.getState().byChannel.c1).toBeUndefined()
+    expect(useUnreadStore.getState().byServer.s1).toBe(1)
+    await unmount()
+    expect(useActiveRoomStore.getState().active).toBeNull()
+  })
+
+  it('conversa: registra o chat aberto e zera a não lida da conversa', async () => {
+    useConversationsStore.setState({
+      conversations: [{ id: 'd1', type: 'dm', name: '', members: [], unread_count: 4, created_at: '', updated_at: '' }]
+    })
+    await render(<ChatScreen variant="dm" id="d1" title="Paulo" onBack={() => {}} />)
+    expect(useActiveRoomStore.getState().active).toEqual({ kind: 'conversation', id: 'd1' })
+    expect(useConversationsStore.getState().conversations[0].unread_count).toBe(0)
+  })
 
   // Regressão: o chat fica abaixo do paddingTop (área segura) do layout; o KeyboardAvoidingView mede
   // a posição relativa ao pai e subestimava o deslocamento: o campo de envio ficava atrás do teclado.

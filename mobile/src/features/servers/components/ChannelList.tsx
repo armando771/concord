@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { colors, fontSize, MIN_TOUCH, radius, spacing } from '../../../shared/theme/tokens'
 import { Banner } from '../../../shared/ui/Banner'
 import { Button } from '../../../shared/ui/Button'
+import { UnreadDot } from '../../chat/components/UnreadBadge'
 import type { Channel } from '../api/channels'
 import { channelSections } from '../lib/channelSections'
 
@@ -12,12 +13,14 @@ interface ChannelListProps {
   channels: Channel[]
   /** A lista de canais deste servidor falhou ao carregar. */
   error: boolean
+  /** Não lidas por canal (só na sessão): o nome fica em negrito e ganha um ponto. */
+  unreadChannels?: Record<string, number>
   onOpenChannel: (channel: Channel) => void
   onRetry: () => void
 }
 
 /** Coluna do meio: nome do servidor e os canais de texto e de voz. */
-export function ChannelList({ serverName, channels, error, onOpenChannel, onRetry }: ChannelListProps) {
+export function ChannelList({ serverName, channels, error, unreadChannels = {}, onOpenChannel, onRetry }: ChannelListProps) {
   const [voiceNotice, setVoiceNotice] = useState(false)
 
   const open = (channel: Channel): void => {
@@ -54,9 +57,10 @@ export function ChannelList({ serverName, channels, error, onOpenChannel, onRetr
                 ) : (
                   <Text style={styles.hash}>#</Text>
                 )}
-                <Text style={styles.name} numberOfLines={1}>
+                <Text style={[styles.name, (unreadChannels[channel.id] ?? 0) > 0 && styles.nameUnread]} numberOfLines={1}>
                   {channel.name}
                 </Text>
+                {(unreadChannels[channel.id] ?? 0) > 0 ? <UnreadDot /> : null}
               </Pressable>
             ))}
           </View>
@@ -76,5 +80,6 @@ const styles = StyleSheet.create({
   pressed: { backgroundColor: colors.bgAccent },
   hash: { color: colors.interactiveNormal, fontSize: fontSize.lg, width: 20, textAlign: 'center' },
   name: { color: colors.textSecondary, fontSize: fontSize.md, flexShrink: 1 },
+  nameUnread: { color: colors.textStrong, fontWeight: '700' },
   error: { gap: spacing.sm, padding: spacing.sm }
 })
