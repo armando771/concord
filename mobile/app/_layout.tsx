@@ -1,9 +1,14 @@
+import { registerGlobals } from '@livekit/react-native'
 import { Stack } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { useCallEvents } from '../src/features/call/hooks/useCallEvents'
+import { useCallLifecycle } from '../src/features/call/hooks/useCallLifecycle'
+import { useCallPresence } from '../src/features/call/hooks/useCallPresence'
+import { useIncomingCallRoute } from '../src/features/call/hooks/useIncomingCallRoute'
 import { useCurrentUser } from '../src/features/auth/hooks/useCurrentUser'
 import { useUnreadLive } from '../src/features/chat/hooks/useUnreadLive'
 import { useNotificationTap } from '../src/features/notifications/hooks/useNotificationTap'
@@ -16,6 +21,8 @@ import { colors } from '../src/shared/theme/tokens'
 import { ErrorBoundary } from '../src/shared/ui/ErrorBoundary'
 
 void SplashScreen.preventAutoHideAsync()
+// WebRTC do LiveKit: precisa rodar uma vez, antes de qualquer chamada (ADR 0023).
+registerGlobals()
 bindAuthSession()
 
 function Gate() {
@@ -27,6 +34,10 @@ function Gate() {
   useUnreadLive()
   usePushRegistration()
   useNotificationTap()
+  useCallEvents()
+  useCallPresence()
+  useCallLifecycle()
+  useIncomingCallRoute()
 
   useEffect(() => {
     void useAuthStore.getState().restore()

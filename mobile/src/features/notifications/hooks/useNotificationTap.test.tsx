@@ -16,6 +16,10 @@ jest.mock('../lib/expoPush', () => ({
   takeLaunchTap: () => mockTakeLaunchTap()
 }))
 
+const mockHandleCallInviteTap = jest.fn().mockResolvedValue(undefined)
+jest.mock('../../call/lib/callInviteTap', () => ({ handleCallInviteTap: (d: unknown) => mockHandleCallInviteTap(d) }))
+jest.mock('../../call/api/calls', () => ({ getActiveDmCall: jest.fn() }))
+
 import { useNotificationTap } from './useNotificationTap'
 
 beforeEach(() => {
@@ -39,6 +43,14 @@ describe('useNotificationTap', () => {
     mockTakeLaunchTap.mockResolvedValue({ type: 'friend_request', username: 'ana' })
     await renderHook(() => useNotificationTap())
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/amigos' })
+  })
+
+  it('toque na chamada recebida consulta o servidor em vez de navegar', async () => {
+    await renderHook(() => useNotificationTap())
+    const data = { type: 'call_invite', call_id: 'c1', conversation_id: 'cv1', name: 'Ana' }
+    act(() => mockTapListener?.(data))
+    expect(mockHandleCallInviteTap).toHaveBeenCalledWith(data)
+    expect(mockPush).not.toHaveBeenCalled()
   })
 
   it('dados desconhecidos não navegam', async () => {

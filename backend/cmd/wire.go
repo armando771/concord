@@ -57,6 +57,10 @@ type app struct {
 	friendAccepted         *friendship.AcceptHook
 	// pushTap liga os publicadores ao notificador de push (wirePush) depois que ele existe.
 	pushTap                *push.Tap
+	// pushNotifier/pushRepo/pushEnabled: o que wirePushCalls usa para ligar a chamada de DM ao push.
+	pushNotifier *push.Notifier
+	pushRepo     *push.Repository
+	pushEnabled  bool
 	channelRepository      *channel.Repository
 	channelService         *channel.Service
 	conversationRepository *conversation.Repository
@@ -116,6 +120,7 @@ func wire(ctx context.Context, db *pgxpool.Pool) *app {
 	a.wireChat()
 	a.wirePush()
 	a.wireCalls()
+	a.wirePushCalls()
 	a.wireGuests()
 	a.wireMusic()
 	a.wireEngagement()

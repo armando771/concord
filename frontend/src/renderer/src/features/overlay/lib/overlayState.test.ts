@@ -312,6 +312,7 @@ describe('normalizeOverlayPrefs (a cada carga, mesmo sem mudar de versão)', () 
       })
     ).toEqual({
       enabled: false,
+      showWatchers: true,
       opacity: 60,
       layout: { position: { x: 1, y: 0.5 }, scale: 1.6 },
       shortcut: 'Shift+Tab'
@@ -321,6 +322,7 @@ describe('normalizeOverlayPrefs (a cada carga, mesmo sem mudar de versão)', () 
   it('layout estragado (ex.: null) vira o padrão em vez de quebrar a tela de configurações', () => {
     expect(normalizeOverlayPrefs({ layout: null }).layout).toEqual(OVERLAY_DEFAULT_LAYOUT)
     expect(normalizeOverlayPrefs(undefined)).toEqual({
+      showWatchers: true,
       opacity: OVERLAY_OPACITY_DEFAULT,
       layout: OVERLAY_DEFAULT_LAYOUT,
       shortcut: 'Shift+Tab'
@@ -344,5 +346,60 @@ describe('buildOverlaySnapshot: tema', () => {
     expect(buildOverlaySnapshot(input({ theme, status: 'idle' })).theme).toEqual(theme)
     expect(buildOverlaySnapshot(input({ theme }), 2).theme).toEqual(theme)
     expect(buildOverlaySnapshot(input()).theme).toBeNull()
+  })
+})
+
+describe('buildOverlaySnapshot: quem assiste a minha live', () => {
+  const live = { live: true, show: true, watchers: [bia] }
+
+  it('sem live não tem contagem nem olho em ninguém', () => {
+    const s = buildOverlaySnapshot(input({ liveWatchers: { ...live, live: false } }))
+    expect(s.viewers).toBeNull()
+    expect(s.members.some((m) => m.watchingMe)).toBe(false)
+  })
+
+  it('com live: conta e marca só quem assiste', () => {
+    const s = buildOverlaySnapshot(input({ liveWatchers: live }))
+    expect(s.viewers).toBe(1)
+    expect(s.members.map((m) => m.watchingMe)).toEqual([false, false, true])
+  })
+
+  it('opção desligada esconde tudo', () => {
+    const s = buildOverlaySnapshot(input({ liveWatchers: { ...live, show: false } }))
+    expect(s.viewers).toBeNull()
+    expect(s.members.some((m) => m.watchingMe)).toBe(false)
+  })
+
+  it('quem assiste e ficou no "+N" ainda entra na contagem', () => {
+    const many = Array.from({ length: 10 }, (_, i) => ({
+      id: `u${i}`,
+      username: `u${i}`,
+      display_name: `U${i}`
+    }))
+    const s = buildOverlaySnapshot(
+      input({ participants: many, liveWatchers: { ...live, watchers: [many[9], many[0]] } })
+    )
+    expect(s.more).toBeGreaterThan(0)
+    expect(s.viewers).toBe(2)
+    expect(s.members.filter((m) => m.watchingMe).map((m) => m.id)).toEqual(['u0'])
+  })
+
+  it('fora da call, nada', () => {
+    const s = buildOverlaySnapshot(input({ status: 'idle', liveWatchers: live }))
+    expect(s.viewers).toBeNull()
+  })
+
+  it('quem passa a assistir muda o snapshot (vai ao overlay)', () => {
+    const a = buildOverlaySnapshot(input({ liveWatchers: { ...live, watchers: [] } }))
+    const b = buildOverlaySnapshot(input({ liveWatchers: live }))
+    expect(sameOverlaySnapshot(a, b)).toBe(false)
+  })
+})
+
+describe('preferências do overlay: mostrar quem assiste', () => {
+  it('padrão ligado; só false explícito desliga', () => {
+    expect(normalizeOverlayPrefs({}).showWatchers).toBe(true)
+    expect(normalizeOverlayPrefs({ showWatchers: false }).showWatchers).toBe(false)
+    expect(normalizeOverlayPrefs({ showWatchers: 'lixo' }).showWatchers).toBe(true)
   })
 })

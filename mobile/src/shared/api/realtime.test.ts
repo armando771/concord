@@ -1,4 +1,4 @@
-import { onRealtimeReconnect } from './realtime'
+import { onRealtimeOpen, onRealtimeReconnect } from './realtime'
 
 // O WsClient avisa onOpen(reconnected); o realtime repassa só as reconexões aos ouvintes.
 jest.mock('./ws', () => {
@@ -25,5 +25,18 @@ describe('onRealtimeReconnect', () => {
     off()
     __open(true)
     expect(listener).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('onRealtimeOpen', () => {
+  it('avisa em toda abertura, inclusive a primeira', () => {
+    const listener = jest.fn()
+    const off = onRealtimeOpen(listener)
+    __open(false)
+    __open(true)
+    expect(listener).toHaveBeenCalledTimes(2)
+    off()
+    __open(false)
+    expect(listener).toHaveBeenCalledTimes(2)
   })
 })

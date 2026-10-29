@@ -18,6 +18,7 @@ const member = (over: Partial<OverlayMember> = {}): OverlayMember => ({
   muted: false,
   deafened: false,
   speaking: true,
+  watchingMe: false,
   ...over
 })
 
@@ -26,6 +27,7 @@ const snapshot = (over: Partial<OverlaySnapshot> = {}): OverlaySnapshot => ({
   inCall: true,
   members: [member()],
   more: 2,
+  viewers: null,
   opacity: 35,
   layout: { position: { x: 0.25, y: 0.5 }, scale: 1.2 },
   shortcut: 'Shift+Tab',
@@ -73,11 +75,28 @@ describe('nativeStateLine', () => {
           tag: 'VOCÊ',
           muted: false,
           deafened: false,
-          speaking: true
+          speaking: true,
+          watching: false
         }
       ],
-      more: 2
+      more: 2,
+      viewers: null
     })
+  })
+
+  it('espectadores da minha live: contagem no estado e olho em cada membro', () => {
+    const line = JSON.parse(
+      nativeStateLine(
+        view({
+          snapshot: snapshot({
+            viewers: 3,
+            members: [member({ self: true }), member({ id: 'ana', self: false, watchingMe: true })]
+          })
+        })
+      )
+    )
+    expect(line.viewers).toBe(3)
+    expect(line.members.map((m: { watching: boolean }) => m.watching)).toEqual([false, true])
   })
 
   it('editando leva a dica com o atalho configurado', () => {

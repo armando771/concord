@@ -22,12 +22,15 @@ interface OverlayPrefsState {
   layout: OverlayLayout
   /** Atalho global para mover/redimensionar no jogo (accelerator do Electron). */
   shortcut: string
+  /** "Mostrar quem assiste a minha live" no overlay (olho + contagem). */
+  showWatchers: boolean
   setEnabled: (enabled: boolean) => void
   setOpacity: (opacity: number) => void
   setLayout: (layout: OverlayLayout) => void
   /** "Restaurar posição": borda esquerda, no meio, 1×. */
   resetLayout: () => void
   setShortcut: (shortcut: string) => void
+  setShowWatchers: (showWatchers: boolean) => void
 }
 
 /** Overlay nos jogos (Configurações → App), ligado por padrão. */
@@ -42,7 +45,9 @@ export const useOverlayPrefsStore = create<OverlayPrefsState>()(
       setLayout: (layout) => set({ layout: normalizeOverlayLayout(layout) }),
       resetLayout: () => set({ layout: OVERLAY_DEFAULT_LAYOUT }),
       shortcut: OVERLAY_SHORTCUT_DEFAULT,
-      setShortcut: (shortcut) => set({ shortcut: normalizeOverlayShortcut(shortcut) })
+      setShortcut: (shortcut) => set({ shortcut: normalizeOverlayShortcut(shortcut) }),
+      showWatchers: true,
+      setShowWatchers: (showWatchers) => set({ showWatchers })
     }),
     {
       name: 'concord-overlay-prefs',

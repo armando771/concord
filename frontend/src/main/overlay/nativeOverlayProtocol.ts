@@ -57,7 +57,8 @@ function nativeMember(member: OverlayMember, avatarPath: AvatarPath): Record<str
     tag: member.self ? SELF_TAG : null,
     muted: member.muted,
     deafened: member.deafened,
-    speaking: member.speaking
+    speaking: member.speaking,
+    watching: member.watchingMe
   }
 }
 
@@ -77,7 +78,8 @@ export function nativeStateLine(view: NativeOverlayView): string {
     hint: view.editing ? overlayEditHint(shortcut) : '',
     theme: snapshot.theme ?? undefined,
     members: snapshot.members.map((m) => nativeMember(m, view.avatarPath)),
-    more: snapshot.more
+    more: snapshot.more,
+    viewers: snapshot.viewers ?? null
   })
 }
 

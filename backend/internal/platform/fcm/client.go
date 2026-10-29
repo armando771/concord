@@ -36,6 +36,8 @@ type Message struct {
 	Title string
 	Body  string
 	Data  map[string]string
+	// Channel é o canal de notificação do Android; vazio usa o de mensagens.
+	Channel string
 }
 
 // Client fala com o FCM. O valor nil é o push desligado: Send não faz nada e não dá erro.
@@ -72,13 +74,17 @@ func (c *Client) Send(ctx context.Context, m Message) error {
 	if err != nil {
 		return err
 	}
+	channel := m.Channel
+	if channel == "" {
+		channel = androidChanel
+	}
 	body, err := json.Marshal(map[string]any{"message": map[string]any{
 		"token":        m.Token,
 		"notification": map[string]string{"title": m.Title, "body": m.Body},
 		"data":         m.Data,
 		"android": map[string]any{
 			"priority":     "HIGH",
-			"notification": map[string]string{"channel_id": androidChanel},
+			"notification": map[string]string{"channel_id": channel},
 		},
 	}})
 	if err != nil {

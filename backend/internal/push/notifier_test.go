@@ -385,3 +385,34 @@ func TestPedidoDeAmizade(t *testing.T) {
 		expectTokens(t, r)
 	})
 }
+
+func TestOnCallInvite(t *testing.T) {
+	invite := CallInvite{CallID: "call-1", ConversationID: "cv-1", CalleeID: "u-ana", InitiatorName: "Autor"}
+
+	t.Run("destinatário offline recebe push de chamada com canal e dados", func(t *testing.T) {
+		r := newRig()
+		r.n.OnCallInvite(invite)
+		expectTokens(t, r, "tok-ana")
+		m := r.sender.sent[0]
+		if m.Title != "Autor" || m.Body != "Está te ligando" || m.Channel != "chamadas" {
+			t.Fatalf("push = %+v", m)
+		}
+		if m.Data["type"] != "call_invite" || m.Data["call_id"] != "call-1" || m.Data["conversation_id"] != "cv-1" || m.Data["name"] != "Autor" {
+			t.Fatalf("data = %v", m.Data)
+		}
+	})
+
+	t.Run("online ou em Não perturbar não recebe", func(t *testing.T) {
+		r := newRig()
+		r.presence.online["u-ana"] = true
+		r.n.OnCallInvite(invite)
+		expectTokens(t, r)
+	})
+
+	t.Run("sem credenciais não faz nada", func(t *testing.T) {
+		r := newRig()
+		r.sender.disabled = true
+		r.n.OnCallInvite(invite)
+		expectTokens(t, r)
+	})
+}

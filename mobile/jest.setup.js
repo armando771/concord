@@ -14,3 +14,14 @@ jest.mock('expo-notifications', () => ({
   getLastNotificationResponseAsync: jest.fn().mockResolvedValue(null),
   clearLastNotificationResponseAsync: jest.fn().mockResolvedValue(undefined)
 }))
+
+// Módulos nativos de WebRTC/LiveKit não existem no Jest; a lógica da chamada usa uma CallMedia falsa (ADR 0023).
+jest.mock('@livekit/react-native', () => ({
+  registerGlobals: jest.fn(),
+  AudioSession: { startAudioSession: jest.fn().mockResolvedValue(undefined), stopAudioSession: jest.fn().mockResolvedValue(undefined) }
+}))
+jest.mock('livekit-client', () => ({
+  Room: jest.fn(),
+  RoomEvent: {},
+  ConnectionState: { Disconnected: 'disconnected' }
+}))

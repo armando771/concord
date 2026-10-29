@@ -1,6 +1,8 @@
 import { renderRouter, screen } from 'expo-router/testing-library'
 import { loadTokens } from '../src/features/auth/lib/secureTokens'
 import { useAuthStore } from '../src/features/auth/store/authStore'
+import { useCallSessionStore } from '../src/features/call/store/callSessionStore'
+import { useIncomingCallStore } from '../src/features/call/store/incomingCallStore'
 
 jest.mock('expo-splash-screen', () => ({
   preventAutoHideAsync: jest.fn().mockResolvedValue(true),
@@ -36,6 +38,7 @@ jest.mock('../src/features/auth/api/auth', () => ({
   ...jest.requireActual('../src/features/auth/api/auth'),
   getMe: jest.fn().mockResolvedValue({ id: 'u1', username: 'ana', display_name: 'Ana', email: 'a@b.co' })
 }))
+jest.mock('../src/features/call/api/calls', () => ({ listServerCalls: jest.fn().mockResolvedValue([]), getCallState: jest.fn() }))
 jest.mock('@react-native-community/netinfo', () => ({
   __esModule: true,
   default: { addEventListener: jest.fn(() => jest.fn()) }
@@ -47,6 +50,8 @@ const signIn = () => useAuthStore.setState({ status: 'signedIn', accessToken: 'a
 describe('rotas do app', () => {
   beforeEach(() => {
     useAuthStore.setState(useAuthStore.getInitialState(), true)
+    useCallSessionStore.getState().reset()
+    useIncomingCallStore.getState().clear()
   })
 
   it('sem sessão, "/" mostra o login', async () => {
@@ -86,5 +91,22 @@ describe('rotas do app', () => {
     await renderRouter('./app', { initialUrl: '/dm/d1?name=Paulo&type=dm' })
     expect(await screen.findByLabelText('Mensagem para @Paulo')).toBeOnTheScreen()
     expect(screen.getByRole('button', { name: 'Voltar' })).toBeOnTheScreen()
+  })
+
+  it('sessão salva: /chamada mostra a tela da chamada em andamento', async () => {
+    jest.mocked(loadTokens).mockResolvedValueOnce({ accessToken: 'a', refreshToken: 'r' })
+    useCallSessionStore.getState().begin({ callId: 'c1', kind: 'channel', phase: 'active', channelId: 'v1', name: 'sala-1' })
+    await renderRouter('./app', { initialUrl: '/chamada' })
+    expect(await screen.findByRole('button', { name: 'Sair da chamada' })).toBeOnTheScreen()
+    expect(screen.getByText('sala-1')).toBeOnTheScreen()
+  })
+
+  it('sessão salva: chamada de DM tocando abre a tela de atender sozinha', async () => {
+    jest.mocked(loadTokens).mockResolvedValueOnce({ accessToken: 'a', refreshToken: 'r' })
+    await renderRouter('./app', { initialUrl: '/' })
+    await screen.findByRole('button', { name: 'Mensagens diretas' })
+    useIncomingCallStore.getState().ring({ callId: 'c9', conversationId: 'cv', initiator: { id: 'u2', username: 'bia', display_name: 'Bia' } })
+    expect(await screen.findByRole('button', { name: 'Atender' })).toBeOnTheScreen()
+    expect(screen.getByText('Está te ligando')).toBeOnTheScreen()
   })
 })

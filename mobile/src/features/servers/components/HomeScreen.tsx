@@ -3,6 +3,9 @@ import { StyleSheet, View } from 'react-native'
 import { colors, spacing } from '../../../shared/theme/tokens'
 import { Banner } from '../../../shared/ui/Banner'
 import { Button } from '../../../shared/ui/Button'
+import { CallBar } from '../../call/components/CallBar'
+import { CallNotice } from '../../call/components/CallNotice'
+import { useVoiceRoster } from '../../call/hooks/useVoiceRoster'
 import { DirectMessages, type OpenConversationArgs } from '../../chat/components/DirectMessages'
 import { totalUnread } from '../../chat/lib/unreadCounts'
 import { useConversationsStore } from '../../chat/store/conversationsStore'
@@ -18,11 +21,16 @@ interface HomeScreenProps {
   onOpenChannel: (channel: Channel) => void
   onOpenConversation: (conversation: OpenConversationArgs) => void
   onOpenFriends: () => void
+  /** Toque num canal de voz: entra na chamada. */
+  onJoinVoice: (channel: Channel) => void
+  /** Barra de chamada: abre a tela cheia. */
+  onOpenCall: () => void
+  onLeaveCall: () => void
   onOpenSettings: () => void
 }
 
 /** Tela principal: trilho de servidores, lista de canais (ou DMs) e o painel do usuário. */
-export function HomeScreen({ onOpenChannel, onOpenConversation, onOpenFriends, onOpenSettings }: HomeScreenProps) {
+export function HomeScreen({ onOpenChannel, onOpenConversation, onOpenFriends, onJoinVoice, onOpenCall, onLeaveCall, onOpenSettings }: HomeScreenProps) {
   const servers = useServersStore((s) => s.servers)
   const status = useServersStore((s) => s.status)
   const channelsByServer = useServersStore((s) => s.channelsByServer)
@@ -50,6 +58,7 @@ export function HomeScreen({ onOpenChannel, onOpenConversation, onOpenFriends, o
   }, [serverId, needsChannels, loadChannels])
 
   const server = servers.find((s) => s.id === serverId)
+  const voiceMembers = useVoiceRoster(serverId)
 
   return (
     <View style={styles.screen}>
@@ -67,7 +76,9 @@ export function HomeScreen({ onOpenChannel, onOpenConversation, onOpenFriends, o
               channels={channelsByServer[server.id] ?? []}
               error={channelsError[server.id] === true}
               unreadChannels={unreadChannels}
+              voiceMembers={voiceMembers}
               onOpenChannel={onOpenChannel}
+              onJoinVoice={onJoinVoice}
               onRetry={() => void loadChannels(server.id)}
             />
           ) : (
@@ -75,6 +86,8 @@ export function HomeScreen({ onOpenChannel, onOpenConversation, onOpenFriends, o
           )}
         </View>
       </View>
+      <CallNotice />
+      <CallBar onOpen={onOpenCall} onLeave={onLeaveCall} />
       <UserPanel onOpenSettings={onOpenSettings} />
     </View>
   )
