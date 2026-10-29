@@ -18,13 +18,10 @@ describe('qualidade de tela', () => {
         const quality = { resolution, frameRate }
         const constraints = screenVideoConstraints(quality, { width: 3840, height: 2160 })
         expect(constraints.frameRate).toEqual({ ideal: frameRate, max: frameRate })
-        if (resolution === 'source') {
-          expect(constraints).not.toHaveProperty('width')
-          expect(constraints).not.toHaveProperty('height')
-        } else {
-          expect(constraints.width).toEqual({ max: resolution === '720p' ? 1280 : 1920 })
-          expect(constraints.height).toEqual({ max: resolution === '720p' ? 720 : 1080 })
-        }
+        // Fonte é limitada a 1440p (como o teto de 1440p dos apps de live).
+        const box = { '720p': [1280, 720], '1080p': [1920, 1080], source: [2560, 1440] }[resolution]
+        expect(constraints.width).toEqual({ max: box[0] })
+        expect(constraints.height).toEqual({ max: box[1] })
         expect(screenEncoding(quality).maxFramerate).toBe(frameRate)
       })
     }
@@ -45,13 +42,23 @@ describe('qualidade de tela', () => {
     ).toMatchObject({ width: { max: 640 }, height: { max: 480 } })
   })
 
-  it('aumenta o orçamento de bitrate conforme resolução e FPS', () => {
-    expect(screenEncoding({ resolution: '1080p', frameRate: 60 }).maxBitrate).toBe(8_000_000)
-    expect(screenEncoding({ resolution: '720p', frameRate: 30 }).maxBitrate).toBe(2_500_000)
-    expect(
-      screenEncoding({ resolution: 'source', frameRate: 60 }, { width: 3840, height: 2160 })
-        .maxBitrate
-    ).toBe(32_000_000)
+  it('bitrate de referência por preset (Twitch/YouTube), Fonte com teto de 1440p', () => {
+    const bitrate = (quality: ScreenShareQuality, source?: MediaTrackSettings): number =>
+      screenEncoding(quality, source).maxBitrate
+    expect(bitrate({ resolution: '720p', frameRate: 30 })).toBe(3_000_000)
+    expect(bitrate({ resolution: '720p', frameRate: 60 })).toBe(4_500_000)
+    expect(bitrate({ resolution: '1080p', frameRate: 30 })).toBe(4_500_000)
+    expect(bitrate({ resolution: '1080p', frameRate: 60 })).toBe(7_000_000)
+    expect(bitrate({ resolution: 'source', frameRate: 30 }, { width: 3840, height: 2160 })).toBe(
+      8_000_000
+    )
+    expect(bitrate({ resolution: 'source', frameRate: 60 }, { width: 3840, height: 2160 })).toBe(
+      10_000_000
+    )
+    // Fonte numa tela 1080p custa o mesmo que 1080p.
+    expect(bitrate({ resolution: 'source', frameRate: 60 }, { width: 1920, height: 1080 })).toBe(
+      7_000_000
+    )
   })
 
   it('mantém a qualidade do stream para republicar na reconexão', () => {
@@ -93,10 +100,12 @@ describe('preferências', () => {
 })
 
 describe('dica de conteúdo da tela', () => {
-  it('60 fps (jogo): movimento, mantendo a fluidez', () => {
+  // A resolução é o piso (nunca abaixo do preset); quem troca de degrau quando
+  // falta banda/CPU é o nosso controlador (screenAdaptController).
+  it('60 fps (jogo): movimento, mantendo a resolução', () => {
     expect(screenMotion(60)).toEqual({
       contentHint: 'motion',
-      degradationPreference: 'maintain-framerate'
+      degradationPreference: 'maintain-resolution'
     })
   })
 

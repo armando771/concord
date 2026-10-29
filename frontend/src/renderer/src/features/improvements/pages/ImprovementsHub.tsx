@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
-import { ChangelogIcon, DiamondIcon } from '../../../shared/ui/icons'
-import { CrownIcon } from '../../../shared/ui/iconsExtra'
+import { ChangelogIcon, CrownIcon, DiamondIcon } from '../../../shared/ui/icons'
 import { useProposalStore } from '../../proposals/store/proposalStore'
 import { useRankingStore } from '../../ranking/store/rankingStore'
 import HubCard from '../components/HubCard'

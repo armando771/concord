@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { CrownIcon } from '../../../shared/ui/iconsExtra'
+import { CrownIcon } from '../../../shared/ui/icons'
 import Button from '../../../shared/ui/Button'
 import type { Ranking as RankingData } from '../api/ranking'
 import MyRankBar from '../components/MyRankBar'

@@ -101,6 +101,11 @@ const pubOf = (p: FakeParticipant, source: string): FakePublication =>
   [...p.trackPublications.values()].find((x) => x.source === source)!
 
 const room = (): InstanceType<typeof lk.FakeRoom> => lk.rooms[lk.rooms.length - 1]
+/** Microfone falso: a sala publica uma cópia (clone) dele. */
+function fakeMic(): MediaStreamTrack {
+  const mic = { clone: () => ({ clonedFrom: mic }) }
+  return mic as unknown as MediaStreamTrack
+}
 const microtasks = (): Promise<void> => new Promise((r) => setTimeout(r, 0))
 
 let emitted: RemoteMedia[]
@@ -168,7 +173,7 @@ describe('CallMedia — assinatura seletiva', () => {
     const media = createMedia()
     const ana = addParticipant('ana', 'microphone', 'camera', 'screen_share', 'screen_share_audio')
 
-    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    await media.connect('ws://x', 'tok', fakeMic(), false)
 
     expect(pubOf(ana, 'microphone').isDesired).toBe(true)
     expect(pubOf(ana, 'camera').isDesired).toBe(true)
@@ -180,7 +185,7 @@ describe('CallMedia — assinatura seletiva', () => {
   it('assistir assina a tela e o som da tela', async () => {
     const media = createMedia()
     const ana = addParticipant('ana', 'microphone', 'screen_share', 'screen_share_audio')
-    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    await media.connect('ws://x', 'tok', fakeMic(), false)
 
     media.setWatchedScreens(['ana'])
 
@@ -191,7 +196,7 @@ describe('CallMedia — assinatura seletiva', () => {
   it('reconexão completa não esquece quem eu estava assistindo', async () => {
     const media = createMedia()
     addParticipant('ana', 'microphone', 'screen_share')
-    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    await media.connect('ws://x', 'tok', fakeMic(), false)
     media.setWatchedScreens(['ana'])
 
     // Como o SDK: desmonta os participantes (ainda "connected") e só depois
@@ -214,7 +219,7 @@ describe('CallMedia — assinatura seletiva', () => {
   it('quem parou de transmitir durante a reconexão volta pausado', async () => {
     const media = createMedia()
     addParticipant('ana', 'microphone', 'screen_share')
-    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    await media.connect('ws://x', 'tok', fakeMic(), false)
     media.setWatchedScreens(['ana'])
 
     room().remoteParticipants.clear()
@@ -233,7 +238,7 @@ describe('CallMedia — assinatura seletiva', () => {
   it('quem para e volta a transmitir começa pausado de novo', async () => {
     const media = createMedia()
     const ana = addParticipant('ana', 'microphone', 'screen_share')
-    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    await media.connect('ws://x', 'tok', fakeMic(), false)
     media.setWatchedScreens(['ana'])
 
     ana.trackPublications.delete('ana-1')
@@ -265,7 +270,7 @@ describe('CallMedia — permissões de publicação', () => {
     const media = mediaWithPermissionHandler(onPublishPermissions)
     room().localParticipant.permissions = NO_MIC
 
-    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    await media.connect('ws://x', 'tok', fakeMic(), false)
 
     expect(room().localParticipant.publishTrack).not.toHaveBeenCalled()
     expect(onPublishPermissions).toHaveBeenLastCalledWith({ microphone: false, stream: true })
@@ -273,7 +278,7 @@ describe('CallMedia — permissões de publicação', () => {
 
   it('com permissão publica o microfone normalmente', async () => {
     const media = createMedia()
-    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, true)
+    await media.connect('ws://x', 'tok', fakeMic(), true)
     expect(room().localParticipant.publishTrack).toHaveBeenCalledTimes(1)
   })
 
@@ -281,7 +286,7 @@ describe('CallMedia — permissões de publicação', () => {
     const onPublishPermissions = vi.fn()
     const media = mediaWithPermissionHandler(onPublishPermissions)
     room().localParticipant.permissions = NO_MIC
-    const mic = {} as MediaStreamTrack
+    const mic = fakeMic()
     await media.connect('ws://x', 'tok', mic, false)
 
     room().localParticipant.permissions = { canPublish: true, canPublishSources: [1, 2, 3, 4] }
@@ -290,12 +295,12 @@ describe('CallMedia — permissões de publicação', () => {
 
     expect(onPublishPermissions).toHaveBeenLastCalledWith({ microphone: true, stream: true })
     expect(room().localParticipant.publishTrack).toHaveBeenCalledTimes(1)
-    expect(room().localParticipant.publishTrack.mock.calls[0][0]).toBe(mic)
+    expect(room().localParticipant.publishTrack.mock.calls[0][0].clonedFrom).toBe(mic)
   })
 
   it('não publica o microfone duas vezes', async () => {
     const media = createMedia()
-    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    await media.connect('ws://x', 'tok', fakeMic(), false)
     room().localParticipant.getTrackPublication.mockReturnValue({})
     await media.ensureMic(false)
     expect(room().localParticipant.publishTrack).toHaveBeenCalledTimes(1)
@@ -304,7 +309,7 @@ describe('CallMedia — permissões de publicação', () => {
   it('permissões de outro participante não contam', async () => {
     const onPublishPermissions = vi.fn()
     const media = mediaWithPermissionHandler(onPublishPermissions)
-    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    await media.connect('ws://x', 'tok', fakeMic(), false)
     onPublishPermissions.mockClear()
     room().emit('ParticipantPermissionsChanged', undefined, { identity: 'ana' })
     expect(onPublishPermissions).not.toHaveBeenCalled()
@@ -313,7 +318,7 @@ describe('CallMedia — permissões de publicação', () => {
   it('sem permissão de transmitir, tela e câmera recusam', async () => {
     const media = createMedia()
     room().localParticipant.permissions = { canPublish: true, canPublishSources: [2] }
-    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    await media.connect('ws://x', 'tok', fakeMic(), false)
     const stream = {
       getVideoTracks: () => [{}],
       getAudioTracks: () => []
@@ -329,7 +334,7 @@ describe('CallMedia — trocar a câmera publicada', () => {
 
   it('substitui a track na publicação existente, sem despublicar', async () => {
     const media = createMedia()
-    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    await media.connect('ws://x', 'tok', fakeMic(), false)
     room().localParticipant.publishTrack.mockClear() // o connect publicou o microfone
     const replaceTrack = vi.fn(async () => {})
     room().localParticipant.getTrackPublication.mockImplementation((source: string) =>
@@ -343,7 +348,7 @@ describe('CallMedia — trocar a câmera publicada', () => {
 
   it('sem câmera publicada não faz nada', async () => {
     const media = createMedia()
-    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    await media.connect('ws://x', 'tok', fakeMic(), false)
     room().localParticipant.publishTrack.mockClear()
     room().localParticipant.getTrackPublication.mockReturnValue(undefined)
     await expect(media.replaceCamera(streamOf({}))).resolves.toBeUndefined()
@@ -352,7 +357,7 @@ describe('CallMedia — trocar a câmera publicada', () => {
 
   it('stream sem vídeo é ignorado', async () => {
     const media = createMedia()
-    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    await media.connect('ws://x', 'tok', fakeMic(), false)
     const replaceTrack = vi.fn()
     room().localParticipant.getTrackPublication.mockReturnValue({ track: { replaceTrack } })
     await media.replaceCamera({ getVideoTracks: () => [] } as unknown as MediaStream)
@@ -363,7 +368,7 @@ describe('CallMedia — trocar a câmera publicada', () => {
 describe('CallMedia — qualidade de tela', () => {
   async function activeScreen() {
     const media = createMedia()
-    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    await media.connect('ws://x', 'tok', fakeMic(), false)
     const video = {
       readyState: 'live',
       getSettings: () => ({ width: 3840, height: 2160 }),
@@ -403,23 +408,27 @@ describe('CallMedia — qualidade de tela', () => {
       frameRate: { ideal: 60, max: 60 }
     })
     expect(sender.getParameters().encodings[0]).toMatchObject({
-      maxBitrate: 8_000_000,
+      maxBitrate: 7_000_000,
       maxFramerate: 60,
       active: true
     })
     expect(track.publishOptions).toMatchObject({
-      screenShareEncoding: { maxBitrate: 8_000_000, maxFramerate: 60 }
+      screenShareEncoding: { maxBitrate: 7_000_000, maxFramerate: 60 }
     })
     expect(room().localParticipant.getTrackPublication('screen_share').options).toMatchObject({
-      screenShareEncoding: { maxBitrate: 8_000_000, maxFramerate: 60 }
+      screenShareEncoding: { maxBitrate: 7_000_000, maxFramerate: 60 }
     })
     expect(room().localParticipant.publishTrack).not.toHaveBeenCalled()
     expect(video.stop).not.toHaveBeenCalled()
-    // 60 fps = jogo: fluidez antes de resolução.
+    // 60 fps = jogo: dica de movimento; a resolução é mantida (o controlador troca de degrau).
     expect((video as { contentHint?: string }).contentHint).toBe('motion')
-    expect(track.setDegradationPreference).toHaveBeenLastCalledWith('maintain-framerate')
+    expect(track.setDegradationPreference).toHaveBeenLastCalledWith('maintain-resolution')
     await media.updateScreenQuality(stream, { resolution: 'source', frameRate: 30 })
-    expect(video.applyConstraints).toHaveBeenLastCalledWith({ frameRate: { ideal: 30, max: 30 } })
+    expect(video.applyConstraints).toHaveBeenLastCalledWith({
+      width: { max: 2560 },
+      height: { max: 1440 },
+      frameRate: { ideal: 30, max: 30 }
+    })
     expect((video as { contentHint?: string }).contentHint).toBe('detail')
     expect(track.setDegradationPreference).toHaveBeenLastCalledWith('maintain-resolution')
   })
@@ -463,7 +472,7 @@ describe('CallMedia — qualidade de tela', () => {
       getCapabilities: () => ({ codecs: [{ mimeType: 'video/VP8' }, { mimeType: 'video/H264' }] })
     })
     const media = createMedia()
-    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    await media.connect('ws://x', 'tok', fakeMic(), false)
     room().localParticipant.publishTrack.mockClear()
     const video = { getSettings: () => ({ width: 1920, height: 1080 }) }
     const audio = {}
@@ -478,10 +487,10 @@ describe('CallMedia — qualidade de tela', () => {
       source: 'screen_share',
       name: 'screen',
       simulcast: false,
-      screenShareEncoding: { maxBitrate: 8_000_000, maxFramerate: 60 },
+      screenShareEncoding: { maxBitrate: 7_000_000, maxFramerate: 60 },
       videoCodec: 'h264',
       backupCodec: { codec: 'vp8' },
-      degradationPreference: 'maintain-framerate'
+      degradationPreference: 'maintain-resolution'
     })
     expect(room().localParticipant.publishTrack).toHaveBeenCalledWith(
       audio,
@@ -500,7 +509,7 @@ describe('CallMedia — codec da tela', () => {
     })
     vi.stubGlobal('localStorage', { getItem: () => 'vp8', setItem: vi.fn() })
     const media = createMedia()
-    await media.connect('ws://x', 'tok', {} as MediaStreamTrack, false)
+    await media.connect('ws://x', 'tok', fakeMic(), false)
     room().localParticipant.publishTrack.mockClear()
     const video = { getSettings: () => ({ width: 1920, height: 1080 }) }
     const stream = {

@@ -43,7 +43,9 @@ func (g *CallGate) IsParticipant(callID string, userID string) bool {
 	return g.next.IsParticipant(callID, userID)
 }
 
+// guestRefusal: aviso de que o visitante não pode fazer isso. Não é
+// call:error: o app trata call:error sem call_id como queda e sai da call.
 func guestRefusal() []byte {
-	data, _ := json.Marshal(map[string]any{"type": "call:error", "payload": map[string]string{"message": "Visitantes não podem fazer isso na call."}})
+	data, _ := json.Marshal(map[string]any{"type": "guest:refused", "payload": map[string]string{"message": "Visitantes não podem fazer isso na call."}})
 	return data
 }

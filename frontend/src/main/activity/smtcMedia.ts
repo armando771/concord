@@ -1,64 +1,14 @@
-import { spawn, type ChildProcess } from 'child_process'
+import type { ChildProcess } from 'child_process'
 import type { MediaSession } from './mediaSessions'
-import { lineSplitter, nextFailures, restartDelay } from './processLines'
+import { helperBroken, lineSplitter, nextFailures, restartDelay } from './processLines'
 
 // Windows: as sessões de mídia do sistema (SMTC, a mesma fonte do painel de
-// volume do Windows) lidas por um PowerShell que fica aberto e escreve uma
-// linha JSON a cada 2 s. Sem dependência nova: o WinRT vem do próprio Windows
-// (docs/adr/0006-musica-em-atividade.md).
+// volume do Windows), uma linha JSON por leitura. Quem lê é o helper nativo
+// (`concord-audio.exe media-watch`, por eventos); sem ele, um PowerShell que
+// fica aberto (smtcPowerShell.ts). Ver docs/adr/0006-musica-em-atividade.md.
 
 /** PlaybackStatus do SMTC: 4 = tocando (5 = pausado, 3 = parado...). */
 const SMTC_PLAYING = 4
-
-/**
- * O script. Encerra sozinho quando o processo do app some (`parentPid`), para
- * não sobrar PowerShell se o app fechar sem matar o filho.
- */
-export const SMTC_SCRIPT = (parentPid: number): string => `
-$ErrorActionPreference = 'Stop'
-[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
-Add-Type -AssemblyName System.Runtime.WindowsRuntime
-$asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
-  $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and
-  $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1'
-} | Select-Object -First 1
-function Await($op, [Type]$type) {
-  $task = $asTask.MakeGenericMethod($type).Invoke($null, @($op))
-  [void]$task.Wait(5000)
-  $task.Result
-}
-$managerType = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager,Windows.Media.Control,ContentType=WindowsRuntime]
-$propsType = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties,Windows.Media.Control,ContentType=WindowsRuntime]
-$manager = Await ($managerType::RequestAsync()) $managerType
-while ($true) {
-  if (-not (Get-Process -Id ${parentPid} -ErrorAction SilentlyContinue)) { exit 0 }
-  $list = New-Object System.Collections.ArrayList
-  foreach ($s in $manager.GetSessions()) {
-    try {
-      $p = Await ($s.TryGetMediaPropertiesAsync()) $propsType
-      $t = $s.GetTimelineProperties()
-      [void]$list.Add(@{
-        app = $s.SourceAppUserModelId
-        title = $p.Title
-        artist = $p.Artist
-        album = $p.AlbumTitle
-        status = [int]$s.GetPlaybackInfo().PlaybackStatus
-        position = [long]$t.Position.TotalMilliseconds
-        duration = [long]($t.EndTime - $t.StartTime).TotalMilliseconds
-        updated = [long]$t.LastUpdatedTime.ToUnixTimeMilliseconds()
-      })
-    } catch {}
-  }
-  [Console]::Out.WriteLine((ConvertTo-Json -InputObject @($list) -Compress))
-  [Console]::Out.Flush()
-  Start-Sleep -Seconds 2
-}
-`
-
-/** O -EncodedCommand do PowerShell é UTF-16LE em base64 (sem problema de aspas). */
-export function encodePowerShell(script: string): string {
-  return Buffer.from(script, 'utf16le').toString('base64')
-}
 
 type Raw = Record<string, unknown>
 
@@ -97,7 +47,7 @@ const isRecord = (value: unknown): value is Raw => typeof value === 'object' && 
 export function parseSmtcLine(line: string, now: number): MediaSession[] | null {
   let raw: unknown
   try {
-    raw = JSON.parse(line.replace(/^﻿/, ''))
+    raw = JSON.parse(line.replace(/^\uFEFF/, ''))
   } catch {
     return null
   }
@@ -105,31 +55,31 @@ export function parseSmtcLine(line: string, now: number): MediaSession[] | null 
   return list.filter(isRecord).map((item) => smtcSession(item, now))
 }
 
-function spawnSmtc(): ChildProcess {
-  const args = [
-    '-NoProfile',
-    '-NonInteractive',
-    '-EncodedCommand',
-    encodePowerShell(SMTC_SCRIPT(process.pid))
-  ]
-  return spawn('powershell', args, { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] })
+/**
+ * De onde vêm as linhas: o helper nativo (`concord-audio.exe media-watch`,
+ * null = não está no lugar) e o PowerShell de reserva. Mesmo formato nos dois.
+ */
+export interface SmtcSources {
+  helper: (() => ChildProcess) | null
+  powershell: () => ChildProcess
+  log?: (message: string) => void
 }
 
 /**
- * Mantém o PowerShell aberto e repassa cada leitura. Se ele cair, abre de novo
- * (e desiste depois de algumas quedas seguidas logo ao abrir: Windows sem SMTC).
- * Devolve o "parar".
+ * Mantém a fonte aberta e repassa cada leitura: o helper nativo enquanto ele
+ * funciona; se ele sair logo sem ler nada (exe antigo, SMTC falhou nele), o
+ * PowerShell na hora. Se a fonte cair, abre de novo (e desiste depois de
+ * algumas quedas seguidas logo ao abrir: Windows sem SMTC). Devolve o "parar".
  */
-export function watchSmtc(onSessions: (sessions: MediaSession[]) => void): () => void {
+export function watchSmtc(
+  onSessions: (sessions: MediaSession[]) => void,
+  sources: SmtcSources
+): () => void {
   let child: ChildProcess | null = null
   let retry: NodeJS.Timeout | null = null
   let failures = 0
   let stopped = false
-
-  const onLine = (line: string): void => {
-    const sessions = parseSmtcLine(line, Date.now())
-    if (sessions) onSessions(sessions)
-  }
+  let useHelper = sources.helper !== null
 
   const scheduleRestart = (): void => {
     const delay = restartDelay(failures)
@@ -137,16 +87,35 @@ export function watchSmtc(onSessions: (sessions: MediaSession[]) => void): () =>
     retry = setTimeout(start, delay)
   }
 
+  const onExit = (viaHelper: boolean, livedMs: number, gotLine: boolean): void => {
+    if (viaHelper && helperBroken(livedMs, gotLine)) {
+      sources.log?.('música: helper nativo não leu o SMTC; usando o PowerShell')
+      useHelper = false
+      if (!stopped) start()
+      return
+    }
+    failures = nextFailures(failures, livedMs)
+    scheduleRestart()
+  }
+
   const start = (): void => {
     const openedAt = Date.now()
-    child = spawnSmtc()
+    const helper = useHelper ? sources.helper : null
+    const viaHelper = helper !== null
+    let gotLine = false
+    child = helper ? helper() : sources.powershell()
     child.stdout?.setEncoding('utf8')
-    child.stdout?.on('data', lineSplitter(onLine))
+    child.stdout?.on(
+      'data',
+      lineSplitter((line) => {
+        const sessions = parseSmtcLine(line, Date.now())
+        if (!sessions) return
+        gotLine = true
+        onSessions(sessions)
+      })
+    )
     child.on('error', () => {})
-    child.on('exit', () => {
-      failures = nextFailures(failures, Date.now() - openedAt)
-      scheduleRestart()
-    })
+    child.on('exit', () => onExit(viaHelper, Date.now() - openedAt, gotLine))
   }
 
   start()

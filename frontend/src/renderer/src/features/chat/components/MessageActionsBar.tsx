@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { messageMenuGroups, quickReactions, type MessageMenuAction } from '../lib/messageMenu'
-import { AddReactionIcon, MoreIcon, ReplyIcon } from './messageActionIcons'
+import { AddReactionIcon, MoreIcon, ReplyIcon } from '../../../shared/ui/icons'
 import MessageMoreMenu from './MessageMoreMenu'
 
 const iconButton =

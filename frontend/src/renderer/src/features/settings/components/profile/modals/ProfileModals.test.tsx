@@ -74,6 +74,9 @@ describe('NameStyleModal', () => {
     expect(html).toContain('Fonte')
     expect(html).toContain('Efeito')
     expect(html).toContain('Surpreenda-me')
+    // O dado é ícone do conjunto, não emoji.
+    expect(html).not.toContain('🎲')
+    expect(html).toMatch(/<svg[^>]*>[\s\S]*<\/svg>Surpreenda-me/)
     expect(html).toContain('data-card="Ana"')
     expect(html).toContain('No chat')
   })

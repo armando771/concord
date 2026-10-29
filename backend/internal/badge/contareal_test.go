@@ -1,42 +1,16 @@
 package badge
 
 import (
-	"fmt"
-	"os"
-	"regexp"
 	"testing"
 	"time"
 )
 
-const (
-	contaRealFuncMigration     = "../../migrations/000165_conta_real_24h.up.sql"
-	amigosRestoreMigration     = "../../migrations/000166_badge_amigos_devolver.up.sql"
-	contaRealIntervalRegexpSrc = `INTERVAL '(\d+) hours'`
-)
+const amigosRestoreMigration = "../../migrations/000166_badge_amigos_devolver.up.sql"
 
-// A função SQL do nível do servidor e as consultas do Go têm que usar o mesmo
-// prazo de conta real: este teste trava a migration na constante.
-func TestContaRealPrazoIgualNoGoENoSQL(t *testing.T) {
-	want := fmt.Sprint(ContaRealHoras)
-	for _, path := range []string{contaRealFuncMigration, amigosRestoreMigration} {
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		m := regexp.MustCompile(contaRealIntervalRegexpSrc).FindAllStringSubmatch(string(raw), -1)
-		if len(m) == 0 {
-			t.Fatalf("%s: prazo em horas não encontrado", path)
-		}
-		for _, hit := range m {
-			if hit[1] != want {
-				t.Errorf("%s: prazo = %s h, ContaRealHoras = %s", path, hit[1], want)
-			}
-		}
-	}
-}
-
-// server_level_real: e-mail confirmado, não bot e 24 h de conta (23 h não, 25 h sim).
-func TestServerLevelRealUsaPrazoDe24Horas(t *testing.T) {
+// Conta real é só quem não é bot e confirmou o e-mail, sem prazo de idade.
+// A função SQL do nível do servidor (server_level_real), a consulta do Festeiro
+// (RealAccounts) e a do Amigos (Stats) têm que dar a mesma resposta.
+func TestContaRealEhEmailConfirmadoNoGoENoSQL(t *testing.T) {
 	d := newTestDB(t)
 	cases := []struct {
 		name     string
@@ -45,21 +19,42 @@ func TestServerLevelRealUsaPrazoDe24Horas(t *testing.T) {
 		bot      bool
 		want     bool
 	}{
-		{"23 horas", "23 hours", true, false, false},
-		{"25 horas", "25 hours", true, false, true},
-		{"sem e-mail confirmado", "30 days", false, false, false},
-		{"bot", "30 days", true, true, false},
+		{"recém-criada com e-mail confirmado", "1 minute", true, false, true},
+		{"conta antiga com e-mail confirmado", "30 days", true, false, true},
+		{"recém-criada sem e-mail", "1 minute", false, false, false},
+		{"antiga sem e-mail", "30 days", false, false, false},
+		{"bot com e-mail confirmado", "30 days", true, true, false},
 	}
+	repo := BadgeRepository(d.db)
 	for _, tc := range cases {
 		id, _ := d.user()
 		d.exec(`UPDATE users SET created_at = NOW() - $2::interval, is_bot = $3,
 			email_verified_at = CASE WHEN $4 THEN NOW() ELSE NULL END WHERE id = $1`, id, tc.age, tc.bot, tc.verified)
-		var got bool
-		if err := d.db.QueryRow(d.ctx, `SELECT server_level_real($1)`, id).Scan(&got); err != nil {
+
+		var sql bool
+		if err := d.db.QueryRow(d.ctx, `SELECT server_level_real($1)`, id).Scan(&sql); err != nil {
 			t.Fatal(err)
 		}
-		if got != tc.want {
-			t.Errorf("%s: server_level_real = %v, quer %v", tc.name, got, tc.want)
+		if sql != tc.want {
+			t.Errorf("%s: server_level_real = %v, quer %v", tc.name, sql, tc.want)
+		}
+
+		real, err := repo.RealAccounts(d.ctx, []string{id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if real[id] != tc.want {
+			t.Errorf("%s: RealAccounts = %v, quer %v", tc.name, real[id], tc.want)
+		}
+
+		dono, _ := d.user()
+		d.friends(dono, id, "accepted")
+		s, err := repo.Stats(d.ctx, dono)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := s.Friends == 1; got != tc.want {
+			t.Errorf("%s: amigo conta = %v, quer %v", tc.name, got, tc.want)
 		}
 	}
 }

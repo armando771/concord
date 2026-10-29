@@ -41,15 +41,23 @@ type Preview struct {
 	CanStream   bool      `json:"can_stream"`
 }
 
-// PassView: o acesso visto pelo próprio visitante.
+// ServerInfo: o que o convite mostra do servidor (nome e ícone).
+type ServerInfo struct {
+	Name    string
+	IconURL string
+}
+
+// PassView: o acesso visto pelo próprio visitante (a tela da call e, para
+// quem tem conta, o item da visita no trilho de servidores).
 type PassView struct {
-	ServerID    string    `json:"server_id"`
-	ServerName  string    `json:"server_name"`
-	ChannelID   string    `json:"channel_id"`
-	ChannelName string    `json:"channel_name"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	CanSpeak    bool      `json:"can_speak"`
-	CanStream   bool      `json:"can_stream"`
+	ServerID      string    `json:"server_id"`
+	ServerName    string    `json:"server_name"`
+	ServerIconURL string    `json:"server_icon_url,omitempty"`
+	ChannelID     string    `json:"channel_id"`
+	ChannelName   string    `json:"channel_name"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	CanSpeak      bool      `json:"can_speak"`
+	CanStream     bool      `json:"can_stream"`
 }
 
 // SessionUser: o usuário efêmero do visitante sem conta.
@@ -75,14 +83,16 @@ func (s *Service) channelName(ctx context.Context, id string) string {
 }
 
 func (s *Service) passView(ctx context.Context, p Pass) PassView {
+	srv := s.dir.Server(ctx, p.ServerID)
 	return PassView{
-		ServerID:    p.ServerID,
-		ServerName:  s.dir.ServerName(ctx, p.ServerID),
-		ChannelID:   p.ChannelID,
-		ChannelName: s.channelName(ctx, p.ChannelID),
-		ExpiresAt:   p.ExpiresAt,
-		CanSpeak:    p.Permissions&permission.Speak != 0,
-		CanStream:   p.Permissions&permission.Stream != 0,
+		ServerID:      p.ServerID,
+		ServerName:    srv.Name,
+		ServerIconURL: srv.IconURL,
+		ChannelID:     p.ChannelID,
+		ChannelName:   s.channelName(ctx, p.ChannelID),
+		ExpiresAt:     p.ExpiresAt,
+		CanSpeak:      p.Permissions&permission.Speak != 0,
+		CanStream:     p.Permissions&permission.Stream != 0,
 	}
 }
 
@@ -93,7 +103,7 @@ func (s *Service) Preview(ctx context.Context, token string) (*Preview, error) {
 		return nil, err
 	}
 	return &Preview{
-		ServerName:  s.dir.ServerName(ctx, inv.ServerID),
+		ServerName:  s.dir.Server(ctx, inv.ServerID).Name,
 		ChannelName: s.channelName(ctx, inv.ChannelID),
 		InviterName: s.dir.DisplayName(ctx, inv.CreatedBy),
 		ExpiresAt:   inv.ExpiresAt,

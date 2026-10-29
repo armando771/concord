@@ -86,5 +86,7 @@ describe('extrasVars / extrasClasses', () => {
       expect(resolveExtras({ background_angle: d.angle }).background_angle).toBe(d.angle)
     }
     expect(GRADIENT_DIRECTIONS.some((d) => d.angle === DEFAULT_EXTRAS.background_angle)).toBe(true)
+    // Sem seta de texto: o editor gira um ícone pelo ângulo.
+    for (const d of GRADIENT_DIRECTIONS) expect(Object.keys(d).sort()).toEqual(['angle', 'label'])
   })
 })

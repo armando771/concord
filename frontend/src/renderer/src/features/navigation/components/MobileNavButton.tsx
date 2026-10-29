@@ -1,4 +1,4 @@
-import { ArrowLeftIcon } from '../../../shared/ui/iconsExtra'
+import { ArrowLeftIcon } from '../../../shared/ui/icons'
 import { useMobileNavStore } from '../store/mobileNavStore'
 
 /**
