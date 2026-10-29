@@ -1,7 +1,7 @@
 // Features do Chromium ligadas/desligadas no boot (captura de tela e vídeo
 // por placa de vídeo). Uma lista só por switch: o Chromium lê apenas o último
 // --enable-features, então duas chamadas de appendSwitch se sobrescrevem.
-// Ver docs/adr/0018-qualidade-das-lives.md.
+// Ver docs/adr/0019-qualidade-das-lives.md.
 
 /** Captura WGC (janela coberta continua entregando quadros). */
 const CAPTURE = ['AllowWgcWindowCapturer', 'AllowWgcScreenCapturer']
