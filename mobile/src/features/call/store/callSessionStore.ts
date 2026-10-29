@@ -9,15 +9,19 @@ export interface CallSession {
   channelId: string | null
   conversationId: string | null
   serverId: string | null
-  /** Nome para a barra e a tela: canal de voz ou a pessoa/grupo da DM. */
+  /** Nome para a barra e a tela: canal de voz ou a pessoa da DM. */
   name: string
   /** Um moderador me moveu para outro canal: o ciclo de vida entra nele. */
   movedTo: { channelId: string; name: string } | null
+  /** O sistema negou o microfone: a pessoa entrou, mas só ouve. */
+  micDenied: boolean
 }
 
 interface CallSessionState extends CallSession {
   begin: (info: Partial<CallSession> & { callId: string; kind: CallKind; phase: CallPhase }) => void
+  setCallId: (callId: string) => void
   setPhase: (phase: CallPhase) => void
+  setMicDenied: (micDenied: boolean) => void
   setMovedTo: (movedTo: CallSession['movedTo']) => void
   reset: () => void
 }
@@ -30,13 +34,16 @@ const IDLE: CallSession = {
   conversationId: null,
   serverId: null,
   name: '',
-  movedTo: null
+  movedTo: null,
+  micDenied: false
 }
 
 export const useCallSessionStore = create<CallSessionState>()((set) => ({
   ...IDLE,
   begin: (info) => set({ ...IDLE, ...info }),
+  setCallId: (callId) => set({ callId }),
   setPhase: (phase) => set({ phase }),
+  setMicDenied: (micDenied) => set({ micDenied }),
   setMovedTo: (movedTo) => set({ movedTo }),
   reset: () => set(IDLE)
 }))

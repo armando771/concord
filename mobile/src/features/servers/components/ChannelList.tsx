@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { colors, fontSize, MIN_TOUCH, radius, spacing } from '../../../shared/theme/tokens'
 import { Banner } from '../../../shared/ui/Banner'
 import { Button } from '../../../shared/ui/Button'
+import type { CallUser } from '../../call/lib/callTypes'
 import { UnreadDot } from '../../chat/components/UnreadBadge'
 import type { Channel } from '../api/channels'
 import { channelSections } from '../lib/channelSections'
@@ -15,19 +15,53 @@ interface ChannelListProps {
   error: boolean
   /** Não lidas por canal (só na sessão): o nome fica em negrito e ganha um ponto. */
   unreadChannels?: Record<string, number>
+  /** Quem está em cada canal de voz (id do canal -> pessoas). */
+  voiceMembers?: Record<string, CallUser[]>
   onOpenChannel: (channel: Channel) => void
+  /** Entrar na chamada do canal de voz. */
+  onJoinVoice?: (channel: Channel) => void
   onRetry: () => void
 }
 
-/** Coluna do meio: nome do servidor e os canais de texto e de voz. */
-export function ChannelList({ serverName, channels, error, unreadChannels = {}, onOpenChannel, onRetry }: ChannelListProps) {
-  const [voiceNotice, setVoiceNotice] = useState(false)
+interface ChannelRowProps {
+  channel: Channel
+  unread: boolean
+  members: CallUser[]
+  onPress: () => void
+}
 
-  const open = (channel: Channel): void => {
-    if (channel.type === 'voice') return setVoiceNotice(true)
-    setVoiceNotice(false)
-    onOpenChannel(channel)
-  }
+/** Um canal: ícone (# ou alto-falante), nome, ponto de não lida e, nos de voz, quem está lá dentro. */
+function ChannelRow({ channel, unread, members, onPress }: ChannelRowProps) {
+  return (
+    <View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={channel.name}
+        onPress={onPress}
+        style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      >
+        {channel.type === 'voice' ? (
+          <Ionicons name="volume-high" size={20} color={colors.interactiveNormal} />
+        ) : (
+          <Text style={styles.hash}>#</Text>
+        )}
+        <Text style={[styles.name, unread && styles.nameUnread]} numberOfLines={1}>
+          {channel.name}
+        </Text>
+        {unread ? <UnreadDot /> : null}
+      </Pressable>
+      {members.map((member) => (
+        <Text key={member.id} style={styles.member} numberOfLines={1}>
+          {member.display_name}
+        </Text>
+      ))}
+    </View>
+  )
+}
+
+/** Coluna do meio: nome do servidor e os canais de texto e de voz. */
+export function ChannelList({ serverName, channels, error, unreadChannels = {}, voiceMembers = {}, onOpenChannel, onJoinVoice, onRetry }: ChannelListProps) {
+  const open = (channel: Channel): void => (channel.type === 'voice' ? onJoinVoice?.(channel) : onOpenChannel(channel))
 
   return (
     <View style={styles.container}>
@@ -45,27 +79,16 @@ export function ChannelList({ serverName, channels, error, unreadChannels = {}, 
           <View key={section.kind}>
             <Text style={styles.section}>{section.title}</Text>
             {section.channels.map((channel) => (
-              <Pressable
+              <ChannelRow
                 key={channel.id}
-                accessibilityRole="button"
-                accessibilityLabel={channel.name}
+                channel={channel}
+                unread={(unreadChannels[channel.id] ?? 0) > 0}
+                members={voiceMembers[channel.id] ?? []}
                 onPress={() => open(channel)}
-                style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-              >
-                {channel.type === 'voice' ? (
-                  <Ionicons name="volume-high" size={20} color={colors.interactiveNormal} />
-                ) : (
-                  <Text style={styles.hash}>#</Text>
-                )}
-                <Text style={[styles.name, (unreadChannels[channel.id] ?? 0) > 0 && styles.nameUnread]} numberOfLines={1}>
-                  {channel.name}
-                </Text>
-                {(unreadChannels[channel.id] ?? 0) > 0 ? <UnreadDot /> : null}
-              </Pressable>
+              />
             ))}
           </View>
         ))}
-        {voiceNotice ? <Banner tone="info" message="Canais de voz chegam em breve" /> : null}
       </ScrollView>
     </View>
   )
@@ -81,5 +104,6 @@ const styles = StyleSheet.create({
   hash: { color: colors.interactiveNormal, fontSize: fontSize.lg, width: 20, textAlign: 'center' },
   name: { color: colors.textSecondary, fontSize: fontSize.md, flexShrink: 1 },
   nameUnread: { color: colors.textStrong, fontWeight: '700' },
+  member: { color: colors.textMuted, fontSize: fontSize.sm, paddingLeft: spacing.xxl + spacing.sm, paddingVertical: spacing.xs },
   error: { gap: spacing.sm, padding: spacing.sm }
 })
