@@ -5,6 +5,7 @@ const joao = { display_name: 'João', username: 'joao' }
 const prefsOn = { desktop: true, taskbar: true, sound: true }
 
 const base = {
+  muted: false,
   deafened: false,
   prefs: prefsOn,
   serverId: 's1',
@@ -21,6 +22,12 @@ describe('knockAlert (pedido para entrar na sala trancada)', () => {
 
   it('ensurdecido: não toca o som, mas o aviso visual continua', () => {
     const alert = knockAlert(joao, { ...base, deafened: true })
+    expect(alert.sound).toBe(false)
+    expect(alert.payload).not.toBeNull()
+  })
+
+  it('mutado: não toca o som, mas o aviso visual continua (#360)', () => {
+    const alert = knockAlert(joao, { ...base, muted: true })
     expect(alert.sound).toBe(false)
     expect(alert.payload).not.toBeNull()
   })
