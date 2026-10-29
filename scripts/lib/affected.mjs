@@ -16,6 +16,10 @@ export const SHARED = [
 
 const isGo = (f) => f.startsWith('backend/') && f.endsWith('.go')
 const isTs = (f) => f.startsWith('frontend/src/') && /\.(ts|tsx)$/.test(f)
+// Código usado por todo o mobile: mexeu aqui, roda a suíte inteira do mobile.
+export const MOBILE_SHARED = ['mobile/package.json', 'mobile/src/shared/']
+
+const isMobile = (f) => /^mobile\/(src|app)\/.*\.(ts|tsx)$/.test(f)
 const isScript = (f) => f.startsWith('scripts/') && f.endsWith('.mjs')
 // O DSP em Rust e o .wasm gerado dele: o scripts/dsp-wasm.test.mjs confere que andam juntos.
 const isDsp = (f) => f.startsWith('native/concord-dsp/') || f.startsWith('frontend/src/renderer/src/features/call/lib/concordDsp.wasm')
@@ -27,8 +31,10 @@ export function classify(files) {
   return {
     go: files.filter(isGo),
     ts: files.filter(isTs),
+    mobile: files.filter(isMobile),
     scripts,
-    shared: files.some((f) => SHARED.some((prefix) => f.startsWith(prefix)))
+    shared: files.some((f) => SHARED.some((prefix) => f.startsWith(prefix))),
+    mobileShared: files.some((f) => MOBILE_SHARED.some((prefix) => f.startsWith(prefix)))
   }
 }
 

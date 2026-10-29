@@ -5,6 +5,7 @@
 //                                          # (vira `full` se tocou código compartilhado)
 //   node scripts/affected-tests.mjs full   # suíte inteira + vet/typecheck + CRAP
 //   opção: --base <ref> (padrão origin/develop, senão origin/main)
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { classify, dependents, goPackages, parseArgs, parseGoList, scriptTests } from './lib/affected.mjs'
 import { changedLines, defaultBase } from './lib/diff.mjs'
@@ -12,6 +13,7 @@ import { capture, GO, ROOT, run } from './lib/run.mjs'
 
 const backend = path.join(ROOT, 'backend')
 const frontend = path.join(ROOT, 'frontend')
+const mobile = path.join(ROOT, 'mobile')
 // Notas da próxima release: o deploy recusa o PUT se passarem do limite.
 const NOTES = 'changelog/next.md'
 const GO_LIST = '{{.ImportPath}}|{{join .Imports ","}}|{{join .TestImports ","}}|{{join .XTestImports ","}}'
@@ -25,11 +27,13 @@ function goAffected(goFiles) {
 }
 
 function loop(files) {
-  const { go, ts, scripts } = classify(files)
+  const { go, ts, mobile: mob, mobileShared, scripts } = classify(files)
   const codes = []
   const pkgs = goAffected(go)
   if (pkgs.length) codes.push(run(GO, ['test', ...pkgs], backend))
   if (ts.length) codes.push(run('npx', ['vitest', 'related', '--run', '--passWithNoTests', ...ts.map((f) => f.slice('frontend/'.length))], frontend))
+  if (mobileShared) codes.push(run('npx', ['jest'], mobile))
+  else if (mob.length) codes.push(run('npx', ['jest', '--findRelatedTests', '--passWithNoTests', ...mob.map((f) => f.slice('mobile/'.length))], mobile))
   const tests = scriptTests(scripts)
   if (tests.length) codes.push(run('node', ['--test', ...tests]))
   if (!codes.length) console.log('Nada a testar no diff.')
@@ -41,10 +45,11 @@ function checkNotes(files) {
 }
 
 function checks(files, base) {
-  const { go, ts } = classify(files)
+  const { go, ts, mobile: mob } = classify(files)
   const codes = []
   if (go.length) codes.push(run(GO, ['vet', ...goPackages(go)], backend))
   if (ts.length) codes.push(run('npm', ['run', 'typecheck'], frontend))
+  if (mob.length) codes.push(run('npm', ['run', 'typecheck'], mobile))
   codes.push(...checkNotes(files))
   codes.push(run('node', ['scripts/check-structure.mjs', '--base', base]))
   codes.push(run('node', ['scripts/crap.mjs', '--base', base]))
@@ -57,6 +62,7 @@ function full() {
     run(GO, ['test', './...'], backend),
     run('npm', ['run', 'typecheck'], frontend),
     run('npx', ['vitest', 'run'], frontend),
+    ...(existsSync(path.join(mobile, 'package.json')) ? [run('npm', ['run', 'typecheck'], mobile), run('npx', ['jest'], mobile)] : []),
     run('node', ['--test', 'scripts/**/*.test.mjs'])
   ]
 }

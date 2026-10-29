@@ -56,6 +56,24 @@ function tsCoverage(files, tmp) {
   return existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : {}
 }
 
+// Jest do mobile/: coverage-final.json (istanbul) só dos arquivos pedidos.
+// Acima disso a linha de comando estoura o limite do Windows (PRs empilhados mexem em dezenas de arquivos):
+// roda o Jest inteiro e deixa a cobertura ampla; o CRAP só avalia as funções dos arquivos tocados.
+const MOBILE_MAX_FILES_ON_CLI = 25
+
+function mobileCoverage(files, tmp) {
+  const rel = files.map((f) => f.slice('mobile/'.length))
+  const many = rel.length > MOBILE_MAX_FILES_ON_CLI
+  const from = many ? ['src/**/*.{ts,tsx}', 'app/**/*.tsx'] : rel
+  const coverage = ['--coverage', '--coverageReporters=json', `--coverageDirectory=${tmp}`, ...from.map((f) => `--collectCoverageFrom=${f}`)]
+  const select = many ? [] : ['--findRelatedTests', '--passWithNoTests']
+  if (run('npx', ['jest', ...select, ...coverage, ...(many ? [] : rel)], path.join(ROOT, 'mobile')) !== 0) {
+    fail('jest falhou: corrija os testes antes de medir o CRAP')
+  }
+  const report = path.join(tmp, 'coverage-final.json')
+  return existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : {}
+}
+
 function fail(message) {
   console.error(`\n❌ ${message}`)
   process.exit(2)
@@ -63,9 +81,13 @@ function fail(message) {
 
 function measure(files) {
   const tmp = mkdtempSync(path.join(tmpdir(), 'crap-'))
-  const { go, ts } = classify(files)
+  const { go, ts, mobile } = classify(files)
   process.chdir(ROOT)
-  return [...goFunctions(go, tmp), ...(ts.length ? tsFunctions(ts, tsCoverage(ts, tmp)) : [])]
+  return [
+    ...goFunctions(go, tmp),
+    ...(ts.length ? tsFunctions(ts, tsCoverage(ts, tmp)) : []),
+    ...(mobile.length ? tsFunctions(mobile, mobileCoverage(mobile, tmp)) : [])
+  ]
 }
 
 function main() {
