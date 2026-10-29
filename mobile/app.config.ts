@@ -24,12 +24,21 @@ const config: ExpoConfig = {
       monochromeImage: './assets/android-icon-monochrome.png'
     },
     predictiveBackGestureEnabled: false,
+    // Só áudio nesta fatia (ADR 0023): sem câmera nem captura de tela.
+    permissions: [
+      'android.permission.RECORD_AUDIO',
+      'android.permission.MODIFY_AUDIO_SETTINGS',
+      'android.permission.FOREGROUND_SERVICE',
+      'android.permission.FOREGROUND_SERVICE_MICROPHONE'
+    ],
     ...(googleServices && existsSync(googleServices) ? { googleServicesFile: googleServices } : {})
   },
   plugins: [
     'expo-router',
     'expo-secure-store',
     'expo-notifications',
+    '@livekit/react-native-expo-plugin',
+    '@config-plugins/react-native-webrtc',
     'expo-status-bar',
     ['expo-splash-screen', { image: './assets/splash-icon.png', backgroundColor: '#121214', imageWidth: 200 }]
   ],

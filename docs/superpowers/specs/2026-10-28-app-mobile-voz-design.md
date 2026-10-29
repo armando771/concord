@@ -9,7 +9,7 @@ Divide-se em dois PRs (ver § Entrega).
 Falar e ouvir no celular, com o mesmo backend e a mesma sala de mídia do desktop:
 
 - entrar e sair de **canais de voz** de um servidor;
-- **ligar, atender e recusar chamadas de DM** (1:1 e grupo), com push quando o app está fechado;
+- **ligar, atender e recusar chamadas de DM 1:1** (o backend não liga em grupo), com push quando o app está fechado;
 - ver quem está na chamada e quem está falando; mudo e fone de verdade;
 - continuar falando com a tela apagada ou com outro app aberto.
 
@@ -28,6 +28,13 @@ Sem câmera, sem transmitir ou ver tela, sem toque de telefone em tela cheia (ve
 - **Chamada de DM recebida**: tela de atender com o app aberto (`call:invite`); com o app fechado, push
   comum (`type=call_invite`, prioridade alta, canal Android `chamadas`) reaproveitando o FCM do
   [ADR 0022](../../adr/0022-push-direto-pelo-fcm.md). Toque de telefone em tela cheia fica para depois.
+  **Mudança no backend de chamadas** (decidida com o dono): hoje `StartDM` recusa quem está offline
+  (`ErrCalleeOffline`). Passa a deixar ligar para quem está offline **e tem token de push registrado** (sem
+  token continua recusando), por um ponto de extensão novo e opcional (`SetOfflineRinger`, em `hooks.go`),
+  usado só nessa checagem: `HandleDisconnect` segue usando `isOnline` puro, senão desconectado viraria
+  fantasma na chamada. Como a chamada para offline não tem quem desligue, ganha **limite de toque de 45 s**
+  (`ring_timeout.go`): sem resposta, a chamada termina (`call:ended` para quem ligou). Quem abre o app pelo
+  push descobre a chamada tocando por `GET /calls/active?scope=dm&id=<conversa>`.
 - **`voiceControlsStore` continua dono do mudo e do fone** (já persistidos). A chamada só reage a ele e
   informa o backend com `call:voice`. Nenhum campo novo em stores grandes.
 - **Presença na mídia (ADR 0018)**: o backend tira da call quem não está na sala do LiveKit (varredura de
