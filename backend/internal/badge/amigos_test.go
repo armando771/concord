@@ -22,33 +22,36 @@ func TestAmigosBackfillMatchesCatalog(t *testing.T) {
 	assertBackfillMatchesCatalog(t, "amigos", amigosMigration)
 }
 
-// Só conta amizade aceita com conta real: e-mail confirmado e criada há 7
-// dias. Quem vira conta real depois passa a contar na próxima avaliação.
+// Só conta amizade aceita com conta real: e-mail confirmado, não bot e criada
+// há 24 horas. Quem vira conta real depois passa a contar na próxima avaliação.
 func TestRepositoryAmigosCountsOnlyRealAccounts(t *testing.T) {
 	d := newTestDB(t)
 	me, _ := d.user()
 	ana, _ := d.user()  // real
-	bia, _ := d.user()  // e-mail confirmado, conta de 2 dias
+	bia, _ := d.user()  // e-mail confirmado, conta de 23 h
 	caio, _ := d.user() // conta antiga sem e-mail confirmado
 	dani, _ := d.user() // real, pedido pendente
-	for _, id := range []string{ana, dani} {
+	bot, _ := d.user()  // bot antigo com e-mail confirmado
+	for _, id := range []string{ana, dani, bot} {
 		d.realAccount(id)
 	}
-	d.exec(`UPDATE users SET email_verified_at = NOW(), created_at = NOW() - INTERVAL '2 days' WHERE id = $1`, bia)
+	d.exec(`UPDATE users SET is_bot = true WHERE id = $1`, bot)
+	d.exec(`UPDATE users SET email_verified_at = NOW(), created_at = NOW() - INTERVAL '23 hours' WHERE id = $1`, bia)
 	d.exec(`UPDATE users SET created_at = NOW() - INTERVAL '30 days' WHERE id = $1`, caio)
 	d.friends(me, ana, "accepted")
 	d.friends(bia, me, "accepted")
 	d.friends(me, caio, "accepted")
 	d.friends(me, dani, "pending")
+	d.friends(me, bot, "accepted")
 
 	repo := BadgeRepository(d.db)
 	s, err := repo.Stats(d.ctx, me)
 	if err != nil || s.Friends != 1 {
 		t.Fatalf("friends = %d, %v (want 1: só a ana)", s.Friends, err)
 	}
-	d.exec(`UPDATE users SET created_at = NOW() - INTERVAL '8 days' WHERE id = $1`, bia)
+	d.exec(`UPDATE users SET created_at = NOW() - INTERVAL '25 hours' WHERE id = $1`, bia)
 	if s, _ = repo.Stats(d.ctx, me); s.Friends != 2 {
-		t.Fatalf("bia com 8 dias: friends = %d, want 2", s.Friends)
+		t.Fatalf("bia com 25 h: friends = %d, want 2", s.Friends)
 	}
 }
 

@@ -50,7 +50,7 @@ function ServerLevelDetails({ serverId }: { serverId: string }): React.JSX.Eleme
 
       <p className="text-ds-xs text-gray-400">
         O nível sobe só com quem usa o servidor: membros novos, mensagens, figurinhas, sons, tempo
-        em call e lives. Contas novas (menos de 7 dias ou sem e-mail confirmado) e bots não contam,
+        em call e lives. Contas novas (com menos de 24 horas ou sem e-mail confirmado) e bots não contam,
         e cada pessoa tem um limite por dia em cada fonte.
       </p>
     </div>
