@@ -1,0 +1,4 @@
+ALTER TABLE users
+  DROP COLUMN IF EXISTS name_font,
+  DROP COLUMN IF EXISTS name_effect,
+  DROP COLUMN IF EXISTS name_colors;

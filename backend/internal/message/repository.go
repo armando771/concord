@@ -2,7 +2,9 @@ package message
 
 import (
 	"context"
-	"slices"
+	"encoding/json"
+
+	"gin-quickstart/backend/internal/namestyle"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,12 +20,13 @@ func MessageRepository(db *pgxpool.Pool) *Repository {
 	}
 }
 
-const messageColumns = `
+var messageColumns = `
 	m.id,
 	m.author_id,
 	u.username,
 	u.display_name,
 	u.avatar_url,
+	` + namestyle.Expr("u") + `,
 	m.channel_id,
 	m.conversation_id,
 	m.reply_to_id,
@@ -37,7 +40,17 @@ const messageColumns = `
 	ru.username,
 	ru.display_name,
 	ru.avatar_url,
-	rm.content
+	` + namestyle.Expr("ru") + `,
+	rm.content,
+	m.sticker_id,
+	stk.server_id,
+	stk.name,
+	stk.content_type,
+	m.gif_url,
+	m.gif_metadata,
+	m.tts,
+	m.tts_voice_channel_id,
+	m.call_invite
 `
 
 const messageFrom = `
@@ -45,14 +58,19 @@ const messageFrom = `
 	JOIN users u ON u.id = m.author_id
 	LEFT JOIN messages rm ON rm.id = m.reply_to_id
 	LEFT JOIN users ru ON ru.id = rm.author_id
+	LEFT JOIN server_stickers stk ON stk.id = m.sticker_id
 `
 
 func (r *Repository) Create(ctx context.Context, msg *Message) error {
+	var gifMetaBytes []byte
+	if msg.GifMetadata != nil {
+		gifMetaBytes, _ = json.Marshal(msg.GifMetadata)
+	}
 	return r.db.QueryRow(
 		ctx,
 		`
-		INSERT INTO messages (id, author_id, channel_id, conversation_id, reply_to_id, content, system_kind, mention_everyone)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO messages (id, author_id, channel_id, conversation_id, reply_to_id, content, system_kind, mention_everyone, sticker_id, gif_url, gif_metadata, call_invite, tts, tts_voice_channel_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING
 			id,
 			author_id,
@@ -70,6 +88,12 @@ func (r *Repository) Create(ctx context.Context, msg *Message) error {
 		msg.Content,
 		msg.SystemKind,
 		msg.MentionEveryone,
+		msg.StickerID,
+		msg.GifURL,
+		gifMetaBytes,
+		callInviteBytes(msg.CallInvite),
+		msg.TTS,
+		msg.TTSVoiceChannelID,
 	).Scan(
 		&msg.ID,
 		&msg.AuthorID,
@@ -82,11 +106,7 @@ func (r *Repository) Create(ctx context.Context, msg *Message) error {
 }
 
 func (r *Repository) FindByID(ctx context.Context, id string) (*Message, error) {
-	msg := &Message{Author: &Author{}}
-	var replyID, replyAuthorID, replyUsername, replyDisplayName, replyContent *string
-	var replyAvatarURL *string
-
-	err := r.db.QueryRow(
+	row := r.db.QueryRow(
 		ctx,
 		`
 		SELECT `+messageColumns+`
@@ -94,53 +114,16 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Message, error) 
 		WHERE m.id = $1
 		`,
 		id,
-	).Scan(
-		&msg.ID,
-		&msg.AuthorID,
-		&msg.Author.Username,
-		&msg.Author.DisplayName,
-		&msg.Author.AvatarURL,
-		&msg.ChannelID,
-		&msg.ConversationID,
-		&msg.ReplyToID,
-		&msg.Content,
-		&msg.SystemKind,
-		&msg.MentionEveryone,
-		&msg.CreatedAt,
-		&msg.EditedAt,
-		&replyID,
-		&replyAuthorID,
-		&replyUsername,
-		&replyDisplayName,
-		&replyAvatarURL,
-		&replyContent,
 	)
+	msg, err := scanMessageRow(row)
 	if err != nil {
 		return nil, err
 	}
-	msg.Author.ID = msg.AuthorID
-
-	if replyID != nil && replyAuthorID != nil && replyUsername != nil && replyDisplayName != nil && replyContent != nil {
-		msg.ReplyTo = &ReplyPreview{
-			ID:       *replyID,
-			AuthorID: *replyAuthorID,
-			Author: &Author{
-				ID:          *replyAuthorID,
-				Username:    *replyUsername,
-				DisplayName: *replyDisplayName,
-				AvatarURL:   replyAvatarURL,
-			},
-			Content: *replyContent,
-		}
-	}
-
-	msgs := []Message{*msg}
+	msgs := []Message{msg}
 	if err := r.attachReactions(ctx, msgs); err != nil {
 		return nil, err
 	}
-	*msg = msgs[0]
-
-	return msg, nil
+	return &msgs[0], nil
 }
 
 // listBeforeCondition é o cursor "before" (id da mensagem mais antiga já
@@ -282,68 +265,6 @@ func (r *Repository) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-func (r *Repository) AddReaction(ctx context.Context, messageID string, userID string, emoji string) (bool, error) {
-	tag, err := r.db.Exec(
-		ctx,
-		`
-		INSERT INTO message_reactions (message_id, user_id, emoji)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (message_id, user_id, emoji) DO NOTHING
-		`,
-		messageID,
-		userID,
-		emoji,
-	)
-	if err != nil {
-		return false, err
-	}
-	return tag.RowsAffected() > 0, nil
-}
-
-func (r *Repository) RemoveReaction(ctx context.Context, messageID string, userID string, emoji string) (bool, error) {
-	tag, err := r.db.Exec(
-		ctx,
-		`DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3`,
-		messageID,
-		userID,
-		emoji,
-	)
-	if err != nil {
-		return false, err
-	}
-	return tag.RowsAffected() > 0, nil
-}
-
-func GroupReactions(rows []ReactionRow) map[string][]ReactionSummary {
-	byMessage := make(map[string][]ReactionSummary)
-	indexByMessageEmoji := make(map[string]map[string]int)
-
-	for _, row := range rows {
-		emojiMap, ok := indexByMessageEmoji[row.MessageID]
-		if !ok {
-			emojiMap = make(map[string]int)
-			indexByMessageEmoji[row.MessageID] = emojiMap
-		}
-
-		if idx, exists := emojiMap[row.Emoji]; exists {
-			summary := &byMessage[row.MessageID][idx]
-			if !slices.Contains(summary.UserIDs, row.UserID) {
-				summary.UserIDs = append(summary.UserIDs, row.UserID)
-				summary.Count = len(summary.UserIDs)
-			}
-		} else {
-			emojiMap[row.Emoji] = len(byMessage[row.MessageID])
-			byMessage[row.MessageID] = append(byMessage[row.MessageID], ReactionSummary{
-				Emoji:   row.Emoji,
-				Count:   1,
-				UserIDs: []string{row.UserID},
-			})
-		}
-	}
-
-	return byMessage
-}
-
 func (r *Repository) attachReactions(ctx context.Context, messages []Message) error {
 	for i := range messages {
 		if messages[i].Reactions == nil {
@@ -394,66 +315,4 @@ func (r *Repository) attachReactions(ctx context.Context, messages []Message) er
 	}
 
 	return nil
-}
-
-type rowScanner interface {
-	Next() bool
-	Scan(dest ...interface{}) error
-}
-
-func scanMessages(rows rowScanner) ([]Message, error) {
-	var messages []Message
-	for rows.Next() {
-		var msg Message
-		var replyID, replyAuthorID, replyUsername, replyDisplayName, replyContent *string
-		var replyAvatarURL *string
-
-		msg.Author = &Author{}
-		if err := rows.Scan(
-			&msg.ID,
-			&msg.AuthorID,
-			&msg.Author.Username,
-			&msg.Author.DisplayName,
-			&msg.Author.AvatarURL,
-			&msg.ChannelID,
-			&msg.ConversationID,
-			&msg.ReplyToID,
-			&msg.Content,
-			&msg.SystemKind,
-			&msg.MentionEveryone,
-			&msg.CreatedAt,
-			&msg.EditedAt,
-			&replyID,
-			&replyAuthorID,
-			&replyUsername,
-			&replyDisplayName,
-			&replyAvatarURL,
-			&replyContent,
-		); err != nil {
-			return nil, err
-		}
-		msg.Author.ID = msg.AuthorID
-
-		if replyID != nil && replyAuthorID != nil && replyUsername != nil && replyDisplayName != nil && replyContent != nil {
-			msg.ReplyTo = &ReplyPreview{
-				ID:       *replyID,
-				AuthorID: *replyAuthorID,
-				Author: &Author{
-					ID:          *replyAuthorID,
-					Username:    *replyUsername,
-					DisplayName: *replyDisplayName,
-					AvatarURL:   replyAvatarURL,
-				},
-				Content: *replyContent,
-			}
-		}
-
-		messages = append(messages, msg)
-	}
-
-	if messages == nil {
-		messages = []Message{}
-	}
-
-	return messages, nil
 }

@@ -12,7 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"gin-quickstart/backend/internal/ratelimit"
+	"gin-quickstart/backend/internal/platform/ratelimit"
 	"gin-quickstart/backend/internal/user"
 )
 

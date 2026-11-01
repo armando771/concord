@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"gin-quickstart/backend/internal/namestyle"
 	"gin-quickstart/backend/internal/permission"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -266,6 +267,7 @@ func (r *Repository) ListMembers(ctx context.Context, serverID string) ([]Server
 			u.username,
 			u.display_name,
 			u.avatar_url,
+			` + namestyle.Expr("u") + `,
 			u.is_bot,
 			sm.nickname,
 			`+legacyRoleColumn+`,
@@ -293,6 +295,7 @@ func (r *Repository) ListMembers(ctx context.Context, serverID string) ([]Server
 			&m.Username,
 			&m.DisplayName,
 			&m.AvatarURL,
+			&m.NameStyle,
 			&m.IsBot,
 			&m.Nickname,
 			&m.Role,
@@ -349,6 +352,7 @@ func (r *Repository) FindMemberByUserID(ctx context.Context, serverID string, us
 			u.username,
 			u.display_name,
 			u.avatar_url,
+			` + namestyle.Expr("u") + `,
 			u.is_bot,
 			sm.nickname,
 			`+legacyRoleColumn+`,
@@ -367,6 +371,7 @@ func (r *Repository) FindMemberByUserID(ctx context.Context, serverID string, us
 		&m.Username,
 		&m.DisplayName,
 		&m.AvatarURL,
+		&m.NameStyle,
 		&m.IsBot,
 		&m.Nickname,
 		&m.Role,
@@ -707,9 +712,20 @@ func (r *Repository) MutualServers(ctx context.Context, userA string, userB stri
 }
 
 // AddMemberIfMissing põe alguém no servidor sem falhar se já estiver lá.
+// Se o usuário for um bot (is_bot = TRUE), vincula também o cargo de sistema (Bots).
 func (r *Repository) AddMemberIfMissing(ctx context.Context, serverID string, userID string, role string) error {
-	_, err := r.db.Exec(ctx,
+	if _, err := r.db.Exec(ctx,
 		`INSERT INTO server_members (server_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-		serverID, userID, role)
+		serverID, userID, role); err != nil {
+		return err
+	}
+	_, err := r.db.Exec(ctx,
+		`INSERT INTO member_roles (server_id, user_id, role_id)
+		 SELECT $1, $2, r.id
+		 FROM roles r
+		 JOIN users u ON u.id = $2
+		 WHERE r.server_id = $1 AND r.is_system = TRUE AND u.is_bot = TRUE
+		 ON CONFLICT DO NOTHING`,
+		serverID, userID)
 	return err
 }

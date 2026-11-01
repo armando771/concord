@@ -1,0 +1,4 @@
+# Pilha pequena: cada AudioWorklet instancia o módulo, e o padrão (1 MiB) faria
+# cada instância reservar mais de 1 MiB de memória sem usar.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "link-arg=-zstack-size=65536"]

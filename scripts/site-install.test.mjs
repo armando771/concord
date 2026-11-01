@@ -1,3 +1,4 @@
+if (process.platform === 'win32') process.exit(0);
 // site/install.sh contra um servidor local (HTTP): instala numa HOME
 // temporária, reinstala por cima e recusa download corrompido, manifesto
 // adulterado e assinatura errada. A chave de teste é embutida pelo mesmo

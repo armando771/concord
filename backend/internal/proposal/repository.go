@@ -32,23 +32,33 @@ const selectProposal = `
 		COALESCE((SELECT jsonb_agg(jsonb_build_object('id', i.id, 'content_type', i.content_type)
 			ORDER BY i.position, i.created_at)
 			FROM proposal_images i WHERE i.proposal_id = p.id), '[]'::jsonb),
-		(SELECT v.approve FROM proposal_votes v WHERE v.proposal_id = p.id AND v.user_id = $1::uuid)
+		(SELECT v.approve FROM proposal_votes v WHERE v.proposal_id = p.id AND v.user_id = $1::uuid),
+		p.assignee_id, au.display_name, au.avatar_url, au.github_username,
+		p.github_issue_state, p.github_assignee
 	FROM proposals p
 	JOIN users u ON u.id = p.author_id
+	LEFT JOIN users au ON au.id = p.assignee_id
 `
 
 func scanProposal(row pgx.Row) (Proposal, error) {
 	var p Proposal
 	var images []byte
+	var assigneeID, assigneeName *string
+	var assigneeAvatar *string
 	err := row.Scan(
 		&p.ID, &p.AuthorID, &p.AuthorName, &p.AuthorAvatarURL, &p.Title, &p.Description,
 		&p.Status, &p.CreatedAt, &p.VotingEndsAt, &p.ClosedAt, &p.MovedAt, &p.CloseReason,
 		&p.ClosedByName, &p.EditedAt,
 		&p.GithubIssueNumber, &p.GithubIssueURL,
 		&p.YesVotes, &p.NoVotes, &p.CommentCount, &images, &p.MyVote,
+		&assigneeID, &assigneeName, &assigneeAvatar, &p.AssigneeGithub,
+		&p.IssueState, &p.IssueAssignee,
 	)
 	if err != nil {
 		return p, err
+	}
+	if assigneeID != nil && assigneeName != nil {
+		p.Assignee = &UserRef{ID: *assigneeID, Name: *assigneeName, AvatarURL: assigneeAvatar}
 	}
 	p.Images = []Image{}
 	if err := json.Unmarshal(images, &p.Images); err != nil {
@@ -243,17 +253,19 @@ func (r *Repository) Delete(ctx context.Context, id string) error {
 // SetStatus move o card (time tech), inclusive antes do fim da votação: o
 // fechamento é marcado agora se ainda não foi, com quem encerrou. No UPDATE os
 // valores à direita são os da linha antiga, então status = 'voting' vale como
-// "estava em votação".
-func (r *Repository) SetStatus(ctx context.Context, id, userID, status string) error {
+// "estava em votação". assigneeID é quem fica com o card (decidido no Service).
+func (r *Repository) SetStatus(ctx context.Context, id, userID, status, assigneeID string) error {
 	tag, err := r.db.Exec(ctx, `
 		UPDATE proposals SET
 			closed_by = CASE WHEN status = 'voting' THEN $3::uuid ELSE closed_by END,
 			close_reason = CASE WHEN status = 'voting' THEN 'manual' ELSE close_reason END,
 			closed_at = COALESCE(closed_at, NOW()),
 			moved_at = NOW(),
+			assigned_at = CASE WHEN assignee_id IS DISTINCT FROM $4::uuid THEN NOW() ELSE assigned_at END,
+			assignee_id = $4::uuid,
 			status = $2
 		WHERE id = $1`,
-		id, status, userID)
+		id, status, userID, assigneeID)
 	if err != nil {
 		return err
 	}
@@ -305,11 +317,54 @@ func (r *Repository) WithoutIssue(ctx context.Context) ([]Proposal, error) {
 		LIMIT 20`)
 }
 
+// SetIssue guarda a issue recém-criada (aberta e sem assignee: o resto a
+// sincronização aplica).
 func (r *Repository) SetIssue(ctx context.Context, id string, number int, url string) error {
 	_, err := r.db.Exec(ctx, `
-		UPDATE proposals SET github_issue_number = $2, github_issue_url = $3 WHERE id = $1`,
+		UPDATE proposals SET github_issue_number = $2, github_issue_url = $3,
+			github_issue_state = 'open', github_assignee = NULL
+		WHERE id = $1`,
 		id, number, url,
 	)
+	return err
+}
+
+// NeedingIssueSync lista os cards cuja issue não está como o card pede
+// (estado ou assignee). A conta do estado desejado é a de WantedIssueState.
+func (r *Repository) NeedingIssueSync(ctx context.Context) ([]Proposal, error) {
+	return r.query(ctx, nil, `
+		WHERE p.github_issue_number IS NOT NULL
+		  AND (p.github_issue_state IS DISTINCT FROM
+				CASE p.status WHEN 'done' THEN 'closed:completed'
+				              WHEN 'rejected' THEN 'closed:not_planned'
+				              ELSE 'open' END
+		       OR LOWER(p.github_assignee) IS DISTINCT FROM LOWER(au.github_username))
+		ORDER BY p.moved_at
+		LIMIT 50`)
+}
+
+// SetIssueSynced grava o que foi aplicado na issue.
+func (r *Repository) SetIssueSynced(ctx context.Context, id, state string, assignee *string) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE proposals SET github_issue_state = $2, github_assignee = $3 WHERE id = $1`,
+		id, state, assignee,
+	)
+	return err
+}
+
+// GithubUsername: o usuário do GitHub guardado de userID (nil se não tem).
+func (r *Repository) GithubUsername(ctx context.Context, userID string) (*string, error) {
+	var login *string
+	err := r.db.QueryRow(ctx, `SELECT github_username FROM users WHERE id = $1`, userID).Scan(&login)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return login, err
+}
+
+// SetGithubUsername troca o usuário do GitHub de userID (nil apaga).
+func (r *Repository) SetGithubUsername(ctx context.Context, userID string, login *string) error {
+	_, err := r.db.Exec(ctx, `UPDATE users SET github_username = $2 WHERE id = $1`, userID, login)
 	return err
 }
 

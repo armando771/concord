@@ -82,7 +82,13 @@ func (s *Service) Create(ctx context.Context, serverID, actorID string, in Input
 	if err != nil {
 		return nil, err
 	}
-	if len(snap.Roles)-1 >= MaxRoles {
+	customCount := 0
+	for _, r := range snap.Roles {
+		if !r.IsDefault && !r.IsSystem {
+			customCount++
+		}
+	}
+	if customCount >= MaxRoles {
 		return nil, ErrTooManyRoles
 	}
 
@@ -119,6 +125,9 @@ func (s *Service) Update(ctx context.Context, serverID, actorID, roleID string, 
 	if current.IsDefault && (in.Name != nil || in.Color != nil || in.ClearColor || in.Hoist != nil) {
 		return nil, ErrEveryoneRole
 	}
+	if current.IsSystem && (in.Name != nil || in.Hoist != nil) {
+		return nil, ErrBotRole
+	}
 
 	updated := current
 	if err := apply(&updated, in, actorPerms); err != nil {
@@ -142,7 +151,7 @@ func (s *Service) Update(ctx context.Context, serverID, actorID, roleID string, 
 func apply(role *Role, in Input, actorPerms int64) error {
 	if in.Name != nil {
 		name := strings.TrimSpace(*in.Name)
-		if name == "" || utf8.RuneCountInString(name) > maxNameLength || name == permission.EveryoneName {
+		if name == "" || utf8.RuneCountInString(name) > maxNameLength || name == permission.EveryoneName || (!role.IsSystem && strings.EqualFold(name, permission.BotsRoleName)) {
 			return ErrInvalidName
 		}
 		role.Name = name
@@ -181,6 +190,9 @@ func (s *Service) Delete(ctx context.Context, serverID, actorID, roleID string) 
 	if current.IsDefault {
 		return ErrEveryoneRole
 	}
+	if current.IsSystem {
+		return ErrBotRole
+	}
 	if !snap.CanManageRole(actorID, current) {
 		return ErrRoleHierarchy
 	}
@@ -194,9 +206,10 @@ func (s *Service) Delete(ctx context.Context, serverID, actorID, roleID string) 
 	return nil
 }
 
-// Reorder recebe todos os cargos (sem o @everyone) do mais alto para o mais
-// baixo. Todo cargo que muda de posição tem que estar abaixo do cargo mais
-// alto do ator antes e depois.
+// Reorder recebe todos os cargos ordenáveis (sem o @everyone e sem o cargo de
+// sistema Bots, ou com Bots fixo no final) do mais alto para o mais baixo. Todo
+// cargo que muda de posição tem que estar abaixo do cargo mais alto do ator
+// antes e depois.
 func (s *Service) Reorder(ctx context.Context, serverID, actorID string, roleIDs []string) ([]Role, error) {
 	snap, _, err := s.actor(ctx, serverID, actorID)
 	if err != nil {
@@ -237,46 +250,58 @@ func (s *Service) Reorder(ctx context.Context, serverID, actorID string, roleIDs
 	return roles, nil
 }
 
-// NewPositions confere que roleIDs são exatamente os cargos do servidor (sem
-// @everyone, sem repetir) e devolve a posição de cada um: o primeiro fica com
-// len(roleIDs), o último com 1.
+// NewPositions confere que roleIDs são exatamente os cargos ordenáveis do
+// servidor (sem @everyone, sem repetir; o cargo Bots fica sempre na posição 1,
+// abaixo de todos os demais cargos) e devolve a posição de cada um.
 func NewPositions(snap *permission.Snapshot, roleIDs []string) (map[string]int, error) {
-	if len(roleIDs) != len(snap.Roles)-1 {
+	customCount := 0
+	base := 0
+	for _, r := range snap.Roles {
+		if r.IsSystem {
+			base = 1
+		} else if !r.IsDefault {
+			customCount++
+		}
+	}
+
+	orderable := roleIDs
+	for i, id := range roleIDs {
+		if r, ok := snap.Roles[id]; ok && r.IsSystem {
+			if i != len(roleIDs)-1 {
+				return nil, ErrBotRole
+			}
+			orderable = roleIDs[:len(roleIDs)-1]
+			break
+		}
+	}
+
+	if len(orderable) != customCount {
 		return nil, ErrInvalidOrder
 	}
-	positions := make(map[string]int, len(roleIDs))
-	for i, id := range roleIDs {
+	positions := make(map[string]int, len(orderable))
+	for i, id := range orderable {
 		r, ok := snap.Roles[id]
-		if !ok || r.IsDefault {
+		if !ok || r.IsDefault || r.IsSystem {
 			return nil, ErrInvalidOrder
 		}
 		if _, dup := positions[id]; dup {
 			return nil, ErrInvalidOrder
 		}
-		positions[id] = len(roleIDs) - i
+		positions[id] = len(orderable) - i + base
 	}
 	return positions, nil
 }
 
-// SetMemberRole dá (add) ou tira um cargo de um membro. Basta o cargo estar
-// abaixo do cargo mais alto do ator (como no Discord).
+// SetMemberRole dá (add) ou tira um cargo de um membro (ou do próprio ator).
+// Basta o cargo estar abaixo do cargo mais alto do ator (como no Discord); os
+// cargos do dono só ele mesmo mexe.
 func (s *Service) SetMemberRole(ctx context.Context, serverID, actorID, targetID, roleID string, add bool) ([]string, error) {
 	snap, _, err := s.actor(ctx, serverID, actorID)
 	if err != nil {
 		return nil, err
 	}
-	if !snap.IsMember(targetID) {
-		return nil, ErrMemberNotFound
-	}
-	current, ok := snap.Roles[roleID]
-	if !ok {
-		return nil, ErrRoleNotFound
-	}
-	if current.IsDefault {
-		return nil, ErrEveryoneRole
-	}
-	if !snap.CanManageRole(actorID, current) {
-		return nil, ErrRoleHierarchy
+	if err := checkMemberRole(snap, actorID, targetID, roleID); err != nil {
+		return nil, err
 	}
 
 	if add {
@@ -298,19 +323,30 @@ func (s *Service) SetMemberRole(ctx context.Context, serverID, actorID, targetID
 	return ids, nil
 }
 
-// SetModerator é o atalho do app antigo ("Tornar moderador"): põe ou tira o
-// cargo Moderador.
-func (s *Service) SetModerator(ctx context.Context, serverID, actorID, targetID string, moderator bool) ([]string, error) {
-	snap, err := s.perms.Snapshot(ctx, serverID)
-	if err != nil {
-		return nil, err
+// checkMemberRole: o alvo é membro (e, se é o dono, só ele mesmo mexe nos
+// cargos dele) e o cargo existe, não é fixo (@everyone ou Bots) e está abaixo
+// do cargo mais alto do ator — o dono dá a si mesmo qualquer cargo.
+func checkMemberRole(snap *permission.Snapshot, actorID, targetID, roleID string) error {
+	if !snap.IsMember(targetID) {
+		return ErrMemberNotFound
 	}
-	for _, r := range snap.Roles {
-		if !r.IsDefault && r.Name == permission.ModeratorName {
-			return s.SetMemberRole(ctx, serverID, actorID, targetID, r.ID, moderator)
-		}
+	if !snap.CanEditRolesOf(actorID, targetID) {
+		return ErrOwnerRoles
 	}
-	return nil, ErrNoModeratorRole
+	current, ok := snap.Roles[roleID]
+	if !ok {
+		return ErrRoleNotFound
+	}
+	if current.IsDefault {
+		return ErrEveryoneRole
+	}
+	if current.IsSystem {
+		return ErrBotRole
+	}
+	if !snap.CanManageRole(actorID, current) {
+		return ErrRoleHierarchy
+	}
+	return nil
 }
 
 func (s *Service) publishOrder(ctx context.Context, serverID string) {

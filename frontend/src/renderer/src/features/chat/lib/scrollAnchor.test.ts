@@ -1,0 +1,226 @@
+import { describe, expect, it } from 'vitest'
+import {
+  anchorCandidates,
+  anchoredScrollTop,
+  bottomScrollPlan,
+  contentOffset,
+  olderPagePrepended,
+  pickAnchor,
+  restoreOlderAnchor
+} from './scrollAnchor'
+
+// Scroller com topo na tela em y=100. A mensagem âncora (a antiga primeira)
+// está 40px abaixo do topo visível, rolada 0.
+const SCROLLER_TOP = 100
+
+describe('contentOffset', () => {
+  it('é a posição no conteúdo, igual com qualquer rolagem', () => {
+    expect(contentOffset(140, SCROLLER_TOP, 0)).toBe(40)
+    // Rolou 300px: o elemento subiu 300px na tela, a posição no conteúdo não muda.
+    expect(contentOffset(-160, SCROLLER_TOP, 300)).toBe(40)
+  })
+})
+
+describe('anchoredScrollTop', () => {
+  const saved = contentOffset(140, SCROLLER_TOP, 0) // 40
+
+  it('página antiga em cima: rola exatamente a altura que entrou acima da âncora', () => {
+    // 2000px entraram acima; scrollTop continua 0 (overflow-anchor: none).
+    const now = contentOffset(2140, SCROLLER_TOP, 0)
+    const top = anchoredScrollTop(0, saved, now)
+    expect(top).toBe(2000)
+    // Depois de rolar, a âncora volta para y=140 na tela.
+    expect(now - top + SCROLLER_TOP).toBe(140)
+  })
+
+  it('mensagem ao vivo embaixo durante a espera não entra na conta', () => {
+    // Página antiga (2000px) + mensagem nova (80px) embaixo: só o que está
+    // acima da âncora muda a posição dela.
+    const now = contentOffset(2140, SCROLLER_TOP, 0)
+    expect(anchoredScrollTop(0, saved, now)).toBe(2000)
+  })
+
+  it('rolagem da pessoa durante a espera é mantida (não volta para o clique)', () => {
+    // Rolou 250px para baixo esperando; a página entra depois.
+    const scrolled = 250
+    const now = contentOffset(2140 - scrolled, SCROLLER_TOP, scrolled)
+    const top = anchoredScrollTop(scrolled, saved, now)
+    expect(top).toBe(2250)
+    // A âncora fica 250px acima de onde estava no clique, como a pessoa deixou.
+    expect(now - top + SCROLLER_TOP).toBe(140 - scrolled)
+  })
+
+  it('sem nada novo acima não mexe', () => {
+    expect(anchoredScrollTop(500, saved, saved)).toBe(500)
+  })
+})
+
+describe('pickAnchor', () => {
+  const candidates = [
+    { id: 'a', offset: 40 },
+    { id: 'b', offset: 120 },
+    { id: 'c', offset: 200 }
+  ]
+
+  it('usa a antiga primeira quando ela continua na tela', () => {
+    expect(pickAnchor(candidates, () => true)).toEqual({ id: 'a', offset: 40 })
+  })
+
+  it('apagada durante o carregamento: usa a seguinte que sobrou', () => {
+    expect(pickAnchor(candidates, (id) => id !== 'a')).toEqual({ id: 'b', offset: 120 })
+    expect(pickAnchor(candidates, (id) => id === 'c')).toEqual({ id: 'c', offset: 200 })
+  })
+
+  it('a reserva mantém a tela parada mesmo com a primeira apagada', () => {
+    // 'a' (80px) foi apagada e 2000px de página antiga entraram em cima:
+    // 'b' está em 120 - 80 + 2000 no conteúdo.
+    const kept = pickAnchor(candidates, (id) => id !== 'a')!
+    const now = 120 - 80 + 2000
+    const top = anchoredScrollTop(0, kept.offset, now)
+    expect(now - top).toBe(120) // mesma posição na tela do clique
+  })
+
+  it('nenhuma sobrou: sem âncora', () => {
+    expect(pickAnchor(candidates, () => false)).toBeNull()
+  })
+})
+
+describe('olderPagePrepended', () => {
+  const candidates = [
+    { id: 'a', offset: 40 },
+    { id: 'b', offset: 120 }
+  ]
+
+  it('nova primeira de fora da lista: entrou página antiga', () => {
+    expect(olderPagePrepended('z', candidates)).toBe(true)
+  })
+
+  it('a primeira continua a mesma (mensagem ao vivo embaixo): nada a fazer', () => {
+    expect(olderPagePrepended('a', candidates)).toBe(false)
+  })
+
+  it('só sumiu a de cima (apagada): a âncora espera a página', () => {
+    expect(olderPagePrepended('b', candidates)).toBe(false)
+  })
+
+  it('lista vazia: nada a fazer', () => {
+    expect(olderPagePrepended(undefined, candidates)).toBe(false)
+  })
+})
+
+describe('bottomScrollPlan', () => {
+  const base = {
+    positionedRoom: null as string | null,
+    room: 'channel:a',
+    loading: false,
+    stickToBottom: true,
+    countChanged: true
+  }
+
+  it('abre a sala já no fim, de uma vez (sem rolar suave)', () => {
+    expect(bottomScrollPlan(base)).toEqual({ scroll: 'instant', positionedRoom: 'channel:a' })
+  })
+
+  it('carregando: não rola e a próxima carga conta como abertura nova', () => {
+    expect(bottomScrollPlan({ ...base, loading: true, positionedRoom: 'channel:a' })).toEqual({
+      scroll: 'none',
+      positionedRoom: null
+    })
+  })
+
+  it('trocar de sala posiciona de novo, mesmo sem mudar a contagem', () => {
+    expect(bottomScrollPlan({ ...base, positionedRoom: 'channel:b', countChanged: false })).toEqual(
+      { scroll: 'instant', positionedRoom: 'channel:a' }
+    )
+  })
+
+  it('mensagem nova depois de aberta, com a pessoa no fim: rola suave', () => {
+    expect(bottomScrollPlan({ ...base, positionedRoom: 'channel:a' }).scroll).toBe('smooth')
+  })
+
+  it('mensagem nova com a pessoa lendo mais acima: não puxa', () => {
+    expect(
+      bottomScrollPlan({ ...base, positionedRoom: 'channel:a', stickToBottom: false }).scroll
+    ).toBe('none')
+  })
+
+  it('sem mudança na lista: não rola', () => {
+    expect(
+      bottomScrollPlan({ ...base, positionedRoom: 'channel:a', countChanged: false }).scroll
+    ).toBe('none')
+  })
+})
+
+describe('anchorCandidates', () => {
+  const offsets: Record<string, number> = { a: 10, b: 60, c: 110 }
+  const offsetOf = (id: string): number | null => offsets[id] ?? null
+
+  it('guarda as primeiras mensagens que estão na tela, na ordem, até o limite', () => {
+    expect(anchorCandidates(['a', 'b', 'c'], offsetOf, 2)).toEqual([
+      { id: 'a', offset: 10 },
+      { id: 'b', offset: 60 }
+    ])
+  })
+
+  it('pula a que não está desenhada (sem posição)', () => {
+    expect(anchorCandidates(['x', 'b'], offsetOf)).toEqual([{ id: 'b', offset: 60 }])
+  })
+
+  it('lista vazia: nenhuma âncora', () => {
+    expect(anchorCandidates([], offsetOf)).toEqual([])
+  })
+})
+
+describe('restoreOlderAnchor', () => {
+  const anchor = {
+    room: 'channel:1',
+    candidates: [
+      { id: 'a', offset: 40 },
+      { id: 'b', offset: 90 }
+    ]
+  }
+  // Página antiga de 2000px entrou em cima.
+  const positions: Record<string, number> = { a: 2040, b: 2090 }
+  const offsetOf = (id: string): number | null => positions[id] ?? null
+  const base = { anchor, room: 'channel:1', firstId: 'z', scrollTop: 0, offsetOf }
+
+  it('sem âncora: não mexe', () => {
+    expect(restoreOlderAnchor({ ...base, anchor: null })).toEqual({
+      anchor: null,
+      scrollTop: null
+    })
+  })
+
+  it('a página antiga ainda não entrou: guarda a âncora e não mexe', () => {
+    expect(restoreOlderAnchor({ ...base, firstId: 'a' })).toEqual({ anchor, scrollTop: null })
+  })
+
+  it('a página entrou: gasta a âncora e rola o que entrou acima dela', () => {
+    expect(restoreOlderAnchor({ ...base, scrollTop: 5 })).toEqual({
+      anchor: null,
+      scrollTop: 2005
+    })
+  })
+
+  it('a antiga primeira foi apagada: usa a seguinte', () => {
+    const semA = (id: string): number | null => (id === 'b' ? 2090 : null)
+    expect(restoreOlderAnchor({ ...base, offsetOf: semA })).toEqual({
+      anchor: null,
+      scrollTop: 2000
+    })
+  })
+
+  it('âncora de outra sala: gasta sem rolar', () => {
+    expect(restoreOlderAnchor({ ...base, room: 'channel:2' })).toEqual({
+      anchor: null,
+      scrollTop: null
+    })
+  })
+
+  it('nenhuma candidata na tela: gasta sem rolar', () => {
+    expect(restoreOlderAnchor({ ...base, offsetOf: () => null })).toEqual({
+      anchor: null,
+      scrollTop: null
+    })
+  })
+})

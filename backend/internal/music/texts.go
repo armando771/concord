@@ -18,11 +18,6 @@ const (
 	TextNothingPlaying = "🤫 Nada tocando agora. Use /play para começar."
 	TextVideoGone      = "🚫 Esse vídeo foi removido ou não está disponível. Tente outro link."
 	TextPlaylistEmpty  = "📀 Essa playlist está vazia, é privada ou só tem vídeos indisponíveis."
-	TextHelp           = "🎻 Maestro\n" +
-		"/play <link ou nome>: toca ou põe na fila\n" +
-		"/skip: pula (a sua música) ou vota (a dos outros)\n" +
-		"/fila: mostra a fila\n" +
-		"Entre em um canal de voz antes. O Maestro sai sozinho depois de 5 min sem música."
 )
 
 func FormatDuration(ms int64) string {

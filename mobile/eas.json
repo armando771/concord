@@ -1,0 +1,14 @@
+{
+  "cli": { "version": ">= 16.0.0" },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": { "EXPO_PUBLIC_SERVER_URL": "http://localhost:8080" }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" }
+    }
+  }
+}

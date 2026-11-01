@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"gin-quickstart/backend/internal/media"
+	"gin-quickstart/backend/internal/platform/media"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -70,6 +70,8 @@ func respondRoomError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, ErrRoomNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	case errors.Is(err, ErrBotConversation):
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "bot_conversation"})
 	case errors.Is(err, ErrNoRoomAccess), errors.Is(err, ErrCannotMessage), errors.Is(err, ErrBlocked):
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 	default:

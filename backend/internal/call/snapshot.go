@@ -1,11 +1,17 @@
 package call
 
-import "sort"
+import (
+	"sort"
+	"time"
+)
 
 // CallSnapshot é uma foto de uma chamada ativa agora (usada pelos badges:
-// tempo transmitindo, call de madrugada, maior call, maratona).
+// tempo transmitindo, tempo assistindo, call de madrugada, maior call,
+// maratona).
 type CallSnapshot struct {
 	CallID string
+	// ServerID: o servidor do canal de voz (nil em chamada de DM).
+	ServerID *string
 	// Todo mundo que está na chamada, mutado ou não.
 	Participants []string
 	// Quem conta como "em call de verdade" (as mesmas regras do XP de voz).
@@ -14,6 +20,15 @@ type CallSnapshot struct {
 	Listeners []string
 	// Quem está compartilhando a tela.
 	ScreenSharers []string
+	// Quem está assistindo à transmissão de outra pessoa (a própria não
+	// conta), uma vez só mesmo vendo duas lives.
+	ScreenWatchers []string
+	// JoinedAt: quando cada participante entrou nesta call.
+	JoinedAt map[string]time.Time
+	// Away: quem está AFK (10 min sem falar). O call.Service não sabe de
+	// fala e deixa vazio; o AFK (afk_view.go) preenche e tira essas pessoas
+	// de Voice, ScreenSharers e ScreenWatchers.
+	Away []string
 }
 
 // CallSnapshots lista as chamadas ativas (tocando não conta), com os ids em
@@ -27,9 +42,10 @@ func (s *Service) CallSnapshots() []CallSnapshot {
 		if ac.info.Status != StatusActive {
 			continue
 		}
-		snap := CallSnapshot{CallID: callID, Voice: eligibleVoiceUsers(ac)}
+		snap := CallSnapshot{CallID: callID, ServerID: ac.info.ServerID, Voice: eligibleVoiceUsers(ac), JoinedAt: make(map[string]time.Time, len(ac.participants))}
 		for userID, p := range ac.participants {
 			snap.Participants = append(snap.Participants, userID)
+			snap.JoinedAt[userID] = p.joinedAt
 			if !p.deafened {
 				snap.Listeners = append(snap.Listeners, userID)
 			}
@@ -39,6 +55,7 @@ func (s *Service) CallSnapshots() []CallSnapshot {
 				snap.ScreenSharers = append(snap.ScreenSharers, userID)
 			}
 		}
+		snap.ScreenWatchers = liveWatchersLocked(ac, s.screenSharers[callID])
 		sort.Strings(snap.Participants)
 		sort.Strings(snap.Listeners)
 		sort.Strings(snap.ScreenSharers)
@@ -46,4 +63,25 @@ func (s *Service) CallSnapshots() []CallSnapshot {
 	}
 	sort.Slice(snaps, func(i, j int) bool { return snaps[i].CallID < snaps[j].CallID })
 	return snaps
+}
+
+// liveWatchersLocked lista, em ordem, quem está na chamada assistindo a uma
+// transmissão ativa de outra pessoa.
+func liveWatchersLocked(ac *activeCall, sharers map[string]struct{}) []string {
+	seen := make(map[string]bool)
+	var out []string
+	for sharerID, watchers := range ac.screenWatchers {
+		if _, live := sharers[sharerID]; !live {
+			continue
+		}
+		for watcherID := range watchers {
+			if watcherID == sharerID || seen[watcherID] || ac.participants[watcherID] == nil {
+				continue
+			}
+			seen[watcherID] = true
+			out = append(out, watcherID)
+		}
+	}
+	sort.Strings(out)
+	return out
 }

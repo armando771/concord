@@ -1,0 +1,6 @@
+DELETE FROM users WHERE id = '53414c49-4e48-4100-8000-000000000002';
+ALTER TABLE users DROP COLUMN IF EXISTS github_username;
+ALTER TABLE proposals DROP COLUMN IF EXISTS github_assignee;
+ALTER TABLE proposals DROP COLUMN IF EXISTS github_issue_state;
+ALTER TABLE proposals DROP COLUMN IF EXISTS assigned_at;
+ALTER TABLE proposals DROP COLUMN IF EXISTS assignee_id;

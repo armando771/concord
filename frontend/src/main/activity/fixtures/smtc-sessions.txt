@@ -1,0 +1,4 @@
+﻿[{"updated":1761580000000,"album":"Elis & Tom","position":83000,"status":4,"artist":"Elis Regina","duration":225000,"title":"Águas de Março","app":"Spotify.exe"},{"updated":1761579990000,"album":"","position":1000,"status":5,"artist":"Canal","duration":600000,"title":"Vídeo qualquer","app":"Chrome"}]
+{"updated":1761580000000,"album":"","position":0,"status":4,"artist":"","duration":0,"title":"Rádio","app":"AIMP.exe"}
+[]
+Exception calling "RequestAsync"

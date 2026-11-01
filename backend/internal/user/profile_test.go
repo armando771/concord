@@ -4,6 +4,9 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"gin-quickstart/backend/internal/namestyle"
+	"gin-quickstart/backend/internal/profiletheme"
 )
 
 func strPtr(s string) *string { return &s }
@@ -137,5 +140,55 @@ func TestProfileMediaURL(t *testing.T) {
 	}
 	if _, ok := mediaIDFromURL(strPtr("https://outro.site/x.png")); ok {
 		t.Fatal("URL de fora não é arquivo nosso")
+	}
+}
+
+func TestValidateProfileNameStyle(t *testing.T) {
+	in := validInput()
+	in.NameStyle = &namestyle.Style{Font: "medieval", Effect: "gradient", Colors: []string{"#FF0000", "#0000FF"}}
+	out, err := ValidateProfile(in)
+	if err != nil {
+		t.Fatalf("erro inesperado: %v", err)
+	}
+	if out.NameStyle == nil || out.NameStyle.Colors[0] != "#ff0000" {
+		t.Fatalf("estilo = %+v", out.NameStyle)
+	}
+
+	in.NameStyle = &namestyle.Style{Font: "comic", Effect: "solid"}
+	if _, err := ValidateProfile(in); !errors.Is(err, ErrInvalidProfile) {
+		t.Fatalf("err = %v, want ErrInvalidProfile", err)
+	}
+
+	in.NameStyle = nil
+	out, err = ValidateProfile(in)
+	if err != nil || out.NameStyle != nil {
+		t.Fatalf("sem estilo deve continuar nil: %+v, %v", out.NameStyle, err)
+	}
+}
+
+func TestValidateProfileTheme(t *testing.T) {
+	in := validInput()
+	in.ProfileTheme = &profiletheme.Theme{
+		Border: "neon", BorderColors: []string{"#00FFAA"},
+		Background: "gradient", BackgroundColors: []string{"#1E1B4B", "#0F172A"},
+		Effect: "snow",
+	}
+	out, err := ValidateProfile(in)
+	if err != nil {
+		t.Fatalf("erro inesperado: %v", err)
+	}
+	if out.ProfileTheme == nil || out.ProfileTheme.BorderColors[0] != "#00ffaa" || out.ProfileTheme.BackgroundColors[1] != "#0f172a" {
+		t.Fatalf("tema = %+v", out.ProfileTheme)
+	}
+
+	in.ProfileTheme = &profiletheme.Theme{Border: "rainbow", Background: "solid", BackgroundColors: []string{"url(x)"}, Effect: "none"}
+	if _, err := ValidateProfile(in); !errors.Is(err, ErrInvalidProfile) {
+		t.Fatalf("err = %v, want ErrInvalidProfile", err)
+	}
+
+	in.ProfileTheme = nil
+	out, err = ValidateProfile(in)
+	if err != nil || out.ProfileTheme != nil {
+		t.Fatalf("sem tema deve continuar nil: %+v, %v", out.ProfileTheme, err)
 	}
 }

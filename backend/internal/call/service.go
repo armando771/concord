@@ -13,8 +13,6 @@ import (
 	"gin-quickstart/backend/internal/conversation"
 	"gin-quickstart/backend/internal/server"
 	"gin-quickstart/backend/internal/user"
-
-	"github.com/google/uuid"
 )
 
 var (
@@ -84,8 +82,13 @@ type activeCall struct {
 	admitted     map[string]time.Time    // userID -> até quando pode entrar sem pedir
 	declinedAt   map[string]time.Time    // userID -> última recusa (anti-spam)
 
+	// Convites de amigos (ver friend_invite.go). Criado sob demanda.
+	invites *inviteBook
+
 	// Espectadores de tela: sharerID -> set de watcherUserIDs
 	screenWatchers map[string]map[string]struct{}
+	// Miniatura da tela de cada um, para o cartão de perfil (ver screen_preview.go).
+	screenPreviews map[string]*screenPreview
 }
 
 type Service struct {
@@ -97,8 +100,19 @@ type Service struct {
 	channelService      *channel.Service
 	userService         *user.Service
 	isOnline            func(userID string) bool
+	// Toque para quem está offline e tem push, limite de toque e observadores do convite (ring.go).
+	offlineRinger func(userID string) bool
+	ringTimeout   time.Duration
+	onDMInvite    []func(DMInvite)
 	perms               PermissionSource
-	media               MediaAdmin
+	invite              inviteDeps
+	// Visitantes (convite de visitante, ver guest.go).
+	guests GuestAccess
+	// Canal pelo id (trocável nos testes, que não têm banco).
+	findChannel func(ctx context.Context, id string) (*channel.Channel, error)
+	// Conversa pelo id (trocável nos testes, que não têm banco).
+	findConversation func(ctx context.Context, id string) (*conversation.Conversation, error)
+	media       MediaAdmin
 
 	mu    sync.RWMutex
 	calls map[string]*activeCall
@@ -118,8 +132,8 @@ type Service struct {
 	// Nome exibido no token do LiveKit (ver Handler.Token).
 	mediaName func(ctx context.Context, userID string) string
 	// Dados do usuário nos eventos de tela (trocável nos testes).
-	lookupUser  func(ctx context.Context, userID string) (UserInfo, error)
-	soundLookup SoundLookup
+	lookupUser func(ctx context.Context, userID string) (UserInfo, error)
+	soundboard soundboardDeps
 
 	// Hooks do bot de música (internal/music): saída de alguém e fim da call.
 	onParticipantLeft []func(callID, userID string)
@@ -130,66 +144,6 @@ type Service struct {
 	restoreStore restoreStore
 	// Grava a entrada de alguém na chamada (trocável nos testes).
 	addParticipant func(ctx context.Context, participant *CallParticipant) error
-}
-
-// participantStateStore guarda o estado de voz/tela de quem está na chamada,
-// que RestoreActive lê de volta quando o backend reinicia.
-type participantStateStore interface {
-	SaveVoiceState(ctx context.Context, callID string, userID string, muted bool, deafened bool) error
-	SaveScreenSharing(ctx context.Context, callID string, userID string, active bool) error
-	// Silenciar/ensurdecer de moderador: sem isso um deploy liberaria quem foi
-	// silenciado.
-	SaveServerVoiceState(ctx context.Context, callID string, userID string, serverMuted bool, serverDeafened bool) error
-	// A DM atendida passa a ativa no banco: senão continua "ringing" e o
-	// próximo reinício a encerra.
-	MarkCallActive(ctx context.Context, callID string) error
-}
-
-// Gravar o estado não pode travar o WebSocket de quem mutou.
-const saveStateTimeout = 2 * time.Second
-
-func (s *Service) saveVoiceState(callID, userID string, muted, deafened bool) {
-	if s.stateStore == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), saveStateTimeout)
-	defer cancel()
-	if err := s.stateStore.SaveVoiceState(ctx, callID, userID, muted, deafened); err != nil {
-		log.Printf("[call] persist voice state %s failed: %v", userID, err)
-	}
-}
-
-func (s *Service) saveServerVoiceState(callID, userID string, serverMuted, serverDeafened bool) {
-	if s.stateStore == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), saveStateTimeout)
-	defer cancel()
-	if err := s.stateStore.SaveServerVoiceState(ctx, callID, userID, serverMuted, serverDeafened); err != nil {
-		log.Printf("[call] persist server voice state %s failed: %v", userID, err)
-	}
-}
-
-func (s *Service) markCallActive(callID string) {
-	if s.stateStore == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), saveStateTimeout)
-	defer cancel()
-	if err := s.stateStore.MarkCallActive(ctx, callID); err != nil {
-		log.Printf("[call] persist active %s failed: %v", callID, err)
-	}
-}
-
-func (s *Service) saveScreenSharing(callID, userID string, active bool) {
-	if s.stateStore == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), saveStateTimeout)
-	defer cancel()
-	if err := s.stateStore.SaveScreenSharing(ctx, callID, userID, active); err != nil {
-		log.Printf("[call] persist screen share %s failed: %v", userID, err)
-	}
 }
 
 const defaultDisconnectGrace = 15 * time.Second
@@ -230,6 +184,12 @@ func CallService(
 	} else {
 		s.addParticipant = func(context.Context, *CallParticipant) error { return nil }
 	}
+	s.findChannel = func(ctx context.Context, id string) (*channel.Channel, error) {
+		return channelService.FindByID(ctx, id)
+	}
+	s.findConversation = func(ctx context.Context, id string) (*conversation.Conversation, error) {
+		return conversationService.FindByID(ctx, id)
+	}
 	s.leaveAfterDisconnect = s.Leave
 	s.leaveCall = s.Leave
 	s.lookupUser = s.userInfo
@@ -241,262 +201,6 @@ func CallService(
 		return info.DisplayName
 	}
 	return s
-}
-
-func (s *Service) StartDM(ctx context.Context, initiatorID string, conversationID string) (*Call, error) {
-	conv, err := s.conversationService.FindByID(ctx, conversationID)
-	if err != nil {
-		return nil, ErrNotFound
-	}
-
-	// Chamada só na DM 1:1 (grupo não liga).
-	if conv.IsGroup() || (conv.UserAID != initiatorID && conv.UserBID != initiatorID) {
-		return nil, ErrNotParticipant
-	}
-
-	calleeID := conv.UserAID
-	if initiatorID == conv.UserAID {
-		calleeID = conv.UserBID
-	}
-
-	if s.blockedCheck != nil {
-		if blocked, err := s.blockedCheck(ctx, initiatorID, calleeID); err != nil || blocked {
-			return nil, ErrBlocked
-		}
-	}
-
-	if s.isOnline != nil && !s.isOnline(calleeID) {
-		return nil, ErrCalleeOffline
-	}
-
-	s.mu.Lock()
-	if callID, ok := s.busy[initiatorID]; ok {
-		existing := s.calls[callID]
-		if existing != nil && existing.info.ConversationID != nil && *existing.info.ConversationID == conversationID {
-			info := existing.info
-			s.mu.Unlock()
-			return info, nil
-		}
-		s.mu.Unlock()
-		return nil, ErrBusy
-	}
-	if _, ok := s.busy[calleeID]; ok {
-		s.mu.Unlock()
-		return nil, ErrBusy
-	}
-	if existing := s.findActiveByScopeLocked(TypeDM, conversationID); existing != nil {
-		ac := existing
-		s.mu.Unlock()
-		return ac.info, nil
-	}
-
-	initiatorInfo, err := s.userInfo(ctx, initiatorID)
-	if err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-	calleeInfo, err := s.userInfo(ctx, calleeID)
-	if err != nil {
-		s.mu.Unlock()
-		return nil, err
-	}
-
-	call := &Call{
-		ID:             uuid.New().String(),
-		Type:           TypeDM,
-		ConversationID: &conv.ID,
-		InitiatorID:    initiatorID,
-		Status:         StatusRinging,
-	}
-	ac := &activeCall{
-		info:         call,
-		participants: make(map[string]*participantState),
-		inviteeID:    calleeID,
-	}
-	ac.participants[initiatorID] = &participantState{
-		userID:   initiatorID,
-		role:     RoleMember,
-		joinedAt: time.Now(),
-	}
-	s.calls[call.ID] = ac
-	s.busy[initiatorID] = call.ID
-	s.mu.Unlock()
-
-	if err := s.repository.Create(ctx, call); err != nil {
-		log.Printf("[call] persist call %s failed: %v", call.ID, err)
-	}
-	if err := s.addParticipant(ctx, &CallParticipant{
-		CallID: call.ID,
-		UserID: initiatorID,
-		Role:   RoleMember,
-	}); err != nil {
-		log.Printf("[call] persist participant %s failed: %v", initiatorID, err)
-	}
-
-	s.publisher.SendToUser(calleeID, marshalEvent("call:invite", InviteEvent{
-		CallID:         call.ID,
-		Type:           call.Type,
-		Initiator:      initiatorInfo,
-		ConversationID: call.ConversationID,
-	}))
-	s.publisher.SendToUser(initiatorID, marshalEvent("call:ring", RingEvent{
-		CallID: call.ID,
-		Callee: calleeInfo,
-	}))
-
-	return call, nil
-}
-
-func (s *Service) StartChannel(ctx context.Context, initiatorID string, channelID string) (*Call, error) {
-	return s.startChannel(ctx, initiatorID, channelID, false)
-}
-
-// startChannel entra (ou cria) a chamada do canal. bypassLock deixa passar
-// por sala trancada (moderador movendo alguém).
-func (s *Service) startChannel(ctx context.Context, initiatorID string, channelID string, bypassLock bool) (*Call, error) {
-	ch, err := s.channelService.FindByID(ctx, channelID)
-	if err != nil {
-		return nil, ErrNotFound
-	}
-
-	if err := s.requireConnect(ctx, ch.ID, initiatorID); err != nil {
-		return nil, err
-	}
-
-	s.mu.Lock()
-	if callID, ok := s.busy[initiatorID]; ok {
-		existing := s.calls[callID]
-		if existing != nil && existing.info.ChannelID != nil && *existing.info.ChannelID == channelID {
-			s.mu.Unlock()
-			return existing.info, nil
-		}
-		s.mu.Unlock()
-		return nil, ErrBusy
-	}
-	if existing := s.findActiveByScopeLocked(TypeChannel, channelID); existing != nil {
-		ac := existing
-		if !bypassLock && !canEnterLockedLocked(ac, initiatorID, time.Now()) {
-			s.mu.Unlock()
-			return ac.info, ErrLocked
-		}
-		s.mu.Unlock()
-		return s.joinLocked(ctx, ac, initiatorID, RoleMember)
-	}
-
-	call := &Call{
-		ID:          uuid.New().String(),
-		Type:        TypeChannel,
-		ChannelID:   &ch.ID,
-		ServerID:    &ch.ServerID,
-		InitiatorID: initiatorID,
-		Status:      StatusActive,
-	}
-	ac := &activeCall{
-		info:         call,
-		participants: make(map[string]*participantState),
-	}
-	s.calls[call.ID] = ac
-	s.mu.Unlock()
-
-	if err := s.repository.Create(ctx, call); err != nil {
-		log.Printf("[call] persist call %s failed: %v", call.ID, err)
-	}
-
-	_, err = s.joinLocked(ctx, ac, initiatorID, RoleMember)
-	if err != nil {
-		return nil, err
-	}
-
-	return call, nil
-}
-
-func (s *Service) Accept(ctx context.Context, callID string, userID string) error {
-	s.mu.Lock()
-	ac, ok := s.calls[callID]
-	if !ok || ac.info.Status == StatusEnded {
-		s.mu.Unlock()
-		return ErrNotFound
-	}
-	if ac.info.Type == TypeDM && ac.inviteeID != userID {
-		s.mu.Unlock()
-		return ErrNotAllowed
-	}
-	if _, ok := ac.participants[userID]; ok {
-		s.mu.Unlock()
-		return nil
-	}
-	if otherID, ok := s.busy[userID]; ok && otherID != callID {
-		s.mu.Unlock()
-		return ErrBusy
-	}
-
-	userInfo, err := s.lookupUser(ctx, userID)
-	if err != nil {
-		s.mu.Unlock()
-		return err
-	}
-
-	now := time.Now()
-	ac.participants[userID] = &participantState{
-		userID:   userID,
-		role:     RoleMember,
-		joinedAt: now,
-	}
-	wasRinging := ac.info.Status != StatusActive
-	ac.info.Status = StatusActive
-	s.busy[userID] = callID
-	callIDCopy := ac.info.ID
-	s.mu.Unlock()
-
-	// Primeiro quem entrou, depois o status: se o backend cair entre os dois,
-	// a DM fica "ringing" com os dois dentro e a subida a cura (restore). Na
-	// ordem inversa ficaria "active" só com quem ligou.
-	if err := s.addParticipant(ctx, &CallParticipant{
-		CallID: callID,
-		UserID: userID,
-		Role:   RoleMember,
-	}); err != nil {
-		log.Printf("[call] persist participant %s failed: %v", userID, err)
-	}
-
-	if wasRinging {
-		s.markCallActive(callID)
-	}
-
-	s.publisher.BroadcastToCall(callIDCopy, marshalEvent("call:accept", ResponseEvent{
-		CallID: callIDCopy,
-		User:   userInfo,
-	}))
-
-	return nil
-}
-
-func (s *Service) Decline(ctx context.Context, callID string, userID string) error {
-	s.mu.Lock()
-	ac, ok := s.calls[callID]
-	if !ok || ac.info.Status == StatusEnded {
-		s.mu.Unlock()
-		return ErrNotFound
-	}
-	if ac.info.Type == TypeDM && ac.inviteeID != userID {
-		s.mu.Unlock()
-		return ErrNotAllowed
-	}
-
-	userInfo, err := s.userInfo(ctx, userID)
-	if err != nil {
-		s.mu.Unlock()
-		return err
-	}
-	initiatorID := ac.info.InitiatorID
-	s.mu.Unlock()
-
-	s.publisher.SendToUser(initiatorID, marshalEvent("call:decline", ResponseEvent{
-		CallID: callID,
-		User:   userInfo,
-	}))
-
-	return s.End(ctx, callID)
 }
 
 func (s *Service) Join(ctx context.Context, callID string, userID string) error {
@@ -579,6 +283,7 @@ func (s *Service) detachParticipant(callID, userID string) (remaining int, remov
 		delete(sharers, userID)
 	}
 	affectedSharers := dropScreenWatcherLocked(ac, userID)
+	delete(ac.screenPreviews, userID)
 	clearedSharer := false
 	if wasSharing {
 		clearedSharer = clearSharerWatchersLocked(ac, userID)
@@ -590,16 +295,16 @@ func (s *Service) detachParticipant(callID, userID string) (remaining int, remov
 	}
 	channelID := ac.info.ChannelID
 	hooks := append([]func(string, string){}, s.onParticipantLeft...)
-	// Quem abriu a atividade saiu: ela acaba para os que ficaram.
-	activityStop := s.dropActivityOfLocked(callID, userID)
+	// Quem abriu a atividade saiu: ela acaba; quem só jogava sai da lista.
+	activityChange := s.dropActivityOfLocked(callID, userID)
 	targets := participantIDsLocked(ac)
 	s.mu.Unlock()
 	for _, fn := range hooks {
 		fn(callID, userID)
 	}
 
-	if activityStop != nil {
-		s.sendToAll(targets, activityStop)
+	if activityChange != nil {
+		s.sendToAll(targets, activityChange)
 	}
 	if wasSharing {
 		s.publishLive(serverID, LiveEvent{CallID: callID, ChannelID: channelID, UserID: userID, Active: false})
@@ -636,8 +341,10 @@ func (s *Service) End(ctx context.Context, callID string) error {
 		return err
 	}
 
-	if err := s.repository.EndCall(ctx, callID); err != nil {
-		log.Printf("[call] persist end %s failed: %v", callID, err)
+	if s.repository != nil {
+		if err := s.repository.EndCall(ctx, callID); err != nil {
+			log.Printf("[call] persist end %s failed: %v", callID, err)
+		}
 	}
 
 	s.publisher.BroadcastToCall(callID, marshalEvent("call:ended", EndedEvent{
@@ -667,6 +374,7 @@ func (s *Service) closeCall(callID string) error {
 	channelID := ac.info.ChannelID
 	srvID := ac.info.ServerID
 	knockers := pendingRequestersLocked(ac)
+	invited := cancelInvitesLocked(ac)
 	delete(s.calls, callID)
 	delete(s.screenSharers, callID)
 	endHooks := append([]func(string){}, s.onCallEnded...)
@@ -679,6 +387,7 @@ func (s *Service) closeCall(callID string) error {
 	for userID := range sharers {
 		s.publishLive(serverID, LiveEvent{CallID: callID, ChannelID: channelID, UserID: userID, Active: false})
 	}
+	s.notifyCancelledInvites(callID, invited)
 	// Sala esvaziou: quem esperava na porta já pode entrar (a próxima chamada
 	// nasce destrancada).
 	for _, uid := range knockers {
@@ -737,6 +446,7 @@ func (s *Service) SetScreenShare(ctx context.Context, callID string, userID stri
 		sharers[userID] = struct{}{}
 	} else {
 		delete(sharers, userID)
+		delete(ac.screenPreviews, userID)
 		clearedWatchers = clearSharerWatchersLocked(ac, userID)
 	}
 
@@ -1102,6 +812,10 @@ func (s *Service) HandleCallMessage(userID string, evType string, payload json.R
 		s.handleActivityMessage(ctx, userID, payload)
 	case "call:activity:stop":
 		s.handleActivityStopMessage(userID, payload)
+	case "call:activity:join":
+		s.handleActivityPresenceMessage(userID, true, payload)
+	case "call:activity:leave":
+		s.handleActivityPresenceMessage(userID, false, payload)
 	case "call:lock":
 		var p LockPayload
 		if err := json.Unmarshal(payload, &p); err != nil || p.CallID == "" {
@@ -1151,7 +865,7 @@ func (s *Service) joinLocked(ctx context.Context, ac *activeCall, userID string,
 		return nil, ErrBusy
 	}
 
-	userInfo, err := s.userInfo(ctx, userID)
+	userInfo, err := s.lookupUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -1167,6 +881,7 @@ func (s *Service) joinLocked(ctx context.Context, ac *activeCall, userID string,
 		s.markCallActive(ac.info.ID)
 	}
 	s.busy[userID] = ac.info.ID
+	s.consumeInviteLocked(ac, userID)
 
 	if err := s.addParticipant(ctx, &CallParticipant{
 		CallID: ac.info.ID,
@@ -1203,19 +918,6 @@ func (s *Service) findActiveByScopeLocked(scope string, scopeID string) *activeC
 	return nil
 }
 
-func (s *Service) userInfo(ctx context.Context, userID string) (UserInfo, error) {
-	u, err := s.userService.FindByID(ctx, userID)
-	if err != nil {
-		return UserInfo{}, err
-	}
-	return UserInfo{
-		ID:          u.ID,
-		Username:    u.Username,
-		DisplayName: u.DisplayName,
-		AvatarURL:   u.AvatarURL,
-	}, nil
-}
-
 func (s *Service) sendError(userID string, callID string, message string) {
 	s.publisher.SendToUser(userID, marshalEvent("call:error", ErrorEvent{
 		CallID:  callID,
@@ -1229,28 +931,4 @@ func (s *Service) handleStartError(userID string, callID string, err error) {
 		return
 	}
 	s.sendError(userID, callID, err.Error())
-}
-
-// OnParticipantLeft registra quem quer saber que alguém saiu de uma chamada.
-func (s *Service) OnParticipantLeft(fn func(callID, userID string)) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.onParticipantLeft = append(s.onParticipantLeft, fn)
-}
-
-// OnCallEnded registra quem quer saber que uma chamada acabou.
-func (s *Service) OnCallEnded(fn func(callID string)) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.onCallEnded = append(s.onCallEnded, fn)
-}
-
-// ParticipantIDs: quem está na chamada, na ordem de entrada.
-func (s *Service) ParticipantIDs(callID string) []string {
-	infos := s.participantInfos(callID)
-	ids := make([]string, len(infos))
-	for i, p := range infos {
-		ids[i] = p.UserID
-	}
-	return ids
 }

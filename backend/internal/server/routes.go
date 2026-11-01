@@ -1,7 +1,7 @@
 package server
 
 import (
-	"gin-quickstart/backend/internal/ratelimit"
+	"gin-quickstart/backend/internal/platform/ratelimit"
 
 	"github.com/gin-gonic/gin"
 )

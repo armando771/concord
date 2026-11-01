@@ -3,6 +3,16 @@
 // Catálogo e validação de link puros, usados pelo renderer e pelo main.
 // O backend tem a mesma lista de origens (backend/internal/call/activity.go).
 
+/**
+ * Como o jogo marca a sala na própria URL (o desktop lê da janela e
+ * compartilha sozinho; o link colado também pode ser só o código):
+ * `/?param=CÓDIGO` (Krunker: `?game=REGIÃO:id`, a partida em que se está).
+ */
+export interface ActivityRoom {
+  param: string
+  code: RegExp
+}
+
 export interface ActivityDefinition {
   id: string
   name: string
@@ -17,6 +27,10 @@ export interface ActivityDefinition {
   linkExample: string
   /** Ícone do card (o renderer mapeia para o SVG). */
   icon: 'crosshair'
+  /** Onde a sala aparece na URL do jogo. */
+  room: ActivityRoom
+  /** Como criar a sala que vai para a chamada (dica no seletor). */
+  roomHint: string
   /** Cor de destaque do card (ícone). */
   accent: string
   /** Partição de sessão da janela no desktop (cookies e login só dela). */
@@ -33,6 +47,8 @@ export const ACTIVITIES: readonly ActivityDefinition[] = [
     origins: ['https://krunker.io'],
     linkExample: 'https://krunker.io/?game=XX:xxxxx',
     icon: 'crosshair',
+    room: { param: 'game', code: /^[A-Z]{2,5}:[a-z0-9]{2,16}$/i },
+    roomHint: 'Quando você entrar numa partida, ela vai para todos da chamada.',
     accent: '#f0b232',
     partition: 'persist:activity-krunker'
   }
@@ -62,6 +78,10 @@ export function validateActivityLink(activityId: string, raw: string): ActivityL
     error: `Use um link ${activity.origins[0]}/…`
   }
   if (link.length > MAX_ACTIVITY_URL) return invalid
+  // Só o código da sala: monta o link.
+  if (!link.includes('://')) {
+    return activity.room.code.test(link) ? { ok: true, url: roomUrl(activity, link) } : invalid
+  }
   // A autoridade crua (antes do URL normalizar porta, barras invertidas etc.).
   const match = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)/i.exec(link)
   if (!match) return invalid
@@ -73,6 +93,29 @@ export function validateActivityLink(activityId: string, raw: string): ActivityL
     return invalid
   }
   return { ok: true, url: link }
+}
+
+function roomUrl(activity: ActivityDefinition, code: string): string {
+  return `${activity.origins[0]}/?${activity.room.param}=${code}`
+}
+
+/**
+ * A sala em que a janela do jogo está agora (desktop: lida a cada navegação
+ * da janela), já no formato canônico — só origem, `/` e os parâmetros da sala;
+ * o resto da URL (tokens, rastreio) fica de fora. null = não é uma sala.
+ */
+export function activityRoomFromUrl(activityId: string, url: string): string | null {
+  const activity = findActivity(activityId)
+  if (!activity) return null
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return null
+  }
+  if (!activity.origins.includes(parsed.origin) || parsed.pathname !== '/') return null
+  const code = parsed.searchParams.get(activity.room.param) ?? ''
+  return activity.room.code.test(code) ? roomUrl(activity, code) : null
 }
 
 /** Link não vazio e dentro das origens da atividade (main confere antes de abrir). */

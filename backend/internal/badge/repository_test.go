@@ -2,12 +2,13 @@ package badge
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"gin-quickstart/backend/internal/database"
+	"gin-quickstart/backend/internal/platform/database"
 
 	"github.com/google/uuid"
 )
@@ -47,22 +48,22 @@ func TestRepositoryDB(t *testing.T) {
 	exec(`INSERT INTO channels (id, server_id, name, created_by) VALUES ($1, $2, 'geral', $3)`, channelID, serverID, userID)
 
 	msgs := []string{uuid.NewString(), uuid.NewString(), uuid.NewString()}
-	for _, id := range msgs {
-		exec(`INSERT INTO messages (id, author_id, channel_id, content) VALUES ($1, $2, $3, 'oi')`, id, userID, channelID)
+	for i, id := range msgs {
+		exec(`INSERT INTO messages (id, author_id, channel_id, content, created_at) VALUES ($1, $2, $3, $4, NOW() - INTERVAL '10 minutes')`, id, userID, channelID, fmt.Sprintf("oi %d", i))
 	}
 	// Mensagem de sistema não conta.
 	exec(`INSERT INTO messages (id, author_id, channel_id, content, system_kind) VALUES ($1, $2, $3, 'parabéns', 'birthday')`, uuid.NewString(), userID, channelID)
-	// Apagar não desconta.
+	// Apagar depois de 2 minutos não desconta (mensagens_test.go).
 	exec(`DELETE FROM messages WHERE id = $1`, msgs[2])
 
 	exec(`INSERT INTO message_reactions (message_id, user_id, emoji) VALUES ($1, $2, '👍'), ($1, $2, '🔥'), ($3, $2, '👍')`, msgs[0], userID, msgs[1])
 	exec(`DELETE FROM message_reactions WHERE message_id = $1 AND emoji = '🔥'`, msgs[0])
 
 	repo := BadgeRepository(db)
-	if err := repo.AddCallStats(ctx, userID, Delta{Stream: 30, Night: 10, PeakCallSize: 6, LongestSession: 100}); err != nil {
+	if err := repo.AddCallStats(ctx, userID, Delta{Stream: 30, Watch: 20, Night: 10, PeakCallSize: 6, LongestSession: 100}); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.AddCallStats(ctx, userID, Delta{Stream: 30, Morning: 5, PeakCallSize: 4, LongestSession: 50}); err != nil {
+	if err := repo.AddCallStats(ctx, userID, Delta{Stream: 30, Watch: 20, Morning: 5, PeakCallSize: 4, LongestSession: 50}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -70,11 +71,32 @@ func TestRepositoryDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.MessagesSent != 3 || s.Reactions != 2 || s.OwnedServers != 1 {
-		t.Fatalf("counters = msgs %d reactions %d servers %d, want 3/2/1", s.MessagesSent, s.Reactions, s.OwnedServers)
+	// Servidor sem membros além do dono não conta (dono_test.go).
+	if s.MessagesSent != 3 || s.Reactions != 2 || s.OwnedServers != 0 {
+		t.Fatalf("counters = msgs %d reactions %d servers %d, want 3/2/0", s.MessagesSent, s.Reactions, s.OwnedServers)
 	}
-	if s.StreamSeconds != 60 || s.NightSeconds != 10 || s.MorningSeconds != 5 || s.PeakCallSize != 6 || s.LongestSessionSeconds != 100 {
+	if s.StreamSeconds != 60 || s.WatchSeconds != 40 || s.NightSeconds != 10 || s.MorningSeconds != 5 || s.PeakCallSize != 6 || s.LongestSessionSeconds != 100 {
 		t.Fatalf("call stats = %+v", s)
+	}
+	if s.IsDev {
+		t.Fatal("new user is a dev before the grant")
+	}
+
+	// O SQL de docs/HOSPEDAGEM.md: concede pelo username (sem diferenciar
+	// maiúsculas), e rodar de novo não duplica.
+	grant := `INSERT INTO dev_badge_users (user_id) SELECT id FROM users WHERE lower(username) IN (lower($1)) ON CONFLICT DO NOTHING`
+	exec(grant, strings.ToUpper(name))
+	exec(grant, name)
+	if s, err = repo.Stats(ctx, userID); err != nil || !s.IsDev {
+		t.Fatalf("after grant IsDev = %v, %v", s.IsDev, err)
+	}
+	var grants int
+	if err := db.QueryRow(ctx, `SELECT COUNT(*) FROM dev_badge_users WHERE user_id = $1`, userID).Scan(&grants); err != nil || grants != 1 {
+		t.Fatalf("grants = %d, %v", grants, err)
+	}
+	exec(`DELETE FROM dev_badge_users WHERE user_id IN (SELECT id FROM users WHERE lower(username) IN (lower($1)))`, name)
+	if s, err = repo.Stats(ctx, userID); err != nil || s.IsDev {
+		t.Fatalf("after revoke IsDev = %v, %v", s.IsDev, err)
 	}
 
 	at := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)

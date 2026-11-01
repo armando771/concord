@@ -126,6 +126,28 @@ func (s *Service) GetOrCreateWith(ctx context.Context, userID string, otherUserI
 	return conv, nil
 }
 
+// GetOrCreateBotDM abre (ou reabre) a DM entre um bot e userID sem as regras de
+// DM entre pessoas: é o servidor avisando (Salinha Bot). A conversa aparece
+// para a pessoa mesmo que ela a tenha fechado.
+func (s *Service) GetOrCreateBotDM(ctx context.Context, botID string, userID string) (*Conversation, error) {
+	userA, userB := botID, userID
+	if userA > userB {
+		userA, userB = userB, userA
+	}
+	if existing, err := s.repository.FindByPair(ctx, userA, userB); err == nil {
+		return existing, nil
+	}
+	conv := &Conversation{ID: uuid.New().String(), Type: TypeDM, UserAID: userA, UserBID: userB}
+	if err := s.repository.CreateDM(ctx, conv, botID); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return s.repository.FindByPair(ctx, userA, userB)
+		}
+		return nil, err
+	}
+	return conv, nil
+}
+
 // CreateGroup cria uma DM em grupo com amigos. Com um amigo só, abre a DM
 // 1:1 (como o botão "Criar DM" do Discord).
 func (s *Service) CreateGroup(ctx context.Context, ownerID string, userIDs []string) (*Conversation, error) {

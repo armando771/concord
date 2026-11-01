@@ -13,6 +13,7 @@ type Role struct {
 	Permissions int64     `json:"permissions"`
 	Hoist       bool      `json:"hoist"`
 	IsDefault   bool      `json:"is_default"`
+	IsSystem    bool      `json:"is_system"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -84,21 +85,18 @@ func ForChannel(base int64, channelType string, overwrites []Overwrite, everyone
 	return implicit(Normalize(perms), channelType)
 }
 
-// implicit: sem ver o canal não faz nada nele; em texto, sem enviar não anexa
-// nem menciona todos; em voz, sem conectar não fala, transmite nem modera.
+// implicit: sem ver o canal não faz nada nele; sem enviar não anexa nem
+// menciona todos (no texto e no chat do canal de voz); em voz, sem conectar
+// não fala, transmite nem modera.
 func implicit(perms int64, channelType string) int64 {
 	if perms&ViewChannel == 0 {
 		return 0
 	}
-	switch channelType {
-	case ChannelText:
-		if perms&SendMessages == 0 {
-			perms &^= AttachFiles | MentionEveryone
-		}
-	case ChannelVoice:
-		if perms&Connect == 0 {
-			perms &^= Speak | Stream | MuteMembers | DeafenMembers | MoveMembers | UseSoundboard
-		}
+	if perms&SendMessages == 0 {
+		perms &^= AttachFiles | MentionEveryone | SendTTSMessages
+	}
+	if channelType == ChannelVoice && perms&Connect == 0 {
+		perms &^= Speak | Stream | MuteMembers | DeafenMembers | MoveMembers | DisconnectMembers | UseSoundboard
 	}
 	return perms
 }
@@ -129,6 +127,13 @@ func CanManageRole(isOwner bool, actorHighest int, role Role) bool {
 	return isOwner || actorHighest > role.Position
 }
 
+// CanEditRolesOf: o ator pode dar ou tirar cargos do alvo? Os cargos do dono
+// só ele mesmo mexe (em si, qualquer cargo); nos demais membros, o próprio ator
+// incluso, vale só a hierarquia de cada cargo (CanManageRole).
+func CanEditRolesOf(ownerID, actorID, targetID string) bool {
+	return targetID != ownerID || actorID == ownerID
+}
+
 // CanActOn: o ator pode expulsar, banir, silenciar, mover ou trocar os cargos
 // do alvo? O dono nunca é alvo; ninguém age sobre si mesmo; fora o dono, só
 // quem tem cargo mais alto que o do alvo.
@@ -140,4 +145,40 @@ func CanActOn(ownerID, actorID, targetID string, actorHighest, targetHighest int
 		return true
 	}
 	return actorHighest > targetHighest
+}
+
+// CanManageNicknameOf: o ator pode mudar o apelido do alvo?
+// O dono nunca é alvo (exceto por si mesmo); fora o dono, pode quem tem o mesmo cargo ou superior (actorHighest >= targetHighest).
+func CanManageNicknameOf(ownerID, actorID, targetID string, actorHighest, targetHighest int) bool {
+	if targetID == ownerID {
+		return actorID == ownerID
+	}
+	if actorID == ownerID {
+		return true
+	}
+	return actorHighest >= targetHighest
+}
+
+// CanDisconnectMember: o ator pode desconectar o alvo da chamada de voz?
+// O dono nunca é alvo (exceto por si mesmo); fora o dono, pode quem tem o mesmo cargo ou superior (actorHighest >= targetHighest).
+func CanDisconnectMember(ownerID, actorID, targetID string, actorHighest, targetHighest int) bool {
+	if targetID == ownerID {
+		return actorID == ownerID
+	}
+	if actorID == ownerID {
+		return true
+	}
+	return actorHighest >= targetHighest
+}
+
+// CanMoveMember: o ator pode mover o alvo entre canais de voz?
+// O dono nunca é alvo (exceto por si mesmo); fora o dono, pode quem tem o mesmo cargo ou superior (actorHighest >= targetHighest).
+func CanMoveMember(ownerID, actorID, targetID string, actorHighest, targetHighest int) bool {
+	if targetID == ownerID {
+		return actorID == ownerID
+	}
+	if actorID == ownerID {
+		return true
+	}
+	return actorHighest >= targetHighest
 }

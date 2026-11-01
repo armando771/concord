@@ -224,3 +224,36 @@ func TestTrackerRestoreGivesBackAFailedDelta(t *testing.T) {
 		t.Fatalf("restored delta = %+v", d)
 	}
 }
+
+func TestTrackerCountsWatchTimeForListeningWatchers(t *testing.T) {
+	// O snapshot já tira quem assiste à própria live e repete quem vê duas.
+	tr := newTracker(t0, time.UTC)
+	live := call.CallSnapshot{
+		CallID:         "c1",
+		Participants:   []string{"ana", "bia", "caio"},
+		Listeners:      []string{"ana", "bia"},
+		ScreenSharers:  []string{"ana"},
+		ScreenWatchers: []string{"bia", "caio"},
+	}
+	runTicks(tr, t0, 3, live)
+
+	deltas := tr.drain()
+	if got := deltas["bia"].Watch; got != 30 {
+		t.Fatalf("bia watch = %d s, want 30", got)
+	}
+	// Surdo (ou AFK ensurdecido) não conta como plateia.
+	if got := deltas["caio"].Watch; got != 0 {
+		t.Fatalf("caio watched deafened and got %d s", got)
+	}
+	if got := deltas["ana"].Watch; got != 0 {
+		t.Fatalf("ana (streaming) got %d s of watch", got)
+	}
+}
+
+func TestTrackerRestoresWatchTime(t *testing.T) {
+	tr := newTracker(t0, time.UTC)
+	tr.restore("bia", Delta{Watch: 42})
+	if got := tr.drain()["bia"].Watch; got != 42 {
+		t.Fatalf("restored watch = %d s, want 42", got)
+	}
+}

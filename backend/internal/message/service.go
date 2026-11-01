@@ -3,6 +3,7 @@ package message
 import (
 	"context"
 	"errors"
+	"gin-quickstart/backend/internal/bot"
 	"gin-quickstart/backend/internal/permission"
 	"log"
 	"strings"
@@ -14,12 +15,15 @@ import (
 )
 
 var (
-	ErrContentRequired = errors.New("content is required")
-	ErrMessageNotFound = errors.New("message not found")
-	ErrNotAuthor       = errors.New("only the author can delete this message")
-	ErrMessageHidden   = errors.New("message not found")
-	ErrInvalidReply    = errors.New("invalid reply target")
-	ErrInvalidEmoji    = errors.New("invalid emoji reaction")
+	ErrContentRequired     = errors.New("content is required")
+	ErrMessageNotFound     = errors.New("message not found")
+	ErrNotAuthor           = errors.New("only the author can delete this message")
+	ErrSystemChannelDelete = errors.New("messages in system channels cannot be deleted")
+	ErrMessageHidden       = errors.New("message not found")
+	ErrInvalidReply        = errors.New("invalid reply target")
+	ErrInvalidEmoji        = errors.New("invalid emoji reaction")
+	ErrInvalidSticker      = errors.New("invalid sticker or sticker does not belong to this server")
+	ErrInvalidGifURL       = errors.New("invalid gif url")
 )
 
 type EventPublisher interface {
@@ -37,10 +41,19 @@ type ChannelResolver interface {
 	ChannelServerID(ctx context.Context, channelID string) (string, error)
 }
 
+// SystemChannelChecker diz se o canal é um canal fixo de sistema ("musica" ou "avisos").
+type SystemChannelChecker interface {
+	IsSystemChannel(ctx context.Context, channelID string) (bool, error)
+}
+
 type ConversationResolver interface {
 	ConversationParticipantIDs(ctx context.Context, conversationID string) ([]string, error)
 	// RevealConversation reabre a DM para quem tinha fechado.
 	RevealConversation(ctx context.Context, conversationID string) error
+}
+
+type StickerChecker interface {
+	StickerServerID(ctx context.Context, stickerID string) (string, error)
 }
 
 // FileRemover apaga o arquivo de um anexo do disco (media.Store).
@@ -57,6 +70,7 @@ type Service struct {
 	files           FileRemover
 	perms           PermissionChecker
 	mentionLimiter  *mentionLimiter
+	stickerChecker  StickerChecker
 }
 
 func MessageService(repository *Repository, publisher EventPublisher, channelResolver ChannelResolver, convResolver ConversationResolver, files FileRemover, perms PermissionChecker) *Service {
@@ -70,6 +84,10 @@ func MessageService(repository *Repository, publisher EventPublisher, channelRes
 		perms:           perms,
 		mentionLimiter:  newMentionLimiter(mentionEveryoneCooldown, time.Now),
 	}
+}
+
+func (s *Service) SetStickerChecker(checker StickerChecker) {
+	s.stickerChecker = checker
 }
 
 func ValidateEmoji(emoji string) error {
@@ -97,8 +115,36 @@ func SameRoomTarget(target *Message, channelID string, conversationID string) bo
 	return false
 }
 
-func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, authorID string, content string, replyToID *string, attachmentIDs []string) (*Message, error) {
-	if err := validateNewMessage(content, attachmentIDs); err != nil {
+func normalizeMediaPointers(stickerID *string, gifURL *string) (*string, *string, error) {
+	if stickerID != nil {
+		trimmed := strings.TrimSpace(*stickerID)
+		if trimmed == "" {
+			stickerID = nil
+		} else {
+			stickerID = &trimmed
+		}
+	}
+	if gifURL != nil {
+		trimmed := strings.TrimSpace(*gifURL)
+		if trimmed == "" {
+			gifURL = nil
+		} else if len(trimmed) > 1024 || (!strings.HasPrefix(trimmed, "https://") && !strings.HasPrefix(trimmed, "http://")) {
+			return nil, nil, ErrInvalidGifURL
+		} else {
+			gifURL = &trimmed
+		}
+	}
+	return stickerID, gifURL, nil
+}
+
+func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, authorID string, content string, replyToID *string, attachmentIDs []string, stickerID *string, gifURL *string, gifMetadata *GifMetadata) (*Message, error) {
+	var err error
+	stickerID, gifURL, err = normalizeMediaPointers(stickerID, gifURL)
+	if err != nil {
+		return nil, err
+	}
+	hasMedia := len(attachmentIDs) > 0 || stickerID != nil || gifURL != nil
+	if err := validateNewMessageWithMedia(content, attachmentIDs, hasMedia); err != nil {
 		return nil, err
 	}
 
@@ -107,8 +153,15 @@ func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, au
 		serverID, _ = s.channelResolver.ChannelServerID(ctx, channelID)
 	}
 
+	if stickerID != nil && s.stickerChecker != nil {
+		stkServerID, err := s.stickerChecker.StickerServerID(ctx, *stickerID)
+		if err != nil || stkServerID != serverID {
+			return nil, ErrInvalidSticker
+		}
+	}
+
 	mentionEveryone := s.resolveMentionEveryone(ctx, serverID, channelID, authorID, content)
-	msg, err := s.create(ctx, channelID, "", authorID, content, replyToID, attachmentIDs, mentionEveryone)
+	msg, err := s.create(ctx, channelID, "", authorID, content, replyToID, attachmentIDs, mentionEveryone, stickerID, gifURL, gifMetadata)
 	if err != nil {
 		// Mensagem que não saiu não gasta a vez do anti-spam.
 		if mentionEveryone != nil {
@@ -126,9 +179,21 @@ func (s *Service) CreateChannelMessage(ctx context.Context, channelID string, au
 	return msg, nil
 }
 
-func (s *Service) CreateConversationMessage(ctx context.Context, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string) (*Message, error) {
+func (s *Service) CreateConversationMessage(ctx context.Context, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string, stickerID *string, gifURL *string, gifMetadata *GifMetadata) (*Message, error) {
+	var err error
+	stickerID, gifURL, err = normalizeMediaPointers(stickerID, gifURL)
+	if err != nil {
+		return nil, err
+	}
+	hasMedia := len(attachmentIDs) > 0 || stickerID != nil || gifURL != nil
+	if err := validateNewMessageWithMedia(content, attachmentIDs, hasMedia); err != nil {
+		return nil, err
+	}
+	if stickerID != nil {
+		return nil, ErrInvalidSticker
+	}
 	// Em DM @all/@here é texto puro.
-	msg, err := s.create(ctx, "", conversationID, authorID, content, replyToID, attachmentIDs, nil)
+	msg, err := s.create(ctx, "", conversationID, authorID, content, replyToID, attachmentIDs, nil, nil, gifURL, gifMetadata)
 	if err != nil {
 		return nil, err
 	}
@@ -151,8 +216,9 @@ func (s *Service) CreateConversationMessage(ctx context.Context, conversationID 
 	return msg, nil
 }
 
-func (s *Service) create(ctx context.Context, channelID string, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string, mentionEveryone *string) (*Message, error) {
-	if err := validateNewMessage(content, attachmentIDs); err != nil {
+func (s *Service) create(ctx context.Context, channelID string, conversationID string, authorID string, content string, replyToID *string, attachmentIDs []string, mentionEveryone *string, stickerID *string, gifURL *string, gifMetadata *GifMetadata) (*Message, error) {
+	hasMedia := len(attachmentIDs) > 0 || stickerID != nil || gifURL != nil
+	if err := validateNewMessageWithMedia(content, attachmentIDs, hasMedia); err != nil {
 		return nil, err
 	}
 
@@ -176,6 +242,9 @@ func (s *Service) create(ctx context.Context, channelID string, conversationID s
 		ReplyToID:       normalizedReplyID,
 		Content:         content,
 		MentionEveryone: mentionEveryone,
+		StickerID:       stickerID,
+		GifURL:          gifURL,
+		GifMetadata:     gifMetadata,
 	}
 
 	if channelID == "" {
@@ -254,7 +323,19 @@ func (s *Service) canModerate(ctx context.Context, channelID string, authorID st
 	return nil
 }
 
+func (s *Service) isSystemChannel(ctx context.Context, channelID string) bool {
+	if checker, ok := s.channelResolver.(SystemChannelChecker); ok {
+		isSys, err := checker.IsSystemChannel(ctx, channelID)
+		return err == nil && isSys
+	}
+	return false
+}
+
 func (s *Service) DeleteChannelMessage(ctx context.Context, channelID string, messageID string, userID string) error {
+	if s.isSystemChannel(ctx, channelID) {
+		return ErrSystemChannelDelete
+	}
+
 	msg, err := s.repository.FindByID(ctx, messageID)
 	if err != nil {
 		return ErrMessageNotFound
@@ -390,9 +471,29 @@ func (s *Service) RemoveChannelReaction(ctx context.Context, channelID string, m
 	return nil
 }
 
+// botConversation: a conversa é com um bot e quem age não é ele (só leitura).
+func (s *Service) botConversation(ctx context.Context, conversationID string, userID string) bool {
+	if s.convResolver == nil {
+		return false
+	}
+	ids, err := s.convResolver.ConversationParticipantIDs(ctx, conversationID)
+	if err != nil {
+		return false
+	}
+	for _, id := range ids {
+		if id != userID && bot.IsBot(id) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Service) AddConversationReaction(ctx context.Context, conversationID string, messageID string, userID string, emoji string) error {
 	if err := ValidateEmoji(emoji); err != nil {
 		return err
+	}
+	if s.botConversation(ctx, conversationID, userID) {
+		return ErrBotConversation
 	}
 
 	msg, err := s.repository.FindByID(ctx, messageID)

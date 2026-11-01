@@ -1,0 +1,1 @@
+[{"app":"Spotify.exe","title":"Águas de Março","artist":"Elis Regina","album":"Elis & Tom","status":4,"position":83000,"duration":225000,"updated":1761580000000},{"app":"Chrome","title":"Vídeo qualquer","artist":"Canal","album":"","status":5,"position":1000,"duration":600000,"updated":1761579990000}]

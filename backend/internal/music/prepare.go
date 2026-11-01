@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -107,10 +108,12 @@ func AnalyzeArgs(path string) []string {
 		"-af", "silencedetect=noise=-60dB:d=0.5,ebur128=peak=true", "-f", "null", "-"}
 }
 
-func DecodeArgs(path string, a Analysis) []string {
+// DecodeArgs: at é a posição de onde tocar, contada do primeiro som (a
+// retomada depois de reiniciar o servidor); 0 = do começo.
+func DecodeArgs(path string, a Analysis, at time.Duration) []string {
 	args := []string{"-hide_banner", "-loglevel", "error"}
-	if a.StartSec > 0 {
-		args = append(args, "-ss", fmt.Sprintf("%.3f", a.StartSec))
+	if start := a.StartSec + at.Seconds(); start > 0 {
+		args = append(args, "-ss", fmt.Sprintf("%.3f", start))
 	}
 	if a.EndSec > 0 {
 		args = append(args, "-to", fmt.Sprintf("%.3f", a.EndSec))
@@ -127,8 +130,9 @@ type Preparer struct {
 
 func NewPreparer(ffmpeg string, run Runner) *Preparer { return &Preparer{ffmpeg: ffmpeg, run: run} }
 
-// Prepare mede a faixa e devolve o PCM já com ganho e sem silêncio nas pontas.
-func (p *Preparer) Prepare(ctx context.Context, path string) (io.ReadCloser, error) {
+// Prepare mede a faixa e devolve o PCM já com ganho e sem silêncio nas
+// pontas, a partir de at (ver DecodeArgs).
+func (p *Preparer) Prepare(ctx context.Context, path string, at time.Duration) (io.ReadCloser, error) {
 	_, stderr, err := p.run(ctx, p.ffmpeg, AnalyzeArgs(path)...)
 	if err != nil {
 		return nil, fmt.Errorf("análise: %v: %s", err, lastLine(string(stderr)))
@@ -137,7 +141,7 @@ func (p *Preparer) Prepare(ctx context.Context, path string) (io.ReadCloser, err
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.CommandContext(ctx, p.ffmpeg, DecodeArgs(path, a)...)
+	cmd := exec.CommandContext(ctx, p.ffmpeg, DecodeArgs(path, a, at)...)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err

@@ -23,6 +23,7 @@ func ProposalRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware, r
 		proposals.POST("", requireVerified, handler.Create)
 		proposals.GET("/mentions", handler.Mentions)
 		proposals.POST("/mentions/seen", handler.MarkMentionsSeen)
+		proposals.PUT("/github-username", handler.SetGithubUsername)
 		proposals.PATCH("/:id", requireVerified, handler.Update)
 		proposals.PUT("/:id/vote", requireVerified, handler.Vote)
 		proposals.DELETE("/:id/vote", handler.RemoveVote)

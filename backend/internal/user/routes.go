@@ -33,3 +33,16 @@ func ProfileRoutes(router *gin.RouterGroup, handler *ProfileHandler, authMiddlew
 	router.GET("/profile-media/:id", handler.ServeMedia)
 	router.GET("/profile-media/:id/static", handler.ServeStaticMedia)
 }
+
+// EntranceSoundRoutes: o som de entrada da própria pessoa (com login) e o
+// arquivo (público, para o <audio> carregar sem token).
+func EntranceSoundRoutes(router *gin.RouterGroup, handler *EntranceSoundHandler, authMiddleware gin.HandlerFunc) {
+	me := router.Group("/users/me")
+	me.Use(authMiddleware)
+	{
+		me.POST("/entrance-sound", handler.Upload)
+		me.DELETE("/entrance-sound", handler.Delete)
+	}
+
+	router.GET("/entrance-sounds/:id", handler.Serve)
+}

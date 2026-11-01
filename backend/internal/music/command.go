@@ -21,11 +21,16 @@ type Command struct {
 	Arg  string
 }
 
-var commandNames = map[string]Kind{
-	"/play": KindPlay, "/p": KindPlay, "/tocar": KindPlay,
-	"/skip": KindSkip, "/s": KindSkip, "/pular": KindSkip,
-	"/fila": KindQueue, "/q": KindQueue,
-	"/help": KindHelp, "/ajuda": KindHelp, "/musica": KindHelp, "/música": KindHelp,
+var commandNames = indexCommandNames(commandSpecs)
+
+func indexCommandNames(specs []CommandSpec) map[string]Kind {
+	names := make(map[string]Kind)
+	for _, spec := range specs {
+		for _, name := range spec.Names {
+			names[name] = spec.Kind
+		}
+	}
+	return names
 }
 
 // ParseCommand reconhece um comando do Maestro no começo da mensagem.

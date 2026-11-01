@@ -105,7 +105,7 @@ func (s *Service) SendRequest(ctx context.Context, requesterID string, addressee
 		return "", ErrUserNotFound
 	}
 
-	if addressee.ID == bot.UserID {
+	if bot.IsBot(addressee.ID) {
 		return "", ErrBotUser
 	}
 
@@ -452,7 +452,7 @@ func (s *Service) IsBlockedEither(ctx context.Context, a string, b string) (bool
 // sem amizade, só quem divide um servidor e se o destinatário permite DM de
 // membros de servidores.
 func (s *Service) CanDirectMessage(ctx context.Context, fromID string, toID string) error {
-	if toID == bot.UserID || fromID == bot.UserID {
+	if bot.IsBot(toID) || bot.IsBot(fromID) {
 		return ErrBotUser
 	}
 	blocked, err := s.IsBlockedEither(ctx, fromID, toID)

@@ -1,0 +1,2 @@
+# Binários gerados (scripts/build-dsp-wasm.sh): nunca converter fim de linha.
+*.wasm binary

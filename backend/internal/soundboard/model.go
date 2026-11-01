@@ -19,6 +19,9 @@ const (
 	// MaxSoundsPerServer limita quantos sons um servidor pode guardar.
 	MaxSoundsPerServer = 50
 
+	// MaxFavoritesPerUser limita quantos sons cada pessoa favorita.
+	MaxFavoritesPerUser = 100
+
 	MaxNameRunes  = 32
 	MaxEmojiRunes = 16
 )
@@ -30,6 +33,8 @@ var (
 	ErrInvalidDuration   = errors.New("sound duration must be between 0.1s and 15s")
 	ErrNotServerMember   = errors.New("you are not a member of this server")
 	ErrCannotDeleteSound = errors.New("only the uploader, moderators or server owner can delete this sound")
+	ErrCannotAddSound    = errors.New("você não tem permissão para adicionar sons neste servidor")
+	ErrFavoritesFull     = errors.New("limite de sons favoritos atingido")
 )
 
 type Sound struct {
@@ -43,6 +48,12 @@ type Sound struct {
 	SizeBytes    int64     `json:"size_bytes"`
 	DurationMs   int       `json:"duration_ms"`
 	CreatedAt    time.Time `json:"created_at"`
+}
+
+// FavoriteSound é um som favorito, com o nome do servidor de onde ele é.
+type FavoriteSound struct {
+	Sound
+	ServerName string `json:"server_name"`
 }
 
 type CreatedEvent struct {

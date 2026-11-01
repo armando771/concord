@@ -196,7 +196,7 @@ REMOTE
 # ausente deixa a linha do .env como está. Roda antes do restart abaixo, que é
 # quando o backend lê o .env. Os valores só podem ter caracteres seguros, para
 # um secret mal colado não injetar linhas no .env.
-SYNCED_ENV=(TECH_TEAM_USER_IDS)
+SYNCED_ENV=(TECH_TEAM_USER_IDS CHANGELOG_TOKEN)
 for name in "${SYNCED_ENV[@]}"; do
   value="${!name:-}"
   [[ -n "$value" ]] || continue

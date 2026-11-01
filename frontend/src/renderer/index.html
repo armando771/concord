@@ -2,6 +2,12 @@
 <html>
   <head>
     <meta charset="UTF-8" />
+    <!-- Celular: largura real do aparelho (sem isto o navegador desenha a 980 px e
+         encolhe tudo) e viewport-fit=cover para as safe areas (env(safe-area-inset-*)). -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <title>Salinha</title>
     <meta
       http-equiv="Content-Security-Policy"

@@ -1,6 +1,10 @@
 package conversation
 
-import "time"
+import (
+	"time"
+
+	"gin-quickstart/backend/internal/namestyle"
+)
 
 const (
 	TypeDM    = "dm"
@@ -33,6 +37,7 @@ type OtherUser struct {
 	Username    string  `json:"username"`
 	DisplayName string  `json:"display_name"`
 	AvatarURL   *string `json:"avatar_url,omitempty"`
+	NameStyle   namestyle.Style `json:"name_style"`
 }
 
 type LastMessage struct {

@@ -2,6 +2,7 @@ package channel
 
 import (
 	"context"
+	"errors"
 
 	"gin-quickstart/backend/internal/permission"
 
@@ -32,9 +33,9 @@ func (r *Repository) Create(ctx context.Context, ch *Channel, overwrites []permi
 	err = tx.QueryRow(
 		ctx,
 		`
-		INSERT INTO channels (id, server_id, name, type, created_by, position)
+		INSERT INTO channels (id, server_id, name, type, created_by, is_system, position)
 		VALUES (
-			$1, $2, $3, $4::varchar, $5,
+			$1, $2, $3, $4::varchar, $5, $6,
 			-- Canal novo vai para o fim da seção dele.
 			(SELECT COALESCE(MAX(position) + 1, 0) FROM channels WHERE server_id = $2 AND type = $4::varchar)
 		)
@@ -44,6 +45,7 @@ func (r *Repository) Create(ctx context.Context, ch *Channel, overwrites []permi
 			name,
 			type,
 			position,
+			is_system,
 			created_by,
 			created_at,
 			updated_at
@@ -53,12 +55,14 @@ func (r *Repository) Create(ctx context.Context, ch *Channel, overwrites []permi
 		ch.Name,
 		ch.Type,
 		ch.CreatedBy,
+		ch.IsSystem,
 	).Scan(
 		&ch.ID,
 		&ch.ServerID,
 		&ch.Name,
 		&ch.Type,
 		&ch.Position,
+		&ch.IsSystem,
 		&ch.CreatedBy,
 		&ch.CreatedAt,
 		&ch.UpdatedAt,
@@ -116,6 +120,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Channel, error) 
 			name,
 			type,
 			position,
+			is_system,
 			created_by,
 			created_at,
 			updated_at
@@ -129,6 +134,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Channel, error) 
 		&ch.Name,
 		&ch.Type,
 		&ch.Position,
+		&ch.IsSystem,
 		&ch.CreatedBy,
 		&ch.CreatedAt,
 		&ch.UpdatedAt,
@@ -137,6 +143,44 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*Channel, error) 
 		return nil, err
 	}
 	return ch, nil
+}
+
+// FindSystemByName: canal de sistema do servidor pelo nome ("musica" ou "avisos").
+func (r *Repository) FindSystemByName(ctx context.Context, serverID string, names ...string) (*Channel, error) {
+	var id string
+	err := r.db.QueryRow(
+		ctx,
+		`SELECT id FROM channels WHERE server_id = $1 AND is_system AND name = ANY($2) LIMIT 1`,
+		serverID,
+		names,
+	).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrChannelNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return r.FindByID(ctx, id)
+}
+
+// FindSystemByServerID: o canal de sistema ("musica") do servidor; ErrChannelNotFound se não tem.
+func (r *Repository) FindSystemByServerID(ctx context.Context, serverID string) (*Channel, error) {
+	return r.FindSystemByName(ctx, serverID, SystemChannelName, SystemChannelAltName)
+}
+
+// FindNoticesByServerID: o canal de sistema ("avisos") do servidor; ErrChannelNotFound se não tem.
+func (r *Repository) FindNoticesByServerID(ctx context.Context, serverID string) (*Channel, error) {
+	return r.FindSystemByName(ctx, serverID, NoticesChannelName, "avisos-sistema")
+}
+
+// IsSystemChannel diz se o canal é de sistema ("musica" ou "avisos").
+func (r *Repository) IsSystemChannel(ctx context.Context, channelID string) (bool, error) {
+	var isSystem bool
+	err := r.db.QueryRow(ctx, `SELECT is_system FROM channels WHERE id = $1`, channelID).Scan(&isSystem)
+	if err != nil {
+		return false, err
+	}
+	return isSystem, nil
 }
 
 func (r *Repository) ChannelServerID(ctx context.Context, channelID string) (string, error) {
@@ -185,6 +229,7 @@ func (r *Repository) ListByServerID(ctx context.Context, serverID string) ([]Cha
 			name,
 			type,
 			position,
+			is_system,
 			created_by,
 			created_at,
 			updated_at
@@ -208,6 +253,7 @@ func (r *Repository) ListByServerID(ctx context.Context, serverID string) ([]Cha
 			&ch.Name,
 			&ch.Type,
 			&ch.Position,
+			&ch.IsSystem,
 			&ch.CreatedBy,
 			&ch.CreatedAt,
 			&ch.UpdatedAt,

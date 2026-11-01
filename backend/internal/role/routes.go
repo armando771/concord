@@ -13,6 +13,5 @@ func RoleRoutes(router *gin.RouterGroup, handler *Handler, authMiddleware gin.Ha
 		servers.DELETE("/roles/:roleId", handler.Delete)
 		servers.PUT("/members/:userId/roles/:roleId", handler.AddMemberRole)
 		servers.DELETE("/members/:userId/roles/:roleId", handler.RemoveMemberRole)
-		servers.PUT("/members/:userId/role", handler.SetLegacyRole)
 	}
 }

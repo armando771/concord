@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"gin-quickstart/backend/internal/ratelimit"
+	"gin-quickstart/backend/internal/platform/ratelimit"
 )
 
 // Limites do login, em memória (um processo só; reiniciar zera).

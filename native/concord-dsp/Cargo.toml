@@ -1,0 +1,19 @@
+[package]
+name = "concord-dsp"
+version = "0.1.0"
+edition = "2021"
+description = "DSP do voice mod da Salinha (AudioWorklet), compilado para WebAssembly"
+publish = false
+
+# Sem dependências: o .wasm só exporta funções extern "C" sobre a memória linear
+# (ver docs/adr/0005-dsp-de-audio-em-wasm.md).
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

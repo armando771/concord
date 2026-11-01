@@ -196,6 +196,10 @@ func (h *Handler) Update(c *gin.Context) {
 
 	updated, err := h.service.Update(c.Request.Context(), channelID, input.Name)
 	if err != nil {
+		if errors.Is(err, ErrSystemChannel) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "system_channel"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -220,6 +224,10 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	if err := h.service.Delete(c.Request.Context(), channelID); err != nil {
+		if errors.Is(err, ErrSystemChannel) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "system_channel"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete channel"})
 		return
 	}
@@ -327,6 +335,10 @@ func (h *Handler) changeOverwrite(c *gin.Context, next *permission.Overwrite) {
 		err = h.service.SetOverwrite(c.Request.Context(), ch, *next)
 	}
 	if err != nil {
+		if errors.Is(err, ErrSystemChannel) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "system_channel"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to change permissions"})
 		return
 	}

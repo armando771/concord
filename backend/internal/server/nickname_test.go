@@ -157,7 +157,6 @@ func TestSetNicknameOthersRespectsPermissionAndHierarchy(t *testing.T) {
 		{"ana", "vip", permission.ErrMissingPermission}, // sem "Gerenciar apelidos"
 		{"vip", "ana", permission.ErrMissingPermission}, // cargo acima, mas sem a permissão
 		{"zeca", "ana", permission.ErrNotMember},
-		{"mod", "mod2", ErrCannotActOn},  // mesmo cargo
 		{"mod", "chefe", ErrCannotActOn}, // cargo acima
 		{"mod", "dono", ErrCannotActOn},  // dono é intocável
 		{"chefe", "dono", ErrCannotActOn},
@@ -177,6 +176,7 @@ func TestSetNicknameOthersRespectsPermissionAndHierarchy(t *testing.T) {
 func TestSetNicknameOthersAllowed(t *testing.T) {
 	ctx := context.Background()
 	cases := []struct{ actor, target string }{
+		{"mod", "mod2"},  // mesmo cargo permitido
 		{"mod", "vip"},   // moderador padrão tem "Gerenciar apelidos"
 		{"mod", "ana"},   // ana só tem @everyone
 		{"chefe", "mod"}, // cargo acima
@@ -210,8 +210,12 @@ func TestSetNicknameManageNicknamesAloneIsEnough(t *testing.T) {
 	if _, err := n.Set(context.Background(), "s1", "ana", "bia", "Bibi"); err != nil {
 		t.Fatal(err)
 	}
-	// vip (posição 1) empata com o cargo de ana: não pode.
-	if _, err := n.Set(context.Background(), "s1", "ana", "vip", "x"); !errors.Is(err, ErrCannotActOn) {
+	// vip (posição 1) empata com o cargo de ana: permitido mudar
+	if _, err := n.Set(context.Background(), "s1", "ana", "vip", "x"); err != nil {
+		t.Fatalf("mesmo cargo deveria poder mudar apelido: %v", err)
+	}
+	// mod (posição 2) acima de ana: negado
+	if _, err := n.Set(context.Background(), "s1", "ana", "mod", "x"); !errors.Is(err, ErrCannotActOn) {
 		t.Fatalf("err = %v, want ErrCannotActOn", err)
 	}
 }

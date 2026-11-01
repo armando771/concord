@@ -9,10 +9,9 @@ import (
 	"io"
 	"log"
 	"os/exec"
-	"path/filepath"
 	"runtime/debug"
-	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -31,6 +30,7 @@ var (
 	ErrNotInMusicCall = errors.New("você não está nessa call")
 	errTooManyPlayers = errors.New("muitos players")
 	errPlayerClosed   = errors.New("player encerrado antes de entrar no mapa")
+	errChannelBusy    = errors.New("o canal já tem player")
 )
 
 type Location struct {
@@ -41,8 +41,10 @@ type Location struct {
 
 // ManagerDeps liga o manager ao resto do backend (main.go) ou a dublês.
 type ManagerDeps struct {
-	Locate          func(userID string) (Location, bool)
-	Humans          func(callID string) []string
+	Locate func(userID string) (Location, bool)
+	Humans func(callID string) []string
+	// Listeners: quem está ouvindo (não surdo) na call; nil = DJ não conta.
+	Listeners       func(callID string) []string
 	BotEnabled      func(ctx context.Context, serverID string) bool
 	IsMember        func(ctx context.Context, serverID, userID string) bool
 	ChannelName     func(ctx context.Context, channelID string) string
@@ -55,22 +57,18 @@ type ManagerDeps struct {
 
 	// Opcionais (testes); nil = implementação real a partir do Config.
 	Source    Source
-	Prepare   func(ctx context.Context, path string) (io.ReadCloser, error)
+	Prepare   func(ctx context.Context, path string, at time.Duration) (io.ReadCloser, error)
 	NewOutput func(ctx context.Context, callID, channelID string, src FrameSource) (Output, error)
 	Available func() bool
+	// Sessions: onde guardar os players para voltar depois de reiniciar
+	// (restart.go); nil = não guarda.
+	Sessions SessionStore
 }
 
 type searchSession struct {
 	userID, serverID, textChannelID string
 	results                         []Track
 	expires                         time.Time
-}
-
-// pendingPlayer: player conectando; quem chega junto espera em ready.
-type pendingPlayer struct {
-	ready chan struct{}
-	p     *Player
-	err   error
 }
 
 type Manager struct {
@@ -84,6 +82,11 @@ type Manager struct {
 	searches map[string]searchSession
 	// Um comando por vez por usuário: não deixa ninguém disparar yt-dlp sem limite.
 	busy map[string]struct{}
+	// onPlayed: quem pediu a música que tocou o bastante (badge DJ, played.go).
+	onPlayed func(userID string)
+	// sessions: nil sem deps.Sessions. stopping: o servidor está desligando.
+	sessions *sessionWriter
+	stopping atomic.Bool
 }
 
 func NewManager(cfg Config, deps ManagerDeps) *Manager {
@@ -107,6 +110,9 @@ func NewManager(cfg Config, deps ManagerDeps) *Manager {
 		deps.Available = func() bool { return binariesPresent(cfg) }
 	}
 	m := &Manager{cfg: cfg, deps: deps, players: map[string]*Player{}, pending: map[string]*pendingPlayer{}, searches: map[string]searchSession{}, busy: map[string]struct{}{}}
+	if deps.Sessions != nil {
+		m.sessions = newSessionWriter(deps.Sessions)
+	}
 	m.available = deps.Available()
 	if !m.available {
 		log.Printf("[music] yt-dlp/ffmpeg não encontrados: o Maestro fica indisponível")
@@ -269,70 +275,6 @@ func (m *Manager) play(ctx context.Context, loc Location, serverID, textChannelI
 	}
 }
 
-func (m *Manager) enqueueURL(ctx context.Context, loc Location, textChannelID, userID, url string, say func(string)) {
-	mctx, cancel := context.WithTimeout(ctx, metadataTimeout)
-	t, err := m.deps.Source.Resolve(mctx, url)
-	cancel()
-	switch {
-	case errors.Is(err, ErrPrivate):
-		say(TextPrivate)
-	case err != nil:
-		say(TextVideoGone)
-	case t.IsLive:
-		say(TextLive)
-	case t.DurationMs > maxVideoMs:
-		say(TextTooLong)
-	default:
-		m.enqueueTracks(ctx, loc, textChannelID, userID, []Track{t}, "", say)
-	}
-}
-
-// enqueueTracks: playlistName vazio = um vídeo só.
-func (m *Manager) enqueueTracks(ctx context.Context, loc Location, textChannelID, userID string, tracks []Track, playlistName string, say func(string)) {
-	p, err := m.playerFor(ctx, loc)
-	if errors.Is(err, errTooManyPlayers) {
-		say(TextTooManyPlayers)
-		return
-	}
-	if err != nil {
-		log.Printf("[music] criar player: %v", err)
-		say(TextUnavailable)
-		return
-	}
-	user, err := m.deps.User(ctx, userID)
-	if err != nil {
-		p.IdleIfEmpty() // player criado sem nada na fila não pode ficar na call para sempre
-		say(TextUnavailable)
-		return
-	}
-	items := make([]*Item, len(tracks))
-	for i, t := range tracks {
-		items[i] = NewItem(t, user, textChannelID)
-	}
-	res, err := p.Enqueue(items, textChannelID)
-	if errors.Is(err, ErrQueueFull) {
-		say(TextQueueFull(m.cfg.QueueMax))
-		return
-	}
-	if err != nil {
-		p.IdleIfEmpty()
-		say(TextUnavailable)
-		return
-	}
-	var text string
-	switch {
-	case playlistName != "":
-		text = TextAddedPlaylist(user.Username, playlistName, res.Added, res.AddedMs, p.ChannelName)
-	case res.StartsNow:
-		text = TextAddedNow(user.Username, tracks[0].Title, tracks[0].DurationMs, p.ChannelName)
-	default:
-		text = TextAdded(user.Username, tracks[0].Title, tracks[0].DurationMs, p.ChannelName, res.FirstPos, MinutesCeil(res.StartsInMs))
-	}
-	if err := m.deps.PostPublic(ctx, textChannelID, text); err != nil {
-		log.Printf("[music] aviso público: %v", err)
-	}
-}
-
 // Pick enfileira um resultado do seletor de busca (vale uma vez, por 60 s).
 func (m *Manager) Pick(ctx context.Context, userID, token string, index int) error {
 	m.mu.Lock()
@@ -361,78 +303,6 @@ func newToken() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
-}
-
-func (m *Manager) player(channelID string) *Player {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.players[channelID]
-}
-
-func (m *Manager) playerByCall(callID string) *Player {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for _, p := range m.players {
-		if p.CallID == callID {
-			return p
-		}
-	}
-	return nil
-}
-
-// playerFor devolve o player do canal, criando (e entrando na sala) se preciso.
-func (m *Manager) playerFor(ctx context.Context, loc Location) (*Player, error) {
-	m.mu.Lock()
-	if p, ok := m.players[loc.ChannelID]; ok {
-		m.mu.Unlock()
-		return p, nil
-	}
-	if pe, ok := m.pending[loc.ChannelID]; ok {
-		// Outro comando já está conectando esse canal: espera o resultado.
-		m.mu.Unlock()
-		select {
-		case <-pe.ready:
-			return pe.p, pe.err
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
-	if len(m.players)+len(m.pending) >= m.cfg.MaxPlayers {
-		m.mu.Unlock()
-		return nil, errTooManyPlayers
-	}
-	p := NewPlayer(loc.CallID, loc.ChannelID, loc.ServerID, m.deps.ChannelName(ctx, loc.ChannelID), PlayerDeps{
-		Source: m.deps.Source, Prepare: m.deps.Prepare, NewOutput: m.deps.NewOutput,
-		Notify: (*notifier)(m), Now: time.Now,
-		CacheDir: filepath.Join(m.cfg.CacheDir, loc.ChannelID),
-		QueueMax: m.cfg.QueueMax, IdleTimeout: m.cfg.IdleTimeout,
-		Crossfade: crossfade, SkipFade: skipFade,
-	})
-	pe := &pendingPlayer{ready: make(chan struct{})}
-	m.pending[loc.ChannelID] = pe // reserva a vaga; só entra em players depois de iniciado
-	m.mu.Unlock()
-
-	err := p.Start(context.Background())
-	m.mu.Lock()
-	delete(m.pending, loc.ChannelID)
-	if err == nil && p.IsClosed() {
-		// Caiu entre o Start e a inserção: não deixa uma entrada morta no mapa.
-		err = errPlayerClosed
-	}
-	if err == nil {
-		m.players[loc.ChannelID] = p
-		pe.p = p
-	}
-	pe.err = err
-	m.mu.Unlock()
-	close(pe.ready)
-	if err != nil {
-		return nil, err
-	}
-	m.deps.BroadcastToRoom("server:"+loc.ServerID, event("music:presence", map[string]any{
-		"server_id": loc.ServerID, "channel_id": loc.ChannelID, "active": true,
-	}))
-	return p, nil
 }
 
 func (m *Manager) queueText(p *Player) (string, bool) {
@@ -524,34 +394,6 @@ func (m *Manager) PresenceFor(ctx context.Context, userID, serverID string) ([]s
 	return m.Presence(serverID), true
 }
 
-// CloseServer fecha os players do servidor (Maestro removido pelo dono).
-func (m *Manager) CloseServer(serverID string) {
-	m.mu.Lock()
-	var ps []*Player
-	for _, p := range m.players {
-		if p.ServerID == serverID {
-			ps = append(ps, p)
-		}
-	}
-	m.mu.Unlock()
-	for _, p := range ps {
-		go p.Close()
-	}
-}
-
-func (m *Manager) Presence(serverID string) []string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	out := []string{}
-	for _, p := range m.players {
-		if p.ServerID == serverID {
-			out = append(out, p.ChannelID)
-		}
-	}
-	sort.Strings(out)
-	return out
-}
-
 // VideoFile: só quem está na call do player vê o vídeo.
 func (m *Manager) VideoFile(userID, itemID string) (string, bool) {
 	loc, ok := m.deps.Locate(userID)
@@ -563,50 +405,4 @@ func (m *Manager) VideoFile(userID, itemID string) (string, bool) {
 		return "", false
 	}
 	return p.VideoPath(itemID)
-}
-
-func (m *Manager) OnParticipantLeft(callID, userID string) {
-	if p := m.playerByCall(callID); p != nil {
-		go p.ParticipantLeft(userID)
-	}
-}
-
-func (m *Manager) OnCallEnded(callID string) {
-	if p := m.playerByCall(callID); p != nil {
-		go p.Close()
-	}
-}
-
-// notifier é o Manager visto pelo Player (Notifier).
-type notifier Manager
-
-func (n *notifier) PublishState(p *Player) {
-	// Chamado com p.mu preso: monta o estado sem pegar o lock de novo.
-	n.deps.BroadcastToCall(p.CallID, event("music:state", buildStateLocked(p, time.Now())))
-}
-
-func (n *notifier) Public(textChannelID, content string) {
-	if textChannelID == "" {
-		return
-	}
-	go func() {
-		if err := n.deps.PostPublic(context.Background(), textChannelID, content); err != nil {
-			log.Printf("[music] aviso público: %v", err)
-		}
-	}()
-}
-
-func (n *notifier) Humans(callID string) []string { return n.deps.Humans(callID) }
-
-func (n *notifier) Closed(p *Player) {
-	m := (*Manager)(n)
-	m.mu.Lock()
-	if m.players[p.ChannelID] == p {
-		delete(m.players, p.ChannelID)
-	}
-	m.mu.Unlock()
-	n.deps.BroadcastToCall(p.CallID, event("music:state", ClosedState(p)))
-	n.deps.BroadcastToRoom("server:"+p.ServerID, event("music:presence", map[string]any{
-		"server_id": p.ServerID, "channel_id": p.ChannelID, "active": false,
-	}))
 }

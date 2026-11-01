@@ -2,14 +2,17 @@ import { describe, expect, it } from 'vitest'
 import {
   ACTIVITIES,
   activityLaunchUrl,
+  activityRoomFromUrl,
   findActivity,
   isAllowedActivityUrl,
   validateActivityLink
 } from './activities'
 
 describe('catálogo de atividades', () => {
-  it('começa só com o Krunker.io', () => {
+  it('só o Krunker.io', () => {
     expect(ACTIVITIES.map((a) => a.id)).toEqual(['krunker'])
+    // Cada jogo tem a própria sessão na janela do desktop.
+    expect(new Set(ACTIVITIES.map((a) => a.partition)).size).toBe(ACTIVITIES.length)
     const krunker = findActivity('krunker')
     expect(krunker?.name).toBe('Krunker.io')
     expect(krunker?.origins).toEqual(['https://krunker.io'])
@@ -64,6 +67,53 @@ describe('validateActivityLink', () => {
       ok: false,
       error: 'Atividade desconhecida.'
     })
+  })
+})
+
+describe('validateActivityLink com código da sala', () => {
+  it('Krunker: REGIÃO:id vira o link da sala', () => {
+    expect(validateActivityLink('krunker', ' BRZ:tukbo ')).toEqual({
+      ok: true,
+      url: 'https://krunker.io/?game=BRZ:tukbo'
+    })
+  })
+
+  it('código com cara errada continua recusado', () => {
+    expect(validateActivityLink('krunker', 'sala do joão').ok).toBe(false)
+    expect(validateActivityLink('krunker', 'r7S5').ok).toBe(false)
+  })
+})
+
+describe('activityRoomFromUrl', () => {
+  it('Krunker: a URL da partida (?game=REGIÃO:id) é a sala', () => {
+    expect(activityRoomFromUrl('krunker', 'https://krunker.io/?game=BRZ:tukbo')).toBe(
+      'https://krunker.io/?game=BRZ:tukbo'
+    )
+  })
+
+  it('só os parâmetros da sala vão adiante (o resto da URL é descartado)', () => {
+    expect(
+      activityRoomFromUrl('krunker', 'https://krunker.io/?game=BRZ:tukbo&utm_source=x&token=abc')
+    ).toBe('https://krunker.io/?game=BRZ:tukbo')
+  })
+
+  it.each([
+    ['página inicial', 'krunker', 'https://krunker.io/'],
+    ['hash sem sala', 'krunker', 'https://krunker.io/#1Fu4'],
+    ['outra página do site', 'krunker', 'https://krunker.io/social.html?game=BRZ:tukbo'],
+    ['outro site', 'krunker', 'https://evil.com/?game=BRZ:tukbo'],
+    ['código esquisito', 'krunker', 'https://krunker.io/?game=<script>'],
+    ['sala em outro site', 'krunker', 'https://example.com/?game=BRZ:tukbo'],
+    ['atividade desconhecida', 'doom', 'https://krunker.io/?game=BRZ:tukbo'],
+    ['lixo', 'krunker', 'não é url']
+  ])('%s: null', (_name, id, url) => {
+    expect(activityRoomFromUrl(id, url)).toBeNull()
+  })
+
+  it('a sala capturada passa na validação do link (e cabe no limite)', () => {
+    const room = activityRoomFromUrl('krunker', 'https://krunker.io/?game=BRZ:tukbo')
+    expect(room).not.toBeNull()
+    expect(isAllowedActivityUrl('krunker', room ?? '')).toBe(true)
   })
 })
 

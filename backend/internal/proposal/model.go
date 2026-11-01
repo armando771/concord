@@ -1,6 +1,9 @@
 package proposal
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // Por que a votação acabou (proposals.close_reason).
 const (
@@ -139,23 +142,30 @@ type PendingMention struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
+// UserRef é quem do time está com o card.
+type UserRef struct {
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	AvatarURL *string `json:"avatar_url,omitempty"`
+}
+
 // Proposal é um card do quadro.
 type Proposal struct {
-	ID                string     `json:"id"`
-	AuthorID          string     `json:"author_id"`
-	AuthorName        string     `json:"author_name"`
-	AuthorAvatarURL   *string    `json:"author_avatar_url,omitempty"`
-	Title             string     `json:"title"`
-	Description       string     `json:"description"`
-	Status            string     `json:"status"`
-	CreatedAt         time.Time  `json:"created_at"`
-	VotingEndsAt      time.Time  `json:"voting_ends_at"`
-	ClosedAt          *time.Time `json:"closed_at,omitempty"`
+	ID              string     `json:"id"`
+	AuthorID        string     `json:"author_id"`
+	AuthorName      string     `json:"author_name"`
+	AuthorAvatarURL *string    `json:"author_avatar_url,omitempty"`
+	Title           string     `json:"title"`
+	Description     string     `json:"description"`
+	Status          string     `json:"status"`
+	CreatedAt       time.Time  `json:"created_at"`
+	VotingEndsAt    time.Time  `json:"voting_ends_at"`
+	ClosedAt        *time.Time `json:"closed_at,omitempty"`
 	// MovedAt: quando o card entrou na coluna atual (ordena as colunas).
 	MovedAt time.Time `json:"moved_at"`
 	// CloseReason e ClosedByName: como a votação acabou e, se foi o time tech, quem.
-	CloseReason   *string `json:"close_reason,omitempty"`
-	ClosedByName  *string `json:"closed_by_name,omitempty"`
+	CloseReason       *string    `json:"close_reason,omitempty"`
+	ClosedByName      *string    `json:"closed_by_name,omitempty"`
 	EditedAt          *time.Time `json:"edited_at,omitempty"`
 	GithubIssueNumber *int       `json:"github_issue_number,omitempty"`
 	GithubIssueURL    *string    `json:"github_issue_url,omitempty"`
@@ -163,9 +173,56 @@ type Proposal struct {
 	NoVotes           int        `json:"no_votes"`
 	CommentCount      int        `json:"comment_count"`
 	Images            []Image    `json:"images"`
+	// Assignee: quem do time tech está com o card (quem o moveu por último,
+	// menos quem só arrastou para Concluída).
+	Assignee *UserRef `json:"assignee,omitempty"`
 	// MyVote: true = sim, false = não, nulo = ainda não votou. Preenchido só
 	// nas respostas para a própria pessoa (não vai no evento de tempo real).
 	MyVote *bool `json:"my_vote,omitempty"`
+
+	// Sincronização com a issue (não vai para o app): o que já foi aplicado
+	// nela e o usuário do GitHub de quem está com o card.
+	IssueState     *string `json:"-"`
+	IssueAssignee  *string `json:"-"`
+	AssigneeGithub *string `json:"-"`
+
+	// Comments: a discussão do card, preenchida só ao abrir a issue (vai no corpo dela).
+	Comments []Comment `json:"-"`
+}
+
+// Estados da issue no GitHub (proposals.github_issue_state).
+const (
+	IssueOpen       = "open"
+	IssueCompleted  = "closed:completed"
+	IssueNotPlanned = "closed:not_planned"
+)
+
+// WantedIssueState: a issue acompanha o card (Concluída fecha como concluída,
+// Rejeitada como "não planejada", o resto fica aberta).
+func (p Proposal) WantedIssueState() string {
+	switch p.Status {
+	case StatusDone:
+		return IssueCompleted
+	case StatusRejected:
+		return IssueNotPlanned
+	}
+	return IssueOpen
+}
+
+// IssueInSync: a issue já está como o card pede (estado e assignee).
+func (p Proposal) IssueInSync() bool {
+	if p.GithubIssueNumber == nil {
+		return true
+	}
+	return p.IssueState != nil && *p.IssueState == p.WantedIssueState() &&
+		sameLogin(p.IssueAssignee, p.AssigneeGithub)
+}
+
+func sameLogin(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return strings.EqualFold(*a, *b)
 }
 
 // Board é a resposta de GET /proposals.
@@ -173,6 +230,8 @@ type Board struct {
 	Proposals []Proposal `json:"proposals"`
 	// IsTech: a pessoa pode mover os cards do time tech.
 	IsTech bool `json:"is_tech"`
+	// GithubUsername: o usuário do GitHub de quem é do time (vira o assignee da issue).
+	GithubUsername *string `json:"github_username,omitempty"`
 }
 
 // Approved: o sim precisa ganhar do não (empate e zero voto rejeitam).

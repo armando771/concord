@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"gin-quickstart/backend/internal/database"
+	"gin-quickstart/backend/internal/platform/database"
 	"gin-quickstart/backend/internal/permission"
-	"gin-quickstart/backend/internal/ratelimit"
+	"gin-quickstart/backend/internal/platform/ratelimit"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

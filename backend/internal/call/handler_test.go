@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"gin-quickstart/backend/internal/livekit"
+	"gin-quickstart/backend/internal/platform/livekit"
 
 	"github.com/gin-gonic/gin"
 	"github.com/livekit/protocol/auth"
@@ -24,7 +24,7 @@ func tokenRouter(service *Service, userID string) *gin.Engine {
 		c.Set("userID", userID)
 		c.Next()
 	}
-	CallRoutes(router.Group("/api"), handler, fakeAuth)
+	CallRoutes(router.Group("/api"), handler, fakeAuth, fakeAuth)
 	return router
 }
 

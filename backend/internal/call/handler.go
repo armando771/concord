@@ -3,8 +3,9 @@ package call
 import (
 	"errors"
 	"net/http"
+	"time"
 
-	"gin-quickstart/backend/internal/livekit"
+	"gin-quickstart/backend/internal/platform/livekit"
 
 	"github.com/gin-gonic/gin"
 )
@@ -363,4 +364,67 @@ func (h *Handler) Disconnect(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// screenPreviewBodyLimit cobre a miniatura em base64 e o JSON em volta.
+const screenPreviewBodyLimit = MaxScreenPreviewBytes*4/3 + 1024
+
+func respondScreenPreview(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, ErrNotFound), errors.Is(err, ErrStreamNotActive):
+		c.JSON(http.StatusNotFound, gin.H{"error": "stream_not_active"})
+	case errors.Is(err, ErrNotAllowed):
+		c.JSON(http.StatusForbidden, gin.H{"error": ErrNotAllowed.Error()})
+	case errors.Is(err, ErrInvalidPreview):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, ErrPreviewTooFrequent):
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to handle preview"})
+	}
+}
+
+// PutScreenPreview: PUT /calls/:id/screen-preview {image: base64 do JPEG}.
+// Quem transmite manda a miniatura quando o servidor pede.
+func (h *Handler) PutScreenPreview(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, screenPreviewBodyLimit)
+	var input struct {
+		// []byte: o JSON traz base64.
+		Image []byte `json:"image"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidPreview.Error()})
+		return
+	}
+	if err := h.service.SaveScreenPreview(c.Param("id"), userID.(string), input.Image, time.Now()); err != nil {
+		respondScreenPreview(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// GetScreenPreview: GET /calls/:id/screen-preview/:userId. image null = a
+// miniatura foi pedida e ainda não chegou (tentar de novo em instantes).
+func (h *Handler) GetScreenPreview(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	result, err := h.service.ScreenPreview(c.Request.Context(), c.Param("id"), c.Param("userId"), userID.(string), time.Now())
+	if err != nil {
+		respondScreenPreview(c, err)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	if result.Image == nil {
+		c.JSON(http.StatusOK, gin.H{"image": nil})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"image": result.Image, "captured_at": result.At.UTC()})
 }

@@ -329,7 +329,7 @@ O [`deploy/Caddyfile`](../deploy/Caddyfile) é a cópia versionada do
 | `:8080` | repasse antigo (apps que falam com o endereço do playit): igual ao de cima |
 | `salinha.bhrx.com.br` | página de download (`/opt/concord/site`) e `/updates/*` |
 | `concord.bhrx.com.br` | redireciona para `salinha.bhrx.com.br` |
-| `app-salinha.bhrx.com.br` | app no navegador (`/opt/concord/web`), `/rtc*`, `/api`, `/ws` |
+| `app-salinha.bhrx.com.br` | app no navegador (`/opt/concord/web`), `/rtc*`, `/api`, `/ws`, `/updates/*`; também o endereço alternativo do app desktop |
 
 Os dois `bhrx.com.br` estão atrás do proxy do Cloudflare (nuvem laranja) e
 funcionam assim, inclusive os WebSockets e o `/rtc` do app web.
@@ -768,7 +768,12 @@ Para ligar, em **Settings → Secrets and variables → Actions**:
     sem espaços, de quem move os cards das propostas. O deploy grava (ou troca)
     essa linha em `/opt/concord/.env` antes de reiniciar o backend. Vazio ou
     ausente, o `.env` da VPS fica como está. O `.env` da VPS continua sendo
-    intocado para o resto.
+    intocado para o resto;
+  - `CHANGELOG_TOKEN` (opcional): segredo com que o deploy publica as notas da
+    versão em `PUT /api/changelog/<versão>` (gere com `openssl rand -hex 24`;
+    só letras e números). O deploy grava a mesma linha no `.env` da VPS e o
+    passo "Changelog" usa o secret. Sem ele a publicação fica desligada (o
+    servidor responde 503) e a leitura do changelog segue funcionando.
 - **Variables:**
   - `DEPLOY_ENABLED=true`;
   - `VPS_HOST=root@<ip>`;
@@ -776,6 +781,15 @@ Para ligar, em **Settings → Secrets and variables → Actions**:
   - `SITE_URL=https://<página de download>` (opcional; padrão `https://salinha.bhrx.com.br`);
   - `WEB_URL=https://app-salinha.bhrx.com.br` (opcional): confere o app web
     depois do deploy. Ligue só depois do DNS e do bloco do Caddy prontos.
+  - `SERVER_FALLBACK_URLS` (opcional; padrão o `WEB_URL` ou
+    `https://app-salinha.bhrx.com.br`): endereços alternativos do mesmo
+    servidor embutidos no app desktop. Ao abrir, o app testa o `PUBLIC_URL` e
+    os alternativos (`/healthz`) e usa o primeiro que responde; o resultado vai
+    para `%APPDATA%\Concord\logs\conexao.log` e para o "Detalhes" do aviso
+    de conexão. Existe porque o `*.sslip.io` não resolve (ou é bloqueado por
+    antivírus/filtro de DNS) na rede de alguns usuários. O alternativo precisa
+    servir `/api`, `/ws`, `/rtc*` e `/updates/*` (bloco `app-salinha` do
+    [`deploy/Caddyfile`](../deploy/Caddyfile)).
 
 Sem `DEPLOY_ENABLED`, o workflow só roda os testes.
 
@@ -823,6 +837,87 @@ Se o boot logar `ERROR: faltam os índices do login ...`, a 000025 foi pulada
 maior aplicada antes dela faz a 000025 nunca rodar). Ela é idempotente: rode
 `psql "$DATABASE_URL" -f /opt/concord/migrations/000025_add_login_lower_indexes.up.sql`
 e reinicie o backend.
+
+## Badge Fundador (devs)
+
+O badge mítico **Fundador** é só dos devs. Quem ganha fica na
+tabela `dev_badge_users` (migration 000057), que começa vazia: não há id de
+usuário no código. O badge aparece no próximo carregamento dos badges da
+pessoa (abrir o perfil ou até 5 minutos online), com o aviso de badge novo.
+
+Conceder (troque os nomes; a comparação ignora maiúsculas e rodar de novo não
+duplica):
+```sql
+INSERT INTO dev_badge_users (user_id)
+SELECT id FROM users WHERE lower(username) IN ('fulano', 'ciclano')
+ON CONFLICT DO NOTHING;
+```
+
+Conferir quem tem:
+```sql
+SELECT u.username, d.granted_at FROM dev_badge_users d JOIN users u ON u.id = d.user_id;
+```
+
+Tirar (o badge some na hora, mesmo já gravado; a segunda linha apaga também a
+data de quando foi ganho, para começar do zero se voltar):
+```sql
+DELETE FROM dev_badge_users WHERE user_id IN (SELECT id FROM users WHERE lower(username) IN ('fulano'));
+DELETE FROM user_badges WHERE category = 'criador' AND user_id IN (SELECT id FROM users WHERE lower(username) IN ('fulano'));
+```
+
+Na VPS: `psql "$DATABASE_URL" -c "..."` com o SQL acima.
+
+## Badge Top 10 do Nível 100
+
+O badge mítico **Top 10 do Nível 100** é automático: os 10 primeiros a chegar
+no nível 100 ganham, na ordem de chegada, gravada em `badge_top10`
+(migration 000069). A vaga é dada quando os badges da pessoa são avaliados
+(a cada minuto em call, ao abrir o perfil ou a cada 5 minutos online), com
+uma trava por transação: dois chegando juntos entram um depois do outro, e a
+tabela não aceita mais de 10. Quem já estava no nível 100 no deploy entrou
+pela data do tier Imortal do badge Nível (empate: mais XP, depois conta mais
+antiga). Conta apagada não devolve a vaga.
+
+Conferir a fila:
+```sql
+SELECT t.posicao, u.username, t.reached_at FROM badge_top10 t LEFT JOIN users u ON u.id = t.user_id ORDER BY t.posicao;
+```
+
+## Badge Caçador de bugs
+
+O badge **Caçador de bugs** é concedido à mão pelo time, na tabela
+`bug_hunters` (migration 000068), que guarda quantos bugs cada pessoa
+reportou. Os tiers vão por quantidade: Olho Vivo (1), Detetive (3),
+Exterminador (10) e Lenda do QA (25). Sem linha (ou com 0 bugs) o badge nem
+aparece. Ele chega no próximo carregamento dos badges da pessoa (abrir o
+perfil ou até 5 minutos online), com o aviso de badge novo.
+
+Conceder ou somar bugs (troque o nome e a quantidade; a comparação ignora
+maiúsculas; quem ainda não tinha entra com essa quantidade, quem já tinha
+soma):
+```sql
+INSERT INTO bug_hunters (user_id, bugs)
+SELECT id, 1 FROM users WHERE lower(username) = lower('fulano')
+ON CONFLICT (user_id) DO UPDATE SET bugs = bug_hunters.bugs + EXCLUDED.bugs, updated_at = NOW();
+```
+
+Conferir quem tem:
+```sql
+SELECT u.username, h.bugs, h.updated_at FROM bug_hunters h JOIN users u ON u.id = h.user_id ORDER BY h.bugs DESC;
+```
+
+Corrigir para um número exato (tier já conquistado não se perde):
+```sql
+UPDATE bug_hunters SET bugs = 5, updated_at = NOW() WHERE user_id = (SELECT id FROM users WHERE lower(username) = lower('fulano'));
+```
+
+Tirar (o badge some na hora; a segunda linha apaga também as datas dos tiers):
+```sql
+DELETE FROM bug_hunters WHERE user_id IN (SELECT id FROM users WHERE lower(username) IN ('fulano'));
+DELETE FROM user_badges WHERE category = 'bugs' AND user_id IN (SELECT id FROM users WHERE lower(username) IN ('fulano'));
+```
+
+Na VPS: `psql "$DATABASE_URL" -c "..."` com o SQL acima.
 
 ## Bot de música (Maestro)
 

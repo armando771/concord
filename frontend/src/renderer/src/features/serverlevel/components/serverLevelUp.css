@@ -1,0 +1,82 @@
+/*
+ * Animação de subida de nível do servidor (ServerLevelUpOverlay) e o selo
+ * lendário do "Nv. N". O canvas faz as partículas; aqui o ícone entrando,
+ * o anel de progresso enchendo, o número explodindo e o selo.
+ */
+@keyframes server-lvl-icon {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  18% {
+    transform: scale(0.85);
+    opacity: 1;
+  }
+  22% {
+    transform: scale(1.25);
+  }
+  32%,
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes server-lvl-ring {
+  from {
+    stroke-dashoffset: var(--ring-len);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes server-lvl-number {
+  0%,
+  14% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  20% {
+    transform: scale(1.6);
+    opacity: 1;
+  }
+  30%,
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes server-lvl-badge {
+  0%,
+  30% {
+    transform: translateY(14px) scale(0.9);
+    opacity: 0;
+  }
+  42%,
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Tudo sai junto no fim (o canvas some sozinho). */
+@keyframes server-lvl-out {
+  0%,
+  86% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.server-level-legendary {
+  background-size: 220% 100% !important;
+  animation: level-legendary 4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .server-level-legendary {
+    animation: none;
+  }
+}

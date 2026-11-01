@@ -1,0 +1,220 @@
+import { useRef } from 'react'
+import { useParams } from 'react-router-dom'
+import type { Channel, ChannelType } from '../api/channels'
+import type { Server } from '../api/servers'
+import { useServerStore } from '../store/serverStore'
+import { useChannelSidebarStore } from '../store/channelSidebarStore'
+import { useServerAccess } from '../hooks/useServerAccess'
+import { useChannelReorder, type ChannelReorder } from '../hooks/useChannelReorder'
+import { useChannelMenuDismiss } from '../hooks/useChannelMenuDismiss'
+import { useServerCallsSync } from '../hooks/useServerCallsSync'
+import { useJoinVoiceChannel } from '../hooks/useJoinVoiceChannel'
+import { Perm } from '../lib/permissions'
+import type { ServerAccess } from '../lib/serverAccess'
+import { canOpenChannelMenu, sidebarSections, type SidebarSections } from '../lib/channelSidebar'
+import SidebarFooter from '../../../app/SidebarFooter'
+import ResizeHandle from '../../../shared/ui/ResizeHandle'
+import { useResizableWidth } from '../../../shared/hooks/useResizableWidth'
+import ServerHeaderMenu from './ServerHeaderMenu'
+import ChannelSection, { ChannelDropLine } from './ChannelSection'
+import { ChannelMenuButton, ChannelMenuHost } from './ChannelMenu'
+import TextChannelRow from './TextChannelRow'
+import VoiceChannelRow from './VoiceChannelRow'
+import SidebarDialogs from './SidebarDialogs'
+
+/** O que as linhas de canal das duas seções compartilham. */
+interface ChannelListProps {
+  serverId: string
+  sections: SidebarSections
+  access: ServerAccess
+  reorder: ChannelReorder
+  menuRef: React.Ref<HTMLDivElement>
+}
+
+/** Menu do canal: "•••", botão direito e o próprio menu (cada item se esconde sem permissão). */
+function useChannelMenuProps(
+  { serverId, sections, access, reorder, menuRef }: ChannelListProps,
+  ch: Channel,
+  type: ChannelType
+): {
+  canOpen: boolean
+  onContextMenu?: (e: React.MouseEvent) => void
+  menu: React.ReactNode
+} {
+  const openMenu = useChannelSidebarStore((s) => s.openMenu)
+  const canOpen = canOpenChannelMenu(
+    ch,
+    access.can(Perm.MANAGE_CHANNELS),
+    access.canInChannel(ch.id, Perm.MANAGE_ROLES)
+  )
+  return {
+    canOpen,
+    // Botão direito no canal abre o mesmo menu do "•••".
+    onContextMenu: canOpen
+      ? (e) => {
+          e.preventDefault()
+          openMenu(ch.id)
+        }
+      : undefined,
+    menu: (
+      <ChannelMenuHost
+        serverId={serverId}
+        channel={ch}
+        section={sections[type]}
+        primaryId={sections.primaryId}
+        access={access}
+        move={reorder.move}
+        menuRef={menuRef}
+      />
+    )
+  }
+}
+
+function TextChannelItem({
+  list,
+  ch,
+  index
+}: {
+  list: ChannelListProps
+  ch: Channel
+  index: number
+}): React.JSX.Element {
+  const { channelId } = useParams<{ channelId: string }>()
+  const menu = useChannelMenuProps(list, ch, 'text')
+  const last = index === list.sections.text.length - 1
+  return (
+    <TextChannelRow
+      serverId={list.serverId}
+      channel={ch}
+      active={ch.id === channelId}
+      isPrivate={list.access.isPrivate(ch.id)}
+      isPrimary={ch.id === list.sections.primaryId}
+      dragging={list.reorder.draggingId === ch.id}
+      dragProps={{
+        ...list.reorder.dragSource(ch, 'text'),
+        ...list.reorder.dropTarget('text', index)
+      }}
+      dropLine={<ChannelDropLine side={list.reorder.lineSide('text', index, last)} />}
+      onContextMenu={menu.onContextMenu}
+      menuButton={menu.canOpen ? <ChannelMenuButton channelId={ch.id} /> : undefined}
+      menu={menu.menu}
+    />
+  )
+}
+
+function VoiceChannelItem({
+  list,
+  ch,
+  index,
+  onJoin
+}: {
+  list: ChannelListProps
+  ch: Channel
+  index: number
+  onJoin: (ch: Channel) => void
+}): React.JSX.Element {
+  const menu = useChannelMenuProps(list, ch, 'voice')
+  const last = index === list.sections.voice.length - 1
+  return (
+    <VoiceChannelRow
+      channel={ch}
+      access={list.access}
+      dragging={list.reorder.draggingId === ch.id}
+      dropLine={<ChannelDropLine side={list.reorder.lineSide('voice', index, last)} />}
+      dropTarget={list.reorder.dropTarget('voice', index)}
+      dragSource={list.reorder.dragSource(ch, 'voice')}
+      onJoin={() => onJoin(ch)}
+      onContextMenu={menu.onContextMenu}
+      renderMenuButton={
+        menu.canOpen
+          ? (onHover) => <ChannelMenuButton channelId={ch.id} onHover={onHover} />
+          : undefined
+      }
+      menu={menu.menu}
+    />
+  )
+}
+
+/** As duas seções de canais (texto e voz) do servidor aberto. */
+function ChannelLists({
+  server,
+  access
+}: {
+  server: Server | null
+  access: ServerAccess
+}): React.JSX.Element {
+  const serverId = server?.id ?? ''
+  const channels = useServerStore((s) => s.channels)
+  const loadedFor = useServerStore((s) => s.channelsLoadedFor)
+  const openCreate = useChannelSidebarStore((s) => s.openCreate)
+  const menuRef = useRef<HTMLDivElement>(null)
+  useChannelMenuDismiss(menuRef)
+  const sections = sidebarSections(server, channels, loadedFor)
+  const canManage = access.can(Perm.MANAGE_CHANNELS)
+  const reorder = useChannelReorder(serverId, sections, canManage)
+  const onJoin = useJoinVoiceChannel(access, server?.id)
+  const list: ChannelListProps = { serverId, sections, access, reorder, menuRef }
+  return (
+    <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
+      <ChannelSection
+        title="Canais de texto"
+        addLabel="Criar canal de texto"
+        onAdd={canManage ? () => openCreate('text') : undefined}
+        ready={sections.ready}
+        count={sections.text.length}
+        emptyText="Nenhum canal ainda."
+        skeleton={{ count: 6 }}
+        onDragLeave={reorder.clearOnLeave}
+      >
+        {sections.text.map((ch, index) => (
+          <TextChannelItem key={ch.id} list={list} ch={ch} index={index} />
+        ))}
+      </ChannelSection>
+      <ChannelSection
+        title="Canais de voz"
+        addLabel="Criar canal de voz"
+        onAdd={canManage ? () => openCreate('voice') : undefined}
+        ready={sections.ready}
+        count={sections.voice.length}
+        emptyText="Nenhum canal de voz ainda."
+        skeleton={{ count: 3, offset: 4 }}
+        onDragLeave={reorder.clearOnLeave}
+      >
+        {sections.voice.map((ch, index) => (
+          <VoiceChannelItem key={ch.id} list={list} ch={ch} index={index} onJoin={onJoin} />
+        ))}
+      </ChannelSection>
+    </div>
+  )
+}
+
+/** Barra de canais do servidor: cabeçalho com o menu, canais de texto e de voz e o rodapé. */
+export function ServerSidebar(): React.JSX.Element {
+  const server = useServerStore((s) => s.currentServer)
+  // Quem pode o quê vem dos cargos; o servidor confere de novo a cada ação.
+  const access = useServerAccess()
+  // Mesma preferência de largura na barra de canais e na de DMs/amigos.
+  const sidebar = useResizableWidth('channels')
+  // A sala do servidor (eventos, menções, não lidas) é assinada pela
+  // ServerRail para todos os servidores — sair desta tela não a cancela.
+  useServerCallsSync(server?.id)
+
+  return (
+    <>
+      {/* z-10: a alça de redimensionar passa um pouco da borda, sobre o conteúdo. */}
+      <aside
+        style={sidebar.panelStyle}
+        className="relative z-10 flex h-full shrink-0 flex-col border-r border-subtle bg-secondary backdrop-blur-2xl"
+      >
+        <ResizeHandle {...sidebar.handleProps} />
+        <ServerHeaderMenu server={server} access={access} />
+        <ChannelLists server={server} access={access} />
+        {/* "Voz conectada" na chamada + a barra do usuário (igual em todas as telas) */}
+        <SidebarFooter />
+      </aside>
+      {server && <SidebarDialogs server={server} />}
+    </>
+  )
+}
+
+export default ServerSidebar

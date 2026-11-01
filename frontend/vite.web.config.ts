@@ -4,7 +4,7 @@ import {
   buildWebConnectSrc,
   buildWebMediaSrc,
   WEB_EXTRA_CSP
-} from './src/renderer/src/lib/serverUrl'
+} from './src/renderer/src/shared/lib/serverUrl'
 import { cspPlugin, rendererShared } from './vite.renderer.shared'
 
 // Salinha no navegador (yarn build:web → dist-web/). O mesmo renderer do app
@@ -42,7 +42,7 @@ const webHeadPlugin: Plugin = {
       attrs: { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
       injectTo: 'head'
     },
-    { tag: 'meta', attrs: { name: 'theme-color', content: '#050508' }, injectTo: 'head' }
+    { tag: 'meta', attrs: { name: 'theme-color', content: '#121214' }, injectTo: 'head' }
   ]
 }
 

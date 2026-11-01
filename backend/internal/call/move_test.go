@@ -1,10 +1,13 @@
 package call
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
 	"gin-quickstart/backend/internal/channel"
+	"gin-quickstart/backend/internal/platform/websocket"
 )
 
 func voiceChannel(id string) *channel.Channel {
@@ -74,5 +77,128 @@ func TestVoiceLocationOf(t *testing.T) {
 	s.calls["call-1"].info.Type = TypeDM
 	if _, ok := s.voiceLocationOf("ana"); ok {
 		t.Fatal("a DM call is not a voice channel")
+	}
+}
+
+// O publisher de verdade (o Hub) sabe tirar alguém da sala da chamada.
+var _ callRoomLeaver = (*websocket.Hub)(nil)
+
+// roomPublisher imita as salas do Hub: BroadcastToCall chega só a quem está
+// inscrito em call:<id>, SendToUser chega sempre.
+type roomPublisher struct {
+	members map[string]map[string]bool // sala -> usuários inscritos
+	got     map[string][]string        // usuário -> tipos de evento recebidos
+}
+
+func newRoomPublisher() *roomPublisher {
+	return &roomPublisher{members: map[string]map[string]bool{}, got: map[string][]string{}}
+}
+
+func (p *roomPublisher) join(room string, users ...string) {
+	if p.members[room] == nil {
+		p.members[room] = map[string]bool{}
+	}
+	for _, u := range users {
+		p.members[room][u] = true
+	}
+}
+
+func (p *roomPublisher) deliver(userID string, raw []byte) {
+	var event struct {
+		Type string `json:"type"`
+	}
+	_ = json.Unmarshal(raw, &event)
+	p.got[userID] = append(p.got[userID], event.Type)
+}
+
+func (p *roomPublisher) SendToUser(userID string, event []byte) { p.deliver(userID, event) }
+func (p *roomPublisher) BroadcastToCall(callID string, event []byte) {
+	p.BroadcastToRoom("call:"+callID, event)
+}
+func (p *roomPublisher) BroadcastToRoom(room string, event []byte) {
+	for u := range p.members[room] {
+		p.deliver(u, event)
+	}
+}
+func (p *roomPublisher) UnsubscribeUser(userID, room string) { delete(p.members[room], userID) }
+
+func (p *roomPublisher) received(userID, eventType string) bool {
+	for _, t := range p.got[userID] {
+		if t == eventType {
+			return true
+		}
+	}
+	return false
+}
+
+// moveFixture: ana (e quem mais vier) na chamada call-1 do canal geral; o
+// mod a move para o palco. Sem banco: sair avisa a chamada como o Leave
+// (call:left e, se esvaziou, call:ended) e entrar no destino dá a call-2.
+func moveFixture(t *testing.T, inGeral ...string) (*Service, *roomPublisher) {
+	t.Helper()
+	svc, _, _ := newVoiceService(voiceSnapshot())
+	pub := newRoomPublisher()
+	svc.publisher = pub
+	putInCall(svc, "call-1", "geral", inGeral...)
+	pub.join("call:call-1", inGeral...)
+	pub.join("server:srv-1", "dono", "mod", "ana")
+	svc.leaveCall = func(_ context.Context, callID, userID string) error {
+		remaining, _, err := svc.detachParticipant(callID, userID)
+		svc.publisher.BroadcastToCall(callID, marshalEvent("call:left", StateEvent{CallID: callID, User: UserInfo{ID: userID}}))
+		if remaining == 0 {
+			svc.publisher.BroadcastToCall(callID, marshalEvent("call:ended", EndedEvent{CallID: callID}))
+		}
+		return err
+	}
+	return svc, pub
+}
+
+func moveAnaToPalco(t *testing.T, svc *Service) *Call {
+	t.Helper()
+	joined := &Call{ID: "call-2"}
+	palco := &channel.Channel{ID: "palco", ServerID: "srv-1", Type: channel.TypeVoice}
+	call, err := svc.moveTo(context.Background(), "mod", "ana", palco, func() (*Call, error) {
+		return joined, nil
+	})
+	if err != nil {
+		t.Fatalf("moveTo: %v", err)
+	}
+	if call != joined {
+		t.Fatalf("moveTo devolveu %+v, quer a chamada do destino", call)
+	}
+	return call
+}
+
+// Issue #368: quem estava sozinha recebia o call:ended da chamada antiga antes
+// do call:moved; o cliente largava a chamada e ignorava o call:moved, e a
+// pessoa ficava na lista do canal novo sem estar de fato nele.
+func TestMovedAloneDoesNotHearOldCallEnd(t *testing.T) {
+	svc, pub := moveFixture(t, "ana")
+
+	moveAnaToPalco(t, svc)
+
+	if pub.received("ana", "call:ended") || pub.received("ana", "call:left") {
+		t.Fatalf("ana recebeu o fim da chamada antiga: %v", pub.got["ana"])
+	}
+	if !pub.received("ana", "call:moved") {
+		t.Fatalf("ana não recebeu o call:moved: %v", pub.got["ana"])
+	}
+}
+
+// Com gente ficando na sala antiga, quem fica a vê sair; ela mesma só recebe
+// o call:moved (o call:left dela fazia o cliente tentar voltar para a sala antiga).
+func TestMovedLeavesOthersBehind(t *testing.T) {
+	svc, pub := moveFixture(t, "ana", "mod")
+
+	moveAnaToPalco(t, svc)
+
+	if !pub.received("mod", "call:left") {
+		t.Fatalf("mod não viu a ana sair: %v", pub.got["mod"])
+	}
+	if pub.received("ana", "call:left") {
+		t.Fatalf("ana recebeu a própria saída da chamada antiga: %v", pub.got["ana"])
+	}
+	if !pub.received("ana", "call:moved") {
+		t.Fatalf("ana não recebeu o call:moved: %v", pub.got["ana"])
 	}
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 
-	"gin-quickstart/backend/internal/mailer"
+	"gin-quickstart/backend/internal/platform/mailer"
 	"gin-quickstart/backend/internal/user"
 )
 

@@ -1,0 +1,292 @@
+@import './nameFonts.css';
+
+.name-rainbow {
+  background-image: linear-gradient(
+    90deg,
+    #ff4d4d,
+    #ffb84d,
+    #f2ff4d,
+    #4dff88,
+    #4dc3ff,
+    #b84dff,
+    #ff4d4d
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: name-rainbow 4s linear infinite;
+}
+
+.name-pulse {
+  animation: name-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes name-rainbow {
+  to {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes name-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* Efeitos novos. Só CSS: transform/opacity quando dá (compositor), e os de
+   fundo recortado no texto (degradê, fogo, brilho) mexem só a posição do fundo,
+   como o arco-íris. Nada roda JS por quadro. */
+
+.name-flow {
+  background-size: 200% 100%;
+  animation: name-rainbow 3s linear infinite;
+}
+
+/* Neon pulsante: o brilho fixo no texto e uma cópia mais forte por cima que
+   pisca (só opacity anima). */
+.name-glow {
+  position: relative;
+  text-shadow:
+    0 0 3px var(--name-c1),
+    0 0 8px var(--name-c1);
+}
+.name-glow::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  text-shadow:
+    0 0 6px var(--name-c1),
+    0 0 14px var(--name-c1),
+    0 0 24px var(--name-c1);
+  animation: name-glow 2.4s ease-in-out infinite;
+}
+
+/* Glitch: duas cópias (vermelha e ciano) deslocadas que piscam em fatias
+   num trecho curto do ciclo; o resto do tempo ficam escondidas. */
+.name-glitch {
+  position: relative;
+}
+.name-glitch::before,
+.name-glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+.name-glitch::before {
+  color: #ff2a6d;
+  animation: name-glitch-a 2.8s steps(1, end) infinite;
+}
+.name-glitch::after {
+  color: #05d9e8;
+  animation: name-glitch-b 2.8s steps(1, end) infinite;
+}
+
+.name-fire {
+  background-image: linear-gradient(0deg, #ff2d00, #ff8a00 25%, #ffe14d 50%, #ff8a00 75%, #ff2d00);
+  background-size: 100% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 3px rgb(255 98 0 / 0.65));
+  animation: name-fire 1.4s linear infinite;
+}
+
+.name-wave-ch {
+  display: inline-block;
+  white-space: pre;
+  animation: name-wave 1.6s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+
+.name-shimmer {
+  background-size: 250% 100%;
+  animation: name-shimmer 2.6s linear infinite;
+}
+
+/* Brilhos: duas estrelinhas em volta do nome (só opacity/transform). */
+.name-sparkle {
+  position: relative;
+}
+.name-sparkle::before,
+.name-sparkle::after {
+  content: '\2726';
+  position: absolute;
+  pointer-events: none;
+  font-family: system-ui, sans-serif;
+  font-size: 0.5em;
+  line-height: 1;
+  color: #fff6c2;
+  text-shadow: 0 0 4px #ffd84d;
+  animation: name-twinkle 1.8s ease-in-out infinite;
+}
+.name-sparkle::before {
+  top: 0;
+  right: -0.55em;
+}
+.name-sparkle::after {
+  bottom: 0.05em;
+  left: -0.45em;
+  animation-delay: 0.9s;
+}
+
+/* Digitando: o nome aparece em passos (um por letra), para e recomeça. */
+.name-typewriter {
+  clip-path: inset(0 100% 0 0);
+  animation: name-type 4.5s steps(var(--name-steps, 8), end) infinite;
+}
+
+.name-chrome {
+  background-image: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    #dfe5ec 38%,
+    #7d8794 50%,
+    #c9d1da 62%,
+    #f4f7fa 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 1px 0 rgb(0 0 0 / 0.55));
+}
+
+@keyframes name-glow {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+  52% {
+    opacity: 0.5;
+  }
+  54% {
+    opacity: 1;
+  }
+}
+
+@keyframes name-glitch-a {
+  0%,
+  86%,
+  100% {
+    opacity: 0;
+    transform: none;
+    clip-path: none;
+  }
+  88% {
+    opacity: 0.9;
+    transform: translate(-2px, 0);
+    clip-path: inset(10% 0 55% 0);
+  }
+  92% {
+    opacity: 0.9;
+    transform: translate(2px, 1px);
+    clip-path: inset(60% 0 8% 0);
+  }
+  96% {
+    opacity: 0.9;
+    transform: translate(-1px, -1px);
+    clip-path: inset(30% 0 40% 0);
+  }
+}
+
+@keyframes name-glitch-b {
+  0%,
+  86%,
+  100% {
+    opacity: 0;
+    transform: none;
+    clip-path: none;
+  }
+  88% {
+    opacity: 0.9;
+    transform: translate(2px, 0);
+    clip-path: inset(55% 0 12% 0);
+  }
+  92% {
+    opacity: 0.9;
+    transform: translate(-2px, -1px);
+    clip-path: inset(5% 0 70% 0);
+  }
+  96% {
+    opacity: 0.9;
+    transform: translate(1px, 1px);
+    clip-path: inset(40% 0 30% 0);
+  }
+}
+
+@keyframes name-fire {
+  to {
+    background-position: 0 -200%;
+  }
+}
+
+@keyframes name-wave {
+  0%,
+  60%,
+  100% {
+    transform: none;
+  }
+  30% {
+    transform: translateY(-0.18em);
+  }
+}
+
+@keyframes name-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
+}
+
+@keyframes name-twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.6);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes name-type {
+  0% {
+    clip-path: inset(0 100% 0 0);
+  }
+  60%,
+  100% {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .name-rainbow,
+  .name-pulse,
+  .name-flow,
+  .name-fire,
+  .name-shimmer,
+  .name-wave-ch,
+  .name-typewriter,
+  .name-glow::after,
+  .name-sparkle::before,
+  .name-sparkle::after {
+    animation: none;
+  }
+  /* Parado: o nome inteiro, sem as cópias que piscam. */
+  .name-typewriter {
+    clip-path: none;
+  }
+  .name-glitch::before,
+  .name-glitch::after {
+    display: none;
+  }
+}

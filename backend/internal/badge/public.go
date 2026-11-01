@@ -27,6 +27,9 @@ type PublicBadge struct {
 	Rarity      string       `json:"rarity"`
 	UnlockedAt  string       `json:"unlocked_at"`
 	Tiers       []PublicTier `json:"tiers"`
+	// Só no Top 10 do nível 100: a posição de chegada não muda nem diz o que
+	// a pessoa está fazendo, então aparece para todos.
+	Value int64 `json:"value,omitempty"`
 }
 
 func day(at *time.Time) string {
@@ -34,6 +37,13 @@ func day(at *time.Time) string {
 		return ""
 	}
 	return at.In(Brasilia()).Format("2006-01-02")
+}
+
+func publicValue(b Badge) int64 {
+	if b.Unit == UnitRank {
+		return b.Value
+	}
+	return 0
 }
 
 // publicView tira dos badges tudo que não é "o que conquistou e quando".
@@ -57,6 +67,7 @@ func publicView(badges []Badge) []PublicBadge {
 			Rarity:      b.Rarity,
 			UnlockedAt:  day(b.UnlockedAt),
 			Tiers:       tiers,
+			Value:       publicValue(b),
 		})
 	}
 	return out

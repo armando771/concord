@@ -3,7 +3,7 @@ import { resolve } from 'path'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import type { Plugin, UserConfig } from 'vite'
-import { fillCsp } from './src/renderer/src/lib/serverUrl'
+import { fillCsp } from './src/renderer/src/shared/lib/serverUrl'
 
 // O que o renderer tem igual no app desktop (electron.vite.config.ts) e no
 // navegador (vite.web.config.ts): aliases, plugins e assets. Mexeu aqui, os
@@ -23,14 +23,50 @@ export function cspPlugin(connectSrc: string, mediaSrc: string, extra?: string):
  * no out/renderer (desktop) e no dist-web. O instalador também leva uma cópia
  * em resources/licenses (electron-builder.yml).
  */
+// Fontes do estilo de nome (assets/nameFonts.css), todas OFL com copyright próprio.
+const NAME_FONT_PACKAGES = [
+  'bitter',
+  'pacifico',
+  'chango',
+  'montserrat',
+  'cinzel-decorative',
+  'press-start-2p',
+  'grenze-gotisch',
+  'caveat',
+  'zilla-slab',
+  'oswald',
+  'jetbrains-mono',
+  'bungee',
+  'silkscreen',
+  'vt323',
+  'dancing-script',
+  'great-vibes',
+  'unifrakturmaguntia',
+  'space-mono',
+  'fredoka',
+  'comfortaa',
+  'lobster',
+  'righteous',
+  'monoton',
+  'bangers',
+  'orbitron',
+  'creepster'
+]
+
 export const fontLicensePlugin: Plugin = {
   name: 'salinha-font-license',
   apply: 'build',
   generateBundle() {
+    const licenses: [string, string][] = [
+      ['outfit', 'node_modules/@fontsource-variable/outfit/LICENSE'],
+      ...NAME_FONT_PACKAGES.map((p): [string, string] => [p, `node_modules/@fontsource/${p}/LICENSE`])
+    ]
     this.emitFile({
       type: 'asset',
       fileName: 'assets/OFL.txt',
-      source: readFileSync(resolve('node_modules/@fontsource-variable/outfit/LICENSE'), 'utf8')
+      source: licenses
+        .map(([name, file]) => `=== ${name} ===\n${readFileSync(resolve(file), 'utf8')}`)
+        .join('\n\n')
     })
   }
 }
@@ -46,6 +82,6 @@ export function rendererShared(
     },
     plugins: [react(), tailwindcss(), fontLicensePlugin, ...extraPlugins],
     // O WASM do RNNoise entra inline (lib/noiseSuppression.ts).
-    assetsInclude: ['**/*.wasm']
+    assetsInclude: ['**/*.wasm', '**/*.tflite']
   }
 }

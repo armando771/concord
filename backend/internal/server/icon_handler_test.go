@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"gin-quickstart/backend/internal/media"
+	"gin-quickstart/backend/internal/platform/media"
 	"gin-quickstart/backend/internal/permission"
 	"gin-quickstart/backend/internal/user"
 

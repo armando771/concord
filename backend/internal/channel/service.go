@@ -12,6 +12,7 @@ import (
 var (
 	ErrNameRequired    = errors.New("name is required")
 	ErrChannelNotFound = errors.New("channel not found")
+	ErrSystemChannel   = errors.New("system channel cannot be changed")
 )
 
 type EventPublisher interface {
@@ -28,6 +29,8 @@ type EventPublisher interface {
 type store interface {
 	Create(ctx context.Context, ch *Channel, overwrites []permission.Overwrite) error
 	FindByID(ctx context.Context, id string) (*Channel, error)
+	FindSystemByServerID(ctx context.Context, serverID string) (*Channel, error)
+	FindNoticesByServerID(ctx context.Context, serverID string) (*Channel, error)
 	Update(ctx context.Context, id string, name string) error
 	Delete(ctx context.Context, id string) error
 	ListByServerID(ctx context.Context, serverID string) ([]Channel, error)
@@ -39,6 +42,9 @@ type store interface {
 type Service struct {
 	repository store
 	publisher  EventPublisher
+
+	// Chamados quando o canal do Maestro nasce com um servidor novo.
+	onSystemCreated []func(ctx context.Context, ch *Channel)
 }
 
 func ChannelService(repository *Repository, publisher EventPublisher) *Service {
@@ -52,8 +58,43 @@ func newService(repository store, publisher EventPublisher) *Service {
 	}
 }
 
-// Create cria o canal já com as sobrescritas (canal privado).
+// Create cria o canal já com as sobrescritas (canal privado). O canal de
+// sistema só nasce por CreateSystem/CreateNotices, nunca por pedido do cliente.
 func (s *Service) Create(ctx context.Context, ch *Channel, overwrites ...permission.Overwrite) error {
+	ch.IsSystem = false
+	return s.create(ctx, ch, overwrites)
+}
+
+// CreateSystem cria o canal "musica" do servidor (usado na criação do servidor).
+func (s *Service) CreateSystem(ctx context.Context, serverID, createdBy string) (*Channel, error) {
+	ch := &Channel{ServerID: serverID, Name: SystemChannelName, Type: TypeText, CreatedBy: createdBy, IsSystem: true}
+	if err := s.create(ctx, ch, nil); err != nil {
+		return nil, err
+	}
+	s.notifySystemCreated(ctx, ch)
+	return ch, nil
+}
+
+// CreateNotices cria o canal "avisos" do servidor (usado na criação do servidor).
+func (s *Service) CreateNotices(ctx context.Context, serverID, createdBy string) (*Channel, error) {
+	ch := &Channel{ServerID: serverID, Name: NoticesChannelName, Type: TypeText, CreatedBy: createdBy, IsSystem: true}
+	if err := s.create(ctx, ch, nil); err != nil {
+		return nil, err
+	}
+	return ch, nil
+}
+
+// SystemChannel: o canal "musica" (do Maestro) do servidor (ErrChannelNotFound se não tem).
+func (s *Service) SystemChannel(ctx context.Context, serverID string) (*Channel, error) {
+	return s.repository.FindSystemByServerID(ctx, serverID)
+}
+
+// NoticesChannel: o canal "avisos" do servidor (ErrChannelNotFound se não tem).
+func (s *Service) NoticesChannel(ctx context.Context, serverID string) (*Channel, error) {
+	return s.repository.FindNoticesByServerID(ctx, serverID)
+}
+
+func (s *Service) create(ctx context.Context, ch *Channel, overwrites []permission.Overwrite) error {
 	if ch.Name == "" {
 		return ErrNameRequired
 	}
@@ -95,6 +136,9 @@ func (s *Service) Update(ctx context.Context, id string, name string) (*Channel,
 	if err != nil {
 		return nil, ErrChannelNotFound
 	}
+	if ch.IsSystem {
+		return nil, ErrSystemChannel
+	}
 
 	if err := s.repository.Update(ctx, id, name); err != nil {
 		return nil, err
@@ -119,6 +163,9 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	ch, err := s.repository.FindByID(ctx, id)
 	if err != nil {
 		return ErrChannelNotFound
+	}
+	if ch.IsSystem {
+		return ErrSystemChannel
 	}
 
 	if err := s.repository.Delete(ctx, id); err != nil {
@@ -171,6 +218,9 @@ func (s *Service) ListByServerID(ctx context.Context, serverID string) ([]Channe
 // SetOverwrite grava a sobrescrita e avisa o servidor (o canal muda para quem
 // ganhou ou perdeu acesso).
 func (s *Service) SetOverwrite(ctx context.Context, ch *Channel, o permission.Overwrite) error {
+	if ch.IsSystem {
+		return ErrSystemChannel
+	}
 	o.ChannelID = ch.ID
 	if err := s.repository.SetOverwrite(ctx, ch.ID, o); err != nil {
 		return err
@@ -180,6 +230,9 @@ func (s *Service) SetOverwrite(ctx context.Context, ch *Channel, o permission.Ov
 }
 
 func (s *Service) DeleteOverwrite(ctx context.Context, ch *Channel, targetType, targetID string) error {
+	if ch.IsSystem {
+		return ErrSystemChannel
+	}
 	if err := s.repository.DeleteOverwrite(ctx, ch.ID, targetType, targetID); err != nil {
 		return err
 	}

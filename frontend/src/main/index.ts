@@ -12,31 +12,58 @@ import {
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { displayAudioMode } from './displayMedia'
-import { PendingDisplayRequest } from './displayPicker'
-import { attachCloseToTray, ensureSingleInstance, setupBackground, startHidden } from './background'
-import { setupUpdater } from './updater'
-import { setupOverlay } from './overlay'
-import { setupGlobalKeybinds } from './globalKeybinds'
-import { setupGames } from './games'
-import { setupAppMetrics } from './appMetrics'
-import { handleInviteArgs, setupInviteProtocol } from './inviteProtocol'
-import { closeActivity, setupActivities } from './activityWindow'
-import { APP_USER_MODEL_ID } from './toastPolicy'
-import { setupToasts } from './toasts'
-import { TITLE_BAR_COLOR, titleBarOptions } from './windowPolicy'
+import trayIcon from '../../resources/tray.png?asset'
+import trayIcon2x from '../../resources/tray-2x.png?asset'
+import './screen/captureSwitches'
+import { PendingDisplayRequest } from './screen/displayPicker'
+import { shareStreams, type ShareDeps } from './screen/shareSource'
+import { WindowWatch } from './screen/windowWatch'
+import { PreferredSource, findGameWindow, listProcessWindows } from './screen/gameWindow'
+import { checkScreenCastPortal } from './screen/screenPortal'
+import { portalMissingMessage, screenShareFlow } from '../shared/screenShareFlow'
+import {
+  attachCloseToTray,
+  ensureSingleInstance,
+  isInCall,
+  onCallStateChange,
+  setupBackground,
+  startHidden
+} from './window/background'
+import { watchWindowActivity } from './window/windowActivity'
+import { setupUpdater } from './updates/updater'
+import { updateFeedFor } from './server/serverChoice'
+import { registerServerDiagnostics, startServerChoice } from './server/serverSetup'
+import { serverArgs } from '../shared/serverConnection'
+import { setupOverlay } from './overlay/overlay'
+import { setupGlobalKeybinds } from './overlay/globalKeybinds'
+import { setupGames } from './activity/games'
+import { setupMusic } from './activity/music'
+import { setupAppMetrics } from './app/appMetrics'
+import { setupTTS } from './tts/ttsSetup'
+import { setupPerfLog } from './perf/setupPerfLog'
+import { handleInviteArgs, handleInviteUrl, setupInviteProtocol } from './app/inviteProtocol'
+import { closeActivity, setupActivities } from './activity/activityWindow'
+import { APP_USER_MODEL_ID } from './window/toastPolicy'
+import { setupToasts } from './window/toasts'
+import {
+  parseTitleBarColors,
+  TITLE_BAR_COLOR,
+  TITLE_BAR_HEIGHT,
+  titleBarOptions
+} from './window/windowPolicy'
 import { isSafeExternalUrl } from '../shared/externalUrl'
-import { contextMenuItems } from './contextMenu'
+import { contextMenuItems } from './window/contextMenu'
 import {
   audioLogPath,
-  hwndFromSourceId,
   logAudio,
   registerScreenAudio,
   startWindowAudio,
   stopWindowAudio
-} from './screenAudio'
+} from './screen/screenAudio'
 
 let mainWindow: BrowserWindow | null = null
+/** Endereço do servidor que respondeu ao abrir (undefined no dev: o do build). */
+let serverUrl: string | undefined
 
 // Picker de tela (Fase 3): o getDisplayMedia do renderer dispara este handler,
 // que pede ao renderer para abrir o modal de seleção e resolve com a fonte
@@ -45,44 +72,101 @@ const pendingDisplay = new PendingDisplayRequest((err) =>
   logAudio(`recusar o compartilhamento falhou: ${String(err)}`)
 )
 let pendingAudioRequested = false
-
-const WINDOW_WATCH_MS = 2000
-let windowWatch: NodeJS.Timeout | null = null
-
-function stopWindowWatch(): void {
-  if (windowWatch) clearInterval(windowWatch)
-  windowWatch = null
+// Janela do jogo em atividade escolhida pelo card (pula o modal de seleção).
+const preferredSource = new PreferredSource()
+const captureDeps = {
+  windows: () =>
+    desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 } }),
+  hwnds: listProcessWindows
 }
 
-// Janela minimizada some da lista de janelas e o Windows para de gerar imagem
-// dela: quem assiste vê a live congelar. Avisa quem compartilha, uma vez por
-// minimização.
-function watchSharedWindow(sourceId: string): void {
-  stopWindowWatch()
-  let hidden = false
-  windowWatch = setInterval(async () => {
+const windowWatch = new WindowWatch(
+  async () => (await captureDeps.windows()).map((s) => s.id),
+  () => mainWindow?.webContents.send('screen-share:window-hidden')
+)
+
+/** Tema trocou no renderer: a barra de título nativa acompanha (Windows/Linux). */
+function registerThemeHandlers(): void {
+  ipcMain.on('window:title-bar-colors', (event, raw: unknown) => {
+    const win = mainWindow
+    if (!win || event.sender !== win.webContents) return
+    const colors = parseTitleBarColors(raw)
+    if (!colors) return
+    win.setBackgroundColor(colors.color)
+    if (process.platform === 'darwin') return
     try {
-      const sources = await desktopCapturer.getSources({
-        types: ['window'],
-        thumbnailSize: { width: 0, height: 0 }
-      })
-      const missing = !sources.some((s) => s.id === sourceId)
-      if (missing && !hidden) mainWindow?.webContents.send('screen-share:window-hidden')
-      hidden = missing
+      win.setTitleBarOverlay({ ...colors, height: TITLE_BAR_HEIGHT })
     } catch {
-      /* próxima volta tenta de novo */
+      // Sem overlay nativo nesta plataforma/versão: só a faixa do renderer muda.
     }
-  }, WINDOW_WATCH_MS)
+  })
 }
 
 function registerScreenShareHandlers(): void {
-  ipcMain.on('screen-share:ended', stopWindowWatch)
+  ipcMain.on('screen-share:ended', () => windowWatch.stop())
+
+  // Wayland: o seletor é o do sistema (xdg-desktop-portal). Cada getSources
+  // abre o seletor e devolve só a fonte escolhida, com id novo a cada vez —
+  // por isso não dá para listar no modal do app e depois procurar pelo id.
+  const flow = screenShareFlow(process.platform, process.env)
+
+  // O renderer pergunta antes de abrir o seletor: sem o portal, o getSources
+  // falha igual a um "Cancelar" e ninguém saberia o motivo.
+  ipcMain.handle('screen-share:portal-status', async () => {
+    const status = flow === 'portal' ? await checkScreenCastPortal() : 'available'
+    if (status === 'missing') logAudio('portal: sem a interface ScreenCast do xdg-desktop-portal')
+    return { status, message: portalMissingMessage(process.env.XDG_CURRENT_DESKTOP) }
+  })
 
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     pendingDisplay.hold(callback)
     pendingAudioRequested = request.audioRequested
-    mainWindow?.webContents.send('screen-picker:show')
+    if (flow === 'portal') {
+      windowWatch.stop()
+      void shareFromPortal()
+      return
+    }
+    const preferred = preferredSource.take()
+    if (preferred) void shareSource(preferred)
+    else mainWindow?.webContents.send('screen-picker:show')
   })
+
+  // Card do jogo: acha a janela dele; se achar, o próximo getDisplayMedia a usa.
+  ipcMain.handle('screen-share:prefer-game', async (_event, gameName: unknown) => {
+    preferredSource.clear()
+    const id = flow === 'app' ? await findGameWindow(gameName, captureDeps) : null
+    if (id) preferredSource.set(id)
+    return id
+  })
+
+  // O som não vai junto no Linux (o loopback do Electron é só do Windows).
+  let portalRequest = 0
+  async function shareFromPortal(): Promise<void> {
+    const ticket = ++portalRequest
+    let source: Electron.DesktopCapturerSource | undefined
+    try {
+      // Tela e janela: o portal oferece as duas (vem como "window:" qualquer
+      // que seja a escolha). Sem miniatura: ninguém vai ver.
+      const sources = await desktopCapturer.getSources({
+        types: ['screen', 'window'],
+        thumbnailSize: { width: 0, height: 0 }
+      })
+      source = sources[0]
+    } catch (err) {
+      // Cancelou o seletor do sistema (ou o portal falhou).
+      logAudio(`portal: sem fonte (${String(err)})`)
+    }
+    // Um pedido mais novo chegou enquanto o seletor estava aberto: ele responde.
+    if (ticket !== portalRequest) return
+    const callback = pendingDisplay.take()
+    if (!callback) return
+    if (!source) {
+      callback(null)
+      return
+    }
+    logAudio(`compartilhando pelo portal (${source.id}): som = none`)
+    callback({ video: source })
+  }
 
   ipcMain.handle('screen-picker:sources', async () => {
     const sources = await desktopCapturer.getSources({
@@ -99,57 +183,34 @@ function registerScreenShareHandlers(): void {
     }))
   })
 
-  ipcMain.on('screen-picker:select', async (_event, sourceId: string) => {
+  // Responde o getDisplayMedia pendente com a fonte escolhida (modal ou atalho do jogo).
+  async function shareSource(sourceId: string): Promise<void> {
     const callback = pendingDisplay.take()
     if (!callback) return
-    try {
-      const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] })
-      const source = sources.find((s) => s.id === sourceId)
-      // Cada escolha começa do zero: nada do compartilhamento anterior.
-      stopWindowAudio()
-      if (!source) {
-        logAudio(`fonte ${sourceId} não encontrada`)
-        callback(null)
-        return
-      }
-      const hwnd = hwndFromSourceId(source.id)
-      let windowAudioOk = false
-      if (hwnd && pendingAudioRequested && process.platform === 'win32' && mainWindow) {
-        windowAudioOk = await startWindowAudio(hwnd, mainWindow.webContents)
-      }
-      const mode = displayAudioMode({
-        sourceId: source.id,
-        audioRequested: pendingAudioRequested,
-        platform: process.platform,
-        windowAudioOk
-      })
-      logAudio(`compartilhando "${source.name}" (${source.id}): som = ${mode}`)
-      if (mode === 'none' && source.id.startsWith('window:') && pendingAudioRequested) {
-        mainWindow?.webContents.send('screen-audio:fallback', audioLogPath())
-      }
-      if (source.id.startsWith('window:')) watchSharedWindow(source.id)
-      else stopWindowWatch()
-      callback(mode === 'system' ? { video: source, audio: 'loopback' } : { video: source })
-    } catch (err) {
-      logAudio(`falha ao compartilhar ${sourceId}: ${String(err)}`)
-      callback(null)
-    }
+    callback(await shareStreams(sourceId, shareDeps()))
+  }
+
+  const shareDeps = (): ShareDeps => ({
+    listSources: () => desktopCapturer.getSources({ types: ['screen', 'window'] }),
+    stopWindowAudio,
+    startWindowAudio: (hwnd) =>
+      mainWindow ? startWindowAudio(hwnd, mainWindow.webContents) : Promise.resolve(false),
+    watchWindow: (id) => windowWatch.watch(id),
+    stopWatch: () => windowWatch.stop(),
+    warnAudioFallback: () =>
+      mainWindow?.webContents.send('screen-audio:fallback', audioLogPath()),
+    log: logAudio,
+    audioRequested: pendingAudioRequested,
+    platform: process.platform
   })
+
+  ipcMain.on('screen-picker:select', (_event, sourceId: string) => void shareSource(sourceId))
 
   ipcMain.on('screen-picker:cancel', () => {
     stopWindowAudio()
     pendingDisplay.deny()
   })
 }
-
-// Janela coberta/minimizada não pode ser tratada como oculta: o Windows marca
-// como "ocluída" e o Chromium para de renderizar (a captura congela).
-app.commandLine.appendSwitch('disable-renderer-backgrounding')
-app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
-app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
-// Captura de janela/tela via Windows Graphics Capture: continua entregando
-// quadros de uma janela coberta por outra (o capturador GDI antigo congela).
-app.commandLine.appendSwitch('enable-features', 'AllowWgcWindowCapturer,AllowWgcScreenCapturer')
 
 function createWindow(): void {
   // Create the browser window.
@@ -167,9 +228,10 @@ function createWindow(): void {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
-      // Sem isso o Chromium reduz timers/render da janela em segundo plano e a
-      // live (captura de tela/WebRTC) trava para quem assiste.
-      backgroundThrottling: false
+      // Em chamada o throttling de segundo plano fica desligado (a live travaria
+      // para quem assiste); fora dela, ligado. Quem decide é o watchWindowActivity.
+      backgroundThrottling: false,
+      additionalArguments: serverArgs(serverUrl)
     }
   })
 
@@ -178,6 +240,7 @@ function createWindow(): void {
     if (!startHidden()) mainWindow?.show()
   })
   attachCloseToTray(mainWindow)
+  watchWindowActivity(mainWindow, { inCall: isInCall, onCallStateChange })
 
   mainWindow.on('closed', () => {
     pendingDisplay.deny()
@@ -187,7 +250,9 @@ function createWindow(): void {
 
   // Link do chat (target="_blank") abre no navegador de fora. Só http/https:
   // o openExternal abriria qualquer esquema (file:, smb:, ms-settings:…).
+  // Link de convite nosso abre a confirmação aqui mesmo, não o navegador.
   mainWindow.webContents.setWindowOpenHandler((details) => {
+    if (handleInviteUrl(details.url, () => mainWindow)) return { action: 'deny' }
     if (isSafeExternalUrl(details.url)) void shell.openExternal(details.url)
     return { action: 'deny' }
   })
@@ -205,6 +270,7 @@ function createWindow(): void {
         label: item.label,
         click: () => {
           if (item.action === 'copyLink') clipboard.writeText(url)
+          else if (handleInviteUrl(url, () => mainWindow)) return
           else if (isSafeExternalUrl(url)) void shell.openExternal(url)
         }
       }
@@ -213,12 +279,16 @@ function createWindow(): void {
       Menu.buildFromTemplate(template).popup({ window: mainWindow })
   })
 
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
+  loadRenderer(mainWindow)
+}
+
+// HMR for renderer base on electron-vite cli.
+// Load the remote URL for development or the local html file for production.
+function loadRenderer(win: BrowserWindow): void {
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    void win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
 
@@ -244,6 +314,11 @@ if (
 }
 
 app.whenReady().then(() => {
+  // Primeiro de tudo: o tempo de abertura medido começa daqui. Sem --perf-log não faz nada.
+  setupPerfLog(() => mainWindow)
+  // Testa os endereços do servidor enquanto o resto inicia.
+  const serverChoice = startServerChoice(__CONCORD_SERVER_URLS__)
+  registerServerDiagnostics(serverChoice, __CONCORD_SERVER_URLS__)
   // Set app user model id for windows. Mantém o id do Concord (nome antigo):
   // é o que liga notificações, atalho de login e instalação ao mesmo app.
   electronApp.setAppUserModelId(APP_USER_MODEL_ID)
@@ -253,17 +328,16 @@ app.whenReady().then(() => {
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
 
   registerScreenShareHandlers()
+  registerThemeHandlers()
   registerScreenAudio()
-  setupBackground(() => mainWindow, icon)
+  setupBackground(() => mainWindow, icon, { small: trayIcon, large: trayIcon2x })
   setupOverlay(() => mainWindow)
   setupGlobalKeybinds(() => mainWindow)
   setupActivities(() => mainWindow)
   setupGames(() => mainWindow)
+  setupMusic(() => mainWindow)
   setupAppMetrics(() => mainWindow)
-  setupUpdater(() => mainWindow, {
-    feedUrl: __CONCORD_UPDATE_URL__,
-    publicKeyPem: __CONCORD_UPDATE_PUBKEY__
-  })
+  setupTTS(() => mainWindow)
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -272,7 +346,16 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  createWindow()
+  // A janela abre já com o endereço que responde (o principal ou um
+  // alternativo, se o principal estiver bloqueado na rede de quem usa).
+  void serverChoice.then((choice) => {
+    serverUrl = choice?.url
+    setupUpdater(() => mainWindow, {
+      feedUrl: updateFeedFor(__CONCORD_UPDATE_URL__, serverUrl),
+      publicKeyPem: __CONCORD_UPDATE_PUBKEY__
+    })
+    createWindow()
+  })
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

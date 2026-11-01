@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"gin-quickstart/backend/internal/media"
+	"gin-quickstart/backend/internal/platform/media"
 )
 
 const (
